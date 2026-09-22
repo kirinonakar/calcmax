@@ -41,7 +41,7 @@ object Lexer {
 }
 
 /** Pratt parser: right-associative powers bind tighter than unary minus. No eval. */
-class Parser(private val source: String) {
+class Parser(private val source: String, private val allowHoles: Boolean = false) {
     private val tokens = Lexer.scan(source)
     private var index = 0
     private var depth = 0
@@ -56,6 +56,7 @@ class Parser(private val source: String) {
         return expr
     }
     private fun expression(min: Int): Expr {
+        if(allowHoles && token.text in listOf("", ")", "]", ",")) return Expr("hole", start=token.start,end=token.start)
         if(++depth > 96 || ++count > 2048) fail("Expression complexity limit")
         val first = take()
         var left = when {
@@ -74,7 +75,8 @@ class Parser(private val source: String) {
             first.text.firstOrNull()?.isLetter() == true -> {
                 if(token.text == "(") {
                     take(); val args = mutableListOf<Expr>()
-                    if(token.text != ")") { args += expression(0); while(token.text == ",") { take(); args += expression(0) } }
+                    if(token.text==")" && !allowHoles) fail("Enter a function argument")
+                    if(token.text != ")" || allowHoles) { args += expression(0); while(token.text == ",") { take(); args += expression(0) } }
                     Expr("call", first.text, args, first.start, expect(")").end)
                 } else Expr("symbol", first.text, start = first.start, end = first.end)
             }

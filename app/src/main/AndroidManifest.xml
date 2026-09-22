@@ -11,6 +11,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Calcmax">
+        <service android:name=".calculator.EngineService" android:exported="false" android:process=":math" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

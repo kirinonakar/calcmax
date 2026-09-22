@@ -9,6 +9,10 @@
 /.idea/assetWizardSettings.xml
 .DS_Store
 /build
+**/build/
+.venv/
+__pycache__/
+*.log
 /captures
 .externalNativeBuild
 .cxx
