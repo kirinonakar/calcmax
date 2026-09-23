@@ -2,7 +2,7 @@
 
 A native Android scientific, graphing and symbolic calculator. Kotlin and Jetpack Compose provide the instrument interface; an independent Kotlin AST and a bundled SymPy engine provide exact offline mathematics. The currency converter alone downloads online reference rates and keeps an offline cache.
 
-![screenshot](screenshot.png)
+<img src="screenshot.png" alt="screenshot" width="50%">
 
 ## 📥 Download
 You can download the latest release from the [Releases Page](https://github.com/kirinonakar/calcmax/releases).
