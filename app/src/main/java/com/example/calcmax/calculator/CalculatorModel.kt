@@ -127,7 +127,12 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     fun edit(value: Editor) {
         val changed=value.source!=editor.source
         editor=value;error="";committed=false
-        if(changed) {inputVersion++;commitRequested=false;busy=false;schedulePreview()}
+        if(changed) {
+            inputVersion++;commitRequested=false;busy=false
+            val tree=runCatching {Parser(value.source,true).parse()}.getOrNull()
+            if(tree!=null&&requiresExplicitEvaluation(tree,multiArgumentUserFunctions())) {result=null;resultSource="";resultVersion=-1}
+            schedulePreview()
+        }
         prefs.edit().putString("expression",editor.source).putInt("cursor",editor.cursor).putBoolean("committed",committed)
             .putString("inputAnswer",inputAnswer?.toString() ?: "{}").putString("answerDisplay",answerDisplay?.toString() ?: "{}").apply()
     }
@@ -179,6 +184,9 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     fun clearAllScreen(){cancel();tape=emptyList();variables=JSONObject();lastAnswerResult=null;poweredOn=true;prefs.edit().putLong("screenClearedAt",System.currentTimeMillis()).apply();clear();save()}
     fun reuse(entry:TapeEntry) {nextEntry();inputAnswer=entry.answer.takeIf{it.isNotEmpty()}?.let(::JSONObject);answerDisplay=inputAnswer;edit(Editor(entry.source))}
     fun recalculatePreview() {inputVersion++;schedulePreview()}
+    private fun multiArgumentUserFunctions():Set<String> = functions.keys().asSequence().filter {name->
+        (functions.optJSONObject(name)?.optJSONArray("parameters")?.length() ?: 0)>1
+    }.toSet()
     private fun schedulePreview() {
         if(mode !in listOf("Scientific","CAS","Equations") || previewRunner?.isActive==true)return
         previewRunner=viewModelScope.launch {
@@ -187,7 +195,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
                 while(true) {
                     val revision=inputVersion;val source=editor.source
                     val tree=runCatching {calculationTree(source)}.getOrNull()
-                    if(tree!=null && !(tree.value in listOf("=",":=") && tree.args.firstOrNull()?.kind in listOf("symbol","call") && mode!="Equations")) {
+                    if(tree!=null && (commitRequested||!requiresExplicitEvaluation(tree,multiArgumentUserFunctions())) && !(tree.value in listOf("=",":=") && tree.args.firstOrNull()?.kind in listOf("symbol","call") && mode!="Equations")) {
                         previewBusy=true
                         val response=engine.execute(request().put("tree",JSONObject(tree.json())).put("budget",if(commitRequested)8 else 2))
                         if(revision==inputVersion && source==editor.source && !committed) {

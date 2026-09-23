@@ -13,7 +13,7 @@ You can download the latest release from the [Releases Page](https://github.com/
 ## Everyday use
 
 * The first keypad page is inspired by the FX-991ES PLUS 2nd edition layout. The second page adds symbolic algebra, number theory, matrix and vector functions.
-* Complete expressions are evaluated as you type. `=` commits a calculation without removing the answer panel. The next calculation appears underneath; beginning it with an operator inserts a boxed, frozen copy of the previous answer. Swipe the display vertically to revisit calculations.
+* Arithmetic and single-argument functions preview as you type. Functions with multiple arguments, such as `integrate`, calculate when you press `=`. The next calculation appears underneath; beginning it with an operator inserts a boxed, frozen copy of the previous answer. Swipe the display vertically to revisit calculations.
 * Fractions, roots and calculus keys insert structural slots. Tap a slot or expression component to select it. Tap the space just after a fraction to leave its denominator. Left/right move the cursor; up selects its enclosing AST node; down selects a child.
 * Selecting an exponent and pressing right once places the cursor after its value **inside** the exponent. Press right again to leave it. Parentheses follow the same inside/outside behavior. Empty power bases and fraction fields are shaded slots; filled slots have no visible scaffolding parentheses. Expressions share a mathematical alignment axis, so powers and fractions do not shift adjacent operands vertically.
 * `Keyboard` enables Android text entry; hardware keyboards also work in the natural display. `Paste` inserts clipboard text.

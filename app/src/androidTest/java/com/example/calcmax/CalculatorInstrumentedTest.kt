@@ -133,6 +133,23 @@ class CalculatorInstrumentedTest {
         compose.runOnIdle { model().mode="Statistics" }
         compose.waitForIdle();capture("statistics-light")
     }
+    @Test fun multiArgumentInputWaitsForEquals() {
+        compose.runOnIdle {model().mode="CAS";model().clear();model().edit(Editor("integrate(e)"))}
+        Thread.sleep(300)
+        compose.runOnIdle {
+            assertEquals("",model().error)
+            assertNull(model().result)
+            model().edit(Editor("integrate(x^2,(x,0,1))"))
+        }
+        Thread.sleep(300)
+        compose.runOnIdle {
+            assertEquals("",model().error)
+            assertNull(model().result)
+            model().calculate()
+        }
+        compose.waitUntil(30000) {model().committed||model().error.isNotEmpty()}
+        compose.runOnIdle {assertEquals("",model().error);assertEquals("1/3",model().result!!.getString("exact"))}
+    }
     @Test fun engineIpcExactAndCancellationRecovery() = runBlocking {
         val client=EngineClient(compose.activity.applicationContext)
         fun request(source:String)=JSONObject().put("tree",JSONObject(Parser(source).parse().json())).put("angle","RAD")
