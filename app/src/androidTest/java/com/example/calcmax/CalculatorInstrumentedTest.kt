@@ -81,7 +81,7 @@ class CalculatorInstrumentedTest {
         compose.waitForIdle()
         compose.runOnIdle { assertEquals("A+1/6",model().editor.source);assertEquals("Dark",model().theme);assertTrue(model().variables.has("A")) }
     }
-    @Test fun systemThemeAndLandscapePreserveState() {
+    @Test(timeout=60000) fun systemThemeAndLandscapePreserveState() {
         compose.runOnIdle {model().theme="System";model().mode="Scientific";model().edit(Editor("sqrt(8)",5));model().save()}
         val uiMode=compose.activity.getSystemService(Context.UI_MODE_SERVICE) as UiModeManager
         compose.runOnIdle {uiMode.setApplicationNightMode(UiModeManager.MODE_NIGHT_YES)}
@@ -92,5 +92,56 @@ class CalculatorInstrumentedTest {
         compose.waitForIdle();compose.onNodeWithContentDescription("=").assertIsDisplayed();capture("landscape-dark")
         compose.runOnIdle {assertEquals("sqrt(8)",model().editor.source);uiMode.setApplicationNightMode(UiModeManager.MODE_NIGHT_NO);compose.activity.requestedOrientation=android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT}
         compose.waitForIdle();capture("system-light")
+    }
+    @Test fun immediateCalculationFixedKeypadAndAnswerContinuation() {
+        compose.runOnIdle {model().poweredOn=true;model().mode="Scientific";model().theme="Light";model().clear()}
+        val top=compose.onNodeWithContentDescription("Calculator keypad").fetchSemanticsNode().boundsInRoot.top
+        val historyCount=model().history.size
+        compose.onNodeWithContentDescription("2").performClick()
+        compose.waitUntil(15000){model().result?.optString("exact")=="2"}
+        compose.runOnIdle {assertEquals(historyCount,model().history.size)}
+        compose.onNodeWithContentDescription("+").performClick()
+        compose.onNodeWithContentDescription("3").performClick()
+        compose.waitUntil(15000){model().result?.optString("exact")=="5"}
+        assertEquals(top,compose.onNodeWithContentDescription("Calculator keypad").fetchSemanticsNode().boundsInRoot.top,.5f)
+        compose.onNodeWithContentDescription("=").performClick()
+        compose.waitUntil(15000){model().committed}
+        compose.onNodeWithContentDescription("Answer panel").assertExists()
+        compose.onNodeWithContentDescription("+").performClick()
+        compose.runOnIdle {assertEquals("Ans+",model().editor.source);assertEquals("2+3",model().tape.last().source)}
+        compose.onNodeWithContentDescription("Previous answer").assertExists()
+        compose.onNodeWithContentDescription("4").performClick()
+        compose.waitUntil(15000){model().result?.optString("exact")=="9"}
+        assertEquals(top,compose.onNodeWithContentDescription("Calculator keypad").fetchSemanticsNode().boundsInRoot.top,.5f)
+        capture("fixed-keypad-answer-chain")
+        compose.onNodeWithContentDescription("=").performClick()
+        compose.waitUntil(15000){model().committed}
+        compose.onNodeWithContentDescription("7").performClick()
+        compose.runOnIdle {assertEquals("7",model().editor.source)}
+        compose.onNodeWithContentDescription("Calculation history, swipe vertically").performTouchInput{swipeDown()}
+        assertEquals(top,compose.onNodeWithContentDescription("Calculator keypad").fetchSemanticsNode().boundsInRoot.top,.5f)
+        compose.onAllNodesWithText("OFFLINE MATHEMATICS",substring=true).assertCountEquals(0)
+    }
+    @Test fun symbolicRenderingCalculusAndFractionExit() {
+        compose.runOnIdle {model().mode="Scientific";model().clear();model().decimal=true;model().edit(Editor("integrate(x,x)"))}
+        compose.waitUntil(15000){model().result?.optString("exact")=="C + x**2/2"}
+        compose.onAllNodesWithText("integrate",substring=true).assertCountEquals(0)
+        compose.onAllNodesWithText("**",substring=true).assertCountEquals(0)
+        capture("symbolic-integral-decimal")
+        compose.runOnIdle {model().edit(Editor("integrate(x,x,0,2)"))}
+        compose.waitUntil(15000){model().result?.optString("exact")=="2"}
+        compose.runOnIdle {model().edit(Editor("nderivative(x^2,x,3)"))}
+        compose.waitUntil(15000){model().result?.optString("decimal")=="6"}
+        compose.onAllNodesWithText("nderivative",substring=true).assertCountEquals(0)
+        compose.runOnIdle {model().edit(Editor("5!"))}
+        compose.waitUntil(15000){model().result?.optString("exact")=="120"}
+        compose.onAllNodesWithText("factorial",substring=true).assertCountEquals(0)
+        compose.runOnIdle {model().edit(Editor("(1)/(3)",5))}
+        compose.onNodeWithContentDescription("After fraction").performClick()
+        compose.runOnIdle {assertEquals(model().editor.source.length,model().editor.cursor);model().insert("+1")}
+        compose.waitUntil(15000){model().result?.optString("exact")=="4/3"}
+        val paste=compose.onNodeWithText("Paste").fetchSemanticsNode().boundsInRoot.center.y
+        val keyboard=compose.onNodeWithText("Keyboard").fetchSemanticsNode().boundsInRoot.center.y
+        assertEquals(paste,keyboard,1f)
     }
 }

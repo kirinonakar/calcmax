@@ -34,7 +34,9 @@ class EngineTests(unittest.TestCase):
                 self.assertEqual(again["exact"],result["exact"])
     def test_precision_and_budget(self):
         result=run("1/3+1/6",precision=100)
-        self.assertGreaterEqual(len(result["decimal"]),100)
+        self.assertEqual(result["decimal"],"0.5")
+        third={"kind":"binary","value":"/","args":[{"kind":"number","value":"1"},{"kind":"number","value":"3"}]}
+        self.assertGreaterEqual(len(json.loads(core.dispatch(json.dumps({"tree":third,"precision":100})))["decimal"]),100)
         huge={"kind":"number","value":"1e100000000"}
         self.assertFalse(json.loads(core.dispatch(json.dumps({"tree":huge})))["ok"])
         self.assertFalse(run("integrate(x^2*sin(x),x)",budget=-1)["ok"])

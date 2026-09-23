@@ -12,13 +12,16 @@ import androidx.compose.ui.unit.*
 import com.example.calcmax.math.Expr
 import com.example.calcmax.ui.theme.LocalInstrument
 import org.json.JSONObject
+import androidx.compose.foundation.shape.RoundedCornerShape
+private val LocalMathRootEnd=staticCompositionLocalOf {-1}
 
 /** Native recursive layout, with source spans retained as logical touch targets. */
 @Composable fun MathNode(node: JSONObject, size: Float=25f, select: ((Int,Int)->Unit)?=null, selection: IntRange?=null, depth: Int=0) {
+    if(depth==0){CompositionLocalProvider(LocalMathRootEnd provides node.optInt("end",-1)){MathNode(node,size,select,selection,1)};return}
     val c=LocalInstrument.current
     val args=node.optJSONArray("args")
     val children=(0 until (args?.length() ?: 0)).map { args!!.getJSONObject(it) }
-    val kind=node.optString("kind"); val value=node.optString("value")
+    val kind=when(val raw=node.optString("kind")){"snapshot_symbol"->"symbol";"constant","float"->"text";"frozen_call"->"function";else->raw}; val value=node.optString("value")
     val start=node.optInt("start",-1); val end=node.optInt("end",-1)
     val selected=selection!=null && start==selection.first && end==selection.last && start!=end
     val modifier=Modifier.then(if(selected) Modifier.background(c.accent.copy(alpha=.18f)) else Modifier).then(if(select!=null && start>=0) Modifier.clickable { select(start,end) } else Modifier)
@@ -36,10 +39,13 @@ import org.json.JSONObject
     val root=kind=="root" || kind=="call" && value=="sqrt"
     Box(modifier.padding(horizontal=1.dp)) {
         when {
-            fraction -> Column(Modifier.width(IntrinsicSize.Max),horizontalAlignment=Alignment.CenterHorizontally) {
+            fraction -> Row(verticalAlignment=Alignment.CenterVertically) {
+              Column(Modifier.width(IntrinsicSize.Max),horizontalAlignment=Alignment.CenterHorizontally) {
                 Box(Modifier.padding(horizontal=4.dp,vertical=2.dp)) { child(0,.85f) }
                 Box(Modifier.fillMaxWidth().height(1.dp).background(c.ink))
                 Box(Modifier.padding(horizontal=4.dp,vertical=2.dp)) { child(1,.85f) }
+              }
+              if(select!=null)Box(Modifier.width(24.dp).height(48.dp).clickable{select(end,end)}.semantics{contentDescription="After fraction"})
             }
             power -> Row(verticalAlignment=Alignment.Top) { Box(Modifier.padding(top=8.dp)) { child(0,bracket=children.firstOrNull()?.optString("kind") in listOf("sum","product","unary")) }; child(1,.65f) }
             root -> Row(verticalAlignment=Alignment.CenterVertically) { label("√",1.35f); Column(Modifier.width(IntrinsicSize.Max)) { Box(Modifier.fillMaxWidth().height(1.dp).background(c.ink)); child(0) } }
@@ -52,15 +58,28 @@ import org.json.JSONObject
             }
             kind=="rows" -> Column { children.forEach { row -> Row(verticalAlignment=Alignment.CenterVertically) { label(row.optString("value")+": ",.7f); MathNode(row.getJSONArray("args").getJSONObject(0),size*.8f,select,selection,depth+1) } } }
             kind=="hole" -> Text("□",Modifier.sizeIn(minWidth=24.dp,minHeight=36.dp).semantics { contentDescription="Empty expression slot" },fontSize=size.sp,color=c.accent)
+            kind=="restricted" -> child(0)
+            kind=="answer" -> Box(Modifier.border(1.dp,c.muted,RoundedCornerShape(4.dp)).padding(horizontal=6.dp,vertical=3.dp).semantics{contentDescription="Previous answer"}){if(children.isNotEmpty())MathNode(children[0],size*.9f,depth=depth+1)}
             kind=="quantity" -> Row(verticalAlignment=Alignment.CenterVertically) {child(0);label(" $value",.7f)}
+            kind=="dms" -> Row(verticalAlignment=Alignment.CenterVertically){child(0);label("°");child(1);label("′");child(2);label("″")}
+            kind=="call" && value=="eng" -> child(0)
             kind=="symbol" && value.contains('_') -> Row(verticalAlignment=Alignment.CenterVertically) {label(value.substringBefore('_'));Box(Modifier.padding(top=15.dp)){label(value.substringAfter('_'),.55f)}}
             kind=="call" && value=="mixed" -> Row(verticalAlignment=Alignment.CenterVertically) {
                 child(0)
                 Column(Modifier.width(IntrinsicSize.Max),horizontalAlignment=Alignment.CenterHorizontally) {child(1,.8f);Box(Modifier.fillMaxWidth().height(1.dp).background(c.ink));child(2,.8f)}
             }
-            kind in listOf("number","symbol","text") -> label(when(value) { "pi"->"π"; "oo"->"∞"; "I"->"i"; else->value })
+            kind in listOf("number","symbol","text") -> {
+                val shown=when(value){"pi"->"π";"oo"->"∞";"I"->"i";else->value}
+                val cursor=selection?.first ?: -1
+                val caret=select!=null&&selection?.last==cursor&&start>=0&&cursor in start..end&&(cursor<end||end!=LocalMathRootEnd.current)
+                if(caret){val offset=if(end==start)0 else ((cursor-start)*shown.length/(end-start)).coerceIn(0,shown.length);label(shown.take(offset)+"│"+shown.drop(offset))}else label(shown)
+            }
             kind=="group" -> Row(verticalAlignment=Alignment.CenterVertically) { label("("); child(0); label(")") }
             kind=="unary" -> Row(verticalAlignment=Alignment.CenterVertically) { label(value); child(0) }
+            kind in listOf("call","function") && value=="factorial" -> Row(verticalAlignment=Alignment.CenterVertically){child(0,bracket=children.firstOrNull()?.optString("kind") in listOf("binary","sum","product"));label("!")}
+            kind in listOf("call","function") && value=="degree" -> Row(verticalAlignment=Alignment.CenterVertically){child(0);label("°")}
+            kind in listOf("call","function") && value in listOf("rad","gradian") -> Row(verticalAlignment=Alignment.CenterVertically){child(0);label(if(value=="rad")"ʳ" else "ᵍ")}
+            kind in listOf("call","function") && value=="percent" -> Row(verticalAlignment=Alignment.CenterVertically){child(0);label("%")}
             kind in listOf("call","function") && value in listOf("abs","Abs") -> Row(verticalAlignment=Alignment.CenterVertically) { label("│");child(0);label("│") }
             kind=="call" && value=="nthroot" -> Row(verticalAlignment=Alignment.Top) { child(1,.55f);label("√",1.3f);child(0) }
             kind=="call" && value=="log" && children.size>1 -> Row(verticalAlignment=Alignment.CenterVertically) { label("log");Box(Modifier.padding(top=14.dp)) {child(1,.55f)};label("(");child(0);label(")") }
@@ -68,12 +87,12 @@ import org.json.JSONObject
                 label("{",2f)
                 Column { children.indices.forEach { i->child(i,.8f) } }
             }
-            kind=="call" && value in listOf("integrate","diff","limit","sum","product") -> Row(verticalAlignment=Alignment.CenterVertically) {
+            kind=="call" && value in listOf("integrate","diff","nderivative","limit","sum","product") -> Row(verticalAlignment=Alignment.CenterVertically) {
                 when(value) {
-                    "diff" -> Column(Modifier.width(IntrinsicSize.Max),horizontalAlignment=Alignment.CenterHorizontally) {
-                        Row {label("d",.8f);if(children.size>2)child(2,.5f)}
+                    "diff","nderivative" -> Column(Modifier.width(IntrinsicSize.Max),horizontalAlignment=Alignment.CenterHorizontally) {
+                        Row {label("d",.8f);if(value=="diff"&&children.size>2)child(2,.5f)}
                         Box(Modifier.fillMaxWidth().height(1.dp).background(c.ink))
-                        Row {label("d",.8f);child(1,.8f);if(children.size>2)child(2,.5f)}
+                        Row {label("d",.8f);child(1,.8f);if(value=="diff"&&children.size>2)child(2,.5f)}
                     }
                     "limit" -> Column(horizontalAlignment=Alignment.CenterHorizontally) {label("lim");Row {child(1,.55f);if(children.size>2){label("→",.55f);child(2,.55f)}}}
                     else -> Column(horizontalAlignment=Alignment.CenterHorizontally) {
@@ -82,8 +101,9 @@ import org.json.JSONObject
                         if(children.size>2)Row {if(value!="integrate"){child(1,.5f);label("=",.5f)};child(2,.5f)}
                     }
                 }
-                child(0,.9f,bracket=value=="diff")
+                child(0,.9f,bracket=value in listOf("diff","nderivative"))
                 if(value=="integrate") {label(" d",.8f);child(1,.8f)}
+                if(value=="nderivative") {label("│",1.3f);Box(Modifier.padding(top=16.dp)){Row{child(1,.55f);label("=",.55f);child(2,.55f)}}}
             }
             else -> Row(verticalAlignment=Alignment.CenterVertically) {
                 val wrap=kind in listOf("list","set","call","function")

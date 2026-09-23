@@ -30,6 +30,10 @@ class EngineService : Service() {
         }
     })
     override fun onBind(intent: Intent): IBinder = messenger.binder
+    override fun onCreate() {
+        super.onCreate()
+        worker.execute {runCatching {if(!Python.isStarted())Python.start(AndroidPlatform(this));Python.getInstance().getModule("calc_engine")}}
+    }
     override fun onDestroy() { worker.shutdownNow(); super.onDestroy() }
 }
 

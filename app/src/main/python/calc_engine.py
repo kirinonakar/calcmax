@@ -8,6 +8,7 @@ import math
 import time
 import sys
 import statistics
+import random
 import sympy as s
 import mpmath as mp
 from sympy.core.relational import Relational
@@ -152,6 +153,7 @@ class Engine:
             if value == "+": return a+b
             if value == "-": return a-b
             if value == "*": return a*b
+            if value == "∠": return self.call("polar",[a,b],args)
             if value == "/":
                 require(b != 0, "Division by zero")
                 if getattr(b, "free_symbols", None): self.conditions.append(s.Ne(b, 0, evaluate=False))
@@ -187,6 +189,21 @@ class Engine:
         finally:
             self.bindings = old
     def call(self, name, a, nodes):
+        if name=="rnd":return s.N(a[0],self.precision)
+        if name=="eng":return a[0]
+        if name=="pol":
+            z=a[0]+s.I*a[1];angle=s.arg(z)*{"DEG":180/s.pi,"GRAD":200/s.pi}.get(self.angle,1)
+            return [s.Abs(z),angle]
+        if name=="rec":
+            z=self.call("polar",a,nodes)
+            return [s.re(z),s.im(z)]
+        if name=="randInt":
+            require(len(a)==2 and all(x.is_Integer for x in a) and a[0]<=a[1],"Enter integer lower and upper bounds")
+            return s.Integer(random.randint(int(a[0]),int(a[1])))
+        if name=="dms":
+            if len(a)==3:return a[0]+a[1]/60+a[2]/3600
+            whole=s.floor(s.Abs(a[0]));minutes=s.floor((s.Abs(a[0])-whole)*60);seconds=s.simplify((s.Abs(a[0])-whole-minutes/60)*3600)
+            return [s.sign(a[0])*whole,minutes,seconds]
         if name=="qty": return quantity(a[0],nodes[1]["value"],UNITS)
         if name=="mixed":
             require(all(v.is_Integer for v in a) and a[2]>0 and 0<=a[1],"Mixed fractions require integer parts and a positive denominator")
@@ -202,7 +219,7 @@ class Engine:
             return a[0]*(s.cos(theta)+s.I*s.sin(theta))
         if name in ("sin", "cos", "tan"):
             arg = a[0]
-            explicit = bool(arg.has(s.pi)) or any(n.get("value") in ("degree", "pi", "rad") for n in walk(nodes[0]))
+            explicit = bool(arg.has(s.pi)) or any(n.get("value") in ("degree", "pi", "rad", "gradian") for n in walk(nodes[0]))
             if not explicit and not getattr(arg, "free_symbols", set()):
                 arg *= {"DEG": s.pi/180, "GRAD": s.pi/200}.get(self.angle, 1)
             return getattr(s,name)(arg)
@@ -218,6 +235,7 @@ class Engine:
                  "simplify": s.simplify, "expand": s.expand, "factor": s.factor, "collect": s.collect,
                  "diff": s.diff, "gcd": s.gcd, "lcm": s.lcm, "nCr": s.binomial,
                  "percent": lambda x: x/100, "degree": lambda x: x*s.pi/180,
+                 "rad":lambda x:x,"gradian":lambda x:x*s.pi/200,
                  "round": lambda x, n=0: x.round(int(n)), "quotient": lambda x,y: s.floor(x/y), "remainder": s.Mod,
                  "polar": lambda r,t: r*(s.cos(t)+s.I*s.sin(t)), "rectpolar": lambda z: [s.Abs(z),s.arg(z)]}
         if name in ("log","ln"): require(a[0]!=0,"Domain ERROR: logarithm of zero")
@@ -381,13 +399,20 @@ def display_tree(x):
     if isinstance(x,s.FiniteSet): return t("set",args=[display_tree(a) for a in sorted(x,key=s.default_sort_key)])
     if isinstance(x,Relational): return t("relation",x.rel_op,[display_tree(x.lhs),display_tree(x.rhs)])
     if isinstance(x,s.Function): return t("function",x.func.__name__,[display_tree(a) for a in x.args])
-    return t("text",s.sstr(x))
+    return t("text",readable(x))
 
 def readable(x):
     if isinstance(x,Quantity): return readable(x.base)+" "+x.unit_text()
     if isinstance(x,dict): return "\n".join(str(k)+": "+readable(v) for k,v in x.items())
     if isinstance(x,(list,tuple)): return "["+", ".join(readable(v) for v in x)+"]"
-    return s.sstr(x)
+    from sympy.printing.str import StrPrinter
+    class CompactPrinter(StrPrinter):
+        def _print_Float(self,expr):
+            text=super()._print_Float(expr)
+            parts=text.lower().split("e")
+            mantissa=parts[0].rstrip("0").rstrip(".") if "." in parts[0] else parts[0]
+            return mantissa+("e"+parts[1] if len(parts)>1 else "")
+    return CompactPrinter().doprint(x)
 
 def approximate(x, digits):
     if isinstance(x,Quantity): return Quantity(s.N(x.base,digits),x.dimensions,x.absolute_temperature)
@@ -408,7 +433,7 @@ def result_ast(x):
     if isinstance(x,s.FiniteSet): return node("set",args=[result_ast(v) for v in x])
     if str(x) in ("pi","E","I","oo","-oo","EmptySet","True","False"): return node("constant",str(x))
     if isinstance(x,s.Symbol): return node("snapshot_symbol",str(x))
-    if isinstance(x,s.Float): return node("float",str(x))
+    if isinstance(x,s.Float): return node("float",readable(x))
     if isinstance(x,s.Integer): return node("number",str(x))
     if isinstance(x,s.Rational): return node("binary","/",[node("number",str(x.p)),node("number",str(x.q))])
     if isinstance(x,(s.Add,s.Mul)):
@@ -495,8 +520,17 @@ def dispatch(payload):
             exact=readable(value)
             require(len(exact)<=40000,"Result exceeds display size limit")
             result={"exact":exact,"decimal":readable(approximate(value,engine.precision)),"tree":display_tree(value),"note":engine.note,
-                    "conditions":[str(c) for c in dict.fromkeys(engine.conditions)],"symbolic":bool(getattr(value,"free_symbols",False))}
+                    "conditions":[readable(c.lhs)+" ≠ "+readable(c.rhs) if isinstance(c,s.Unequality) else str(c) for c in dict.fromkeys(engine.conditions)],"symbolic":bool(getattr(value,"free_symbols",False))}
             result["approximate"]=bool(getattr(value,"has",lambda *_:False)(s.Float))
+            result["decimalTree"]=display_tree(approximate(value,engine.precision))
+            if request["tree"].get("value")=="eng" and getattr(value,"is_number",False):
+                offset=engine.build(request["tree"]["args"][1]) if len(request["tree"]["args"])>1 else 0
+                require(-300<=offset<=300,"Engineering exponent limit")
+                exponent=(int(s.floor(s.log(s.Abs(value),10)/3))*3 if value!=0 else 0)+int(offset)
+                mantissa=s.N(value/s.Integer(10)**exponent,engine.precision)
+                power={"kind":"power","args":[{"kind":"text","value":"10"},{"kind":"text","value":str(exponent)}]}
+                result["tree"]=result["decimalTree"]={"kind":"product","args":[display_tree(mantissa),power]}
+            if request["tree"].get("value")=="dms" and isinstance(value,list):result["tree"]=result["decimalTree"]={"kind":"dms","args":[display_tree(x) for x in value]}
             try:
                 ast=result_ast(value)
                 symbols=getattr(value,"free_symbols",set())

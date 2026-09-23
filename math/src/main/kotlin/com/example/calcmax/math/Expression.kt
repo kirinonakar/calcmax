@@ -48,7 +48,10 @@ class Parser(private val source: String, private val allowHoles: Boolean = false
     private var count = 0
     private val token get() = tokens[index]
     private fun take() = tokens[index++]
-    private fun expect(s: String): Token { if(token.text != s) fail("Expected '$s'"); return take() }
+    private fun expect(s: String): Token {
+        if(allowHoles && token.text.isEmpty() && s in listOf(")","]"))return Token(s,source.length,source.length)
+        if(token.text != s) fail("Expected '$s'"); return take()
+    }
     private fun fail(s: String): Nothing = throw SyntaxException(s, token.start)
     fun parse(): Expr {
         val expr = expression(0)
@@ -93,7 +96,7 @@ class Parser(private val source: String, private val allowHoles: Boolean = false
             }
             val implicit = op.isNotEmpty() && (op == "(" || op.first().isLetter() && op != "mod" || op == "√")
             val actual = if(implicit) "*" else op
-            val binding = when(actual) { ":=" -> 1; "=", "==", "<", ">", "<=", ">=", "!=", "->" -> 5; "+", "-" -> 10; "*", "/", "mod" -> 20; "^" -> 30; else -> -1 }
+            val binding = when(actual) { ":=" -> 1; "=", "==", "<", ">", "<=", ">=", "!=", "->" -> 5; "+", "-" -> 10; "*", "/", "mod", "∠" -> 20; "^" -> 30; else -> -1 }
             if(binding < min) break
             if(!implicit) take()
             val right = expression(if(actual in listOf("^", ":=")) binding else binding+1)

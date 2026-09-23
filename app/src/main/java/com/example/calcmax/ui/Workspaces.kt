@@ -122,8 +122,9 @@ data class ConstantEntry(val symbol: String,val name: String,val value: String,v
 @Composable fun SettingsDialog(m: CalculatorModel,close: ()->Unit) {
     AlertDialog(onDismissRequest=close,title={Text("Instrument setup")},text={Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(10.dp)) {
         Text("Appearance"); Choices(listOf("System","Light","Dark"),m.theme,{m.theme=it;m.save()})
-        Text("Angle unit"); Choices(listOf("DEG","RAD","GRAD"),m.angle,{m.angle=it;m.save()})
-        Text("Decimal precision"); Choices(listOf("15","30","50","100","200"),m.precision.toString(),{m.precision=it.toInt();m.save()})
+        Text("Angle unit"); Choices(listOf("DEG","RAD","GRAD"),m.angle,{m.angle=it;m.recalculatePreview();m.save()})
+        Text("Maximum significant digits"); Choices(listOf("15","30","50","100","200"),m.precision.toString(),{m.precision=it.toInt();m.recalculatePreview();m.save()})
+        Text("Trailing decimal zeros are omitted. Precision controls accuracy, not a fixed number of displayed places.",fontSize=11.sp)
         Row(verticalAlignment=Alignment.CenterVertically) { Text("Key vibration",Modifier.weight(1f)); Switch(m.haptics,{m.haptics=it;m.save()}) }
         Row(verticalAlignment=Alignment.CenterVertically) { Text("Key sound",Modifier.weight(1f)); Switch(m.sound,{m.sound=it;m.save()}) }
         Row(verticalAlignment=Alignment.CenterVertically) { Text("Save history locally",Modifier.weight(1f)); Switch(m.persistHistory,{m.persistHistory=it;m.save()}) }

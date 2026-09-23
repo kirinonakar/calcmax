@@ -15,13 +15,15 @@ APK: `app/build/outputs/apk/debug/app-debug.apk`. `:app:assembleRelease` builds 
 
 ## Everyday use
 
-* Use the keypad for ordinary calculations. SHIFT and ALPHA are one-shot modifiers; their labels are visible above each key.
-* Fractions, roots and calculus keys insert structural slots. Tap a slot or expression component to select it. Left/right move the cursor; up selects its enclosing AST node; SHIFT up selects a child. The small source line makes cursor position explicit.
-* `Type / paste` enables Android text entry; hardware keyboards also work in the natural display. `Paste` inserts clipboard text.
-* S⇔D switches exact and decimal results. SHIFT S⇔D opens the searchable function catalog.
+* The keypad follows the [FX-991ES PLUS 2nd edition layout](https://www.casio.com/intl/scientific-calculators/product.FX-991ESPLUS-2/): round SHIFT/ALPHA/MODE/ON keys, central four-way navigation, CALC/integral/inverse/base-log keys, three scientific rows and four numeric rows. It stays anchored to the bottom while the expression/history region scrolls independently.
+* Complete expressions are evaluated as you type. `=` commits a calculation without removing the answer panel. The next calculation appears underneath; beginning it with an operator inserts a boxed, frozen copy of the previous answer. Swipe the display vertically to revisit calculations.
+* Fractions, roots and calculus keys insert structural slots. Tap a slot or expression component to select it. Tap the space just after a fraction to leave its denominator. Left/right move the cursor; up selects its enclosing AST node; down selects a child.
+* `Keyboard` enables Android text entry; hardware keyboards also work in the natural display. `Paste` inserts clipboard text.
+* S⇔D switches exact and decimal results; SHIFT S⇔D switches improper/mixed fractions. The top `Catalog` button opens the searchable function catalog. Decimal output omits trailing zeros, and symbolic expressions remain typeset in decimal mode.
 * MODE opens scientific, CAS, graphing, equations, matrix, vector, statistics, programmer, units and constants workspaces.
 * SETUP chooses Light, Dark, or System (the default), angle unit, precision, haptics, sound and optional persistent history. Theme changes preserve the current calculation and editor state.
-* STO / SHIFT STO open variable storage and recall. `radius=5` and `f(x)=x^2+1` are supported at the top level outside Equation mode. Use `solve(...)` to solve equations. Stored values are snapshots; user functions retain their expression bodies.
+* RCL / SHIFT RCL open variable recall and storage. `radius=5` and `f(x)=x^2+1` are supported at the top level outside Equation mode. Use `solve(...)` to solve equations. Stored values are snapshots; user functions retain their expression bodies.
+* The integral key inserts a definite integral; SHIFT integral inserts a derivative evaluated at a point. The display toolbar also provides indefinite integral, definite integral, symbolic derivative and point derivative templates.
 
 ## Examples
 
@@ -91,7 +93,7 @@ python -m venv .venv
 .\gradlew.bat :app:connectedDebugAndroidTest
 ```
 
-The desktop tests consume AST fixtures produced by the actual Kotlin parser. They cover the specification's exact examples, precedence, complex arithmetic, calculus, solving, domains, matrices, statistics, graph discontinuities, units, precision, safeguards, result serialization and 100 seeded rational arithmetic cases. Device tests cover the native keypad, actual service IPC, cancellation/recovery, CAS, graphing, saved variables, activity recreation, both themes, system theme changes and landscape. Tests produce screenshots in the app's private `files/qa` directory.
+The desktop tests consume AST fixtures produced by the actual Kotlin parser. They cover the specification's exact examples, precedence, complex arithmetic, calculus, solving, domains, matrices, statistics, graph discontinuities, units, precision, safeguards, result serialization and 100 seeded rational arithmetic cases. Device tests cover the native keypad, actual service IPC, cancellation/recovery, CAS, graphing, saved variables, activity recreation, both themes, system theme changes and landscape. Regression tests also assert live results without `=`, unchanged keypad bounds, boxed-answer continuation, vertical history gestures, fraction exit hit targets, symbolic/decimal typesetting and calculus at bounds/points. Tests produce screenshots in the app's private `files/qa` directory.
 
 ## Explicit bounds
 
@@ -99,7 +101,7 @@ The desktop tests consume AST fixtures produced by the actual Kotlin parser. The
 * Matrix entry grid: up to 4×4; expression matrices: up to 32×32. Large exact factorizations/eigensystems may time out.
 * Graphs use finite samples and break large discontinuities; narrow features can be missed. Analysis controls currently apply to Cartesian functions; all three graph types support pan, zoom, ranges and tracing.
 * General output such as condition sets and series remainder terms can use textual mathematical notation where a dedicated native layout is not available. Such results may be copyable but not reusable through Ans; the app disables result insertion for them.
-* Large font sizes and small/landscape screens may scroll the keypad. The application has been tested on an Android 16 emulator; physical-device and broader Android-version qualification is still needed before a store release.
+* The keypad retains its physical arrangement in landscape, using more compact keys beside the display. The application has been tested on an Android 16 emulator; physical-device and broader Android-version qualification is still needed before a store release.
 
 ## Third-party notices
 
