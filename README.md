@@ -1,6 +1,6 @@
 # CalcMax
 
-A native Android scientific, graphing and symbolic calculator. Kotlin and Jetpack Compose provide the instrument interface; an independent Kotlin AST and a bundled SymPy engine provide exact offline mathematics. No WebView, remote mathematical calculation service, or LLM is used. The currency converter alone downloads online reference rates and keeps an offline cache.
+A native Android scientific, graphing and symbolic calculator. Kotlin and Jetpack Compose provide the instrument interface; an independent Kotlin AST and a bundled SymPy engine provide exact offline mathematics. The currency converter alone downloads online reference rates and keeps an offline cache.
 
 ## Build
 
@@ -15,7 +15,7 @@ APK: `app/build/outputs/apk/debug/app-debug.apk`. `:app:assembleRelease` builds 
 
 ## Everyday use
 
-* The first keypad page follows the [FX-991ES PLUS 2nd edition layout](https://www.casio.com/intl/scientific-calculators/product.FX-991ESPLUS-2/), with the ON position changed to a 2nd/1st page switch. The second page adds symbolic algebra, number theory, matrix and vector functions. The keypad stays anchored to the bottom while the expression/history region scrolls independently. ALPHA log enters `z`; ALPHA ln enters `t`.
+* The first keypad page is inspired by the FX-991ES PLUS 2nd edition layout. The second page adds symbolic algebra, number theory, matrix and vector functions.
 * Complete expressions are evaluated as you type. `=` commits a calculation without removing the answer panel. The next calculation appears underneath; beginning it with an operator inserts a boxed, frozen copy of the previous answer. Swipe the display vertically to revisit calculations.
 * Fractions, roots and calculus keys insert structural slots. Tap a slot or expression component to select it. Tap the space just after a fraction to leave its denominator. Left/right move the cursor; up selects its enclosing AST node; down selects a child.
 * Selecting an exponent and pressing right once places the cursor after its value **inside** the exponent. Press right again to leave it. Parentheses follow the same inside/outside behavior. Empty power bases and fraction fields are shaded slots; filled slots have no visible scaffolding parentheses. Expressions share a mathematical alignment axis, so powers and fractions do not shift adjacent operands vertically.
@@ -108,8 +108,7 @@ The desktop tests consume AST fixtures produced by the actual Kotlin parser. The
 * Matrix entry grid: up to 4×4; expression matrices: up to 32×32. Large exact factorizations/eigensystems may time out.
 * Graphs use finite samples and break large discontinuities; narrow features can be missed. Analysis controls currently apply to Cartesian functions; all three graph types support pan, zoom, ranges and tracing.
 * General output such as condition sets and series remainder terms can use textual mathematical notation where a dedicated native layout is not available. Such results may be copyable but not reusable through Ans; the app disables result insertion for them.
-* The keypad retains its physical arrangement in landscape, using more compact keys beside the display. The application has been tested on an Android 16 emulator; physical-device and broader Android-version qualification is still needed before a store release.
 
 ## Third-party notices
 
-SymPy 1.14.0 and mpmath 1.3.0 use BSD licenses. Chaquopy 17 uses the MIT license. Full licenses are included in `app/src/main/assets/licenses/`; Python and native runtime notices are also packaged by Chaquopy. AndroidX uses Apache 2.0. CalcMax is an independent application, not affiliated with or endorsed by Casio.
+SymPy 1.14.0 and mpmath 1.3.0 use BSD licenses. Chaquopy 17 uses the MIT license. Full licenses are included in `app/src/main/assets/licenses/`; Python and native runtime notices are also packaged by Chaquopy. AndroidX uses Apache 2.0.
