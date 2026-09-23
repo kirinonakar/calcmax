@@ -14,6 +14,12 @@ import mpmath as mp
 from sympy.core.relational import Relational
 from quantities import Quantity, quantity, convert_quantity
 
+# Exact integers (e.g. factorial) are serialized to text; CPython 3.11+ caps
+# int -> str conversion at 4300 digits, which is below the display limit used
+# below. Raise it so the advertised range (factorial up to 10000) is usable.
+if hasattr(sys, "set_int_max_str_digits"):
+    sys.set_int_max_str_digits(100000)
+
 class MathError(ValueError):
     pass
 
@@ -526,10 +532,11 @@ def dispatch(payload):
             if getattr(value,"has",lambda *_:False)(s.zoo,s.nan): raise MathError("Undefined or division by zero")
             exact=readable(value)
             require(len(exact)<=40000,"Result exceeds display size limit")
-            result={"exact":exact,"decimal":readable(approximate(value,engine.precision)),"tree":display_tree(value),"note":engine.note,
+            decimal_value=approximate(value,engine.precision)
+            result={"exact":exact,"decimal":readable(decimal_value),"tree":display_tree(value),"note":engine.note,
                     "conditions":[readable(c.lhs)+" ≠ "+readable(c.rhs) if isinstance(c,s.Unequality) else str(c) for c in dict.fromkeys(engine.conditions)],"symbolic":bool(getattr(value,"free_symbols",False))}
             result["approximate"]=bool(getattr(value,"has",lambda *_:False)(s.Float))
-            result["decimalTree"]=display_tree(approximate(value,engine.precision))
+            result["decimalTree"]=display_tree(decimal_value)
             if request["tree"].get("value")=="eng" and getattr(value,"is_number",False):
                 offset=engine.build(request["tree"]["args"][1]) if len(request["tree"]["args"])>1 else 0
                 require(-300<=offset<=300,"Engineering exponent limit")

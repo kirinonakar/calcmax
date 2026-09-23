@@ -43,6 +43,14 @@ class EngineTests(unittest.TestCase):
         huge={"kind":"number","value":"1e100000000"}
         self.assertFalse(json.loads(core.dispatch(json.dumps({"tree":huge})))["ok"])
         self.assertFalse(run("integrate(x^2*sin(x),x)",budget=-1)["ok"])
+    def test_large_exact_integer_serialization(self):
+        # Results beyond CPython's default 4300-digit int->str cap must still serialize.
+        for n in (2000,10000):
+            tree={"kind":"call","value":"factorial","args":[{"kind":"number","value":str(n)}]}
+            with self.subTest(n=n):
+                result=json.loads(core.dispatch(json.dumps({"tree":tree})))
+                self.assertTrue(result["ok"],result)
+                self.assertEqual(result["exact"],str(core.s.factorial(n)))
     def test_exact_examples(self):
         for case in CASES:
             if "expected" in case:
