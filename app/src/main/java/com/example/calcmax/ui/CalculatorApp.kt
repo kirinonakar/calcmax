@@ -98,7 +98,7 @@ val Modes=listOf("Scientific","CAS","Graph","Equations","Matrix","Vector","Stati
                 Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).clickable {m.reuse(entry)}) {MathNode(JSONObject(entry.input),m.inputFont*.84f)}
                 val response=remember(entry.result){JSONObject(entry.result)}
                 Box(Modifier.fillMaxWidth().padding(top=6.dp).horizontalScroll(rememberScrollState()),contentAlignment=Alignment.CenterEnd) {ResultMath(response,m.decimal,m.outputFont*.82f,
-                    displayMode=m.resultDisplayMode,thousandsSeparator=m.thousandsSeparator)}
+                    displayMode=m.resultDisplayMode,thousandsSeparator=m.thousandsSeparator,dmsDisplay=response.optBoolean("dms"))}
                 if(domainText(response).isNotEmpty())Text(domainText(response),fontSize=10.sp,color=c.muted)
                 HorizontalDivider(Modifier.padding(top=10.dp),color=c.grid)
             }
@@ -159,7 +159,7 @@ val Modes=listOf("Scientific","CAS","Graph","Equations","Matrix","Vector","Stati
         // This answer region is always present, including while a worker is computing.
         Box(Modifier.fillMaxWidth().heightIn(min=56.dp).horizontalScroll(rememberScrollState()).semantics(mergeDescendants=true){contentDescription="Answer panel";liveRegion=LiveRegionMode.Polite},contentAlignment=Alignment.CenterEnd){
             if(m.result!=null&&m.poweredOn)ResultMath(m.result!!,m.decimal,m.outputFont,m.mixedNumbers,
-                displayMode=m.resultDisplayMode,thousandsSeparator=m.thousandsSeparator,engineeringConversion=m.engineeringConversion,engineeringShift=m.engineeringShift) else Text(" ",fontSize=28.sp)
+                displayMode=m.resultDisplayMode,thousandsSeparator=m.thousandsSeparator,engineeringConversion=m.engineeringConversion,engineeringShift=m.engineeringShift,dmsDisplay=m.dmsDisplay,dmsConversion=m.dmsConversion) else Text(" ",fontSize=28.sp)
         }
         Row(Modifier.fillMaxWidth().height(24.dp),verticalAlignment=Alignment.CenterVertically){
             Text(when{m.engineeringConversion->"ENG mode · ←/→ shifts mantissa";m.error.isNotBlank()->m.error;m.busy->"Computing…";m.previewBusy->"Calculating…";domainText(m.result).isNotBlank()->domainText(m.result);m.committed->"Next input starts a new calculation";else->m.result?.optString("note") ?: ""},Modifier.weight(1f),fontSize=10.sp,maxLines=1,color=if(m.error.isNotBlank())c.danger else if(m.engineeringConversion)c.accent else c.muted)
@@ -179,10 +179,19 @@ val Modes=listOf("Scientific","CAS","Graph","Equations","Matrix","Vector","Stati
     }
 }
 
-@Composable fun ResultMath(result:JSONObject,decimal:Boolean,size:Float,mixed:Boolean=false,displayMode:ResultDisplayMode=ResultDisplayMode.OFF,thousandsSeparator:Boolean=false,engineeringConversion:Boolean=false,engineeringShift:Int=0) {
+@Composable fun ResultMath(result:JSONObject,decimal:Boolean,size:Float,mixed:Boolean=false,displayMode:ResultDisplayMode=ResultDisplayMode.OFF,thousandsSeparator:Boolean=false,engineeringConversion:Boolean=false,engineeringShift:Int=0,dmsDisplay:Boolean=false,dmsConversion:Boolean=false) {
     val useDecimal=decimal||engineeringConversion
     val effectiveMode=if(engineeringConversion)ResultDisplayMode.ENGINEERING else displayMode
-    var tree=result.optJSONObject(if(useDecimal)"decimalTree" else "tree") ?: result.optJSONObject("tree")
+    val wantDms=dmsDisplay&&!engineeringConversion
+    var tree=when {
+        wantDms&&result.optBoolean("dms")->result.optJSONObject(if(decimal)"decimalTree" else "tree")
+        wantDms->ResultDisplayFormat.dmsTree(result.optString("decimal"))
+        result.optBoolean("dms")->result.optJSONObject("numericDecimalTree")
+            ?: result.optJSONObject("numericTree")
+            ?: result.optJSONObject(if(decimal)"decimalTree" else "tree")
+        dmsConversion->result.optJSONObject("decimalTree") ?: result.optJSONObject("tree")
+        else->result.optJSONObject(if(useDecimal)"decimalTree" else "tree") ?: result.optJSONObject("tree")
+    }
     if(mixed&&!useDecimal&&tree?.optString("kind")=="fraction") {
         val fraction=tree
         tree=runCatching {

@@ -15,6 +15,18 @@ class ParserTest {
         assertEquals("tuple",p("(x,)").kind)
     }
     @Test fun unicode() { assertEquals("^",p("x²").value); assertEquals("sqrt",p("√8").value); assertEquals("degree",p("30°").value) }
+    @Test fun sexagesimalInputAndIncompleteFields() {
+        val tree=p("2°20′30″")
+        assertEquals("sexagesimal",tree.kind)
+        assertEquals(listOf("2","20","30"),tree.args.map{it.value})
+        val addition=p("2°20′30″+0°39′30″")
+        assertEquals("+",addition.value)
+        assertTrue(addition.args.all{it.kind=="sexagesimal"})
+        assertEquals("degree",p("30°").value)
+        val pending=Parser("2°20",true).parse()
+        assertEquals("sexagesimal",pending.kind)
+        assertTrue(pending.nodes().any{it.kind=="hole"})
+    }
     @Test fun editor() { assertEquals("sqrt(8)",Editor().insert("sqrt()",5).insert("8").source); assertEquals("2+",Editor("2+3").delete().source); assertEquals("7",Editor("2+3",3,0).insert("7").source) }
     @Test fun invalid() { for(s in listOf("", "1..2", "2+", "a.__class__", "f(1,)", "[1,2", "(x,,0)")) assertThrows(SyntaxException::class.java) { p(s) } }
     @Test fun complexity() { assertThrows(SyntaxException::class.java) { p("(".repeat(200)+"1"+")".repeat(200)) } }

@@ -80,6 +80,15 @@ def matrix(a):
 def flatten(a):
     return list(a) if isinstance(a, (list, tuple, s.MatrixBase, s.Tuple)) else [a]
 
+def dms_parts(value):
+    """Return normalized [degrees, minutes, seconds] for a real numeric value."""
+    require(getattr(value, "is_number", False) and not value.has(s.I), "DMS conversion requires a real numeric value")
+    magnitude=s.Abs(value)
+    whole=s.floor(magnitude)
+    minutes=s.floor((magnitude-whole)*60)
+    seconds=s.simplify((magnitude-whole-minutes/60)*3600)
+    return [s.sign(value)*whole,minutes,seconds]
+
 class Engine:
     def __init__(self, request):
         self.request = request
@@ -152,6 +161,11 @@ class Engine:
         if kind == "list": return [build(a) for a in args]
         if kind == "tuple": return tuple(build(a) for a in args)
         if kind == "unary": return (-1 if value == "-" else 1)*build(args[0])
+        if kind == "sexagesimal":
+            require(len(args) == 3, "DMS input requires degrees, minutes and seconds")
+            values=[build(a) for a in args]
+            require(all(getattr(item,"is_number",False) and not item.has(s.I) for item in values), "DMS fields must be real numbers")
+            return values[0]+values[1]/60+values[2]/3600
         if kind in ("binary", "relation"):
             require(value != ":=", "Use STO for variables or the Variables editor for functions")
             a, b = map(build, args)
@@ -208,10 +222,12 @@ class Engine:
         if name=="randInt":
             require(len(a)==2 and all(x.is_Integer for x in a) and a[0]<=a[1],"Enter integer lower and upper bounds")
             return s.Integer(random.randint(int(a[0]),int(a[1])))
+        if name=="sexagesimal":
+            require(len(a) == 3, "DMS input requires degrees, minutes and seconds")
+            return a[0]+a[1]/60+a[2]/3600
         if name=="dms":
-            if len(a)==3:return a[0]+a[1]/60+a[2]/3600
-            whole=s.floor(s.Abs(a[0]));minutes=s.floor((s.Abs(a[0])-whole)*60);seconds=s.simplify((s.Abs(a[0])-whole-minutes/60)*3600)
-            return [s.sign(a[0])*whole,minutes,seconds]
+            if len(a)==3:return self.call("sexagesimal",a,nodes)
+            return dms_parts(a[0])
         if name=="qty": return quantity(a[0],nodes[1]["value"],UNITS)
         if name=="mixed":
             require(all(v.is_Integer for v in a) and a[2]>0 and 0<=a[1],"Mixed fractions require integer parts and a positive denominator")
@@ -388,6 +404,19 @@ def walk(node):
     yield node
     for child in node.get("args",[]): yield from walk(child)
 
+def is_dms_expression(node, variables=None):
+    if not isinstance(node, dict): return False
+    kind=node.get("kind")
+    if kind == "sexagesimal": return True
+    if kind == "frozen_call" and node.get("value") == "sexagesimal": return True
+    if kind in ("group", "restricted", "unary"):
+        return bool(node.get("args")) and is_dms_expression(node["args"][0], variables)
+    if kind == "symbol" and node.get("value") == "Ans":
+        return is_dms_expression((variables or {}).get("Ans", {}), variables)
+    if kind == "binary" and node.get("value") in ("+", "-", "*", "/"):
+        return any(is_dms_expression(arg, variables) for arg in node.get("args", []))
+    return False
+
 def display_tree(x):
     def t(kind,value="",args=()): return {"kind":kind,"value":value,"args":list(args)}
     if isinstance(x,Quantity): return t("quantity",x.unit_text(),[display_tree(x.base)])
@@ -411,6 +440,9 @@ def display_tree(x):
     if isinstance(x,s.Symbol): return t("symbol",readable(x))
     if isinstance(x,s.Number): return t("number",readable(x))
     return t("text",readable(x))
+
+def dms_tree(value):
+    return {"kind":"dms","args":[display_tree(part) for part in dms_parts(value)]}
 
 def readable(x):
     if isinstance(x,Quantity): return readable(x.base)+" "+x.unit_text()
@@ -533,10 +565,18 @@ def dispatch(payload):
             exact=readable(value)
             require(len(exact)<=40000,"Result exceeds display size limit")
             decimal_value=approximate(value,engine.precision)
+            dms_result=(is_dms_expression(request["tree"],request.get("variables",{}))
+                        and getattr(value,"is_number",False) and not value.has(s.I))
             result={"exact":exact,"decimal":readable(decimal_value),"tree":display_tree(value),"note":engine.note,
                     "conditions":[readable(c.lhs)+" ≠ "+readable(c.rhs) if isinstance(c,s.Unequality) else str(c) for c in dict.fromkeys(engine.conditions)],"symbolic":bool(getattr(value,"free_symbols",False))}
             result["approximate"]=bool(getattr(value,"has",lambda *_:False)(s.Float))
             result["decimalTree"]=display_tree(decimal_value)
+            if dms_result:
+                result["tree"]=dms_tree(value)
+                result["decimalTree"]=dms_tree(decimal_value)
+                result["numericTree"]=display_tree(value)
+                result["numericDecimalTree"]=display_tree(decimal_value)
+                result["dms"]=True
             if request["tree"].get("value")=="eng" and getattr(value,"is_number",False):
                 offset=engine.build(request["tree"]["args"][1]) if len(request["tree"]["args"])>1 else 0
                 require(-300<=offset<=300,"Engineering exponent limit")
@@ -547,6 +587,8 @@ def dispatch(payload):
             if request["tree"].get("value")=="dms" and isinstance(value,list):result["tree"]=result["decimalTree"]={"kind":"dms","args":[display_tree(x) for x in value]}
             try:
                 ast=result_ast(value)
+                if dms_result:
+                    ast={"kind":"frozen_call","value":"sexagesimal","args":[result_ast(part) for part in dms_parts(value)]}
                 symbols=getattr(value,"free_symbols",set())
                 guards=[c for c in dict.fromkeys(engine.conditions) if c.free_symbols & symbols]
                 result["resultAst"]={"kind":"restricted","args":[ast]+[result_ast(c) for c in guards]} if guards else ast

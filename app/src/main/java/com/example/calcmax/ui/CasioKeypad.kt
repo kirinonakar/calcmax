@@ -28,7 +28,7 @@ import kotlin.random.Random
 data class KeySpec(val title:String,val input:String=title,val secondary:String="",val alternate:String="",val alpha:String="",val type:String="scientific")
 private val ScientificKeys=listOf(
     listOf(KeySpec("a/b","()/()","mixed","mixed(,,)"),KeySpec("√","sqrt()","³√","cbrt()"),KeySpec("x²","^2","x³","^3"),KeySpec("x□","^()","ⁿ√","nthroot(,)"),KeySpec("log","log()","10ˣ","10^()","z"),KeySpec("ln","ln()","eˣ","exp()","t")),
-    listOf(KeySpec("(−)","NEG","∠","∠","A"),KeySpec("°′″","°","←","DMS","B"),KeySpec("hyp","HYP","Abs","abs()","C"),KeySpec("sin","sin()","sin⁻¹","asin()","D"),KeySpec("cos","cos()","cos⁻¹","acos()","E"),KeySpec("tan","tan()","tan⁻¹","atan()","F")),
+    listOf(KeySpec("(−)","NEG","∠","∠","A"),KeySpec("°′″","DMS_INPUT","←","DMS","B"),KeySpec("hyp","HYP","Abs","abs()","C"),KeySpec("sin","sin()","sin⁻¹","asin()","D"),KeySpec("cos","cos()","cos⁻¹","acos()","E"),KeySpec("tan","tan()","tan⁻¹","atan()","F")),
     listOf(KeySpec("RCL",secondary="STO",alternate="STO"),KeySpec("ENG",secondary="←",alternate="ENG−",alpha="i"),KeySpec("(",secondary="%",alternate="%"),KeySpec(")",secondary=",",alternate=",",alpha="x"),KeySpec("S⇔D",secondary="a b/c ⇔ d/c",alternate="MIXED",alpha="y"),KeySpec("M+",secondary="M−",alternate="M−",alpha="M"))
 )
 private val SecondKeys=listOf(
@@ -90,7 +90,8 @@ private val NumericKeys=listOf(
             "RANDOM"->m.insert("0."+Random.nextInt(1000).toString().padStart(3,'0'))
             "ENG"->m.enterEngineering()
             "ENG−"->{m.enterEngineering();m.shiftEngineering(3)}
-            "DMS"->m.edit(Editor("dms(${m.editor.source.ifBlank{"0"}})"))
+            "DMS_INPUT"->m.insertDmsSymbol()
+            "DMS"->m.toggleDms()
             else->{val at=when {value=="()/()"->1;value.contains('(')->value.indexOf('(')+1;else->value.length};m.insert(value,at)}
         }
         if(value!="HYP")m.hyperbolic=false

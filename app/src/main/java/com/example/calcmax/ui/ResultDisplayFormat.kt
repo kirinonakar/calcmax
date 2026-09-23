@@ -3,6 +3,7 @@ package com.example.calcmax.ui
 import com.example.calcmax.calculator.ResultDisplayMode
 import org.json.JSONArray
 import org.json.JSONObject
+import java.math.RoundingMode
 import kotlin.math.abs
 
 /** Formatting helpers used only for the answer view; the engine result remains lossless. */
@@ -10,6 +11,30 @@ object ResultDisplayFormat {
     private const val MAX_DISPLAY_DIGITS = 40_000
 
     data class NotationParts(val mantissa: String, val exponent: Int)
+
+    /** Convert a displayed decimal result to the same compact tree used by the engine. */
+    fun dmsTree(value: String): JSONObject? = runCatching {
+        val number=value.trim().toBigDecimalOrNull() ?: return@runCatching null
+        val negative=number.signum()<0
+        val magnitude=number.abs()
+        var degrees=magnitude.setScale(0,RoundingMode.FLOOR)
+        val minuteValue=magnitude.subtract(degrees).multiply(java.math.BigDecimal.valueOf(60L))
+        var minutes=minuteValue.setScale(0,RoundingMode.FLOOR)
+        var seconds=minuteValue.subtract(minutes).multiply(java.math.BigDecimal.valueOf(60L))
+        val sixty=java.math.BigDecimal.valueOf(60L)
+        if(seconds.compareTo(sixty)>=0){seconds=seconds.subtract(sixty);minutes=minutes.add(java.math.BigDecimal.valueOf(1L))}
+        if(minutes.compareTo(sixty)>=0){minutes=minutes.subtract(sixty);degrees=degrees.add(java.math.BigDecimal.valueOf(1L))}
+        fun text(part:java.math.BigDecimal):String=part.stripTrailingZeros().toPlainString()
+        val degreeText=when {
+            negative&&degrees.signum()==0 -> "-0"
+            negative -> "-${text(degrees)}"
+            else -> text(degrees)
+        }
+        JSONObject().put("kind","dms").put("args",JSONArray()
+            .put(JSONObject().put("kind","number").put("value",degreeText))
+            .put(JSONObject().put("kind","number").put("value",text(minutes)))
+            .put(JSONObject().put("kind","number").put("value",text(seconds))))
+    }.getOrNull()
 
     fun formatTree(tree: JSONObject, displayMode: ResultDisplayMode, grouping: Boolean, engineeringShift: Int = 0, showZeroExponent: Boolean = false): JSONObject {
         if (displayMode == ResultDisplayMode.OFF && !grouping) return tree

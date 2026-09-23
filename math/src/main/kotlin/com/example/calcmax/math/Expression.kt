@@ -53,6 +53,46 @@ class Parser(private val source: String, private val allowHoles: Boolean = false
         if(token.text != s) fail("Expected '$s'"); return take()
     }
     private fun fail(s: String): Nothing = throw SyntaxException(s, token.start)
+    private fun isDmsComponentStart(): Boolean {
+        val first=token.text.firstOrNull()
+        if(first?.isDigit()==true || first=='.') return true
+        if(token.text !in listOf("+","-")) return false
+        val next=tokens.getOrNull(index+1)?.text?.firstOrNull()
+        return next?.isDigit()==true || next=='.'
+    }
+    private fun dmsComponent(): Expr? {
+        val saved=index
+        val first=take()
+        val sign=if(first.text in listOf("+","-")) {
+            val next=token.text.firstOrNull()
+            if(next?.isDigit()!=true && next!='.') { index=saved; return null }
+            take()
+        } else null
+        val number=if(sign==null) first else tokens[index-1]
+        val raw=(sign?.text ?: "")+number.text
+        return runCatching { raw.toBigDecimal(); Expr("number",raw,start=first.start,end=number.end) }.getOrNull()
+            ?: run { index=saved; null }
+    }
+    private fun dmsHole() = Expr("hole",start=token.start,end=token.start)
+    /** A Casio DMS entry is a sequence of numeric fields separated by °, ′ and ″. */
+    private fun tryDms(left: Expr): Expr? {
+        val saved=index
+        val degreeMarker=take()
+        if(!isDmsComponentStart()) { index=saved; return null }
+        val minute=dmsComponent()
+        if(minute==null) { index=saved; return null }
+        if(token.text=="′") {
+            val minuteMarker=take()
+            val second=dmsComponent()
+            if(second==null) return Expr("sexagesimal","pending-second",listOf(left,minute,dmsHole()),start=left.start,end=minuteMarker.end)
+            if(token.text=="″") {
+                val end=take().end
+                return Expr("sexagesimal","",listOf(left,minute,second),start=left.start,end=end)
+            }
+            return Expr("sexagesimal","pending-final",listOf(left,minute,second,dmsHole()),start=left.start,end=second.end)
+        }
+        return Expr("sexagesimal","pending-minute",listOf(left,minute,dmsHole()),start=left.start,end=degreeMarker.end.coerceAtLeast(minute.end))
+    }
     fun parse(): Expr {
         val expr = expression(0)
         if(token.text.isNotEmpty()) fail("Unexpected '${token.text}'")
@@ -99,6 +139,10 @@ class Parser(private val source: String, private val allowHoles: Boolean = false
         }
         while(true) {
             val op = token.text
+            if(op=="°" && min<=40) {
+                val dms=tryDms(left)
+                if(dms!=null) { left=dms; continue }
+            }
             if(op in listOf("!", "%", "°", "²", "³") && min <= 40) {
                 val end = take().end
                 left = when(op) {

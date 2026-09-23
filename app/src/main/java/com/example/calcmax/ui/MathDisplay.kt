@@ -141,7 +141,14 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
             kind=="answer"->Box(Modifier.border(1.dp,c.muted,RoundedCornerShape(4.dp)).padding(horizontal=5.dp,vertical=2.dp).semantics{contentDescription="Previous answer"}){children.firstOrNull()?.let{MathNode(it,size*.9f,depth=depth+1)}}
             kind=="restricted"->child(0)
             kind=="quantity"->MathRow{child(0);label(" $value",.7f)}
-            kind=="dms"->MathRow{child(0);label("°");child(1);label("′");child(2);label("″")}
+            kind=="dms"||kind=="sexagesimal"->MathRow {
+                child(0);label("°")
+                val showMinuteMarker=value!="pending-minute"
+                if(children.size>1){child(1);if(showMinuteMarker)label("′")}
+                val showSecondField=value==""||value=="pending-final"
+                if(children.size>2&&showSecondField)child(2)
+                if(value=="")label("″")
+            }
             kind=="group"->if(hideGroup)child(0)else MathRow{label("(");if(children.getOrNull(0)?.optString("kind")!="hole")child(0);if(value!="open")label(")")}
             kind=="call"&&value=="mixed"->MathRow(3.dp){child(0);FractionLayout({child(1,.85f)},{child(2,.85f)})}
             kind=="call"&&value=="eng"->child(0)

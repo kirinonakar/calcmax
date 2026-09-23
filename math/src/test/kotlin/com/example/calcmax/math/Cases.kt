@@ -5,6 +5,7 @@ fun main(args: Array<String>) {
     val cases=listOf(
         "2+3*4" to "14", "1/3+1/6" to "1/2", "sqrt(8)" to "2*sqrt(2)", "sqrt(12)" to "2*sqrt(3)",
         "sin(pi/6)" to "1/2", "cos(pi)" to "-1", "sin(30°)" to "1/2", "-2^2" to "-4", "2^3^2" to "512",
+        "2°20′30″" to "281/120", "2°20′30″+0°39′30″" to "3",
         "0.1+0.2" to "3/10", "123456789012345678901234567890+1" to "123456789012345678901234567891",
         "diff(x^3,x)" to "3*x**2", "diff(sin(x^2),x)" to "2*x*cos(x**2)", "diff(exp(x),x,3)" to "exp(x)",
         "integrate(x^2,x)" to "C + x**3/3", "integrate(x^2*sin(x),x)" to "C - x**2*cos(x) + 2*x*sin(x) + 2*cos(x)",

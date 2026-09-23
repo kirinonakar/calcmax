@@ -26,6 +26,10 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         private set
     var result by mutableStateOf<JSONObject?>(loadObject("result").takeIf{it.has("exact")})
         private set
+    var dmsDisplay by mutableStateOf(result?.optBoolean("dms") == true)
+        private set
+    var dmsConversion by mutableStateOf(false)
+        private set
     var tape by mutableStateOf<List<TapeEntry>>(emptyList())
         private set
     var committed by mutableStateOf(prefs.getBoolean("committed",false))
@@ -143,6 +147,8 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         if(changed)exitEngineering()
         editor=value;error="";committed=false
         if(changed) {
+            dmsDisplay=false
+            dmsConversion=false
             inputVersion++;commitRequested=false;busy=false
             val tree=runCatching {Parser(value.source,true).parse()}.getOrNull()
             if(tree!=null&&requiresExplicitEvaluation(tree,multiArgumentUserFunctions())) {result=null;resultSource="";resultVersion=-1}
@@ -155,7 +161,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         if(!committed) return
         exitEngineering()
         result?.let {tape=(tape+TapeEntry(editor.source,inputTree()?.toString() ?: "{}",it.toString(),inputAnswer?.toString() ?: "")).takeLast(300)}
-        committed=false;editor=Editor();result=null;resultSource="";inputAnswer=null
+        committed=false;editor=Editor();result=null;dmsDisplay=false;dmsConversion=false;resultSource="";inputAnswer=null
     }
     fun insert(text: String, inside: Int = text.length) {
         if(!poweredOn)return
@@ -168,8 +174,32 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         val target=if(overwrite&&editor.cursor==editor.anchor)editor.copy(anchor=(editor.cursor+text.length).coerceAtMost(editor.source.length)) else editor
         edit(target.insert(text,inside))
     }
+    fun insertDmsSymbol() {
+        if(!poweredOn)return
+        val position=minOf(editor.cursor,editor.anchor).coerceIn(0,editor.source.length)
+        val prefix=editor.source.substring(0,position)
+        val markerIndex=prefix.lastIndexOfAny(charArrayOf('°','′','″'))
+        val marker=prefix.getOrNull(markerIndex)
+        val afterMarker=if(markerIndex<0)"" else prefix.substring(markerIndex+1)
+        val activeField=afterMarker.isBlank()||afterMarker.toBigDecimalOrNull()!=null
+        val symbol=when {
+            !activeField||marker==null||marker=='″' -> "°"
+            marker=='°' -> "′"
+            else -> "″"
+        }
+        insert(symbol)
+    }
+    fun toggleDms() {
+        val current=result ?: return
+        if(current.optString("decimal").toBigDecimalOrNull()==null) {
+            error="DMS conversion requires a numeric result"
+            return
+        }
+        dmsDisplay=!dmsDisplay
+        dmsConversion=true
+    }
     fun clear() {
-        inputVersion++;commitRequested=false;committed=false;editor=Editor();result=null;resultSource="";error="";shift=false;alpha=false;hyperbolic=false;answerDisplay=null;inputAnswer=null;busy=false;exitEngineering();save()
+        inputVersion++;commitRequested=false;committed=false;editor=Editor();result=null;dmsDisplay=false;dmsConversion=false;resultSource="";error="";shift=false;alpha=false;hyperbolic=false;answerDisplay=null;inputAnswer=null;busy=false;exitEngineering();save()
     }
     fun fresh() {nextEntry();edit(Editor())}
     fun fraction() {
@@ -217,7 +247,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
                         val response=engine.execute(request().put("tree",JSONObject(tree.json())).put("budget",if(commitRequested)8 else 2))
                         if(revision==inputVersion && source==editor.source && !committed) {
                             if(response.optBoolean("ok")) {
-                                result=response;resultSource=source;resultVersion=revision;error=""
+                                result=response;dmsDisplay=response.optBoolean("dms");dmsConversion=false;resultSource=source;resultVersion=revision;error=""
                                 if(commitRequested)commit(source,response)
                             } else {error=response.optString("error");resultVersion=-1;commitRequested=false;busy=false}
                         }
@@ -232,7 +262,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     private fun commit(source:String,response:JSONObject) {
         if(committed)return
         exitEngineering()
-        result=response;resultSource=source;committed=true;commitRequested=false;busy=false
+        result=response;dmsDisplay=response.optBoolean("dms");dmsConversion=false;resultSource=source;committed=true;commitRequested=false;busy=false
         val next=JSONObject(variables.toString())
         if(response.has("resultAst"))next.put("Ans",response.getJSONObject("resultAst")) else next.remove("Ans")
         variables=next
@@ -269,7 +299,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
             try {
                 val response = engine.execute(request().put("tree",JSONObject(tree.json())))
                 if(response.optBoolean("ok")) {
-                    result=response
+                    result=response;dmsDisplay=response.optBoolean("dms");dmsConversion=false
                     val exact=response.optString("exact"); val approx=response.optString("decimal")
                     val next=JSONObject(variables.toString())
                     if(response.has("resultAst")) next.put("Ans",response.getJSONObject("resultAst")) else next.remove("Ans")
@@ -296,7 +326,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
                         val stored=response.getJSONObject("resultAst")
                         variables=JSONObject(variables.toString()).put(name,stored)
                         inputVersion++;resultVersion=-1
-                        if(showResult)result=response.put("note","Stored in $name")
+                        if(showResult){result=response.put("note","Stored in $name");dmsDisplay=false;dmsConversion=false}
                         error="";save()
                     } else error=response.optString("error","This result cannot be stored")
                 } finally {busy=false}
@@ -332,7 +362,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
             functions=JSONObject(functions.toString()).put(name,JSONObject().put("parameters",JSONArray(names)).put("source",source).put("body",JSONObject(Parser(source).parse().json()))); save()
             error=""
             val message="$name(${names.joinToString()}) defined"
-            if(showResult)result=JSONObject().put("exact",message).put("decimal",message).put("tree",JSONObject().put("kind","text").put("value",message))
+            if(showResult){result=JSONObject().put("exact",message).put("decimal",message).put("tree",JSONObject().put("kind","text").put("value",message));dmsDisplay=false;dmsConversion=false}
         } catch(e: Exception) { error=e.message ?: "Invalid function" }
     }
     fun assume(name: String, assumption: String) { assumptions=JSONObject(assumptions.toString()).put(name,JSONArray(if(assumption=="none") emptyList<String>() else listOf(assumption))); save() }
@@ -357,7 +387,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         if(busy) return
         job=viewModelScope.launch {
             busy=true; error=""
-            try { val r=engine.execute(request("programmer").put("a",a).put("b",b.ifBlank { "0" }).put("base",base).put("width",width).put("signed",signed).put("op",op)); if(r.optBoolean("ok")) result=r else error=r.optString("error") }
+            try { val r=engine.execute(request("programmer").put("a",a).put("b",b.ifBlank { "0" }).put("base",base).put("width",width).put("signed",signed).put("op",op)); if(r.optBoolean("ok")){result=r;dmsDisplay=false;dmsConversion=false} else error=r.optString("error") }
             finally { busy=false }
         }
     }
