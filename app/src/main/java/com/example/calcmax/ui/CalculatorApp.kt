@@ -20,6 +20,7 @@ import androidx.compose.ui.text.font.*
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.*
 import com.example.calcmax.calculator.CalculatorModel
+import com.example.calcmax.calculator.ResultDisplayMode
 import com.example.calcmax.math.Editor
 import com.example.calcmax.ui.theme.LocalInstrument
 import org.json.JSONObject
@@ -96,7 +97,8 @@ val Modes=listOf("Scientific","CAS","Graph","Equations","Matrix","Vector","Stati
             Column(Modifier.fillMaxWidth().padding(horizontal=14.dp,vertical=10.dp)) {
                 Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).clickable {m.reuse(entry)}) {MathNode(JSONObject(entry.input),m.inputFont*.84f)}
                 val response=remember(entry.result){JSONObject(entry.result)}
-                Box(Modifier.fillMaxWidth().padding(top=6.dp).horizontalScroll(rememberScrollState()),contentAlignment=Alignment.CenterEnd) {ResultMath(response,m.decimal,m.outputFont*.82f)}
+                Box(Modifier.fillMaxWidth().padding(top=6.dp).horizontalScroll(rememberScrollState()),contentAlignment=Alignment.CenterEnd) {ResultMath(response,m.decimal,m.outputFont*.82f,
+                    displayMode=m.resultDisplayMode,thousandsSeparator=m.thousandsSeparator)}
                 if(domainText(response).isNotEmpty())Text(domainText(response),fontSize=10.sp,color=c.muted)
                 HorizontalDivider(Modifier.padding(top=10.dp),color=c.grid)
             }
@@ -156,7 +158,8 @@ val Modes=listOf("Scientific","CAS","Graph","Equations","Matrix","Vector","Stati
         }
         // This answer region is always present, including while a worker is computing.
         Box(Modifier.fillMaxWidth().heightIn(min=56.dp).horizontalScroll(rememberScrollState()).semantics(mergeDescendants=true){contentDescription="Answer panel";liveRegion=LiveRegionMode.Polite},contentAlignment=Alignment.CenterEnd){
-            if(m.result!=null&&m.poweredOn)ResultMath(m.result!!,m.decimal,m.outputFont,m.mixedNumbers) else Text(" ",fontSize=28.sp)
+            if(m.result!=null&&m.poweredOn)ResultMath(m.result!!,m.decimal,m.outputFont,m.mixedNumbers,
+                displayMode=m.resultDisplayMode,thousandsSeparator=m.thousandsSeparator) else Text(" ",fontSize=28.sp)
         }
         Row(Modifier.fillMaxWidth().height(24.dp),verticalAlignment=Alignment.CenterVertically){
             Text(when{m.error.isNotBlank()->m.error;m.busy->"Computing…";m.previewBusy->"Calculating…";domainText(m.result).isNotBlank()->domainText(m.result);m.committed->"Next input starts a new calculation";else->m.result?.optString("note") ?: ""},Modifier.weight(1f),fontSize=10.sp,maxLines=1,color=if(m.error.isNotBlank())c.danger else c.muted)
@@ -164,6 +167,8 @@ val Modes=listOf("Scientific","CAS","Graph","Equations","Matrix","Vector","Stati
         }
         Row(Modifier.fillMaxWidth().height(36.dp).horizontalScroll(rememberScrollState()),verticalAlignment=Alignment.CenterVertically){
             SmallAction(if(m.decimal)"≈ Decimal" else "Exact"){m.decimal=!m.decimal}
+            SmallAction(if(m.resultDisplayMode==ResultDisplayMode.SCIENTIFIC)"SCI" else "ENG",active=m.resultDisplayMode!=ResultDisplayMode.OFF,description="Result notation"){m.cycleResultDisplayMode()}
+            SmallAction(",",active=m.thousandsSeparator,description="Thousands separators"){m.thousandsSeparator=!m.thousandsSeparator;m.save()}
             SmallAction("Copy"){m.result?.let{clipboard.setText(AnnotatedString(it.optString(if(m.decimal)"decimal" else "exact")))}}
             SmallAction("∫"){m.insert("integrate(,x)",10)}
             SmallAction("∫ₐᵇ"){m.insert("integrate(,x,,)",10)}
@@ -174,7 +179,7 @@ val Modes=listOf("Scientific","CAS","Graph","Equations","Matrix","Vector","Stati
     }
 }
 
-@Composable fun ResultMath(result:JSONObject,decimal:Boolean,size:Float,mixed:Boolean=false) {
+@Composable fun ResultMath(result:JSONObject,decimal:Boolean,size:Float,mixed:Boolean=false,displayMode:ResultDisplayMode=ResultDisplayMode.OFF,thousandsSeparator:Boolean=false) {
     var tree=result.optJSONObject(if(decimal)"decimalTree" else "tree") ?: result.optJSONObject("tree")
     if(mixed&&!decimal&&tree?.optString("kind")=="fraction") {
         val fraction=tree
@@ -185,11 +190,19 @@ val Modes=listOf("Scientific","CAS","Graph","Equations","Matrix","Vector","Stati
             if(parts[0].signum()==0)fraction else JSONObject().put("kind","call").put("value","mixed").put("args",org.json.JSONArray(listOf(parts[0]*numerator.signum().toBigInteger(),parts[1],denominator).map {JSONObject().put("kind","number").put("value",it.toString())}))
         }.getOrDefault(tree)
     }
-    if(tree!=null)MathNode(tree,size) else Text(result.optString(if(decimal)"decimal" else "exact"),fontSize=size.sp,color=LocalInstrument.current.ink,fontFamily=FontFamily.Serif)
+    val displayTree=tree?.let{ResultDisplayFormat.formatTree(it,displayMode,thousandsSeparator)}
+    if(displayTree!=null)MathNode(displayTree,size) else Text(ResultDisplayFormat.formatText(result.optString(if(decimal)"decimal" else "exact"),displayMode,thousandsSeparator),fontSize=size.sp,color=LocalInstrument.current.ink,fontFamily=FontFamily.Serif)
 }
 private fun domainText(result:JSONObject?):String {
     val conditions=result?.optJSONArray("conditions") ?: return ""
     return if(conditions.length()==0)"" else "Domain: "+(0 until conditions.length()).joinToString{conditions.getString(it)}
 }
-@Composable fun SmallAction(text:String,action:()->Unit){TextButton(onClick=action,contentPadding=PaddingValues(horizontal=8.dp,vertical=0.dp)){Text(text,fontSize=11.sp)}}
+@Composable fun SmallAction(text:String,active:Boolean?=null,description:String?=null,action:()->Unit){
+    val c=LocalInstrument.current
+    val color=when(active){true->c.accent;false->c.muted.copy(alpha=.45f);null->MaterialTheme.colorScheme.onSurface}
+    val modifier=description?.let{value->Modifier.semantics{contentDescription=value}} ?: Modifier
+    TextButton(onClick=action,contentPadding=PaddingValues(horizontal=8.dp,vertical=0.dp),modifier=modifier){
+        Text(text,fontSize=11.sp,color=color,fontWeight=if(active==true)FontWeight.SemiBold else FontWeight.Normal)
+    }
+}
 @Composable fun Templates(m:CalculatorModel){Row(Modifier.horizontalScroll(rememberScrollState())){listOf("Factor" to "factor(x^4-1)","Solve" to "solve(x^2-5x+6=0,x)","Derivative" to "diff(sin(x^2),x)","Integral" to "integrate(x^2*exp(x),x)").forEach{(label,source)->SmallAction(label){m.edit(Editor(source))}}}}

@@ -8,6 +8,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.calcmax.calculator.CalculatorModel
+import com.example.calcmax.calculator.ResultDisplayMode
 import com.example.calcmax.math.Editor
 import com.example.calcmax.math.Parser
 import org.json.JSONObject
@@ -65,7 +66,8 @@ import org.json.JSONObject
             else {val command=if(kind=="System")"solve($expression,[${names.joinToString(",")}])" else if(numerical)"nsolve($expression,${names[0]},$guess)" else "solve($expression,${names[0]})";m.fresh();m.edit(Editor(command));m.calculate()}
         },enabled=!m.busy){Text(if(m.busy)"Solving…" else "Solve")}
         if(m.error.isNotBlank())Text(m.error,color=MaterialTheme.colorScheme.error)
-        if(m.result!=null) {HorizontalDivider();Text("Solution");Box(Modifier.horizontalScroll(rememberScrollState())){ResultMath(m.result!!,m.decimal,m.outputFont)};SmallAction(if(m.decimal)"Show exact" else "Show decimal"){m.decimal=!m.decimal}}
+        if(m.result!=null) {HorizontalDivider();Text("Solution");Box(Modifier.horizontalScroll(rememberScrollState())){ResultMath(m.result!!,m.decimal,m.outputFont,
+            displayMode=m.resultDisplayMode,thousandsSeparator=m.thousandsSeparator)};SmallAction(if(m.decimal)"Show exact" else "Show decimal"){m.decimal=!m.decimal}}
     }
 }
 

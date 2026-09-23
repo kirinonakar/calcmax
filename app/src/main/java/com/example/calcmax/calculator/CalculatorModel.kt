@@ -11,6 +11,7 @@ import org.json.JSONObject
 
 data class HistoryEntry(val id: Long, val source: String, val exact: String, val decimal: String, val mode: String, val favorite: Boolean = false,val inputTree:String="",val response:String="",val answer:String="")
 data class TapeEntry(val source: String,val input: String,val result: String,val answer:String="")
+enum class ResultDisplayMode { OFF, ENGINEERING, SCIENTIFIC }
 class CalculatorModel(application: Application) : AndroidViewModel(application) {
     private val prefs = application.getSharedPreferences("calculator",0)
     private val engine = EngineClient(application)
@@ -58,6 +59,14 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     var inputFont by mutableFloatStateOf(prefs.getFloat("inputFont",25f))
     var outputFont by mutableFloatStateOf(prefs.getFloat("outputFont",28f))
     var decimal by mutableStateOf(false)
+    var resultDisplayMode by mutableStateOf(
+        when(prefs.getString("resultDisplayMode","")) {
+            "eng" -> ResultDisplayMode.ENGINEERING
+            "sci" -> ResultDisplayMode.SCIENTIFIC
+            else -> if(prefs.getBoolean("engineeringNotation",false)) ResultDisplayMode.ENGINEERING else ResultDisplayMode.OFF
+        }
+    )
+    var thousandsSeparator by mutableStateOf(prefs.getBoolean("thousandsSeparator",false))
     var haptics by mutableStateOf(prefs.getBoolean("haptics",true))
     var sound by mutableStateOf(prefs.getBoolean("sound",false))
     var persistHistory by mutableStateOf(prefs.getBoolean("historyEnabled",true))
@@ -105,6 +114,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         prefs.edit().putString("expression",editor.source).putInt("cursor",editor.cursor).putString("mode",mode).putString("angle",angle).putString("theme",theme)
             .putString("result",result?.toString() ?: "{}").putString("resultSource",resultSource).putBoolean("committed",committed)
             .putString("inputAnswer",inputAnswer?.toString() ?: "{}").putString("answerDisplay",answerDisplay?.toString() ?: "{}").putString("lastAnswerResult",lastAnswerResult?.toString() ?: "{}")
+            .putString("resultDisplayMode",resultDisplayMode.name.lowercase()).putBoolean("thousandsSeparator",thousandsSeparator)
             .putInt("precision",precision).putBoolean("haptics",haptics).putBoolean("sound",sound).putBoolean("historyEnabled",persistHistory)
             .putFloat("inputFont",inputFont).putFloat("outputFont",outputFont)
             .putString("variables",variables.toString()).putString("functions",functions.toString()).putString("assumptions",assumptions.toString())
@@ -179,7 +189,8 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         val selected=target.source.substring(minOf(target.anchor,target.cursor),maxOf(target.anchor,target.cursor))
         edit(target.insert("$function($selected)"))
     }
-    fun resetSetup(){angle="DEG";precision=30;decimal=false;mixedNumbers=false;overwrite=false;clear();save()}
+    fun resetSetup(){angle="DEG";precision=30;decimal=false;resultDisplayMode=ResultDisplayMode.OFF;thousandsSeparator=false;mixedNumbers=false;overwrite=false;clear();save()}
+    fun cycleResultDisplayMode(){resultDisplayMode=when(resultDisplayMode){ResultDisplayMode.OFF->ResultDisplayMode.ENGINEERING;ResultDisplayMode.ENGINEERING->ResultDisplayMode.SCIENTIFIC;ResultDisplayMode.SCIENTIFIC->ResultDisplayMode.OFF};save()}
     fun clearMemory(){variables=JSONObject();functions=JSONObject();assumptions=JSONObject();lastAnswerResult=null;clear();save()}
     fun clearAllScreen(){cancel();tape=emptyList();variables=JSONObject();lastAnswerResult=null;poweredOn=true;prefs.edit().putLong("screenClearedAt",System.currentTimeMillis()).apply();clear();save()}
     fun reuse(entry:TapeEntry) {nextEntry();inputAnswer=entry.answer.takeIf{it.isNotEmpty()}?.let(::JSONObject);answerDisplay=inputAnswer;edit(Editor(entry.source))}
