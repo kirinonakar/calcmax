@@ -26,7 +26,71 @@ class CalculatorInstrumentedTest {
     private fun model()=ViewModelProvider(compose.activity)[CalculatorModel::class.java]
     private fun capture(name: String) {
         val file=File(compose.activity.filesDir,"qa/$name.png");file.parentFile!!.mkdirs()
-        file.outputStream().use { compose.onRoot().captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG,100,it) }
+        file.outputStream().use { val roots=compose.onAllNodes(isRoot());roots[roots.fetchSemanticsNodes().lastIndex].captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG,100,it) }
+    }
+    @Test fun tokenCursorMalformedInputAndClearAll() {
+        compose.runOnIdle {model().mode="Scientific";model().clear();model().edit(Editor("1234"))}
+        val token=compose.onNode(hasText("1234│") and hasAnyAncestor(hasContentDescription("Current expression")),useUnmergedTree=true)
+        token.performTouchInput{click(center)}
+        compose.runOnIdle{assertEquals(0,model().editor.anchor);assertEquals(4,model().editor.cursor)}
+        compose.onNode(hasText("1234") and hasAnyAncestor(hasContentDescription("Current expression")),useUnmergedTree=true).performTouchInput{click(androidx.compose.ui.geometry.Offset(width*.3f,height/2f))}
+        compose.runOnIdle{assertEquals(model().editor.anchor,model().editor.cursor);assertTrue(model().editor.cursor in 1..2)}
+        compose.onNode(hasText("│",substring=true) and hasAnyAncestor(hasContentDescription("Current expression")),useUnmergedTree=true).performTouchInput{click(androidx.compose.ui.geometry.Offset(width*.85f,height/2f))}
+        compose.runOnIdle{assertTrue(model().editor.cursor>=3);model().edit(Editor("123-434+545)",0))}
+        compose.onNode(hasText("│123") and hasAnyAncestor(hasContentDescription("Current expression")),useUnmergedTree=true).assertExists()
+        compose.runOnIdle{model().insert("(");assertNotNull(model().editor.tree());model().store("A","42")}
+        compose.waitUntil(30000){!model().busy&&model().variables.has("A")}
+        compose.onNodeWithContentDescription("RCL").performClick()
+        compose.onNodeWithText("A = ").assertExists()
+        capture("recall-values")
+        compose.onNodeWithText("Done").performClick()
+        var count=0
+        compose.runOnIdle{count=model().history.size;model().precision=10;model().inputFont=27f;model().save()}
+        compose.onNodeWithContentDescription("SHIFT").performClick()
+        compose.onNodeWithContentDescription("AC").performClick()
+        compose.runOnIdle{assertEquals("",model().editor.source);assertEquals(0,model().variables.length());assertTrue(model().tape.isEmpty());assertEquals(count,model().history.size);assertEquals(10,model().precision);assertEquals(27f,model().inputFont);model().inputFont=25f;model().precision=30;model().save()}
+    }
+    @Test fun equationAndCustomFunctionWorkspaces() {
+        compose.runOnIdle{model().clear();model().mode="Equations"}
+        compose.onNodeWithText("Solve",useUnmergedTree=true).performClick()
+        compose.waitUntil(30000){!model().busy&&model().result!=null}
+        compose.runOnIdle{assertEquals("{2, 3}",model().result!!.getString("exact"))}
+        capture("equation-solver")
+        compose.onNodeWithText("System").performClick()
+        compose.onNodeWithText("Solve",useUnmergedTree=true).performClick()
+        compose.waitUntil(30000){!model().busy&&model().result?.optString("exact")?.contains("y")==true}
+        compose.runOnIdle{assertTrue(model().error,model().error.isEmpty());model().mode="Functions"}
+        compose.onNodeWithText("Save function").performClick()
+        compose.runOnIdle{assertTrue(model().functions.has("f"));assertEquals("x^2+1",model().functions.getJSONObject("f").getString("source"))}
+        capture("custom-functions")
+        compose.runOnIdle{model().mode="Scientific";model().clear();model().edit(Editor("f(3)+sinc(0)"));model().calculate()}
+        compose.waitUntil(30000){!model().busy&&model().result!=null}
+        compose.runOnIdle{assertEquals("11",model().result!!.getString("exact"))}
+    }
+    @Test fun directionalGraphPinches() {
+        compose.runOnIdle{model().mode="Graph";model().xMin=-10.0;model().xMax=10.0;model().yMin=-5.0;model().yMax=5.0}
+        val graph=compose.onNode(hasContentDescription("Graph with",substring=true))
+        graph.performTouchInput {
+            down(0,androidx.compose.ui.geometry.Offset(width*.35f,height*.5f));down(1,androidx.compose.ui.geometry.Offset(width*.65f,height*.5f))
+            moveTo(0,androidx.compose.ui.geometry.Offset(width*.2f,height*.5f));moveTo(1,androidx.compose.ui.geometry.Offset(width*.8f,height*.5f));up(0);up(1)
+        }
+        compose.runOnIdle{assertTrue(model().xMax-model().xMin<18.0);assertEquals(10.0,model().yMax-model().yMin,.001);model().xMin=-10.0;model().xMax=10.0}
+        graph.performTouchInput {
+            down(0,androidx.compose.ui.geometry.Offset(width*.5f,height*.35f));down(1,androidx.compose.ui.geometry.Offset(width*.5f,height*.65f))
+            moveTo(0,androidx.compose.ui.geometry.Offset(width*.5f,height*.2f));moveTo(1,androidx.compose.ui.geometry.Offset(width*.5f,height*.8f));up(0);up(1)
+        }
+        compose.runOnIdle{assertEquals(20.0,model().xMax-model().xMin,.001);assertTrue(model().yMax-model().yMin<9.0)}
+    }
+    @Test fun keyboardOverlaysWithoutMovingKeys() {
+        compose.runOnIdle{model().mode="Scientific";model().clear()}
+        val before=compose.onNodeWithContentDescription("AC").fetchSemanticsNode().boundsInRoot
+        compose.onNodeWithText("Keyboard").performClick()
+        compose.onNodeWithContentDescription("Expression input").performClick().performTextInput("1234")
+        compose.waitUntil(10000){androidx.core.view.ViewCompat.getRootWindowInsets(compose.activity.window.decorView)?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime())==true}
+        val after=compose.onNodeWithContentDescription("AC").fetchSemanticsNode().boundsInRoot
+        assertEquals(before,after)
+        capture("keyboard-overlay")
+        compose.activityRule.scenario.onActivity{androidx.core.view.WindowCompat.getInsetsController(it.window,it.window.decorView).hide(androidx.core.view.WindowInsetsCompat.Type.ime())}
     }
     @Test fun scientificCalculationAndThemes() {
         compose.runOnIdle { model().clear();model().mode="Scientific";model().theme="Light" }

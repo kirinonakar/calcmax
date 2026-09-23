@@ -129,6 +129,10 @@ data class ConstantEntry(val symbol: String,val name: String,val value: String,v
         Text("Maximum significant digits"); Choices(digits+"Custom",if(customVisible)"Custom" else m.precision.toString(),{if(it=="Custom")customVisible=true else {customVisible=false;m.precision=it.toInt();m.recalculatePreview();m.save()}})
         if(customVisible) {Field(custom,"Custom precision · 3–200",Modifier.fillMaxWidth()){custom=it};TextButton(onClick={m.precision=custom.toInt();m.recalculatePreview();m.save()},enabled=custom.toIntOrNull() in 3..200){Text("Apply precision")}}
         Text("Trailing decimal zeros are omitted. Precision controls accuracy, not a fixed number of displayed places.",fontSize=11.sp)
+        Text("Input font · ${m.inputFont.toInt()} sp")
+        Slider(m.inputFont,{m.inputFont=it},valueRange=16f..42f,steps=25,onValueChangeFinished={m.save()})
+        Text("Output font · ${m.outputFont.toInt()} sp")
+        Slider(m.outputFont,{m.outputFont=it},valueRange=16f..48f,steps=31,onValueChangeFinished={m.save()})
         Row(verticalAlignment=Alignment.CenterVertically) { Text("Key vibration",Modifier.weight(1f)); Switch(m.haptics,{m.haptics=it;m.save()}) }
         Row(verticalAlignment=Alignment.CenterVertically) { Text("Key sound",Modifier.weight(1f)); Switch(m.sound,{m.sound=it;m.save()}) }
         Row(verticalAlignment=Alignment.CenterVertically) { Text("Save history locally",Modifier.weight(1f)); Switch(m.persistHistory,{m.persistHistory=it;m.save()}) }
@@ -159,6 +163,16 @@ data class ConstantEntry(val symbol: String,val name: String,val value: String,v
     var name by rememberSaveable { mutableStateOf("A") }; var value by rememberSaveable { mutableStateOf(m.editor.source.ifBlank { "0" }) }; var parameters by rememberSaveable { mutableStateOf("x") }; var function by rememberSaveable { mutableStateOf(false) }
     AlertDialog(onDismissRequest=close,title={Text("Variables & functions")},text={Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(6.dp)) {
         Choices(listOf("A","B","C","D","E","F","X","Y","M"),name,{name=it})
+        if(operation=="RCL") {
+            Text("Stored values · tap to recall")
+            if(m.variables.length()==0)Text("No stored variables")
+            m.variables.keys().asSequence().toList().sorted().forEach{key->
+                Row(Modifier.fillMaxWidth().clickable{m.insert(key);close()}.padding(vertical=8.dp),verticalAlignment=Alignment.CenterVertically){
+                    Text("$key = ",fontSize=16.sp)
+                    Box(Modifier.horizontalScroll(rememberScrollState())){MathNode(m.variables.getJSONObject(key),m.outputFont*.75f)}
+                }
+            }
+        }
         Field(name,"Name",Modifier.fillMaxWidth()) { name=it }
         Field(value,"Value / expression",Modifier.fillMaxWidth()) { value=it }
         Row(verticalAlignment=Alignment.CenterVertically) { Checkbox(function,{function=it});Text("User function") }

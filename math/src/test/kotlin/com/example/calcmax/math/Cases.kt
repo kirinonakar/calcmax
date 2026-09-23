@@ -8,6 +8,7 @@ fun main(args: Array<String>) {
         "0.1+0.2" to "3/10", "123456789012345678901234567890+1" to "123456789012345678901234567891",
         "diff(x^3,x)" to "3*x**2", "diff(sin(x^2),x)" to "2*x*cos(x**2)", "diff(exp(x),x,3)" to "exp(x)",
         "integrate(x^2,x)" to "C + x**3/3", "integrate(x^2*sin(x),x)" to "C - x**2*cos(x) + 2*x*sin(x) + 2*cos(x)",
+        "sinc(0)" to "1", "sinc(pi)" to "0", "sinc(pi/2)" to "2/pi",
         "integrate(x^2,x,0,1)" to "1/3", "limit(sin(x)/x,x,0)" to "1", "limit(1/x,x,oo)" to "0",
         "limit(1/x,x,0,left)" to "-oo", "limit(1/x,x,0,right)" to "oo",
         "factor(x^4-1)" to "(x - 1)*(x + 1)*(x**2 + 1)", "expand((x+1)^2)" to "x**2 + 2*x + 1",

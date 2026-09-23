@@ -2,6 +2,18 @@ package com.example.calcmax.math
 import org.junit.Assert.*
 import org.junit.Test
 class StructuredEditorTest {
+    @Test fun malformedExpressionStillHasAddressableCursor() {
+        val e=Editor("123-434+545)",0)
+        assertNull(e.tree())
+        assertEquals(0..3,e.cursorTarget())
+        assertNotNull(e.insert("(").tree())
+        val inside=e.selectRange(0,3).placeInToken(0,3,1)
+        assertEquals("1923-434+545)",inside.insert("9").source)
+        assertEquals(0..3,inside.cursorTarget())
+        val continued=Editor("1234").placeInToken(0,4,4).insert("+")
+        assertNull(continued.activeToken)
+        assertNotNull(continued.cursorTarget())
+    }
     @Test fun exponentHasSeparateInsideAndOutsideStops() {
         val selected=Editor("3^2+6").selectRange(2,3)
         val inside=selected.move(1)

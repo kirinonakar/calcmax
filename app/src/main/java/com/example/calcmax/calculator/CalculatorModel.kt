@@ -55,6 +55,8 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     var angle by mutableStateOf(prefs.getString("angle","DEG") ?: "DEG")
     var theme by mutableStateOf(prefs.getString("theme","System") ?: "System")
     var precision by mutableIntStateOf(prefs.getInt("precision",30))
+    var inputFont by mutableFloatStateOf(prefs.getFloat("inputFont",25f))
+    var outputFont by mutableFloatStateOf(prefs.getFloat("outputFont",28f))
     var decimal by mutableStateOf(false)
     var haptics by mutableStateOf(prefs.getBoolean("haptics",true))
     var sound by mutableStateOf(prefs.getBoolean("sound",false))
@@ -85,7 +87,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     private var job: Job? = null
     private var graphJob: Job? = null
     init {
-        tape=history.filterIndexed{index,entry->index!=0||!committed||entry.source!=editor.source}.take(100).asReversed().mapNotNull {entry->
+        tape=history.filterIndexed{index,entry->entry.id>prefs.getLong("screenClearedAt",0)&&(index!=0||!committed||entry.source!=editor.source)}.take(100).asReversed().mapNotNull {entry->
             runCatching {
                 val input=entry.inputTree.ifBlank {Parser(entry.source,true).parse().json()}
                 val response=entry.response.ifBlank {JSONObject().put("exact",entry.exact).put("decimal",entry.decimal).put("tree",JSONObject(Parser(entry.exact,true).parse().json())).toString()}
@@ -104,6 +106,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
             .putString("result",result?.toString() ?: "{}").putString("resultSource",resultSource).putBoolean("committed",committed)
             .putString("inputAnswer",inputAnswer?.toString() ?: "{}").putString("answerDisplay",answerDisplay?.toString() ?: "{}").putString("lastAnswerResult",lastAnswerResult?.toString() ?: "{}")
             .putInt("precision",precision).putBoolean("haptics",haptics).putBoolean("sound",sound).putBoolean("historyEnabled",persistHistory)
+            .putFloat("inputFont",inputFont).putFloat("outputFont",outputFont)
             .putString("variables",variables.toString()).putString("functions",functions.toString()).putString("assumptions",assumptions.toString())
             .putString("graphSource",graphSource).putString("graphKind",graphKind).putString("xMin",xMin.toString()).putString("xMax",xMax.toString()).putString("yMin",yMin.toString()).putString("yMax",yMax.toString())
             .putString("parameterMin",parameterMin.toString()).putString("parameterMax",parameterMax.toString())
@@ -173,6 +176,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     }
     fun resetSetup(){angle="DEG";precision=30;decimal=false;mixedNumbers=false;overwrite=false;clear();save()}
     fun clearMemory(){variables=JSONObject();functions=JSONObject();assumptions=JSONObject();lastAnswerResult=null;clear();save()}
+    fun clearAllScreen(){cancel();tape=emptyList();variables=JSONObject();lastAnswerResult=null;poweredOn=true;prefs.edit().putLong("screenClearedAt",System.currentTimeMillis()).apply();clear();save()}
     fun reuse(entry:TapeEntry) {nextEntry();inputAnswer=entry.answer.takeIf{it.isNotEmpty()}?.let(::JSONObject);answerDisplay=inputAnswer;edit(Editor(entry.source))}
     fun recalculatePreview() {inputVersion++;schedulePreview()}
     private fun schedulePreview() {
@@ -290,15 +294,15 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
             }finally{busy=false}
         }
     }
-    fun define(name: String, parameters: String, source: String) {
+    fun define(name: String, parameters: String, source: String, showResult:Boolean=true) {
         try {
             require(name.matches(Regex("[A-Za-z][A-Za-z0-9_]*")))
-            require(name !in ("sin cos tan asin acos atan sinh cosh tanh asinh acosh atanh sqrt cbrt nthroot abs floor ceil round sign factorial gamma ln log exp erf erfc Ei Si Ci zeta re im arg conj polar rectpolar simplify expand factor collect diff integrate limit series solve nsolve sum product piecewise subs gcd lcm nCr nPr prime factorization divisors percent degree quotient remainder det inverse transpose rank trace rref ref lu eigenvalues eigenvectors norm normalize dot cross angle projection linsolve mean median variance stdev sumdata quartiles stats regression convert qty nintegrate nderivative minimum maximum".split(' '))) {"This function name is reserved"}
+            require(name !in ("sinc sin cos tan asin acos atan sinh cosh tanh asinh acosh atanh sqrt cbrt nthroot abs floor ceil round sign factorial gamma ln log exp erf erfc Ei Si Ci zeta re im arg conj polar rectpolar simplify expand factor collect diff integrate limit series solve nsolve sum product piecewise subs gcd lcm nCr nPr prime factorization divisors percent degree quotient remainder det inverse transpose rank trace rref ref lu eigenvalues eigenvectors norm normalize dot cross angle projection linsolve mean median variance stdev sumdata quartiles stats regression convert qty nintegrate nderivative minimum maximum".split(' '))) {"This function name is reserved"}
             val names=parameters.split(',').map { it.trim() }; require(names.all { it.matches(Regex("[A-Za-z][A-Za-z0-9_]*")) } && names.distinct().size==names.size)
-            functions=JSONObject(functions.toString()).put(name,JSONObject().put("parameters",JSONArray(names)).put("body",JSONObject(Parser(source).parse().json()))); save()
+            functions=JSONObject(functions.toString()).put(name,JSONObject().put("parameters",JSONArray(names)).put("source",source).put("body",JSONObject(Parser(source).parse().json()))); save()
             error=""
             val message="$name(${names.joinToString()}) defined"
-            result=JSONObject().put("exact",message).put("decimal",message).put("tree",JSONObject().put("kind","text").put("value",message))
+            if(showResult)result=JSONObject().put("exact",message).put("decimal",message).put("tree",JSONObject().put("kind","text").put("value",message))
         } catch(e: Exception) { error=e.message ?: "Invalid function" }
     }
     fun assume(name: String, assumption: String) { assumptions=JSONObject(assumptions.toString()).put(name,JSONArray(if(assumption=="none") emptyList<String>() else listOf(assumption))); save() }

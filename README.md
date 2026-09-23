@@ -92,6 +92,10 @@ History is capped at 500 entries and stored privately on the device. Turning per
 
 ## Validation
 
+Recent interaction additions: directional pinches lock to x for horizontal finger placement, y for vertical placement, and equal x/y scaling for diagonal placement. Software keyboard input overlays the lower keys without resizing the instrument. Tap a number once to select it and again to place its blinking internal cursor. Setup offers separate input/output font sizes. RCL lists stored values; SHIFT AC is CLR ALL and clears the visible tape and variables while preserving History, settings, assumptions and custom functions.
+
+Equations provides coefficient forms for linear/quadratic/cubic equations, multi-line systems and general exact/numeric solving. Functions provides creation, editing, insertion and deletion of reusable formulas. The second keypad and catalog include the unnormalized radian function `sinc(x) = sin(x)/x`, with `sinc(0) = 1`.
+
 ```powershell
 .\gradlew.bat :math:test :math:exportCases :app:lintDebug
 python -m venv .venv

@@ -29,11 +29,11 @@ private val ScientificKeys=listOf(
 )
 private val SecondKeys=listOf(
     listOf(KeySpec("simp","simplify()"),KeySpec("factor","factor()"),KeySpec("expand","expand()"),KeySpec("collect","collect(,x)"),KeySpec("subs","subs(,x,)"),KeySpec("cases","piecewise([,x>0],[0,true])")),
-    listOf(KeySpec("⌊x⌋","floor()"),KeySpec("⌈x⌉","ceil()"),KeySpec("∞","oo","sign","sign()"),KeySpec("gcd","gcd(,)"),KeySpec("lcm","lcm(,)"),KeySpec("divisors","divisors()")),
+    listOf(KeySpec("⌊x⌋","floor()"),KeySpec("⌈x⌉","ceil()"),KeySpec("∞","oo","sign","sign()"),KeySpec("gcd","gcd(,)"),KeySpec("lcm","lcm(,)"),KeySpec("sinc","sinc()","divisors","divisors()")),
     listOf(KeySpec("det","det()"),KeySpec("inv","inverse()"),KeySpec("T","transpose()"),KeySpec("‖v‖","norm()"),KeySpec("dot","dot(,)"),KeySpec("cross","cross(,)"))
 )
 private val NumericKeys=listOf(
-    listOf(KeySpec("7",secondary="CONST",alternate="Constants"),KeySpec("8",secondary="CONV",alternate="Units"),KeySpec("9",secondary="CLR",alternate="Clear"),KeySpec("DEL",secondary="INS",alternate="INS",type="danger"),KeySpec("AC",secondary="OFF",alternate="OFF",type="danger")),
+    listOf(KeySpec("7",secondary="CONST",alternate="Constants"),KeySpec("8",secondary="CONV",alternate="Units"),KeySpec("9",secondary="CLR",alternate="Clear"),KeySpec("DEL",secondary="INS",alternate="INS",type="danger"),KeySpec("AC",secondary="CLR ALL",alternate="CLR ALL",type="danger")),
     listOf(KeySpec("4",secondary="MATRIX",alternate="Matrix"),KeySpec("5",secondary="VECTOR",alternate="Vector"),KeySpec("6"),KeySpec("×",secondary="nPr",alternate="nPr(,)"),KeySpec("÷",secondary="nCr",alternate="nCr(,)")),
     listOf(KeySpec("1",secondary="STAT",alternate="Statistics"),KeySpec("2",secondary="CMPLX",alternate="Complex"),KeySpec("3",secondary="BASE",alternate="Programmer"),KeySpec("+",secondary="Pol",alternate="pol(,)"),KeySpec("−",secondary="Rec",alternate="rec(,)")),
     listOf(KeySpec("0",secondary="Rnd",alternate="rnd()"),KeySpec(".",secondary="Ran#",alternate="RANDOM",alpha="randInt(,)"),KeySpec("×10ˣ","*10^()","π","pi","e"),KeySpec("Ans",secondary="DRG▶",alternate="ANGLE"),KeySpec("="))
@@ -56,7 +56,7 @@ private val NumericKeys=listOf(
         if(m.hyperbolic && value in listOf("sin()","cos()","tan()","asin()","acos()","atan()"))value=value.substringBefore('(')+"h()"
         when(value) {
             "ON"->{m.poweredOn=true;m.clear()}
-            "OFF"->{m.cancel();m.error="";m.poweredOn=false}
+            "CLR ALL"->m.clearAllScreen()
             "MODE"->open("Mode");"SETUP"->open("Settings")
             "CALC","="->m.calculate()
             "RELATION"->m.insert("=")

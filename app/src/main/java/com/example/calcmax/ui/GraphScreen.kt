@@ -3,7 +3,8 @@ package com.example.calcmax.ui
 import android.graphics.Paint
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -18,6 +19,7 @@ import androidx.compose.ui.unit.*
 import com.example.calcmax.calculator.CalculatorModel
 import com.example.calcmax.math.Editor
 import com.example.calcmax.math.PiAxis
+import com.example.calcmax.math.GraphZoom
 import com.example.calcmax.ui.theme.LocalInstrument
 import kotlinx.coroutines.delay
 import kotlin.math.*
@@ -39,14 +41,38 @@ import kotlin.math.*
             val array=m.graphData?.optJSONArray("curves")
             (0 until (array?.length() ?: 0)).map { ci->val curve=array!!.getJSONArray(ci); (0 until curve.length()).map { k->curve.optJSONArray(k)?.let { it.getDouble(0) to it.getDouble(1) } } }
         }
-        val transform=Modifier.pointerInput(Unit) { detectTransformGestures { _,pan,zoom,_->
-            run {
-                val dx=(m.xMax-m.xMin)*pan.x/size.width;val dy=(m.yMax-m.yMin)*pan.y/size.height
-                val cx=(m.xMin+m.xMax)/2-dx;val cy=(m.yMin+m.yMax)/2+dy
-                val hx=((m.xMax-m.xMin)/2/zoom).coerceIn(1e-7,1e8);val hy=((m.yMax-m.yMin)/2/zoom).coerceIn(1e-7,1e8)
-                m.xMin=cx-hx;m.xMax=cx+hx;m.yMin=cy-hy;m.yMax=cy+hy
-            }
-        } }
+        val transform=Modifier.pointerInput(Unit) {awaitEachGesture {
+            awaitFirstDown(requireUnconsumed=false)
+            var axis:String?=null
+            var totalPan=Offset.Zero
+            var dragging=false
+            do {
+                val event=awaitPointerEvent()
+                val fingers=event.changes.filter{it.pressed&&it.previousPressed}
+                if(fingers.isNotEmpty()) {
+                    val current=fingers.fold(Offset.Zero){a,p->a+p.position}/fingers.size.toFloat()
+                    val previous=fingers.fold(Offset.Zero){a,p->a+p.previousPosition}/fingers.size.toFloat()
+                    val pan=current-previous
+                    totalPan+=pan
+                    if(totalPan.getDistance()>viewConfiguration.touchSlop||fingers.size>=2)dragging=true
+                    var zx=1.0;var zy=1.0
+                    if(fingers.size>=2) {
+                        val old=fingers[1].previousPosition-fingers[0].previousPosition
+                        val now=fingers[1].position-fingers[0].position
+                        if(axis==null)axis=GraphZoom.axis(old.x,old.y)
+                        val factors=GraphZoom.factors(axis!!,old.x,old.y,now.x,now.y);zx=factors.first;zy=factors.second
+                    }else axis=null
+                    if(dragging) {
+                        val w=m.xMax-m.xMin;val h=m.yMax-m.yMin
+                        val anchorX=m.xMin+w*previous.x/size.width;val anchorY=m.yMax-h*previous.y/size.height
+                        val newW=(w/zx).coerceIn(2e-7,2e8);val newH=(h/zy).coerceIn(2e-7,2e8)
+                        m.xMin=anchorX-newW*current.x/size.width;m.xMax=m.xMin+newW
+                        m.yMax=anchorY+newH*current.y/size.height;m.yMin=m.yMax-newH
+                        event.changes.forEach{it.consume()}
+                    }
+                }
+            }while(event.changes.any{it.pressed})
+        }}
         Canvas(Modifier.fillMaxWidth().weight(1f).heightIn(min=180.dp).background(c.display).then(transform).pointerInput(curves,selected) { detectTapGestures { p ->
             val target=m.xMin+(m.xMax-m.xMin)*p.x/size.width
             val targetY=m.yMax-(m.yMax-m.yMin)*p.y/size.height

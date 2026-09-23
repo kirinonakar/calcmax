@@ -8,7 +8,7 @@ import androidx.compose.ui.unit.*
 import com.example.calcmax.calculator.CalculatorModel
 
 private val Catalog=linkedMapOf(
-    "Scientific" to listOf("abs()","floor()","ceil()","round(,0)","sign()","sqrt()","cbrt()","nthroot(,3)","log(,10)","ln()","exp()","sinh()","cosh()","tanh()","asinh()","acosh()","atanh()","gamma()","factorial()","nCr(,)","nPr(,)","gcd(,)","lcm(,)","prime()","factorization()","divisors()"),
+    "Scientific" to listOf("abs()","floor()","ceil()","round(,0)","sign()","sqrt()","cbrt()","nthroot(,3)","log(,10)","ln()","exp()","sinc()","sinh()","cosh()","tanh()","asinh()","acosh()","atanh()","gamma()","factorial()","nCr(,)","nPr(,)","gcd(,)","lcm(,)","prime()","factorization()","divisors()"),
     "Symbolic" to listOf("simplify()","expand()","factor()","collect(,x)","subs(,x,0)","diff(,x)","diff(,x,2)","integrate(,x)","integrate(,x,0,1)","limit(,x,0)","limit(,x,0,left)","limit(,x,0,right)","series(,x,0,6)","sum(,x,1,10)","product(,x,1,10)","solve(,x)","nsolve(,x,0,1)","nintegrate(,x,0,1)","nderivative(,x,0)","minimum(,x,0,1)","maximum(,x,0,1)","piecewise([,x>0],[0,true])"),
     "Complex" to listOf("re()","im()","conj()","abs()","arg()","polar(,pi/2)","rectpolar()"),
     "Matrix & vector" to listOf("det()","inverse()","transpose()","rank()","trace()","ref()","rref()","lu()","linsolve(,)","eigenvalues()","eigenvectors()","dot(,)","cross(,)","norm()","normalize()","angle(,)","projection(,)"),

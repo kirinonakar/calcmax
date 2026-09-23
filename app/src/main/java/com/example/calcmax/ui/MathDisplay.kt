@@ -1,6 +1,7 @@
 package com.example.calcmax.ui
 
 import androidx.compose.foundation.*
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -9,6 +10,9 @@ import androidx.compose.ui.*
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.*
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.*
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.*
@@ -19,12 +23,17 @@ import kotlin.math.max
 val MathAxis=HorizontalAlignmentLine(::minOf)
 val LocalMathCursorTarget=staticCompositionLocalOf<IntRange?>{null}
 val LocalMathAfter=staticCompositionLocalOf<((Int,Int)->Unit)?>{null}
+val LocalCaretVisible=staticCompositionLocalOf{true}
+val LocalActiveToken=staticCompositionLocalOf<IntRange?>{null}
+val LocalPlaceCursor=staticCompositionLocalOf<((Int,Int,Int)->Unit)?>{null}
 
 private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspecified)height/2 else it}
-@Composable private fun MathText(text:String,size:Float) {
+@Composable private fun MathText(text:String,size:Float,modifier:Modifier=Modifier,blink:Boolean=false,onLayout:(TextLayoutResult)->Unit={}) {
     val color=LocalInstrument.current.ink
-    Text(text,fontFamily=FontFamily.Serif,fontSize=size.sp,lineHeight=(size*1.18f).sp,color=color,softWrap=false,
-        modifier=Modifier.layout {measurable,constraints->
+    val visible=!blink||LocalCaretVisible.current
+    val styled=buildAnnotatedString {append(text);if(!visible)text.forEachIndexed{i,ch->if(ch=='│')addStyle(SpanStyle(color=Color.Transparent),i,i+1)}}
+    Text(styled,fontFamily=FontFamily.Serif,fontSize=size.sp,lineHeight=(size*1.18f).sp,color=color,softWrap=false,onTextLayout=onLayout,
+        modifier=modifier.layout {measurable,constraints->
             val p=measurable.measure(constraints);val baseline=p[FirstBaseline]
             val axis=if(baseline==AlignmentLine.Unspecified)p.height/2 else baseline-(size.sp.toPx()*.3f).toInt()
             layout(p.width,p.height,mapOf(MathAxis to axis)){p.place(0,0)}
@@ -97,6 +106,7 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
     val fraction=kind=="fraction"||kind=="binary"&&value=="/"
     val power=kind=="power"||kind=="binary"&&value=="^"
     Box(touch) {MathRow {
+        if(caret&&!atomic&&cursor<=start)MathText("│",size,blink=true)
         when {
             fraction->Box {
                 FractionLayout({child(0,.9f,true)},{child(1,.9f,true)})
@@ -129,9 +139,15 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
             kind=="call"&&value=="eng"->child(0)
             kind in listOf("number","symbol","text")-> {
                 val shown=when(value){"pi"->"π";"oo"->"∞";"I"->"i";"E"->"e";else->value}
-                if(caret){val at=if(end==start)0 else ((cursor-start)*shown.length/(end-start)).coerceIn(0,shown.length);label(shown.take(at)+"│"+shown.drop(at))}
-                else if(kind=="symbol"&&value.contains('_'))MathRow{label(value.substringBefore('_'));Box(Modifier.padding(top=12.dp)){label(value.substringAfter('_'),.6f)}}
-                else label(shown)
+                val at=if(end==start)0 else ((cursor-start)*shown.length/(end-start)).coerceIn(0,shown.length)
+                val text=if(caret)shown.take(at)+"│"+shown.drop(at)else shown
+                var layout by remember{mutableStateOf<TextLayoutResult?>(null)}
+                val place=LocalPlaceCursor.current
+                val active=LocalActiveToken.current==range
+                MathText(text,size,if(select==null)Modifier else Modifier.pointerInput(text,selected,active,place){detectTapGestures{offset->
+                    if(selected||active){val hit=layout?.getOffsetForPosition(offset) ?: 0;val index=(hit-if(caret&&hit>at)1 else 0).coerceIn(0,shown.length);place?.invoke(start,end,start+(index.toFloat()/shown.length.coerceAtLeast(1)*(end-start)).toInt())}
+                    else select(start,end)
+                }},blink=caret,onLayout={layout=it})
             }
             kind=="unary"->MathRow{label(if(value=="-")"−" else value);child(0)}
             kind in listOf("call","function")&&value=="factorial"->MathRow{child(0);label("!")}
@@ -171,6 +187,6 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
                 if(children.isEmpty())label(value)
             }
         }
-        if(caret&&!atomic)label("│")
+        if(caret&&!atomic&&cursor>start)MathText("│",size,blink=true)
     }}
 }

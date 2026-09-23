@@ -23,14 +23,17 @@ import com.example.calcmax.calculator.CalculatorModel
 import com.example.calcmax.math.Editor
 import com.example.calcmax.ui.theme.LocalInstrument
 import org.json.JSONObject
+import kotlinx.coroutines.delay
+import com.example.calcmax.math.Lexer
+import com.example.calcmax.math.Expr
 
-val Modes=listOf("Scientific","CAS","Graph","Equations","Matrix","Vector","Statistics","Programmer","Units","Constants","Tip","Currency")
+val Modes=listOf("Scientific","CAS","Graph","Equations","Matrix","Vector","Statistics","Programmer","Units","Constants","Tip","Currency","Functions")
 @Composable fun CalculatorApp(m:CalculatorModel) {
     val c=LocalInstrument.current
     var overlay by rememberSaveable {mutableStateOf("")}
     val workspaces=rememberSaveableStateHolder()
     LaunchedEffect(m.mode){m.save()}
-    Column(Modifier.fillMaxSize().background(c.body).safeDrawingPadding()) {
+    Column(Modifier.fillMaxSize().background(c.body).windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.displayCutout))) {
         Row(Modifier.fillMaxWidth().height(44.dp).padding(horizontal=14.dp),verticalAlignment=Alignment.CenterVertically) {
             Text("CALC MAX",Modifier.weight(1f),fontWeight=FontWeight.ExtraBold,letterSpacing=2.sp,fontSize=18.sp,color=c.ink)
             SmallAction("History"){overlay="History"};SmallAction("Catalog"){overlay="Catalog"};SmallAction("Setup"){overlay="Settings"}
@@ -44,6 +47,8 @@ val Modes=listOf("Scientific","CAS","Graph","Equations","Matrix","Vector","Stati
         }
         Box(Modifier.weight(1f)) {workspaces.SaveableStateProvider(m.mode) {
             when(m.mode) {
+                "Equations"->EquationScreen(m)
+                "Functions"->FunctionsScreen(m)
                 "Graph"->GraphScreen(m)
                 "Matrix","Vector"->MatrixScreen(m)
                 "Statistics"->StatisticsScreen(m)
@@ -67,7 +72,7 @@ val Modes=listOf("Scientific","CAS","Graph","Equations","Matrix","Vector","Stati
         if(m.mode !in listOf("Scientific","CAS","Equations") && m.error.isNotBlank()) Text(m.error,Modifier.fillMaxWidth().padding(8.dp),fontSize=12.sp,color=c.danger)
     }
     when(overlay) {
-        "Mode"->AlertDialog(onDismissRequest={overlay=""},title={Text("Calculation mode")},text={Column {Modes.chunked(2).forEach {row->Row {row.forEach {name->TextButton(onClick={m.mode=name;overlay=""},modifier=Modifier.weight(1f)){Text(name)}}}}}},confirmButton={TextButton(onClick={overlay=""}){Text("Close")}})
+        "Mode"->AlertDialog(onDismissRequest={overlay=""},title={Text("Calculation mode")},text={Column(Modifier.verticalScroll(rememberScrollState())) {Modes.chunked(2).forEach {row->Row {row.forEach {name->TextButton(onClick={m.mode=name;overlay=""},modifier=Modifier.weight(1f)){Text(name)}}}}}},confirmButton={TextButton(onClick={overlay=""}){Text("Close")}})
         "Settings"->SettingsDialog(m){overlay=""}
         "History"->HistoryDialog(m){overlay=""}
         "Variables","STO","RCL"->VariablesDialog(m,overlay){overlay=""}
@@ -89,9 +94,9 @@ val Modes=listOf("Scientific","CAS","Graph","Equations","Matrix","Vector","Stati
         item(key="active") {Display(m)}
         items(m.tape.asReversed()) {entry->
             Column(Modifier.fillMaxWidth().padding(horizontal=14.dp,vertical=10.dp)) {
-                Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).clickable {m.reuse(entry)}) {MathNode(JSONObject(entry.input),21f)}
+                Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).clickable {m.reuse(entry)}) {MathNode(JSONObject(entry.input),m.inputFont*.84f)}
                 val response=remember(entry.result){JSONObject(entry.result)}
-                Box(Modifier.fillMaxWidth().padding(top=6.dp).horizontalScroll(rememberScrollState()),contentAlignment=Alignment.CenterEnd) {ResultMath(response,m.decimal,23f)}
+                Box(Modifier.fillMaxWidth().padding(top=6.dp).horizontalScroll(rememberScrollState()),contentAlignment=Alignment.CenterEnd) {ResultMath(response,m.decimal,m.outputFont*.82f)}
                 if(domainText(response).isNotEmpty())Text(domainText(response),fontSize=10.sp,color=c.muted)
                 HorizontalDivider(Modifier.padding(top=10.dp),color=c.grid)
             }
@@ -105,6 +110,8 @@ val Modes=listOf("Scientific","CAS","Graph","Equations","Matrix","Vector","Stati
     val context=LocalContext.current
     var typing by rememberSaveable {mutableStateOf(false)}
     val focus=remember {FocusRequester()}
+    var caretVisible by remember{mutableStateOf(true)}
+    LaunchedEffect(m.editor,m.committed){caretVisible=true;while(!m.committed){delay(500);caretVisible=!caretVisible}}
     LaunchedEffect(typing,m.poweredOn){if(!typing&&m.poweredOn)focus.requestFocus()}
     Column(Modifier.fillMaxWidth().background(c.display).padding(horizontal=14.dp,vertical=4.dp)) {
         Row(Modifier.fillMaxWidth().height(36.dp),verticalAlignment=Alignment.CenterVertically) {
@@ -123,7 +130,7 @@ val Modes=listOf("Scientific","CAS","Graph","Equations","Matrix","Vector","Stati
                 }else m.edit(Editor(it.text,it.selection.end,it.selection.start))
             },
             modifier=Modifier.fillMaxWidth().heightIn(min=60.dp).onPreviewKeyEvent{if(it.type==KeyEventType.KeyDown&&it.key==Key.Enter){m.calculate();true}else false}.semantics{contentDescription="Expression input"},
-            textStyle=TextStyle(color=c.ink,fontSize=22.sp,fontFamily=FontFamily.Monospace))
+            textStyle=TextStyle(color=c.ink,fontSize=m.inputFont.sp,fontFamily=FontFamily.Monospace))
         else Box(Modifier.fillMaxWidth().heightIn(min=60.dp).focusRequester(focus).onKeyEvent{event->
             if(event.type!=KeyEventType.KeyDown)false else when(event.key){
                 Key.Enter,Key.NumPadEnter->{m.calculate();true}
@@ -136,19 +143,20 @@ val Modes=listOf("Scientific","CAS","Graph","Equations","Matrix","Vector","Stati
         }.focusable().horizontalScroll(rememberScrollState()).semantics{contentDescription="Current expression"},contentAlignment=Alignment.CenterStart){
             Row(verticalAlignment=Alignment.CenterVertically){
                 val tree=remember(m.editor,m.answerDisplay){m.inputTree()}
-                CompositionLocalProvider(LocalMathCursorTarget provides if(m.committed)null else m.editor.cursorTarget(),LocalMathAfter provides {a,b->m.edit(m.editor.after(a,b))}) {
-                    if(m.editor.source.isBlank())Text("│",fontSize=25.sp,color=c.accent)
-                    else if(tree!=null)MathNode(tree,25f,select={a,b->m.edit(m.editor.selectRange(a,b))},selection=minOf(m.editor.anchor,m.editor.cursor)..maxOf(m.editor.anchor,m.editor.cursor))
-                    else Text(m.editor.source,fontSize=25.sp,color=c.ink)
+                CompositionLocalProvider(LocalMathCursorTarget provides if(m.committed)null else m.editor.cursorTarget(),LocalMathAfter provides {a,b->m.edit(m.editor.after(a,b))},LocalCaretVisible provides caretVisible,LocalActiveToken provides m.editor.activeToken,LocalPlaceCursor provides {a,b,p->m.edit(m.editor.placeInToken(a,b,p))}) {
+                    if(m.editor.source.isBlank())Text("│",fontSize=m.inputFont.sp,color=if(caretVisible)c.accent else androidx.compose.ui.graphics.Color.Transparent)
+                    else if(tree!=null)MathNode(tree,m.inputFont,select={a,b->m.edit(m.editor.selectRange(a,b))},selection=minOf(m.editor.anchor,m.editor.cursor)..maxOf(m.editor.anchor,m.editor.cursor))
+                    else Row {Lexer.scan(m.editor.source).filter{it.text.isNotEmpty()}.forEach{token->
+                        MathNode(JSONObject(Expr("text",m.editor.source.substring(token.start,token.end),start=token.start,end=token.end).json()),m.inputFont,select={a,b->m.edit(m.editor.selectRange(a,b))},selection=minOf(m.editor.anchor,m.editor.cursor)..maxOf(m.editor.anchor,m.editor.cursor))
+                    }}
                 }
                 Box(Modifier.width(32.dp).heightIn(min=48.dp).clickable{m.edit(Editor(m.editor.source))}.semantics{contentDescription="After expression"},contentAlignment=Alignment.CenterStart){
-                    if(tree==null&&m.editor.source.isNotBlank()&&!m.committed&&m.editor.cursor==m.editor.source.length)Text("│",color=c.accent,fontSize=25.sp)
                 }
             }
         }
         // This answer region is always present, including while a worker is computing.
         Box(Modifier.fillMaxWidth().heightIn(min=56.dp).horizontalScroll(rememberScrollState()).semantics(mergeDescendants=true){contentDescription="Answer panel";liveRegion=LiveRegionMode.Polite},contentAlignment=Alignment.CenterEnd){
-            if(m.result!=null&&m.poweredOn)ResultMath(m.result!!,m.decimal,28f,m.mixedNumbers) else Text(" ",fontSize=28.sp)
+            if(m.result!=null&&m.poweredOn)ResultMath(m.result!!,m.decimal,m.outputFont,m.mixedNumbers) else Text(" ",fontSize=28.sp)
         }
         Row(Modifier.fillMaxWidth().height(24.dp),verticalAlignment=Alignment.CenterVertically){
             Text(when{m.error.isNotBlank()->m.error;m.busy->"Computing…";m.previewBusy->"Calculating…";domainText(m.result).isNotBlank()->domainText(m.result);m.committed->"Next input starts a new calculation";else->m.result?.optString("note") ?: ""},Modifier.weight(1f),fontSize=10.sp,maxLines=1,color=if(m.error.isNotBlank())c.danger else c.muted)

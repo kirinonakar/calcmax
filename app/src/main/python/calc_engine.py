@@ -230,7 +230,7 @@ class Engine:
                  "floor": s.floor, "ceil": s.ceiling, "sign": s.sign, "gamma": s.gamma,
                  "erf":s.erf,"erfc":s.erfc,"Ei":s.Ei,"Si":s.Si,"Ci":s.Ci,"zeta":s.zeta,
                  "ln": s.log, "log": lambda x, b=10: s.log(x,b), "exp": s.exp,
-                 "sinh": s.sinh, "cosh": s.cosh, "tanh": s.tanh, "asinh": s.asinh, "acosh": s.acosh, "atanh": s.atanh,
+                 "sinc": s.sinc, "sinh": s.sinh, "cosh": s.cosh, "tanh": s.tanh, "asinh": s.asinh, "acosh": s.acosh, "atanh": s.atanh,
                  "conj": s.conjugate, "re": s.re, "im": s.im, "arg": s.arg,
                  "simplify": s.simplify, "expand": s.expand, "factor": s.factor, "collect": s.collect,
                  "diff": s.diff, "gcd": s.gcd, "lcm": s.lcm, "nCr": s.binomial,
