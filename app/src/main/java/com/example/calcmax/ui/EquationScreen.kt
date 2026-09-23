@@ -67,7 +67,7 @@ import org.json.JSONObject
         },enabled=!m.busy){Text(if(m.busy)"Solving…" else "Solve")}
         if(m.error.isNotBlank())Text(m.error,color=MaterialTheme.colorScheme.error)
         if(m.result!=null) {HorizontalDivider();Text("Solution");Box(Modifier.horizontalScroll(rememberScrollState())){ResultMath(m.result!!,m.decimal,m.outputFont,
-            displayMode=m.resultDisplayMode,thousandsSeparator=m.thousandsSeparator)};SmallAction(if(m.decimal)"Show exact" else "Show decimal"){m.decimal=!m.decimal}}
+            displayMode=m.resultDisplayMode,thousandsSeparator=m.thousandsSeparator,precision=m.precision)};SmallAction(if(m.decimal)"Show exact" else "Show decimal"){m.decimal=!m.decimal}}
     }
 }
 
