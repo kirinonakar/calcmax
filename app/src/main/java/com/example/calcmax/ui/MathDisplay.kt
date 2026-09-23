@@ -142,7 +142,7 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
             kind=="restricted"->child(0)
             kind=="quantity"->MathRow{child(0);label(" $value",.7f)}
             kind=="dms"->MathRow{child(0);label("°");child(1);label("′");child(2);label("″")}
-            kind=="group"->if(hideGroup)child(0)else wrapped(0)
+            kind=="group"->if(hideGroup)child(0)else MathRow{label("(");if(children.getOrNull(0)?.optString("kind")!="hole")child(0);if(value!="open")label(")")}
             kind=="call"&&value=="mixed"->MathRow(3.dp){child(0);FractionLayout({child(1,.85f)},{child(2,.85f)})}
             kind=="call"&&value=="eng"->child(0)
             kind in listOf("number","symbol","text")-> {

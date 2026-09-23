@@ -74,8 +74,9 @@ class Parser(private val source: String, private val allowHoles: Boolean = false
                     if(token.text == ")") break
                     args += expression(0)
                 }
+                val unclosed = allowHoles && token.text.isEmpty()
                 val end = expect(")")
-                Expr(if(tuple) "tuple" else "group", args = args, start = first.start, end = end.end)
+                Expr(if(tuple) "tuple" else "group", if(!tuple && unclosed) "open" else "", args = args, start = first.start, end = end.end)
             }
             first.text == "[" -> {
                 val args = mutableListOf<Expr>()

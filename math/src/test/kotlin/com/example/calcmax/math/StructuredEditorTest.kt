@@ -30,6 +30,11 @@ class StructuredEditorTest {
         assertEquals("(x+1)",inside.insert("+1").source)
         assertEquals("(x)+1",inside.move(1).insert("+1").source)
     }
+    @Test fun unclosedParenthesisIsMarkedOpen() {
+        assertEquals("open",Editor("3*(").tree()!!.args[1].value)
+        assertEquals("group",Editor("3*(5)").tree()!!.args[1].kind)
+        assertEquals("",Editor("3*(5)").tree()!!.args[1].value)
+    }
     @Test fun adjacentTermsHaveOneCaretOwner() {
         val editor=Editor("sin(3pi)",5)
         assertEquals(4..5,editor.cursorTarget())
