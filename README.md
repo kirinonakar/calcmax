@@ -7,17 +7,6 @@ A native Android scientific, graphing and symbolic calculator. Kotlin and Jetpac
 ## 📥 Download
 You can download the latest release from the [Releases Page](https://github.com/kirinonakar/calcmax/releases).
 
-## Build
-
-Requirements: JDK 21 (Android Studio's bundled runtime works), Android SDK 36.1, Python 3.14 on PATH, and an initial internet connection to download build dependencies. The installed application computes offline. Supported devices: Android 8/API 26 or later, arm64-v8a and x86_64.
-
-```powershell
-$env:JAVA_HOME='C:\Program Files\Android\Android Studio\jbr'
-.\gradlew.bat :app:assembleDebug
-```
-
-APK: `app/build/outputs/apk/debug/app-debug.apk`. `:app:assembleRelease` builds the unsigned release variant; use your own signing credentials for distribution. No release signing secret is checked in.
-
 ## Everyday use
 
 * The first keypad page is inspired by the FX-991ES PLUS 2nd edition layout. The second page adds symbolic algebra, number theory, matrix and vector functions.
@@ -74,6 +63,17 @@ The currency converter supports a manual rate or the latest [ExchangeRate-API da
 Statistics distinguish population and sample variance/SD; quartiles use the inclusive interpolation convention. Regression supports linear, quadratic, logarithmic, exponential and power models. Programmer inputs use the selected base, mask to 8/16/32/64 bits, and expose all four bases; right shifts are arithmetic in signed mode and logical in unsigned mode. Shift counts are entered in the selected base.
 
 Units use exact conversion factors, explicit dimensions and affine temperature conversion. Use `qty(value,unit)` inside expressions. Absolute temperatures support conversion, not compound algebra; temperature differences should be represented separately. Constants use SI definitions and [NIST CODATA 2022](https://physics.nist.gov/cuu/Constants/). Measured constants are marked as approximate and retain their published precision.
+
+## Build
+
+Requirements: JDK 21 (Android Studio's bundled runtime works), Android SDK 36.1, Python 3.14 on PATH, and an initial internet connection to download build dependencies. The installed application computes offline. Supported devices: Android 8/API 26 or later, arm64-v8a and x86_64.
+
+```powershell
+$env:JAVA_HOME='C:\Program Files\Android\Android Studio\jbr'
+.\gradlew.bat :app:assembleDebug
+```
+
+APK: `app/build/outputs/apk/debug/app-debug.apk`. `:app:assembleRelease` builds the unsigned release variant; use your own signing credentials for distribution. No release signing secret is checked in.
 
 ## Architecture
 
