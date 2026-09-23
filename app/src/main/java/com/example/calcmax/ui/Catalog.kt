@@ -16,10 +16,17 @@ private val Catalog=linkedMapOf(
 )
 @Composable fun CatalogDialog(m: CalculatorModel,close: ()->Unit) {
     var category by remember {mutableStateOf("Scientific")};var search by remember {mutableStateOf("")}
+    val custom=m.functions.keys().asSequence().toList().sorted().map {name->
+        val count=m.functions.getJSONObject(name).getJSONArray("parameters").length()
+        "$name(${if(count>0)",".repeat(count-1) else ""})"
+    }
+    val categories=linkedMapOf("Custom" to custom).apply {putAll(Catalog)}
     AlertDialog(onDismissRequest=close,title={Text("Function catalog")},text={Column(Modifier.verticalScroll(rememberScrollState())) {
         Field(search,"Find function",Modifier.fillMaxWidth()) {search=it}
-        Choices(Catalog.keys.toList(),category,{category=it})
-        (if(search.isBlank())Catalog[category]!! else Catalog.values.flatten().filter {it.contains(search,true)}).chunked(2).forEach { row->Row {row.forEach { source->TextButton(onClick={val at=source.indexOf('(')+1;m.insert(source,at);close()},modifier=Modifier.weight(1f)) {Text(source,fontSize=12.sp)} } } }
+        Choices(categories.keys.toList(),category,{category=it})
+        val entries=if(search.isBlank())categories[category].orEmpty() else categories.values.flatten().filter {it.contains(search,true)}
+        if(category=="Custom"&&entries.isEmpty()&&search.isBlank())Text("Save a function in Functions to see it here.",fontSize=12.sp)
+        entries.chunked(2).forEach { row->Row {row.forEach { source->TextButton(onClick={val at=source.indexOf('(')+1;m.insert(source,at);close()},modifier=Modifier.weight(1f)) {Text(source,fontSize=12.sp)} } } }
         Text("Tap a template, then tap its empty slots to fill them. ↑ selects the enclosing expression; ↓ selects a child.",fontSize=11.sp)
     }},confirmButton={TextButton(onClick=close) {Text("Done")}})
 }

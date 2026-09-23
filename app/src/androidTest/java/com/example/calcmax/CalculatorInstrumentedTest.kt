@@ -29,15 +29,20 @@ class CalculatorInstrumentedTest {
         file.outputStream().use { val roots=compose.onAllNodes(isRoot());roots[roots.fetchSemanticsNodes().lastIndex].captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG,100,it) }
     }
     @Test fun tokenCursorMalformedInputAndClearAll() {
+        compose.runOnIdle {model().mode="Scientific";model().clear();model().edit(Editor("1234",4,0))}
+        val number=compose.onNode(hasText("1234") and hasAnyAncestor(hasContentDescription("Current expression")),useUnmergedTree=true)
+        val widthWithoutCursor=number.fetchSemanticsNode().boundsInRoot.width
+        compose.runOnIdle {model().edit(Editor("1234",2))}
+        assertEquals(widthWithoutCursor,number.fetchSemanticsNode().boundsInRoot.width,0.1f)
         compose.runOnIdle {model().mode="Scientific";model().clear();model().edit(Editor("1234"))}
-        val token=compose.onNode(hasText("1234│") and hasAnyAncestor(hasContentDescription("Current expression")),useUnmergedTree=true)
+        val token=compose.onNode(hasText("1234") and hasAnyAncestor(hasContentDescription("Current expression")),useUnmergedTree=true)
         token.performTouchInput{click(center)}
         compose.runOnIdle{assertEquals(0,model().editor.anchor);assertEquals(4,model().editor.cursor)}
         compose.onNode(hasText("1234") and hasAnyAncestor(hasContentDescription("Current expression")),useUnmergedTree=true).performTouchInput{click(androidx.compose.ui.geometry.Offset(width*.3f,height/2f))}
         compose.runOnIdle{assertEquals(model().editor.anchor,model().editor.cursor);assertTrue(model().editor.cursor in 1..2)}
-        compose.onNode(hasText("│",substring=true) and hasAnyAncestor(hasContentDescription("Current expression")),useUnmergedTree=true).performTouchInput{click(androidx.compose.ui.geometry.Offset(width*.85f,height/2f))}
+        compose.onNode(hasText("1234") and hasAnyAncestor(hasContentDescription("Current expression")),useUnmergedTree=true).performTouchInput{click(androidx.compose.ui.geometry.Offset(width*.85f,height/2f))}
         compose.runOnIdle{assertTrue(model().editor.cursor>=3);model().edit(Editor("123-434+545)",0))}
-        compose.onNode(hasText("│123") and hasAnyAncestor(hasContentDescription("Current expression")),useUnmergedTree=true).assertExists()
+        compose.onNode(hasText("123",substring=true) and hasAnyAncestor(hasContentDescription("Current expression")),useUnmergedTree=true).assertExists()
         compose.runOnIdle{model().insert("(");assertNotNull(model().editor.tree());model().store("A","42")}
         compose.waitUntil(30000){!model().busy&&model().variables.has("A")}
         compose.onNodeWithContentDescription("RCL").performClick()
@@ -45,10 +50,10 @@ class CalculatorInstrumentedTest {
         capture("recall-values")
         compose.onNodeWithText("Done").performClick()
         var count=0
-        compose.runOnIdle{count=model().history.size;model().precision=10;model().inputFont=27f;model().save()}
+        compose.runOnIdle{count=model().history.size;model().precision=10;model().inputFont=27f;model().haptics=true;model().sound=true;model().save()}
         compose.onNodeWithContentDescription("SHIFT").performClick()
         compose.onNodeWithContentDescription("AC").performClick()
-        compose.runOnIdle{assertEquals("",model().editor.source);assertEquals(0,model().variables.length());assertTrue(model().tape.isEmpty());assertEquals(count,model().history.size);assertEquals(10,model().precision);assertEquals(27f,model().inputFont);model().inputFont=25f;model().precision=30;model().save()}
+        compose.runOnIdle{assertEquals("",model().editor.source);assertEquals(0,model().variables.length());assertTrue(model().tape.isEmpty());assertEquals(count,model().history.size);assertEquals(10,model().precision);assertEquals(27f,model().inputFont);model().inputFont=25f;model().precision=30;model().sound=false;model().save()}
     }
     @Test fun equationAndCustomFunctionWorkspaces() {
         compose.runOnIdle{model().clear();model().mode="Equations"}
@@ -63,6 +68,12 @@ class CalculatorInstrumentedTest {
         compose.onNodeWithText("Save function").performClick()
         compose.runOnIdle{assertTrue(model().functions.has("f"));assertEquals("x^2+1",model().functions.getJSONObject("f").getString("source"))}
         capture("custom-functions")
+        compose.runOnIdle{model().mode="Scientific";model().clear()}
+        compose.onNodeWithText("Catalog").performClick()
+        compose.onNodeWithText("Custom").performClick()
+        compose.onNodeWithText("f()").assertExists()
+        compose.onNodeWithText("f()").performClick()
+        compose.runOnIdle{assertEquals("f()",model().editor.source);assertEquals(2,model().editor.cursor)}
         compose.runOnIdle{model().mode="Scientific";model().clear();model().edit(Editor("f(3)+sinc(0)"));model().calculate()}
         compose.waitUntil(30000){!model().busy&&model().result!=null}
         compose.runOnIdle{assertEquals("11",model().result!!.getString("exact"))}

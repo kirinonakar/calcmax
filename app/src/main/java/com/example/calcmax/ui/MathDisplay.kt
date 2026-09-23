@@ -8,6 +8,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.*
 import androidx.compose.ui.input.pointer.pointerInput
@@ -140,14 +141,20 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
             kind in listOf("number","symbol","text")-> {
                 val shown=when(value){"pi"->"π";"oo"->"∞";"I"->"i";"E"->"e";else->value}
                 val at=if(end==start)0 else ((cursor-start)*shown.length/(end-start)).coerceIn(0,shown.length)
-                val text=if(caret)shown.take(at)+"│"+shown.drop(at)else shown
                 var layout by remember{mutableStateOf<TextLayoutResult?>(null)}
                 val place=LocalPlaceCursor.current
                 val active=LocalActiveToken.current==range
-                MathText(text,size,if(select==null)Modifier else Modifier.pointerInput(text,selected,active,place){detectTapGestures{offset->
-                    if(selected||active){val hit=layout?.getOffsetForPosition(offset) ?: 0;val index=(hit-if(caret&&hit>at)1 else 0).coerceIn(0,shown.length);place?.invoke(start,end,start+(index.toFloat()/shown.length.coerceAtLeast(1)*(end-start)).toInt())}
+                val caretVisible=LocalCaretVisible.current
+                val cursorLine=Modifier.drawWithContent {
+                    drawContent()
+                    if(caret&&caretVisible)layout?.getCursorRect(at)?.let {rect->
+                        drawLine(c.ink,Offset(rect.left,rect.top),Offset(rect.left,rect.bottom),1.dp.toPx())
+                    }
+                }
+                MathText(shown,size,cursorLine.then(if(select==null)Modifier else Modifier.pointerInput(shown,selected,active,place){detectTapGestures{offset->
+                    if(selected||active){val index=(layout?.getOffsetForPosition(offset) ?: 0).coerceIn(0,shown.length);place?.invoke(start,end,start+(index.toFloat()/shown.length.coerceAtLeast(1)*(end-start)).toInt())}
                     else select(start,end)
-                }},blink=caret,onLayout={layout=it})
+                }}),onLayout={layout=it})
             }
             kind=="unary"->MathRow{label(if(value=="-")"−" else value);child(0)}
             kind in listOf("call","function")&&value=="factorial"->MathRow{child(0);label("!")}

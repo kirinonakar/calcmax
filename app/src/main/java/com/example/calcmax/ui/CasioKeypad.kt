@@ -1,6 +1,11 @@
 package com.example.calcmax.ui
 
 import android.media.AudioManager
+import android.media.ToneGenerator
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.*
@@ -9,7 +14,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.*
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.*
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontWeight
@@ -41,13 +45,20 @@ private val NumericKeys=listOf(
 
 @Composable fun Keypad(m:CalculatorModel,modifier:Modifier=Modifier,open:(String)->Unit) {
     val c=LocalInstrument.current
-    val haptic=LocalHapticFeedback.current
     val context=LocalContext.current
+    @Suppress("DEPRECATION")
+    val vibrator=remember(context) {
+        if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.S)
+            (context.getSystemService(android.content.Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager).defaultVibrator
+        else context.getSystemService(android.content.Context.VIBRATOR_SERVICE) as Vibrator
+    }
+    val tone=remember {ToneGenerator(AudioManager.STREAM_MUSIC,65)}
+    DisposableEffect(tone) {onDispose {tone.release()}}
     var engineering by remember {mutableIntStateOf(0)}
     fun press(key:KeySpec) {
         if(!m.poweredOn && key.input!="SECOND")return
-        if(m.haptics)haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-        if(m.sound)(context.getSystemService(android.content.Context.AUDIO_SERVICE)as AudioManager).playSoundEffect(AudioManager.FX_KEY_CLICK)
+        if(m.haptics&&vibrator.hasVibrator())vibrator.vibrate(VibrationEffect.createOneShot(18,VibrationEffect.DEFAULT_AMPLITUDE))
+        if(m.sound)tone.startTone(ToneGenerator.TONE_PROP_BEEP,35)
         if(key.title=="SHIFT"){m.shift=!m.shift;m.alpha=false;return}
         if(key.title=="ALPHA"){m.alpha=!m.alpha;m.shift=false;return}
         if(key.input=="SECOND"){m.poweredOn=true;m.secondKeys=!m.secondKeys;m.shift=false;m.alpha=false;return}
