@@ -2,6 +2,11 @@
 
 A native Android scientific, graphing and symbolic calculator. Kotlin and Jetpack Compose provide the instrument interface; an independent Kotlin AST and a bundled SymPy engine provide exact offline mathematics. The currency converter alone downloads online reference rates and keeps an offline cache.
 
+![screenshot](screenshot.png)
+
+## 📥 Download
+You can download the latest release from the [Releases Page](https://github.com/kirinonakar/calcmax/releases).
+
 ## Build
 
 Requirements: JDK 21 (Android Studio's bundled runtime works), Android SDK 36.1, Python 3.14 on PATH, and an initial internet connection to download build dependencies. The installed application computes offline. Supported devices: Android 8/API 26 or later, arm64-v8a and x86_64.
