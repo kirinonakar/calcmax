@@ -17,6 +17,7 @@ import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.*
 import com.example.calcmax.calculator.CalculatorModel
 import com.example.calcmax.math.Editor
+import com.example.calcmax.math.PiAxis
 import com.example.calcmax.ui.theme.LocalInstrument
 import kotlinx.coroutines.delay
 import kotlin.math.*
@@ -29,10 +30,10 @@ import kotlin.math.*
     var selected by rememberSaveable { mutableIntStateOf(0) }
     LaunchedEffect(m.xMin,m.xMax,m.graphKind,m.parameterMin,m.parameterMax) { delay(300);m.plot() }
     Column(Modifier.fillMaxSize()) {
-        OutlinedTextField(m.graphSource,{m.graphSource=it},Modifier.fillMaxWidth().padding(horizontal=10.dp),label={Text(if(m.graphKind=="parametric") "One [x(t),y(t)] pair per line" else if(m.graphKind=="polar") "r(t) · radians · one curve per line" else "f(x) · one function per line · up to six")},maxLines=3)
+        OutlinedTextField(m.graphSource,{m.graphSource=it},Modifier.fillMaxWidth().padding(start=10.dp,end=10.dp,top=8.dp),label={Text(if(m.graphKind=="parametric") "One [x(t),y(t)] pair per line" else if(m.graphKind=="polar") "r(t) · radians · one curve per line" else "f(x) · one function per line · up to six")},maxLines=3)
         Column {
             Choices(listOf("cartesian","parametric","polar"),m.graphKind,{m.graphKind=it;m.graphSource=when(it) { "parametric"->"[cos(t),sin(t)]"; "polar"->"2*cos(3*t)"; else->"sin(x)\ncos(x)" }; if(it!="cartesian") {m.parameterMin=0.0;m.parameterMax=2*PI;m.xMin=-3.0;m.xMax=3.0;m.yMin=-3.0;m.yMax=3.0} })
-            Row { SmallAction("Plot") {m.plot()};SmallAction("Range") {rangeDialog=true};SmallAction("Analyze") {analysis=!analysis} }
+            Row(Modifier.horizontalScroll(rememberScrollState())) { SmallAction("Plot") {m.plot()};SmallAction("Range") {rangeDialog=true};SmallAction("Analyze") {analysis=!analysis};SmallAction(if(m.radianAxis)"x: π rad" else "x: decimal"){m.radianAxis=!m.radianAxis;m.save()} }
         }
         val curves=remember(m.graphData) {
             val array=m.graphData?.optJSONArray("curves")
@@ -56,10 +57,10 @@ import kotlin.math.*
             fun py(y:Double)=(size.height-(y-m.yMin)/(m.yMax-m.yMin)*size.height).toFloat()
             val paint=Paint(Paint.ANTI_ALIAS_FLAG).apply { color=c.muted.toArgb();textSize=11.sp.toPx() }
             fun step(range:Double):Double { val raw=range/7;val p=10.0.pow(floor(log10(raw)));val v=raw/p;return p*(if(v>5)10 else if(v>2)5 else if(v>1)2 else 1) }
-            val sx=step(xhi-xlo);val sy=step(m.yMax-m.yMin)
+            val sx=if(m.radianAxis)PiAxis.step(xhi-xlo) else step(xhi-xlo);val sy=step(m.yMax-m.yMin)
             clipRect {
                 var x=ceil(xlo/sx)*sx
-                while(x<=xhi) { drawLine(c.grid,Offset(px(x),0f),Offset(px(x),size.height));drawContext.canvas.nativeCanvas.drawText("%.3g".format(x),px(x)+3,size.height-8,paint);x+=sx }
+                while(x<=xhi) { drawLine(c.grid,Offset(px(x),0f),Offset(px(x),size.height));drawContext.canvas.nativeCanvas.drawText(if(m.radianAxis)PiAxis.label(x) else "%.3g".format(x),px(x)+3,size.height-8,paint);x+=sx }
                 var y=ceil(m.yMin/sy)*sy
                 while(y<=m.yMax) { drawLine(c.grid,Offset(0f,py(y)),Offset(size.width,py(y)));drawContext.canvas.nativeCanvas.drawText("%.3g".format(y),4f,py(y)-3,paint);y+=sy }
                 drawLine(c.muted,Offset(px(0.0),0f),Offset(px(0.0),size.height),2f)

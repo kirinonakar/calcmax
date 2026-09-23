@@ -23,9 +23,14 @@ import kotlin.random.Random
 
 data class KeySpec(val title:String,val input:String=title,val secondary:String="",val alternate:String="",val alpha:String="",val type:String="scientific")
 private val ScientificKeys=listOf(
-    listOf(KeySpec("a/b","()/()","mixed","mixed(,,)"),KeySpec("√","sqrt()","³√","cbrt()"),KeySpec("x²","^2","x³","^3"),KeySpec("x□","^()","ⁿ√","nthroot(,)"),KeySpec("log","log()","10ˣ","10^()"),KeySpec("ln","ln()","eˣ","exp()")),
+    listOf(KeySpec("a/b","()/()","mixed","mixed(,,)"),KeySpec("√","sqrt()","³√","cbrt()"),KeySpec("x²","^2","x³","^3"),KeySpec("x□","^()","ⁿ√","nthroot(,)"),KeySpec("log","log()","10ˣ","10^()","z"),KeySpec("ln","ln()","eˣ","exp()","t")),
     listOf(KeySpec("(−)","NEG","∠","∠","A"),KeySpec("°′″","°","←","DMS","B"),KeySpec("hyp","HYP","Abs","abs()","C"),KeySpec("sin","sin()","sin⁻¹","asin()","D"),KeySpec("cos","cos()","cos⁻¹","acos()","E"),KeySpec("tan","tan()","tan⁻¹","atan()","F")),
     listOf(KeySpec("RCL",secondary="STO",alternate="STO"),KeySpec("ENG",secondary="←",alternate="ENG−",alpha="i"),KeySpec("(",secondary="%",alternate="%"),KeySpec(")",secondary=",",alternate=",",alpha="x"),KeySpec("S⇔D",secondary="a b/c ⇔ d/c",alternate="MIXED",alpha="y"),KeySpec("M+",secondary="M−",alternate="M−",alpha="M"))
+)
+private val SecondKeys=listOf(
+    listOf(KeySpec("simp","simplify()"),KeySpec("factor","factor()"),KeySpec("expand","expand()"),KeySpec("collect","collect(,x)"),KeySpec("subs","subs(,x,)"),KeySpec("cases","piecewise([,x>0],[0,true])")),
+    listOf(KeySpec("⌊x⌋","floor()"),KeySpec("⌈x⌉","ceil()"),KeySpec("∞","oo","sign","sign()"),KeySpec("gcd","gcd(,)"),KeySpec("lcm","lcm(,)"),KeySpec("divisors","divisors()")),
+    listOf(KeySpec("det","det()"),KeySpec("inv","inverse()"),KeySpec("T","transpose()"),KeySpec("‖v‖","norm()"),KeySpec("dot","dot(,)"),KeySpec("cross","cross(,)"))
 )
 private val NumericKeys=listOf(
     listOf(KeySpec("7",secondary="CONST",alternate="Constants"),KeySpec("8",secondary="CONV",alternate="Units"),KeySpec("9",secondary="CLR",alternate="Clear"),KeySpec("DEL",secondary="INS",alternate="INS",type="danger"),KeySpec("AC",secondary="OFF",alternate="OFF",type="danger")),
@@ -40,11 +45,12 @@ private val NumericKeys=listOf(
     val context=LocalContext.current
     var engineering by remember {mutableIntStateOf(0)}
     fun press(key:KeySpec) {
-        if(!m.poweredOn && key.title!="ON")return
+        if(!m.poweredOn && key.input!="SECOND")return
         if(m.haptics)haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
         if(m.sound)(context.getSystemService(android.content.Context.AUDIO_SERVICE)as AudioManager).playSoundEffect(AudioManager.FX_KEY_CLICK)
         if(key.title=="SHIFT"){m.shift=!m.shift;m.alpha=false;return}
         if(key.title=="ALPHA"){m.alpha=!m.alpha;m.shift=false;return}
+        if(key.input=="SECOND"){m.poweredOn=true;m.secondKeys=!m.secondKeys;m.shift=false;m.alpha=false;return}
         var value=if(m.alpha&&key.alpha.isNotEmpty())key.alpha else if(m.shift&&key.alternate.isNotEmpty())key.alternate else key.input
         if(key.title=="CALC"&&m.alpha)value="RELATION"
         if(m.hyperbolic && value in listOf("sin()","cos()","tan()","asin()","acos()","atan()"))value=value.substringBefore('(')+"h()"
@@ -55,6 +61,7 @@ private val NumericKeys=listOf(
             "CALC","="->m.calculate()
             "RELATION"->m.insert("=")
             "()/()"->m.fraction()
+            "^2","^3","^()","^(-1)"->m.powerTemplate(value)
             "SOLVE"->{m.edit(Editor("solve(${m.editor.source.ifBlank{"x"}},x)"));m.calculate()}
             "LEFT"->m.edit(m.editor.move(-1));"RIGHT"->m.edit(m.editor.move(1));"UP"->m.edit(m.editor.parent());"DOWN"->m.edit(m.editor.child())
             "RCL","STO","Clear"->open(value)
@@ -64,7 +71,7 @@ private val NumericKeys=listOf(
             "S⇔D"->m.decimal=!m.decimal
             "MIXED"->{m.mixedNumbers=!m.mixedNumbers;m.decimal=false}
             "AC"->m.clear();"DEL"->m.edit(m.editor.delete());"INS"->m.overwrite=!m.overwrite
-            "M+","M−"->{val previous=if(m.variables.has("M"))"M" else "0";m.store("M","$previous${if(value=="M+")"+" else "-"}(${m.editor.source.ifBlank{"0"}})")}
+            "M+","M−"->m.memory(if(value=="M+")1 else -1)
             "NEG"->{if(m.committed)m.fresh();m.insert("-")}
             "ANGLE"->open("Angle")
             "RANDOM"->m.insert("0."+Random.nextInt(1000).toString().padStart(3,'0'))
@@ -79,9 +86,9 @@ private val NumericKeys=listOf(
         BoxWithConstraints(Modifier.fillMaxWidth().weight(2f)) {
             val column=maxWidth/6
             val row=maxHeight/2
-            val top=listOf(KeySpec("SHIFT",type="round"),KeySpec("ALPHA",type="round"),KeySpec("MODE",secondary="SETUP",alternate="SETUP",type="round"),KeySpec("ON",type="round"))
+            val top=listOf(KeySpec("SHIFT",type="round"),KeySpec("ALPHA",type="round"),KeySpec("MODE",secondary="SETUP",alternate="SETUP",type="round"),KeySpec(if(m.secondKeys)"1st" else "2nd","SECOND",type="round"))
             top.forEachIndexed {i,k->val col=if(i<2)i else i+2;Keycap(k,Modifier.offset(x=column*col).width(column-4.dp).height(row),m.shift&&k.title=="SHIFT"||m.alpha&&k.title=="ALPHA"){press(k)}}
-            val bottom=listOf(KeySpec("CALC",secondary="SOLVE",alternate="SOLVE",alpha="="),KeySpec("∫","integrate(,x,,)","d/dx","nderivative(,x,)",":"),KeySpec("x⁻¹","^(-1)","x!","!"),KeySpec("logₐ□","log(,)","Σ","sum(,x,,)"))
+            val bottom=if(m.secondKeys)listOf(KeySpec("d/dx","diff(,x)"),KeySpec("lim","limit(,x,)"),KeySpec("series","series(,x,0,6)"),KeySpec("Π","product(,x,,)")) else listOf(KeySpec("CALC",secondary="SOLVE",alternate="SOLVE",alpha="="),KeySpec("∫","integrate(,x,,)","d/dx","nderivative(,x,)",":"),KeySpec("x⁻¹","^(-1)","x!","!"),KeySpec("logₐ□","log(,)","Σ","sum(,x,,)"))
             bottom.forEachIndexed {i,k->val col=if(i<2)i else i+2;Keycap(k,Modifier.offset(x=column*col,y=row).width(column-4.dp).height(row)){press(k)}}
             Box(Modifier.offset(x=column*2).width(column*2-4.dp).fillMaxHeight(),contentAlignment=Alignment.Center) {
                 Box(Modifier.fillMaxSize(.88f).clip(CircleShape).background(c.scientific).border(1.dp,c.muted.copy(alpha=.3f),CircleShape))
@@ -91,7 +98,7 @@ private val NumericKeys=listOf(
                 DirectionKey("▼","Cursor down",Modifier.align(Alignment.BottomCenter).fillMaxWidth(.3f).fillMaxHeight(.34f)){press(KeySpec("DOWN"))}
             }
         }
-        ScientificKeys.forEach {row->Row(Modifier.fillMaxWidth().weight(1f),horizontalArrangement=Arrangement.spacedBy(5.dp)){row.forEach {key->Keycap(key,Modifier.weight(1f).fillMaxHeight()){press(key)}}}}
+        (if(m.secondKeys)SecondKeys else ScientificKeys).forEach {row->Row(Modifier.fillMaxWidth().weight(1f),horizontalArrangement=Arrangement.spacedBy(5.dp)){row.forEach {key->Keycap(key,Modifier.weight(1f).fillMaxHeight()){press(key)}}}}
         NumericKeys.forEach {row->Row(Modifier.fillMaxWidth().weight(1f),horizontalArrangement=Arrangement.spacedBy(6.dp)){row.forEach {key->Keycap(if(key.type=="danger")key else key.copy(type="numeric"),Modifier.weight(1f).fillMaxHeight()){press(key)}}}}
     }
 }

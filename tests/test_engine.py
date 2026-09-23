@@ -37,6 +37,8 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(result["decimal"],"0.5")
         third={"kind":"binary","value":"/","args":[{"kind":"number","value":"1"},{"kind":"number","value":"3"}]}
         self.assertGreaterEqual(len(json.loads(core.dispatch(json.dumps({"tree":third,"precision":100})))["decimal"]),100)
+        self.assertEqual(json.loads(core.dispatch(json.dumps({"tree":third,"precision":3})))["decimal"],"0.333")
+        self.assertEqual(json.loads(core.dispatch(json.dumps({"tree":third,"precision":10})))["decimal"],"0.3333333333")
         huge={"kind":"number","value":"1e100000000"}
         self.assertFalse(json.loads(core.dispatch(json.dumps({"tree":huge})))["ok"])
         self.assertFalse(run("integrate(x^2*sin(x),x)",budget=-1)["ok"])

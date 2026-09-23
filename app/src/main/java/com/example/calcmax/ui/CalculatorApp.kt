@@ -24,7 +24,7 @@ import com.example.calcmax.math.Editor
 import com.example.calcmax.ui.theme.LocalInstrument
 import org.json.JSONObject
 
-val Modes=listOf("Scientific","CAS","Graph","Equations","Matrix","Vector","Statistics","Programmer","Units","Constants")
+val Modes=listOf("Scientific","CAS","Graph","Equations","Matrix","Vector","Statistics","Programmer","Units","Constants","Tip","Currency")
 @Composable fun CalculatorApp(m:CalculatorModel) {
     val c=LocalInstrument.current
     var overlay by rememberSaveable {mutableStateOf("")}
@@ -35,10 +35,10 @@ val Modes=listOf("Scientific","CAS","Graph","Equations","Matrix","Vector","Stati
             Text("CALC MAX",Modifier.weight(1f),fontWeight=FontWeight.ExtraBold,letterSpacing=2.sp,fontSize=18.sp,color=c.ink)
             SmallAction("History"){overlay="History"};SmallAction("Catalog"){overlay="Catalog"};SmallAction("Setup"){overlay="Settings"}
         }
-        Row(Modifier.fillMaxWidth().height(32.dp).background(c.scientific).padding(horizontal=12.dp),verticalAlignment=Alignment.CenterVertically) {
-            Text(m.mode.uppercase()+" ▾",Modifier.clickable{overlay="Mode"},fontSize=11.sp,color=c.ink)
-            Spacer(Modifier.weight(1f))
-            Text(if(m.shift)"SHIFT  " else if(m.alpha)"ALPHA  " else if(m.hyperbolic)"HYP  " else "",fontSize=10.sp,color=if(m.alpha)c.alpha else c.shift)
+        Row(Modifier.fillMaxWidth().height(48.dp).zIndex(2f).background(c.scientific).padding(horizontal=8.dp),verticalAlignment=Alignment.CenterVertically) {
+            TextButton(onClick={overlay="Mode"},modifier=Modifier.weight(1f).fillMaxHeight().semantics{contentDescription="Choose calculation mode"},contentPadding=PaddingValues(horizontal=8.dp)) {Text(m.mode.uppercase()+" ▾",Modifier.fillMaxWidth(),fontSize=12.sp,color=c.ink)}
+            if(m.variables.has("M"))Text("M  ",fontSize=10.sp,color=c.muted,modifier=Modifier.semantics{contentDescription="Stored memory"})
+            Text(if(m.shift)"SHIFT  " else if(m.alpha)"ALPHA  " else if(m.hyperbolic)"HYP  " else if(m.secondKeys)"2ND  " else "",fontSize=10.sp,color=if(m.alpha)c.alpha else c.shift)
             Text(m.angle,Modifier.clickable {m.angle=when(m.angle){"DEG"->"RAD";"RAD"->"GRAD";else->"DEG"};m.recalculatePreview();m.save()}.padding(horizontal=12.dp),fontSize=11.sp,color=c.accent)
             Text("≤ ${m.precision} digits",fontSize=10.sp,color=c.muted)
         }
@@ -50,6 +50,8 @@ val Modes=listOf("Scientific","CAS","Graph","Equations","Matrix","Vector","Stati
                 "Programmer"->ProgrammerScreen(m)
                 "Units"->UnitsScreen(m)
                 "Constants"->ConstantsScreen(m)
+                "Tip"->TipScreen()
+                "Currency"->CurrencyScreen(m)
                 else->BoxWithConstraints(Modifier.fillMaxSize()) {
                     val keyboardHeight=minOf(520.dp,maxHeight*.68f)
                     if(maxWidth>650.dp && maxHeight<500.dp) Row(Modifier.fillMaxSize()) {
@@ -111,7 +113,7 @@ val Modes=listOf("Scientific","CAS","Graph","Equations","Matrix","Vector","Stati
             TextButton(onClick={clipboard.getText()?.text?.let{m.insert(it)}},modifier=Modifier.height(36.dp),contentPadding=PaddingValues(horizontal=8.dp)){Text("Paste",fontSize=11.sp)}
             TextButton(onClick={typing=!typing},modifier=Modifier.height(36.dp),contentPadding=PaddingValues(horizontal=8.dp)){Text(if(typing)"Math input" else "Keyboard",fontSize=11.sp)}
         }
-        if(!m.poweredOn) Box(Modifier.fillMaxWidth().height(66.dp),contentAlignment=Alignment.Center){Text("OFF · press ON",color=c.muted)}
+        if(!m.poweredOn) Box(Modifier.fillMaxWidth().height(66.dp),contentAlignment=Alignment.Center){Text("OFF · press 2nd to resume",color=c.muted)}
         else if(typing) BasicTextField(
             value=TextFieldValue(m.editor.source,TextRange(m.editor.anchor.coerceIn(0,m.editor.source.length),m.editor.cursor.coerceIn(0,m.editor.source.length))),
             onValueChange={
@@ -131,13 +133,16 @@ val Modes=listOf("Scientific","CAS","Graph","Equations","Matrix","Vector","Stati
                 Key.DirectionUp->{m.edit(m.editor.parent());true};Key.DirectionDown->{m.edit(m.editor.child());true}
                 else->{val ch=event.nativeKeyEvent.unicodeChar;if(ch>=32&&ch!=127){m.insert(ch.toChar().toString());true}else false}
             }
-        }.focusable().horizontalScroll(rememberScrollState()),contentAlignment=Alignment.CenterStart){
+        }.focusable().horizontalScroll(rememberScrollState()).semantics{contentDescription="Current expression"},contentAlignment=Alignment.CenterStart){
             Row(verticalAlignment=Alignment.CenterVertically){
                 val tree=remember(m.editor,m.answerDisplay){m.inputTree()}
-                if(tree!=null) MathNode(tree,25f,select={a,b->m.edit(Editor(m.editor.source,b,a))},selection=minOf(m.editor.anchor,m.editor.cursor)..maxOf(m.editor.anchor,m.editor.cursor))
-                else Text(m.editor.source.ifBlank{"0"},fontSize=25.sp,color=c.ink)
+                CompositionLocalProvider(LocalMathCursorTarget provides if(m.committed)null else m.editor.cursorTarget(),LocalMathAfter provides {a,b->m.edit(m.editor.after(a,b))}) {
+                    if(m.editor.source.isBlank())Text("│",fontSize=25.sp,color=c.accent)
+                    else if(tree!=null)MathNode(tree,25f,select={a,b->m.edit(m.editor.selectRange(a,b))},selection=minOf(m.editor.anchor,m.editor.cursor)..maxOf(m.editor.anchor,m.editor.cursor))
+                    else Text(m.editor.source,fontSize=25.sp,color=c.ink)
+                }
                 Box(Modifier.width(32.dp).heightIn(min=48.dp).clickable{m.edit(Editor(m.editor.source))}.semantics{contentDescription="After expression"},contentAlignment=Alignment.CenterStart){
-                    if(!m.committed&&m.editor.cursor==m.editor.source.length)Text("│",color=c.accent,fontSize=25.sp)
+                    if(tree==null&&m.editor.source.isNotBlank()&&!m.committed&&m.editor.cursor==m.editor.source.length)Text("│",color=c.accent,fontSize=25.sp)
                 }
             }
         }

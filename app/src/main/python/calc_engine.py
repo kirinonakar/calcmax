@@ -77,7 +77,7 @@ def flatten(a):
 class Engine:
     def __init__(self, request):
         self.request = request
-        self.precision = max(10, min(200, int(request.get("precision", 30))))
+        self.precision = max(3, min(200, int(request.get("precision", 30))))
         self.angle = request.get("angle", "RAD")
         self.variables = request.get("variables", {})
         self.functions = request.get("functions", {})
@@ -289,10 +289,10 @@ class Engine:
             expr = a[0].lhs-a[0].rhs if isinstance(a[0],s.Equality) else a[0]
             if len(a)==4:
                 # Bracketing does not lose convergence merely due to a zero derivative.
-                result=s.nsolve(expr,a[1],(a[2],a[3]),solver="bisect",prec=self.precision)
-            else: result=s.nsolve(expr,a[1],a[2],prec=self.precision)
+                result=s.nsolve(expr,a[1],(a[2],a[3]),solver="bisect",prec=max(20,self.precision+10))
+            else: result=s.nsolve(expr,a[1],a[2],prec=max(20,self.precision+10))
             require(all(c.subs(a[1],result)!=s.false for c in self.conditions),"No solution found in the expression domain")
-            return result
+            return s.N(result,self.precision)
         if name in ("nintegrate", "nderivative", "minimum", "maximum"):
             if name == "nderivative": return s.N(s.diff(a[0],a[1]).subs(a[1],a[2]),self.precision)
             if name in ("minimum", "maximum"):

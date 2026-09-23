@@ -14,6 +14,13 @@ data class TapeEntry(val source: String,val input: String,val result: String,val
 class CalculatorModel(application: Application) : AndroidViewModel(application) {
     private val prefs = application.getSharedPreferences("calculator",0)
     private val engine = EngineClient(application)
+    private val exchangeRepository by lazy{ExchangeRepository(application)}
+    var exchangeRates by mutableStateOf<RateTable?>(null)
+        private set
+    var exchangeBusy by mutableStateOf(false)
+        private set
+    var exchangeStatus by mutableStateOf("")
+        private set
     var editor by mutableStateOf(Editor(prefs.getString("expression","") ?: "",prefs.getInt("cursor",0)))
         private set
     var result by mutableStateOf<JSONObject?>(loadObject("result").takeIf{it.has("exact")})
@@ -31,6 +38,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     var poweredOn by mutableStateOf(true)
     var hyperbolic by mutableStateOf(false)
     var overwrite by mutableStateOf(false)
+    var secondKeys by mutableStateOf(false)
     var mixedNumbers by mutableStateOf(false)
     private var previewRunner: Job?=null
     private var commitRequested=false
@@ -71,6 +79,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     var parameterMin by mutableDoubleStateOf(prefs.getString("parameterMin","0")!!.toDouble())
     var parameterMax by mutableDoubleStateOf(prefs.getString("parameterMax","6.283185307179586")!!.toDouble())
     var shadedInterval by mutableStateOf<Pair<Double,Double>?>(null)
+    var radianAxis by mutableStateOf(prefs.getBoolean("radianAxis",false))
     var constants by mutableStateOf<JSONArray?>(null)
         private set
     private var job: Job? = null
@@ -98,6 +107,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
             .putString("variables",variables.toString()).putString("functions",functions.toString()).putString("assumptions",assumptions.toString())
             .putString("graphSource",graphSource).putString("graphKind",graphKind).putString("xMin",xMin.toString()).putString("xMax",xMax.toString()).putString("yMin",yMin.toString()).putString("yMax",yMax.toString())
             .putString("parameterMin",parameterMin.toString()).putString("parameterMax",parameterMax.toString())
+            .putBoolean("radianAxis",radianAxis)
             .putString("history",if(persistHistory) JSONArray(history.map { JSONObject().put("id",it.id).put("source",it.source).put("exact",it.exact).put("decimal",it.decimal).put("mode",it.mode).put("favorite",it.favorite).put("inputTree",it.inputTree).put("response",it.response).put("answer",it.answer) }).toString() else "[]").apply()
     }
     fun inputTree(): JSONObject? {
@@ -238,7 +248,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     }
     fun cancel() { inputVersion++;commitRequested=false;previewRunner?.cancel();job?.cancel(); graphJob?.cancel(); engine.cancel(); busy=false; graphBusy=false;previewBusy=false;error="Calculation cancelled" }
     fun transform(operation: String) { val source=editor.source.ifBlank { "Ans" }; edit(Editor("$operation($source)")); calculate() }
-    fun store(name: String, source: String = editor.source.ifBlank { "Ans" }) {
+    fun store(name: String, source: String = editor.source.ifBlank { "Ans" },showResult:Boolean=true) {
         try {
             require(name.matches(Regex("[A-Za-z][A-Za-z0-9_]*"))) { "Use a letter followed by letters, digits or underscores" }
             val tree=Parser(source).parse()
@@ -252,12 +262,33 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
                         val stored=response.getJSONObject("resultAst")
                         variables=JSONObject(variables.toString()).put(name,stored)
                         inputVersion++;resultVersion=-1
-                        result=response.put("note","Stored in $name")
+                        if(showResult)result=response.put("note","Stored in $name")
                         error="";save()
                     } else error=response.optString("error","This result cannot be stored")
                 } finally {busy=false}
             }
         } catch(e: Exception) { error=e.message ?: "Invalid variable" }
+    }
+    fun memory(direction:Int,source:String=editor.source) {
+        if(busy)return
+        val expression=source.ifBlank{"0"}
+        val tree=try{calculationTree(expression)}catch(e:Exception){error=e.message ?: "Complete the expression";return}
+        val revision=inputVersion
+        val operandRequest=request().put("tree",JSONObject(tree.json()))
+        val cached=result?.takeIf{resultSource==expression&&resultVersion==revision&&it.optBoolean("ok")}
+        job=viewModelScope.launch {
+            busy=true
+            try {
+                val operand=cached ?: engine.execute(operandRequest)
+                if(!operand.optBoolean("ok")||!operand.has("resultAst")){error=operand.optString("error","This result cannot be stored in memory");return@launch}
+                if(revision==inputVersion&&source==editor.source){if(!committed)commit(source,operand);busy=true}
+                val previous=variables.optJSONObject("M") ?: JSONObject().put("kind","number").put("value","0")
+                val addition=JSONObject().put("kind","binary").put("value",if(direction>0)"+" else "-").put("args",JSONArray().put(previous).put(operand.getJSONObject("resultAst")))
+                val updated=engine.execute(request().put("tree",addition))
+                if(updated.optBoolean("ok")&&updated.has("resultAst")){variables=JSONObject(variables.toString()).put("M",updated.getJSONObject("resultAst"));save()}
+                else error=updated.optString("error","Memory update failed")
+            }finally{busy=false}
+        }
     }
     fun define(name: String, parameters: String, source: String) {
         try {
@@ -302,6 +333,20 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
             val response=engine.execute(request("constants"))
             if(response.optBoolean("ok")) constants=response.getJSONArray("constants") else error=response.optString("error")
         }
+    }
+    fun loadExchangeRates() {
+        if(exchangeBusy)return
+        exchangeRates=exchangeRepository.cached()
+        exchangeBusy=true
+        viewModelScope.launch {
+            try {exchangeRates=exchangeRepository.refresh();exchangeStatus="Cached reference rates · updated at most once every 24 hours"}
+            catch(_:Exception){exchangeStatus=if(exchangeRates!=null)"Offline · showing saved reference rates" else "Online rates unavailable · use a manual rate"}
+            finally{exchangeBusy=false}
+        }
+    }
+    fun powerTemplate(suffix:String) {
+        if(editor.source.isBlank()||editor.source.lastOrNull() in listOf('+','-','−','×','*','÷','/','('))insert("()$suffix",1)
+        else insert(suffix,if(suffix=="^()")2 else suffix.length)
     }
     override fun onCleared() { save(); engine.close(); super.onCleared() }
 }

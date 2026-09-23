@@ -20,6 +20,6 @@ private val Catalog=linkedMapOf(
         Field(search,"Find function",Modifier.fillMaxWidth()) {search=it}
         Choices(Catalog.keys.toList(),category,{category=it})
         (if(search.isBlank())Catalog[category]!! else Catalog.values.flatten().filter {it.contains(search,true)}).chunked(2).forEach { row->Row {row.forEach { source->TextButton(onClick={val at=source.indexOf('(')+1;m.insert(source,at);close()},modifier=Modifier.weight(1f)) {Text(source,fontSize=12.sp)} } } }
-        Text("Tap a template, then tap its empty slots to fill them. ↑ selects the enclosing expression; SHIFT ↑ selects a child.",fontSize=11.sp)
+        Text("Tap a template, then tap its empty slots to fill them. ↑ selects the enclosing expression; ↓ selects a child.",fontSize=11.sp)
     }},confirmButton={TextButton(onClick=close) {Text("Done")}})
 }

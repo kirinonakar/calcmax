@@ -120,17 +120,21 @@ data class ConstantEntry(val symbol: String,val name: String,val value: String,v
 }
 
 @Composable fun SettingsDialog(m: CalculatorModel,close: ()->Unit) {
+    val digits=listOf("3","10","15","30","50","100","200")
+    var custom by rememberSaveable{mutableStateOf(m.precision.toString())}
+    var customVisible by rememberSaveable{mutableStateOf(m.precision.toString() !in digits)}
     AlertDialog(onDismissRequest=close,title={Text("Instrument setup")},text={Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(10.dp)) {
         Text("Appearance"); Choices(listOf("System","Light","Dark"),m.theme,{m.theme=it;m.save()})
         Text("Angle unit"); Choices(listOf("DEG","RAD","GRAD"),m.angle,{m.angle=it;m.recalculatePreview();m.save()})
-        Text("Maximum significant digits"); Choices(listOf("15","30","50","100","200"),m.precision.toString(),{m.precision=it.toInt();m.recalculatePreview();m.save()})
+        Text("Maximum significant digits"); Choices(digits+"Custom",if(customVisible)"Custom" else m.precision.toString(),{if(it=="Custom")customVisible=true else {customVisible=false;m.precision=it.toInt();m.recalculatePreview();m.save()}})
+        if(customVisible) {Field(custom,"Custom precision · 3–200",Modifier.fillMaxWidth()){custom=it};TextButton(onClick={m.precision=custom.toInt();m.recalculatePreview();m.save()},enabled=custom.toIntOrNull() in 3..200){Text("Apply precision")}}
         Text("Trailing decimal zeros are omitted. Precision controls accuracy, not a fixed number of displayed places.",fontSize=11.sp)
         Row(verticalAlignment=Alignment.CenterVertically) { Text("Key vibration",Modifier.weight(1f)); Switch(m.haptics,{m.haptics=it;m.save()}) }
         Row(verticalAlignment=Alignment.CenterVertically) { Text("Key sound",Modifier.weight(1f)); Switch(m.sound,{m.sound=it;m.save()}) }
         Row(verticalAlignment=Alignment.CenterVertically) { Text("Save history locally",Modifier.weight(1f)); Switch(m.persistHistory,{m.persistHistory=it;m.save()}) }
         Text("Turning history off removes its saved copy. The current session remains visible until you clear it.",fontSize=11.sp)
         Text("Symbolic calculus uses radians. Numeric trig follows the selected angle unit; explicit π and ° override it.",fontSize=12.sp)
-        Text("CalcMax 1.0 · Offline engine: SymPy 1.14 (BSD), mpmath 1.3 (BSD), Chaquopy 17 (MIT). No network permission.",fontSize=11.sp)
+        Text("CalcMax 1.0 · Offline mathematics: SymPy 1.14 (BSD), mpmath 1.3 (BSD), Chaquopy 17 (MIT). Only currency-rate updates use the internet.",fontSize=11.sp)
     }},confirmButton={TextButton(onClick=close) { Text("Done") }})
 }
 
@@ -160,7 +164,7 @@ data class ConstantEntry(val symbol: String,val name: String,val value: String,v
         Row(verticalAlignment=Alignment.CenterVertically) { Checkbox(function,{function=it});Text("User function") }
         if(function) Field(parameters,"Parameters (comma separated)",Modifier.fillMaxWidth()) { parameters=it }
         Row { SmallAction("Store") { if(function)m.define(name,parameters,value) else m.store(name,value) }; SmallAction("Recall") { m.insert(if(function) "$name()" else name);close() }; SmallAction("Delete") { m.removeVariable(name) } }
-        Row { SmallAction("M+") { m.store("M","${if(m.variables.has("M")) "M" else "0"}+($value)") }; SmallAction("M−") { m.store("M","${if(m.variables.has("M")) "M" else "0"}-($value)") } }
+        Row { SmallAction("M+") { m.memory(1,value) }; SmallAction("M−") { m.memory(-1,value) } }
         Text("Assumption for $name",fontSize=12.sp)
         Choices(listOf("none","real","positive","integer","nonzero"),m.assumptions.optJSONArray(name)?.optString(0) ?: "none",{m.assume(name,it)})
         Text("Stored: "+m.variables.keys().asSequence().toList().joinToString()+"\nFunctions: "+m.functions.keys().asSequence().toList().joinToString(),fontSize=12.sp)

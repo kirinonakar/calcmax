@@ -82,16 +82,36 @@ class CalculatorInstrumentedTest {
         compose.runOnIdle { assertEquals("A+1/6",model().editor.source);assertEquals("Dark",model().theme);assertTrue(model().variables.has("A")) }
     }
     @Test(timeout=60000) fun systemThemeAndLandscapePreserveState() {
+        // Observe the Android configuration itself. Espresso's old-root frame wait can
+        // race window replacement; it is not a reliable signal for configuration completion.
+        fun settle(){repeat(8){compose.mainClock.advanceTimeByFrame();Thread.sleep(30)}}
+        fun nativeCapture(name:String):Int {
+            lateinit var bitmap:Bitmap
+            lateinit var file:File
+            val completed=java.util.concurrent.CountDownLatch(1)
+            val status=java.util.concurrent.atomic.AtomicInteger(-1)
+            compose.activityRule.scenario.onActivity {activity->
+                val view=activity.window.decorView
+                bitmap=Bitmap.createBitmap(view.width,view.height,Bitmap.Config.ARGB_8888)
+                file=File(activity.filesDir,"qa/$name.png");file.parentFile!!.mkdirs()
+                android.view.PixelCopy.request(activity.window,bitmap,{code->status.set(code);completed.countDown()},android.os.Handler(android.os.Looper.getMainLooper()))
+                val vm=ViewModelProvider(activity)[CalculatorModel::class.java]
+                assertEquals("sqrt(8)",vm.editor.source);assertEquals(5,vm.editor.cursor)
+            }
+            assertTrue(completed.await(5,java.util.concurrent.TimeUnit.SECONDS));assertEquals(android.view.PixelCopy.SUCCESS,status.get())
+            val pixel=bitmap.getPixel(4,bitmap.height/2)
+            val brightness=android.graphics.Color.red(pixel)+android.graphics.Color.green(pixel)+android.graphics.Color.blue(pixel)
+            file.outputStream().use{bitmap.compress(Bitmap.CompressFormat.PNG,100,it)};bitmap.recycle()
+            return brightness
+        }
         compose.runOnIdle {model().theme="System";model().mode="Scientific";model().edit(Editor("sqrt(8)",5));model().save()}
-        val uiMode=compose.activity.getSystemService(Context.UI_MODE_SERVICE) as UiModeManager
-        compose.runOnIdle {uiMode.setApplicationNightMode(UiModeManager.MODE_NIGHT_YES)}
-        compose.waitForIdle()
-        compose.runOnIdle {assertEquals("sqrt(8)",model().editor.source);assertEquals(5,model().editor.cursor)}
-        capture("system-dark")
-        compose.runOnIdle {compose.activity.requestedOrientation=android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE}
-        compose.waitForIdle();compose.onNodeWithContentDescription("=").assertIsDisplayed();capture("landscape-dark")
-        compose.runOnIdle {assertEquals("sqrt(8)",model().editor.source);uiMode.setApplicationNightMode(UiModeManager.MODE_NIGHT_NO);compose.activity.requestedOrientation=android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT}
-        compose.waitForIdle();capture("system-light")
+        compose.activityRule.scenario.onActivity {(it.getSystemService(Context.UI_MODE_SERVICE)as UiModeManager).setApplicationNightMode(UiModeManager.MODE_NIGHT_YES)}
+        settle();val dark=nativeCapture("system-dark")
+        compose.activityRule.scenario.onActivity {it.requestedOrientation=android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE}
+        settle();nativeCapture("landscape-dark")
+        compose.activityRule.scenario.onActivity {(it.getSystemService(Context.UI_MODE_SERVICE)as UiModeManager).setApplicationNightMode(UiModeManager.MODE_NIGHT_NO);it.requestedOrientation=android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT}
+        settle();val light=nativeCapture("system-light")
+        assertTrue("System theme must actually change the rendered colors",light>dark+200)
     }
     @Test fun immediateCalculationFixedKeypadAndAnswerContinuation() {
         compose.runOnIdle {model().poweredOn=true;model().mode="Scientific";model().theme="Light";model().clear()}
@@ -143,5 +163,68 @@ class CalculatorInstrumentedTest {
         val paste=compose.onNodeWithText("Paste").fetchSemanticsNode().boundsInRoot.center.y
         val keyboard=compose.onNodeWithText("Keyboard").fetchSemanticsNode().boundsInRoot.center.y
         assertEquals(paste,keyboard,1f)
+    }
+    @Test fun structuredCursorBaselineMemoryAndSecondKeys() {
+        compose.runOnIdle{model().mode="Scientific";model().poweredOn=true;model().secondKeys=false;model().clearHistory();model().clear();model().edit(Editor("3^2+6").selectRange(2,3))}
+        val expression=hasAnyAncestor(hasContentDescription("Current expression"))
+        val three=compose.onNode(hasText("3") and expression,useUnmergedTree=true).fetchSemanticsNode().boundsInRoot.top
+        val six=compose.onNode(hasText("6") and expression,useUnmergedTree=true).fetchSemanticsNode().boundsInRoot.top
+        assertEquals(three,six,1f)
+        compose.onNodeWithContentDescription("Cursor right").performClick()
+        compose.runOnIdle{model().insert("+3");assertEquals("3^(2+3)+6",model().editor.source)}
+        compose.waitUntil(15000){model().result?.optString("exact")=="249"}
+        capture("exponent-editing")
+        compose.runOnIdle{model().edit(Editor("(1)/(3)+6"))}
+        compose.waitUntil(15000){model().result?.optString("exact")=="19/3"}
+        capture("fraction-axis")
+        compose.runOnIdle{model().edit(Editor("sin(3pi)",5))}
+        compose.onAllNodes(hasText("│",substring=true) and expression,useUnmergedTree=true).assertCountEquals(1)
+        compose.runOnIdle{model().clear()}
+        compose.onNodeWithContentDescription("x²").performClick()
+        compose.onNodeWithContentDescription("Empty expression slot").assertExists()
+        compose.onNodeWithContentDescription("3").performClick()
+        compose.onAllNodesWithContentDescription("Empty expression slot").assertCountEquals(0)
+        compose.onAllNodes(hasText("(") and expression,useUnmergedTree=true).assertCountEquals(0)
+        compose.onNodeWithContentDescription("AC").performClick()
+        compose.onAllNodesWithContentDescription("Empty expression slot").assertCountEquals(0)
+        compose.onNodeWithContentDescription("SHIFT").performClick();compose.onNodeWithContentDescription("√").performClick()
+        compose.onAllNodes(hasText("cbrt",substring=true) and expression,useUnmergedTree=true).assertCountEquals(0)
+        compose.runOnIdle{model().clear();model().removeVariable("M");model().edit(Editor("2+3"))}
+        compose.waitUntil(15000){model().result?.optString("exact")=="5"}
+        compose.onNodeWithContentDescription("M+").performClick()
+        compose.waitUntil(15000){!model().busy&&model().variables.has("M")}
+        compose.runOnIdle{assertEquals("5",model().result!!.optString("exact"));assertEquals("2+3",model().editor.source)}
+        compose.onNodeWithContentDescription("M+").performClick()
+        compose.waitUntil(15000){!model().busy&&model().variables.optJSONObject("M")?.optString("value")=="10"}
+        compose.runOnIdle{assertEquals("5",model().result!!.optString("exact"))}
+        compose.onNodeWithContentDescription("2nd").performClick()
+        compose.onNodeWithContentDescription("factor").assertExists();compose.onNodeWithContentDescription("1st").performClick()
+        compose.onNodeWithContentDescription("sin").assertExists()
+        compose.runOnIdle{model().clear()}
+        compose.onNodeWithContentDescription("ALPHA").performClick();compose.onNodeWithContentDescription("log").performClick()
+        compose.runOnIdle{assertEquals("z",model().editor.source);model().clear()}
+        compose.onNodeWithContentDescription("ALPHA").performClick();compose.onNodeWithContentDescription("ln").performClick()
+        compose.runOnIdle{assertEquals("t",model().editor.source)}
+        compose.onNodeWithContentDescription("2nd").performClick();capture("second-keypad");compose.onNodeWithContentDescription("1st").performClick()
+    }
+    @Test fun moneyModesGraphSelectorAndCustomPrecision() {
+        compose.runOnIdle{model().mode="Graph";model().graphSource="sin(x)";model().radianAxis=false}
+        compose.onNodeWithText("x: decimal").performClick()
+        compose.runOnIdle{assertTrue(model().radianAxis)}
+        capture("graph-radian-axis")
+        compose.onNodeWithContentDescription("Choose calculation mode").performClick()
+        compose.onNodeWithText("Tip").performClick()
+        compose.onNodeWithText("Tip calculator").assertExists();capture("tip-calculator")
+        compose.onNodeWithContentDescription("Choose calculation mode").performClick()
+        compose.onNodeWithText("Currency").performClick()
+        compose.onNodeWithText("Manual").performClick()
+        compose.onNodeWithText("1 USD = ? KRW").performTextReplacement("1300")
+        compose.onNodeWithText("≈ 130000 KRW").assertExists();capture("currency-manual")
+        compose.onNodeWithText("Setup").performClick()
+        compose.onNodeWithText("Custom").performScrollTo().performClick()
+        compose.onNodeWithText("Custom precision · 3–200").performTextReplacement("42")
+        compose.onNodeWithText("Apply precision").performClick()
+        compose.runOnIdle{assertEquals(42,model().precision)}
+        compose.onNodeWithText("Done").performClick()
     }
 }
