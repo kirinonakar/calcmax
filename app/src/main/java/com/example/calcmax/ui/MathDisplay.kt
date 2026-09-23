@@ -91,6 +91,9 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
     val value=node.optString("value")
     val array=node.optJSONArray("args")
     val children=(0 until (array?.length() ?: 0)).map{array!!.getJSONObject(it)}
+    val integrationTuple=if(kind=="call"&&value=="integrate"&&children.size==2&&children[1].optString("kind")=="tuple")children[1].optJSONArray("args")else null
+    val integrationArity=integrationTuple?.length()?.plus(1) ?: children.size
+    val coefficient=kind=="binary"&&value=="*"&&children.size==2&&children[0].optString("kind")=="number"&&children[1].optString("kind")=="symbol"
     val start=node.optInt("start",-1);val end=node.optInt("end",-1)
     val range=start..end
     val target=LocalMathCursorTarget.current
@@ -102,6 +105,10 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
     val touch=Modifier.then(if(selected||activeHole)Modifier.background(c.accent.copy(alpha=.17f),RoundedCornerShape(2.dp))else Modifier)
         .then(if(select!=null&&start>=0)Modifier.clickable{select(start,end)}else Modifier)
     @Composable fun child(i:Int,scale:Float=1f,hidden:Boolean=false) {children.getOrNull(i)?.let{MathNode(it,(size*scale).coerceAtLeast(11f),select,selection,depth+1,hidden)}}
+    @Composable fun integralPart(i:Int,scale:Float=1f) {
+        if(i==0||integrationTuple==null)child(i,scale)
+        else integrationTuple.optJSONObject(i-1)?.let{MathNode(it,(size*scale).coerceAtLeast(11f),select,selection,depth+1)}
+    }
     @Composable fun label(text:String,scale:Float=1f){MathText(text,size*scale)}
     @Composable fun wrapped(i:Int,scale:Float=1f){MathRow{label("(",scale);child(i,scale);label(")",scale)}}
     val fraction=kind=="fraction"||kind=="binary"&&value=="/"
@@ -168,28 +175,30 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
                 if(value=="nderivative"){label("│",1.4f);Box(Modifier.padding(top=16.dp)){MathRow{child(1,.6f);label("=",.6f);child(2,.6f)}}}
             }
             kind=="call"&&value in listOf("integrate","sum","product")->MathRow(3.dp){
-                MathStack(if(children.size>3)1 else 0){
-                    if(children.size>3)child(3,.55f)
+                MathStack(if(integrationArity>3)1 else 0){
+                    if(integrationArity>3)integralPart(3,.55f)
                     label(when(value){"integrate"->"∫";"sum"->"Σ";else->"Π"},1.4f)
-                    if(children.size>2)MathRow{if(value!="integrate"){child(1,.55f);label("=",.55f)};child(2,.55f)}
+                    if(integrationArity>2)MathRow{if(value!="integrate"){child(1,.55f);label("=",.55f)};integralPart(2,.55f)}
                 }
                 child(0)
-                if(value=="integrate"){label("d");child(1)}
+                if(value=="integrate"){label("d");integralPart(1)}
             }
             kind=="call"&&value=="limit"->MathRow(4.dp){MathStack(0){label("lim");MathRow{child(1,.55f);if(children.size>2){label("→",.55f);child(2,.55f)}}};child(0)}
             kind in listOf("call","function")&&value in listOf("piecewise","Piecewise")->MathRow{label("{",1.7f);Column{children.indices.forEach{child(it,.85f)}}}
-            else->MathRow(2.dp){
-                val wrap=kind in listOf("call","function","list","set")
+            else->MathRow(if(coefficient)0.dp else 2.dp){
+                val wrap=kind in listOf("call","function","list","tuple","set")
                 if(kind in listOf("call","function"))label(value,.9f)
                 if(wrap)label(when(kind){"list"->"[";"set"->"{";else->"("})
                 children.forEachIndexed{i,n->
                     val negative=kind=="sum"&&n.optString("kind")=="unary"&&n.optString("value")=="-"
                     if(negative){label(if(i==0)"−" else " − ");MathNode(n.getJSONArray("args").getJSONObject(0),size,select,selection,depth+1)}
                     else {
-                        if(i>0)label(when(kind){"sum"->" + ";"product"->" · ";"binary","relation"->when(value){"*"->" × ";"-"->" − ";"!="->" ≠ ";"<="->" ≤ ";">="->" ≥ ";else->" $value "};else->", "})
+                        val adjacentCoefficient=kind=="product"&&i>0&&children[i-1].optString("kind")=="number"&&n.optString("kind")=="symbol"
+                        if(i>0&&!coefficient&&!adjacentCoefficient)label(when(kind){"sum"->" + ";"product"->" · ";"binary","relation"->when(value){"*"->" × ";"-"->" − ";"!="->" ≠ ";"<="->" ≤ ";">="->" ≥ ";else->" $value "};else->", "})
                         if(kind=="product"&&n.optString("kind")=="sum")wrapped(i)else child(i)
                     }
                 }
+                if(kind=="tuple"&&children.size==1)label(",")
                 if(wrap)label(when(kind){"list"->"]";"set"->"}";else->")"})
                 if(children.isEmpty())label(value)
             }

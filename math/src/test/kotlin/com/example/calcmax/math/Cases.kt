@@ -25,7 +25,7 @@ fun main(args: Array<String>) {
         "qty(2,m)+qty(30,cm)" to "23/10 m", "convert(qty(1,kg)*qty(2,mps2),N)" to "2",
         "qty(1,km)/qty(1,m)" to "1000", "convert(qty(32,degF),degC)" to "0"
     )
-    val extras=listOf("1/0","0^0","inverse([[1,2],[2,4]])","dot([1,2],[1,2,3])","convert(1,m,kg)","convert(-1,K,degC)","factorial(-1)","sqrt(x^2)","solve((x^2-1)/(x-1)=2,x)","sin(x)","[cos(t),sin(t)]","1/x","tan(x)","nsolve(cos(x)-x,x,0,1)","nintegrate(sin(x),x,0,pi)","stats([1,2,3])","series(exp(x),x,0,4)","solve([x+y=3,x-y=1],[x,y])","integrate(exp(-x^2),x)","minimum(x^2,x,-2,3)","maximum(x^2,x,-2,3)","eigenvalues([[1,0],[0,2]])","lu([[1,2],[3,4]])","f(3)","x+1")
+    val extras=listOf("1/0","0^0","inverse([[1,2],[2,4]])","dot([1,2],[1,2,3])","convert(1,m,kg)","convert(-1,K,degC)","factorial(-1)","sqrt(x^2)","solve((x^2-1)/(x-1)=2,x)","sin(x)","cos(2*x)","[cos(t),sin(t)]","1/x","tan(x)","nsolve(cos(x)-x,x,0,1)","nintegrate(sin(x),x,0,pi)","stats([1,2,3])","series(exp(x),x,0,4)","solve([x+y=3,x-y=1],[x,y])","integrate(exp(-x^2),x)","integrate(exp(-x^2)*cos(2x),(x,0,oo))","integrate(exp(-x^2)*cos(2*x),x,0,oo)","minimum(x^2,x,-2,3)","maximum(x^2,x,-2,3)","eigenvalues([[1,0],[0,2]])","lu([[1,2],[3,4]])","f(3)","x+1")
     val values=cases.map { (source,expected)->"{\"source\":${quote(source)},\"expected\":${quote(expected)},\"tree\":${Parser(source).parse().json()}}" }+extras.map { "{\"source\":${quote(it)},\"tree\":${Parser(it).parse().json()}}" }
     File(args[0]).apply { parentFile.mkdirs();writeText(values.joinToString(",","[","]")) }
 }

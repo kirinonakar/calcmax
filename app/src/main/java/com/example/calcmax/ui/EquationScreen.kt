@@ -107,6 +107,7 @@ private fun editableSource(node:JSONObject):String {
         "binary","relation"->"(${parts[0]}$value${parts[1]})"
         "unary"->"$value(${parts[0]})"
         "list"->"[${parts.joinToString(",")}]"
+        "tuple"->"(${parts.joinToString(",")}${if(parts.size==1) "," else ""})"
         "group"->"(${parts[0]})"
         else->value
     }

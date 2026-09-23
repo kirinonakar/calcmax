@@ -3,6 +3,7 @@ import pathlib
 import sys
 import unittest
 import random
+import subprocess
 from fractions import Fraction
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -67,6 +68,28 @@ class EngineTests(unittest.TestCase):
         self.assertAlmostEqual(float(run("nintegrate(sin(x),x,0,pi)")["exact"]),2,12)
         self.assertEqual(run("minimum(x^2,x,-2,3)")["exact"],"0")
         self.assertEqual(run("maximum(x^2,x,-2,3)")["exact"],"9")
+    def test_sympy_integration_bounds(self):
+        tuple_result=run("integrate(exp(-x^2)*cos(2x),(x,0,oo))")
+        flat_result=run("integrate(exp(-x^2)*cos(2*x),x,0,oo)")
+        self.assertTrue(tuple_result["ok"],tuple_result)
+        self.assertEqual(tuple_result["exact"],flat_result["exact"])
+        self.assertEqual(tuple_result["exact"],"sqrt(pi)*exp(-1)/2")
+        self.assertEqual(run("integrate(exp(-x^2)*cos(2x),(x,0,oo))",variables={"x":{"kind":"number","value":"7"}})["exact"],tuple_result["exact"])
+    def test_symbolic_coefficient_display_tree(self):
+        result=run("cos(2*x)")
+        self.assertTrue(result["ok"],result)
+        self.assertEqual([part["kind"] for part in result["tree"]["args"][0]["args"]],["number","symbol"])
+    def test_cold_sympy_integration_bounds(self):
+        tree=TREES["integrate(exp(-x^2)*cos(2x),(x,0,oo))"]
+        dependencies_path=str(pathlib.Path(core.s.__file__).resolve().parent.parent)
+        script=("import sys,json\n"
+                f"sys.path.insert(0,{dependencies_path!r})\n"
+                f"sys.path.insert(0,{str(ROOT / 'app/src/main/python')!r})\n"
+                "import calc_engine\n"
+                f"print(calc_engine.dispatch({json.dumps(json.dumps({'tree':tree,'angle':'RAD'}))}))")
+        result=subprocess.run([sys.executable,"-c",script],cwd=ROOT,capture_output=True,text=True,timeout=20)
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertTrue(json.loads(result.stdout)["ok"],result.stdout)
     def test_graph(self):
         result=run("sin(x)",action="graph",trees=[TREES["sin(x)"]],min=-3,max=3,samples=100)
         self.assertTrue(result["ok"],result)

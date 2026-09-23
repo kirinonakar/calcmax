@@ -65,7 +65,18 @@ class Parser(private val source: String, private val allowHoles: Boolean = false
         var left = when {
             first.text in listOf("+", "-") -> Expr("unary", first.text, listOf(expression(25)), first.start, tokens[index-1].end)
             first.text == "√" -> Expr("call", "sqrt", listOf(expression(25)), first.start, tokens[index-1].end)
-            first.text == "(" -> { val x = expression(0); val end = expect(")"); Expr("group", args = listOf(x), start = first.start, end = end.end) }
+            first.text == "(" -> {
+                val args = mutableListOf(expression(0))
+                var tuple = false
+                while(token.text == ",") {
+                    tuple = true
+                    take()
+                    if(token.text == ")") break
+                    args += expression(0)
+                }
+                val end = expect(")")
+                Expr(if(tuple) "tuple" else "group", args = args, start = first.start, end = end.end)
+            }
             first.text == "[" -> {
                 val args = mutableListOf<Expr>()
                 if(token.text != "]") { args += expression(0); while(token.text == ",") { take(); args += expression(0) } }

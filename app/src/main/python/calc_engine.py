@@ -144,6 +144,7 @@ class Engine:
         if kind == "mapping": return {build(pair["args"][0]):build(pair["args"][1]) for pair in args}
         if kind == "group": return build(args[0])
         if kind == "list": return [build(a) for a in args]
+        if kind == "tuple": return tuple(build(a) for a in args)
         if kind == "unary": return (-1 if value == "-" else 1)*build(args[0])
         if kind in ("binary", "relation"):
             require(value != ":=", "Use STO for variables or the Variables editor for functions")
@@ -174,6 +175,7 @@ class Engine:
         if scoped:
             varnode = args[1]
             candidates = varnode.get("args", []) if varnode["kind"] == "list" else [varnode]
+            if varnode["kind"] == "tuple": candidates = varnode["args"][:1]
             if varnode["kind"] == "relation": candidates = [varnode["args"][0]]
             for n in candidates:
                 if n["kind"] == "symbol": self.bindings[n["value"]] = self.symbol(n["value"])
@@ -253,6 +255,7 @@ class Engine:
             return s.divisors(a[0])
         if name == "subs": return a[0].subs(a[1],a[2])
         if name == "integrate":
+            require(len(a) in (2,4), "integrate expects a variable or integration bounds")
             spec = a[1] if len(a)==2 else (a[1],a[2],a[3])
             result = s.integrate(a[0],spec)
             if result.has(s.Integral): self.note = "Symbolic solution not found for the remaining integral."
@@ -399,6 +402,8 @@ def display_tree(x):
     if isinstance(x,s.FiniteSet): return t("set",args=[display_tree(a) for a in sorted(x,key=s.default_sort_key)])
     if isinstance(x,Relational): return t("relation",x.rel_op,[display_tree(x.lhs),display_tree(x.rhs)])
     if isinstance(x,s.Function): return t("function",x.func.__name__,[display_tree(a) for a in x.args])
+    if isinstance(x,s.Symbol): return t("symbol",readable(x))
+    if isinstance(x,s.Number): return t("number",readable(x))
     return t("text",readable(x))
 
 def readable(x):
@@ -501,7 +506,9 @@ def programmer(request):
 
 def dispatch(payload):
     request=json.loads(payload)
-    budget=Budget(float(request.get("budget",8)))
+    tree=request.get("tree",{})
+    integration=tree.get("kind")=="call" and tree.get("value")=="integrate"
+    budget=Budget(float(request.get("budget",8)),steps=6000000 if integration else 1500000)
     try:
         sys.settrace(budget.trace)
         engine=Engine(request)
