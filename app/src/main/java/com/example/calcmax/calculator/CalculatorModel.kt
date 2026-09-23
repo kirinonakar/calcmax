@@ -41,6 +41,10 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     var overwrite by mutableStateOf(false)
     var secondKeys by mutableStateOf(false)
     var mixedNumbers by mutableStateOf(false)
+    var engineeringConversion by mutableStateOf(false)
+        private set
+    var engineeringShift by mutableIntStateOf(0)
+        private set
     private var previewRunner: Job?=null
     private var commitRequested=false
     private var resultSource=prefs.getString("resultSource","") ?: ""
@@ -136,6 +140,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     }
     fun edit(value: Editor) {
         val changed=value.source!=editor.source
+        if(changed)exitEngineering()
         editor=value;error="";committed=false
         if(changed) {
             inputVersion++;commitRequested=false;busy=false
@@ -148,6 +153,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     }
     private fun nextEntry() {
         if(!committed) return
+        exitEngineering()
         result?.let {tape=(tape+TapeEntry(editor.source,inputTree()?.toString() ?: "{}",it.toString(),inputAnswer?.toString() ?: "")).takeLast(300)}
         committed=false;editor=Editor();result=null;resultSource="";inputAnswer=null
     }
@@ -163,7 +169,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         edit(target.insert(text,inside))
     }
     fun clear() {
-        inputVersion++;commitRequested=false;committed=false;editor=Editor();result=null;resultSource="";error="";shift=false;alpha=false;hyperbolic=false;answerDisplay=null;inputAnswer=null;busy=false;save()
+        inputVersion++;commitRequested=false;committed=false;editor=Editor();result=null;resultSource="";error="";shift=false;alpha=false;hyperbolic=false;answerDisplay=null;inputAnswer=null;busy=false;exitEngineering();save()
     }
     fun fresh() {nextEntry();edit(Editor())}
     fun fraction() {
@@ -225,6 +231,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     }
     private fun commit(source:String,response:JSONObject) {
         if(committed)return
+        exitEngineering()
         result=response;resultSource=source;committed=true;commitRequested=false;busy=false
         val next=JSONObject(variables.toString())
         if(response.has("resultAst"))next.put("Ans",response.getJSONObject("resultAst")) else next.remove("Ans")
@@ -240,6 +247,10 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         return tree
     }
     fun calculate(source: String = editor.source) {
+        if(engineeringConversion) {
+            exitEngineering()
+            return
+        }
         if(committed && source==editor.source)return
         val tree = try { calculationTree(source) } catch(e: Exception) { error=e.message ?: "Syntax ERROR"; return }
         if(tree.value in listOf("=",":=") && tree.args.size==2 && mode!="Equations") {
@@ -371,5 +382,8 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         if(editor.source.isBlank()||editor.source.lastOrNull() in listOf('+','-','−','×','*','÷','/','('))insert("()$suffix",1)
         else insert(suffix,if(suffix=="^()")2 else suffix.length)
     }
+    fun enterEngineering() { if(!poweredOn||result==null)return;engineeringConversion=true;engineeringShift=0 }
+    fun shiftEngineering(delta:Int) { if(engineeringConversion)engineeringShift=(engineeringShift+delta).coerceIn(-40_000,40_000) }
+    fun exitEngineering() { engineeringConversion=false;engineeringShift=0 }
     override fun onCleared() { save(); engine.close(); super.onCleared() }
 }

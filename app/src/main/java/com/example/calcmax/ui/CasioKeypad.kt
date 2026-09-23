@@ -54,7 +54,6 @@ private val NumericKeys=listOf(
     }
     val tone=remember {ToneGenerator(AudioManager.STREAM_MUSIC,65)}
     DisposableEffect(tone) {onDispose {tone.release()}}
-    var engineering by remember {mutableIntStateOf(0)}
     fun press(key:KeySpec) {
         if(!m.poweredOn && key.input!="SECOND")return
         if(m.haptics&&vibrator.hasVibrator())vibrator.vibrate(VibrationEffect.createOneShot(18,VibrationEffect.DEFAULT_AMPLITUDE))
@@ -65,16 +64,19 @@ private val NumericKeys=listOf(
         var value=if(m.alpha&&key.alpha.isNotEmpty())key.alpha else if(m.shift&&key.alternate.isNotEmpty())key.alternate else key.input
         if(key.title=="CALC"&&m.alpha)value="RELATION"
         if(m.hyperbolic && value in listOf("sin()","cos()","tan()","asin()","acos()","atan()"))value=value.substringBefore('(')+"h()"
+        if(m.engineeringConversion && value !in setOf("ENG","ENG−","LEFT","RIGHT","=","CALC","AC","ON","CLR ALL"))m.exitEngineering()
         when(value) {
             "ON"->{m.poweredOn=true;m.clear()}
             "CLR ALL"->m.clearAllScreen()
             "MODE"->open("Mode");"SETUP"->open("Settings")
-            "CALC","="->m.calculate()
+            "CALC","="->if(m.engineeringConversion)m.exitEngineering()else m.calculate()
             "RELATION"->m.insert("=")
             "()/()"->m.fraction()
             "^2","^3","^()","^(-1)"->m.powerTemplate(value)
             "SOLVE"->{m.edit(Editor("solve(${m.editor.source.ifBlank{"x"}},x)"));m.calculate()}
-            "LEFT"->m.edit(m.editor.move(-1));"RIGHT"->m.edit(m.editor.move(1));"UP"->m.edit(m.editor.parent());"DOWN"->m.edit(m.editor.child())
+            "LEFT"->if(m.engineeringConversion)m.shiftEngineering(1)else m.edit(m.editor.move(-1))
+            "RIGHT"->if(m.engineeringConversion)m.shiftEngineering(-1)else m.edit(m.editor.move(1))
+            "UP"->m.edit(m.editor.parent());"DOWN"->m.edit(m.editor.child())
             "RCL","STO","Clear"->open(value)
             "Constants","Units","Matrix","Vector","Statistics","Programmer"->{m.mode=value}
             "Complex"->{m.mode="Scientific";open("Catalog")}
@@ -86,7 +88,8 @@ private val NumericKeys=listOf(
             "NEG"->{if(m.committed)m.fresh();m.insert("-")}
             "ANGLE"->open("Angle")
             "RANDOM"->m.insert("0."+Random.nextInt(1000).toString().padStart(3,'0'))
-            "ENG","ENG−"->{val exponent=engineering;engineering+=if(value=="ENG")3 else -3;m.edit(Editor("eng(${m.editor.source.ifBlank{"0"}},$exponent)"))}
+            "ENG"->m.enterEngineering()
+            "ENG−"->{m.enterEngineering();m.shiftEngineering(3)}
             "DMS"->m.edit(Editor("dms(${m.editor.source.ifBlank{"0"}})"))
             else->{val at=when {value=="()/()"->1;value.contains('(')->value.indexOf('(')+1;else->value.length};m.insert(value,at)}
         }
@@ -109,7 +112,7 @@ private val NumericKeys=listOf(
                 DirectionKey("▼","Cursor down",Modifier.align(Alignment.BottomCenter).fillMaxWidth(.3f).fillMaxHeight(.34f)){press(KeySpec("DOWN"))}
             }
         }
-        (if(m.secondKeys)SecondKeys else ScientificKeys).forEach {row->Row(Modifier.fillMaxWidth().weight(1f),horizontalArrangement=Arrangement.spacedBy(5.dp)){row.forEach {key->Keycap(key,Modifier.weight(1f).fillMaxHeight()){press(key)}}}}
+        (if(m.secondKeys)SecondKeys else ScientificKeys).forEach {row->Row(Modifier.fillMaxWidth().weight(1f),horizontalArrangement=Arrangement.spacedBy(5.dp)){row.forEach {key->Keycap(key,Modifier.weight(1f).fillMaxHeight(),active=key.title=="ENG"&&m.engineeringConversion){press(key)}}}}
         NumericKeys.forEach {row->Row(Modifier.fillMaxWidth().weight(1f),horizontalArrangement=Arrangement.spacedBy(6.dp)){row.forEach {key->Keycap(if(key.type=="danger")key else key.copy(type="numeric"),Modifier.weight(1f).fillMaxHeight()){press(key)}}}}
     }
 }

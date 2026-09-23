@@ -11,16 +11,16 @@ object ResultDisplayFormat {
 
     data class NotationParts(val mantissa: String, val exponent: Int)
 
-    fun formatTree(tree: JSONObject, displayMode: ResultDisplayMode, grouping: Boolean): JSONObject {
+    fun formatTree(tree: JSONObject, displayMode: ResultDisplayMode, grouping: Boolean, engineeringShift: Int = 0, showZeroExponent: Boolean = false): JSONObject {
         if (displayMode == ResultDisplayMode.OFF && !grouping) return tree
-        return formatNode(tree, displayMode, grouping, allowNotation = true)
+        return formatNode(tree, displayMode, grouping, engineeringShift, showZeroExponent, allowNotation = true)
     }
 
-    fun formatText(text: String, displayMode: ResultDisplayMode, grouping: Boolean): String {
+    fun formatText(text: String, displayMode: ResultDisplayMode, grouping: Boolean, engineeringShift: Int = 0, showZeroExponent: Boolean = false): String {
         if (text.isBlank()) return text
         if (displayMode != ResultDisplayMode.OFF) {
-            notationParts(text, displayMode)?.let { parts ->
-                if (parts.exponent != 0) {
+            notationParts(text, displayMode, engineeringShift)?.let { parts ->
+                if (parts.exponent != 0 || showZeroExponent) {
                     val mantissa = if (grouping) groupNumber(parts.mantissa) ?: parts.mantissa else parts.mantissa
                     return "$mantissa×10^${parts.exponent}"
                 }
@@ -33,14 +33,16 @@ object ResultDisplayFormat {
         node: JSONObject,
         displayMode: ResultDisplayMode,
         grouping: Boolean,
+        engineeringShift: Int,
+        showZeroExponent: Boolean,
         allowNotation: Boolean
     ): JSONObject {
         val kind = node.optString("kind")
         val value = node.optString("value")
         val numericLeaf = kind in setOf("number", "float", "text")
         if (displayMode != ResultDisplayMode.OFF && allowNotation && numericLeaf) {
-            notationParts(value, displayMode)?.let { parts ->
-                if (parts.exponent != 0) {
+            notationParts(value, displayMode, engineeringShift)?.let { parts ->
+                if (parts.exponent != 0 || showZeroExponent) {
                     val mantissa = if (grouping) groupNumber(parts.mantissa) ?: parts.mantissa else parts.mantissa
                     return notationNode(mantissa, parts.exponent)
                 }
@@ -57,7 +59,7 @@ object ResultDisplayFormat {
             for (index in 0 until args.length()) {
                 val child = args.opt(index)
                 val childNotation = displayMode != ResultDisplayMode.OFF && allowNotation && kind == "unary" && args.length() == 1
-                formatted.put(if (child is JSONObject) formatNode(child, displayMode, grouping, childNotation) else child)
+                formatted.put(if (child is JSONObject) formatNode(child, displayMode, grouping, engineeringShift, showZeroExponent, childNotation) else child)
             }
             copy.put("args", formatted)
         }
@@ -80,7 +82,7 @@ object ResultDisplayFormat {
             .put("args", JSONArray().put(JSONObject().put("kind", "number").put("value", mantissa)).put(power))
     }
 
-    private fun notationParts(value: String, displayMode: ResultDisplayMode): NotationParts? {
+    private fun notationParts(value: String, displayMode: ResultDisplayMode, engineeringShift: Int): NotationParts? {
         if (displayMode == ResultDisplayMode.OFF) return null
         val number = value.trim().toBigDecimalOrNull() ?: return null
         if (number.signum() == 0) return null
@@ -88,12 +90,13 @@ object ResultDisplayFormat {
         return runCatching {
             val magnitude = number.abs()
             val floorLog10 = magnitude.precision() - magnitude.scale() - 1
-            val exponent = if (displayMode == ResultDisplayMode.ENGINEERING) {
+            val baseExponent = if (displayMode == ResultDisplayMode.ENGINEERING) {
                 val remainder = ((floorLog10 % 3) + 3) % 3
                 floorLog10 - remainder
             } else {
                 floorLog10
             }
+            val exponent = baseExponent + engineeringShift
             if (abs(exponent) > MAX_DISPLAY_DIGITS) return null
             val mantissa = number.scaleByPowerOfTen(-exponent).stripTrailingZeros().toPlainString()
             if (mantissa.length > MAX_DISPLAY_DIGITS) null
