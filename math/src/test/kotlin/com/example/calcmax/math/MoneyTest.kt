@@ -22,6 +22,11 @@ class MoneyTest {
         assertTrue((table.rate("JPY","KRW").multiply(BigDecimal("150"))-BigDecimal("1300")).abs()<BigDecimal("1e-28"))
         assertFalse(table.due(2000+RateTable.TTL-1));assertTrue(table.due(2000+RateTable.TTL))
     }
+    @Test fun moneyFormattingGroupsThousands() {
+        assertEquals("1,234,567.89",Money.format(BigDecimal("1234567.89")))
+        assertEquals("-1,234.5",Money.format(BigDecimal("-1234.50")))
+        assertEquals("123.45",Money.format(BigDecimal("123.4500")))
+    }
     @Test fun invalidAmountsAreRejected(){assertThrows(IllegalArgumentException::class.java){Money.tip(BigDecimal.TEN,BigDecimal.TEN,BigDecimal.ZERO,0)}}
     @Test fun halfCentRoundsUp(){assertEquals(BigDecimal("0.11"),Money.tip(BigDecimal("1.05"),BigDecimal.TEN,BigDecimal.ZERO,1).tip)}
 }

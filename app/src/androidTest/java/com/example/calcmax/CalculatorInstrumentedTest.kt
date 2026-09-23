@@ -311,7 +311,7 @@ class CalculatorInstrumentedTest {
         compose.onNodeWithText("Currency").performClick()
         compose.onNodeWithText("Manual").performClick()
         compose.onNodeWithText("1 USD = ? KRW").performTextReplacement("1300")
-        compose.onNodeWithText("≈ 130000 KRW").assertExists();capture("currency-manual")
+        compose.onNodeWithText("≈ 130,000 KRW").assertExists();capture("currency-manual")
         compose.onNodeWithText("Setup").performClick()
         compose.onNodeWithText("Custom").performScrollTo().performClick()
         compose.onNodeWithText("Custom precision · 3–200").performTextReplacement("42")

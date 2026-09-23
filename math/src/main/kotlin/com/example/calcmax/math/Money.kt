@@ -18,7 +18,17 @@ object Money {
         val share=BigDecimal(division[0],places)
         return TipResult(tip,tax,total,share,share+BigDecimal.ONE.movePointLeft(places),division[1].toInt())
     }
-    fun format(value:BigDecimal):String=value.stripTrailingZeros().toPlainString()
+    fun format(value:BigDecimal):String {
+        val plain=value.stripTrailingZeros().toPlainString()
+        val sign=if(plain.startsWith("-"))"-" else ""
+        val unsigned=if(sign.isEmpty())plain else plain.drop(1)
+        val dot=unsigned.indexOf('.')
+        val integer=if(dot>=0)unsigned.substring(0,dot) else unsigned
+        val fraction=if(dot>=0)unsigned.substring(dot) else ""
+        if(integer.length<=3)return sign+integer+fraction
+        val grouped=integer.reversed().chunked(3).joinToString(",").reversed()
+        return sign+grouped+fraction
+    }
 }
 data class RateTable(val base:String,val rates:Map<String,BigDecimal>,val referenceMillis:Long,val fetchedMillis:Long) {
     companion object {const val TTL=24*60*60*1000L}
