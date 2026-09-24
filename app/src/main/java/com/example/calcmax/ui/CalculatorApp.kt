@@ -98,9 +98,13 @@ val Modes=listOf("Scientific","CAS","Graph","Python","Equations","Matrix","Vecto
 @Composable fun CalculationTape(m:CalculatorModel,modifier:Modifier=Modifier,screenExpanded:Boolean=false,onToggleScreen:(()->Unit)?=null) {
     val c=LocalInstrument.current
     val scroll=rememberLazyListState()
+    var typing by rememberSaveable {mutableStateOf(false)}
+    LaunchedEffect(m.calcSession!=null){if(m.calcSession!=null)typing=false}
     LaunchedEffect(m.inputVersion,m.tape.size){scroll.scrollToItem(0)}
-    LazyColumn(modifier.fillMaxWidth().background(c.display).semantics {contentDescription="Calculation history, swipe vertically"},state=scroll,reverseLayout=true) {
-        item(key="active") {Display(m,screenExpanded,onToggleScreen)}
+    Column(modifier.fillMaxWidth().background(c.display)) {
+        DisplayToolbar(m,typing){typing=!typing}
+        LazyColumn(Modifier.fillMaxWidth().weight(1f).semantics {contentDescription="Calculation history, swipe vertically"},state=scroll,reverseLayout=true) {
+            item(key="active") {DisplayContent(m,typing)}
         items(m.tape.asReversed()) {entry->
             Column(Modifier.fillMaxWidth().padding(horizontal=14.dp,vertical=10.dp)) {
                 val input=remember(entry.input){runCatching {JSONObject(entry.input)}.getOrNull()}
@@ -124,6 +128,8 @@ val Modes=listOf("Scientific","CAS","Graph","Python","Equations","Matrix","Vecto
                 HorizontalDivider(Modifier.padding(top=10.dp),color=c.grid)
             }
         }
+        }
+        DisplayActions(m,screenExpanded,onToggleScreen)
     }
 }
 
@@ -143,10 +149,30 @@ private fun largeHistoryTree(root:JSONObject?,compactStructured:Boolean=true):Bo
 
 @Composable fun Display(m:CalculatorModel,screenExpanded:Boolean=false,onToggleScreen:(()->Unit)?=null) {
     val c=LocalInstrument.current
-    val clipboard=LocalClipboardManager.current
-    val context=LocalContext.current
     var typing by rememberSaveable {mutableStateOf(false)}
     LaunchedEffect(m.calcSession!=null){if(m.calcSession!=null)typing=false}
+    Column(Modifier.fillMaxWidth().background(c.display).padding(vertical=4.dp)) {
+        DisplayToolbar(m,typing){typing=!typing}
+        DisplayContent(m,typing)
+        DisplayActions(m,screenExpanded,onToggleScreen)
+    }
+}
+
+@Composable fun DisplayToolbar(m:CalculatorModel,typing:Boolean,onToggleTyping:()->Unit) {
+    val c=LocalInstrument.current
+    val clipboard=LocalClipboardManager.current
+    Row(Modifier.fillMaxWidth().height(36.dp).padding(horizontal=14.dp),verticalAlignment=Alignment.CenterVertically) {
+        Text(if(m.committed)"=" else "MATH",fontSize=10.sp,color=c.muted,letterSpacing=1.sp)
+        Spacer(Modifier.weight(1f))
+        TextButton(onClick={m.undo()},enabled=m.canUndo,modifier=Modifier.height(36.dp).semantics{contentDescription="Undo last input"},contentPadding=PaddingValues(horizontal=8.dp)){Text("Undo",fontSize=11.sp)}
+        TextButton(onClick={m.result?.let{clipboard.setText(AnnotatedString(it.optString(if(m.decimal)"decimal" else "exact")))}},modifier=Modifier.height(36.dp),contentPadding=PaddingValues(horizontal=8.dp)){Text("Copy",fontSize=11.sp)}
+        TextButton(onClick={clipboard.getText()?.text?.let{if(m.calcSession!=null)m.insertCalcValue(it)else m.insert(it)}},modifier=Modifier.height(36.dp),contentPadding=PaddingValues(horizontal=8.dp)){Text("Paste",fontSize=11.sp)}
+        if(m.calcSession==null)TextButton(onClick=onToggleTyping,modifier=Modifier.height(36.dp),contentPadding=PaddingValues(horizontal=8.dp)){Text(if(typing)"Math input" else "Keyboard",fontSize=11.sp)}
+    }
+}
+
+@Composable fun DisplayContent(m:CalculatorModel,typing:Boolean) {
+    val c=LocalInstrument.current
     val inputTree=remember(m.editor,m.answerDisplay,typing) {
         if(typing||m.editor.source.length>800)null else m.inputTree()
     }
@@ -161,15 +187,7 @@ private fun largeHistoryTree(root:JSONObject?,compactStructured:Boolean=true):Bo
         showCalculationStatus=false
         if(calculating){delay(1000);showCalculationStatus=true}
     }
-    Column(Modifier.fillMaxWidth().background(c.display).padding(horizontal=14.dp,vertical=4.dp)) {
-        Row(Modifier.fillMaxWidth().height(36.dp),verticalAlignment=Alignment.CenterVertically) {
-            Text(if(m.committed)"=" else "MATH",fontSize=10.sp,color=c.muted,letterSpacing=1.sp)
-            Spacer(Modifier.weight(1f))
-            TextButton(onClick={m.undo()},enabled=m.canUndo,modifier=Modifier.height(36.dp).semantics{contentDescription="Undo last input"},contentPadding=PaddingValues(horizontal=8.dp)){Text("Undo",fontSize=11.sp)}
-            TextButton(onClick={m.result?.let{clipboard.setText(AnnotatedString(it.optString(if(m.decimal)"decimal" else "exact")))}},modifier=Modifier.height(36.dp),contentPadding=PaddingValues(horizontal=8.dp)){Text("Copy",fontSize=11.sp)}
-            TextButton(onClick={clipboard.getText()?.text?.let{if(m.calcSession!=null)m.insertCalcValue(it)else m.insert(it)}},modifier=Modifier.height(36.dp),contentPadding=PaddingValues(horizontal=8.dp)){Text("Paste",fontSize=11.sp)}
-            if(m.calcSession==null)TextButton(onClick={typing=!typing},modifier=Modifier.height(36.dp),contentPadding=PaddingValues(horizontal=8.dp)){Text(if(typing)"Math input" else "Keyboard",fontSize=11.sp)}
-        }
+    Column(Modifier.fillMaxWidth().padding(horizontal=14.dp)) {
         if(!m.poweredOn) Box(Modifier.fillMaxWidth().height(66.dp),contentAlignment=Alignment.Center){Text("OFF · press 2nd to resume",color=c.muted)}
         else if(typing||compactInput) BasicTextField(
             value=TextFieldValue(m.editor.source,TextRange(m.editor.anchor.coerceIn(0,m.editor.source.length),m.editor.cursor.coerceIn(0,m.editor.source.length))),
@@ -255,17 +273,21 @@ private fun largeHistoryTree(root:JSONObject?,compactStructured:Boolean=true):Bo
             Text(when{m.engineeringConversion->"ENG mode · ←/→ shifts mantissa";m.error.isNotBlank()->m.error;calculating&&showCalculationStatus->if(m.busy)"Computing…" else "Calculating…";m.calcSession!=null->"CALC · enter a value, then press = · AC cancels";domainText(m.result).isNotBlank()->domainText(m.result);m.committed->"Next input starts a new calculation";else->m.result?.optString("note") ?: ""},Modifier.weight(1f),fontSize=10.sp,maxLines=1,color=if(m.error.isNotBlank())c.danger else if(m.engineeringConversion)c.accent else c.muted)
             if(calculating&&showCalculationStatus)Text("Cancel",Modifier.clickable{m.cancel()}.padding(start=8.dp),fontSize=10.sp,color=c.accent)
         }
-        Row(Modifier.fillMaxWidth().height(36.dp).horizontalScroll(rememberScrollState()),verticalAlignment=Alignment.CenterVertically){
-            SmallAction(if(m.decimal)"≈ Decimal" else "Exact"){m.decimal=!m.decimal}
-            SmallAction(if(m.resultDisplayMode==ResultDisplayMode.SCIENTIFIC)"SCI" else "ENG",active=m.resultDisplayMode!=ResultDisplayMode.OFF,description="Result notation"){m.cycleResultDisplayMode()}
-            SmallAction(",",active=m.thousandsSeparator,description="Thousands separators"){m.thousandsSeparator=!m.thousandsSeparator;m.save()}
-            if(onToggleScreen!=null)SmallAction("scr",active=screenExpanded,description=if(screenExpanded)"Restore full keypad" else "Expand calculation screen"){onToggleScreen()}
-            SmallAction("∫"){m.insert("integrate(,x)",10)}
-            SmallAction("∫ₐᵇ"){m.insert("integrate(,x,,)",10)}
-            SmallAction("d/dx"){m.insert("diff(,x)",5)}
-            SmallAction("f′(a)"){m.insert("nderivative(,x,)",12)}
-            SmallAction("Share"){m.result?.let{context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,m.editor.source+" = "+it.optString("exact")),"Share calculation"))}}
-        }
+    }
+}
+
+@Composable fun DisplayActions(m:CalculatorModel,screenExpanded:Boolean=false,onToggleScreen:(()->Unit)?=null) {
+    val context=LocalContext.current
+    Row(Modifier.fillMaxWidth().height(36.dp).padding(horizontal=14.dp).horizontalScroll(rememberScrollState()),verticalAlignment=Alignment.CenterVertically){
+        SmallAction(if(m.decimal)"≈ Decimal" else "Exact"){m.decimal=!m.decimal}
+        SmallAction(if(m.resultDisplayMode==ResultDisplayMode.SCIENTIFIC)"SCI" else "ENG",active=m.resultDisplayMode!=ResultDisplayMode.OFF,description="Result notation"){m.cycleResultDisplayMode()}
+        SmallAction(",",active=m.thousandsSeparator,description="Thousands separators"){m.thousandsSeparator=!m.thousandsSeparator;m.save()}
+        if(onToggleScreen!=null)SmallAction("scr",active=screenExpanded,description=if(screenExpanded)"Restore full keypad" else "Expand calculation screen"){onToggleScreen()}
+        SmallAction("∫"){m.insert("integrate(,x)",10)}
+        SmallAction("∫ₐᵇ"){m.insert("integrate(,x,,)",10)}
+        SmallAction("d/dx"){m.insert("diff(,x)",5)}
+        SmallAction("f′(a)"){m.insert("nderivative(,x,)",12)}
+        SmallAction("Share"){m.result?.let{context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,m.editor.source+" = "+it.optString("exact")),"Share calculation"))}}
     }
 }
 
