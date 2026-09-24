@@ -120,8 +120,12 @@ class StructuredEditorTest {
         assertEquals("integrate(5^2,x,,)",editor.source)
         assertEquals(13,editor.cursor)
         assertEquals(10..13,editor.cursorTarget())
+        assertEquals("integrate(5^2*4,x,,)",editor.insert("4").source)
+        assertEquals("integrate",editor.insert("4").tree()?.value)
+        assertEquals("integrate(5^2*sin(),x,,)",editor.insert("sin()").source)
         val insideExponent=editor.move(-1)
         assertEquals(12..13,insideExponent.cursorTarget())
+        assertEquals("integrate(5^(24),x,,)",insideExponent.insert("4").source)
         assertEquals(10..13,insideExponent.move(1).cursorTarget())
     }
     @Test fun deletingIntegralInputPreservesItsHiddenOpeningParenthesis() {

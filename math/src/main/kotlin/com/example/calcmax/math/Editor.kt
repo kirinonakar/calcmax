@@ -4,6 +4,9 @@ package com.example.calcmax.math
 data class Editor(val source: String = "", val cursor: Int = source.length, val anchor: Int = cursor,
                   val exponent: IntRange? = null, val outside: IntRange? = null, val activeToken: IntRange? = null) {
     fun insert(text: String, inside: Int = text.length): Editor {
+        if(cursor==anchor && exponent==null && text.firstOrNull()?.let{it.isLetterOrDigit()||it=='.'||it=='('||it=='√'}==true &&
+            tree()?.nodes()?.any {it.kind=="binary"&&it.value=="^"&&it.end==cursor&&it.args[1].kind !in setOf("hole","group")}==true)
+            return Editor(source,cursor).insert("*$text",inside+1)
         if(cursor==anchor && source.getOrNull(cursor-1)==')' && text.firstOrNull()?.let{it.isDigit()||it=='.'}==true) {
             val nodes=tree()?.nodes()
             val completed=nodes?.firstOrNull {node->
