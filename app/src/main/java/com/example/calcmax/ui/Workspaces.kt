@@ -4,6 +4,7 @@ import android.graphics.Paint
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -48,7 +49,7 @@ import kotlin.math.max
 }
 @Composable fun Field(value: String,label: String,modifier: Modifier=Modifier,onValue: (String)->Unit) { OutlinedTextField(value,onValue,modifier=modifier,label={Text(label)},singleLine=true) }
 @Composable private fun StatHeader(text:String,modifier:Modifier) { val c=LocalInstrument.current; Box(modifier.fillMaxHeight(),contentAlignment=Alignment.Center){Text(text,fontSize=11.sp,color=c.muted,fontWeight=FontWeight.SemiBold)} }
-@Composable private fun StatCell(value:String,modifier:Modifier,focus:FocusRequester,onValue:(String)->Unit) { val c=LocalInstrument.current; BasicTextField(value,onValue,modifier.fillMaxHeight().background(c.display).focusRequester(focus),textStyle=MaterialTheme.typography.bodyMedium.copy(fontSize=12.sp,color=c.ink),singleLine=true,cursorBrush=SolidColor(c.accent),decorationBox={inner->Box(Modifier.fillMaxSize().padding(horizontal=8.dp),contentAlignment=Alignment.CenterStart){inner()}}) }
+@Composable private fun StatCell(value:String,modifier:Modifier,focus:FocusRequester,onValue:(String)->Unit) { val c=LocalInstrument.current; val tapSource=remember{MutableInteractionSource()}; Box(modifier.fillMaxHeight().background(c.display).clickable(interactionSource=tapSource,indication=null){runCatching {focus.requestFocus()}}.padding(horizontal=8.dp),contentAlignment=Alignment.CenterStart){BasicTextField(value,onValue,Modifier.fillMaxWidth().focusRequester(focus),textStyle=MaterialTheme.typography.bodyMedium.copy(fontSize=12.sp,color=c.ink),singleLine=true,cursorBrush=SolidColor(c.accent))} }
 
 @Composable fun MatrixScreen(m: CalculatorModel) {
     var rows by rememberSaveable { mutableIntStateOf(2) }; var cols by rememberSaveable { mutableIntStateOf(if(m.mode=="Vector")1 else 2) }

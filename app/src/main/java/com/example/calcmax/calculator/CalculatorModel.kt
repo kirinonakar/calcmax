@@ -9,6 +9,7 @@ import kotlinx.coroutines.*
 import org.json.JSONArray
 import org.json.JSONObject
 
+private const val maxTapeEntries = 10
 data class HistoryEntry(val id: Long, val source: String, val exact: String, val decimal: String, val mode: String, val favorite: Boolean = false,val inputTree:String="",val response:String="",val answer:String="")
 data class TapeEntry(val source: String,val input: String,val result: String,val answer:String="")
 data class CalcSession(val source:String,val names:List<String>,val index:Int=0,val input:Editor=Editor(),val accepted:Map<String,JSONObject> = emptyMap()) {
@@ -168,7 +169,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     private var analysisJob: Job? = null
     private var pythonJob: Job? = null
     init {
-        tape=history.filterIndexed{index,entry->entry.id>prefs.getLong("screenClearedAt",0)&&(index!=0||!committed||entry.source!=editor.source)}.take(100).asReversed().map(HistoryEntry::toTapeEntry)
+        tape=history.filterIndexed{index,entry->entry.id>prefs.getLong("screenClearedAt",0)&&(index!=0||!committed||entry.source!=editor.source)}.take(maxTapeEntries).asReversed().map(HistoryEntry::toTapeEntry)
         if(!committed&&editor.source.isNotBlank())schedulePreview()
     }
     private fun loadObject(key: String) = runCatching { JSONObject(prefs.getString(key,"{}")!!) }.getOrDefault(JSONObject())
@@ -242,7 +243,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     private fun nextEntry() {
         if(!committed) return
         exitEngineering()
-        result?.let {tape=(tape+TapeEntry(editor.source,inputTree()?.toString() ?: "{}",it.toString(),inputAnswer?.toString() ?: "")).takeLast(300)}
+        result?.let {tape=(tape+TapeEntry(editor.source,inputTree()?.toString() ?: "{}",it.toString(),inputAnswer?.toString() ?: "")).takeLast(maxTapeEntries)}
         committed=false;editor=Editor();result=null;dmsDisplay=false;dmsConversion=false;resultSource="";inputAnswer=null
     }
     fun insert(text: String, inside: Int = text.length) {
