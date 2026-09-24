@@ -57,24 +57,27 @@ import kotlin.math.max
 @Composable private fun StatCell(value:String,modifier:Modifier,focus:FocusRequester,tag:String,onValue:(String)->Unit) {
     val c=LocalInstrument.current
     val keyboard=LocalSoftwareKeyboardController.current
-    BasicTextField(value,onValue,modifier.fillMaxHeight().background(c.display).focusRequester(focus).testTag(tag)
-        .pointerInput(focus,keyboard) {
-            val tolerance=24.dp.toPx()
+    Box(modifier.fillMaxHeight().background(c.display).pointerInput(focus,keyboard) {
+            val tolerance=viewConfiguration.touchSlop
             awaitEachGesture {
                 val down=awaitFirstDown(requireUnconsumed=false,pass=PointerEventPass.Initial)
+                var moved=false
                 while(true) {
                     val event=awaitPointerEvent(PointerEventPass.Initial)
                     val change=event.changes.firstOrNull {it.id==down.id}
                     if(change==null) {if(event.changes.none {it.pressed})break;continue}
+                    if((change.position-down.position).getDistance()>tolerance)moved=true
                     if(!change.pressed) {
-                        if((change.position-down.position).getDistance()<=tolerance){focus.requestFocus();keyboard?.show()}
+                        if(!moved){focus.requestFocus();keyboard?.show()}
                         break
                     }
                 }
             }
-        },
-        textStyle=MaterialTheme.typography.bodyMedium.copy(fontSize=12.sp,color=c.ink),singleLine=true,cursorBrush=SolidColor(c.accent),
-        decorationBox={innerTextField->Box(Modifier.fillMaxSize().padding(horizontal=8.dp),contentAlignment=Alignment.CenterStart){innerTextField()}})
+        }) {
+        BasicTextField(value,onValue,Modifier.fillMaxSize().focusRequester(focus).testTag(tag),
+            textStyle=MaterialTheme.typography.bodyMedium.copy(fontSize=12.sp,color=c.ink),singleLine=true,cursorBrush=SolidColor(c.accent),
+            decorationBox={innerTextField->Box(Modifier.fillMaxSize().padding(horizontal=8.dp),contentAlignment=Alignment.CenterStart){innerTextField()}})
+    }
 }
 
 @Composable fun MatrixScreen(m: CalculatorModel) {
@@ -179,7 +182,7 @@ import kotlin.math.max
                 HorizontalDivider(color=grid,thickness=1.dp)
                 parsedRows.forEachIndexed {index,row->
                     val cellFocus=remember(index,tableColumns.size) {List(tableColumns.size){FocusRequester()} }
-                    Row(Modifier.fillMaxWidth().height(48.dp)) {
+                    Row(Modifier.fillMaxWidth().height(56.dp)) {
                         Box(Modifier.width(30.dp).fillMaxHeight().clickable {cellFocus.first().requestFocus()},contentAlignment=Alignment.Center){Text("${index+1}",fontSize=12.sp,color=LocalInstrument.current.muted)}
                         VerticalDivider(color=grid,thickness=1.dp)
                         repeat(tableColumns.size) {column->

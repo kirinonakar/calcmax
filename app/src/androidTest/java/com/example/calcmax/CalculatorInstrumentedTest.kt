@@ -87,10 +87,14 @@ class CalculatorInstrumentedTest {
     @Test fun statisticsCellsFocusWhenTappedNearTheirEdges() {
         compose.runOnIdle {model().mode="Statistics"}
         compose.onNodeWithText("New").performClick()
-        for(index in List(16) {it%2}) {
+        for(tap in 0 until 16) {
+            val index=tap%2
             val cell=compose.onNodeWithTag("statistics-cell-$index-0")
             cell.performScrollTo()
-            cell.performTouchInput {click(androidx.compose.ui.geometry.Offset(width-4f,height/2f))}
+            cell.performTouchInput {click(androidx.compose.ui.geometry.Offset(
+                if(tap<8)4f else width-4f,
+                if(tap%4<2)4f else height-4f
+            ))}
             cell.assertIsFocused()
         }
         compose.onNodeWithTag("statistics-cell-1-0").performTextInput("9")
