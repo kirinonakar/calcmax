@@ -28,6 +28,57 @@ class CalculatorInstrumentedTest {
         val file=File(compose.activity.filesDir,"qa/$name.png");file.parentFile!!.mkdirs()
         file.outputStream().use { val roots=compose.onAllNodes(isRoot());roots[roots.fetchSemanticsNodes().lastIndex].captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG,100,it) }
     }
+    @Test fun undoRevertsEachInputAndClear() {
+        compose.runOnIdle {model().mode="Scientific";model().poweredOn=true;model().secondKeys=false;model().clear(recordUndo=false)}
+        listOf("1","+","2").forEach {compose.onNodeWithContentDescription(it).performClick()}
+        compose.runOnIdle {assertEquals("1+2",model().editor.source)}
+        compose.onNodeWithContentDescription("Undo last input").performClick()
+        compose.runOnIdle {assertEquals("1+",model().editor.source)}
+        compose.onNodeWithContentDescription("Undo last input").performClick()
+        compose.runOnIdle {assertEquals("1",model().editor.source)}
+        compose.onNodeWithContentDescription("Undo last input").performClick()
+        compose.runOnIdle {assertEquals("",model().editor.source);assertFalse(model().canUndo)}
+        compose.runOnIdle {model().insert("123");model().edit(model().editor.delete());assertEquals("12",model().editor.source)}
+        compose.onNodeWithContentDescription("Undo last input").performClick()
+        compose.runOnIdle {assertEquals("123",model().editor.source);model().clear()}
+        compose.onNodeWithContentDescription("Undo last input").performClick()
+        compose.runOnIdle {assertEquals("123",model().editor.source);model().clear(recordUndo=false);model().edit(Editor("2+3"));model().calculate()}
+        compose.waitUntil(30000){model().committed}
+        compose.runOnIdle {model().fresh(Editor("-"));assertEquals("-",model().editor.source)}
+        compose.onNodeWithContentDescription("Undo last input").performClick()
+        compose.runOnIdle {assertEquals("2+3",model().editor.source);model().clear(recordUndo=false);model().edit(Editor("A+1"));model().startCalc();model().insertCalcValue("42")}
+        compose.onNodeWithContentDescription("Undo last input").performClick()
+        compose.runOnIdle {assertEquals("",model().calcSession?.input?.source);model().cancelCalc();model().clear(recordUndo=false)}
+    }
+    @Test fun integralPowerBaseMovesDirectlyToExponent() {
+        compose.runOnIdle {model().mode="Scientific";model().secondKeys=false;model().clear();model().edit(Editor("integrate(x^2,x,,)",11))}
+        compose.onNodeWithContentDescription("DEL").performClick()
+        compose.runOnIdle {assertEquals("integrate(()^2,x,,)",model().editor.source)}
+        compose.onNodeWithContentDescription("Cursor right").performClick()
+        compose.runOnIdle {assertEquals(model().editor.source.indexOf('2'),model().editor.cursor)}
+        compose.onNodeWithContentDescription("3").performClick()
+        compose.runOnIdle {assertEquals("call",model().editor.tree()?.kind);assertEquals("integrate",model().editor.tree()?.value);model().clear()}
+    }
+    @Test fun calcPromptsForVariablesAndReusesStoredValues() {
+        compose.runOnIdle {model().mode="Scientific";model().clear();model().edit(Editor("A+2B"))}
+        compose.onNodeWithContentDescription("CALC").performClick()
+        compose.runOnIdle {assertEquals("A",model().calcSession?.name)}
+        compose.onNodeWithContentDescription("3").performClick()
+        compose.runOnIdle {assertEquals("3",model().calcSession?.input?.source)}
+        compose.onNodeWithContentDescription("=").performClick()
+        compose.waitUntil(30000){!model().busy&&model().calcSession?.name=="B"}
+        compose.runOnIdle {assertEquals("3",model().calcSession?.accepted?.get("A")?.optString("value"))}
+        compose.onNodeWithContentDescription("4").performClick()
+        compose.onNodeWithContentDescription("=").performClick()
+        compose.waitUntil(30000){!model().busy&&model().committed}
+        compose.runOnIdle {assertEquals("11",model().result?.optString("exact"));assertEquals("3",model().lastCalcValues["A"]?.optString("value"));assertEquals("4",model().lastCalcValues["B"]?.optString("value"));assertTrue(model().variables.has("A"));assertTrue(model().variables.has("B"))}
+        compose.onNodeWithContentDescription("CALC").performClick()
+        compose.onNodeWithContentDescription("=").performClick()
+        compose.waitUntil(30000){!model().busy&&model().calcSession?.name=="B"}
+        compose.onNodeWithContentDescription("=").performClick()
+        compose.waitUntil(30000){!model().busy&&model().committed}
+        compose.runOnIdle {assertEquals("11",model().result?.optString("exact"));model().clear()}
+    }
     @Test fun tappingEmptyStatisticListPreservesItsBrackets() {
         compose.runOnIdle {model().mode="Scientific";model().clear();model().insert("mean([])",6)}
         compose.onNodeWithContentDescription("Empty list; tap to enter values").performClick()

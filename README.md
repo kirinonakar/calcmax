@@ -21,6 +21,7 @@ You can download the latest release from the [Releases Page](https://github.com/
 * MODE opens scientific, CAS, graphing, Python, equations, matrix, vector, statistics, programmer, units, constants, tip and currency workspaces.
 * SETUP chooses Light, Dark, or System (the default), angle unit, precision, haptics, sound and optional persistent history. Theme changes preserve the current calculation and editor state.
 * RCL / SHIFT RCL open variable recall and storage. `radius=5` and `f(x)=x^2+1` are supported at the top level outside Equation mode. Use `solve(...)` to solve equations. Stored values are snapshots; user functions retain their expression bodies.
+* For an expression with variables, press `CALC` to enter each variable value in order and press `=` after each one. The last `=` evaluates the original expression. Empty input reuses a stored value or uses zero; `AC` closes the prompt.
 
 ## Examples
 
@@ -46,6 +47,8 @@ nintegrate(sin(x),x,0,pi)
 det([[1,2],[3,4]])
 eigenvalues([[1,0],[0,2]])
 dot([1,2,3],[4,5,6])
+prime(1000)
+isprime(123457)
 stats([1,2,3,4])
 regression([[1,2],[2,4],[3,6]],linear)
 convert(32,degF,degC)
@@ -54,6 +57,8 @@ convert(qty(1,kg)*qty(2,mps2),N)
 ```
 
 Decimal literals are exact rationals. Decimal results use 3–200 configurable significant digits, with 3/10/15/30/50/100/200 presets and a custom entry. Numeric trig honors DEG/RAD/GRAD; explicit π or ° specifies a radian/degree expression. Symbolic calculus is in radians. Complex values use `i`; `polar(r,theta)`, `rectpolar(z)`, `re`, `im`, `arg` and `conj` are available.
+
+`prime(n)` returns the nth prime (for example, `prime(1000)` is 7919). `isprime(n)` returns true or false for an integer (for example, `isprime(123457)` is true).
 
 The graph workspace accepts one expression per line (six curves), including user functions. Cartesian variable: `x`. Parametric input: `[cos(t),sin(t)]`; polar input: `2*cos(3*t)`. Cartesian analysis lists and marks roots and intersections in a selected interval, along with extrema, derivatives and integrals.
 

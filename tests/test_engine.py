@@ -17,6 +17,17 @@ def run(source, **options):
     return json.loads(core.dispatch(json.dumps({"tree": TREES[source], "angle": "RAD", **options})))
 
 class EngineTests(unittest.TestCase):
+    def test_prime_index_and_primality_are_distinct(self):
+        def call(name, value):
+            tree={"kind":"call","value":name,"args":[{"kind":"number","value":str(value)}]}
+            return json.loads(core.dispatch(json.dumps({"tree":tree})))
+        self.assertEqual(call("prime",1)["exact"],"2")
+        self.assertEqual(call("prime",1000)["exact"],"7919")
+        self.assertEqual(call("isprime",123457)["exact"],"True")
+        self.assertEqual(call("isprime",123456)["exact"],"False")
+        self.assertEqual(call("isprime",-7)["exact"],"False")
+        self.assertFalse(call("prime",0)["ok"])
+        self.assertFalse(call("prime",100001)["ok"])
     def test_exact_rational_properties(self):
         rng=random.Random(991)
         def rational(a,b): return {"kind":"binary","value":"/","args":[{"kind":"number","value":str(a)},{"kind":"number","value":str(b)}]}

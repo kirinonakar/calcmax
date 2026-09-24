@@ -11,6 +11,9 @@ import org.json.JSONObject
 
 data class HistoryEntry(val id: Long, val source: String, val exact: String, val decimal: String, val mode: String, val favorite: Boolean = false,val inputTree:String="",val response:String="",val answer:String="")
 data class TapeEntry(val source: String,val input: String,val result: String,val answer:String="")
+data class CalcSession(val source:String,val names:List<String>,val index:Int=0,val input:Editor=Editor(),val accepted:Map<String,JSONObject> = emptyMap()) {
+    val name get()=names[index]
+}
 
 internal fun HistoryEntry.toTapeEntry():TapeEntry {
     val input=runCatching {JSONObject(inputTree).takeIf {it.has("kind")}?.toString()}.getOrNull()
@@ -66,6 +69,15 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     private var inputAnswer:JSONObject?=loadObject("inputAnswer").takeIf{it.has("kind")}
     private var lastAnswerResult:JSONObject?=loadObject("lastAnswerResult").takeIf{it.has("exact")}
     var error by mutableStateOf("")
+    private var undoHistory by mutableStateOf<List<Editor>>(emptyList())
+    private var calcUndoHistory by mutableStateOf<List<Editor>>(emptyList())
+    val canUndo get()=if(calcSession!=null)calcUndoHistory.isNotEmpty() else undoHistory.isNotEmpty()
+    var calcSession by mutableStateOf<CalcSession?>(null)
+        private set
+    var lastCalcValues by mutableStateOf<Map<String,JSONObject>>(emptyMap())
+        private set
+    var lastCalcSource by mutableStateOf("")
+        private set
     var busy by mutableStateOf(false)
         private set
     var shift by mutableStateOf(false)
@@ -176,8 +188,26 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         }
         return replace(JSONObject(tree.json()))
     }
-    fun edit(value: Editor) {
+    private fun rememberUndo(value:Editor) {undoHistory=(undoHistory+value).takeLast(100)}
+    fun undo() {
+        val session=calcSession
+        if(session!=null) {
+            if(calcUndoHistory.isEmpty())return
+            calcSession=session.copy(input=calcUndoHistory.last())
+            calcUndoHistory=calcUndoHistory.dropLast(1)
+            error=""
+            return
+        }
+        if(undoHistory.isEmpty())return
+        val previous=undoHistory.last()
+        undoHistory=undoHistory.dropLast(1)
+        edit(previous,recordUndo=false)
+    }
+    fun edit(value: Editor,recordUndo:Boolean=true) {
         val changed=value.source!=editor.source
+        if(changed&&recordUndo)rememberUndo(editor)
+        if(changed && calcSession!=null){job?.cancel();busy=false;calcSession=null}
+        if(changed){lastCalcValues=emptyMap();lastCalcSource=""}
         if(changed)exitEngineering()
         editor=value;error="";committed=false
         if(changed) {
@@ -199,14 +229,16 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     }
     fun insert(text: String, inside: Int = text.length) {
         if(!poweredOn)return
+        var recordInEdit=true
         if(committed) {
+            rememberUndo(editor);recordInEdit=false
             val last=result?.optJSONObject(if(decimal)"decimalTree" else "tree") ?: result?.optJSONObject("tree")
             nextEntry();answerDisplay=last
             if((text in listOf("+","-","−","*","×","/","÷","!","%","°","∠") || text.startsWith("^")) && variables.has("Ans")) {editor=Editor("Ans");inputAnswer=variables.getJSONObject("Ans")}
         }
         if(text=="Ans") {inputAnswer=variables.optJSONObject("Ans");answerDisplay=lastAnswerResult?.optJSONObject(if(decimal)"decimalTree" else "tree") ?: inputAnswer}
         val target=if(overwrite&&editor.cursor==editor.anchor)editor.copy(anchor=(editor.cursor+text.length).coerceAtMost(editor.source.length)) else editor
-        edit(target.insert(text,inside))
+        edit(target.insert(text,inside),recordUndo=recordInEdit)
     }
     fun insertDmsSymbol() {
         if(!poweredOn)return
@@ -232,12 +264,17 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         dmsDisplay=!dmsDisplay
         dmsConversion=true
     }
-    fun clear() {
-        inputVersion++;commitRequested=false;committed=false;editor=Editor();result=null;dmsDisplay=false;dmsConversion=false;resultSource="";error="";shift=false;alpha=false;hyperbolic=false;answerDisplay=null;inputAnswer=null;busy=false;exitEngineering();save()
+    fun clear(recordUndo:Boolean=true) {
+        if(recordUndo&&editor.source.isNotEmpty())rememberUndo(editor)
+        if(!recordUndo)undoHistory=emptyList()
+        if(calcSession!=null)job?.cancel()
+        calcSession=null;calcUndoHistory=emptyList();lastCalcValues=emptyMap();lastCalcSource="";inputVersion++;commitRequested=false;committed=false;editor=Editor();result=null;dmsDisplay=false;dmsConversion=false;resultSource="";error="";shift=false;alpha=false;hyperbolic=false;answerDisplay=null;inputAnswer=null;busy=false;exitEngineering();save()
     }
-    fun fresh() {nextEntry();edit(Editor())}
+    fun fresh(value:Editor=Editor()) {if(editor.source.isNotEmpty())rememberUndo(editor);nextEntry();edit(value,recordUndo=false)}
     fun fraction() {
+        var recordInEdit=true
         if(committed) {
+            rememberUndo(editor);recordInEdit=false
             val previous=result?.optJSONObject("tree")
             nextEntry();inputAnswer=variables.optJSONObject("Ans");answerDisplay=previous
             if(inputAnswer!=null)editor=Editor("Ans")
@@ -250,36 +287,38 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         val a=minOf(target.cursor,target.anchor);val b=maxOf(target.cursor,target.anchor)
         val numerator=target.source.substring(a,b)
         val template="($numerator)/()"
-        edit(target.insert(template,if(numerator.isEmpty())1 else template.length-1))
+        edit(target.insert(template,if(numerator.isEmpty())1 else template.length-1),recordUndo=recordInEdit)
     }
     fun angleSuffix(function:String) {
-        if(committed){val display=result?.optJSONObject("tree");nextEntry();inputAnswer=variables.optJSONObject("Ans");answerDisplay=display;editor=Editor("Ans")}
+        var recordInEdit=true
+        if(committed){rememberUndo(editor);recordInEdit=false;val display=result?.optJSONObject("tree");nextEntry();inputAnswer=variables.optJSONObject("Ans");answerDisplay=display;editor=Editor("Ans")}
         var target=editor
         if(target.cursor==target.anchor)target.tree()?.nodes()?.filter{it.end==target.cursor&&it.start<it.end}?.minByOrNull{it.end-it.start}?.let{target=target.select(it)}
         val selected=target.source.substring(minOf(target.anchor,target.cursor),maxOf(target.anchor,target.cursor))
-        edit(target.insert("$function($selected)"))
+        edit(target.insert("$function($selected)"),recordUndo=recordInEdit)
     }
-    fun resetSetup(){angle="DEG";precision=30;decimal=false;resultDisplayMode=ResultDisplayMode.OFF;thousandsSeparator=false;mixedNumbers=false;overwrite=false;clear();save()}
+    fun resetSetup(){angle="DEG";precision=30;decimal=false;resultDisplayMode=ResultDisplayMode.OFF;thousandsSeparator=false;mixedNumbers=false;overwrite=false;clear(recordUndo=false);save()}
     fun cycleResultDisplayMode(){resultDisplayMode=when(resultDisplayMode){ResultDisplayMode.OFF->ResultDisplayMode.ENGINEERING;ResultDisplayMode.ENGINEERING->ResultDisplayMode.SCIENTIFIC;ResultDisplayMode.SCIENTIFIC->ResultDisplayMode.OFF};save()}
-    fun clearMemory(){variables=JSONObject();functions=JSONObject();assumptions=JSONObject();lastAnswerResult=null;clear();save()}
-    fun clearAllScreen(){cancel();tape=emptyList();variables=JSONObject();lastAnswerResult=null;poweredOn=true;prefs.edit().putLong("screenClearedAt",System.currentTimeMillis()).apply();clear();save()}
+    fun clearMemory(){variables=JSONObject();functions=JSONObject();assumptions=JSONObject();lastAnswerResult=null;clear(recordUndo=false);save()}
+    fun clearAllScreen(){cancel();tape=emptyList();variables=JSONObject();lastAnswerResult=null;poweredOn=true;prefs.edit().putLong("screenClearedAt",System.currentTimeMillis()).apply();clear(recordUndo=false);save()}
     fun reuse(entry:TapeEntry) {nextEntry();inputAnswer=entry.answer.takeIf{it.isNotEmpty()}?.let(::JSONObject);answerDisplay=inputAnswer;edit(Editor(entry.source))}
     fun recalculatePreview() {inputVersion++;schedulePreview()}
     private fun multiArgumentUserFunctions():Set<String> = functions.keys().asSequence().filter {name->
         (functions.optJSONObject(name)?.optJSONArray("parameters")?.length() ?: 0)>1
     }.toSet()
     private fun schedulePreview() {
-        if(mode !in listOf("Scientific","CAS","Equations") || previewRunner?.isActive==true)return
+        if(calcSession!=null || mode !in listOf("Scientific","CAS","Equations") || previewRunner?.isActive==true)return
         previewRunner=viewModelScope.launch {
             try {
                 delay(100)
                 while(true) {
+                    if(calcSession!=null)break
                     val revision=inputVersion;val source=editor.source
                     val tree=runCatching {calculationTree(source)}.getOrNull()
                     if(tree!=null && (commitRequested||!requiresExplicitEvaluation(tree,multiArgumentUserFunctions())) && !(tree.value in listOf("=",":=") && tree.args.firstOrNull()?.kind in listOf("symbol","call") && mode!="Equations")) {
                         previewBusy=true
                         val response=engine.execute(request().put("tree",JSONObject(tree.json())).put("budget",if(commitRequested)8 else 2))
-                        if(revision==inputVersion && source==editor.source && !committed) {
+                        if(revision==inputVersion && source==editor.source && !committed && calcSession==null) {
                             if(response.optBoolean("ok")) {
                                 result=response;dmsDisplay=response.optBoolean("dms");dmsConversion=false;resultSource=source;resultVersion=revision;error=""
                                 if(commitRequested)commit(source,response)
@@ -310,7 +349,68 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         if(tree.nodes().any {it.kind=="hole"})throw SyntaxException("Complete the empty expression slots",source.length)
         return tree
     }
+    fun startCalc() {
+        if(busy)return
+        val source=editor.source
+        val tree=try {calculationTree(source)} catch(e:Exception) {error=e.message ?: "Syntax ERROR";return}
+        val constants=setOf("pi","e","i","I","oo","true","false","Ans","c0","hP","hbar","G","qe","NA","kB0","me","mp0")
+        val names=linkedSetOf<String>()
+        fun collect(node:Expr,bound:Set<String>) {
+            if(node.kind=="symbol" && node.value !in constants && node.value !in bound)names+=node.value
+            val binder=if(node.kind=="call" && node.value in setOf("integrate","diff","nderivative","limit","sum","product","solve","nsolve","nintegrate","series"))
+                node.args.getOrNull(1)?.takeIf {it.kind=="symbol"}?.value else null
+            node.args.forEachIndexed {index,arg->
+                if(index!=1 || binder==null)collect(arg,if(index==0 && binder!=null)bound+binder else bound)
+            }
+        }
+        collect(tree,emptySet())
+        if(names.isEmpty()){calculate();return}
+        previewRunner?.cancel();previewRunner=null;inputVersion++;commitRequested=false;busy=false;committed=false
+        result=null;resultSource="";resultVersion=-1;error=""
+        calcUndoHistory=emptyList()
+        calcSession=CalcSession(source,names.toList())
+    }
+    fun editCalcValue(value:Editor) {if(busy)return;calcSession?.let{session->if(value.source!=session.input.source)calcUndoHistory=(calcUndoHistory+session.input).takeLast(100);calcSession=session.copy(input=value)};error=""}
+    fun insertCalcValue(text:String,inside:Int=text.length) {
+        val session=calcSession ?: return
+        editCalcValue(session.input.insert(text,inside))
+    }
+    fun cancelCalc() {job?.cancel();busy=false;calcSession=null;calcUndoHistory=emptyList();error="";schedulePreview()}
+    fun submitCalcValue() {
+        val session=calcSession ?: return
+        if(busy)return
+        val input=session.input.source
+        val tree=if(input.isBlank())null else try {calculationTree(input)} catch(e:Exception) {error=e.message ?: "Syntax ERROR";return}
+        val existing=variables.optJSONObject(session.name)
+        job=viewModelScope.launch {
+            busy=true;error=""
+            try {
+                val value=if(tree==null)existing ?: JSONObject().put("kind","number").put("value","0") else {
+                    val response=engine.execute(request().put("tree",JSONObject(tree.json())))
+                    if(!response.optBoolean("ok")){error=response.optString("error","Math ERROR");return@launch}
+                    if(response.optBoolean("symbolic") || !response.has("resultAst")){error="Enter a numeric value";return@launch}
+                    response.getJSONObject("resultAst")
+                }
+                val updated=JSONObject(variables.toString()).put(session.name,value)
+                variables=updated;save()
+                val accepted=session.accepted+(session.name to JSONObject(value.toString()))
+                if(session.index<session.names.lastIndex) {
+                    calcUndoHistory=emptyList()
+                    calcSession=session.copy(index=session.index+1,input=Editor(),accepted=accepted)
+                } else {
+                    val expression=calculationTree(session.source)
+                    val response=engine.execute(request().put("tree",JSONObject(expression.json())))
+                    if(response.optBoolean("ok")) {
+                        lastCalcValues=accepted;lastCalcSource=session.source
+                        calcSession=null;calcUndoHistory=emptyList()
+                        commit(session.source,response)
+                    } else error=response.optString("error","Math ERROR")
+                }
+            } finally {busy=false}
+        }
+    }
     fun calculate(source: String = editor.source) {
+        if(calcSession!=null){submitCalcValue();return}
         if(engineeringConversion) {
             exitEngineering()
             return
@@ -391,7 +491,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     fun define(name: String, parameters: String, source: String, showResult:Boolean=true) {
         try {
             require(name.matches(Regex("[A-Za-z][A-Za-z0-9_]*")))
-            require(name !in ("sinc sin cos tan asin acos atan sinh cosh tanh asinh acosh atanh sqrt cbrt nthroot abs floor ceil round sign factorial gamma ln log exp erf erfc Ei Si Ci zeta re im arg conj polar rectpolar simplify expand factor collect diff integrate limit series solve nsolve sum product piecewise subs gcd lcm nCr nPr prime factorint divisors percent degree quotient remainder det inverse transpose rank trace rref ref lu eigenvalues eigenvectors norm normalize dot cross angle projection linsolve mean median variance stdev sumdata quartiles stats regression convert qty nintegrate nderivative minimum maximum".split(' '))) {"This function name is reserved"}
+            require(name !in ("sinc sin cos tan asin acos atan sinh cosh tanh asinh acosh atanh sqrt cbrt nthroot abs floor ceil round sign factorial gamma ln log exp erf erfc Ei Si Ci zeta re im arg conj polar rectpolar simplify expand factor collect diff integrate limit series solve nsolve sum product piecewise subs gcd lcm nCr nPr prime isprime factorint divisors percent degree quotient remainder det inverse transpose rank trace rref ref lu eigenvalues eigenvectors norm normalize dot cross angle projection linsolve mean median variance stdev sumdata quartiles stats regression convert qty nintegrate nderivative minimum maximum".split(' '))) {"This function name is reserved"}
             val names=parameters.split(',').map { it.trim() }; require(names.all { it.matches(Regex("[A-Za-z][A-Za-z0-9_]*")) } && names.distinct().size==names.size)
             functions=JSONObject(functions.toString()).put(name,JSONObject().put("parameters",JSONArray(names)).put("source",source).put("body",JSONObject(Parser(source).parse().json()))); save()
             error=""

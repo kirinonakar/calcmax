@@ -153,8 +153,9 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
             kind=="list"&&children.isNotEmpty()->SquareBrackets {MathRow(2.dp){children.indices.forEach {i->if(i>0)label(", ");child(i)}}}
             emptyContainer->MathRow {label(if(kind=="list")"[" else "{");if(caret&&cursor==start+1)MathText("│",size,blink=true);label(if(kind=="list")"]" else "}")}
             kind=="rows"->Column{children.forEach{row->MathRow{label(row.optString("value")+": ",.65f);row.optJSONArray("args")?.optJSONObject(0)?.let{MathNode(it,size*.8f,depth=depth+1)}}}}
-            kind=="hole"->if(activeHole)MathText("│",size,blink=true)
-                else Box(Modifier.width(18.dp).height(26.dp).border(1.dp,c.muted,RoundedCornerShape(1.dp)).semantics{contentDescription="Empty expression slot"})
+            kind=="hole"->Box(Modifier.width(18.dp).height(26.dp).border(1.dp,if(activeHole)c.accent else c.muted,RoundedCornerShape(1.dp)).then(if(activeHole)Modifier else Modifier.semantics{contentDescription="Empty expression slot"}),contentAlignment=Alignment.Center){
+                if(activeHole)MathText("│",size,blink=true)
+            }
             kind=="answer"->Box(Modifier.border(1.dp,c.muted,RoundedCornerShape(4.dp)).padding(horizontal=5.dp,vertical=2.dp).semantics{contentDescription="Previous answer"}){children.firstOrNull()?.let{MathNode(it,size*.9f,depth=depth+1)}}
             kind=="restricted"->child(0)
             kind=="quantity"->MathRow{child(0);label(" $value",.7f)}
@@ -219,7 +220,8 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
                     else {
                         val adjacentCoefficient=kind=="product"&&i>0&&children[i-1].optString("kind")=="number"&&n.optString("kind")=="symbol"
                         if(i>0&&!coefficient&&!adjacentCoefficient)label(when(kind){"sum"->" + ";"product"->" · ";"binary","relation"->when(value){"*"->" × ";"/"->" ÷ ";"-"->" − ";"!="->" ≠ ";"<="->" ≤ ";">="->" ≥ ";else->" $value "};else->", "})
-                        if(kind=="product"&&n.optString("kind")=="sum")wrapped(i)else child(i)
+                        if(kind=="product"&&n.optString("kind")=="sum")wrapped(i)
+                        else child(i,hidden=kind=="binary"&&value=="*"&&n.optString("kind")=="group"&&n.optJSONArray("args")?.optJSONObject(0)?.optString("kind")=="hole")
                     }
                 }
                 if(kind=="tuple"&&children.size==1)label(",")

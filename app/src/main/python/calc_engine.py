@@ -265,13 +265,20 @@ class Engine:
         if name in ("log","ln"): require(a[0]!=0,"Domain ERROR: logarithm of zero")
         if name=="log" and len(a)>1: require(a[1] not in (0,1),"Domain ERROR: invalid logarithm base")
         if name in basic: return basic[name](*a)
-        if name in ("factorial", "nPr", "prime", "factorint", "divisors"):
+        if name in ("prime", "isprime"):
+            require(len(a)==1, name+" expects one integer")
+            require(a[0].is_Integer, name+" requires an integer")
+            if name=="prime":
+                require(1<=a[0]<=100000, "prime index must be between 1 and 100000")
+                return s.Integer(s.prime(int(a[0])))
+            require(abs(a[0])<=10**15, "isprime input outside supported range")
+            return s.true if s.isprime(a[0]) else s.false
+        if name in ("factorial", "nPr", "factorint", "divisors"):
             require(a[0].is_Integer and 0 <= a[0] <= (10000 if name in ("factorial", "nPr") else 10**15), "Number theory input outside supported range")
             if name == "factorial": return s.factorial(a[0])
             if name == "nPr":
                 require(a[1].is_Integer and 0 <= a[1] <= a[0], "nPr requires 0 ≤ r ≤ n")
                 return s.factorial(a[0])/s.factorial(a[0]-a[1])
-            if name == "prime": return s.true if s.isprime(a[0]) else s.false
             require(a[0]>0,"Factorization and divisors require a positive integer")
             if name == "factorint": return [[s.Integer(p), s.Integer(k)] for p,k in s.factorint(a[0]).items()]
             return s.divisors(a[0])

@@ -11,7 +11,7 @@ m, cm = "m", "cm"
 _names = set("""
 abs floor ceil round sign sqrt cbrt nthroot log ln exp sinc sinh cosh tanh asinh acosh atanh gamma
 sin cos tan asin acos atan
-factorial nCr nPr gcd lcm prime factorint divisors simplify expand factor collect subs diff integrate
+factorial nCr nPr gcd lcm prime isprime factorint divisors simplify expand factor collect subs diff integrate
 limit series sum product solve nsolve nintegrate nderivative minimum maximum piecewise re im conj arg polar
 rectpolar det inverse transpose rank trace ref rref lu linsolve eigenvalues eigenvectors dot cross norm
 normalize angle projection stats mean median variance stdev quartiles regression qty convert

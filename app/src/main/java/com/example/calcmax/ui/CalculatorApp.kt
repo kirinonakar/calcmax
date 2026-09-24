@@ -145,6 +145,7 @@ private fun largeHistoryTree(root:JSONObject?):Boolean {
     val clipboard=LocalClipboardManager.current
     val context=LocalContext.current
     var typing by rememberSaveable {mutableStateOf(false)}
+    LaunchedEffect(m.calcSession!=null){if(m.calcSession!=null)typing=false}
     val focus=remember {FocusRequester()}
     var caretVisible by remember{mutableStateOf(true)}
     LaunchedEffect(m.editor,m.committed){caretVisible=true;while(!m.committed){delay(500);caretVisible=!caretVisible}}
@@ -159,9 +160,10 @@ private fun largeHistoryTree(root:JSONObject?):Boolean {
         Row(Modifier.fillMaxWidth().height(36.dp),verticalAlignment=Alignment.CenterVertically) {
             Text(if(m.committed)"=" else "MATH",fontSize=10.sp,color=c.muted,letterSpacing=1.sp)
             Spacer(Modifier.weight(1f))
+            TextButton(onClick={m.undo()},enabled=m.canUndo,modifier=Modifier.height(36.dp).semantics{contentDescription="Undo last input"},contentPadding=PaddingValues(horizontal=8.dp)){Text("Undo",fontSize=11.sp)}
             TextButton(onClick={m.result?.let{clipboard.setText(AnnotatedString(it.optString(if(m.decimal)"decimal" else "exact")))}},modifier=Modifier.height(36.dp),contentPadding=PaddingValues(horizontal=8.dp)){Text("Copy",fontSize=11.sp)}
-            TextButton(onClick={clipboard.getText()?.text?.let{m.insert(it)}},modifier=Modifier.height(36.dp),contentPadding=PaddingValues(horizontal=8.dp)){Text("Paste",fontSize=11.sp)}
-            TextButton(onClick={typing=!typing},modifier=Modifier.height(36.dp),contentPadding=PaddingValues(horizontal=8.dp)){Text(if(typing)"Math input" else "Keyboard",fontSize=11.sp)}
+            TextButton(onClick={clipboard.getText()?.text?.let{if(m.calcSession!=null)m.insertCalcValue(it)else m.insert(it)}},modifier=Modifier.height(36.dp),contentPadding=PaddingValues(horizontal=8.dp)){Text("Paste",fontSize=11.sp)}
+            if(m.calcSession==null)TextButton(onClick={typing=!typing},modifier=Modifier.height(36.dp),contentPadding=PaddingValues(horizontal=8.dp)){Text(if(typing)"Math input" else "Keyboard",fontSize=11.sp)}
         }
         if(!m.poweredOn) Box(Modifier.fillMaxWidth().height(66.dp),contentAlignment=Alignment.Center){Text("OFF · press 2nd to resume",color=c.muted)}
         else if(typing) BasicTextField(
@@ -169,16 +171,23 @@ private fun largeHistoryTree(root:JSONObject?):Boolean {
             onValueChange={
                 if(m.committed&&it.text!=m.editor.source){
                     if(it.text.startsWith(m.editor.source))m.insert(it.text.removePrefix(m.editor.source))
-                    else {m.fresh();m.edit(Editor(it.text,it.selection.end,it.selection.start))}
+                    else m.fresh(Editor(it.text,it.selection.end,it.selection.start))
                 }else m.edit(Editor(it.text,it.selection.end,it.selection.start))
             },
             modifier=Modifier.fillMaxWidth().heightIn(min=60.dp).onPreviewKeyEvent{if(it.type==KeyEventType.KeyDown&&it.key==Key.Enter){m.calculate();true}else false}.semantics{contentDescription="Expression input"},
             textStyle=TextStyle(color=c.ink,fontSize=m.inputFont.sp,fontFamily=FontFamily.Monospace))
         else Box(Modifier.fillMaxWidth().heightIn(min=60.dp).focusRequester(focus).onKeyEvent{event->
-            if(event.type!=KeyEventType.KeyDown)false else when(event.key){
+            if(event.type!=KeyEventType.KeyDown)false else if(m.calcSession!=null)when(event.key){
+                Key.Enter,Key.NumPadEnter->{m.submitCalcValue();true}
+                Key.Backspace->{m.editCalcValue(m.calcSession!!.input.delete());true}
+                Key.Delete->{m.editCalcValue(m.calcSession!!.input.deleteForward());true}
+                Key.DirectionLeft->{m.editCalcValue(m.calcSession!!.input.move(-1));true}
+                Key.DirectionRight->{m.editCalcValue(m.calcSession!!.input.move(1));true}
+                else->{val ch=event.nativeKeyEvent.unicodeChar;if(ch>=32&&ch!=127){m.insertCalcValue(ch.toChar().toString());true}else false}
+            } else when(event.key){
                 Key.Enter,Key.NumPadEnter->{m.calculate();true}
                 Key.Backspace->{m.edit(m.editor.delete());true}
-                Key.Delete->{val e=m.editor;m.edit(if(e.cursor<e.source.length)e.copy(anchor=e.cursor+1).insert("")else e);true}
+                Key.Delete->{m.edit(m.editor.deleteForward());true}
                 Key.DirectionLeft->{if(m.engineeringConversion)m.shiftEngineering(1)else m.edit(m.editor.move(-1));true};Key.DirectionRight->{if(m.engineeringConversion)m.shiftEngineering(-1)else m.edit(m.editor.move(1));true}
                 Key.DirectionUp->{m.edit(m.editor.parent());true};Key.DirectionDown->{m.edit(m.editor.child());true}
                 else->{val ch=event.nativeKeyEvent.unicodeChar;if(ch>=32&&ch!=127){m.insert(ch.toChar().toString());true}else false}
@@ -198,12 +207,38 @@ private fun largeHistoryTree(root:JSONObject?):Boolean {
             }
         }
         // This answer region is always present, including while a worker is computing.
-        Box(Modifier.fillMaxWidth().heightIn(min=56.dp).horizontalScroll(rememberScrollState()).semantics(mergeDescendants=true){contentDescription="Answer panel";liveRegion=LiveRegionMode.Polite},contentAlignment=Alignment.CenterEnd){
-            if(m.result!=null&&m.poweredOn)ResultMath(m.result!!,m.decimal,m.outputFont,m.mixedNumbers,
-                displayMode=m.resultDisplayMode,thousandsSeparator=m.thousandsSeparator,engineeringConversion=m.engineeringConversion,engineeringShift=m.engineeringShift,dmsDisplay=m.dmsDisplay,dmsConversion=m.dmsConversion,precision=m.precision) else Text(" ",fontSize=28.sp)
+        Box(Modifier.fillMaxWidth().heightIn(min=56.dp).semantics(mergeDescendants=true){contentDescription=if(m.calcSession!=null)"CALC variable input" else "Answer panel";liveRegion=LiveRegionMode.Polite},contentAlignment=Alignment.CenterEnd){
+            val session=m.calcSession
+            if(session!=null)Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+                Text("${session.index+1}/${session.names.size}  ${session.name} = ",fontSize=20.sp,color=c.accent)
+                BasicTextField(
+                    value=TextFieldValue(session.input.source,TextRange(session.input.anchor.coerceIn(0,session.input.source.length),session.input.cursor.coerceIn(0,session.input.source.length))),
+                    onValueChange={m.editCalcValue(Editor(it.text,it.selection.end,it.selection.start))},
+                    modifier=Modifier.weight(1f).onPreviewKeyEvent{if(it.type==KeyEventType.KeyDown&&it.key==Key.Enter){m.submitCalcValue();true}else false}.semantics{contentDescription="Value for ${session.name}"},
+                    textStyle=TextStyle(color=c.ink,fontSize=22.sp,fontFamily=FontFamily.Monospace),
+                    decorationBox={inner->Box(Modifier.fillMaxWidth()) {
+                        if(session.input.source.isEmpty()) {
+                            val stored=m.variables.optJSONObject(session.name)
+                            if(stored!=null)MathNode(stored,20f) else Text("0",fontSize=22.sp,color=c.muted)
+                        }
+                        inner()
+                    }}
+                )
+            }
+            else if(m.result!=null&&m.poweredOn)Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),contentAlignment=Alignment.CenterEnd){ResultMath(m.result!!,m.decimal,m.outputFont,m.mixedNumbers,
+                displayMode=m.resultDisplayMode,thousandsSeparator=m.thousandsSeparator,engineeringConversion=m.engineeringConversion,engineeringShift=m.engineeringShift,dmsDisplay=m.dmsDisplay,dmsConversion=m.dmsConversion,precision=m.precision)} else Text(" ",fontSize=28.sp)
+        }
+        val shownCalcValues=m.calcSession?.accepted ?: if(m.committed&&m.lastCalcSource==m.editor.source)m.lastCalcValues else emptyMap()
+        if(shownCalcValues.isNotEmpty())Row(Modifier.fillMaxWidth().heightIn(min=24.dp).horizontalScroll(rememberScrollState()),verticalAlignment=Alignment.CenterVertically){
+            Text("CALC  ",fontSize=11.sp,color=c.muted)
+            shownCalcValues.forEach {(name,value)->
+                Text("$name = ",fontSize=13.sp,color=c.accent)
+                MathNode(value,14f)
+                Spacer(Modifier.width(14.dp))
+            }
         }
         Row(Modifier.fillMaxWidth().height(24.dp),verticalAlignment=Alignment.CenterVertically){
-            Text(when{m.engineeringConversion->"ENG mode · ←/→ shifts mantissa";m.error.isNotBlank()->m.error;calculating&&showCalculationStatus->if(m.busy)"Computing…" else "Calculating…";domainText(m.result).isNotBlank()->domainText(m.result);m.committed->"Next input starts a new calculation";else->m.result?.optString("note") ?: ""},Modifier.weight(1f),fontSize=10.sp,maxLines=1,color=if(m.error.isNotBlank())c.danger else if(m.engineeringConversion)c.accent else c.muted)
+            Text(when{m.engineeringConversion->"ENG mode · ←/→ shifts mantissa";m.error.isNotBlank()->m.error;calculating&&showCalculationStatus->if(m.busy)"Computing…" else "Calculating…";m.calcSession!=null->"CALC · enter a value, then press = · AC cancels";domainText(m.result).isNotBlank()->domainText(m.result);m.committed->"Next input starts a new calculation";else->m.result?.optString("note") ?: ""},Modifier.weight(1f),fontSize=10.sp,maxLines=1,color=if(m.error.isNotBlank())c.danger else if(m.engineeringConversion)c.accent else c.muted)
             if(calculating&&showCalculationStatus)Text("Cancel",Modifier.clickable{m.cancel()}.padding(start=8.dp),fontSize=10.sp,color=c.accent)
         }
         Row(Modifier.fillMaxWidth().height(36.dp).horizontalScroll(rememberScrollState()),verticalAlignment=Alignment.CenterVertically){

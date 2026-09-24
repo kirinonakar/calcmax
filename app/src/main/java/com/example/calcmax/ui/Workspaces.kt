@@ -2,6 +2,8 @@ package com.example.calcmax.ui
 
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -145,16 +147,20 @@ data class ConstantEntry(val symbol: String,val name: String,val value: String,v
 @Composable fun HistoryDialog(m: CalculatorModel,close: ()->Unit) {
     val clipboard=LocalClipboardManager.current
     var favorites by remember { mutableStateOf(false) }
-    AlertDialog(onDismissRequest=close,title={Text("Calculation history")},text={Column(Modifier.verticalScroll(rememberScrollState())) {
+    val entries=m.history.filter { !favorites||it.favorite }
+    AlertDialog(onDismissRequest=close,title={Text("Calculation history")},text={Column(Modifier.fillMaxWidth().heightIn(max=480.dp)) {
         Choices(listOf("All","Favorites"),if(favorites)"Favorites" else "All",{favorites=it=="Favorites"})
-        if(m.history.isEmpty()) Text("Your calculations will appear here.")
-        m.history.filter { !favorites||it.favorite }.forEach { entry ->
-            Column(Modifier.fillMaxWidth().padding(vertical=8.dp)) {
-                Text(entry.source.historyPreview(),fontFamily=FontFamily.Monospace,fontSize=13.sp)
-                Text("= ${entry.exact.historyPreview()}",fontFamily=FontFamily.Serif,fontSize=20.sp)
-                Text("${entry.mode} · ${DateFormat.getDateTimeInstance(DateFormat.SHORT,DateFormat.SHORT).format(Date(entry.id))}",fontSize=10.sp,color=LocalInstrument.current.muted)
-                Row { SmallAction("Reuse") { m.edit(Editor(entry.source));m.mode="Scientific";close() }; SmallAction(if(entry.favorite)"★" else "☆") { m.favorite(entry.id) }; SmallAction("Copy") { clipboard.setText(AnnotatedString(entry.exact)) }; SmallAction("Delete") { m.deleteHistory(entry.id) } }
-            };HorizontalDivider()
+        LazyColumn(Modifier.fillMaxWidth().weight(1f,fill=false)) {
+            if(entries.isEmpty())item {Text(if(favorites)"No favorites yet." else "Your calculations will appear here.")}
+            items(entries) { entry ->
+                Column(Modifier.fillMaxWidth().padding(vertical=8.dp)) {
+                    Text(entry.source.historyPreview(),fontFamily=FontFamily.Monospace,fontSize=13.sp)
+                    Text("= ${entry.exact.historyPreview()}",fontFamily=FontFamily.Serif,fontSize=20.sp)
+                    Text("${entry.mode} · ${DateFormat.getDateTimeInstance(DateFormat.SHORT,DateFormat.SHORT).format(Date(entry.id))}",fontSize=10.sp,color=LocalInstrument.current.muted)
+                    Row { SmallAction("Reuse") { m.edit(Editor(entry.source));m.mode="Scientific";close() }; SmallAction(if(entry.favorite)"★" else "☆") { m.favorite(entry.id) }; SmallAction("Copy") { clipboard.setText(AnnotatedString(entry.exact)) }; SmallAction("Delete") { m.deleteHistory(entry.id) } }
+                }
+                HorizontalDivider()
+            }
         }
     }},confirmButton={TextButton(onClick=close) { Text("Done") }},dismissButton={TextButton(onClick={m.clearHistory()}) { Text("Clear all") }})
 }

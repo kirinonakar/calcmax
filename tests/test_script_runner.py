@@ -55,6 +55,12 @@ class ScriptRunnerTests(unittest.TestCase):
         self.assertTrue(result["ok"],result)
         self.assertEqual(result["output"],"2\n[[2, 2], [3, 1]]\n3*x**2\n100\n")
 
+    def test_prime_functions_match_calculator(self):
+        source="import calcmax_catalog as calc\nprint(calc.prime(1000))\nprint(calc.isprime(123457))"
+        result=json.loads(script_runner.run(json.dumps({"source":source})))
+        self.assertTrue(result["ok"],result)
+        self.assertEqual(result["output"],"7919\nTrue\n")
+
     def test_custom_catalog_function_uses_saved_definition(self):
         definition={"f":{"parameters":["x"],"body":{"kind":"binary","value":"+","args":[{"kind":"symbol","value":"x"},{"kind":"number","value":"1"}]}}}
         result=json.loads(script_runner.run(json.dumps({"source":"import calcmax_catalog as calc\nprint(calc.f(3))","functions":definition})))

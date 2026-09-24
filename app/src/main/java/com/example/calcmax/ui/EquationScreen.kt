@@ -63,7 +63,7 @@ import org.json.JSONObject
         Button(onClick={
             val names=if(kind=="System")variables.split(',').map{it.trim()}else listOf(variable.trim())
             if(names.isEmpty()||names.any{!it.matches(Regex("[A-Za-z][A-Za-z0-9_]*"))})m.error="Enter valid variable names"
-            else {val command=if(kind=="System")"solve($expression,[${names.joinToString(",")}])" else if(numerical)"nsolve($expression,${names[0]},$guess)" else "solve($expression,${names[0]})";m.fresh();m.edit(Editor(command));m.calculate()}
+            else {val command=if(kind=="System")"solve($expression,[${names.joinToString(",")}])" else if(numerical)"nsolve($expression,${names[0]},$guess)" else "solve($expression,${names[0]})";m.fresh(Editor(command));m.calculate()}
         },enabled=!m.busy){Text(if(m.busy)"Solving…" else "Solve")}
         if(m.error.isNotBlank())Text(m.error,color=MaterialTheme.colorScheme.error)
         if(m.result!=null) {HorizontalDivider();Text("Solution");Box(Modifier.horizontalScroll(rememberScrollState())){ResultMath(m.result!!,m.decimal,m.outputFont,

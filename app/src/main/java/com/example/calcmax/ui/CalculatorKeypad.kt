@@ -63,13 +63,28 @@ private val NumericKeys=listOf(
         if(key.input=="SECOND"){m.poweredOn=true;m.secondKeys=!m.secondKeys;m.shift=false;m.alpha=false;return}
         var value=if(m.alpha&&key.alpha.isNotEmpty())key.alpha else if(m.shift&&key.alternate.isNotEmpty())key.alternate else key.input
         if(key.title=="CALC"&&m.alpha)value="RELATION"
+        if(m.calcSession!=null) {
+            when(value) {
+                "AC","ON"->m.cancelCalc()
+                "=","CALC"->m.submitCalcValue()
+                "DEL"->m.editCalcValue(m.calcSession!!.input.delete())
+                "LEFT"->m.editCalcValue(m.calcSession!!.input.move(-1))
+                "RIGHT"->m.editCalcValue(m.calcSession!!.input.move(1))
+                "NEG"->m.insertCalcValue("-")
+                "RCL","STO","Clear","CLR ALL","MODE","SETUP","ENG","ENG−","S⇔D","MIXED","M+","M−","SOLVE","RELATION"->Unit
+                else->{val at=if(value.contains('('))value.indexOf('(')+1 else value.length;m.insertCalcValue(value,at)}
+            }
+            m.shift=false;m.alpha=false
+            return
+        }
         if(m.hyperbolic && value in listOf("sin()","cos()","tan()","asin()","acos()","atan()"))value=value.substringBefore('(')+"h()"
         if(m.engineeringConversion && value !in setOf("ENG","ENG−","LEFT","RIGHT","=","CALC","AC","ON","CLR ALL"))m.exitEngineering()
         when(value) {
             "ON"->{m.poweredOn=true;m.clear()}
             "CLR ALL"->m.clearAllScreen()
             "MODE"->open("Mode");"SETUP"->open("Settings")
-            "CALC","="->if(m.engineeringConversion)m.exitEngineering()else m.calculate()
+            "CALC"->if(m.engineeringConversion)m.exitEngineering()else m.startCalc()
+            "="->if(m.engineeringConversion)m.exitEngineering()else m.calculate()
             "RELATION"->m.insert("=")
             "()/()"->m.fraction()
             "^2","^3","^()","^(-1)"->m.powerTemplate(value)
@@ -85,7 +100,7 @@ private val NumericKeys=listOf(
             "MIXED"->{m.mixedNumbers=!m.mixedNumbers;m.decimal=false}
             "AC"->m.clear();"DEL"->m.edit(m.editor.delete());"INS"->m.overwrite=!m.overwrite
             "M+","M−"->m.memory(if(value=="M+")1 else -1)
-            "NEG"->{if(m.committed)m.fresh();m.insert("-")}
+            "NEG"->{if(m.committed)m.fresh(Editor("-"))else m.insert("-")}
             "ANGLE"->open("Angle")
             "RANDOM"->m.insert("0."+Random.nextInt(1000).toString().padStart(3,'0'))
             "ENG"->m.enterEngineering()
