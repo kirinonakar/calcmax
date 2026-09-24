@@ -13,6 +13,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.layout.*
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.*
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontFamily
@@ -83,6 +87,35 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
     }
 }
 
+
+/** Radical sign drawn to the radicand's height so the roof always meets the diagonal, even when the radicand contains an exponent. */
+@Composable private fun RadicalSign(content:@Composable ()->Unit) {
+    val ink=LocalInstrument.current.ink
+    Layout(content={
+        Box(Modifier.drawBehind {
+            val stroke=1.dp.toPx()
+            val roofY=stroke/2
+            val bottomY=size.height-stroke/2
+            val signW=(size.height*.45f).coerceIn(10.dp.toPx(),22.dp.toPx())
+            drawPath(Path().apply {
+                moveTo(0f,size.height*.52f)
+                lineTo(signW*.34f,bottomY)
+                lineTo(signW*.66f,roofY)
+                lineTo(signW,roofY)
+                lineTo(size.width,roofY)
+            },ink,style=Stroke(stroke,cap=StrokeCap.Round,join=StrokeJoin.Round))
+        })
+        content()
+    }){ms,constraints->
+        val c=ms[1].measure(constraints.copy(minWidth=0,minHeight=0))
+        val padTop=2.dp.roundToPx();val padBottom=2.dp.roundToPx()
+        val height=c.height+padTop+padBottom
+        val signW=(height*.45f).coerceIn(10.dp.toPx(),22.dp.toPx()).toInt()
+        val width=signW+c.width
+        val bar=ms[0].measure(Constraints.fixed(width,height))
+        layout(width,height,mapOf(MathAxis to padTop+c.axis())){bar.place(0,0);c.place(signW,padTop)}
+    }
+}
 @Composable private fun SquareBrackets(content:@Composable ()->Unit) {
     val ink=LocalInstrument.current.ink
     Box(Modifier.drawBehind {
@@ -144,8 +177,7 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
             },{child(1,.67f,true)})
             kind=="root"||kind=="call"&&value in listOf("sqrt","cbrt","nthroot")->MathRow {
                 if(value=="cbrt")label("³",.7f)else if(value=="nthroot")child(1,.55f)
-                label("√",1.28f)
-                Box(Modifier.padding(top=2.dp).drawBehind{drawLine(c.ink,Offset.Zero,Offset(this.size.width,0f),1.dp.toPx())}){child(0,hidden=true)}
+                RadicalSign{child(0,hidden=true)}
             }
             kind=="matrix"||kind=="list"&&children.isNotEmpty()&&children.all{it.optString("kind")=="list"}->SquareBrackets {
                 Column(verticalArrangement=Arrangement.spacedBy(4.dp)){children.forEach{row->MathRow(10.dp){val cells=row.optJSONArray("args");for(i in 0 until(cells?.length() ?: 0))cells?.optJSONObject(i)?.let{MathNode(it,size*.85f,select,selection,depth+1)}}}}
