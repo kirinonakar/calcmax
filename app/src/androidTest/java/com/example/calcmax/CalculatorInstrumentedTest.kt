@@ -223,6 +223,17 @@ class CalculatorInstrumentedTest {
         }
         compose.runOnIdle{assertEquals(20.0,model().xMax-model().xMin,.001);assertTrue(model().yMax-model().yMin<9.0)}
     }
+    @Test fun differentialGraphSelectorWorksAfterPanning() {
+        compose.runOnIdle {model().mode="Graph";model().changeGraphKind("differential");model().xMin=-5.0;model().xMax=5.0}
+        compose.onNodeWithText("Diff eq").performScrollTo()
+        val graph=compose.onNode(hasContentDescription("Graph with",substring=true))
+        graph.performTouchInput {swipeRight()}
+        compose.runOnIdle {assertTrue(model().xMin < -5.0)}
+        compose.runOnIdle {model().xMin=1e12;model().xMax=1e12+0.000244140625}
+        compose.onNodeWithContentDescription("Graph types").performTouchInput {swipeRight()}
+        compose.onNodeWithText("Cartesian").performClick()
+        compose.runOnIdle {assertEquals("cartesian",model().graphKind)}
+    }
     @Test fun keyboardOverlaysWithoutMovingKeys() {
         compose.runOnIdle{model().mode="Scientific";model().clear()}
         val before=compose.onNodeWithContentDescription("AC").fetchSemanticsNode().boundsInRoot

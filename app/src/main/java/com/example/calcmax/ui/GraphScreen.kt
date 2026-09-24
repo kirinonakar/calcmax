@@ -11,6 +11,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.*
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.clipRect
@@ -37,8 +38,8 @@ import kotlin.math.*
     LaunchedEffect(m.graphSource,m.xMin,m.xMax,m.yMin,m.yMax,m.graphKind,m.parameterMin,m.parameterMax,m.sequenceInitials,m.differentialInitials,m.differentialT0) { delay(350);m.plot() }
     Column(Modifier.fillMaxSize()) {
         OutlinedTextField(m.graphSource,{m.updateGraphSource(it)},Modifier.fillMaxWidth().padding(start=10.dp,end=10.dp,top=8.dp),label={Text(when(m.graphKind){"parametric"->"One [x(t),y(t)] pair per line";"polar"->"r(t) · radians · one curve per line";"sequence"->"u(n) · use u(n−1) for recurrences";"surface"->"z = f(x,y)";"differential"->"dy/dt = f(t,y)";else->"f(x) · one function per line · up to six"})},minLines=if(m.graphKind in listOf("surface","differential"))1 else 2,maxLines=4)
-        Column {
-            Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.fillMaxWidth().zIndex(1f).background(c.body)) {
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).semantics { contentDescription="Graph types" },horizontalArrangement=Arrangement.spacedBy(6.dp)) {
                 listOf("cartesian" to "Cartesian","parametric" to "Parametric","polar" to "Polar","sequence" to "Sequence","surface" to "3D surface","differential" to "Diff eq").forEach {(kind,label)->
                     FilterChip(m.graphKind==kind,{m.changeGraphKind(kind)},label={Text(label,fontSize=12.sp)})
                 }
@@ -97,7 +98,7 @@ import kotlin.math.*
             }while(event.changes.any{it.pressed})
         }}
         if(m.graphKind=="surface") {
-            SurfaceGraph(m,surfaceRotation,Modifier.fillMaxWidth().weight(1f).heightIn(min=180.dp).pointerInput(m.graphKind) {
+            SurfaceGraph(m,surfaceRotation,Modifier.fillMaxWidth().weight(1f).clipToBounds().pointerInput(m.graphKind) {
                 detectDragGestures {change,dragAmount->
                     surfaceRotation=((surfaceRotation+dragAmount.x*.7f)%360f+360f)%360f
                     change.consume()
@@ -106,7 +107,7 @@ import kotlin.math.*
             Row(Modifier.fillMaxWidth().padding(horizontal=14.dp),verticalAlignment=Alignment.CenterVertically) {
                 Text("Rotate",fontSize=11.sp,color=c.muted);Slider(surfaceRotation,{surfaceRotation=it},Modifier.weight(1f),valueRange=0f..360f);Text("${surfaceRotation.toInt()}°",fontSize=11.sp,color=c.muted);SmallAction("Reset"){m.xMin=-3.0;m.xMax=3.0;m.yMin=-3.0;m.yMax=3.0;m.save();m.plot()}
             }
-        } else Canvas(Modifier.fillMaxWidth().weight(1f).heightIn(min=180.dp).background(c.display).then(transform).pointerInput(m.graphKind,selected) { detectTapGestures { p ->
+        } else Canvas(Modifier.fillMaxWidth().weight(1f).clipToBounds().background(c.display).then(transform).pointerInput(m.graphKind,selected) { detectTapGestures { p ->
             val target=m.xMin+(m.xMax-m.xMin)*p.x/size.width
             val targetY=m.yMax-(m.yMax-m.yMin)*p.y/size.height
             m.trace=latestCurves.getOrNull(selected)?.filterNotNull()?.minByOrNull { ((it.first-target)/(m.xMax-m.xMin)).pow(2)+((it.second-targetY)/(m.yMax-m.yMin)).pow(2) }
@@ -118,10 +119,20 @@ import kotlin.math.*
             fun step(range:Double):Double { val raw=range/7;val p=10.0.pow(floor(log10(raw)));val v=raw/p;return p*(if(v>5)10 else if(v>2)5 else if(v>1)2 else 1) }
             val sx=if(m.radianAxis)PiAxis.step(xhi-xlo) else step(xhi-xlo);val sy=step(m.yMax-m.yMin)
             clipRect {
-                var x=ceil(xlo/sx)*sx
-                while(x<=xhi) { drawLine(c.grid,Offset(px(x),0f),Offset(px(x),size.height));drawContext.canvas.nativeCanvas.drawText(if(m.radianAxis)PiAxis.label(x) else "%.3g".format(x),px(x)+3,size.height-8,paint);x+=sx }
-                var y=ceil(m.yMin/sy)*sy
-                while(y<=m.yMax) { drawLine(c.grid,Offset(0f,py(y)),Offset(size.width,py(y)));drawContext.canvas.nativeCanvas.drawText("%.3g".format(y),4f,py(y)-3,paint);y+=sy }
+                val firstX=ceil(xlo/sx)*sx
+                for(index in 0..64) {
+                    val x=firstX+index*sx
+                    if(!x.isFinite() || x>xhi)break
+                    drawLine(c.grid,Offset(px(x),0f),Offset(px(x),size.height))
+                    drawContext.canvas.nativeCanvas.drawText(if(m.radianAxis)PiAxis.label(x) else "%.3g".format(x),px(x)+3,size.height-8,paint)
+                }
+                val firstY=ceil(m.yMin/sy)*sy
+                for(index in 0..64) {
+                    val y=firstY+index*sy
+                    if(!y.isFinite() || y>m.yMax)break
+                    drawLine(c.grid,Offset(0f,py(y)),Offset(size.width,py(y)))
+                    drawContext.canvas.nativeCanvas.drawText("%.3g".format(y),4f,py(y)-3,paint)
+                }
                 drawLine(c.muted,Offset(px(0.0),0f),Offset(px(0.0),size.height),2f)
                 drawLine(c.muted,Offset(0f,py(0.0)),Offset(size.width,py(0.0)),2f)
                 curves.forEachIndexed { ci,points ->
