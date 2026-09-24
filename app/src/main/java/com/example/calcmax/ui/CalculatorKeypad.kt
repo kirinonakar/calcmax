@@ -113,6 +113,7 @@ private fun pressedShade(base:Color)=if(base.luminance()>.45f)Color.Black.copy(a
             "TO_GRAPH"->m.sendExpressionToGraph()
             "MATRIX_INPUT"->m.insert("[[,],[,]]",2)
             "MATRIX_INPUT_3"->m.insert("[[,,],[,,],[,,]]",2)
+            "*10^()"->{val text=if(m.editor.source.isBlank())"1$value" else value;m.insert(text,text.indexOf('(')+1)}
             else->{val at=when {value=="()/()"->1;value.contains('(')->value.indexOf('(')+1;else->value.length};m.insert(value,at)}
         }
         if(value!="HYP")m.hyperbolic=false
