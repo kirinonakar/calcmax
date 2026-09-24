@@ -330,6 +330,32 @@ class CalculatorInstrumentedTest {
         compose.onNodeWithContentDescription("sin").assertExists()
         assertEquals(originalTop,compose.onNodeWithContentDescription("Calculator keypad").fetchSemanticsNode().boundsInRoot.top,.5f)
     }
+    @Test fun previousCalculationsRemainScrollableWithDamagedSavedTrees() {
+        val damaged=HistoryEntry(1,"2+2","4","4","Scientific",inputTree="{invalid",response="{invalid").toTapeEntry()
+        assertTrue(JSONObject(damaged.input).has("kind"))
+        assertEquals("4",JSONObject(damaged.result).getJSONObject("tree").getString("value"))
+        val entries=(0 until 25).map { index ->
+            when(index) {
+                14->TapeEntry("damaged", "{invalid", "{invalid")
+                15->TapeEntry("nested", """{"kind":"list","args":["invalid",{"kind":"number","value":"2"}]}""", """{"exact":"2","tree":{"kind":"number","value":"2"}}""")
+                else->HistoryEntry(index.toLong(),"$index+1",(index+1).toString(),(index+1).toString(),"Scientific").toTapeEntry()
+            }
+        }
+        // Seed the screen tape directly so damaged entries are rendered only when scrolled into view.
+        val setTape=CalculatorModel::class.java.getDeclaredMethod("setTape",List::class.java).apply {isAccessible=true}
+        compose.runOnIdle {
+            model().mode="Scientific";model().clearHistory();model().clear()
+            setTape.invoke(model(),entries)
+        }
+        val tape=compose.onNodeWithContentDescription("Calculation history, swipe vertically")
+        compose.onNodeWithContentDescription("Expand calculation screen").performClick()
+        tape.performScrollToIndex(10)
+        repeat(3) {tape.performTouchInput {swipeDown()}}
+        compose.onNodeWithContentDescription("Restore full keypad").performClick()
+        tape.performScrollToIndex(11)
+        tape.assertExists()
+        compose.runOnIdle {assertEquals(25,model().tape.size)}
+    }
     @Test fun symbolicRenderingCalculusAndFractionExit() {
         compose.runOnIdle {model().mode="Scientific";model().clear();model().decimal=true;model().edit(Editor("integrate(x,x)"))}
         compose.waitUntil(15000){model().result?.optString("exact")=="C + x**2/2"}

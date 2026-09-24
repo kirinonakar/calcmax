@@ -103,7 +103,7 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
     val kind=when(raw){"snapshot_symbol"->"symbol";"constant","float"->"text";"frozen_call"->"function";else->raw}
     val value=node.optString("value")
     val array=node.optJSONArray("args")
-    val children=(0 until (array?.length() ?: 0)).map{array!!.getJSONObject(it)}
+    val children=(0 until (array?.length() ?: 0)).mapNotNull{array?.optJSONObject(it)}
     val integrationTuple=if(kind=="call"&&value=="integrate"&&children.size==2&&children[1].optString("kind")=="tuple")children[1].optJSONArray("args")else null
     val integrationArity=integrationTuple?.length()?.plus(1) ?: children.size
     val coefficient=kind=="binary"&&value=="*"&&children.size==2&&children[0].optString("kind")=="number"&&children[1].optString("kind")=="symbol"
@@ -148,7 +148,7 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
                 Box(Modifier.padding(top=2.dp).drawBehind{drawLine(c.ink,Offset.Zero,Offset(this.size.width,0f),1.dp.toPx())}){child(0,hidden=true)}
             }
             kind=="matrix"||kind=="list"&&children.isNotEmpty()&&children.all{it.optString("kind")=="list"}->SquareBrackets {
-                Column(verticalArrangement=Arrangement.spacedBy(4.dp)){children.forEach{row->MathRow(10.dp){val cells=row.optJSONArray("args");for(i in 0 until(cells?.length() ?: 0))MathNode(cells!!.getJSONObject(i),size*.85f,select,selection,depth+1)}}}
+                Column(verticalArrangement=Arrangement.spacedBy(4.dp)){children.forEach{row->MathRow(10.dp){val cells=row.optJSONArray("args");for(i in 0 until(cells?.length() ?: 0))cells?.optJSONObject(i)?.let{MathNode(it,size*.85f,select,selection,depth+1)}}}}
             }
             kind=="list"&&children.isNotEmpty()->SquareBrackets {MathRow(2.dp){children.indices.forEach {i->if(i>0)label(", ");child(i)}}}
             emptyContainer->MathRow {label(if(kind=="list")"[" else "{");if(caret&&cursor==start+1)MathText("│",size,blink=true);label(if(kind=="list")"]" else "}")}
@@ -214,8 +214,8 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
                 if(kind in listOf("call","function"))label(value,.9f)
                 if(wrap)label(when(kind){"list"->"[";"set"->"{";else->"("})
                 children.forEachIndexed{i,n->
-                    val negative=kind=="sum"&&n.optString("kind")=="unary"&&n.optString("value")=="-"
-                    if(negative){label(if(i==0)"−" else " − ");MathNode(n.getJSONArray("args").getJSONObject(0),size,select,selection,depth+1)}
+                    val negativePart=if(kind=="sum"&&n.optString("kind")=="unary"&&n.optString("value")=="-")n.optJSONArray("args")?.optJSONObject(0)else null
+                    if(negativePart!=null){label(if(i==0)"−" else " − ");MathNode(negativePart,size,select,selection,depth+1)}
                     else {
                         val adjacentCoefficient=kind=="product"&&i>0&&children[i-1].optString("kind")=="number"&&n.optString("kind")=="symbol"
                         if(i>0&&!coefficient&&!adjacentCoefficient)label(when(kind){"sum"->" + ";"product"->" · ";"binary","relation"->when(value){"*"->" × ";"/"->" ÷ ";"-"->" − ";"!="->" ≠ ";"<="->" ≤ ";">="->" ≥ ";else->" $value "};else->", "})

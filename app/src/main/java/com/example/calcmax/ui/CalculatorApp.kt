@@ -102,11 +102,17 @@ val Modes=listOf("Scientific","CAS","Graph","Python","Equations","Matrix","Vecto
         item(key="active") {Display(m,screenExpanded,onToggleScreen)}
         items(m.tape.asReversed()) {entry->
             Column(Modifier.fillMaxWidth().padding(horizontal=14.dp,vertical=10.dp)) {
-                Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).clickable {m.reuse(entry)}) {MathNode(JSONObject(entry.input),m.inputFont*.84f)}
-                val response=remember(entry.result){JSONObject(entry.result)}
-                Box(Modifier.fillMaxWidth().padding(top=6.dp).horizontalScroll(rememberScrollState()),contentAlignment=Alignment.CenterEnd) {ResultMath(response,m.decimal,m.outputFont*.82f,
-                    displayMode=m.resultDisplayMode,thousandsSeparator=m.thousandsSeparator,dmsDisplay=response.optBoolean("dms"),precision=m.precision)}
-                if(domainText(response).isNotEmpty())Text(domainText(response),fontSize=10.sp,color=c.muted)
+                val input=remember(entry.input){runCatching {JSONObject(entry.input)}.getOrNull()}
+                Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).clickable {m.reuse(entry)}) {
+                    if(input!=null)MathNode(input,m.inputFont*.84f) else Text(entry.source,fontSize=(m.inputFont*.84f).sp,color=c.ink)
+                }
+                val response=remember(entry.result){runCatching {JSONObject(entry.result)}.getOrNull()}
+                Box(Modifier.fillMaxWidth().padding(top=6.dp).horizontalScroll(rememberScrollState()),contentAlignment=Alignment.CenterEnd) {
+                    if(response!=null)ResultMath(response,m.decimal,m.outputFont*.82f,
+                        displayMode=m.resultDisplayMode,thousandsSeparator=m.thousandsSeparator,dmsDisplay=response.optBoolean("dms"),precision=m.precision)
+                    else Text(entry.result,fontSize=(m.outputFont*.82f).sp,color=c.ink)
+                }
+                if(response!=null&&domainText(response).isNotEmpty())Text(domainText(response),fontSize=10.sp,color=c.muted)
                 HorizontalDivider(Modifier.padding(top=10.dp),color=c.grid)
             }
         }
@@ -221,7 +227,7 @@ val Modes=listOf("Scientific","CAS","Graph","Python","Equations","Matrix","Vecto
 }
 private fun domainText(result:JSONObject?):String {
     val conditions=result?.optJSONArray("conditions") ?: return ""
-    return if(conditions.length()==0)"" else "Domain: "+(0 until conditions.length()).joinToString{conditions.getString(it)}
+    return if(conditions.length()==0)"" else "Domain: "+(0 until conditions.length()).joinToString{conditions.optString(it)}
 }
 @Composable fun SmallAction(text:String,active:Boolean?=null,description:String?=null,shaded:Boolean=false,action:()->Unit){
     val c=LocalInstrument.current

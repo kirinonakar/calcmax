@@ -11,6 +11,16 @@ import org.json.JSONObject
 
 data class HistoryEntry(val id: Long, val source: String, val exact: String, val decimal: String, val mode: String, val favorite: Boolean = false,val inputTree:String="",val response:String="",val answer:String="")
 data class TapeEntry(val source: String,val input: String,val result: String,val answer:String="")
+
+internal fun HistoryEntry.toTapeEntry():TapeEntry {
+    val input=runCatching {JSONObject(inputTree).takeIf {it.has("kind")}?.toString()}.getOrNull()
+        ?: runCatching {Parser(source,true).parse().json()}.getOrNull()
+        ?: JSONObject().put("kind","text").put("value",source).toString()
+    val result=runCatching {JSONObject(response).takeIf {it.has("exact")||it.has("tree")}?.toString()}.getOrNull()
+        ?: JSONObject().put("exact",exact).put("decimal",decimal)
+            .put("tree",runCatching {JSONObject(Parser(exact,true).parse().json())}.getOrElse {JSONObject().put("kind","text").put("value",exact)}).toString()
+    return TapeEntry(source,input,result,answer)
+}
 enum class ResultDisplayMode { OFF, ENGINEERING, SCIENTIFIC }
 class CalculatorModel(application: Application) : AndroidViewModel(application) {
     private val prefs = application.getSharedPreferences("calculator",0)
@@ -133,13 +143,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     private var analysisJob: Job? = null
     private var pythonJob: Job? = null
     init {
-        tape=history.filterIndexed{index,entry->entry.id>prefs.getLong("screenClearedAt",0)&&(index!=0||!committed||entry.source!=editor.source)}.take(100).asReversed().mapNotNull {entry->
-            runCatching {
-                val input=entry.inputTree.ifBlank {Parser(entry.source,true).parse().json()}
-                val response=entry.response.ifBlank {JSONObject().put("exact",entry.exact).put("decimal",entry.decimal).put("tree",JSONObject(Parser(entry.exact,true).parse().json())).toString()}
-                TapeEntry(entry.source,input,response,entry.answer)
-            }.getOrNull()
-        }
+        tape=history.filterIndexed{index,entry->entry.id>prefs.getLong("screenClearedAt",0)&&(index!=0||!committed||entry.source!=editor.source)}.take(100).asReversed().map(HistoryEntry::toTapeEntry)
         if(!committed&&editor.source.isNotBlank())schedulePreview()
     }
     private fun loadObject(key: String) = runCatching { JSONObject(prefs.getString(key,"{}")!!) }.getOrDefault(JSONObject())
