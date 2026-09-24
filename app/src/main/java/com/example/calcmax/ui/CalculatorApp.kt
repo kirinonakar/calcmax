@@ -99,12 +99,18 @@ val Modes=listOf("Scientific","CAS","Graph","Python","Equations","Matrix","Vecto
     val c=LocalInstrument.current
     val scroll=rememberLazyListState()
     var typing by rememberSaveable {mutableStateOf(false)}
-    LaunchedEffect(m.calcSession!=null){if(m.calcSession!=null)typing=false}
+    // The active item leaves and re-enters composition while history is scrolled.
+    // Requesting focus on every re-entry pulls it back into view during a gesture.
+    var focusPending by remember {mutableStateOf(true)}
+    LaunchedEffect(m.calcSession!=null){if(m.calcSession!=null){typing=false;focusPending=true}}
+    LaunchedEffect(scroll.isScrollInProgress){
+        if(scroll.isScrollInProgress)focusPending=false
+    }
     LaunchedEffect(m.inputVersion,m.tape.size){scroll.scrollToItem(0)}
     Column(modifier.fillMaxWidth().background(c.display)) {
-        DisplayToolbar(m,typing){typing=!typing}
+        DisplayToolbar(m,typing){typing=!typing;if(!typing)focusPending=true}
         LazyColumn(Modifier.fillMaxWidth().weight(1f).semantics {contentDescription="Calculation history, swipe vertically"},state=scroll,reverseLayout=true) {
-            item(key="active") {DisplayContent(m,typing)}
+            item(key="active") {DisplayContent(m,typing,requestInitialFocus=focusPending&&!scroll.isScrollInProgress,onInitialFocus={focusPending=false})}
         items(m.tape.asReversed()) {entry->
             Column(Modifier.fillMaxWidth().padding(horizontal=14.dp,vertical=10.dp)) {
                 val input=remember(entry.input){runCatching {JSONObject(entry.input)}.getOrNull()}
@@ -171,16 +177,19 @@ private fun largeHistoryTree(root:JSONObject?,compactStructured:Boolean=true):Bo
     }
 }
 
-@Composable fun DisplayContent(m:CalculatorModel,typing:Boolean) {
+@Composable fun DisplayContent(m:CalculatorModel,typing:Boolean,requestInitialFocus:Boolean=true,onInitialFocus:()->Unit={}) {
     val c=LocalInstrument.current
     val inputTree=remember(m.editor,m.answerDisplay,typing) {
         if(typing||m.editor.source.length>800)null else m.inputTree()
     }
     val compactInput=m.editor.source.length>800||largeHistoryTree(inputTree,compactStructured=false)
     val focus=remember {FocusRequester()}
+    val requestInputFocus:()->Boolean={try {focus.requestFocus()} catch (_:IllegalStateException) {false}}
     var caretVisible by remember{mutableStateOf(true)}
     LaunchedEffect(m.editor,m.committed){caretVisible=true;while(!m.committed){delay(500);caretVisible=!caretVisible}}
-    LaunchedEffect(typing,compactInput,m.poweredOn){if(!typing&&!compactInput&&m.poweredOn)focus.requestFocus()}
+    LaunchedEffect(typing,compactInput,m.poweredOn,requestInitialFocus){
+        if(requestInitialFocus&&!typing&&!compactInput&&m.poweredOn&&requestInputFocus())onInitialFocus()
+    }
     val calculating=m.busy||m.previewBusy
     var showCalculationStatus by remember{mutableStateOf(false)}
     LaunchedEffect(calculating,m.inputVersion){
@@ -219,14 +228,14 @@ private fun largeHistoryTree(root:JSONObject?,compactStructured:Boolean=true):Bo
             }
         }.focusable().horizontalScroll(rememberScrollState()).semantics{contentDescription="Current expression"},contentAlignment=Alignment.CenterStart){
             Row(verticalAlignment=Alignment.CenterVertically){
-                CompositionLocalProvider(LocalMathCursorTarget provides if(m.committed)null else m.editor.cursorTarget(),LocalMathAfter provides {a,b->m.edit(m.editor.after(a,b))},LocalCaretVisible provides caretVisible,LocalActiveToken provides m.editor.activeToken,LocalPlaceCursor provides {a,b,p->m.edit(m.editor.placeInToken(a,b,p))}) {
+                CompositionLocalProvider(LocalMathCursorTarget provides if(m.committed)null else m.editor.cursorTarget(),LocalMathAfter provides {a,b->requestInputFocus();m.edit(m.editor.after(a,b))},LocalCaretVisible provides caretVisible,LocalActiveToken provides m.editor.activeToken,LocalPlaceCursor provides {a,b,p->requestInputFocus();m.edit(m.editor.placeInToken(a,b,p))}) {
                     if(m.editor.source.isBlank())Text("│",fontSize=m.inputFont.sp,color=if(caretVisible)c.accent else androidx.compose.ui.graphics.Color.Transparent)
-                    else if(inputTree!=null)MathNode(inputTree,m.inputFont,select={a,b->m.edit(m.editor.selectRange(a,b))},selection=minOf(m.editor.anchor,m.editor.cursor)..maxOf(m.editor.anchor,m.editor.cursor))
+                    else if(inputTree!=null)MathNode(inputTree,m.inputFont,select={a,b->requestInputFocus();m.edit(m.editor.selectRange(a,b))},selection=minOf(m.editor.anchor,m.editor.cursor)..maxOf(m.editor.anchor,m.editor.cursor))
                     else Row {Lexer.scan(m.editor.source).filter{it.text.isNotEmpty()}.forEach{token->
-                        MathNode(JSONObject(Expr("text",m.editor.source.substring(token.start,token.end),start=token.start,end=token.end).json()),m.inputFont,select={a,b->m.edit(m.editor.selectRange(a,b))},selection=minOf(m.editor.anchor,m.editor.cursor)..maxOf(m.editor.anchor,m.editor.cursor))
+                        MathNode(JSONObject(Expr("text",m.editor.source.substring(token.start,token.end),start=token.start,end=token.end).json()),m.inputFont,select={a,b->requestInputFocus();m.edit(m.editor.selectRange(a,b))},selection=minOf(m.editor.anchor,m.editor.cursor)..maxOf(m.editor.anchor,m.editor.cursor))
                     }}
                 }
-                Box(Modifier.width(32.dp).heightIn(min=48.dp).clickable{val editor=m.editor;m.edit(editor.tree()?.let{editor.after(it.start,it.end)} ?: Editor(editor.source))}.semantics{contentDescription="After expression"},contentAlignment=Alignment.CenterStart){
+                Box(Modifier.width(32.dp).heightIn(min=48.dp).clickable{requestInputFocus();val editor=m.editor;m.edit(editor.tree()?.let{editor.after(it.start,it.end)} ?: Editor(editor.source))}.semantics{contentDescription="After expression"},contentAlignment=Alignment.CenterStart){
                 }
             }
         }

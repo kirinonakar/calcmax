@@ -4,7 +4,8 @@ import android.graphics.Paint
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
-import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -20,8 +21,12 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -49,7 +54,12 @@ import kotlin.math.max
 }
 @Composable fun Field(value: String,label: String,modifier: Modifier=Modifier,onValue: (String)->Unit) { OutlinedTextField(value,onValue,modifier=modifier,label={Text(label)},singleLine=true) }
 @Composable private fun StatHeader(text:String,modifier:Modifier) { val c=LocalInstrument.current; Box(modifier.fillMaxHeight(),contentAlignment=Alignment.Center){Text(text,fontSize=11.sp,color=c.muted,fontWeight=FontWeight.SemiBold)} }
-@Composable private fun StatCell(value:String,modifier:Modifier,focus:FocusRequester,onValue:(String)->Unit) { val c=LocalInstrument.current; val tapSource=remember{MutableInteractionSource()}; Box(modifier.fillMaxHeight().background(c.display).clickable(interactionSource=tapSource,indication=null){runCatching {focus.requestFocus()}}.padding(horizontal=8.dp),contentAlignment=Alignment.CenterStart){BasicTextField(value,onValue,Modifier.fillMaxWidth().focusRequester(focus),textStyle=MaterialTheme.typography.bodyMedium.copy(fontSize=12.sp,color=c.ink),singleLine=true,cursorBrush=SolidColor(c.accent))} }
+@Composable private fun StatCell(value:String,modifier:Modifier,focus:FocusRequester,tag:String,onValue:(String)->Unit) {
+    val c=LocalInstrument.current
+    BasicTextField(value,onValue,modifier.fillMaxHeight().background(c.display).focusRequester(focus).testTag(tag),
+        textStyle=MaterialTheme.typography.bodyMedium.copy(fontSize=12.sp,color=c.ink),singleLine=true,cursorBrush=SolidColor(c.accent),
+        decorationBox={innerTextField->Box(Modifier.fillMaxSize().padding(horizontal=8.dp),contentAlignment=Alignment.CenterStart){innerTextField()}})
+}
 
 @Composable fun MatrixScreen(m: CalculatorModel) {
     var rows by rememberSaveable { mutableIntStateOf(2) }; var cols by rememberSaveable { mutableIntStateOf(if(m.mode=="Vector")1 else 2) }
@@ -124,6 +134,7 @@ import kotlin.math.max
     val parsedRows=rows()
     val xValues=parsedRows.mapNotNull {it.getOrNull(0)?.toDoubleOrNull()?.takeIf {v->v.isFinite()}}
     val paired=parsedRows.mapNotNull {row->val x=row.getOrNull(0)?.toDoubleOrNull();val y=row.getOrNull(1)?.toDoubleOrNull();if(x!=null&&y!=null&&x.isFinite()&&y.isFinite())x to y else null}
+    val keyboard=LocalSoftwareKeyboardController.current
     Panel("Data & statistics","Save named lists or paired x,y datasets, import/export CSV, calculate summaries and view statistical plots.") {
         if(names.isNotEmpty())Choices(names,activeName,{selected=it;isNew=false})
         Row(horizontalArrangement=Arrangement.spacedBy(6.dp),verticalAlignment=Alignment.CenterVertically) {
@@ -144,25 +155,44 @@ import kotlin.math.max
         else {
             val grid=LocalInstrument.current.grid
             val tableColumns=if(dataKind=="xy")listOf("x","y") else listOf("value")
-            Column(Modifier.fillMaxWidth().border(1.dp,grid).heightIn(max=300.dp).verticalScroll(rememberScrollState())) {
+            Column(Modifier.fillMaxWidth().border(1.dp,grid).heightIn(max=300.dp).verticalScroll(rememberScrollState()).testTag("statistics-table")) {
                 Row(Modifier.fillMaxWidth().height(30.dp).background(LocalInstrument.current.scientific)) {
                     StatHeader("#",Modifier.width(30.dp)); VerticalDivider(color=grid,thickness=1.dp)
                     tableColumns.forEach {name->StatHeader(name,Modifier.weight(1f));VerticalDivider(color=grid,thickness=1.dp)}
-                    StatHeader("",Modifier.width(40.dp))
+                    StatHeader("",Modifier.width(48.dp))
                 }
                 HorizontalDivider(color=grid,thickness=1.dp)
                 parsedRows.forEachIndexed {index,row->
                     val cellFocus=remember(index,tableColumns.size) {List(tableColumns.size){FocusRequester()} }
-                    Row(Modifier.fillMaxWidth().height(38.dp)) {
-                        Box(Modifier.width(30.dp).fillMaxHeight().clickable { runCatching {cellFocus.first().requestFocus()} },contentAlignment=Alignment.Center){Text("${index+1}",fontSize=12.sp,color=LocalInstrument.current.muted)}
+                    Row(Modifier.fillMaxWidth().height(48.dp).pointerInput(cellFocus,keyboard) {
+                        awaitEachGesture {
+                            val down=awaitFirstDown(requireUnconsumed=false,pass=PointerEventPass.Initial)
+                            var moved=false
+                            while(true) {
+                                val change=awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull {it.id==down.id} ?: break
+                                if((change.position-down.position).getDistance()>viewConfiguration.touchSlop)moved=true
+                                if(!change.pressed) {
+                                    val start=31.dp.toPx()
+                                    val end=size.width-48.dp.toPx()
+                                    if(!moved&&change.position.x in start..end) {
+                                        val column=((change.position.x-start)/((end-start)/cellFocus.size)).toInt().coerceIn(cellFocus.indices)
+                                        cellFocus[column].requestFocus()
+                                        keyboard?.show()
+                                    }
+                                    break
+                                }
+                            }
+                        }
+                    }) {
+                        Box(Modifier.width(30.dp).fillMaxHeight().clickable {cellFocus.first().requestFocus()},contentAlignment=Alignment.Center){Text("${index+1}",fontSize=12.sp,color=LocalInstrument.current.muted)}
                         VerticalDivider(color=grid,thickness=1.dp)
                         repeat(tableColumns.size) {column->
-                            StatCell(row.getOrElse(column){""},Modifier.weight(1f),cellFocus[column]) {text->
+                            StatCell(row.getOrElse(column){""},Modifier.weight(1f),cellFocus[column],"statistics-cell-$index-$column") {text->
                                 val next=parsedRows.map {it.toMutableList().apply {while(size<tableColumns.size)add("")}}.toMutableList();next[index][column]=text;data=next.joinToString("\n"){it.joinToString(",")}
                             }
                             VerticalDivider(color=grid,thickness=1.dp)
                         }
-                        Box(Modifier.width(40.dp).fillMaxHeight(),contentAlignment=Alignment.Center){SmallAction("−"){data=parsedRows.filterIndexed {i,_->i!=index}.joinToString("\n"){it.joinToString(",")}}}
+                        Box(Modifier.width(48.dp).fillMaxHeight(),contentAlignment=Alignment.Center){SmallAction("−"){data=parsedRows.filterIndexed {i,_->i!=index}.joinToString("\n"){it.joinToString(",")}}}
                     }
                     if(index<parsedRows.lastIndex)HorizontalDivider(color=grid,thickness=1.dp)
                 }

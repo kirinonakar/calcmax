@@ -84,6 +84,41 @@ class CalculatorInstrumentedTest {
         compose.onNodeWithContentDescription("Empty list; tap to enter values").performClick()
         compose.runOnIdle {model().insert("1,2,3");assertEquals("mean([1,2,3])",model().editor.source)}
     }
+    @Test fun statisticsCellsFocusWhenTappedNearTheirEdges() {
+        compose.runOnIdle {model().mode="Statistics"}
+        compose.onNodeWithText("New").performClick()
+        for(index in List(16) {it%2}) {
+            val cell=compose.onNodeWithTag("statistics-cell-$index-0")
+            cell.performScrollTo()
+            cell.performTouchInput {click(androidx.compose.ui.geometry.Offset(width-4f,height/2f))}
+            cell.assertIsFocused()
+        }
+        compose.onNodeWithTag("statistics-cell-1-0").performTextInput("9")
+        compose.onNodeWithTag("statistics-cell-1-0").assertTextContains("9",substring=true)
+        compose.onNodeWithText("x,y data").performClick()
+        val yCell=compose.onNodeWithTag("statistics-cell-0-1")
+        yCell.performScrollTo()
+        yCell.performTouchInput {click(androidx.compose.ui.geometry.Offset(4f,height/2f))}
+        yCell.assertIsFocused()
+        yCell.performTextInput("5")
+        yCell.assertTextContains("5",substring=true)
+    }
+    @Test fun statisticsCellTapImmediatelyAfterFlingFocuses() {
+        compose.runOnIdle {
+            model().saveDataSet("AaTouchRows",(1..60).joinToString("\n"),"list")
+            model().mode="Statistics"
+        }
+        compose.onAllNodesWithText("AaTouchRows").onFirst().performScrollTo().performClick()
+        val table=compose.onNodeWithTag("statistics-table").performScrollTo()
+        table.performTouchInput {
+            swipeUp(startY=height*.8f,endY=height*.2f,durationMillis=80)
+            click(androidx.compose.ui.geometry.Offset(width/2f,height/2f))
+        }
+        assertTrue(compose.onAllNodes(isFocused()).fetchSemanticsNodes().any {
+            runCatching {it.config[androidx.compose.ui.semantics.SemanticsProperties.TestTag].startsWith("statistics-cell-")}.getOrDefault(false)
+        })
+        compose.runOnIdle {model().deleteDataSet("AaTouchRows")}
+    }
     @Test fun divisionAndAdditionPlaceCaretWithoutAnEmptyBox() {
         compose.runOnIdle {model().mode="Scientific";model().clear();model().edit(Editor("49"))}
         compose.onNodeWithContentDescription("÷").performClick()
@@ -421,6 +456,38 @@ class CalculatorInstrumentedTest {
         tape.assertExists()
         compose.runOnIdle {assertEquals(25,model().tape.size);assertEquals("damaged",model().editor.source)}
     }
+    @Test fun selectedStructuredExpressionSurvivesHistoryScrolling() {
+        val entries=List(40) {index->HistoryEntry(index.toLong(),"$index+1",(index+1).toString(),(index+1).toString(),"Scientific").toTapeEntry()}
+        val setTape=CalculatorModel::class.java.getDeclaredMethod("setTape",List::class.java).apply {isAccessible=true}
+        compose.runOnIdle {
+            model().mode="Scientific";model().clearHistory();model().clear()
+            setTape.invoke(model(),entries)
+        }
+        val tape=compose.onNodeWithContentDescription("Calculation history, swipe vertically")
+        for(source in listOf("integrate((x^2)/(x+1),x,0,2)","nderivative(sin(x^2),x,3)","(x^2+1)/(x-1)","stats([1,2,3,4,5,6,7,8,9,10])")) {
+            compose.runOnIdle {
+                model().edit(Editor(source).selectRange(0,source.length))
+            }
+            repeat(3) {
+                tape.performScrollToIndex(30)
+                tape.performScrollToIndex(0)
+                tape.performTouchInput {swipeUp()}
+                tape.performTouchInput {swipeDown()}
+            }
+            if(source.startsWith("integrate(")||source.startsWith("stats("))repeat(8) {
+                tape.performTouchInput {swipeUp(durationMillis=80)}
+                tape.performTouchInput {swipeDown(durationMillis=80)}
+            }
+            compose.runOnIdle {
+                assertEquals(source,model().editor.source)
+                assertEquals(0,model().editor.anchor)
+                assertEquals(source.length,model().editor.cursor)
+            }
+            tape.performScrollToIndex(0)
+            compose.onNodeWithContentDescription("After expression").performClick()
+            compose.onNodeWithContentDescription("Current expression").assertIsFocused()
+        }
+    }
     @Test fun matrixAndStatisticsResultsScrollInCalculationTape() = runBlocking {
         val largeMatrix=List(32) {row->List(32) {column->if(row==column)"1" else "0"}.joinToString(",","[","]")}.joinToString(",","[","]")
         val sources=listOf(
@@ -465,6 +532,10 @@ class CalculatorInstrumentedTest {
         compose.waitUntil(15000) {model().committed || model().error.isNotBlank()}
         compose.runOnIdle {assertEquals("",model().error)}
         val tape=compose.onNodeWithContentDescription("Calculation history, swipe vertically")
+        repeat(20) {
+            tape.performTouchInput {swipeUp(durationMillis=60)}
+            tape.performTouchInput {swipeDown(durationMillis=60)}
+        }
         compose.onNodeWithContentDescription("Expand calculation screen").performClick()
         for(index in 1 until 120 step 5)tape.performScrollToIndex(index)
         repeat(4){tape.performTouchInput {swipeDown()}}
