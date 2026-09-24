@@ -224,14 +224,15 @@ class CalculatorInstrumentedTest {
         compose.runOnIdle{assertEquals(20.0,model().xMax-model().xMin,.001);assertTrue(model().yMax-model().yMin<9.0)}
     }
     @Test fun differentialGraphSelectorWorksAfterPanning() {
-        compose.runOnIdle {model().mode="Graph";model().changeGraphKind("differential");model().xMin=-5.0;model().xMax=5.0}
-        compose.onNodeWithText("Diff eq").performScrollTo()
+        compose.runOnIdle {model().mode="Graph";model().changeGraphKind("cartesian")}
+        compose.onNodeWithText("Diff eq").performScrollTo().performTouchInput {click()}
+        compose.waitUntil(30000) {model().graphKind=="differential" && !model().graphBusy && model().graphData!=null}
         val graph=compose.onNode(hasContentDescription("Graph with",substring=true))
         graph.performTouchInput {swipeRight()}
         compose.runOnIdle {assertTrue(model().xMin < -5.0)}
         compose.runOnIdle {model().xMin=1e12;model().xMax=1e12+0.000244140625}
-        compose.onNodeWithContentDescription("Graph types").performTouchInput {swipeRight()}
-        compose.onNodeWithText("Cartesian").performClick()
+        compose.onNodeWithText("Diff eq").performTouchInput {swipeRight()}
+        compose.onNodeWithText("Cartesian").assertIsDisplayed().performTouchInput {click()}
         compose.runOnIdle {assertEquals("cartesian",model().graphKind)}
     }
     @Test fun keyboardOverlaysWithoutMovingKeys() {
