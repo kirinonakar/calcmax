@@ -2,6 +2,11 @@ package com.example.calcmax.math
 import org.junit.Assert.*
 import org.junit.Test
 class StructuredEditorTest {
+    @Test fun emptyStatisticListKeepsDelimitersAfterCursorPlacement() {
+        val editor=Editor("mean([])").placeInToken(5,7,6)
+        assertEquals(6,editor.cursor)
+        assertEquals("mean([1,2,3])",editor.insert("1,2,3").source)
+    }
     @Test fun malformedExpressionStillHasAddressableCursor() {
         val e=Editor("123-434+545)",0)
         assertNull(e.tree())

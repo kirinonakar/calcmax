@@ -83,6 +83,19 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
     }
 }
 
+@Composable private fun SquareBrackets(content:@Composable ()->Unit) {
+    val ink=LocalInstrument.current.ink
+    Box(Modifier.drawBehind {
+        val stroke=1.5.dp.toPx();val arm=7.dp.toPx();val left=stroke/2;val right=this.size.width-stroke/2
+        drawLine(ink,Offset(left,0f),Offset(left,this.size.height),stroke)
+        drawLine(ink,Offset(left,0f),Offset(left+arm,0f),stroke)
+        drawLine(ink,Offset(left,this.size.height),Offset(left+arm,this.size.height),stroke)
+        drawLine(ink,Offset(right,0f),Offset(right,this.size.height),stroke)
+        drawLine(ink,Offset(right-arm,0f),Offset(right,0f),stroke)
+        drawLine(ink,Offset(right-arm,this.size.height),Offset(right,this.size.height),stroke)
+    }.padding(horizontal=12.dp,vertical=3.dp)) {content()}
+}
+
 @Composable fun MathNode(node:JSONObject,size:Float=25f,select:((Int,Int)->Unit)?=null,selection:IntRange?=null,depth:Int=0,hideGroup:Boolean=false) {
     if(depth>36){MathText("…",size);return}
     val c=LocalInstrument.current
@@ -102,8 +115,11 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
     val selected=select!=null&&selection==range&&start!=end
     val activeHole=kind=="hole"&&caret
     val atomic=kind in listOf("number","symbol","text","hole")
+    val emptyContainer=kind in listOf("list","set")&&children.isEmpty()&&end-start>=2
+    val placeCursor=LocalPlaceCursor.current
     val touch=Modifier.then(if(selected||activeHole)Modifier.background(c.accent.copy(alpha=.17f),RoundedCornerShape(2.dp))else Modifier)
-        .then(if(select!=null&&start>=0)Modifier.clickable{select(start,end)}else Modifier)
+        .then(if(emptyContainer&&select!=null)Modifier.semantics(mergeDescendants=true){contentDescription=if(kind=="list")"Empty list; tap to enter values" else "Empty set; tap to enter values"}else Modifier)
+        .then(if(select!=null&&start>=0)Modifier.clickable{if(emptyContainer){if(placeCursor!=null)placeCursor(start,end,start+1)else select(start+1,start+1)}else select(start,end)}else Modifier)
     @Composable fun child(i:Int,scale:Float=1f,hidden:Boolean=false) {children.getOrNull(i)?.let{MathNode(it,(size*scale).coerceAtLeast(11f),select,selection,depth+1,hidden)}}
     @Composable fun integralPart(i:Int,scale:Float=1f) {
         if(i==0||integrationTuple==null)child(i,scale)
@@ -131,17 +147,11 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
                 label("√",1.28f)
                 Box(Modifier.padding(top=2.dp).drawBehind{drawLine(c.ink,Offset.Zero,Offset(this.size.width,0f),1.dp.toPx())}){child(0,hidden=true)}
             }
-            kind=="matrix"||kind=="list"&&children.isNotEmpty()&&children.all{it.optString("kind")=="list"}->Box(
-                Modifier.drawBehind {
-                    val stroke=1.5.dp.toPx();val arm=7.dp.toPx();val left=stroke/2;val right=this.size.width-stroke/2
-                    drawLine(c.ink,Offset(left,0f),Offset(left,this.size.height),stroke)
-                    drawLine(c.ink,Offset(left,0f),Offset(left+arm,0f),stroke)
-                    drawLine(c.ink,Offset(left,this.size.height),Offset(left+arm,this.size.height),stroke)
-                    drawLine(c.ink,Offset(right,0f),Offset(right,this.size.height),stroke)
-                    drawLine(c.ink,Offset(right-arm,0f),Offset(right,0f),stroke)
-                    drawLine(c.ink,Offset(right-arm,this.size.height),Offset(right,this.size.height),stroke)
-                }.padding(horizontal=12.dp,vertical=3.dp)
-            ) {Column(verticalArrangement=Arrangement.spacedBy(4.dp)){children.forEach{row->MathRow(10.dp){val cells=row.optJSONArray("args");for(i in 0 until(cells?.length() ?: 0))MathNode(cells!!.getJSONObject(i),size*.85f,select,selection,depth+1)}}}}
+            kind=="matrix"||kind=="list"&&children.isNotEmpty()&&children.all{it.optString("kind")=="list"}->SquareBrackets {
+                Column(verticalArrangement=Arrangement.spacedBy(4.dp)){children.forEach{row->MathRow(10.dp){val cells=row.optJSONArray("args");for(i in 0 until(cells?.length() ?: 0))MathNode(cells!!.getJSONObject(i),size*.85f,select,selection,depth+1)}}}
+            }
+            kind=="list"&&children.isNotEmpty()->SquareBrackets {MathRow(2.dp){children.indices.forEach {i->if(i>0)label(", ");child(i)}}}
+            emptyContainer->MathRow {label(if(kind=="list")"[" else "{");if(caret&&cursor==start+1)MathText("│",size,blink=true);label(if(kind=="list")"]" else "}")}
             kind=="rows"->Column{children.forEach{row->MathRow{label(row.optString("value")+": ",.65f);row.optJSONArray("args")?.optJSONObject(0)?.let{MathNode(it,size*.8f,depth=depth+1)}}}}
             kind=="hole"->Box(Modifier.width(18.dp).height(26.dp).border(1.dp,if(activeHole)c.accent else c.muted,RoundedCornerShape(1.dp)).semantics{contentDescription="Empty expression slot"})
             kind=="answer"->Box(Modifier.border(1.dp,c.muted,RoundedCornerShape(4.dp)).padding(horizontal=5.dp,vertical=2.dp).semantics{contentDescription="Previous answer"}){children.firstOrNull()?.let{MathNode(it,size*.9f,depth=depth+1)}}
@@ -216,6 +226,6 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
                 if(children.isEmpty())label(value)
             }
         }
-        if(caret&&!atomic&&cursor>start)MathText("│",size,blink=true)
+        if(caret&&!atomic&&cursor>start&&!(emptyContainer&&cursor==start+1))MathText("│",size,blink=true)
     }}
 }

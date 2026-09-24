@@ -101,7 +101,7 @@ import kotlin.math.*
                     points.forEach { point ->
                         val current=point?.let { Offset(px(it.first),py(it.second)) }
                         if(ci==selected && point!=null && m.shadedInterval?.let {point.first in min(it.first,it.second)..max(it.first,it.second)}==true) drawLine(c.curves[ci%c.curves.size].copy(alpha=.2f),Offset(current!!.x,py(0.0)),current,3f)
-                        if(current!=null && previous!=null && abs(current.y-previous!!.y)<size.height*.65f) drawLine(c.curves[ci%c.curves.size],previous!!,current,if(ci==selected)3f else 2f,pathEffect=if(ci%2==1)PathEffect.dashPathEffect(floatArrayOf(12f,5f)) else null)
+                        if(current!=null && previous!=null && abs(current.y-previous!!.y)<size.height*.65f) drawLine(c.curves[ci%c.curves.size],previous!!,current,if(ci==selected)4.dp.toPx() else 1.5.dp.toPx(),pathEffect=if(ci%2==1)PathEffect.dashPathEffect(floatArrayOf(12f,5f)) else null)
                         previous=current
                     }
                 }

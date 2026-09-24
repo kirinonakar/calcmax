@@ -33,8 +33,8 @@ private val ScientificKeys=listOf(
 )
 private val SecondKeys=listOf(
     listOf(KeySpec("simp","simplify()"),KeySpec("factor","factor()"),KeySpec("expand","expand()"),KeySpec("x"),KeySpec("y"),KeySpec("z")),
-    listOf(KeySpec("⌊x⌋","floor()"),KeySpec("⌈x⌉","ceil()"),KeySpec("∞","oo","sign","sign()"),KeySpec(","),KeySpec("{"),KeySpec("}")),
-    listOf(KeySpec("MATRIX","MATRIX_INPUT",secondary="2×2",type="action"),KeySpec("det","det()"),KeySpec("inv","inverse()"),KeySpec("T","transpose()"),KeySpec("‖v‖","norm()"),KeySpec("GRAPH","TO_GRAPH",type="action"))
+    listOf(KeySpec("⌊x⌋","floor()"),KeySpec("⌈x⌉","ceil()"),KeySpec("∞","oo","sign","sign()"),KeySpec(","),KeySpec("{",secondary="[",alternate="["),KeySpec("}",secondary="]",alternate="]")),
+    listOf(KeySpec("MATRIX","MATRIX_INPUT",secondary="3×3",alternate="MATRIX_INPUT_3",type="action"),KeySpec("det","det()"),KeySpec("inv","inverse()"),KeySpec("T","transpose()"),KeySpec("‖v‖","norm()"),KeySpec("GRAPH","TO_GRAPH",type="action"))
 )
 private val NumericKeys=listOf(
     listOf(KeySpec("7",secondary="CONST",alternate="Constants"),KeySpec("8",secondary="CONV",alternate="Units"),KeySpec("9",secondary="CLR",alternate="Clear"),KeySpec("DEL",secondary="INS",alternate="INS",type="danger"),KeySpec("AC",secondary="CLR ALL",alternate="CLR ALL",type="danger")),
@@ -94,6 +94,7 @@ private val NumericKeys=listOf(
             "DMS"->m.toggleDms()
             "TO_GRAPH"->m.sendExpressionToGraph()
             "MATRIX_INPUT"->m.insert("[[,],[,]]",2)
+            "MATRIX_INPUT_3"->m.insert("[[,,],[,,],[,,]]",2)
             else->{val at=when {value=="()/()"->1;value.contains('(')->value.indexOf('(')+1;else->value.length};m.insert(value,at)}
         }
         if(value!="HYP")m.hyperbolic=false
@@ -115,7 +116,7 @@ private val NumericKeys=listOf(
                 DirectionKey("▼","Cursor down",Modifier.align(Alignment.BottomCenter).fillMaxWidth(.3f).fillMaxHeight(.34f)){press(KeySpec("DOWN"))}
             }
         }
-        (if(m.secondKeys)SecondKeys else ScientificKeys).forEach {row->Row(Modifier.fillMaxWidth().weight(1f),horizontalArrangement=Arrangement.spacedBy(5.dp)){row.forEach {key->Keycap(key,Modifier.weight(1f).fillMaxHeight(),active=key.title=="ENG"&&m.engineeringConversion){press(key)}}}}
+        (if(m.secondKeys)SecondKeys else ScientificKeys).forEach {row->Row(Modifier.fillMaxWidth().weight(1f),horizontalArrangement=Arrangement.spacedBy(5.dp)){row.forEach {key->Keycap(key,Modifier.weight(1f).fillMaxHeight(),active=key.title=="ENG"&&m.engineeringConversion,shifted=m.shift){press(key)}}}}
         NumericKeys.forEach {row->Row(Modifier.fillMaxWidth().weight(1f),horizontalArrangement=Arrangement.spacedBy(6.dp)){row.forEach {key->Keycap(if(key.type=="danger")key else key.copy(type="numeric"),Modifier.weight(1f).fillMaxHeight()){press(key)}}}}
     }
 }
@@ -124,7 +125,7 @@ private val NumericKeys=listOf(
     val c=LocalInstrument.current
     Box(modifier.clip(RoundedCornerShape(35)).background(Brush.verticalGradient(listOf(c.numeric,c.scientific))).border(1.dp,c.muted.copy(alpha=.3f),RoundedCornerShape(35)).clickable(onClick=onClick).semantics{contentDescription=description},contentAlignment=Alignment.Center){Text(label,fontSize=12.sp,color=c.ink)}
 }
-@Composable private fun Keycap(key:KeySpec,modifier:Modifier,active:Boolean=false,onClick:()->Unit) {
+@Composable private fun Keycap(key:KeySpec,modifier:Modifier,active:Boolean=false,shifted:Boolean=false,onClick:()->Unit) {
     val c=LocalInstrument.current
     if(key.type=="utility") {
         val bg=when(key.title){"SHIFT"->c.shift;"ALPHA"->c.alpha;"MODE"->c.accent;else->c.operator}
@@ -137,7 +138,7 @@ private val NumericKeys=listOf(
     }
     val bg=when(key.type){"numeric"->c.numeric;"danger"->c.clearKey;"action"->c.operator;else->c.scientific}
     val ink=if(key.type=="danger")c.clearInk else c.ink
-    BoxWithConstraints(modifier.clickable(onClick=onClick).semantics(mergeDescendants=true){contentDescription=when(key.input){"TO_GRAPH"->"Graph current expression";"MATRIX_INPUT"->"Insert 2 by 2 matrix";else->key.title};stateDescription=if(active)"Active" else listOf(key.secondary,key.alpha).filter{it.isNotBlank()}.joinToString()}) {
+    BoxWithConstraints(modifier.clickable(onClick=onClick).semantics(mergeDescendants=true){contentDescription=when(key.input){"TO_GRAPH"->"Graph current expression";"MATRIX_INPUT"->if(shifted)"Insert 3 by 3 matrix" else "Insert 2 by 2 matrix";else->if(shifted&&key.alternate.isNotBlank())key.alternate else key.title};stateDescription=if(active)"Active" else listOf(key.secondary,key.alpha).filter{it.isNotBlank()}.joinToString()}) {
         val labelHeight=(maxHeight*.25f).coerceAtMost(15.dp)
         val keyFont=(maxHeight.value*(when(key.type){"numeric","danger"->.44f;"action"->.24f;else->.32f})).coerceIn(10f,24f).sp
         val smallFont=(labelHeight.value*.66f).coerceIn(6f,if(key.secondary.length+key.alpha.length>10)7.5f else 10f).sp

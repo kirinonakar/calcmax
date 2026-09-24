@@ -28,6 +28,11 @@ class CalculatorInstrumentedTest {
         val file=File(compose.activity.filesDir,"qa/$name.png");file.parentFile!!.mkdirs()
         file.outputStream().use { val roots=compose.onAllNodes(isRoot());roots[roots.fetchSemanticsNodes().lastIndex].captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG,100,it) }
     }
+    @Test fun tappingEmptyStatisticListPreservesItsBrackets() {
+        compose.runOnIdle {model().mode="Scientific";model().clear();model().insert("mean([])",6)}
+        compose.onNodeWithContentDescription("Empty list; tap to enter values").performClick()
+        compose.runOnIdle {model().insert("1,2,3");assertEquals("mean([1,2,3])",model().editor.source)}
+    }
     @Test fun pythonWorkspaceRunsSavedSourceThroughService() {
         compose.runOnIdle {
             model().mode="Python"
@@ -50,8 +55,18 @@ class CalculatorInstrumentedTest {
         compose.onNodeWithContentDescription("Insert 2 by 2 matrix").performClick()
         compose.runOnIdle {assertEquals("[[,],[,]]",model().editor.source);assertEquals(2,model().editor.cursor)}
         compose.runOnIdle {model().clear();model().secondKeys=true}
+        compose.onNodeWithContentDescription("SHIFT").performClick()
+        compose.onNodeWithContentDescription("Insert 3 by 3 matrix").performClick()
+        compose.runOnIdle {assertEquals("[[,,],[,,],[,,]]",model().editor.source);assertEquals(2,model().editor.cursor)}
+        compose.runOnIdle {model().clear();model().secondKeys=true}
         listOf("{","x",",","y","}").forEach {key->compose.onNodeWithContentDescription(key).performClick()}
         compose.runOnIdle {assertEquals("{x,y}",model().editor.source);assertEquals("set",model().editor.tree()?.kind)}
+        compose.runOnIdle {model().clear();model().secondKeys=true}
+        compose.onNodeWithContentDescription("SHIFT").performClick()
+        compose.onNodeWithContentDescription("[").performClick()
+        compose.onNodeWithContentDescription("SHIFT").performClick()
+        compose.onNodeWithContentDescription("]").performClick()
+        compose.runOnIdle {assertEquals("[]",model().editor.source)}
     }
     @Test fun tokenCursorMalformedInputAndClearAll() {
         compose.runOnIdle {model().mode="Scientific";model().clear();model().edit(Editor("1234",4,0))}

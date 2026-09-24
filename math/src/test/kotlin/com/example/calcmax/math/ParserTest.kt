@@ -13,6 +13,8 @@ class ParserTest {
         assertEquals("list",Parser("[[,],[,]]",true).parse().kind)
         assertEquals(4,Parser("[[,],[,]]",true).parse().nodes().count {it.kind=="hole"})
         assertEquals("[[1,],[,]]",Editor().insert("[[,],[,]]",2).insert("1").source)
+        assertEquals(9,Parser("[[,,],[,,],[,,]]",true).parse().nodes().count {it.kind=="hole"})
+        assertEquals("[[1,,],[,,],[,,]]",Editor().insert("[[,,],[,,],[,,]]",2).insert("1").source)
     }
     @Test fun integrationTuple() {
         val integral=p("integrate(exp(-x^2)*cos(2x), (x, 0, oo))")
