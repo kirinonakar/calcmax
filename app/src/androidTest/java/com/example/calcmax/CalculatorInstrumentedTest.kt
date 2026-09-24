@@ -356,6 +356,57 @@ class CalculatorInstrumentedTest {
         tape.assertExists()
         compose.runOnIdle {assertEquals(25,model().tape.size)}
     }
+    @Test fun matrixAndStatisticsResultsScrollInCalculationTape() = runBlocking {
+        val largeMatrix=List(32) {row->List(32) {column->if(row==column)"1" else "0"}.joinToString(",","[","]")}.joinToString(",","[","]")
+        val sources=listOf(
+            "stats(59,9)",
+            "stats([1,2,3,4,5,6,7,8])",
+            largeMatrix,
+            "[[1,2,3,4],[5,6,7,8],[9,10,11,12],[13,14,15,16]]",
+            "inverse([[1,2,3],[0,1,4],[5,6,0]])",
+            "quartiles([1,2,3,4,5,6,7,8])",
+            "lu([[1,2,3],[0,1,4],[5,6,0]])",
+            "eigenvalues([[1,0],[0,2]])"
+        )
+        val client=EngineClient(compose.activity.applicationContext)
+        val entries=try {
+            sources.map { source ->
+                val input=JSONObject(Parser(source).parse().json())
+                val result=client.execute(JSONObject().put("tree",input).put("angle","RAD"))
+                assertTrue("$source: $result",result.optBoolean("ok"))
+                TapeEntry(source,input.toString(),result.toString())
+            }
+        } finally {client.close()}
+        val setTape=CalculatorModel::class.java.getDeclaredMethod("setTape",List::class.java).apply {isAccessible=true}
+        compose.runOnIdle {model().mode="Scientific";model().clearHistory();model().clear();setTape.invoke(model(),List(4){entries}.flatten())}
+        val tape=compose.onNodeWithContentDescription("Calculation history, swipe vertically")
+        compose.onNodeWithContentDescription("Expand calculation screen").performClick()
+        for(index in 1..32 step 3) tape.performScrollToIndex(index)
+        compose.onNodeWithContentDescription("Restore full keypad").performClick()
+        for(index in 32 downTo 1 step 3) tape.performScrollToIndex(index)
+        tape.assertExists()
+        Unit
+    }
+    @Test fun manyStatisticsEntriesScrollWithoutCrashing() = runBlocking {
+        val source="stats(59,9)"
+        val input=JSONObject(Parser(source).parse().json())
+        val client=EngineClient(compose.activity.applicationContext)
+        val result=try {client.execute(JSONObject().put("tree",input).put("angle","RAD"))} finally {client.close()}
+        assertTrue(result.toString(),result.optBoolean("ok"))
+        val entries=List(120) {TapeEntry(source,input.toString(),result.toString())}
+        val setTape=CalculatorModel::class.java.getDeclaredMethod("setTape",List::class.java).apply {isAccessible=true}
+        compose.runOnIdle {model().mode="Scientific";model().clearHistory();model().clear();setTape.invoke(model(),entries);model().edit(Editor(source));model().calculate()}
+        compose.waitUntil(15000) {model().committed || model().error.isNotBlank()}
+        compose.runOnIdle {assertEquals("",model().error)}
+        val tape=compose.onNodeWithContentDescription("Calculation history, swipe vertically")
+        compose.onNodeWithContentDescription("Expand calculation screen").performClick()
+        for(index in 1 until 120 step 5)tape.performScrollToIndex(index)
+        repeat(4){tape.performTouchInput {swipeDown()}}
+        compose.onNodeWithContentDescription("Restore full keypad").performClick()
+        for(index in 119 downTo 1 step 7)tape.performScrollToIndex(index)
+        tape.assertExists()
+        Unit
+    }
     @Test fun symbolicRenderingCalculusAndFractionExit() {
         compose.runOnIdle {model().mode="Scientific";model().clear();model().decimal=true;model().edit(Editor("integrate(x,x)"))}
         compose.waitUntil(15000){model().result?.optString("exact")=="C + x**2/2"}

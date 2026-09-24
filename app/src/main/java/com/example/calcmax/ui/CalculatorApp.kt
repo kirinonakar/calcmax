@@ -18,6 +18,7 @@ import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.*
 import androidx.compose.ui.text.font.*
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
 import com.example.calcmax.calculator.CalculatorModel
 import com.example.calcmax.calculator.ResultDisplayMode
@@ -103,20 +104,40 @@ val Modes=listOf("Scientific","CAS","Graph","Python","Equations","Matrix","Vecto
         items(m.tape.asReversed()) {entry->
             Column(Modifier.fillMaxWidth().padding(horizontal=14.dp,vertical=10.dp)) {
                 val input=remember(entry.input){runCatching {JSONObject(entry.input)}.getOrNull()}
-                Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).clickable {m.reuse(entry)}) {
-                    if(input!=null)MathNode(input,m.inputFont*.84f) else Text(entry.source,fontSize=(m.inputFont*.84f).sp,color=c.ink)
-                }
                 val response=remember(entry.result){runCatching {JSONObject(entry.result)}.getOrNull()}
+                val compact=remember(entry.input,entry.result) {
+                    input==null||response==null||entry.source.length>800||entry.result.length>20_000||response.optString("exact").contains('\n')||
+                        largeHistoryTree(input)||largeHistoryTree(response.optJSONObject("tree"))||largeHistoryTree(response.optJSONObject("decimalTree"))
+                }
+                Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).clickable {m.reuse(entry)}) {
+                    if(!compact&&input!=null)MathNode(input,m.inputFont*.84f)
+                    else Text(entry.source.take(800),fontSize=(m.inputFont*.84f).sp,fontFamily=FontFamily.Monospace,color=c.ink,maxLines=4,overflow=TextOverflow.Ellipsis)
+                }
                 Box(Modifier.fillMaxWidth().padding(top=6.dp).horizontalScroll(rememberScrollState()),contentAlignment=Alignment.CenterEnd) {
-                    if(response!=null)ResultMath(response,m.decimal,m.outputFont*.82f,
+                    if(!compact&&response!=null)ResultMath(response,m.decimal,m.outputFont*.82f,
                         displayMode=m.resultDisplayMode,thousandsSeparator=m.thousandsSeparator,dmsDisplay=response.optBoolean("dms"),precision=m.precision)
-                    else Text(entry.result,fontSize=(m.outputFont*.82f).sp,color=c.ink)
+                    else Text(response?.optString(if(m.decimal)"decimal" else "exact").orEmpty().ifBlank {entry.result}.take(1200),
+                        fontSize=(m.outputFont*.72f).sp,color=c.ink,maxLines=8,overflow=TextOverflow.Ellipsis)
                 }
                 if(response!=null&&domainText(response).isNotEmpty())Text(domainText(response),fontSize=10.sp,color=c.muted)
                 HorizontalDivider(Modifier.padding(top=10.dp),color=c.grid)
             }
         }
     }
+}
+
+private fun largeHistoryTree(root:JSONObject?):Boolean {
+    if(root==null)return false
+    val pending=ArrayDeque<JSONObject>()
+    pending.add(root)
+    var count=0
+    while(pending.isNotEmpty()) {
+        val node=pending.removeLast()
+        if(node.optString("kind") in setOf("matrix","rows")||++count>120)return true
+        val args=node.optJSONArray("args")
+        for(index in 0 until (args?.length() ?: 0))args?.optJSONObject(index)?.let(pending::add)
+    }
+    return false
 }
 
 @Composable fun Display(m:CalculatorModel,screenExpanded:Boolean=false,onToggleScreen:(()->Unit)?=null) {
