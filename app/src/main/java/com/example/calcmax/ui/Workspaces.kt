@@ -56,7 +56,23 @@ import kotlin.math.max
 @Composable private fun StatHeader(text:String,modifier:Modifier) { val c=LocalInstrument.current; Box(modifier.fillMaxHeight(),contentAlignment=Alignment.Center){Text(text,fontSize=11.sp,color=c.muted,fontWeight=FontWeight.SemiBold)} }
 @Composable private fun StatCell(value:String,modifier:Modifier,focus:FocusRequester,tag:String,onValue:(String)->Unit) {
     val c=LocalInstrument.current
-    BasicTextField(value,onValue,modifier.fillMaxHeight().background(c.display).focusRequester(focus).testTag(tag),
+    val keyboard=LocalSoftwareKeyboardController.current
+    BasicTextField(value,onValue,modifier.fillMaxHeight().background(c.display).focusRequester(focus).testTag(tag)
+        .pointerInput(focus,keyboard) {
+            val tolerance=24.dp.toPx()
+            awaitEachGesture {
+                val down=awaitFirstDown(requireUnconsumed=false,pass=PointerEventPass.Initial)
+                while(true) {
+                    val event=awaitPointerEvent(PointerEventPass.Initial)
+                    val change=event.changes.firstOrNull {it.id==down.id}
+                    if(change==null) {if(event.changes.none {it.pressed})break;continue}
+                    if(!change.pressed) {
+                        if((change.position-down.position).getDistance()<=tolerance){focus.requestFocus();keyboard?.show()}
+                        break
+                    }
+                }
+            }
+        },
         textStyle=MaterialTheme.typography.bodyMedium.copy(fontSize=12.sp,color=c.ink),singleLine=true,cursorBrush=SolidColor(c.accent),
         decorationBox={innerTextField->Box(Modifier.fillMaxSize().padding(horizontal=8.dp),contentAlignment=Alignment.CenterStart){innerTextField()}})
 }
@@ -134,7 +150,6 @@ import kotlin.math.max
     val parsedRows=rows()
     val xValues=parsedRows.mapNotNull {it.getOrNull(0)?.toDoubleOrNull()?.takeIf {v->v.isFinite()}}
     val paired=parsedRows.mapNotNull {row->val x=row.getOrNull(0)?.toDoubleOrNull();val y=row.getOrNull(1)?.toDoubleOrNull();if(x!=null&&y!=null&&x.isFinite()&&y.isFinite())x to y else null}
-    val keyboard=LocalSoftwareKeyboardController.current
     Panel("Data & statistics","Save named lists or paired x,y datasets, import/export CSV, calculate summaries and view statistical plots.") {
         if(names.isNotEmpty())Choices(names,activeName,{selected=it;isNew=false})
         Row(horizontalArrangement=Arrangement.spacedBy(6.dp),verticalAlignment=Alignment.CenterVertically) {
@@ -164,26 +179,7 @@ import kotlin.math.max
                 HorizontalDivider(color=grid,thickness=1.dp)
                 parsedRows.forEachIndexed {index,row->
                     val cellFocus=remember(index,tableColumns.size) {List(tableColumns.size){FocusRequester()} }
-                    Row(Modifier.fillMaxWidth().height(48.dp).pointerInput(cellFocus,keyboard) {
-                        awaitEachGesture {
-                            val down=awaitFirstDown(requireUnconsumed=false,pass=PointerEventPass.Initial)
-                            var moved=false
-                            while(true) {
-                                val change=awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull {it.id==down.id} ?: break
-                                if((change.position-down.position).getDistance()>viewConfiguration.touchSlop)moved=true
-                                if(!change.pressed) {
-                                    val start=31.dp.toPx()
-                                    val end=size.width-48.dp.toPx()
-                                    if(!moved&&change.position.x in start..end) {
-                                        val column=((change.position.x-start)/((end-start)/cellFocus.size)).toInt().coerceIn(cellFocus.indices)
-                                        cellFocus[column].requestFocus()
-                                        keyboard?.show()
-                                    }
-                                    break
-                                }
-                            }
-                        }
-                    }) {
+                    Row(Modifier.fillMaxWidth().height(48.dp)) {
                         Box(Modifier.width(30.dp).fillMaxHeight().clickable {cellFocus.first().requestFocus()},contentAlignment=Alignment.Center){Text("${index+1}",fontSize=12.sp,color=LocalInstrument.current.muted)}
                         VerticalDivider(color=grid,thickness=1.dp)
                         repeat(tableColumns.size) {column->
