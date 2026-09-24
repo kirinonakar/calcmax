@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.*
 import com.example.calcmax.ui.theme.LocalInstrument
 import org.json.JSONObject
 import kotlin.math.max
+import kotlin.math.roundToInt
 
 val MathAxis=HorizontalAlignmentLine(::minOf)
 val LocalMathCursorTarget=staticCompositionLocalOf<IntRange?>{null}
@@ -94,16 +95,21 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
     Layout(content={
         Box(Modifier.drawBehind {
             val stroke=1.dp.toPx()
+            val downStroke=1.5.dp.toPx()
             val roofY=stroke/2
-            val bottomY=size.height-stroke/2
+            val bottomY=size.height-downStroke/2
             val signW=(size.height*.45f).coerceIn(10.dp.toPx(),22.dp.toPx())
+            val hook=Offset(signW*.16f,size.height*.51f)
+            val bottom=Offset(signW*.38f,bottomY)
             drawPath(Path().apply {
-                moveTo(0f,size.height*.52f)
-                lineTo(signW*.34f,bottomY)
-                lineTo(signW*.66f,roofY)
+                moveTo(stroke/2,size.height*.55f)
+                lineTo(hook.x,hook.y)
+                lineTo(bottom.x,bottom.y)
+                lineTo(signW*.70f,roofY)
                 lineTo(signW,roofY)
                 lineTo(size.width,roofY)
             },ink,style=Stroke(stroke,cap=StrokeCap.Round,join=StrokeJoin.Round))
+            drawLine(ink,hook,bottom,downStroke,cap=StrokeCap.Round)
         })
         content()
     }){ms,constraints->
@@ -117,11 +123,19 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
     }
 }
 
-/** Offsets content visually (used for radical indices) while keeping its math axis so the row still aligns. */
-@Composable private fun MathShift(x:Dp,y:Dp,content:@Composable ()->Unit) {
-    Layout(content=content){ms,constraints->
-        val p=ms.firstOrNull()?.measure(constraints.copy(minWidth=0,minHeight=0))
-        if(p==null)layout(0,0){} else layout(p.width,p.height,mapOf(MathAxis to p.axis())){p.place(x.roundToPx(),y.roundToPx())}
+/** Positions every root index against the radical, including when the radicand makes it taller. */
+@Composable private fun IndexedRadical(size:Float,index:@Composable ()->Unit,content:@Composable ()->Unit) {
+    Layout(content={index();RadicalSign(content)}){ms,constraints->
+        val inner=constraints.copy(minWidth=0,minHeight=0)
+        val i=ms[0].measure(inner);val radical=ms[1].measure(inner)
+        val indexX=(size*.24f).dp.roundToPx()
+        val ordinaryHeight=(size.sp.toPx()*1.18f).roundToInt()+4.dp.roundToPx()
+        val extraHeight=(radical.height-ordinaryHeight).coerceAtLeast(0)
+        val indexY=(radical.axis()-i.axis()-(size*.16f).dp.roundToPx()-extraHeight*.8f).roundToInt().coerceAtLeast(0)
+        layout(i.width+radical.width,max(radical.height,indexY+i.height),mapOf(MathAxis to radical.axis())){
+            i.place(indexX,indexY)
+            radical.place(i.width,0)
+        }
     }
 }
 @Composable private fun SquareBrackets(content:@Composable ()->Unit) {
@@ -183,11 +197,22 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
                 val hide=base?.optString("kind")=="group"&&groupInner?.optString("kind") in listOf("number","symbol","hole","call")
                 if(base?.optString("kind") in listOf("sum","product","unary"))wrapped(0)else child(0,hidden=hide)
             },{child(1,.67f,true)})
-            kind=="root"||kind=="call"&&value in listOf("sqrt","cbrt","nthroot")->MathRow {
-                if(value=="cbrt")MathShift((size*.10f).dp,(-size*.16f).dp){label("³",.7f)}
-                else if(value=="nthroot")MathShift((size*.10f).dp,(-size*.16f).dp){child(1,.55f)}
-                RadicalSign{child(0,hidden=true)}
-            }
+            kind=="root"||kind=="call"&&value in listOf("sqrt","cbrt","nthroot")->
+                if(value=="cbrt"||value=="nthroot")IndexedRadical(size,
+                    index={
+                        if(value=="cbrt")label("³",.7f)
+                        else {
+                            val numericIndex=children.getOrNull(1)?.takeIf {
+                                it.optString("kind")=="number"&&it.optString("value").let {digits->digits.isNotEmpty()&&digits.all {digit->digit in '0'..'9'}}
+                            }
+                            if(numericIndex!=null){
+                                val superscript=numericIndex.optString("value").map {"⁰¹²³⁴⁵⁶⁷⁸⁹"[it-'0']}.joinToString("")
+                                MathNode(JSONObject(numericIndex.toString()).put("value",superscript),(size*.7f).coerceAtLeast(11f),select,selection,depth+1)
+                            } else child(1,.55f)
+                        }
+                    },
+                    content={child(0,hidden=true)})
+                else RadicalSign{child(0,hidden=true)}
             kind=="matrix"||kind=="list"&&children.isNotEmpty()&&children.all{it.optString("kind")=="list"}->SquareBrackets {
                 Column(verticalArrangement=Arrangement.spacedBy(4.dp)){children.forEach{row->MathRow(10.dp){val cells=row.optJSONArray("args");for(i in 0 until(cells?.length() ?: 0))cells?.optJSONObject(i)?.let{MathNode(it,size*.85f,select,selection,depth+1)}}}}
             }
