@@ -132,6 +132,11 @@ The desktop tests consume AST fixtures produced by the actual Kotlin parser. The
 * Graphs use bounded adaptive samples; very narrow features can still be missed. Cartesian analysis controls apply only to Cartesian functions. The RK4 differential-equation plots are numerical approximations, and 3D surfaces use a finite wireframe grid.
 * General output such as condition sets and series remainder terms can use textual mathematical notation where a dedicated native layout is not available. Such results may be copyable but not reusable through Ans; the app disables result insertion for them.
 
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+Copyright (c) 2026 **kirinonakar**. All rights reserved.
+
 ## Third-party notices
 
 SymPy 1.14.0 and mpmath 1.3.0 use BSD licenses. Chaquopy 17 uses the MIT license. Full licenses are included in `app/src/main/assets/licenses/`; Python and native runtime notices are also packaged by Chaquopy. AndroidX uses Apache 2.0.
