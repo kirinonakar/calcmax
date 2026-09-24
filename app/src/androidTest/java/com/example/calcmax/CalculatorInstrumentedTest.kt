@@ -187,7 +187,7 @@ class CalculatorInstrumentedTest {
         compose.runOnIdle{assertEquals("",model().editor.source);assertEquals(0,model().variables.length());assertTrue(model().tape.isEmpty());assertEquals(count,model().history.size);assertEquals(10,model().precision);assertEquals(27f,model().inputFont);model().inputFont=25f;model().precision=30;model().sound=false;model().save()}
     }
     @Test fun equationAndCustomFunctionWorkspaces() {
-        compose.runOnIdle{model().clear();model().mode="Equations"}
+        compose.runOnIdle{model().clear();model().mode="Equations";model().equationKind="Quadratic";model().equationCoefficients=listOf("1","-5","6","0");model().equationSystem="x+y=3\nx-y=1";model().equationVariables="x,y"}
         compose.onNodeWithText("Solve",useUnmergedTree=true).performClick()
         compose.waitUntil(30000){!model().busy&&model().result!=null}
         compose.runOnIdle{assertEquals("{2, 3}",model().result!!.getString("exact"))}

@@ -14,14 +14,14 @@ import com.example.calcmax.math.Parser
 import org.json.JSONObject
 
 @Composable fun EquationScreen(m:CalculatorModel) {
-    var kind by rememberSaveable{mutableStateOf("Quadratic")}
-    var coefficients by rememberSaveable{mutableStateOf(listOf("1","-5","6","0"))}
-    var equations by rememberSaveable{mutableStateOf("x+y=3\nx-y=1")}
-    var equation by rememberSaveable{mutableStateOf("sin(x)=1/2")}
-    var variables by rememberSaveable{mutableStateOf("x,y")}
-    var variable by rememberSaveable{mutableStateOf("x")}
-    var guess by rememberSaveable{mutableStateOf("1")}
-    var numerical by rememberSaveable{mutableStateOf(false)}
+    val kind=m.equationKind
+    val coefficients=m.equationCoefficients
+    val equations=m.equationSystem
+    val equation=m.equationGeneral
+    val variables=m.equationVariables
+    val variable=m.equationVariable
+    val guess=m.equationGuess
+    val numerical=m.equationNumeric
     val degree=when(kind){"Linear"->1;"Quadratic"->2;else->3}
     val polynomial=buildString {
         (0..degree).forEach{i->
@@ -44,19 +44,19 @@ import org.json.JSONObject
     }
     val expression=when(kind){"General"->equation;"System"->"["+equations.lines().filter{it.isNotBlank()}.joinToString(",")+"]";else->polynomial}
     Panel("Equation solver","Enter coefficients or equations, then find exact solutions. Numeric solving uses an initial guess and returns a nearby root.") {
-        Choices(listOf("Linear","Quadratic","Cubic","System","General"),kind,{kind=it})
+        Choices(listOf("Linear","Quadratic","Cubic","System","General"),kind,{m.equationKind=it})
         if(kind=="System") {
-            OutlinedTextField(equations,{equations=it},Modifier.fillMaxWidth(),label={Text("One equation per line")},minLines=2)
-            Field(variables,"Variables · comma separated",Modifier.fillMaxWidth()){variables=it}
+            OutlinedTextField(equations,{m.equationSystem=it},Modifier.fillMaxWidth(),label={Text("One equation per line")},minLines=2)
+            Field(variables,"Variables · comma separated",Modifier.fillMaxWidth()){m.equationVariables=it}
         }else {
-            Field(variable,"Solve for",Modifier.fillMaxWidth()){variable=it}
-            if(kind=="General")Field(equation,"Equation",Modifier.fillMaxWidth()){equation=it}
+            Field(variable,"Solve for",Modifier.fillMaxWidth()){m.equationVariable=it}
+            if(kind=="General")Field(equation,"Equation",Modifier.fillMaxWidth()){m.equationGeneral=it}
             else {
                 Text(when(degree){1->"a x + b = 0";2->"a x² + b x + c = 0";else->"a x³ + b x² + c x + d = 0"})
-                Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){(0..degree).forEach{i->Field(coefficients[i],('a'+i).toString(),Modifier.weight(1f)){v->coefficients=coefficients.toMutableList().apply{set(i,v)}}}}
+                Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){(0..degree).forEach{i->Field(coefficients[i],('a'+i).toString(),Modifier.weight(1f)){v->m.equationCoefficients=coefficients.toMutableList().apply{set(i,v)}}}}
             }
-            Choices(listOf("Exact","Numeric"),if(numerical)"Numeric" else "Exact",{numerical=it=="Numeric"})
-            if(numerical)Field(guess,"Initial guess",Modifier.fillMaxWidth()){guess=it}
+            Choices(listOf("Exact","Numeric"),if(numerical)"Numeric" else "Exact",{m.equationNumeric=it=="Numeric"})
+            if(numerical)Field(guess,"Initial guess",Modifier.fillMaxWidth()){m.equationGuess=it}
         }
         val preview=runCatching{JSONObject(Parser(expression,true).parse().json())}.getOrNull()
         if(preview!=null)Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())){MathNode(preview,m.inputFont)}

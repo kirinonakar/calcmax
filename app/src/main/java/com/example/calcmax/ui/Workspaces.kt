@@ -42,6 +42,7 @@ import kotlin.math.max
     Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)) { values.forEach { value->FilterChip(selected==value,onClick={choose(value)},label={Text(value,fontSize=12.sp)}) } }
 }
 @Composable fun Field(value: String,label: String,modifier: Modifier=Modifier,onValue: (String)->Unit) { OutlinedTextField(value,onValue,modifier=modifier,label={Text(label)},singleLine=true) }
+@Composable private fun CompactField(value: String,label: String,modifier: Modifier=Modifier,onValue: (String)->Unit) { OutlinedTextField(value,onValue,modifier=modifier.height(44.dp),label={Text(label)},textStyle=MaterialTheme.typography.bodyMedium,singleLine=true) }
 
 @Composable fun MatrixScreen(m: CalculatorModel) {
     var rows by rememberSaveable { mutableIntStateOf(2) }; var cols by rememberSaveable { mutableIntStateOf(if(m.mode=="Vector")1 else 2) }
@@ -51,7 +52,7 @@ import kotlin.math.max
     fun source()=(0 until rows).joinToString(",","[","]") { r->(0 until cols).joinToString(",","[","]") { c->cells[r*4+c].ifBlank { "0" } } }
     Panel(if(m.mode=="Vector") "Vector workspace" else "Matrix workspace","Edit exact values, then calculate or store for reuse.") {
         Choices(listOf("A","B","C"),name,{name=it})
-        Row { Text("Rows: $rows",Modifier.weight(1f)); SmallAction("−") { rows=(rows-1).coerceAtLeast(1) }; SmallAction("+") { rows=(rows+1).coerceAtMost(4) }; Text("Cols: $cols"); SmallAction("−") { cols=(cols-1).coerceAtLeast(1) }; SmallAction("+") { cols=(cols+1).coerceAtMost(4) } }
+        Row(verticalAlignment=Alignment.CenterVertically) { Text("Rows: $rows",Modifier.weight(1f)); SmallAction("−") { rows=(rows-1).coerceAtLeast(1) }; SmallAction("+") { rows=(rows+1).coerceAtMost(4) }; Text("Cols: $cols"); SmallAction("−") { cols=(cols-1).coerceAtLeast(1) }; SmallAction("+") { cols=(cols+1).coerceAtMost(4) } }
         repeat(rows) { r -> Row(horizontalArrangement=Arrangement.spacedBy(5.dp)) { repeat(cols) { c -> Field(cells[r*4+c],"${r+1},${c+1}",Modifier.weight(1f)) { text->cells=cells.toMutableList().also { it[r*4+c]=text } } } } }
         Row { Button(onClick={m.store(name,source())}) { Text("Store $name") }; SmallAction("Insert into calculator") { m.edit(Editor(source()));m.mode="Scientific" } }
         Field(other,"Second matrix / vector") { other=it }
@@ -136,7 +137,7 @@ import kotlin.math.max
         else Column(Modifier.heightIn(max=300.dp).verticalScroll(rememberScrollState())) {
             parsedRows.forEachIndexed {index,row->Row(horizontalArrangement=Arrangement.spacedBy(5.dp),verticalAlignment=Alignment.CenterVertically) {
                 Text("${index+1}",fontSize=11.sp,modifier=Modifier.width(20.dp))
-                repeat(if(dataKind=="xy")2 else 1) {column->Field(row.getOrElse(column){""},if(dataKind=="list")"value" else if(column==0)"x" else "y",Modifier.weight(1f)) {text->
+                repeat(if(dataKind=="xy")2 else 1) {column->CompactField(row.getOrElse(column){""},if(dataKind=="list")"value" else if(column==0)"x" else "y",Modifier.weight(1f)) {text->
                     val next=parsedRows.map {it.toMutableList().apply {while(size<(if(dataKind=="xy")2 else 1))add("")}}.toMutableList();next[index][column]=text;data=next.joinToString("\n"){it.joinToString(",")}
                 }}
                 SmallAction("−"){data=parsedRows.filterIndexed {i,_->i!=index}.joinToString("\n"){it.joinToString(",")}}

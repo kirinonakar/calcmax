@@ -115,6 +115,14 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     var differentialInitials by mutableStateOf(prefs.getString("differentialInitials", "1") ?: "1")
     var differentialT0 by mutableStateOf(prefs.getString("differentialT0", "0") ?: "0")
     var graphSource by mutableStateOf(graphSources.optString(prefs.getString("graphKind","cartesian"),prefs.getString("graphSource","sin(x)\ncos(x)") ?: "sin(x)\ncos(x)"))
+    var equationKind by mutableStateOf(prefs.getString("equationKind","Quadratic") ?: "Quadratic")
+    var equationCoefficients by mutableStateOf((loadList("equationCoefficients",listOf("1","-5","6","0"))+List(4){"0"}).take(4))
+    var equationSystem by mutableStateOf(prefs.getString("equationSystem","x+y=3\nx-y=1") ?: "x+y=3\nx-y=1")
+    var equationGeneral by mutableStateOf(prefs.getString("equationGeneral","sin(x)=1/2") ?: "sin(x)=1/2")
+    var equationVariables by mutableStateOf(prefs.getString("equationVariables","x,y") ?: "x,y")
+    var equationVariable by mutableStateOf(prefs.getString("equationVariable","x") ?: "x")
+    var equationGuess by mutableStateOf(prefs.getString("equationGuess","1") ?: "1")
+    var equationNumeric by mutableStateOf(prefs.getBoolean("equationNumeric",false))
     var pythonSource by mutableStateOf(prefs.getString("pythonSource","") ?: "")
         private set
     var pythonSelectionStart by mutableIntStateOf(pythonSource.length)
@@ -164,6 +172,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         if(!committed&&editor.source.isNotBlank())schedulePreview()
     }
     private fun loadObject(key: String) = runCatching { JSONObject(prefs.getString(key,"{}")!!) }.getOrDefault(JSONObject())
+    private fun loadList(key:String,default:List<String>):List<String> = runCatching {val array=JSONArray(prefs.getString(key,"[]"));List(array.length()){array.getString(it)}}.getOrDefault(emptyList()).ifEmpty {default}
     private fun loadHistory(): List<HistoryEntry> = runCatching {
         val array = JSONArray(prefs.getString("history","[]"))
         (0 until array.length()).map { i -> array.getJSONObject(i).let { HistoryEntry(it.getLong("id"),it.getString("source"),it.getString("exact"),it.getString("decimal"),it.getString("mode"),it.optBoolean("favorite"),it.optString("inputTree"),it.optString("response"),it.optString("answer")) } }
@@ -180,6 +189,9 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
             .putString("graphSource",graphSource).putString("graphSources",graphSources.put(graphKind,graphSource).toString()).putString("graphKind",graphKind).putString("xMin",xMin.toString()).putString("xMax",xMax.toString()).putString("yMin",yMin.toString()).putString("yMax",yMax.toString())
             .putString("pythonSource",pythonSource).putString("pythonFileName",pythonFileName).putString("pythonUri",pythonUri).putBoolean("pythonDirty",pythonDirty)
             .putString("parameterMin",parameterMin.toString()).putString("parameterMax",parameterMax.toString())
+            .putString("equationKind",equationKind).putString("equationCoefficients",JSONArray(equationCoefficients).toString())
+            .putString("equationSystem",equationSystem).putString("equationGeneral",equationGeneral).putString("equationVariables",equationVariables)
+            .putString("equationVariable",equationVariable).putString("equationGuess",equationGuess).putBoolean("equationNumeric",equationNumeric)
             .putBoolean("radianAxis",radianAxis)
             .putString("history",if(persistHistory) JSONArray(history.map { JSONObject().put("id",it.id).put("source",it.source).put("exact",it.exact).put("decimal",it.decimal).put("mode",it.mode).put("favorite",it.favorite).put("inputTree",it.inputTree).put("response",it.response).put("answer",it.answer) }).toString() else "[]").apply()
     }
