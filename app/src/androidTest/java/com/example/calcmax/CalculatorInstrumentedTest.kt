@@ -451,11 +451,12 @@ class CalculatorInstrumentedTest {
         Unit
     }
     @Test fun manyStatisticsEntriesScrollWithoutCrashing() = runBlocking {
-        val source="stats(59,9)"
+        val source="stats([1,2,3,4,5,6,7,8,9,10])"
         val input=JSONObject(Parser(source).parse().json())
         val client=EngineClient(compose.activity.applicationContext)
         val result=try {client.execute(JSONObject().put("tree",input).put("angle","RAD"))} finally {client.close()}
         assertTrue(result.toString(),result.optBoolean("ok"))
+        assertEquals("rows",result.getJSONObject("tree").getString("kind"))
         val entries=List(120) {TapeEntry(source,input.toString(),result.toString())}
         val setTape=CalculatorModel::class.java.getDeclaredMethod("setTape",List::class.java).apply {isAccessible=true}
         compose.runOnIdle {model().mode="Scientific";model().clearHistory();model().clear();setTape.invoke(model(),entries);model().edit(Editor(source));model().calculate()}

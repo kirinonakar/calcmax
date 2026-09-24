@@ -116,6 +116,14 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
         layout(width,height,mapOf(MathAxis to padTop+c.axis())){bar.place(0,0);c.place(signW,padTop)}
     }
 }
+
+/** Offsets content visually (used for radical indices) while keeping its math axis so the row still aligns. */
+@Composable private fun MathShift(x:Dp,y:Dp,content:@Composable ()->Unit) {
+    Layout(content=content){ms,constraints->
+        val p=ms.firstOrNull()?.measure(constraints.copy(minWidth=0,minHeight=0))
+        if(p==null)layout(0,0){} else layout(p.width,p.height,mapOf(MathAxis to p.axis())){p.place(x.roundToPx(),y.roundToPx())}
+    }
+}
 @Composable private fun SquareBrackets(content:@Composable ()->Unit) {
     val ink=LocalInstrument.current.ink
     Box(Modifier.drawBehind {
@@ -176,7 +184,8 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
                 if(base?.optString("kind") in listOf("sum","product","unary"))wrapped(0)else child(0,hidden=hide)
             },{child(1,.67f,true)})
             kind=="root"||kind=="call"&&value in listOf("sqrt","cbrt","nthroot")->MathRow {
-                if(value=="cbrt")label("³",.7f)else if(value=="nthroot")child(1,.55f)
+                if(value=="cbrt")MathShift((size*.10f).dp,(-size*.16f).dp){label("³",.7f)}
+                else if(value=="nthroot")MathShift((size*.10f).dp,(-size*.16f).dp){child(1,.55f)}
                 RadicalSign{child(0,hidden=true)}
             }
             kind=="matrix"||kind=="list"&&children.isNotEmpty()&&children.all{it.optString("kind")=="list"}->SquareBrackets {
@@ -204,21 +213,24 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
             kind=="call"&&value=="eng"->child(0)
             kind in listOf("number","symbol","text")-> {
                 val shown=when(value){"pi"->"π";"oo"->"∞";"I"->"i";"E"->"e";else->value}
-                val at=if(end==start)0 else ((cursor-start)*shown.length/(end-start)).coerceIn(0,shown.length)
-                var layout by remember{mutableStateOf<TextLayoutResult?>(null)}
-                val place=LocalPlaceCursor.current
-                val active=LocalActiveToken.current==range
-                val caretVisible=LocalCaretVisible.current
-                val cursorLine=Modifier.drawWithContent {
-                    drawContent()
-                    if(caret&&caretVisible)layout?.getCursorRect(at)?.let {rect->
-                        drawLine(c.ink,Offset(rect.left,rect.top),Offset(rect.left,rect.bottom),1.dp.toPx())
+                if(select==null) MathText(shown,size)
+                else {
+                    val at=if(end==start)0 else ((cursor-start)*shown.length/(end-start)).coerceIn(0,shown.length)
+                    var textLayout by remember(shown){mutableStateOf<TextLayoutResult?>(null)}
+                    val place=LocalPlaceCursor.current
+                    val active=LocalActiveToken.current==range
+                    val caretVisible=LocalCaretVisible.current
+                    val cursorLine=Modifier.drawWithContent {
+                        drawContent()
+                        if(caret&&caretVisible)textLayout?.takeIf{it.layoutInput.text.text==shown}?.getCursorRect(at)?.let {rect->
+                            drawLine(c.ink,Offset(rect.left,rect.top),Offset(rect.left,rect.bottom),1.dp.toPx())
+                        }
                     }
+                    MathText(shown,size,cursorLine.pointerInput(shown,selected,active,place){detectTapGestures{offset->
+                        if(selected||active){val index=(textLayout?.takeIf{it.layoutInput.text.text==shown}?.getOffsetForPosition(offset) ?: 0).coerceIn(0,shown.length);place?.invoke(start,end,start+(index.toFloat()/shown.length.coerceAtLeast(1)*(end-start)).toInt())}
+                        else select(start,end)
+                    }},onLayout={textLayout=it})
                 }
-                MathText(shown,size,cursorLine.then(if(select==null)Modifier else Modifier.pointerInput(shown,selected,active,place){detectTapGestures{offset->
-                    if(selected||active){val index=(layout?.getOffsetForPosition(offset) ?: 0).coerceIn(0,shown.length);place?.invoke(start,end,start+(index.toFloat()/shown.length.coerceAtLeast(1)*(end-start)).toInt())}
-                    else select(start,end)
-                }}),onLayout={layout=it})
             }
             kind=="unary"->MathRow{label(if(value=="-")"−" else value);child(0)}
             kind in listOf("call","function")&&value=="factorial"->MathRow{child(0);label("!")}
