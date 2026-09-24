@@ -7,6 +7,13 @@ class ParserTest {
     @Test fun precedence() { assertEquals("*",p("2+3*4").args[1].value); assertEquals("unary",p("-2^2").kind); assertEquals("^",p("2^3^2").args[1].value) }
     @Test fun exactLiteral() { assertEquals("1",p("1/3").args[0].value); assertEquals("number",p("1.234567890123456789").kind) }
     @Test fun structures() { assertEquals("list",p("det([[1,2],[3,4]])").args[0].kind); assertEquals("relation",p("solve(x^2=1,x)").args[0].kind); assertEquals("*",p("2x").value) }
+    @Test fun directSecondPageStructures() {
+        assertEquals(listOf("x","y"),p("{x,y}").args.map{it.value})
+        assertEquals("set",p("{x,y}").kind)
+        assertEquals("list",Parser("[[,],[,]]",true).parse().kind)
+        assertEquals(4,Parser("[[,],[,]]",true).parse().nodes().count {it.kind=="hole"})
+        assertEquals("[[1,],[,]]",Editor().insert("[[,],[,]]",2).insert("1").source)
+    }
     @Test fun integrationTuple() {
         val integral=p("integrate(exp(-x^2)*cos(2x), (x, 0, oo))")
         assertEquals("tuple",integral.args[1].kind)

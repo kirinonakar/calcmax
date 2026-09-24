@@ -265,7 +265,7 @@ class Engine:
         if name in ("log","ln"): require(a[0]!=0,"Domain ERROR: logarithm of zero")
         if name=="log" and len(a)>1: require(a[1] not in (0,1),"Domain ERROR: invalid logarithm base")
         if name in basic: return basic[name](*a)
-        if name in ("factorial", "nPr", "prime", "factorization", "divisors"):
+        if name in ("factorial", "nPr", "prime", "factorint", "divisors"):
             require(a[0].is_Integer and 0 <= a[0] <= (10000 if name in ("factorial", "nPr") else 10**15), "Number theory input outside supported range")
             if name == "factorial": return s.factorial(a[0])
             if name == "nPr":
@@ -273,7 +273,7 @@ class Engine:
                 return s.factorial(a[0])/s.factorial(a[0]-a[1])
             if name == "prime": return s.true if s.isprime(a[0]) else s.false
             require(a[0]>0,"Factorization and divisors require a positive integer")
-            if name == "factorization": return [[s.Integer(p), s.Integer(k)] for p,k in s.factorint(a[0]).items()]
+            if name == "factorint": return [[s.Integer(p), s.Integer(k)] for p,k in s.factorint(a[0]).items()]
             return s.divisors(a[0])
         if name == "subs": return a[0].subs(a[1],a[2])
         if name == "integrate":
@@ -516,6 +516,80 @@ def graph(engine, request):
         curves.append(samples)
     return {"curves":curves}
 
+def graph_analysis(engine, request):
+    x = engine.symbol("x"); engine.bindings["x"] = x
+    expressions = [engine.build(tree) for tree in request.get("trees", [])]
+    require(expressions and all(isinstance(expr, s.Expr) for expr in expressions), "Enter Cartesian functions")
+    selected = int(request.get("selected", 0)); other = int(request.get("other", 1))
+    require(0 <= selected < len(expressions), "Select a function")
+    action = request.get("analysis", "root")
+    require(action in ("root", "intersection", "minimum", "maximum", "derivative", "integral"), "Unknown graph analysis")
+    if action == "intersection": require(0 <= other < len(expressions) and other != selected, "Select two different functions")
+    a = float(request.get("a", -10)); b = float(request.get("b", 10))
+    require(math.isfinite(a) and math.isfinite(b) and (action == "derivative" or a < b) and abs(b-a) <= 1e9, "Invalid analysis range")
+    expression = expressions[selected]
+    target = expression-expressions[other] if action == "intersection" else expression
+    def numeric(expr):
+        raw = s.lambdify(x, expr, modules="math", cse=True, docstring_limit=0)
+        def value(at):
+            try:
+                result = float(raw(at))
+                return result if math.isfinite(result) else None
+            except (TypeError, ValueError, ZeroDivisionError, OverflowError): return None
+        return value
+    value = numeric(expression)
+    if action == "derivative":
+        derivative = numeric(s.diff(expression, x))(a)
+        require(derivative is not None and value(a) is not None, "Derivative is undefined at this point")
+        return {"analysis":action,"points":[[a,value(a)]],"value":derivative}
+    if action == "integral":
+        result = s.Integral(expression, (x, s.Float(a), s.Float(b))).evalf(engine.precision, strict=True)
+        require(result.is_real and result.is_finite, "Numerical convergence failed")
+        return {"analysis":action,"points":[],"value":float(result)}
+    tested = numeric(target)
+    def zeroes(fn):
+        count = 1200
+        xs = [a+(b-a)*i/count for i in range(count+1)]
+        ys = [fn(at) for at in xs]
+        roots = []
+        def add(at):
+            if not roots or all(abs(at-old)>max(1e-8,abs(b-a)*1e-6) for old in roots): roots.append(at)
+        for i in range(count):
+            left,right = xs[i],xs[i+1]; yl,yr = ys[i],ys[i+1]
+            if yl is None or yr is None: continue
+            if abs(yl) < 1e-9: add(left)
+            if yl*yr < 0:
+                lo,hi = left,right; low = yl
+                for _ in range(55):
+                    mid = (lo+hi)/2; middle = fn(mid)
+                    if middle is None: break
+                    if low*middle <= 0: hi=mid
+                    else: lo=mid; low=middle
+                root=(lo+hi)/2; residual=fn(root)
+                if residual is not None and abs(residual) < 1e-6: add(root)
+        if ys[-1] is not None and abs(ys[-1]) < 1e-9: add(b)
+        return sorted(roots)
+    if action in ("root", "intersection"):
+        positions = zeroes(tested)
+        # A tangent intersection has no sign change. Its derivative identifies a zero minimum.
+        try:
+            for at in zeroes(numeric(s.diff(target, x))):
+                residual=tested(at)
+                if residual is not None and abs(residual) < 1e-7 and all(abs(at-old)>max(1e-8,abs(b-a)*1e-6) for old in positions): positions.append(at)
+        except (TypeError,ValueError): pass
+        positions.sort()
+    else:
+        positions = [a,b]
+        try: positions += zeroes(numeric(s.diff(expression, x)))
+        except (TypeError,ValueError): pass
+        values = [(at,value(at)) for at in positions]
+        values = [(at,y) for at,y in values if y is not None]
+        require(values, "No finite values in this range")
+        limit = (min if action == "minimum" else max)(y for _,y in values)
+        positions = [at for at,y in values if abs(y-limit) <= max(1e-8,abs(limit)*1e-8)]
+    points = [[at,value(at)] for at in positions if value(at) is not None][:80]
+    return {"analysis":action,"points":points,"count":len(points),"truncated":len(positions)>80}
+
 def programmer(request):
     width = int(request.get("width",32)); require(width in (8,16,32,64),"Invalid word size")
     base = int(request.get("base",10)); require(base in (2,8,10,16),"Invalid base")
@@ -556,6 +630,7 @@ def dispatch(payload):
             entries += [{"symbol":key,"name":v[0],"value":v[1] or "h / (2π)","unit":v[2],"exact":v[3]} for key,v in CONSTANTS.items()]
             result={"constants":entries,"source":"NIST CODATA 2022"}
         elif action=="graph": result=graph(engine,request)
+        elif action=="graphAnalysis": result=graph_analysis(engine,request)
         elif action=="programmer": result=programmer(request)
         else:
             value=engine.build(request["tree"])

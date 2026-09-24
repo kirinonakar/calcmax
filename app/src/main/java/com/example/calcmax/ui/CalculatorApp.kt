@@ -28,7 +28,7 @@ import kotlinx.coroutines.delay
 import com.example.calcmax.math.Lexer
 import com.example.calcmax.math.Expr
 
-val Modes=listOf("Scientific","CAS","Graph","Equations","Matrix","Vector","Statistics","Programmer","Units","Constants","Tip","Currency","Functions")
+val Modes=listOf("Scientific","CAS","Graph","Python","Equations","Matrix","Vector","Statistics","Programmer","Units","Constants","Tip","Currency","Functions")
 @Composable fun CalculatorApp(m:CalculatorModel) {
     val c=LocalInstrument.current
     var overlay by rememberSaveable {mutableStateOf("")}
@@ -51,6 +51,7 @@ val Modes=listOf("Scientific","CAS","Graph","Equations","Matrix","Vector","Stati
                 "Equations"->EquationScreen(m)
                 "Functions"->FunctionsScreen(m)
                 "Graph"->GraphScreen(m)
+                "Python"->PythonScreen(m)
                 "Matrix","Vector"->MatrixScreen(m)
                 "Statistics"->StatisticsScreen(m)
                 "Programmer"->ProgrammerScreen(m)

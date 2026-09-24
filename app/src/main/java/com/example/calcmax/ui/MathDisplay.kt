@@ -131,11 +131,17 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
                 label("√",1.28f)
                 Box(Modifier.padding(top=2.dp).drawBehind{drawLine(c.ink,Offset.Zero,Offset(this.size.width,0f),1.dp.toPx())}){child(0,hidden=true)}
             }
-            kind=="matrix"||kind=="list"&&children.isNotEmpty()&&children.all{it.optString("kind")=="list"}->MathRow {
-                label("[",1.5f)
-                Column(verticalArrangement=Arrangement.spacedBy(4.dp)){children.forEach{row->MathRow(10.dp){val cells=row.optJSONArray("args");for(i in 0 until(cells?.length() ?: 0))MathNode(cells!!.getJSONObject(i),size*.85f,select,selection,depth+1)}}}
-                label("]",1.5f)
-            }
+            kind=="matrix"||kind=="list"&&children.isNotEmpty()&&children.all{it.optString("kind")=="list"}->Box(
+                Modifier.drawBehind {
+                    val stroke=1.5.dp.toPx();val arm=7.dp.toPx();val left=stroke/2;val right=this.size.width-stroke/2
+                    drawLine(c.ink,Offset(left,0f),Offset(left,this.size.height),stroke)
+                    drawLine(c.ink,Offset(left,0f),Offset(left+arm,0f),stroke)
+                    drawLine(c.ink,Offset(left,this.size.height),Offset(left+arm,this.size.height),stroke)
+                    drawLine(c.ink,Offset(right,0f),Offset(right,this.size.height),stroke)
+                    drawLine(c.ink,Offset(right-arm,0f),Offset(right,0f),stroke)
+                    drawLine(c.ink,Offset(right-arm,this.size.height),Offset(right,this.size.height),stroke)
+                }.padding(horizontal=12.dp,vertical=3.dp)
+            ) {Column(verticalArrangement=Arrangement.spacedBy(4.dp)){children.forEach{row->MathRow(10.dp){val cells=row.optJSONArray("args");for(i in 0 until(cells?.length() ?: 0))MathNode(cells!!.getJSONObject(i),size*.85f,select,selection,depth+1)}}}}
             kind=="rows"->Column{children.forEach{row->MathRow{label(row.optString("value")+": ",.65f);row.optJSONArray("args")?.optJSONObject(0)?.let{MathNode(it,size*.8f,depth=depth+1)}}}}
             kind=="hole"->Box(Modifier.width(18.dp).height(26.dp).border(1.dp,if(activeHole)c.accent else c.muted,RoundedCornerShape(1.dp)).semantics{contentDescription="Empty expression slot"})
             kind=="answer"->Box(Modifier.border(1.dp,c.muted,RoundedCornerShape(4.dp)).padding(horizontal=5.dp,vertical=2.dp).semantics{contentDescription="Previous answer"}){children.firstOrNull()?.let{MathNode(it,size*.9f,depth=depth+1)}}

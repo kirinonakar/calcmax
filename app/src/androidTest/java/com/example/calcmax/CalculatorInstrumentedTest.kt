@@ -28,6 +28,31 @@ class CalculatorInstrumentedTest {
         val file=File(compose.activity.filesDir,"qa/$name.png");file.parentFile!!.mkdirs()
         file.outputStream().use { val roots=compose.onAllNodes(isRoot());roots[roots.fetchSemanticsNodes().lastIndex].captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG,100,it) }
     }
+    @Test fun pythonWorkspaceRunsSavedSourceThroughService() {
+        compose.runOnIdle {
+            model().mode="Python"
+            model().newPythonFile()
+            model().editPython("import math\nprint(math.sqrt(81))")
+            model().runPython()
+        }
+        compose.waitUntil(30000) {model().pythonOutput.contains("9.0") || model().pythonError.isNotBlank()}
+        compose.runOnIdle {
+            assertEquals("",model().pythonError)
+            assertEquals("9.0\n",model().pythonOutput)
+            assertEquals("import math\nprint(math.sqrt(81))",model().pythonSource)
+        }
+    }
+    @Test fun secondPageInsertsStructuresAndGraphsCurrentExpression() {
+        compose.runOnIdle {model().mode="Scientific";model().clear();model().secondKeys=true;model().edit(Editor("y=x^2+1"))}
+        compose.onNodeWithContentDescription("Graph current expression").performClick()
+        compose.runOnIdle {assertEquals("Graph",model().mode);assertEquals("cartesian",model().graphKind);assertEquals("x^2+1",model().graphSource)}
+        compose.runOnIdle {model().mode="Scientific";model().clear();model().secondKeys=true}
+        compose.onNodeWithContentDescription("Insert 2 by 2 matrix").performClick()
+        compose.runOnIdle {assertEquals("[[,],[,]]",model().editor.source);assertEquals(2,model().editor.cursor)}
+        compose.runOnIdle {model().clear();model().secondKeys=true}
+        listOf("{","x",",","y","}").forEach {key->compose.onNodeWithContentDescription(key).performClick()}
+        compose.runOnIdle {assertEquals("{x,y}",model().editor.source);assertEquals("set",model().editor.tree()?.kind)}
+    }
     @Test fun tokenCursorMalformedInputAndClearAll() {
         compose.runOnIdle {model().mode="Scientific";model().clear();model().edit(Editor("1234",4,0))}
         val number=compose.onNode(hasText("1234") and hasAnyAncestor(hasContentDescription("Current expression")),useUnmergedTree=true)

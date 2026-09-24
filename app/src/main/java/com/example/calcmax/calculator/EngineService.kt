@@ -22,7 +22,8 @@ class EngineService : Service() {
             worker.execute {
                 val result = try {
                     if (!Python.isStarted()) Python.start(AndroidPlatform(this))
-                    Python.getInstance().getModule("calc_engine").callAttr("dispatch", payload).toString()
+                    val module=if(JSONObject(payload).optString("action")=="python") "script_runner" else "calc_engine"
+                    Python.getInstance().getModule(module).callAttr(if(module=="script_runner") "run" else "dispatch", payload).toString()
                 } catch (e: Exception) { JSONObject().put("ok", false).put("error", e.message ?: "Engine error").toString() }
                 runCatching { reply.send(Message.obtain(null, 1, id, 0).apply { data = Bundle().apply { putString("result", result) } }) }
             }

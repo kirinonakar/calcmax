@@ -49,7 +49,7 @@ class Parser(private val source: String, private val allowHoles: Boolean = false
     private val token get() = tokens[index]
     private fun take() = tokens[index++]
     private fun expect(s: String): Token {
-        if(allowHoles && token.text.isEmpty() && s in listOf(")","]"))return Token(s,source.length,source.length)
+        if(allowHoles && token.text.isEmpty() && s in listOf(")","]","}"))return Token(s,source.length,source.length)
         if(token.text != s) fail("Expected '$s'"); return take()
     }
     private fun fail(s: String): Nothing = throw SyntaxException(s, token.start)
@@ -74,7 +74,7 @@ class Parser(private val source: String, private val allowHoles: Boolean = false
             ?: run { index=saved; null }
     }
     private fun dmsHole() = Expr("hole",start=token.start,end=token.start)
-    /** A Casio DMS entry is a sequence of numeric fields separated by °, ′ and ″. */
+    /** DMS entry is a sequence of numeric fields separated by °, ′ and ″. */
     private fun tryDms(left: Expr): Expr? {
         val saved=index
         val degreeMarker=take()
@@ -99,7 +99,7 @@ class Parser(private val source: String, private val allowHoles: Boolean = false
         return expr
     }
     private fun expression(min: Int): Expr {
-        if(allowHoles && token.text in listOf("", ")", "]", ",")) return Expr("hole", start=token.start,end=token.start)
+        if(allowHoles && token.text in listOf("", ")", "]", "}", ",")) return Expr("hole", start=token.start,end=token.start)
         if(++depth > 96 || ++count > 2048) fail("Expression complexity limit")
         val first = take()
         var left = when {
@@ -122,6 +122,11 @@ class Parser(private val source: String, private val allowHoles: Boolean = false
                 val args = mutableListOf<Expr>()
                 if(token.text != "]") { args += expression(0); while(token.text == ",") { take(); args += expression(0) } }
                 Expr("list", args = args, start = first.start, end = expect("]").end)
+            }
+            first.text == "{" -> {
+                val args = mutableListOf<Expr>()
+                if(token.text != "}") { args += expression(0); while(token.text == ",") { take(); args += expression(0) } }
+                Expr("set", args = args, start = first.start, end = expect("}").end)
             }
             first.text.firstOrNull()?.let { it.isDigit() || it == '.' } == true -> {
                 try { first.text.toBigDecimal() } catch(_: Exception) { throw SyntaxException("Invalid number", first.start) }

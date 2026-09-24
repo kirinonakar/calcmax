@@ -17,7 +17,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.*
 import com.example.calcmax.calculator.CalculatorModel
-import com.example.calcmax.math.Editor
 import com.example.calcmax.math.PiAxis
 import com.example.calcmax.math.GraphZoom
 import com.example.calcmax.ui.theme.LocalInstrument
@@ -28,18 +27,24 @@ import kotlin.math.*
     val c=LocalInstrument.current
     var rangeDialog by remember { mutableStateOf(false) }
     var analysis by remember { mutableStateOf(false) }
-    var first by rememberSaveable { mutableStateOf("0") }; var second by rememberSaveable { mutableStateOf("1") }
+    var first by rememberSaveable { mutableStateOf(m.xMin.toString()) }; var second by rememberSaveable { mutableStateOf(m.xMax.toString()) }
     var selected by rememberSaveable { mutableIntStateOf(0) }
-    LaunchedEffect(m.xMin,m.xMax,m.graphKind,m.parameterMin,m.parameterMax) { delay(300);m.plot() }
+    var other by rememberSaveable { mutableIntStateOf(1) }
+    LaunchedEffect(m.graphSource,m.xMin,m.xMax,m.graphKind,m.parameterMin,m.parameterMax) { delay(350);m.plot() }
     Column(Modifier.fillMaxSize()) {
-        OutlinedTextField(m.graphSource,{m.graphSource=it},Modifier.fillMaxWidth().padding(start=10.dp,end=10.dp,top=8.dp),label={Text(if(m.graphKind=="parametric") "One [x(t),y(t)] pair per line" else if(m.graphKind=="polar") "r(t) · radians · one curve per line" else "f(x) · one function per line · up to six")},maxLines=3)
+        OutlinedTextField(m.graphSource,{m.updateGraphSource(it)},Modifier.fillMaxWidth().padding(start=10.dp,end=10.dp,top=8.dp),label={Text(if(m.graphKind=="parametric") "One [x(t),y(t)] pair per line" else if(m.graphKind=="polar") "r(t) · radians · one curve per line" else "f(x) · one function per line · up to six")},minLines=2,maxLines=4)
         Column {
-            Choices(listOf("cartesian","parametric","polar"),m.graphKind,{m.graphKind=it;m.graphSource=when(it) { "parametric"->"[cos(t),sin(t)]"; "polar"->"2*cos(3*t)"; else->"sin(x)\ncos(x)" }; if(it!="cartesian") {m.parameterMin=0.0;m.parameterMax=2*PI;m.xMin=-3.0;m.xMax=3.0;m.yMin=-3.0;m.yMax=3.0} })
+            Choices(listOf("cartesian","parametric","polar"),m.graphKind,{m.changeGraphKind(it)})
             Row(Modifier.horizontalScroll(rememberScrollState())) { SmallAction("Plot") {m.plot()};SmallAction("Range") {rangeDialog=true};SmallAction("Analyze") {analysis=!analysis};SmallAction(if(m.radianAxis)"x: π rad" else "x: decimal"){m.radianAxis=!m.radianAxis;m.save()} }
         }
         val curves=remember(m.graphData) {
             val array=m.graphData?.optJSONArray("curves")
             (0 until (array?.length() ?: 0)).map { ci->val curve=array!!.getJSONArray(ci); (0 until curve.length()).map { k->curve.optJSONArray(k)?.let { it.getDouble(0) to it.getDouble(1) } } }
+        }
+        val sources=m.graphSource.lines().filter {it.isNotBlank()}.take(6)
+        val markers=remember(m.graphAnalysis) {
+            val array=m.graphAnalysis?.optJSONArray("points")
+            (0 until (array?.length() ?: 0)).mapNotNull {i->array?.optJSONArray(i)?.let {it.getDouble(0) to it.getDouble(1)}}
         }
         val transform=Modifier.pointerInput(Unit) {awaitEachGesture {
             awaitFirstDown(requireUnconsumed=false)
@@ -100,30 +105,48 @@ import kotlin.math.*
                         previous=current
                     }
                 }
+                markers.forEachIndexed {index,point ->
+                    val at=Offset(px(point.first),py(point.second))
+                    if(at.x in 0f..size.width && at.y in 0f..size.height) {
+                        drawCircle(c.display,9.dp.toPx(),at)
+                        drawCircle(c.accent,5.dp.toPx(),at)
+                        drawContext.canvas.nativeCanvas.drawText("${index+1}",at.x+9.dp.toPx(),at.y-9.dp.toPx(),paint)
+                    }
+                }
                 m.trace?.let { p -> val at=Offset(px(p.first),py(p.second));drawLine(c.muted,Offset(at.x,0f),Offset(at.x,size.height),1f);drawCircle(c.accent,6f,at) }
             }
         }
         Row(Modifier.horizontalScroll(rememberScrollState()),verticalAlignment=Alignment.CenterVertically) {
-            curves.forEachIndexed { i,_->SmallAction("${if(i==selected)"●" else "○"} f${i+1}") {selected=i} }
-            SmallAction("−") { val half=(m.xMax-m.xMin)/2;m.xMin-=half;m.xMax+=half;m.yMin*=2;m.yMax*=2 }
-            SmallAction("+") { val quarter=(m.xMax-m.xMin)/4;m.xMin+=quarter;m.xMax-=quarter;m.yMin/=2;m.yMax/=2 }
+            curves.forEachIndexed { i,_->SmallAction("${if(i==selected)"●" else "○"} f${i+1}: ${sources.getOrElse(i){""}.take(18)}") {selected=i;if(other==selected)other=(i+1)%curves.size} }
+            SmallAction("−") { val cx=(m.xMin+m.xMax)/2;val cy=(m.yMin+m.yMax)/2;val halfX=(m.xMax-m.xMin);val halfY=(m.yMax-m.yMin);m.xMin=cx-halfX;m.xMax=cx+halfX;m.yMin=cy-halfY;m.yMax=cy+halfY }
+            SmallAction("+") { val cx=(m.xMin+m.xMax)/2;val cy=(m.yMin+m.yMax)/2;val halfX=(m.xMax-m.xMin)/4;val halfY=(m.yMax-m.yMin)/4;m.xMin=cx-halfX;m.xMax=cx+halfX;m.yMin=cy-halfY;m.yMax=cy+halfY }
+            SmallAction("Fit Y") {val ys=curves.flatMap {it.filterNotNull()}.filter {it.first in m.xMin..m.xMax && it.second.isFinite()}.map {it.second};if(ys.isNotEmpty()){val lo=ys.min();val hi=ys.max();val pad=max((hi-lo)*.12,if(hi==lo)1.0 else 1e-6);m.yMin=lo-pad;m.yMax=hi+pad;m.save()} }
             SmallAction("Reset") {m.xMin=-10.0;m.xMax=10.0;m.yMin=-5.0;m.yMax=5.0;m.trace=null}
         }
         Text(if(m.graphBusy) "Sampling locally…" else m.trace?.let { "Trace ≈ x: %.7g   y: %.7g".format(it.first,it.second) } ?: "RADIANS · tap to trace · drag to pan · pinch to zoom",Modifier.padding(horizontal=14.dp,vertical=5.dp),fontSize=11.sp,color=c.muted)
-        if(analysis) Column(Modifier.heightIn(max=250.dp).verticalScroll(rememberScrollState()).padding(horizontal=10.dp)) {
+        if(analysis) Column(Modifier.heightIn(max=290.dp).verticalScroll(rememberScrollState()).padding(horizontal=10.dp)) {
+            Text("Analyze ${if(m.graphKind=="cartesian")"Cartesian curves" else "Choose Cartesian to analyze"}",fontSize=12.sp,color=c.muted)
             Row(horizontalArrangement=Arrangement.spacedBy(6.dp)) { Field(first,"a / x",Modifier.weight(1f)) {first=it};Field(second,"b",Modifier.weight(1f)) {second=it} }
+            SmallAction("Use visible x range") {first=m.xMin.toString();second=m.xMax.toString()}
+            if(sources.size>1) {
+                Text("Intersection: selected f${selected+1} with",fontSize=12.sp,color=c.muted)
+                Row(Modifier.horizontalScroll(rememberScrollState())) {sources.indices.filter {it!=selected}.forEach {i->SmallAction("f${i+1}",i==other) {other=i}}}
+            }
             Row(Modifier.horizontalScroll(rememberScrollState())) {
-                listOf("Root","Intersection","Minimum","Maximum","Derivative","Integral").forEach { action->SmallAction(action) {
-                    val functions=m.graphSource.lines().filter {it.isNotBlank()};val f=functions.getOrElse(selected){"x"}
-                    val expression=when(action) { "Root"->"nsolve($f,x,$first,$second)";"Intersection"->"nsolve(($f)-(${functions.getOrElse((selected+1)%functions.size){"0"}}),x,$first,$second)";"Minimum"->"minimum($f,x,$first,$second)";"Maximum"->"maximum($f,x,$first,$second)";"Derivative"->"nderivative($f,x,$first)";else->"nintegrate($f,x,$first,$second)" }
-                    if(m.graphKind!="cartesian") m.error="Analysis currently requires a Cartesian graph" else {
-                        m.shadedInterval=if(action=="Integral") first.toDoubleOrNull()?.let {a->second.toDoubleOrNull()?.let {b->a to b}} else null
-                        m.edit(Editor(expression));m.calculate()
-                    }
+                listOf("Root","Intersection","Minimum","Maximum","Derivative","Integral").forEach { action->SmallAction(action) {m.analyzeGraph(action.lowercase(),first,second,selected,other)} }
+            }
+            if(m.graphAnalysisBusy)Text("Analyzing…",fontSize=12.sp,color=c.muted)
+            m.graphAnalysis?.let {result->
+                val action=result.optString("analysis")
+                if(result.has("value"))Text("${action.replaceFirstChar {it.uppercase()}} = %.9g".format(result.optDouble("value")),fontSize=16.sp)
+                else Text("${action.replaceFirstChar {it.uppercase()}} · ${result.optInt("count")} point(s)${if(result.optBoolean("truncated"))" · first 80 shown" else ""}",fontSize=13.sp)
+                markers.forEachIndexed {i,p->SmallAction("${i+1}. (%.7g, %.7g)".format(p.first,p.second)) {
+                    m.trace=p
+                    if(p.first !in m.xMin..m.xMax) {val half=(m.xMax-m.xMin)/2;m.xMin=p.first-half;m.xMax=p.first+half}
+                    if(p.second !in m.yMin..m.yMax) {val half=(m.yMax-m.yMin)/2;m.yMin=p.second-half;m.yMax=p.second+half}
                 } }
             }
-            m.result?.let { Text(it.optString("exact"),fontSize=18.sp) }
-            Row {SmallAction("Trace x") {first.toDoubleOrNull()?.let {x->m.trace=curves.getOrNull(selected)?.filterNotNull()?.minByOrNull {abs(it.first-x)}}};if(m.busy)SmallAction("Cancel") {m.cancel()}}
+            SmallAction("Trace x") {first.toDoubleOrNull()?.let {x->m.trace=curves.getOrNull(selected)?.filterNotNull()?.minByOrNull {abs(it.first-x)}}}
         }
     }
     if(rangeDialog) {

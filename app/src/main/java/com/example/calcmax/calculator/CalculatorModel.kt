@@ -86,13 +86,34 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         private set
     var assumptions by mutableStateOf(loadObject("assumptions"))
         private set
-    var graphSource by mutableStateOf(prefs.getString("graphSource","sin(x)\ncos(x)") ?: "sin(x)\ncos(x)")
+    private val graphSources=loadObject("graphSources")
+    var graphSource by mutableStateOf(graphSources.optString(prefs.getString("graphKind","cartesian"),prefs.getString("graphSource","sin(x)\ncos(x)") ?: "sin(x)\ncos(x)"))
+    var pythonSource by mutableStateOf(prefs.getString("pythonSource","") ?: "")
+        private set
+    var pythonFileName by mutableStateOf(prefs.getString("pythonFileName","untitled.py") ?: "untitled.py")
+        private set
+    var pythonUri by mutableStateOf(prefs.getString("pythonUri","") ?: "")
+        private set
+    var pythonDirty by mutableStateOf(prefs.getBoolean("pythonDirty",false))
+        private set
+    var pythonOutput by mutableStateOf("")
+        private set
+    var pythonHasRun by mutableStateOf(false)
+        private set
+    var pythonError by mutableStateOf("")
+        private set
+    var pythonBusy by mutableStateOf(false)
+        private set
     var graphKind by mutableStateOf(prefs.getString("graphKind","cartesian") ?: "cartesian")
     var xMin by mutableDoubleStateOf(prefs.getString("xMin","-10")!!.toDouble())
     var xMax by mutableDoubleStateOf(prefs.getString("xMax","10")!!.toDouble())
     var yMin by mutableDoubleStateOf(prefs.getString("yMin","-5")!!.toDouble())
     var yMax by mutableDoubleStateOf(prefs.getString("yMax","5")!!.toDouble())
     var graphData by mutableStateOf<JSONObject?>(null)
+    var graphAnalysis by mutableStateOf<JSONObject?>(null)
+        private set
+    var graphAnalysisBusy by mutableStateOf(false)
+        private set
     var graphBusy by mutableStateOf(false)
     var trace by mutableStateOf<Pair<Double,Double>?>(null)
     var parameterMin by mutableDoubleStateOf(prefs.getString("parameterMin","0")!!.toDouble())
@@ -103,6 +124,8 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         private set
     private var job: Job? = null
     private var graphJob: Job? = null
+    private var analysisJob: Job? = null
+    private var pythonJob: Job? = null
     init {
         tape=history.filterIndexed{index,entry->entry.id>prefs.getLong("screenClearedAt",0)&&(index!=0||!committed||entry.source!=editor.source)}.take(100).asReversed().mapNotNull {entry->
             runCatching {
@@ -126,7 +149,8 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
             .putInt("precision",precision).putBoolean("haptics",haptics).putBoolean("sound",sound).putBoolean("historyEnabled",persistHistory)
             .putFloat("inputFont",inputFont).putFloat("outputFont",outputFont)
             .putString("variables",variables.toString()).putString("functions",functions.toString()).putString("assumptions",assumptions.toString())
-            .putString("graphSource",graphSource).putString("graphKind",graphKind).putString("xMin",xMin.toString()).putString("xMax",xMax.toString()).putString("yMin",yMin.toString()).putString("yMax",yMax.toString())
+            .putString("graphSource",graphSource).putString("graphSources",graphSources.put(graphKind,graphSource).toString()).putString("graphKind",graphKind).putString("xMin",xMin.toString()).putString("xMax",xMax.toString()).putString("yMin",yMin.toString()).putString("yMax",yMax.toString())
+            .putString("pythonSource",pythonSource).putString("pythonFileName",pythonFileName).putString("pythonUri",pythonUri).putBoolean("pythonDirty",pythonDirty)
             .putString("parameterMin",parameterMin.toString()).putString("parameterMax",parameterMax.toString())
             .putBoolean("radianAxis",radianAxis)
             .putString("history",if(persistHistory) JSONArray(history.map { JSONObject().put("id",it.id).put("source",it.source).put("exact",it.exact).put("decimal",it.decimal).put("mode",it.mode).put("favorite",it.favorite).put("inputTree",it.inputTree).put("response",it.response).put("answer",it.answer) }).toString() else "[]").apply()
@@ -310,7 +334,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
             } finally { busy=false }
         }
     }
-    fun cancel() { inputVersion++;commitRequested=false;previewRunner?.cancel();job?.cancel(); graphJob?.cancel(); engine.cancel(); busy=false; graphBusy=false;previewBusy=false;error="Calculation cancelled" }
+    fun cancel() { inputVersion++;commitRequested=false;previewRunner?.cancel();job?.cancel(); graphJob?.cancel();pythonJob?.cancel(); engine.cancel(); busy=false; graphBusy=false;pythonBusy=false;previewBusy=false;error="Calculation cancelled" }
     fun transform(operation: String) { val source=editor.source.ifBlank { "Ans" }; edit(Editor("$operation($source)")); calculate() }
     fun store(name: String, source: String = editor.source.ifBlank { "Ans" },showResult:Boolean=true) {
         try {
@@ -357,7 +381,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     fun define(name: String, parameters: String, source: String, showResult:Boolean=true) {
         try {
             require(name.matches(Regex("[A-Za-z][A-Za-z0-9_]*")))
-            require(name !in ("sinc sin cos tan asin acos atan sinh cosh tanh asinh acosh atanh sqrt cbrt nthroot abs floor ceil round sign factorial gamma ln log exp erf erfc Ei Si Ci zeta re im arg conj polar rectpolar simplify expand factor collect diff integrate limit series solve nsolve sum product piecewise subs gcd lcm nCr nPr prime factorization divisors percent degree quotient remainder det inverse transpose rank trace rref ref lu eigenvalues eigenvectors norm normalize dot cross angle projection linsolve mean median variance stdev sumdata quartiles stats regression convert qty nintegrate nderivative minimum maximum".split(' '))) {"This function name is reserved"}
+            require(name !in ("sinc sin cos tan asin acos atan sinh cosh tanh asinh acosh atanh sqrt cbrt nthroot abs floor ceil round sign factorial gamma ln log exp erf erfc Ei Si Ci zeta re im arg conj polar rectpolar simplify expand factor collect diff integrate limit series solve nsolve sum product piecewise subs gcd lcm nCr nPr prime factorint divisors percent degree quotient remainder det inverse transpose rank trace rref ref lu eigenvalues eigenvectors norm normalize dot cross angle projection linsolve mean median variance stdev sumdata quartiles stats regression convert qty nintegrate nderivative minimum maximum".split(' '))) {"This function name is reserved"}
             val names=parameters.split(',').map { it.trim() }; require(names.all { it.matches(Regex("[A-Za-z][A-Za-z0-9_]*")) } && names.distinct().size==names.size)
             functions=JSONObject(functions.toString()).put(name,JSONObject().put("parameters",JSONArray(names)).put("source",source).put("body",JSONObject(Parser(source).parse().json()))); save()
             error=""
@@ -374,13 +398,88 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         graphJob?.cancel()
         val trees=try { graphSource.lines().filter { it.isNotBlank() }.take(6).map { JSONObject(Parser(it).parse().json()) } } catch(e: Exception) { error=e.message ?: "Syntax ERROR"; return }
         if(trees.isEmpty()) { error="Enter a function"; return }
+        val source=graphSource;val kind=graphKind;val min=if(kind=="cartesian")xMin else parameterMin;val max=if(kind=="cartesian")xMax else parameterMax
         graphJob=viewModelScope.launch {
             graphBusy=true; error=""
             try {
-                val response=engine.execute(request("graph").put("angle","RAD").put("trees",JSONArray(trees)).put("graphKind",graphKind).put("variable",if(graphKind=="cartesian") "x" else "t").put("min",if(graphKind=="cartesian")xMin else parameterMin).put("max",if(graphKind=="cartesian")xMax else parameterMax).put("samples",500))
-                if(response.optBoolean("ok")) graphData=response else error=response.optString("error")
+                val response=engine.execute(request("graph").put("angle","RAD").put("trees",JSONArray(trees)).put("graphKind",kind).put("variable",if(kind=="cartesian") "x" else "t").put("min",min).put("max",max).put("samples",500))
+                if(source==graphSource && kind==graphKind && min==(if(kind=="cartesian")xMin else parameterMin) && max==(if(kind=="cartesian")xMax else parameterMax)) {
+                    if(response.optBoolean("ok")) graphData=response else {graphData=null;error=response.optString("error")}
+                }
                 save()
             } finally { graphBusy=false }
+        }
+    }
+    fun editPython(source:String) {pythonSource=source;pythonDirty=true;save()}
+    fun newPythonFile() {pythonSource="";pythonFileName="untitled.py";pythonUri="";pythonDirty=false;pythonOutput="";pythonError="";pythonHasRun=false;save()}
+    fun openPythonFile(source:String,name:String,uri:String) {pythonSource=source;pythonFileName=name;pythonUri=uri;pythonDirty=false;pythonOutput="";pythonError="";pythonHasRun=false;save()}
+    fun savedPythonFile(name:String,uri:String) {pythonFileName=name;pythonUri=uri;pythonDirty=false;save()}
+    fun pythonFileError(message:String) {pythonError=message}
+    fun runPython() {
+        if(pythonBusy)return
+        val source=pythonSource;val filename=pythonFileName
+        pythonJob=viewModelScope.launch {
+            pythonBusy=true;pythonOutput="";pythonError="";pythonHasRun=false
+            try {
+                val response=engine.execute(JSONObject().put("action","python").put("source",source).put("filename",filename))
+                pythonOutput=response.optString("output","")
+                pythonError=if(response.optBoolean("ok"))"" else response.optString("error","Python execution failed")
+                pythonHasRun=true
+            } finally {pythonBusy=false}
+        }
+    }
+    fun stopPython() {pythonJob?.cancel();engine.cancel();pythonBusy=false;pythonHasRun=true;pythonError="Execution stopped"}
+    fun updateGraphSource(source:String) {
+        graphSource=source
+        graphData=null;graphAnalysis=null;trace=null;shadedInterval=null
+        save()
+    }
+    fun sendExpressionToGraph() {
+        val source=editor.source.trim()
+        if(source.isEmpty()) {error="Enter an expression to graph";return}
+        val tree=try {Parser(source).parse()} catch(e:Exception) {error=e.message ?: "Syntax ERROR";return}
+        val expression=if(tree.kind=="relation" && tree.value=="=" && tree.args.firstOrNull()?.kind=="symbol" && tree.args.first().value=="y") {
+            source.substring(tree.args[1].start,tree.args[1].end)
+        } else {
+            if(tree.kind=="relation") {error="Graph an expression or y = f(x)";return}
+            source
+        }
+        changeGraphKind("cartesian")
+        updateGraphSource(expression)
+        error="";mode="Graph"
+    }
+    fun changeGraphKind(kind:String) {
+        if(kind==graphKind)return
+        graphSources.put(graphKind,graphSource)
+        graphKind=kind
+        graphSource=graphSources.optString(kind,when(kind){"parametric"->"[cos(t),sin(t)]";"polar"->"2*cos(3*t)";else->"sin(x)\ncos(x)"})
+        graphData=null;graphAnalysis=null;trace=null;shadedInterval=null
+        if(kind!="cartesian" && xMin == -10.0 && xMax == 10.0 && yMin == -5.0 && yMax == 5.0) {
+            xMin=-3.0;xMax=3.0;yMin=-3.0;yMax=3.0
+        }
+        save()
+    }
+    fun analyzeGraph(action:String,first:String,second:String,selected:Int,other:Int) {
+        if(graphKind!="cartesian") {error="Analysis requires a Cartesian graph";return}
+        val a=first.toDoubleOrNull();val b=if(action=="derivative")a else second.toDoubleOrNull()
+        if(a==null || !a.isFinite() || b==null || !b.isFinite() || (action!="derivative" && a>=b)) {error="Enter finite values with a < b";return}
+        val sources=graphSource.lines().filter {it.isNotBlank()}.take(6)
+        if(sources.isEmpty() || selected !in sources.indices || action=="intersection" && (other !in sources.indices || other==selected)) {error="Select two different functions";return}
+        val trees=try {JSONArray(sources.map {JSONObject(Parser(it).parse().json())})} catch(e:Exception) {error=e.message ?: "Syntax ERROR";return}
+        analysisJob?.cancel()
+        val source=graphSource
+        analysisJob=viewModelScope.launch {
+            graphAnalysisBusy=true;error="";graphAnalysis=null
+            try {
+                val response=engine.execute(request("graphAnalysis").put("angle","RAD").put("trees",trees).put("analysis",action).put("a",a).put("b",b).put("selected",selected).put("other",other))
+                if(source==graphSource && graphKind=="cartesian") {
+                    if(response.optBoolean("ok")) {
+                        graphAnalysis=response
+                        shadedInterval=if(action=="integral")a to b else null
+                        response.optJSONArray("points")?.optJSONArray(0)?.let {trace=it.getDouble(0) to it.getDouble(1)}
+                    } else error=response.optString("error","Analysis failed")
+                }
+            } finally {graphAnalysisBusy=false}
         }
     }
     fun program(a: String,b: String,base: Int,width: Int,signed: Boolean,op: String) {

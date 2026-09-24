@@ -32,9 +32,9 @@ private val ScientificKeys=listOf(
     listOf(KeySpec("RCL",secondary="STO",alternate="STO"),KeySpec("ENG",secondary="←",alternate="ENG−",alpha="i"),KeySpec("(",secondary="%",alternate="%"),KeySpec(")",secondary=",",alternate=",",alpha="x"),KeySpec("S⇔D",secondary="a b/c ⇔ d/c",alternate="MIXED",alpha="y"),KeySpec("M+",secondary="M−",alternate="M−",alpha="M"))
 )
 private val SecondKeys=listOf(
-    listOf(KeySpec("simp","simplify()"),KeySpec("factor","factor()"),KeySpec("expand","expand()"),KeySpec("collect","collect(,x)"),KeySpec("subs","subs(,x,)"),KeySpec("cases","piecewise([,x>0],[0,true])")),
-    listOf(KeySpec("⌊x⌋","floor()"),KeySpec("⌈x⌉","ceil()"),KeySpec("∞","oo","sign","sign()"),KeySpec("gcd","gcd(,)"),KeySpec("lcm","lcm(,)"),KeySpec("sinc","sinc()","divisors","divisors()")),
-    listOf(KeySpec("det","det()"),KeySpec("inv","inverse()"),KeySpec("T","transpose()"),KeySpec("‖v‖","norm()"),KeySpec("dot","dot(,)"),KeySpec("cross","cross(,)"))
+    listOf(KeySpec("simp","simplify()"),KeySpec("factor","factor()"),KeySpec("expand","expand()"),KeySpec("x"),KeySpec("y"),KeySpec("z")),
+    listOf(KeySpec("⌊x⌋","floor()"),KeySpec("⌈x⌉","ceil()"),KeySpec("∞","oo","sign","sign()"),KeySpec(","),KeySpec("{"),KeySpec("}")),
+    listOf(KeySpec("MATRIX","MATRIX_INPUT",secondary="2×2",type="action"),KeySpec("det","det()"),KeySpec("inv","inverse()"),KeySpec("T","transpose()"),KeySpec("‖v‖","norm()"),KeySpec("GRAPH","TO_GRAPH",type="action"))
 )
 private val NumericKeys=listOf(
     listOf(KeySpec("7",secondary="CONST",alternate="Constants"),KeySpec("8",secondary="CONV",alternate="Units"),KeySpec("9",secondary="CLR",alternate="Clear"),KeySpec("DEL",secondary="INS",alternate="INS",type="danger"),KeySpec("AC",secondary="CLR ALL",alternate="CLR ALL",type="danger")),
@@ -92,6 +92,8 @@ private val NumericKeys=listOf(
             "ENG−"->{m.enterEngineering();m.shiftEngineering(3)}
             "DMS_INPUT"->m.insertDmsSymbol()
             "DMS"->m.toggleDms()
+            "TO_GRAPH"->m.sendExpressionToGraph()
+            "MATRIX_INPUT"->m.insert("[[,],[,]]",2)
             else->{val at=when {value=="()/()"->1;value.contains('(')->value.indexOf('(')+1;else->value.length};m.insert(value,at)}
         }
         if(value!="HYP")m.hyperbolic=false
@@ -101,9 +103,9 @@ private val NumericKeys=listOf(
         BoxWithConstraints(Modifier.fillMaxWidth().weight(2f)) {
             val column=maxWidth/6
             val row=maxHeight/2
-            val top=listOf(KeySpec("SHIFT",type="round"),KeySpec("ALPHA",type="round"),KeySpec("MODE",secondary="SETUP",alternate="SETUP",type="round"),KeySpec(if(m.secondKeys)"1st" else "2nd","SECOND",type="round"))
+            val top=listOf(KeySpec("SHIFT",type="utility"),KeySpec("ALPHA",type="utility"),KeySpec("MODE",type="utility"),KeySpec(if(m.secondKeys)"1st" else "2nd","SECOND",type="utility"))
             top.forEachIndexed {i,k->val col=if(i<2)i else i+2;Keycap(k,Modifier.offset(x=column*col).width(column-4.dp).height(row),m.shift&&k.title=="SHIFT"||m.alpha&&k.title=="ALPHA"){press(k)}}
-            val bottom=if(m.secondKeys)listOf(KeySpec("d/dx","diff(,x)"),KeySpec("lim","limit(,x,)"),KeySpec("series","series(,x,0,6)"),KeySpec("Π","product(,x,,)")) else listOf(KeySpec("CALC",secondary="SOLVE",alternate="SOLVE",alpha="="),KeySpec("∫","integrate(,x,,)","d/dx","nderivative(,x,)",":"),KeySpec("x⁻¹","^(-1)","x!","!"),KeySpec("logₐ□","log(,)","Σ","sum(,x,,)"))
+            val bottom=if(m.secondKeys)listOf(KeySpec("d/dx","diff(,x)"),KeySpec("lim","limit(,x,)"),KeySpec("sinc","sinc()"),KeySpec("Π","product(,x,,)")) else listOf(KeySpec("CALC",secondary="SOLVE",alternate="SOLVE",alpha="="),KeySpec("∫","integrate(,x,,)","d/dx","nderivative(,x,)",":"),KeySpec("x⁻¹","^(-1)","x!","!"),KeySpec("logₐ□","log(,)","Σ","sum(,x,,)"))
             bottom.forEachIndexed {i,k->val col=if(i<2)i else i+2;Keycap(k,Modifier.offset(x=column*col,y=row).width(column-4.dp).height(row)){press(k)}}
             Box(Modifier.offset(x=column*2).width(column*2-4.dp).fillMaxHeight(),contentAlignment=Alignment.Center) {
                 Box(Modifier.fillMaxSize(.88f).clip(CircleShape).background(c.scientific).border(1.dp,c.muted.copy(alpha=.3f),CircleShape))
@@ -124,11 +126,20 @@ private val NumericKeys=listOf(
 }
 @Composable private fun Keycap(key:KeySpec,modifier:Modifier,active:Boolean=false,onClick:()->Unit) {
     val c=LocalInstrument.current
-    val bg=when(key.type){"numeric"->c.numeric;"danger"->c.clearKey;else->c.scientific}
+    if(key.type=="utility") {
+        val bg=when(key.title){"SHIFT"->c.shift;"ALPHA"->c.alpha;"MODE"->c.accent;else->c.operator}
+        val ink=if(key.title=="2nd"||key.title=="1st")c.ink else Color.White
+        val shape=RoundedCornerShape(8.dp)
+        Box(modifier.padding(top=3.dp,bottom=3.dp).clip(shape).background(bg).border(if(active)2.dp else 1.dp,if(active)c.ink else c.muted.copy(alpha=.25f),shape).clickable(onClick=onClick).semantics{contentDescription=key.title;stateDescription=if(active)"Active" else ""},contentAlignment=Alignment.Center) {
+            Text(key.title,color=ink,fontSize=13.sp,fontWeight=FontWeight.Bold,maxLines=1)
+        }
+        return
+    }
+    val bg=when(key.type){"numeric"->c.numeric;"danger"->c.clearKey;"action"->c.operator;else->c.scientific}
     val ink=if(key.type=="danger")c.clearInk else c.ink
-    BoxWithConstraints(modifier.clickable(onClick=onClick).semantics(mergeDescendants=true){contentDescription=key.title;stateDescription=if(active)"Active" else listOf(key.secondary,key.alpha).filter{it.isNotBlank()}.joinToString()}) {
+    BoxWithConstraints(modifier.clickable(onClick=onClick).semantics(mergeDescendants=true){contentDescription=when(key.input){"TO_GRAPH"->"Graph current expression";"MATRIX_INPUT"->"Insert 2 by 2 matrix";else->key.title};stateDescription=if(active)"Active" else listOf(key.secondary,key.alpha).filter{it.isNotBlank()}.joinToString()}) {
         val labelHeight=(maxHeight*.25f).coerceAtMost(15.dp)
-        val keyFont=(maxHeight.value*(if(key.type in listOf("numeric","danger")) .44f else .32f)).coerceIn(10f,24f).sp
+        val keyFont=(maxHeight.value*(when(key.type){"numeric","danger"->.44f;"action"->.24f;else->.32f})).coerceIn(10f,24f).sp
         val smallFont=(labelHeight.value*.66f).coerceIn(6f,if(key.secondary.length+key.alpha.length>10)7.5f else 10f).sp
         Column(Modifier.fillMaxSize(),horizontalAlignment=Alignment.CenterHorizontally) {
             Row(Modifier.fillMaxWidth().height(labelHeight),horizontalArrangement=Arrangement.Center,verticalAlignment=Alignment.CenterVertically){
