@@ -138,6 +138,22 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
         }
     }
 }
+@Composable private fun RootIndexSlot(size:Float,active:Boolean) {
+    val c=LocalInstrument.current
+    Layout(content={
+        MathText("⁴",size)
+        Box(Modifier.border(1.dp,if(active)c.accent else c.muted,RoundedCornerShape(1.dp))
+            .then(if(active)Modifier else Modifier.semantics{contentDescription="Empty expression slot"}),contentAlignment=Alignment.Center){
+            if(active)MathText("│",size*.7f,blink=true)
+        }
+    }){ms,constraints->
+        val glyph=ms[0].measure(constraints.copy(minWidth=0,minHeight=0))
+        val boxWidth=glyph.width.coerceAtLeast(9.dp.roundToPx())
+        val boxHeight=(glyph.height*.72f).roundToInt().coerceAtLeast(12.dp.roundToPx())
+        val box=ms[1].measure(Constraints.fixed(boxWidth,boxHeight))
+        layout(boxWidth,glyph.height,mapOf(MathAxis to glyph.axis())){box.place(0,(glyph.height-boxHeight)/2)}
+    }
+}
 @Composable private fun SquareBrackets(content:@Composable ()->Unit) {
     val ink=LocalInstrument.current.ink
     Box(Modifier.drawBehind {
@@ -151,7 +167,7 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
     }.padding(horizontal=12.dp,vertical=3.dp)) {content()}
 }
 
-@Composable fun MathNode(node:JSONObject,size:Float=25f,select:((Int,Int)->Unit)?=null,selection:IntRange?=null,depth:Int=0,hideGroup:Boolean=false) {
+@Composable fun MathNode(node:JSONObject,size:Float=25f,select:((Int,Int)->Unit)?=null,selection:IntRange?=null,depth:Int=0,hideGroup:Boolean=false,compactRootIndexHole:Boolean=false) {
     if(depth>36){MathText("…",size);return}
     val c=LocalInstrument.current
     val raw=node.optString("kind")
@@ -208,6 +224,8 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
                             if(numericIndex!=null){
                                 val superscript=numericIndex.optString("value").map {"⁰¹²³⁴⁵⁶⁷⁸⁹"[it-'0']}.joinToString("")
                                 MathNode(JSONObject(numericIndex.toString()).put("value",superscript),(size*.7f).coerceAtLeast(11f),select,selection,depth+1)
+                            } else if(children.getOrNull(1)?.optString("kind")=="hole") {
+                                MathNode(children[1],(size*.7f).coerceAtLeast(11f),select,selection,depth+1,compactRootIndexHole=true)
                             } else child(1,.55f)
                         }
                     },
@@ -219,9 +237,10 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
             kind=="list"&&children.isNotEmpty()->SquareBrackets {MathRow(2.dp){children.indices.forEach {i->if(i>0)label(", ");child(i)}}}
             emptyContainer->MathRow {label(if(kind=="list")"[" else "{");if(caret&&cursor==start+1)MathText("│",size,blink=true);label(if(kind=="list")"]" else "}")}
             kind=="rows"->Column{children.forEach{row->MathRow{label(row.optString("value")+": ",.65f);row.optJSONArray("args")?.optJSONObject(0)?.let{MathNode(it,size*.8f,depth=depth+1)}}}}
-            kind=="hole"->Box(Modifier.width(18.dp).height(26.dp).border(1.dp,if(activeHole)c.accent else c.muted,RoundedCornerShape(1.dp)).then(if(activeHole)Modifier else Modifier.semantics{contentDescription="Empty expression slot"}),contentAlignment=Alignment.Center){
-                if(activeHole)MathText("│",size,blink=true)
-            }
+            kind=="hole"->if(compactRootIndexHole)RootIndexSlot(size,activeHole)else
+                Box(Modifier.width(18.dp).height(26.dp).border(1.dp,if(activeHole)c.accent else c.muted,RoundedCornerShape(1.dp)).then(if(activeHole)Modifier else Modifier.semantics{contentDescription="Empty expression slot"}),contentAlignment=Alignment.Center){
+                    if(activeHole)MathText("│",size,blink=true)
+                }
             kind=="answer"->Box(Modifier.border(1.dp,c.muted,RoundedCornerShape(4.dp)).padding(horizontal=5.dp,vertical=2.dp).semantics{contentDescription="Previous answer"}){children.firstOrNull()?.let{MathNode(it,size*.9f,depth=depth+1)}}
             kind=="restricted"->child(0)
             kind=="quantity"->MathRow{child(0);label(" $value",.7f)}
