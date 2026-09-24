@@ -22,6 +22,18 @@ class ScriptRunnerTests(unittest.TestCase):
         self.assertTrue(result["ok"],result)
         self.assertEqual(result["output"],"3.0\n")
 
+    def test_input_prompt_and_float_conversion(self):
+        class Bridge:
+            def __init__(self): self.requests = []
+            def request(self, prompt, output):
+                self.requests.append((prompt, output))
+                return "2.5"
+        bridge = Bridge()
+        result = json.loads(script_runner.run(json.dumps({"source":"a=float(input('a='))\nprint(a*2)"}), bridge))
+        self.assertTrue(result["ok"], result)
+        self.assertEqual(bridge.requests, [("a=", "")])
+        self.assertEqual(result["output"], "a=2.5\n5.0\n")
+
     def test_traceback_contains_script_name(self):
         result=json.loads(script_runner.run(json.dumps({"source":"raise ValueError('bad')","filename":"example.py"})))
         self.assertFalse(result["ok"])

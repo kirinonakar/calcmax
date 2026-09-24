@@ -107,6 +107,8 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     var pythonError by mutableStateOf("")
         private set
     var pythonBusy by mutableStateOf(false)
+    var pythonInputPrompt by mutableStateOf<String?>(null)
+    private var pythonInputSubmit: ((String) -> Unit)? = null
         private set
     var graphKind by mutableStateOf(prefs.getString("graphKind","cartesian") ?: "cartesian")
     var xMin by mutableDoubleStateOf(prefs.getString("xMin","-10")!!.toDouble())
@@ -338,7 +340,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
             } finally { busy=false }
         }
     }
-    fun cancel() { inputVersion++;commitRequested=false;previewRunner?.cancel();job?.cancel(); graphJob?.cancel();pythonJob?.cancel(); engine.cancel(); busy=false; graphBusy=false;pythonBusy=false;previewBusy=false;error="Calculation cancelled" }
+    fun cancel() { inputVersion++;commitRequested=false;previewRunner?.cancel();job?.cancel(); graphJob?.cancel();pythonJob?.cancel(); engine.cancel(); busy=false; graphBusy=false;pythonBusy=false;pythonInputPrompt=null;pythonInputSubmit=null;previewBusy=false;error="Calculation cancelled" }
     fun transform(operation: String) { val source=editor.source.ifBlank { "Ans" }; edit(Editor("$operation($source)")); calculate() }
     fun store(name: String, source: String = editor.source.ifBlank { "Ans" },showResult:Boolean=true) {
         try {
@@ -428,24 +430,27 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         val cursor=a+inside.coerceIn(0,snippet.length)
         editPython(source,cursor,cursor)
     }
-    fun newPythonFile() {pythonSource="";pythonSelectionStart=0;pythonSelectionEnd=0;pythonFileName="untitled.py";pythonUri="";pythonDirty=false;pythonOutput="";pythonError="";pythonHasRun=false;save()}
-    fun openPythonFile(source:String,name:String,uri:String) {pythonSource=source;pythonSelectionStart=source.length;pythonSelectionEnd=source.length;pythonFileName=name;pythonUri=uri;pythonDirty=false;pythonOutput="";pythonError="";pythonHasRun=false;save()}
+    fun newPythonFile() {pythonSource="";pythonSelectionStart=0;pythonSelectionEnd=0;pythonFileName="untitled.py";pythonUri="";pythonDirty=false;pythonOutput="";pythonError="";pythonHasRun=false;pythonInputPrompt=null;pythonInputSubmit=null;save()}
+    fun openPythonFile(source:String,name:String,uri:String) {pythonSource=source;pythonSelectionStart=source.length;pythonSelectionEnd=source.length;pythonFileName=name;pythonUri=uri;pythonDirty=false;pythonOutput="";pythonError="";pythonHasRun=false;pythonInputPrompt=null;pythonInputSubmit=null;save()}
     fun savedPythonFile(name:String,uri:String) {pythonFileName=name;pythonUri=uri;pythonDirty=false;save()}
     fun pythonFileError(message:String) {pythonError=message}
     fun runPython() {
         if(pythonBusy)return
         val source=pythonSource;val filename=pythonFileName
         pythonJob=viewModelScope.launch {
-            pythonBusy=true;pythonOutput="";pythonError="";pythonHasRun=false
+            pythonBusy=true;pythonOutput="";pythonError="";pythonHasRun=false;pythonInputPrompt=null;pythonInputSubmit=null
             try {
-                val response=engine.execute(JSONObject().put("action","python").put("source",source).put("filename",filename).put("functions",functions).put("variables",variables).put("assumptions",assumptions))
+                val response=engine.execute(JSONObject().put("action","python").put("source",source).put("filename",filename).put("functions",functions).put("variables",variables).put("assumptions",assumptions)) { prompt, output, submit ->
+                    pythonOutput=output;pythonInputPrompt=prompt;pythonInputSubmit=submit
+                }
                 pythonOutput=response.optString("output","")
                 pythonError=if(response.optBoolean("ok"))"" else response.optString("error","Python execution failed")
                 pythonHasRun=true
-            } finally {pythonBusy=false}
+            } finally {pythonBusy=false;pythonInputPrompt=null;pythonInputSubmit=null}
         }
     }
-    fun stopPython() {pythonJob?.cancel();engine.cancel();pythonBusy=false;pythonHasRun=true;pythonError="Execution stopped"}
+    fun submitPythonInput(value:String) {pythonInputSubmit?.invoke(value);pythonInputSubmit=null;pythonInputPrompt=null}
+    fun stopPython() {pythonJob?.cancel();engine.cancel();pythonBusy=false;pythonInputPrompt=null;pythonInputSubmit=null;pythonHasRun=true;pythonError="Execution stopped"}
     fun updateGraphSource(source:String) {
         graphSource=source
         graphData=null;graphAnalysis=null;trace=null;shadedInterval=null

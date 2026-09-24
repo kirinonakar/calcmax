@@ -61,6 +61,21 @@ class CalculatorInstrumentedTest {
             assertEquals("import math\nprint(math.sqrt(81))",model().pythonSource)
         }
     }
+    @Test fun pythonWorkspaceAcceptsInputThroughService() {
+        compose.runOnIdle {
+            model().mode="Python"
+            model().newPythonFile()
+            model().editPython("a=float(input(\"a=\"))\nprint(a*2)")
+            model().runPython()
+        }
+        compose.waitUntil(30000) {model().pythonInputPrompt == "a=" || model().pythonError.isNotBlank()}
+        compose.runOnIdle {assertEquals("",model().pythonError);model().submitPythonInput("2.5")}
+        compose.waitUntil(30000) {model().pythonHasRun || model().pythonError.isNotBlank()}
+        compose.runOnIdle {
+            assertEquals("",model().pythonError)
+            assertEquals("a=2.5\n5.0\n",model().pythonOutput)
+        }
+    }
     @Test fun pythonCatalogInsertsIntoCodeAtCursor() {
         compose.runOnIdle {model().mode="Python";model().newPythonFile();model().editPython("print()",6,6)}
         compose.onNodeWithText("Catalog").performClick()

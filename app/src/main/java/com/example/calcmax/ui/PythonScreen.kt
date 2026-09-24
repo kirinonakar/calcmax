@@ -30,6 +30,7 @@ import com.example.calcmax.ui.theme.LocalInstrument
     var importsOpen by remember {mutableStateOf(false)}
     var templatesOpen by remember {mutableStateOf(false)}
     var confirm by remember {mutableStateOf("")}
+    var inputText by remember {mutableStateOf("")}
     DisposableEffect(context) {
         val window=(context as? Activity)?.window
         window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
@@ -116,6 +117,12 @@ import com.example.calcmax.ui.theme.LocalInstrument
                 if(m.pythonError.isNotBlank()) {if(isNotEmpty())append('\n');append(m.pythonError)}
                 if(isEmpty()&&!m.pythonBusy)append(if(m.pythonHasRun)"Finished (no output)." else "Run a script to see its output here.")
             },fontFamily=FontFamily.Monospace,fontSize=12.sp,color=if(m.pythonError.isNotBlank())c.danger else c.ink)
+        }
+        m.pythonInputPrompt?.let { prompt ->
+            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(inputText,{inputText=it},Modifier.weight(1f),label={Text(prompt.ifEmpty { "Input" })},singleLine=true)
+                Button(onClick={m.submitPythonInput(inputText);inputText=""}) {Text("Enter")}
+            }
         }
     }
     if(confirm.isNotBlank())AlertDialog(onDismissRequest={confirm=""},title={Text("Unsaved changes")},text={Text("Discard changes to ${m.pythonFileName}?")},confirmButton={TextButton(onClick={val action=confirm;confirm="";if(action=="new"){m.newPythonFile();editor=TextFieldValue("")}else open.launch(arrayOf("*/*"))}){Text("Discard")}},dismissButton={TextButton(onClick={confirm=""}){Text("Cancel")}})

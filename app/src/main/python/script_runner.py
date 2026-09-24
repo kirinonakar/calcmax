@@ -1,5 +1,6 @@
 """Execute a user-authored script in the app's separate Python service process."""
 import contextlib
+import builtins
 import json
 import traceback
 import calcmax_catalog
@@ -17,12 +18,21 @@ class LimitedOutput:
     def getvalue(self): return self.value
 
 
-def run(payload):
+def run(payload, input_bridge=None):
     request = json.loads(payload)
     source = request.get("source", "")
     filename = request.get("filename", "script.py")
     output = LimitedOutput()
     namespace = {"__name__": "__main__", "__file__": filename}
+    script_builtins = vars(builtins).copy()
+    def script_input(prompt=""):
+        if input_bridge is None:
+            raise EOFError("No input is available")
+        value = input_bridge.request(str(prompt), output.getvalue())
+        output.write(str(prompt) + value + "\n")
+        return value
+    script_builtins["input"] = script_input
+    namespace["__builtins__"] = script_builtins
     calcmax_catalog.set_context(request.get("functions"),request.get("variables"),request.get("assumptions"))
     try:
         with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
