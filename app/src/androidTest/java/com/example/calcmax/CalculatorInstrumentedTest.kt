@@ -399,7 +399,7 @@ class CalculatorInstrumentedTest {
         assertEquals("4",JSONObject(damaged.result).getJSONObject("tree").getString("value"))
         val entries=(0 until 25).map { index ->
             when(index) {
-                14->TapeEntry("damaged", "{invalid", "{invalid")
+                14->TapeEntry("damaged", "{invalid", "{invalid", "{invalid")
                 15->TapeEntry("nested", """{"kind":"list","args":["invalid",{"kind":"number","value":"2"}]}""", """{"exact":"2","tree":{"kind":"number","value":"2"}}""")
                 else->HistoryEntry(index.toLong(),"$index+1",(index+1).toString(),(index+1).toString(),"Scientific").toTapeEntry()
             }
@@ -416,8 +416,10 @@ class CalculatorInstrumentedTest {
         repeat(3) {tape.performTouchInput {swipeDown()}}
         compose.onNodeWithContentDescription("Restore full keypad").performClick()
         tape.performScrollToIndex(11)
+        compose.onNodeWithContentDescription("Reuse calculation: damaged").performClick()
+        for(index in listOf(1,20,4,15,1))tape.performScrollToIndex(index)
         tape.assertExists()
-        compose.runOnIdle {assertEquals(25,model().tape.size)}
+        compose.runOnIdle {assertEquals(25,model().tape.size);assertEquals("damaged",model().editor.source)}
     }
     @Test fun matrixAndStatisticsResultsScrollInCalculationTape() = runBlocking {
         val largeMatrix=List(32) {row->List(32) {column->if(row==column)"1" else "0"}.joinToString(",","[","]")}.joinToString(",","[","]")
@@ -468,8 +470,28 @@ class CalculatorInstrumentedTest {
         repeat(4){tape.performTouchInput {swipeDown()}}
         compose.onNodeWithContentDescription("Restore full keypad").performClick()
         for(index in 119 downTo 1 step 7)tape.performScrollToIndex(index)
+        tape.performScrollToIndex(119)
+        compose.onAllNodesWithContentDescription("Reuse calculation: $source").onFirst().performClick()
+        for(index in listOf(1,60,120,30,2))tape.performScrollToIndex(index)
+        repeat(3){tape.performTouchInput {swipeDown()}}
         tape.assertExists()
+        compose.runOnIdle {assertEquals(source,model().editor.source)}
         Unit
+    }
+    @Test fun longStatisticsHistoryCanBeReusedAndScrolledAgain() {
+        val source=(1..300).joinToString(",","stats([","])")
+        val input=JSONObject(Parser(source).parse().json())
+        val entries=List(20) {HistoryEntry(it.toLong(),"$it+1",(it+1).toString(),(it+1).toString(),"Scientific").toTapeEntry()}+
+            TapeEntry(source,input.toString(),"""{"exact":"summary"}""")
+        val setTape=CalculatorModel::class.java.getDeclaredMethod("setTape",List::class.java).apply {isAccessible=true}
+        compose.runOnIdle {model().mode="Scientific";model().clearHistory();model().clear();setTape.invoke(model(),entries)}
+        val tape=compose.onNodeWithContentDescription("Calculation history, swipe vertically")
+        tape.performScrollToIndex(1)
+        compose.onNodeWithContentDescription("Reuse calculation: ${source.take(120)}").performClick()
+        compose.onNodeWithContentDescription("Expression input").assertExists()
+        for(index in listOf(1,12,21,5,1))tape.performScrollToIndex(index)
+        repeat(3){tape.performTouchInput {swipeDown()}}
+        compose.runOnIdle {assertEquals(source,model().editor.source)}
     }
     @Test fun symbolicRenderingCalculusAndFractionExit() {
         compose.runOnIdle {model().mode="Scientific";model().clear();model().decimal=true;model().edit(Editor("integrate(x,x)"))}

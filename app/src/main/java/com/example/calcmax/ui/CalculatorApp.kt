@@ -109,7 +109,8 @@ val Modes=listOf("Scientific","CAS","Graph","Python","Equations","Matrix","Vecto
                     input==null||response==null||entry.source.length>800||entry.result.length>20_000||response.optString("exact").contains('\n')||
                         largeHistoryTree(input)||largeHistoryTree(response.optJSONObject("tree"))||largeHistoryTree(response.optJSONObject("decimalTree"))
                 }
-                Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).clickable {m.reuse(entry)}) {
+                Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).clickable {m.reuse(entry)}
+                    .semantics {contentDescription="Reuse calculation: ${entry.source.take(120)}"}) {
                     if(!compact&&input!=null)MathNode(input,m.inputFont*.84f)
                     else Text(entry.source.take(800),fontSize=(m.inputFont*.84f).sp,fontFamily=FontFamily.Monospace,color=c.ink,maxLines=4,overflow=TextOverflow.Ellipsis)
                 }
@@ -126,14 +127,14 @@ val Modes=listOf("Scientific","CAS","Graph","Python","Equations","Matrix","Vecto
     }
 }
 
-private fun largeHistoryTree(root:JSONObject?):Boolean {
+private fun largeHistoryTree(root:JSONObject?,compactStructured:Boolean=true):Boolean {
     if(root==null)return false
     val pending=ArrayDeque<JSONObject>()
     pending.add(root)
     var count=0
     while(pending.isNotEmpty()) {
         val node=pending.removeLast()
-        if(node.optString("kind") in setOf("matrix","rows")||++count>120)return true
+        if((compactStructured&&node.optString("kind") in setOf("matrix","rows"))||++count>120)return true
         val args=node.optJSONArray("args")
         for(index in 0 until (args?.length() ?: 0))args?.optJSONObject(index)?.let(pending::add)
     }
@@ -146,10 +147,14 @@ private fun largeHistoryTree(root:JSONObject?):Boolean {
     val context=LocalContext.current
     var typing by rememberSaveable {mutableStateOf(false)}
     LaunchedEffect(m.calcSession!=null){if(m.calcSession!=null)typing=false}
+    val inputTree=remember(m.editor,m.answerDisplay,typing) {
+        if(typing||m.editor.source.length>800)null else m.inputTree()
+    }
+    val compactInput=m.editor.source.length>800||largeHistoryTree(inputTree,compactStructured=false)
     val focus=remember {FocusRequester()}
     var caretVisible by remember{mutableStateOf(true)}
     LaunchedEffect(m.editor,m.committed){caretVisible=true;while(!m.committed){delay(500);caretVisible=!caretVisible}}
-    LaunchedEffect(typing,m.poweredOn){if(!typing&&m.poweredOn)focus.requestFocus()}
+    LaunchedEffect(typing,compactInput,m.poweredOn){if(!typing&&!compactInput&&m.poweredOn)focus.requestFocus()}
     val calculating=m.busy||m.previewBusy
     var showCalculationStatus by remember{mutableStateOf(false)}
     LaunchedEffect(calculating,m.inputVersion){
@@ -166,7 +171,7 @@ private fun largeHistoryTree(root:JSONObject?):Boolean {
             if(m.calcSession==null)TextButton(onClick={typing=!typing},modifier=Modifier.height(36.dp),contentPadding=PaddingValues(horizontal=8.dp)){Text(if(typing)"Math input" else "Keyboard",fontSize=11.sp)}
         }
         if(!m.poweredOn) Box(Modifier.fillMaxWidth().height(66.dp),contentAlignment=Alignment.Center){Text("OFF · press 2nd to resume",color=c.muted)}
-        else if(typing) BasicTextField(
+        else if(typing||compactInput) BasicTextField(
             value=TextFieldValue(m.editor.source,TextRange(m.editor.anchor.coerceIn(0,m.editor.source.length),m.editor.cursor.coerceIn(0,m.editor.source.length))),
             onValueChange={
                 if(m.committed&&it.text!=m.editor.source){
@@ -175,7 +180,9 @@ private fun largeHistoryTree(root:JSONObject?):Boolean {
                 }else m.edit(Editor(it.text,it.selection.end,it.selection.start))
             },
             modifier=Modifier.fillMaxWidth().heightIn(min=60.dp).onPreviewKeyEvent{if(it.type==KeyEventType.KeyDown&&it.key==Key.Enter){m.calculate();true}else false}.semantics{contentDescription="Expression input"},
-            textStyle=TextStyle(color=c.ink,fontSize=m.inputFont.sp,fontFamily=FontFamily.Monospace))
+            textStyle=TextStyle(color=c.ink,fontSize=m.inputFont.sp,fontFamily=FontFamily.Monospace),
+            maxLines=if(compactInput)4 else Int.MAX_VALUE,
+            readOnly=m.calcSession!=null)
         else Box(Modifier.fillMaxWidth().heightIn(min=60.dp).focusRequester(focus).onKeyEvent{event->
             if(event.type!=KeyEventType.KeyDown)false else if(m.calcSession!=null)when(event.key){
                 Key.Enter,Key.NumPadEnter->{m.submitCalcValue();true}
@@ -194,10 +201,9 @@ private fun largeHistoryTree(root:JSONObject?):Boolean {
             }
         }.focusable().horizontalScroll(rememberScrollState()).semantics{contentDescription="Current expression"},contentAlignment=Alignment.CenterStart){
             Row(verticalAlignment=Alignment.CenterVertically){
-                val tree=remember(m.editor,m.answerDisplay){m.inputTree()}
                 CompositionLocalProvider(LocalMathCursorTarget provides if(m.committed)null else m.editor.cursorTarget(),LocalMathAfter provides {a,b->m.edit(m.editor.after(a,b))},LocalCaretVisible provides caretVisible,LocalActiveToken provides m.editor.activeToken,LocalPlaceCursor provides {a,b,p->m.edit(m.editor.placeInToken(a,b,p))}) {
                     if(m.editor.source.isBlank())Text("│",fontSize=m.inputFont.sp,color=if(caretVisible)c.accent else androidx.compose.ui.graphics.Color.Transparent)
-                    else if(tree!=null)MathNode(tree,m.inputFont,select={a,b->m.edit(m.editor.selectRange(a,b))},selection=minOf(m.editor.anchor,m.editor.cursor)..maxOf(m.editor.anchor,m.editor.cursor))
+                    else if(inputTree!=null)MathNode(inputTree,m.inputFont,select={a,b->m.edit(m.editor.selectRange(a,b))},selection=minOf(m.editor.anchor,m.editor.cursor)..maxOf(m.editor.anchor,m.editor.cursor))
                     else Row {Lexer.scan(m.editor.source).filter{it.text.isNotEmpty()}.forEach{token->
                         MathNode(JSONObject(Expr("text",m.editor.source.substring(token.start,token.end),start=token.start,end=token.end).json()),m.inputFont,select={a,b->m.edit(m.editor.selectRange(a,b))},selection=minOf(m.editor.anchor,m.editor.cursor)..maxOf(m.editor.anchor,m.editor.cursor))
                     }}
@@ -225,8 +231,16 @@ private fun largeHistoryTree(root:JSONObject?):Boolean {
                     }}
                 )
             }
-            else if(m.result!=null&&m.poweredOn)Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),contentAlignment=Alignment.CenterEnd){ResultMath(m.result!!,m.decimal,m.outputFont,m.mixedNumbers,
-                displayMode=m.resultDisplayMode,thousandsSeparator=m.thousandsSeparator,engineeringConversion=m.engineeringConversion,engineeringShift=m.engineeringShift,dmsDisplay=m.dmsDisplay,dmsConversion=m.dmsConversion,precision=m.precision)} else Text(" ",fontSize=28.sp)
+            else if(m.result!=null&&m.poweredOn)Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),contentAlignment=Alignment.CenterEnd){
+                val currentResult=m.result!!
+                val compactResult=remember(currentResult,m.decimal) {
+                    currentResult.optString("exact").length>20_000||
+                        largeHistoryTree(currentResult.optJSONObject(if(m.decimal)"decimalTree" else "tree"),compactStructured=false)
+                }
+                if(compactResult)Text(currentResult.optString(if(m.decimal)"decimal" else "exact").take(1200),fontSize=m.outputFont.sp,color=c.ink,maxLines=8,overflow=TextOverflow.Ellipsis)
+                else ResultMath(currentResult,m.decimal,m.outputFont,m.mixedNumbers,
+                    displayMode=m.resultDisplayMode,thousandsSeparator=m.thousandsSeparator,engineeringConversion=m.engineeringConversion,engineeringShift=m.engineeringShift,dmsDisplay=m.dmsDisplay,dmsConversion=m.dmsConversion,precision=m.precision)
+            } else Text(" ",fontSize=28.sp)
         }
         val shownCalcValues=m.calcSession?.accepted ?: if(m.committed&&m.lastCalcSource==m.editor.source)m.lastCalcValues else emptyMap()
         if(shownCalcValues.isNotEmpty())Row(Modifier.fillMaxWidth().heightIn(min=24.dp).horizontalScroll(rememberScrollState()),verticalAlignment=Alignment.CenterVertically){

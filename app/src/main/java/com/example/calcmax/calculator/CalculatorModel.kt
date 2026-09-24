@@ -319,7 +319,15 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     fun cycleResultDisplayMode(){resultDisplayMode=when(resultDisplayMode){ResultDisplayMode.OFF->ResultDisplayMode.ENGINEERING;ResultDisplayMode.ENGINEERING->ResultDisplayMode.SCIENTIFIC;ResultDisplayMode.SCIENTIFIC->ResultDisplayMode.OFF};save()}
     fun clearMemory(){variables=JSONObject();functions=JSONObject();assumptions=JSONObject();lastAnswerResult=null;clear(recordUndo=false);save()}
     fun clearAllScreen(){cancel();tape=emptyList();variables=JSONObject();lastAnswerResult=null;poweredOn=true;prefs.edit().putLong("screenClearedAt",System.currentTimeMillis()).apply();clear(recordUndo=false);save()}
-    fun reuse(entry:TapeEntry) {nextEntry();inputAnswer=entry.answer.takeIf{it.isNotEmpty()}?.let(::JSONObject);answerDisplay=inputAnswer;edit(Editor(entry.source))}
+    fun reuse(entry:TapeEntry) {
+        val savedAnswer=entry.answer.takeIf(String::isNotBlank)?.let {raw->
+            runCatching {JSONObject(raw).takeIf {it.has("kind")}}.getOrNull()
+        }
+        nextEntry()
+        inputAnswer=savedAnswer
+        answerDisplay=savedAnswer
+        edit(Editor(entry.source))
+    }
     fun recalculatePreview() {inputVersion++;schedulePreview()}
     private fun multiArgumentUserFunctions():Set<String> = functions.keys().asSequence().filter {name->
         (functions.optJSONObject(name)?.optJSONArray("parameters")?.length() ?: 0)>1
