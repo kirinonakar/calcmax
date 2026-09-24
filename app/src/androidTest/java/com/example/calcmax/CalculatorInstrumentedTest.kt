@@ -33,6 +33,20 @@ class CalculatorInstrumentedTest {
         compose.onNodeWithContentDescription("Empty list; tap to enter values").performClick()
         compose.runOnIdle {model().insert("1,2,3");assertEquals("mean([1,2,3])",model().editor.source)}
     }
+    @Test fun divisionAndAdditionPlaceCaretWithoutAnEmptyBox() {
+        compose.runOnIdle {model().mode="Scientific";model().clear();model().edit(Editor("49"))}
+        compose.onNodeWithContentDescription("÷").performClick()
+        compose.runOnIdle {assertEquals("49÷",model().editor.source);assertEquals(3..3,model().editor.cursorTarget())}
+        compose.onNodeWithContentDescription("Empty expression slot").assertDoesNotExist()
+        compose.onNodeWithText("│",useUnmergedTree=true).assertExists()
+        compose.onNodeWithContentDescription("2").performClick()
+        compose.runOnIdle {assertEquals("49÷2",model().editor.source);assertEquals(3..4,model().editor.cursorTarget())}
+        compose.runOnIdle {model().clear();model().edit(Editor("49"))}
+        compose.onNodeWithContentDescription("+").performClick()
+        compose.runOnIdle {assertEquals("49+",model().editor.source);assertEquals(3..3,model().editor.cursorTarget())}
+        compose.onNodeWithContentDescription("Empty expression slot").assertDoesNotExist()
+        compose.onNodeWithText("│",useUnmergedTree=true).assertExists()
+    }
     @Test fun pythonWorkspaceRunsSavedSourceThroughService() {
         compose.runOnIdle {
             model().mode="Python"

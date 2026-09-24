@@ -116,10 +116,17 @@ val Modes=listOf("Scientific","CAS","Graph","Python","Equations","Matrix","Vecto
     var caretVisible by remember{mutableStateOf(true)}
     LaunchedEffect(m.editor,m.committed){caretVisible=true;while(!m.committed){delay(500);caretVisible=!caretVisible}}
     LaunchedEffect(typing,m.poweredOn){if(!typing&&m.poweredOn)focus.requestFocus()}
+    val calculating=m.busy||m.previewBusy
+    var showCalculationStatus by remember{mutableStateOf(false)}
+    LaunchedEffect(calculating,m.inputVersion){
+        showCalculationStatus=false
+        if(calculating){delay(1000);showCalculationStatus=true}
+    }
     Column(Modifier.fillMaxWidth().background(c.display).padding(horizontal=14.dp,vertical=4.dp)) {
         Row(Modifier.fillMaxWidth().height(36.dp),verticalAlignment=Alignment.CenterVertically) {
             Text(if(m.committed)"=" else "MATH",fontSize=10.sp,color=c.muted,letterSpacing=1.sp)
             Spacer(Modifier.weight(1f))
+            TextButton(onClick={m.result?.let{clipboard.setText(AnnotatedString(it.optString(if(m.decimal)"decimal" else "exact")))}},modifier=Modifier.height(36.dp),contentPadding=PaddingValues(horizontal=8.dp)){Text("Copy",fontSize=11.sp)}
             TextButton(onClick={clipboard.getText()?.text?.let{m.insert(it)}},modifier=Modifier.height(36.dp),contentPadding=PaddingValues(horizontal=8.dp)){Text("Paste",fontSize=11.sp)}
             TextButton(onClick={typing=!typing},modifier=Modifier.height(36.dp),contentPadding=PaddingValues(horizontal=8.dp)){Text(if(typing)"Math input" else "Keyboard",fontSize=11.sp)}
         }
@@ -153,7 +160,7 @@ val Modes=listOf("Scientific","CAS","Graph","Python","Equations","Matrix","Vecto
                         MathNode(JSONObject(Expr("text",m.editor.source.substring(token.start,token.end),start=token.start,end=token.end).json()),m.inputFont,select={a,b->m.edit(m.editor.selectRange(a,b))},selection=minOf(m.editor.anchor,m.editor.cursor)..maxOf(m.editor.anchor,m.editor.cursor))
                     }}
                 }
-                Box(Modifier.width(32.dp).heightIn(min=48.dp).clickable{m.edit(Editor(m.editor.source))}.semantics{contentDescription="After expression"},contentAlignment=Alignment.CenterStart){
+                Box(Modifier.width(32.dp).heightIn(min=48.dp).clickable{val editor=m.editor;m.edit(editor.tree()?.let{editor.after(it.start,it.end)} ?: Editor(editor.source))}.semantics{contentDescription="After expression"},contentAlignment=Alignment.CenterStart){
                 }
             }
         }
@@ -163,14 +170,13 @@ val Modes=listOf("Scientific","CAS","Graph","Python","Equations","Matrix","Vecto
                 displayMode=m.resultDisplayMode,thousandsSeparator=m.thousandsSeparator,engineeringConversion=m.engineeringConversion,engineeringShift=m.engineeringShift,dmsDisplay=m.dmsDisplay,dmsConversion=m.dmsConversion,precision=m.precision) else Text(" ",fontSize=28.sp)
         }
         Row(Modifier.fillMaxWidth().height(24.dp),verticalAlignment=Alignment.CenterVertically){
-            Text(when{m.engineeringConversion->"ENG mode · ←/→ shifts mantissa";m.error.isNotBlank()->m.error;m.busy->"Computing…";m.previewBusy->"Calculating…";domainText(m.result).isNotBlank()->domainText(m.result);m.committed->"Next input starts a new calculation";else->m.result?.optString("note") ?: ""},Modifier.weight(1f),fontSize=10.sp,maxLines=1,color=if(m.error.isNotBlank())c.danger else if(m.engineeringConversion)c.accent else c.muted)
-            if(m.busy||m.previewBusy)Text("Cancel",Modifier.clickable{m.cancel()}.padding(start=8.dp),fontSize=10.sp,color=c.accent)
+            Text(when{m.engineeringConversion->"ENG mode · ←/→ shifts mantissa";m.error.isNotBlank()->m.error;calculating&&showCalculationStatus->if(m.busy)"Computing…" else "Calculating…";domainText(m.result).isNotBlank()->domainText(m.result);m.committed->"Next input starts a new calculation";else->m.result?.optString("note") ?: ""},Modifier.weight(1f),fontSize=10.sp,maxLines=1,color=if(m.error.isNotBlank())c.danger else if(m.engineeringConversion)c.accent else c.muted)
+            if(calculating&&showCalculationStatus)Text("Cancel",Modifier.clickable{m.cancel()}.padding(start=8.dp),fontSize=10.sp,color=c.accent)
         }
         Row(Modifier.fillMaxWidth().height(36.dp).horizontalScroll(rememberScrollState()),verticalAlignment=Alignment.CenterVertically){
             SmallAction(if(m.decimal)"≈ Decimal" else "Exact"){m.decimal=!m.decimal}
             SmallAction(if(m.resultDisplayMode==ResultDisplayMode.SCIENTIFIC)"SCI" else "ENG",active=m.resultDisplayMode!=ResultDisplayMode.OFF,description="Result notation"){m.cycleResultDisplayMode()}
             SmallAction(",",active=m.thousandsSeparator,description="Thousands separators"){m.thousandsSeparator=!m.thousandsSeparator;m.save()}
-            SmallAction("Copy"){m.result?.let{clipboard.setText(AnnotatedString(it.optString(if(m.decimal)"decimal" else "exact")))}}
             SmallAction("∫"){m.insert("integrate(,x)",10)}
             SmallAction("∫ₐᵇ"){m.insert("integrate(,x,,)",10)}
             SmallAction("d/dx"){m.insert("diff(,x)",5)}

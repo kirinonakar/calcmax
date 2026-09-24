@@ -54,4 +54,25 @@ class StructuredEditorTest {
         assertEquals(0..7,editor.cursorTarget())
         assertEquals("(1)/(3)+2+6",editor.insert("+2").source)
     }
+    @Test fun trailingOperatorHolesOwnTheCaret() {
+        val addition=Editor("49").insert("+")
+        assertEquals(3..3,addition.cursorTarget())
+        assertEquals("49+2",addition.insert("2").source)
+
+        val division=Editor("49").insert("÷")
+        assertEquals("/",division.tree()?.value)
+        assertEquals(3..3,division.cursorTarget())
+        val denominator=division.insert("2")
+        assertEquals("49÷2",denominator.source)
+        assertEquals(3..4,denominator.cursorTarget())
+        assertEquals(3..5,denominator.insert("3").cursorTarget())
+        val afterFraction=denominator.move(1)
+        assertEquals(0..4,afterFraction.cursorTarget())
+        assertEquals(3..4,afterFraction.move(-1).cursorTarget())
+        assertEquals(0..4,denominator.after(0,4).cursorTarget())
+
+        val fraction=Editor("49").selectRange(0,2).insert("(49)/()",6)
+        assertEquals(6..6,fraction.cursorTarget())
+        assertEquals("(49)/(2)",fraction.insert("2").source)
+    }
 }

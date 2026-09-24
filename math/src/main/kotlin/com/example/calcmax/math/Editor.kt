@@ -30,6 +30,15 @@ data class Editor(val source: String = "", val cursor: Int = source.length, val 
             val power=barePower(exponent.first,exponent.last)
             return Editor(source,cursor,outside=power?.let{it.start..it.end})
         }
+        if(cursor==source.length&&outside!=null&&delta>0)return this
+        if(cursor==source.length&&exponent==null) {
+            val fraction=tree()?.let(::fractionEndingAtCursor)?.first
+            if(fraction!=null) {
+                val range=fraction.start..fraction.end
+                if(delta>0&&outside==null)return Editor(source,cursor,outside=range)
+                if(delta<0&&outside==range)return Editor(source,cursor)
+            }
+        }
         if(delta<0&&exponent==null) {
             val power=tree()?.nodes()?.filter{it.kind=="binary"&&it.value=="^"&&it.end==cursor&&it.args[1].kind!="group"}?.minByOrNull{it.end-it.start}
             if(power!=null)return Editor(source,cursor,exponent=power.args[1].let{it.start..it.end})
@@ -44,6 +53,12 @@ data class Editor(val source: String = "", val cursor: Int = source.length, val 
     private fun barePower(start:Int,end:Int):Expr?=tree()?.nodes()?.filter{
         it.kind=="binary"&&it.value=="^"&&it.args[1].kind!="group"&&start>=it.args[1].start&&end<=it.args[1].end
     }?.minByOrNull{it.args[1].end-it.args[1].start}
+    private fun fractionEndingAtCursor(root:Expr):Pair<Expr,Expr>?=root.nodes().filter{
+        it.kind=="binary"&&it.value=="/"&&it.end==cursor
+    }.mapNotNull{fraction->
+        fraction.args[1].nodes().filter{it.args.isEmpty()&&it.end==cursor&&it.start<it.end}
+            .minByOrNull{it.end-it.start}?.let{fraction to it}
+    }.minByOrNull{it.first.end-it.first.start}
     fun selectRange(start:Int,end:Int):Editor=copy(cursor=end,anchor=start,exponent=barePower(start,end)?.args?.get(1)?.let{it.start..it.end},outside=null,activeToken=null)
     fun placeInToken(start:Int,end:Int,position:Int)=Editor(source,position.coerceIn(start,end),exponent=barePower(start,end)?.args?.get(1)?.let{it.start..it.end},activeToken=start..end)
     fun select(node: Expr) = selectRange(node.start,node.end)
@@ -54,7 +69,11 @@ data class Editor(val source: String = "", val cursor: Int = source.length, val 
         outside?.let{return it}
         activeToken?.let {if(cursor in it)return it}
         val root=tree() ?: return runCatching{Lexer.scan(source).filter{it.text.isNotEmpty()&&cursor in it.start..it.end}.minByOrNull{if(it.end==cursor)0 else 1}?.let{it.start..it.end}}.getOrNull()
-        if(cursor==source.length&&exponent==null)return root.start..root.end
+        if(cursor==source.length&&exponent==null) {
+            root.nodes().firstOrNull{it.kind=="hole"&&it.start==cursor&&it.end==cursor}?.let{return it.start..it.end}
+            fractionEndingAtCursor(root)?.second?.let{return it.start..it.end}
+            return root.start..root.end
+        }
         val leaves=root.nodes().filter{it.args.isEmpty()&&cursor in it.start..it.end}
         val leaf=leaves.sortedWith(compareBy<Expr>{if(it.kind=="hole")0 else if(it.end==cursor)1 else 2}.thenBy{it.end-it.start}).firstOrNull()
         if(leaf!=null)return leaf.start..leaf.end
