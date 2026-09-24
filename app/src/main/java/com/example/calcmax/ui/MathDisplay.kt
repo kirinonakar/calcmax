@@ -127,7 +127,7 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
     }
     @Composable fun label(text:String,scale:Float=1f){MathText(text,size*scale)}
     @Composable fun wrapped(i:Int,scale:Float=1f){MathRow{label("(",scale);child(i,scale);label(")",scale)}}
-    val fraction=kind=="fraction"||kind=="binary"&&value=="/"
+    val fraction=kind=="fraction"||kind=="binary"&&value=="/"&&node.optString("displayOperator")!="÷"
     val power=kind=="power"||kind=="binary"&&value=="^"
     Box(touch) {MathRow {
         if(caret&&!atomic&&cursor<=start)MathText("│",size,blink=true)
@@ -218,7 +218,7 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
                     if(negative){label(if(i==0)"−" else " − ");MathNode(n.getJSONArray("args").getJSONObject(0),size,select,selection,depth+1)}
                     else {
                         val adjacentCoefficient=kind=="product"&&i>0&&children[i-1].optString("kind")=="number"&&n.optString("kind")=="symbol"
-                        if(i>0&&!coefficient&&!adjacentCoefficient)label(when(kind){"sum"->" + ";"product"->" · ";"binary","relation"->when(value){"*"->" × ";"-"->" − ";"!="->" ≠ ";"<="->" ≤ ";">="->" ≥ ";else->" $value "};else->", "})
+                        if(i>0&&!coefficient&&!adjacentCoefficient)label(when(kind){"sum"->" + ";"product"->" · ";"binary","relation"->when(value){"*"->" × ";"/"->" ÷ ";"-"->" − ";"!="->" ≠ ";"<="->" ≤ ";">="->" ≥ ";else->" $value "};else->", "})
                         if(kind=="product"&&n.optString("kind")=="sum")wrapped(i)else child(i)
                     }
                 }

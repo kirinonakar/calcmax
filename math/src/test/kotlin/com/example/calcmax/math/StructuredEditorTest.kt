@@ -64,6 +64,8 @@ class StructuredEditorTest {
         assertEquals(3..3,division.cursorTarget())
         val denominator=division.insert("2")
         assertEquals("49÷2",denominator.source)
+        assertEquals("÷",denominator.tree()?.displayOperator)
+        assertTrue(denominator.tree()!!.json().contains("\"displayOperator\":\"÷\""))
         assertEquals(3..4,denominator.cursorTarget())
         assertEquals(3..5,denominator.insert("3").cursorTarget())
         val afterFraction=denominator.move(1)
@@ -74,5 +76,6 @@ class StructuredEditorTest {
         val fraction=Editor("49").selectRange(0,2).insert("(49)/()",6)
         assertEquals(6..6,fraction.cursorTarget())
         assertEquals("(49)/(2)",fraction.insert("2").source)
+        assertEquals("",fraction.insert("2").tree()?.displayOperator)
     }
 }

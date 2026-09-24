@@ -1,8 +1,9 @@
 package com.example.calcmax.math
 
 /** Immutable, source-addressable tree shared by every calculator mode. */
-data class Expr(val kind: String, val value: String = "", val args: List<Expr> = emptyList(), val start: Int = 0, val end: Int = 0) {
-    fun json(): String = "{\"kind\":${quote(value = kind)},\"value\":${quote(value)},\"args\":[${args.joinToString(",") { it.json() }}],\"start\":$start,\"end\":$end}"
+data class Expr(val kind: String, val value: String = "", val args: List<Expr> = emptyList(), val start: Int = 0, val end: Int = 0, val displayOperator: String = "") {
+    fun json(): String = "{\"kind\":${quote(value = kind)},\"value\":${quote(value)},\"args\":[${args.joinToString(",") { it.json() }}],\"start\":$start,\"end\":$end" +
+        (if(displayOperator.isEmpty()) "" else ",\"displayOperator\":${quote(displayOperator)}") + "}"
     fun nodes(): List<Expr> = listOf(this) + args.flatMap { it.nodes() }
 }
 
@@ -159,9 +160,10 @@ class Parser(private val source: String, private val allowHoles: Boolean = false
             val actual = if(implicit) "*" else op
             val binding = when(actual) { ":=" -> 1; "=", "==", "<", ">", "<=", ">=", "!=", "->" -> 5; "+", "-" -> 10; "*", "/", "mod", "∠" -> 20; "^" -> 30; else -> -1 }
             if(binding < min) break
-            if(!implicit) take()
+            val operatorToken=if(implicit) null else take()
             val right = expression(if(actual in listOf("^", ":=")) binding else binding+1)
-            left = Expr(if(binding == 5) "relation" else "binary", actual, listOf(left,right), left.start,right.end)
+            left = Expr(if(binding == 5) "relation" else "binary", actual, listOf(left,right), left.start,right.end,
+                if(actual=="/" && operatorToken!=null && source[operatorToken.start]=='÷')"÷" else "")
         }
         depth--
         return left

@@ -41,6 +41,8 @@ class CalculatorInstrumentedTest {
         compose.onNodeWithText("│",useUnmergedTree=true).assertExists()
         compose.onNodeWithContentDescription("2").performClick()
         compose.runOnIdle {assertEquals("49÷2",model().editor.source);assertEquals(3..4,model().editor.cursorTarget())}
+        compose.onNode(hasText(" ÷ ") and hasAnyAncestor(hasContentDescription("Current expression")),useUnmergedTree=true).assertExists()
+        compose.onNodeWithContentDescription("After fraction").assertDoesNotExist()
         compose.runOnIdle {model().clear();model().edit(Editor("49"))}
         compose.onNodeWithContentDescription("+").performClick()
         compose.runOnIdle {assertEquals("49+",model().editor.source);assertEquals(3..3,model().editor.cursorTarget())}
