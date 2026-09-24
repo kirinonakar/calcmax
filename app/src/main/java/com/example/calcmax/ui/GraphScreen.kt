@@ -27,21 +27,37 @@ import kotlin.math.*
     val c=LocalInstrument.current
     var rangeDialog by remember { mutableStateOf(false) }
     var analysis by remember { mutableStateOf(false) }
+    var showTable by rememberSaveable { mutableStateOf(false) }
+    var surfaceRotation by rememberSaveable { mutableFloatStateOf(35f) }
     var first by rememberSaveable { mutableStateOf(m.xMin.toString()) }; var second by rememberSaveable { mutableStateOf(m.xMax.toString()) }
     var selected by rememberSaveable { mutableIntStateOf(0) }
     var other by rememberSaveable { mutableIntStateOf(1) }
-    LaunchedEffect(m.graphSource,m.xMin,m.xMax,m.graphKind,m.parameterMin,m.parameterMax) { delay(350);m.plot() }
+    LaunchedEffect(m.graphKind){selected=0;other=1}
+    LaunchedEffect(m.graphSource,m.xMin,m.xMax,m.yMin,m.yMax,m.graphKind,m.parameterMin,m.parameterMax,m.sequenceInitials,m.differentialInitials,m.differentialT0) { delay(350);m.plot() }
     Column(Modifier.fillMaxSize()) {
-        OutlinedTextField(m.graphSource,{m.updateGraphSource(it)},Modifier.fillMaxWidth().padding(start=10.dp,end=10.dp,top=8.dp),label={Text(if(m.graphKind=="parametric") "One [x(t),y(t)] pair per line" else if(m.graphKind=="polar") "r(t) · radians · one curve per line" else "f(x) · one function per line · up to six")},minLines=2,maxLines=4)
+        OutlinedTextField(m.graphSource,{m.updateGraphSource(it)},Modifier.fillMaxWidth().padding(start=10.dp,end=10.dp,top=8.dp),label={Text(when(m.graphKind){"parametric"->"One [x(t),y(t)] pair per line";"polar"->"r(t) · radians · one curve per line";"sequence"->"u(n) · use u(n−1) for recurrences";"surface"->"z = f(x,y)";"differential"->"dy/dt = f(t,y)";else->"f(x) · one function per line · up to six"})},minLines=if(m.graphKind in listOf("surface","differential"))1 else 2,maxLines=4)
         Column {
-            Choices(listOf("cartesian","parametric","polar"),m.graphKind,{m.changeGraphKind(it)})
-            Row(Modifier.horizontalScroll(rememberScrollState())) { SmallAction("Plot") {m.plot()};SmallAction("Range") {rangeDialog=true};SmallAction("Analyze",active=if(analysis)true else null,shaded=analysis) {analysis=!analysis};SmallAction(if(m.radianAxis)"x: π rad" else "x: decimal"){m.radianAxis=!m.radianAxis;m.save()} }
+            Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+                listOf("cartesian" to "Cartesian","parametric" to "Parametric","polar" to "Polar","sequence" to "Sequence","surface" to "3D surface","differential" to "Diff eq").forEach {(kind,label)->
+                    FilterChip(m.graphKind==kind,{m.changeGraphKind(kind)},label={Text(label,fontSize=12.sp)})
+                }
+            }
+            if(m.graphKind=="sequence") Field(m.sequenceInitials,"Initial values at n=0 · comma separated",Modifier.fillMaxWidth()) {m.sequenceInitials=it;m.save()}
+            if(m.graphKind=="differential") {
+                Row(horizontalArrangement=Arrangement.spacedBy(6.dp)) {Field(m.differentialT0,"Initial time t₀",Modifier.weight(1f)){m.differentialT0=it;m.save()};Field(m.differentialInitials,"Initial y values · comma separated",Modifier.weight(2f)){m.differentialInitials=it;m.save()} }
+            }
+            Row(Modifier.horizontalScroll(rememberScrollState())) {
+                SmallAction("Plot") {m.plot()};SmallAction("Range") {rangeDialog=true}
+                if(m.graphKind=="cartesian")SmallAction("Analyze",active=if(analysis)true else null,shaded=analysis) {analysis=!analysis}
+                if(m.graphKind!="surface")SmallAction("Table",active=if(showTable)true else null,shaded=showTable) {showTable=!showTable}
+                if(m.graphKind in listOf("cartesian","parametric","polar"))SmallAction(if(m.radianAxis)"x: π rad" else "x: decimal"){m.radianAxis=!m.radianAxis;m.save()}
+            }
         }
         val curves=remember(m.graphData) {
             val array=m.graphData?.optJSONArray("curves")
             (0 until (array?.length() ?: 0)).map { ci->val curve=array!!.getJSONArray(ci); (0 until curve.length()).map { k->curve.optJSONArray(k)?.let { it.getDouble(0) to it.getDouble(1) } } }
         }
-        val sources=m.graphSource.lines().filter {it.isNotBlank()}.take(6)
+        val sources=m.graphSource.lines().filter {it.isNotBlank()}.take(if(m.graphKind in listOf("surface","differential"))1 else 6)
         val markers=remember(m.graphAnalysis) {
             val array=m.graphAnalysis?.optJSONArray("points")
             (0 until (array?.length() ?: 0)).mapNotNull {i->array?.optJSONArray(i)?.let {it.getDouble(0) to it.getDouble(1)}}
@@ -78,7 +94,12 @@ import kotlin.math.*
                 }
             }while(event.changes.any{it.pressed})
         }}
-        Canvas(Modifier.fillMaxWidth().weight(1f).heightIn(min=180.dp).background(c.display).then(transform).pointerInput(curves,selected) { detectTapGestures { p ->
+        if(m.graphKind=="surface") {
+            SurfaceGraph(m,surfaceRotation,Modifier.fillMaxWidth().weight(1f).heightIn(min=180.dp))
+            Row(Modifier.fillMaxWidth().padding(horizontal=14.dp),verticalAlignment=Alignment.CenterVertically) {
+                Text("Rotate",fontSize=11.sp,color=c.muted);Slider(surfaceRotation,{surfaceRotation=it},Modifier.weight(1f),valueRange=0f..360f);Text("${surfaceRotation.toInt()}°",fontSize=11.sp,color=c.muted);SmallAction("Reset"){m.xMin=-3.0;m.xMax=3.0;m.yMin=-3.0;m.yMax=3.0;m.save();m.plot()}
+            }
+        } else Canvas(Modifier.fillMaxWidth().weight(1f).heightIn(min=180.dp).background(c.display).then(transform).pointerInput(curves,selected) { detectTapGestures { p ->
             val target=m.xMin+(m.xMax-m.xMin)*p.x/size.width
             val targetY=m.yMax-(m.yMax-m.yMin)*p.y/size.height
             m.trace=curves.getOrNull(selected)?.filterNotNull()?.minByOrNull { ((it.first-target)/(m.xMax-m.xMin)).pow(2)+((it.second-targetY)/(m.yMax-m.yMin)).pow(2) }
@@ -105,6 +126,17 @@ import kotlin.math.*
                         previous=current
                     }
                 }
+                if(m.graphKind=="differential") {
+                    val fieldData=m.graphData?.optJSONArray("fields")
+                    val dx=(xhi-xlo)/70.0
+                    for(index in 0 until (fieldData?.length() ?: 0)) {
+                        val field=fieldData?.optJSONArray(index) ?: continue
+                        val x=field.optDouble(0);val y=field.optDouble(1);val slope=field.optDouble(2)
+                        if(!x.isFinite()||!y.isFinite()||!slope.isFinite())continue
+                        val dy=(slope*dx).coerceIn(-(m.yMax-m.yMin)/14,(m.yMax-m.yMin)/14)
+                        drawLine(c.muted.copy(alpha=.55f),Offset(px(x-dx/2),py(y-dy/2)),Offset(px(x+dx/2),py(y+dy/2)),1.dp.toPx())
+                    }
+                }
                 markers.forEachIndexed {index,point ->
                     val at=Offset(px(point.first),py(point.second))
                     if(at.x in 0f..size.width && at.y in 0f..size.height) {
@@ -116,15 +148,26 @@ import kotlin.math.*
                 m.trace?.let { p -> val at=Offset(px(p.first),py(p.second));drawLine(c.muted,Offset(at.x,0f),Offset(at.x,size.height),1f);drawCircle(c.accent,6f,at) }
             }
         }
-        Row(Modifier.horizontalScroll(rememberScrollState()),verticalAlignment=Alignment.CenterVertically) {
-            curves.forEachIndexed { i,_->SmallAction("${if(i==selected)"●" else "○"} f${i+1}: ${sources.getOrElse(i){""}.take(18)}") {selected=i;if(other==selected)other=(i+1)%curves.size} }
+        if(m.graphKind!="surface" && curves.isNotEmpty())Row(Modifier.horizontalScroll(rememberScrollState()),verticalAlignment=Alignment.CenterVertically) {
+            curves.forEachIndexed { i,_->
+                val prefix=when(m.graphKind){"sequence"->"u";"differential"->"y";else->"f"}
+                SmallAction("${if(i==selected)"●" else "○"} $prefix${i+1}: ${sources.getOrElse(i){""}.take(14)}") {selected=i;if(other==selected)other=(i+1)%curves.size}
+            }
             SmallAction("−") { val cx=(m.xMin+m.xMax)/2;val cy=(m.yMin+m.yMax)/2;val halfX=(m.xMax-m.xMin);val halfY=(m.yMax-m.yMin);m.xMin=cx-halfX;m.xMax=cx+halfX;m.yMin=cy-halfY;m.yMax=cy+halfY }
             SmallAction("+") { val cx=(m.xMin+m.xMax)/2;val cy=(m.yMin+m.yMax)/2;val halfX=(m.xMax-m.xMin)/4;val halfY=(m.yMax-m.yMin)/4;m.xMin=cx-halfX;m.xMax=cx+halfX;m.yMin=cy-halfY;m.yMax=cy+halfY }
             SmallAction("Fit Y") {val ys=curves.flatMap {it.filterNotNull()}.filter {it.first in m.xMin..m.xMax && it.second.isFinite()}.map {it.second};if(ys.isNotEmpty()){val lo=ys.min();val hi=ys.max();val pad=max((hi-lo)*.12,if(hi==lo)1.0 else 1e-6);m.yMin=lo-pad;m.yMax=hi+pad;m.save()} }
-            SmallAction("Reset") {m.xMin=-10.0;m.xMax=10.0;m.yMin=-5.0;m.yMax=5.0;m.trace=null}
+            SmallAction("Reset") {
+                when(m.graphKind) {
+                    "sequence"->{m.xMin=0.0;m.xMax=20.0;m.yMin=-2.0;m.yMax=20.0;m.parameterMin=0.0;m.parameterMax=20.0}
+                    "differential"->{m.xMin=-5.0;m.xMax=5.0;m.yMin=-3.0;m.yMax=5.0;m.parameterMin=-5.0;m.parameterMax=5.0}
+                    else->{m.xMin=-10.0;m.xMax=10.0;m.yMin=-5.0;m.yMax=5.0}
+                }
+                m.trace=null;m.save()
+            }
         }
-        Text(if(m.graphBusy) "Sampling locally…" else m.trace?.let { "Trace ≈ x: %.7g   y: %.7g".format(it.first,it.second) } ?: "RADIANS · tap to trace · drag to pan · pinch to zoom",Modifier.padding(horizontal=14.dp,vertical=5.dp),fontSize=11.sp,color=c.muted)
-        if(analysis) Column(Modifier.heightIn(max=290.dp).verticalScroll(rememberScrollState()).padding(horizontal=10.dp)) {
+        if(m.graphKind!="surface")Text(if(m.graphBusy) "Sampling locally…" else m.trace?.let { "Trace ≈ x: %.7g   y: %.7g".format(it.first,it.second) } ?: if(m.graphKind=="differential")"Direction field · tap a solution to trace · drag/pinch to explore" else "Tap to trace · drag to pan · pinch to zoom",Modifier.padding(horizontal=14.dp,vertical=5.dp),fontSize=11.sp,color=c.muted)
+        if(showTable && m.graphKind!="surface") GraphValueTable(curves,selected,{m.trace=it},m.graphKind)
+        if(analysis && m.graphKind=="cartesian") Column(Modifier.heightIn(max=290.dp).verticalScroll(rememberScrollState()).padding(horizontal=10.dp)) {
             Text("Analyze ${if(m.graphKind=="cartesian")"Cartesian curves" else "Choose Cartesian to analyze"}",fontSize=12.sp,color=c.muted)
             Row(horizontalArrangement=Arrangement.spacedBy(6.dp)) { Field(first,"a / x",Modifier.weight(1f)) {first=it};Field(second,"b",Modifier.weight(1f)) {second=it} }
             SmallAction("Use visible x range") {first=m.xMin.toString();second=m.xMax.toString()}
@@ -152,10 +195,89 @@ import kotlin.math.*
     if(rangeDialog) {
         var xmin by remember {mutableStateOf(m.xMin.toString())};var xmax by remember {mutableStateOf(m.xMax.toString())};var ymin by remember {mutableStateOf(m.yMin.toString())};var ymax by remember {mutableStateOf(m.yMax.toString())}
         var tmin by remember {mutableStateOf(m.parameterMin.toString())};var tmax by remember {mutableStateOf(m.parameterMax.toString())}
-        AlertDialog(onDismissRequest={rangeDialog=false},title={Text("Graph range")},text={Column(Modifier.verticalScroll(rememberScrollState())) { Field(xmin,"x minimum") {xmin=it};Field(xmax,"x maximum") {xmax=it};Field(ymin,"y minimum") {ymin=it};Field(ymax,"y maximum") {ymax=it};if(m.graphKind!="cartesian"){Field(tmin,"t minimum") {tmin=it};Field(tmax,"t maximum") {tmax=it}} }},confirmButton={TextButton(onClick={
+        AlertDialog(onDismissRequest={rangeDialog=false},title={Text("Graph range")},text={Column(Modifier.verticalScroll(rememberScrollState())) { Field(xmin,if(m.graphKind=="sequence")"n minimum" else "x minimum") {xmin=it};Field(xmax,if(m.graphKind=="sequence")"n maximum" else "x maximum") {xmax=it};Field(ymin,if(m.graphKind=="surface")"y domain minimum" else "y minimum") {ymin=it};Field(ymax,if(m.graphKind=="surface")"y domain maximum" else "y maximum") {ymax=it};if(m.graphKind in listOf("parametric","polar","differential")){Field(tmin,"t minimum") {tmin=it};Field(tmax,"t maximum") {tmax=it}} }},confirmButton={TextButton(onClick={
             val values=listOf(xmin,xmax,ymin,ymax).map {it.toDoubleOrNull()}
             val ta=tmin.toDoubleOrNull();val tb=tmax.toDoubleOrNull()
-            if(values.any {it==null||!it.isFinite()} || values[0]!!>=values[1]!! || values[2]!!>=values[3]!! || ta==null || tb==null || !ta.isFinite() || !tb.isFinite() || ta>=tb) m.error="Enter finite increasing ranges" else {m.xMin=values[0]!!;m.xMax=values[1]!!;m.yMin=values[2]!!;m.yMax=values[3]!!;m.parameterMin=ta;m.parameterMax=tb;m.save();rangeDialog=false;m.plot()}
+            val usesT=m.graphKind in listOf("parametric","polar","differential")
+            if(values.any {it==null||!it.isFinite()} || values[0]!!>=values[1]!! || values[2]!!>=values[3]!! || (usesT&&(ta==null||tb==null||!ta.isFinite()||!tb.isFinite()||ta>=tb))) m.error="Enter finite increasing ranges" else {
+                m.xMin=values[0]!!;m.xMax=values[1]!!;m.yMin=values[2]!!;m.yMax=values[3]!!
+                if(m.graphKind=="sequence"){m.parameterMin=values[0]!!;m.parameterMax=values[1]!!}
+                else if(usesT){m.parameterMin=ta!!;m.parameterMax=tb!!}
+                m.save();rangeDialog=false;m.plot()
+            }
         }) {Text("Apply")} },dismissButton={TextButton(onClick={rangeDialog=false}) {Text("Cancel")} })
+    }
+}
+
+@Composable private fun GraphValueTable(
+    curves:List<List<Pair<Double,Double>?>>,
+    selected:Int,
+    onTrace:(Pair<Double,Double>)->Unit,
+    kind:String
+) {
+    val c=LocalInstrument.current
+    val count=curves.maxOfOrNull { it.size } ?: 0
+    val stride=max(1,ceil(count/28.0).toInt())
+    Column(Modifier.fillMaxWidth().heightIn(max=190.dp).verticalScroll(rememberScrollState()).padding(horizontal=10.dp)) {
+        Text(if(kind=="sequence")"Sequence table · tap a row to trace" else "Visible graph values · tap a row to trace",fontSize=12.sp,color=c.muted)
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical=4.dp)) {
+            Text(if(kind=="sequence")"n" else "x",Modifier.width(72.dp),fontSize=11.sp,color=c.accent)
+            curves.indices.forEach { Text("${if(kind=="sequence")"u" else "f"}${it+1}",Modifier.width(92.dp),fontSize=11.sp,color=c.accent) }
+        }
+        for(index in 0 until count step stride) {
+            val anchor=curves.getOrNull(selected)?.getOrNull(index)
+                ?: curves.firstNotNullOfOrNull { it.getOrNull(index) }
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).clickable(enabled=anchor!=null) { anchor?.let(onTrace) }.padding(vertical=3.dp)) {
+                Text(anchor?.first?.let { "%.5g".format(it) } ?: "—",Modifier.width(72.dp),fontSize=11.sp,color=c.ink)
+                curves.forEach { curve->Text(curve.getOrNull(index)?.second?.let { "%.6g".format(it) } ?: "—",Modifier.width(92.dp),fontSize=11.sp,color=c.ink) }
+            }
+            HorizontalDivider(color=c.grid)
+        }
+    }
+}
+
+@Composable private fun SurfaceGraph(m:CalculatorModel,rotation:Float,modifier:Modifier=Modifier) {
+    val c=LocalInstrument.current
+    val mesh=remember(m.graphData) {
+        val rows=m.graphData?.optJSONArray("surface")
+        (0 until (rows?.length() ?: 0)).map { ri->
+            val row=rows!!.optJSONArray(ri)
+            (0 until (row?.length() ?: 0)).map { ci->
+                val point=row?.optJSONArray(ci)
+                if(point==null || point.isNull(2)) null else doubleArrayOf(point.optDouble(0),point.optDouble(1),point.optDouble(2))
+            }
+        }
+    }
+    Canvas(modifier.background(c.display).semantics { contentDescription="Three dimensional surface. Rotate with the slider and adjust x and y ranges." }) {
+        if(mesh.isEmpty())return@Canvas
+        val xmin=m.xMin;val xmax=m.xMax;val ymin=m.yMin;val ymax=m.yMax
+        val zmin=m.graphData?.optDouble("zMin",-1.0) ?: -1.0
+        val zmax=m.graphData?.optDouble("zMax",1.0) ?: 1.0
+        val zspan=(zmax-zmin).takeIf { it>1e-12 } ?: 1.0
+        val theta=Math.toRadians(rotation.toDouble());val elevation=.62
+        val scale=min(size.width,size.height)*.39f
+        fun project(point:DoubleArray):Offset {
+            val xx=2*(point[0]-(xmin+xmax)/2)/(xmax-xmin)
+            val yy=2*(point[1]-(ymin+ymax)/2)/(ymax-ymin)
+            val zz=2*(point[2]-zmin)/zspan-1
+            val horizontal=xx*cos(theta)-yy*sin(theta)
+            val depth=xx*sin(theta)+yy*cos(theta)
+            val vertical=depth*sin(elevation)+zz*cos(elevation)
+            return Offset(size.width/2+horizontal.toFloat()*scale,size.height/2-vertical.toFloat()*scale)
+        }
+        clipRect {
+            mesh.forEachIndexed { ri,row->
+                for(ci in 0 until row.lastIndex) {
+                    val a=row[ci];val b=row[ci+1]
+                    if(a!=null&&b!=null)drawLine(c.curves[ri%c.curves.size].copy(alpha=.78f),project(a),project(b),1.15.dp.toPx())
+                }
+            }
+            if(mesh.isNotEmpty())for(ci in mesh.first().indices) {
+                for(ri in 0 until mesh.lastIndex) {
+                    val a=mesh[ri].getOrNull(ci);val b=mesh[ri+1].getOrNull(ci)
+                    if(a!=null&&b!=null)drawLine(c.accent.copy(alpha=.62f),project(a),project(b),1.dp.toPx())
+                }
+            }
+        }
     }
 }

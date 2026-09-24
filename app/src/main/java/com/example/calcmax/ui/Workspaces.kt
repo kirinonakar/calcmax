@@ -1,5 +1,8 @@
 package com.example.calcmax.ui
 
+import android.graphics.Paint
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -8,6 +11,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.*
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -15,8 +23,15 @@ import androidx.compose.ui.unit.*
 import com.example.calcmax.calculator.CalculatorModel
 import com.example.calcmax.math.Editor
 import com.example.calcmax.ui.theme.LocalInstrument
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.DateFormat
 import java.util.Date
+import kotlin.math.ceil
+import kotlin.math.floor
+import kotlin.math.ln
+import kotlin.math.max
 
 @Composable fun Panel(title: String,subtitle: String,content: @Composable ColumnScope.()->Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(14.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
@@ -48,28 +63,152 @@ import java.util.Date
 }
 
 @Composable fun StatisticsScreen(m: CalculatorModel) {
-    var data by rememberSaveable { mutableStateOf("1,2\n2,4\n3,5\n4,8") }
-    var regression by rememberSaveable { mutableStateOf("linear") }
-    var csv by rememberSaveable { mutableStateOf(false) }
-    fun rows()=data.lines().filter { it.isNotBlank() }.map { it.split(',').map(String::trim) }
-    fun vector(column: Int)=rows().joinToString(",","[","]") { it.getOrElse(column) { "0" } }
-    Panel("Data & statistics","Enter one observation per row. Use x,y columns for paired data.") {
-        Row { SmallAction(if(csv)"Table editor" else "Paste CSV") {csv=!csv};SmallAction("Add row") { if(rows().size<100)data+="\n0,0" } }
-        if(csv) OutlinedTextField(data,{data=it},Modifier.fillMaxWidth().height(180.dp),label={Text("x, y table")},textStyle=MaterialTheme.typography.bodyLarge.copy(fontFamily=FontFamily.Monospace))
-        else Column(Modifier.heightIn(max=300.dp).verticalScroll(rememberScrollState())) {
-            rows().forEachIndexed { index,row->Row(horizontalArrangement=Arrangement.spacedBy(5.dp),verticalAlignment=Alignment.CenterVertically) {
-                Text("${index+1}",fontSize=11.sp,modifier=Modifier.width(20.dp))
-                repeat(2) { column->Field(row.getOrElse(column){""},if(column==0)"x" else "y",Modifier.weight(1f)) { text->
-                    val next=rows().map { it.toMutableList().apply {while(size<2)add("")} }.toMutableList();next[index][column]=text;data=next.joinToString("\n") {it.joinToString(",")}
-                } }
-                SmallAction("−") {data=rows().filterIndexed {i,_->i!=index}.joinToString("\n") {it.joinToString(",")}}
-            } }
+    val context=LocalContext.current
+    val scope=rememberCoroutineScope()
+    val names=remember(m.dataSets) {m.dataSets.keys().asSequence().toList().sorted()}
+    var selected by rememberSaveable {mutableStateOf("")}
+    var isNew by rememberSaveable {mutableStateOf(false)}
+    val activeName=if(isNew)"" else selected.ifBlank {names.firstOrNull().orEmpty()}
+    var datasetName by rememberSaveable {mutableStateOf("D1")}
+    var data by rememberSaveable {mutableStateOf("1\n2\n3\n4")}
+    var dataKind by rememberSaveable {mutableStateOf("list")}
+    var regression by rememberSaveable {mutableStateOf("linear")}
+    var plotType by rememberSaveable {mutableStateOf("Histogram")}
+    var csv by rememberSaveable {mutableStateOf(false)}
+    LaunchedEffect(activeName) {
+        if(activeName.isNotBlank())m.dataSets.optJSONObject(activeName)?.let {item->
+            datasetName=activeName;data=item.optString("csv");dataKind=item.optString("kind","list")
+            plotType=if(dataKind=="xy")"Scatter" else "Histogram"
         }
-        Row { Button(onClick={val expression="stats(${vector(0)})";m.edit(Editor(expression));m.calculate()}) { Text("Summarize x") }; SmallAction("Summarize y") { val expression="stats(${vector(1)})";m.edit(Editor(expression));m.calculate() } }
-        Choices(listOf("linear","quadratic","logarithmic","exponential","power"),regression,{regression=it})
-        Button(onClick={val table=rows().joinToString(",","[","]") { it.joinToString(",","[","]") };m.edit(Editor("regression($table,$regression)"));m.calculate()}) { Text("Fit regression") }
+    }
+    val importCsv=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {uri->
+        if(uri!=null)scope.launch {
+            val content=withContext(Dispatchers.IO) {runCatching {context.contentResolver.openInputStream(uri)?.bufferedReader()?.use {it.readText()}}.getOrNull()}
+            if(content!=null) {
+                data=content
+                val first=content.lineSequence().firstOrNull {it.isNotBlank()}.orEmpty().splitCsvRecord()
+                dataKind=if(first.size>=2)"xy" else "list"
+                datasetName=datasetName.ifBlank {activeName.ifBlank {"D1"}}
+                m.saveDataSet(datasetName,data,dataKind);selected=datasetName;isNew=false
+            } else m.error="Could not read the selected CSV file"
+        }
+    }
+    val exportCsv=rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) {uri->
+        if(uri!=null)scope.launch {
+            val success=withContext(Dispatchers.IO) {runCatching {val stream=context.contentResolver.openOutputStream(uri)?:error("No output stream");stream.bufferedWriter().use {it.write(data)};true}.getOrDefault(false)}
+            if(!success)m.error="Could not write the CSV file"
+        }
+    }
+    fun rows()=data.lineSequence().filter {it.isNotBlank()}.map {it.splitCsvRecord().map(String::trim)}.filter {it.isNotEmpty()}
+        .filterIndexed {index,row->!(index==0&&row.firstOrNull()?.lowercase() in listOf("x","n","value","y"))}.toList()
+    fun vector(column:Int)=rows().mapNotNull {it.getOrNull(column)?.takeIf(String::isNotBlank)}.joinToString(",","[","]")
+    fun variableSource():String=if(dataKind=="list")vector(0) else rows().joinToString(",","[","]") {row->"[${row.getOrElse(0){"0"}},${row.getOrElse(1){"0"}}]"}
+    fun startNew() {
+        var index=1;val existing=names.toSet();while("D$index" in existing)index++
+        datasetName="D$index";data=if(dataKind=="xy")"0,0\n1,1" else "1\n2\n3";isNew=true;selected=""
+    }
+    val parsedRows=rows()
+    val xValues=parsedRows.mapNotNull {it.getOrNull(0)?.toDoubleOrNull()?.takeIf {v->v.isFinite()}}
+    val paired=parsedRows.mapNotNull {row->val x=row.getOrNull(0)?.toDoubleOrNull();val y=row.getOrNull(1)?.toDoubleOrNull();if(x!=null&&y!=null&&x.isFinite()&&y.isFinite())x to y else null}
+    Panel("Data & statistics","Save named lists or paired x,y datasets, import/export CSV, calculate summaries and view statistical plots.") {
+        if(names.isNotEmpty())Choices(names,activeName,{selected=it;isNew=false})
+        Row(horizontalArrangement=Arrangement.spacedBy(6.dp),verticalAlignment=Alignment.CenterVertically) {
+            Field(datasetName,"Dataset name",Modifier.weight(1f)){datasetName=it}
+            SmallAction("New"){startNew()}
+            SmallAction("Save"){m.saveDataSet(datasetName,data,dataKind);selected=datasetName;isNew=false}
+            SmallAction("Delete"){if(activeName.isNotBlank()){m.deleteDataSet(activeName);selected="";isNew=true;startNew()}}
+        }
+        Choices(listOf("List","x,y data"),if(dataKind=="xy")"x,y data" else "List",{dataKind=if(it=="x,y data")"xy" else "list";plotType=if(dataKind=="xy")"Scatter" else "Histogram"})
+        Row(Modifier.horizontalScroll(rememberScrollState())) {
+            SmallAction("Import CSV"){importCsv.launch(arrayOf("text/csv","text/comma-separated-values","text/plain","application/vnd.ms-excel"))}
+            SmallAction("Export CSV"){exportCsv.launch("${datasetName.ifBlank {"dataset"}}.csv")}
+            SmallAction("Store as $datasetName"){if(datasetName.matches(Regex("[A-Za-z][A-Za-z0-9_]*")))m.store(datasetName,variableSource(),false)else m.error="Dataset name must be a valid variable name"}
+            SmallAction(if(csv)"Table editor" else "Paste CSV"){csv=!csv}
+            SmallAction("Add row"){if(parsedRows.size<999)data+=if(data.isBlank())if(dataKind=="xy")"0,0" else "0" else if(dataKind=="xy")"\n0,0" else "\n0"}
+        }
+        if(csv)OutlinedTextField(data,{data=it},Modifier.fillMaxWidth().height(180.dp),label={Text(if(dataKind=="xy")"x, y values" else "One value per line")},textStyle=MaterialTheme.typography.bodyLarge.copy(fontFamily=FontFamily.Monospace))
+        else Column(Modifier.heightIn(max=300.dp).verticalScroll(rememberScrollState())) {
+            parsedRows.forEachIndexed {index,row->Row(horizontalArrangement=Arrangement.spacedBy(5.dp),verticalAlignment=Alignment.CenterVertically) {
+                Text("${index+1}",fontSize=11.sp,modifier=Modifier.width(20.dp))
+                repeat(if(dataKind=="xy")2 else 1) {column->Field(row.getOrElse(column){""},if(dataKind=="list")"value" else if(column==0)"x" else "y",Modifier.weight(1f)) {text->
+                    val next=parsedRows.map {it.toMutableList().apply {while(size<(if(dataKind=="xy")2 else 1))add("")}}.toMutableList();next[index][column]=text;data=next.joinToString("\n"){it.joinToString(",")}
+                }}
+                SmallAction("−"){data=parsedRows.filterIndexed {i,_->i!=index}.joinToString("\n"){it.joinToString(",")}}
+            }}
+        }
+        Row(Modifier.horizontalScroll(rememberScrollState())) {
+            Button(onClick={val values=vector(0);if(values!="[]"){m.edit(Editor("stats($values)"));m.calculate()}}){Text(if(dataKind=="xy")"Summarize x" else "Summarize list")}
+            if(dataKind=="xy")SmallAction("Summarize y"){val values=vector(1);if(values!="[]"){m.edit(Editor("stats($values)"));m.calculate()}}
+            if(dataKind=="xy")SmallAction("Fit regression"){val table=parsedRows.filter {it.size>=2}.joinToString(",","[","]"){it.take(2).joinToString(",","[","]")};m.edit(Editor("regression($table,$regression)"));m.calculate()}
+        }
+        if(dataKind=="xy")Choices(listOf("linear","quadratic","logarithmic","exponential","power"),regression,{regression=it})
+        Choices(if(dataKind=="xy")listOf("Scatter","Histogram","Box plot") else listOf("Histogram","Box plot"),plotType,{plotType=it})
+        StatisticsPlot(plotType,if(plotType=="Scatter")paired else xValues.mapIndexed {i,v->i.toDouble() to v},xValues)
         Display(m)
-        SmallAction("Graph fitted expression") { val exact=m.result?.optString("exact"); if(!exact.isNullOrBlank()) { m.graphSource=exact.replace("**","^");m.mode="Graph";m.plot() } }
+        if(dataKind=="xy")SmallAction("Graph fitted expression"){val exact=m.result?.optString("exact");if(!exact.isNullOrBlank()){m.changeGraphKind("cartesian");m.updateGraphSource(exact.replace("**","^"));m.mode="Graph";m.plot()}}
+    }
+}
+
+private fun String.splitCsvRecord():List<String> {
+    val cells=mutableListOf<String>();val current=StringBuilder();var quoted=false;var i=0
+    while(i<length) {
+        val ch=this[i]
+        when {
+            ch=='"'&&quoted&&i+1<length&&this[i+1]=='"'->{current.append('"');i++}
+            ch=='"'->quoted=!quoted
+            ch==','&&!quoted->{cells+=current.toString().trim();current.setLength(0)}
+            else->current.append(ch)
+        }
+        i++
+    }
+    cells+=current.toString().trim();return cells
+}
+
+@Composable private fun StatisticsPlot(type:String,points:List<Pair<Double,Double>>,values:List<Double>) {
+    val c=LocalInstrument.current
+    Canvas(Modifier.fillMaxWidth().height(220.dp).background(c.display)) {
+        val left=38.dp.toPx();val right=12.dp.toPx();val top=14.dp.toPx();val bottom=28.dp.toPx()
+        val width=size.width-left-right;val height=size.height-top-bottom
+        val text=Paint(Paint.ANTI_ALIAS_FLAG).apply {color=c.muted.toArgb();textSize=10.sp.toPx()}
+        drawLine(c.grid,Offset(left,top+height),Offset(left+width,top+height),1.dp.toPx())
+        drawLine(c.grid,Offset(left,top),Offset(left,top+height),1.dp.toPx())
+        if(type=="Scatter") {
+            if(points.isEmpty())return@Canvas
+            var x0=points.minOf {it.first};var x1=points.maxOf {it.first};var y0=points.minOf {it.second};var y1=points.maxOf {it.second}
+            if(x0==x1){x0-=1;x1+=1};if(y0==y1){y0-=1;y1+=1}
+            fun px(x:Double)=left+((x-x0)/(x1-x0)).toFloat()*width
+            fun py(y:Double)=top+height-((y-y0)/(y1-y0)).toFloat()*height
+            points.forEach {drawCircle(c.accent,4.dp.toPx(),Offset(px(it.first),py(it.second)))}
+            drawContext.canvas.nativeCanvas.drawText("x",left+width-4,top+height+20.dp.toPx(),text)
+            drawContext.canvas.nativeCanvas.drawText("y",5.dp.toPx(),top+12.dp.toPx(),text)
+            drawContext.canvas.nativeCanvas.drawText("%.4g".format(x0),left,top+height+16.dp.toPx(),text)
+            drawContext.canvas.nativeCanvas.drawText("%.4g".format(x1),left+width-34.dp.toPx(),top+height+16.dp.toPx(),text)
+        } else if(values.isEmpty()) {
+            drawContext.canvas.nativeCanvas.drawText("Add finite numeric observations to plot",left,top+20.dp.toPx(),text)
+        } else if(type=="Histogram") {
+            var lo=values.min();var hi=values.max();if(lo==hi){lo-=.5;hi+=.5}
+            val bins=ceil(1+ln(values.size.coerceAtLeast(2).toDouble())/ln(2.0)).toInt().coerceIn(3,14)
+            val counts=IntArray(bins);values.forEach {v->counts[((v-lo)/(hi-lo)*bins).toInt().coerceIn(0,bins-1)]++}
+            val peak=counts.maxOrNull()?.coerceAtLeast(1) ?: 1;val bar=width/bins
+            counts.forEachIndexed {i,count->val h=height*count/peak;drawRect(c.accent.copy(alpha=.78f),Offset(left+i*bar+1,top+height-h),androidx.compose.ui.geometry.Size((bar-2).coerceAtLeast(1f),h))}
+            drawContext.canvas.nativeCanvas.drawText("${values.size} values · $bins bins",left,top+11.dp.toPx(),text)
+            drawContext.canvas.nativeCanvas.drawText("%.4g".format(lo),left,top+height+16.dp.toPx(),text)
+            drawContext.canvas.nativeCanvas.drawText("%.4g".format(hi),left+width-34.dp.toPx(),top+height+16.dp.toPx(),text)
+        } else {
+            val sorted=values.sorted()
+            fun quantile(p:Double):Double {val position=(sorted.size-1)*p;val low=floor(position).toInt();val high=ceil(position).toInt();return sorted[low]+(sorted[high]-sorted[low])*(position-low)}
+            val lo=sorted.first();val q1=quantile(.25);val median=quantile(.5);val q3=quantile(.75);val hi=sorted.last()
+            var minValue=lo;var maxValue=hi;if(minValue==maxValue){minValue-=.5;maxValue+=.5}
+            fun px(value:Double)=left+((value-minValue)/(maxValue-minValue)).toFloat()*width
+            val y=top+height/2
+            drawLine(c.muted,Offset(px(lo),y),Offset(px(hi),y),2.dp.toPx())
+            drawLine(c.muted,Offset(px(lo),y-9.dp.toPx()),Offset(px(lo),y+9.dp.toPx()),2.dp.toPx())
+            drawLine(c.muted,Offset(px(hi),y-9.dp.toPx()),Offset(px(hi),y+9.dp.toPx()),2.dp.toPx())
+            drawRect(c.accent.copy(alpha=.24f),Offset(px(q1),y-20.dp.toPx()),androidx.compose.ui.geometry.Size((px(q3)-px(q1)).coerceAtLeast(1f),40.dp.toPx()))
+            drawRect(c.accent,Offset(px(q1),y-20.dp.toPx()),androidx.compose.ui.geometry.Size((px(q3)-px(q1)).coerceAtLeast(1f),40.dp.toPx()),style=Stroke(1.5.dp.toPx()))
+            drawLine(c.danger,Offset(px(median),y-20.dp.toPx()),Offset(px(median),y+20.dp.toPx()),2.dp.toPx())
+            drawContext.canvas.nativeCanvas.drawText("min %.4g   Q1 %.4g   median %.4g   Q3 %.4g   max %.4g".format(lo,q1,median,q3,hi),left,top+13.dp.toPx(),text)
+        }
     }
 }
 

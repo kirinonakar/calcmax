@@ -183,6 +183,7 @@ class Engine:
         self.note = ""
         self.conditions = []
         self.bindings = {}
+        self.allow_sequence_calls = False
         self.assumptions = request.get("assumptions", {})
     def symbol(self, name):
         if name not in self.symbols:
@@ -295,6 +296,9 @@ class Engine:
         finally:
             self.bindings = old
     def call(self, name, a, nodes):
+        if self.allow_sequence_calls and (name == "u" or name in ("u1", "u2", "u3", "u4", "u5", "u6")):
+            require(len(a) == 1, "Sequence references take one integer index")
+            return s.Function(name)(a[0])
         if name=="rnd":return s.N(a[0],self.precision)
         if name=="eng":return a[0]
         if name=="pol":
@@ -716,31 +720,182 @@ def result_ast(x):
     raise MathError("This result cannot be stored as a reusable expression")
 
 def graph(engine, request):
-    var = engine.symbol(request.get("variable","x")); engine.bindings[str(var)] = var
     kind = request.get("graphKind","cartesian")
     trees = request.get("trees",[])
-    expressions = [engine.build(t) for t in trees]
     start,end = float(request.get("min",-10)),float(request.get("max",10))
     require(math.isfinite(start) and math.isfinite(end) and end>start,"Invalid graph range")
+    if kind == "sequence":
+        return graph_sequence(engine, request, trees, start, end)
+    if kind == "surface":
+        return graph_surface(engine, request, trees, start, end)
+    if kind == "differential":
+        return graph_differential(engine, request, trees, start, end)
+    var = engine.symbol(request.get("variable","x")); engine.bindings[str(var)] = var
+    expressions = [engine.build(t) for t in trees]
     count = min(1600,max(100,int(request.get("samples",500))))
     curves=[]
     for expression in expressions:
         function=s.lambdify(var,expression,modules="math",cse=True,docstring_limit=0)
-        # Numeric substitution evaluates the very same expression; no second parser.
-        samples=[]
-        for k in range(count+1):
-            t = start+(end-start)*k/count
-            try:
-                if kind=="parametric":
-                    require(isinstance(expression,list) and len(expression)==2,"Parametric graph requires [x(t),y(t)]")
-                    x,y = map(float,function(t))
-                else:
-                    y = float(function(t)); x = t
-                    if kind=="polar": x,y = y*math.cos(t),y*math.sin(t)
-                samples.append([x,y] if math.isfinite(x) and math.isfinite(y) else None)
-            except (TypeError,ValueError,ZeroDivisionError,OverflowError): samples.append(None)
+        samples = adaptive_samples(function, start, end, count, kind)
         curves.append(samples)
     return {"curves":curves}
+
+def _finite_real(value):
+    try:
+        value = float(value)
+        return value if math.isfinite(value) and abs(value) < 1e100 else None
+    except (TypeError, ValueError, ZeroDivisionError, OverflowError):
+        return None
+
+def adaptive_samples(function, start, end, base_count, kind="cartesian"):
+    """Sample coarsely first, then add points where the curve bends or breaks."""
+    def point(at):
+        try:
+            if kind == "parametric":
+                x, y = map(float, function(at))
+            else:
+                y = float(function(at)); x = at
+                if kind == "polar": x, y = y*math.cos(at), y*math.sin(at)
+            return [x, y] if math.isfinite(x) and math.isfinite(y) and abs(x) < 1e100 and abs(y) < 1e100 else None
+        except (TypeError, ValueError, ZeroDivisionError, OverflowError):
+            return None
+    intervals = min(512, max(100, base_count))
+    values = {start + (end-start)*i/intervals: None for i in range(intervals+1)}
+    for at in values:
+        values[at] = point(at)
+    max_points = min(1800, max(base_count+1, 1200))
+    def refine(left, right, depth):
+        if depth >= 4 or len(values) >= max_points:
+            return
+        middle = (left+right)/2
+        actual = point(middle)
+        a, b = values[left], values[right]
+        split = a is None or b is None or actual is None
+        if a is not None and b is not None and actual is not None:
+            linear = ((a[0]+b[0])/2, (a[1]+b[1])/2)
+            span = max(abs(b[0]-a[0]), abs(b[1]-a[1]), 1e-9)
+            error = max(abs(actual[0]-linear[0]), abs(actual[1]-linear[1]))/span
+            split = error > 0.012 or abs(b[1]-a[1]) > 0.22*max(abs(end-start),1e-9)
+        if split:
+            values[middle] = actual
+            refine(left, middle, depth+1)
+            refine(middle, right, depth+1)
+    coarse = sorted(values)
+    for left, right in zip(coarse, coarse[1:]):
+        refine(left, right, 0)
+    return [values[at] for at in sorted(values)]
+
+def graph_sequence(engine, request, trees, start, end):
+    require(start >= 0 and end <= 2000, "Sequence range must be between 0 and 2000")
+    first, last = math.ceil(start), math.floor(end)
+    require(last >= first and last-first <= 1200, "Sequence range is too large")
+    n = engine.symbol("n"); engine.bindings["n"] = n
+    engine.allow_sequence_calls = True
+    expressions = [engine.build(tree) for tree in trees]
+    seed_trees = request.get("initialTrees", [])
+    seeds = []
+    for tree in seed_trees[:20]:
+        value = engine.build(tree)
+        numeric = _finite_real(s.N(value, engine.precision))
+        require(numeric is not None, "Initial sequence values must be finite real numbers")
+        seeds.append(numeric)
+    require(expressions, "Enter a sequence rule")
+    curves = []
+    for curve_index, expression in enumerate(expressions):
+        function_name = "u" if len(expressions) == 1 else "u%d" % (curve_index+1)
+        sequence = {}
+        recursive_calls = expression.atoms(AppliedUndef)
+        for index, value in enumerate(seeds): sequence[index] = value
+        for index in range(last+1):
+            if recursive_calls and index in sequence:
+                pass
+            else:
+                current = expression.subs(n, s.Integer(index))
+                replacements = {}
+                for call in current.atoms(AppliedUndef):
+                    name = call.func.__name__
+                    require(name in ("u", function_name), "A sequence rule may only refer to its own previous terms")
+                    require(len(call.args) == 1 and call.args[0].is_Integer, "Sequence references need integer indices")
+                    previous_index = int(call.args[0])
+                    require(previous_index < index and previous_index in sequence,
+                            "Provide enough initial values for every previous-term reference")
+                    replacements[call] = s.Float(sequence[previous_index], engine.precision)
+                value = _finite_real(s.N(current.xreplace(replacements), engine.precision))
+                require(value is not None, "Sequence rule did not produce a finite real value")
+                sequence[index] = value
+        curves.append([[index, sequence[index]] for index in range(first, last+1) if index in sequence])
+    return {"curves": curves, "discrete": True}
+
+def graph_surface(engine, request, trees, xmin, xmax):
+    require(len(trees) == 1, "Enter one surface expression z=f(x,y)")
+    ymin, ymax = float(request.get("surfaceYMin", -3)), float(request.get("surfaceYMax", 3))
+    require(math.isfinite(ymin) and math.isfinite(ymax) and ymax > ymin, "Invalid surface y range")
+    x, y = engine.symbol("x"), engine.symbol("y")
+    engine.bindings.update({"x":x, "y":y})
+    expression = engine.build(trees[0])
+    fn = s.lambdify((x,y), expression, modules="math", cse=True, docstring_limit=0)
+    count = min(40, max(12, int(request.get("surfaceSamples", 26))))
+    mesh = []
+    for row in range(count+1):
+        yy = ymin+(ymax-ymin)*row/count
+        points = []
+        for col in range(count+1):
+            xx = xmin+(xmax-xmin)*col/count
+            try: z = _finite_real(fn(xx,yy))
+            except (TypeError, ValueError, ZeroDivisionError, OverflowError): z = None
+            points.append([xx,yy,z] if z is not None else None)
+        mesh.append(points)
+    values = [point[2] for row in mesh for point in row if point is not None]
+    require(values, "Surface has no finite values in this range")
+    return {"surface":mesh,"zMin":min(values),"zMax":max(values),"surfaceSamples":count}
+
+def graph_differential(engine, request, trees, start, end):
+    require(len(trees) == 1, "Enter one derivative rule dy/dt=f(t,y)")
+    t, y = engine.symbol("t"), engine.symbol("y")
+    engine.bindings.update({"t":t, "y":y})
+    expression = engine.build(trees[0])
+    fn = s.lambdify((t,y), expression, modules="math", cse=True, docstring_limit=0)
+    ymin, ymax = float(request.get("yMin", -5)), float(request.get("yMax", 5))
+    t0 = float(request.get("t0", 0))
+    require(math.isfinite(ymin) and math.isfinite(ymax) and ymax > ymin, "Invalid solution y range")
+    require(math.isfinite(t0) and start <= t0 <= end, "Initial time must be inside the t range")
+    initials = request.get("initialValues", [1])
+    require(1 <= len(initials) <= 6, "Enter between one and six initial y values")
+    def slope(at, value):
+        try: return _finite_real(fn(at,value))
+        except (TypeError, ValueError, ZeroDivisionError, OverflowError): return None
+    curves=[]
+    for initial in initials:
+        y0 = _finite_real(initial)
+        require(y0 is not None, "Initial y values must be finite real numbers")
+        def integrate(bound):
+            distance = bound-t0
+            steps = max(40, min(500, int(240*abs(distance)/(end-start))+40))
+            h = distance/steps
+            points = [[t0,y0]]
+            at, value = t0, y0
+            for _ in range(steps):
+                k1=slope(at,value)
+                k2=slope(at+h/2,value+h*k1/2) if k1 is not None else None
+                k3=slope(at+h/2,value+h*k2/2) if k2 is not None else None
+                k4=slope(at+h,value+h*k3) if k3 is not None else None
+                if None in (k1,k2,k3,k4): break
+                value += h*(k1+2*k2+2*k3+k4)/6
+                at += h
+                if not math.isfinite(value) or abs(value)>1e100: break
+                points.append([at,value])
+            return points
+        left=integrate(start); right=integrate(end)
+        curves.append(list(reversed(left[1:]))+[[t0,y0]]+right[1:])
+    fields=[]
+    nx, ny = 17, 11
+    for ix in range(nx):
+        at=start+(end-start)*(ix+0.5)/nx
+        for iy in range(ny):
+            value=ymin+(ymax-ymin)*(iy+0.5)/ny
+            dy=slope(at,value)
+            if dy is not None: fields.append([at,value,dy])
+    return {"curves":curves,"fields":fields,"differential":True}
 
 def graph_analysis(engine, request):
     x = engine.symbol("x"); engine.bindings["x"] = x

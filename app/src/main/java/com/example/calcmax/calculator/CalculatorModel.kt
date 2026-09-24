@@ -109,6 +109,11 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     var assumptions by mutableStateOf(loadObject("assumptions"))
         private set
     private val graphSources=loadObject("graphSources")
+    var dataSets by mutableStateOf(loadObject("dataSets"))
+        private set
+    var sequenceInitials by mutableStateOf(prefs.getString("sequenceInitials", "0,1") ?: "0,1")
+    var differentialInitials by mutableStateOf(prefs.getString("differentialInitials", "1") ?: "1")
+    var differentialT0 by mutableStateOf(prefs.getString("differentialT0", "0") ?: "0")
     var graphSource by mutableStateOf(graphSources.optString(prefs.getString("graphKind","cartesian"),prefs.getString("graphSource","sin(x)\ncos(x)") ?: "sin(x)\ncos(x)"))
     var pythonSource by mutableStateOf(prefs.getString("pythonSource","") ?: "")
         private set
@@ -171,6 +176,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
             .putInt("precision",precision).putBoolean("haptics",haptics).putBoolean("sound",sound).putBoolean("historyEnabled",persistHistory)
             .putFloat("inputFont",inputFont).putFloat("outputFont",outputFont)
             .putString("variables",variables.toString()).putString("functions",functions.toString()).putString("assumptions",assumptions.toString())
+            .putString("dataSets",dataSets.toString()).putString("sequenceInitials",sequenceInitials).putString("differentialInitials",differentialInitials).putString("differentialT0",differentialT0)
             .putString("graphSource",graphSource).putString("graphSources",graphSources.put(graphKind,graphSource).toString()).putString("graphKind",graphKind).putString("xMin",xMin.toString()).putString("xMax",xMax.toString()).putString("yMin",yMin.toString()).putString("yMax",yMax.toString())
             .putString("pythonSource",pythonSource).putString("pythonFileName",pythonFileName).putString("pythonUri",pythonUri).putBoolean("pythonDirty",pythonDirty)
             .putString("parameterMin",parameterMin.toString()).putString("parameterMax",parameterMax.toString())
@@ -504,16 +510,48 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     fun favorite(id: Long) { history=history.map { if(it.id==id) it.copy(favorite=!it.favorite) else it }; save() }
     fun deleteHistory(id: Long) { history=history.filter { it.id!=id }; save() }
     fun clearHistory() { history=emptyList();tape=emptyList();save() }
+    fun saveDataSet(name:String,csv:String,kind:String) {
+        try {
+            require(name.matches(Regex("[A-Za-z][A-Za-z0-9_]*"))) { "Use a letter followed by letters, digits or underscores for the dataset name" }
+            require(kind in listOf("list", "xy")) { "Unknown dataset type" }
+            dataSets=JSONObject(dataSets.toString()).put(name,JSONObject().put("csv",csv).put("kind",kind))
+            error="";save()
+        } catch(e:Exception) { error=e.message ?: "Could not save dataset" }
+    }
+    fun deleteDataSet(name:String) {
+        dataSets=JSONObject(dataSets.toString()).apply { remove(name) }
+        save()
+    }
     fun plot() {
         graphJob?.cancel()
-        val trees=try { graphSource.lines().filter { it.isNotBlank() }.take(6).map { JSONObject(Parser(it).parse().json()) } } catch(e: Exception) { error=e.message ?: "Syntax ERROR"; return }
+        val limit=if(graphKind in listOf("surface","differential")) 1 else 6
+        val trees=try { graphSource.lines().filter { it.isNotBlank() }.take(limit).map { JSONObject(Parser(it).parse().json()) } } catch(e: Exception) { error=e.message ?: "Syntax ERROR"; return }
         if(trees.isEmpty()) { error="Enter a function"; return }
-        val source=graphSource;val kind=graphKind;val min=if(kind=="cartesian")xMin else parameterMin;val max=if(kind=="cartesian")xMax else parameterMax
+        val source=graphSource;val kind=graphKind;val min=if(kind in listOf("cartesian","surface"))xMin else parameterMin;val max=if(kind in listOf("cartesian","surface"))xMax else parameterMax
+        val request=request("graph").put("angle","RAD").put("trees",JSONArray(trees)).put("graphKind",kind)
+            .put("variable",when(kind){"cartesian"->"x";"sequence"->"n";"surface"->"x";else->"t"})
+            .put("min",min).put("max",max).put("samples",500).put("yMin",yMin).put("yMax",yMax)
+        if(kind=="surface")request.put("surfaceYMin",yMin).put("surfaceYMax",yMax)
+        if(kind=="sequence") {
+            try {
+                val seeds=sequenceInitials.split(',').map(String::trim).filter(String::isNotEmpty).map { JSONObject(Parser(it).parse().json()) }
+                require(seeds.isNotEmpty()) { "Enter at least one initial sequence value" }
+                request.put("initialTrees",JSONArray(seeds))
+            } catch(e:Exception) { error=e.message ?: "Invalid initial sequence values";return }
+        }
+        if(kind=="differential") {
+            val t0=differentialT0.trim().toDoubleOrNull()
+            val initials=differentialInitials.split(',').map(String::trim).filter(String::isNotEmpty).mapNotNull(String::toDoubleOrNull)
+            if(t0==null || !t0.isFinite() || initials.isEmpty() || initials.size>6 || differentialInitials.split(',').map(String::trim).filter(String::isNotEmpty).size!=initials.size) {
+                error="Enter t₀ and one to six finite initial y values";return
+            }
+            request.put("t0",t0).put("initialValues",JSONArray(initials))
+        }
         graphJob=viewModelScope.launch {
             graphBusy=true; error=""
             try {
-                val response=engine.execute(request("graph").put("angle","RAD").put("trees",JSONArray(trees)).put("graphKind",kind).put("variable",if(kind=="cartesian") "x" else "t").put("min",min).put("max",max).put("samples",500))
-                if(source==graphSource && kind==graphKind && min==(if(kind=="cartesian")xMin else parameterMin) && max==(if(kind=="cartesian")xMax else parameterMax)) {
+                val response=engine.execute(request)
+                if(source==graphSource && kind==graphKind && min==(if(kind in listOf("cartesian","surface"))xMin else parameterMin) && max==(if(kind in listOf("cartesian","surface"))xMax else parameterMax)) {
                     if(response.optBoolean("ok")) graphData=response else {graphData=null;error=response.optString("error")}
                 }
                 save()
@@ -578,9 +616,15 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         if(kind==graphKind)return
         graphSources.put(graphKind,graphSource)
         graphKind=kind
-        graphSource=graphSources.optString(kind,when(kind){"parametric"->"[cos(t),sin(t)]";"polar"->"2*cos(3*t)";else->"sin(x)\ncos(x)"})
+        graphSource=graphSources.optString(kind,when(kind){"parametric"->"[cos(t),sin(t)]";"polar"->"2*cos(3*t)";"sequence"->"n\nu(n-1)+u(n-2)";"surface"->"sin(sqrt(x^2+y^2))";"differential"->"y-t";else->"sin(x)\ncos(x)"})
         graphData=null;graphAnalysis=null;trace=null;shadedInterval=null
-        if(kind!="cartesian" && xMin == -10.0 && xMax == 10.0 && yMin == -5.0 && yMax == 5.0) {
+        if(kind=="sequence") {
+            parameterMin=0.0;parameterMax=20.0;xMin=0.0;xMax=20.0;yMin=-2.0;yMax=20.0
+        } else if(kind=="differential") {
+            parameterMin=-5.0;parameterMax=5.0;xMin=-5.0;xMax=5.0;yMin=-3.0;yMax=5.0
+        } else if(kind=="surface") {
+            xMin=-3.0;xMax=3.0;yMin=-3.0;yMax=3.0
+        } else if(kind!="cartesian" && xMin == -10.0 && xMax == 10.0 && yMin == -5.0 && yMax == 5.0) {
             xMin=-3.0;xMax=3.0;yMin=-3.0;yMax=3.0
         }
         save()
