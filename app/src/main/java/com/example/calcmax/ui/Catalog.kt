@@ -1,6 +1,7 @@
 package com.example.calcmax.ui
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -67,7 +68,7 @@ private sealed interface HelpBlock {
         SearchField(search,"Search"){search=it}
         val loaded=document
         if(loaded==null) Text("Loading the catalog reference...",fontSize=12.sp)
-        else Column(Modifier.fillMaxWidth().heightIn(max=460.dp).verticalScroll(rememberScrollState())) {HelpDocument(loaded,search)}
+        else SelectionContainer {Column(Modifier.fillMaxWidth().heightIn(max=460.dp).verticalScroll(rememberScrollState())) {HelpDocument(loaded,search)}}
     }},confirmButton={TextButton(onClick=close){Text("Close")}})
 }
 
