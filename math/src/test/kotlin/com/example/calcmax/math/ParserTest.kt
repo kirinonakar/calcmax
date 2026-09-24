@@ -46,4 +46,14 @@ class ParserTest {
         assertEquals("sqrt",Editor("sqrt()").tree()!!.value)
         assertThrows(SyntaxException::class.java) { p("()/()") }
     }
+    @Test fun engineeringCatalogSyntax() {
+        for(source in listOf(
+            "taylor(exp(x),x,0,4)",
+            "gradient(x^2+y^2,[x,y])",
+            "dsolve(diff(y(t),t)=y(t),y(t),t)",
+            "laplace(sin(t),t,s)",
+            "charpoly([[1,2],[3,4]],x)",
+            "convert(qty(1,V)/qty(1,ohm),A)"
+        )) assertEquals("call",p(source).kind)
+    }
 }

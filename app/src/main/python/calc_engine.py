@@ -12,6 +12,8 @@ import random
 import sympy as s
 import mpmath as mp
 from sympy.core.relational import Relational
+from sympy.core.function import AppliedUndef
+from sympy.calculus.util import continuous_domain, function_range
 from quantities import Quantity, quantity, convert_quantity
 
 # Exact integers (e.g. factorial) are serialized to text; CPython 3.11+ caps
@@ -33,7 +35,7 @@ class Budget:
             raise MathError("Computation limit reached. Reduce expression complexity.")
         return self.trace
 
-# Dimension order: length, mass, time, temperature, current, amount, data, angle.
+# Dimension order: length, mass, time, temperature, data, angle, current, amount.
 UNITS = {}
 def unit(names, dim, scale, offset=0):
     for name in names.split():
@@ -52,6 +54,15 @@ unit("N", "force", 1); unit("kN", "force", 1000); unit("lbf", "force", '4.448221
 unit("J", "energy", 1); unit("kJ", "energy", 1000); unit("cal", "energy", '4.184'); unit("kWh", "energy", 3600000); unit("eV", "energy", '1.602176634e-19')
 unit("W", "power", 1); unit("kW", "power", 1000)
 unit("Hz", "frequency", 1); unit("kHz", "frequency", 1000); unit("MHz", "frequency", 1000000)
+unit("A amp ampere", "current", 1); unit("mA", "current", '.001'); unit("uA", "current", '0.000001')
+unit("C coulomb", "charge", 1); unit("mC", "charge", '.001'); unit("uC", "charge", '0.000001')
+unit("V volt", "voltage", 1); unit("mV", "voltage", '.001'); unit("kV", "voltage", 1000)
+unit("ohm Ω", "resistance", 1); unit("kohm kΩ", "resistance", 1000); unit("Mohm MΩ", "resistance", 1000000)
+unit("S siemens", "conductance", 1); unit("mS", "conductance", '.001')
+unit("F farad", "capacitance", 1); unit("uF", "capacitance", '0.000001'); unit("nF", "capacitance", '0.000000001'); unit("pF", "capacitance", '0.000000000001')
+unit("H henry", "inductance", 1); unit("mH", "inductance", '.001'); unit("uH", "inductance", '0.000001')
+unit("Wb weber Vs", "magnetic_flux", 1); unit("T tesla", "magnetic_flux_density", 1); unit("mT", "magnetic_flux_density", '.001'); unit("uT", "magnetic_flux_density", '0.000001')
+unit("mol mole", "amount", 1); unit("mmol", "amount", '.001'); unit("umol", "amount", '0.000001')
 unit("bit", "data", 1); unit("byte", "data", 8); unit("kB", "data", 8000); unit("KiB", "data", 8192); unit("MB", "data", 8000000); unit("MiB", "data", 8388608); unit("GB", "data", 8000000000)
 unit("rad", "angle", 1); UNITS["deg"] = ("angle", s.pi/180, 0); UNITS["grad"] = ("angle", s.pi/200, 0)
 
@@ -65,6 +76,10 @@ CONSTANTS = {
     "kB0": ("Boltzmann constant", "1.380649e-23", "J/K", True),
     "me": ("Electron mass", "9.1093837139e-31", "kg", False),
     "mp0": ("Proton mass", "1.67262192595e-27", "kg", False),
+    "epsilon0": ("Vacuum electric permittivity", "8.8541878188e-12", "F/m", False),
+    "mu0": ("Vacuum magnetic permeability", "1.25663706127e-6", "H/m", False),
+    "Z0": ("Vacuum characteristic impedance", "376.730313412", "ohm", False),
+    "sigmaSB": ("Stefan-Boltzmann constant", "5.670374419e-8", "W/(m^2 K^4)", False),
 }
 
 def require(condition, message):
@@ -88,6 +103,72 @@ def dms_parts(value):
     minutes=s.floor((magnitude-whole)*60)
     seconds=s.simplify((magnitude-whole-minutes/60)*3600)
     return [s.sign(value)*whole,minutes,seconds]
+
+def coordinates(value):
+    require(isinstance(value, (list, tuple)) and value and all(isinstance(item, s.Symbol) for item in value),
+            "Provide a non-empty list of variables")
+    require(len(set(value))==len(value), "Coordinate variables must be distinct")
+    return tuple(value)
+
+def numeric_derivative(expression, variable, point, precision, step=None):
+    """A high-precision central difference with Richardson extrapolation.
+
+    This deliberately does not use a symbolic derivative.  It makes nderivative
+    useful for expressions that are numeric functions but have no convenient
+    closed-form derivative, while retaining the calculator's exact-input model.
+    """
+    require(getattr(point, "is_number", False) and not point.has(s.I),
+            "nderivative requires a real numeric point")
+    if step is None:
+        step=s.Rational(10)**(-max(8, min(80, (precision+5)//3)))
+    else:
+        require(getattr(step, "is_number", False) and step>0, "Derivative step must be positive")
+    def central(h):
+        return s.N((expression.subs(variable, point+h)-expression.subs(variable, point-h))/(2*h), precision+10)
+    coarse=central(step)
+    fine=central(step/2)
+    result=(4*fine-coarse)/3
+    finer=central(step/4)
+    result=(16*((4*finer-fine)/3)-result)/15
+    require(not result.has(s.nan, s.zoo) and result.is_finite is not False,
+            "Numerical differentiation failed")
+    return s.N(result, precision)
+
+def discrete_fourier(values, inverse=False):
+    values=flatten(values)
+    require(1<=len(values)<=256, "FFT length must be between 1 and 256")
+    count=len(values); sign=1 if inverse else -1
+    divisor=count if inverse else 1
+    return [s.simplify(sum((values[index]*s.exp(sign*2*s.pi*s.I*s.Rational(output*index,count)) for index in range(count)), s.Integer(0))/divisor)
+            for output in range(count)]
+
+def ode_equation(value):
+    if isinstance(value, Relational):
+        require(isinstance(value, s.Equality), "Differential equations must use equality")
+        return value
+    return s.Eq(value, 0)
+
+def initial_conditions(value, dependent, independent):
+    items=value if isinstance(value, (list, tuple)) else [value]
+    result={}
+    for item in items:
+        require(isinstance(item, Relational) and isinstance(item, s.Equality),
+                "Initial conditions must be equations")
+        lhs=item.lhs
+        if isinstance(lhs, AppliedUndef):
+            require(lhs.args and lhs.args[0].is_number,
+                    "Initial conditions need a numeric independent-variable value")
+            point=lhs.args[0]; key=lhs
+        elif isinstance(lhs, s.Derivative):
+            require(lhs.variables==(independent,) and lhs.point and lhs.point[0].is_number,
+                    "Derivative initial conditions need a numeric point")
+            point=lhs.point[0]; key=s.Subs(lhs, independent, point)
+        else:
+            require(lhs==dependent, "Initial-condition left side is not the dependent function")
+            point=s.Integer(0); key=dependent
+        value=item.rhs.subs(independent, point) if independent in item.rhs.free_symbols else item.rhs
+        result[key]=value
+    return result
 
 class Engine:
     def __init__(self, request):
@@ -189,14 +270,17 @@ class Engine:
             raise MathError("Unknown operator")
         require(kind == "call", "Unknown AST node")
         # Preserve bound variable identity even if the user stored x previously.
-        scoped = value in ("diff", "integrate", "limit", "series", "sum", "product", "solve", "nsolve", "nintegrate", "nderivative", "minimum", "maximum", "collect", "subs") and len(args) > 1
+        scoped = value in ("diff", "integrate", "limit", "series", "taylor", "sum", "product", "solve", "nsolve", "nintegrate", "nderivative", "minimum", "maximum", "collect", "subs", "domain", "range", "coeff", "quo", "rem", "resultant", "discriminant", "charpoly", "gradient", "divergence", "curl", "hessian", "jacobian", "laplacian", "dsolve", "desolve", "laplace", "ilaplace", "fourier", "ifourier") and len(args) > 1
         old = self.bindings.copy()
         if value=="solve" and len(args)==1: self.bindings["x"]=self.symbol("x")
         if scoped:
-            varnode = args[1]
-            candidates = varnode.get("args", []) if varnode["kind"] == "list" else [varnode]
-            if varnode["kind"] == "tuple": candidates = varnode["args"][:1]
-            if varnode["kind"] == "relation": candidates = [varnode["args"][0]]
+            if value in ("dsolve", "desolve", "laplace", "fourier", "ilaplace", "ifourier"):
+                candidates = list(args[1:3])
+            else:
+                varnode = args[1]
+                candidates = varnode.get("args", []) if varnode["kind"] == "list" else [varnode]
+                if varnode["kind"] == "tuple": candidates = varnode["args"][:1]
+                if varnode["kind"] == "relation": candidates = [varnode["args"][0]]
             for n in candidates:
                 if n["kind"] == "symbol": self.bindings[n["value"]] = self.symbol(n["value"])
         try:
@@ -247,11 +331,15 @@ class Engine:
             if not explicit and not getattr(arg, "free_symbols", set()):
                 arg *= {"DEG": s.pi/180, "GRAD": s.pi/200}.get(self.angle, 1)
             return getattr(s,name)(arg)
+        if name=="atan2":
+            result=s.atan2(a[0],a[1])
+            return result * ({"DEG":180/s.pi,"GRAD":200/s.pi}.get(self.angle,1) if not result.free_symbols else 1)
         if name in ("asin", "acos", "atan"):
             result = getattr(s,name)(*a)
-            return result * ({"DEG": 180/s.pi, "GRAD": 200/s.pi}.get(self.angle, 1) if not result.free_symbols else 1)
+            return result * ({"DEG": 180/s.pi, "GRAD":200/s.pi}.get(self.angle, 1) if not result.free_symbols else 1)
         basic = {"sqrt": s.sqrt, "cbrt": lambda x: s.real_root(x,3), "nthroot": s.root, "abs": s.Abs,
-                 "floor": s.floor, "ceil": s.ceiling, "sign": s.sign, "gamma": s.gamma,
+                 "floor": s.floor, "ceil": s.ceiling, "iPart": s.floor, "frac": s.frac,
+                 "sign": s.sign, "gamma": s.gamma,
                  "erf":s.erf,"erfc":s.erfc,"Ei":s.Ei,"Si":s.Si,"Ci":s.Ci,"zeta":s.zeta,
                  "ln": s.log, "log": lambda x, b=10: s.log(x,b), "exp": s.exp,
                  "sinc": s.sinc, "sinh": s.sinh, "cosh": s.cosh, "tanh": s.tanh, "asinh": s.asinh, "acosh": s.acosh, "atanh": s.atanh,
@@ -283,6 +371,43 @@ class Engine:
             if name == "factorint": return [[s.Integer(p), s.Integer(k)] for p,k in s.factorint(a[0]).items()]
             return s.divisors(a[0])
         if name == "subs": return a[0].subs(a[1],a[2])
+        if name in ("apart","partfrac"):
+            require(len(a)==2, name+" expects an expression and variable")
+            return s.apart(a[0],a[1])
+        if name in ("together","cancel","trigsimp","trigexpand","powsimp","powdenest","hyperexpand"):
+            transforms={"together":s.together,"cancel":s.cancel,"trigsimp":s.trigsimp,
+                        "trigexpand":s.trigexpand,"powsimp":s.powsimp,"powdenest":s.powdenest,
+                        "hyperexpand":s.hyperexpand}
+            require(len(a)==1, name+" expects one expression")
+            return transforms[name](a[0])
+        if name=="nsimplify":
+            require(len(a)==1,"nsimplify expects one expression")
+            return s.nsimplify(a[0])
+        if name=="taylor":
+            require(len(a)==4,"taylor expects expression, variable, point and order")
+            return s.series(a[0],a[1],a[2],int(a[3]))
+        if name in ("comDenom","numden"):
+            numerator,denominator=s.fraction(s.together(a[0]))
+            return denominator if name=="comDenom" else [numerator,denominator]
+        if name=="coeff":
+            require(len(a) in (2,3),"coeff expects an expression, variable and optional power")
+            return a[0].coeff(a[1]) if len(a)==2 else a[0].coeff(a[1],int(a[2]))
+        if name in ("quo","rem"):
+            require(len(a)==3,name+" expects two polynomials and a variable")
+            quotient,remainder=s.div(a[0],a[1],a[2])
+            return quotient if name=="quo" else remainder
+        if name=="resultant":
+            require(len(a)==3,"resultant expects two expressions and a variable")
+            return s.resultant(a[0],a[1],a[2])
+        if name=="discriminant":
+            require(len(a)==2,"discriminant expects a polynomial and variable")
+            return s.discriminant(a[0],a[1])
+        if name=="domain":
+            require(len(a)==2,"domain expects an expression and variable")
+            return continuous_domain(a[0],a[1],s.S.Reals)
+        if name=="range":
+            require(len(a)==2,"range expects an expression and variable")
+            return function_range(a[0],a[1],s.S.Reals)
         if name == "integrate":
             require(len(a) in (2,4), "integrate expects a variable or integration bounds")
             spec = a[1] if len(a)==2 else (a[1],a[2],a[3])
@@ -290,6 +415,36 @@ class Engine:
             if result.has(s.Integral): self.note = "Symbolic solution not found for the remaining integral."
             elif len(a)==2 and not isinstance(a[1], (list,tuple)): result += self.symbol("C")
             return result
+        if name in ("dsolve","desolve"):
+            require(len(a) in (3,4), "dsolve expects equation, dependent function and independent variable")
+            require(isinstance(a[2], s.Symbol), "dsolve independent variable must be a symbol")
+            equation=ode_equation(a[0]); dependent=a[1]
+            function=dependent.func if isinstance(dependent, AppliedUndef) else dependent
+            conditions=initial_conditions(a[3],dependent,a[2]) if len(a)==4 else None
+            return s.dsolve(equation, fun=function, x=a[2], ics=conditions) if conditions else s.dsolve(equation, fun=function, x=a[2])
+        if name in ("laplace","fourier"):
+            require(len(a)==3, name+" expects an expression, time variable and transform variable")
+            result=(s.laplace_transform if name=="laplace" else s.fourier_transform)(a[0],a[1],a[2])
+            if isinstance(result, tuple):
+                value, conditions = result[0], result[1:]
+            else:
+                value, conditions = result, ()
+            meaningful=[str(condition) for condition in conditions if condition not in (s.true,0)]
+            if meaningful: self.note="Transform conditions: "+", ".join(meaningful)
+            return value
+        if name in ("ilaplace","ifourier"):
+            require(len(a)==3, name+" expects a transformed expression, transform variable and time variable")
+            result=(s.inverse_laplace_transform if name=="ilaplace" else s.inverse_fourier_transform)(a[0],a[1],a[2])
+            if isinstance(result, tuple):
+                value, conditions = result[0], result[1:]
+            else:
+                value, conditions = result, ()
+            meaningful=[str(condition) for condition in conditions if condition not in (s.true,0)]
+            if meaningful: self.note="Transform conditions: "+", ".join(meaningful)
+            return value
+        if name in ("fft","ifft"):
+            require(len(a)==1, name+" expects a list of samples")
+            return discrete_fourier(a[0], inverse=name=="ifft")
         if name == "limit":
             if isinstance(a[1],Relational): var,point = a[1].lhs,a[1].rhs; direction = str(a[2]) if len(a)>2 else "+-"
             else: var,point = a[1],a[2]; direction = str(a[3]) if len(a)>3 else "+-"
@@ -325,8 +480,10 @@ class Engine:
             else: result=s.nsolve(expr,a[1],a[2],prec=max(20,self.precision+10))
             require(all(c.subs(a[1],result)!=s.false for c in self.conditions),"No solution found in the expression domain")
             return s.N(result,self.precision)
-        if name in ("nintegrate", "nderivative", "minimum", "maximum"):
-            if name == "nderivative": return s.N(s.diff(a[0],a[1]).subs(a[1],a[2]),self.precision)
+        if name=="nderivative":
+            require(len(a) in (3,4), "nderivative expects an expression, variable and point")
+            return numeric_derivative(a[0],a[1],a[2],self.precision,a[3] if len(a)==4 else None)
+        if name in ("nintegrate", "minimum", "maximum"):
             if name in ("minimum", "maximum"):
                 return (s.minimum if name=="minimum" else s.maximum)(a[0],a[1],s.Interval(a[2],a[3]))
             # SymPy evalf uses adaptive quadrature and arbitrary precision.
@@ -337,12 +494,51 @@ class Engine:
             vector=matrix(a[0]);length=vector.norm()
             require(length!=0,"Domain ERROR: zero vector cannot be normalized")
             return vector/length
+        if name=="gradient":
+            coords=coordinates(a[1])
+            return [s.diff(a[0],var) for var in coords]
+        if name in ("divergence","curl"):
+            coords=coordinates(a[1]); field=matrix(a[0])
+            if field.rows==1 and field.cols==len(coords): field=field.T
+            require(field.cols==1 and field.rows==len(coords), "Vector field dimension does not match coordinates")
+            if name=="divergence":
+                return s.Add(*(s.diff(field[index],coords[index]) for index in range(len(coords))))
+            if field.rows==2:
+                return s.diff(field[1],coords[0])-s.diff(field[0],coords[1])
+            require(field.rows==3,"Curl supports two or three dimensional vector fields")
+            return s.Matrix([s.diff(field[2],coords[1])-s.diff(field[1],coords[2]),
+                             s.diff(field[0],coords[2])-s.diff(field[2],coords[0]),
+                             s.diff(field[1],coords[0])-s.diff(field[0],coords[1])])
+        if name=="hessian":
+            coords=coordinates(a[1])
+            return s.Matrix([[s.diff(a[0],coords[row],coords[column]) for column in range(len(coords))] for row in range(len(coords))])
+        if name=="jacobian":
+            coords=coordinates(a[1])
+            return matrix(a[0]).jacobian(coords)
+        if name=="laplacian":
+            coords=coordinates(a[1])
+            return s.Add(*(s.diff(a[0],var,var) for var in coords))
+        if name=="charpoly":
+            require(len(a) in (1,2), "charpoly expects a matrix and optional variable")
+            m=matrix(a[0]); variable=a[1] if len(a)==2 else s.Symbol("lambda")
+            return m.charpoly(variable).as_expr()
+        if name=="identity":
+            require(len(a)==1 and a[0].is_Integer and 0<a[0]<=32, "identity size must be an integer from 1 to 32")
+            return s.eye(int(a[0]))
+        if name=="diag":
+            require(len(a)==1 and isinstance(a[0],(list,tuple)), "diag expects a list of diagonal entries")
+            return s.diag(*a[0])
         matrix_ops = {"det": lambda m: m.det(), "inverse": lambda m: m.inv(), "transpose": lambda m: m.T,
                       "rank": lambda m: s.Integer(m.rank()), "trace": lambda m: m.trace(), "rref": lambda m: m.rref()[0],
                       "ref": lambda m: m.echelon_form(), "lu": lambda m: list(m.LUdecomposition()),
                       "eigenvalues": lambda m: [[k,s.Integer(v)] for k,v in m.eigenvals().items()],
                       "eigenvectors": lambda m: [[v,s.Integer(k),vec] for v,k,vec in m.eigenvects()],
-                      "norm": lambda m: m.norm()}
+                      "norm": lambda m: m.norm(), "qr": lambda m: list(m.QRdecomposition()),
+                      "cholesky": lambda m: m.cholesky(hermitian=False), "nullspace": lambda m: list(m.nullspace()),
+                      "cofactor": lambda m: m.cofactor_matrix(), "adjugate": lambda m: m.adjugate(),
+                      "rowspace": lambda m: list(m.rowspace()), "singularvalues": lambda m: list(m.singular_values()),
+                      "frob": lambda m: s.sqrt(sum(item*item for item in m)),
+                      "jordan": lambda m: list(m.jordan_form()), "dim": lambda m: [m.rows,m.cols]}
         if name in matrix_ops: return matrix_ops[name](matrix(a[0]))
         if name in ("dot", "cross", "angle", "projection", "linsolve"):
             u,v = matrix(a[0]),matrix(a[1])
@@ -370,6 +566,18 @@ class Engine:
             return {"n": s.Integer(n), "sum": sum(data), "mean": avg, "median": med, "population variance": var,
                     "population SD": s.sqrt(var), "sample variance": var*n/(n-1) if n>1 else s.nan,
                     "sample SD": s.sqrt(var*n/(n-1)) if n>1 else s.nan, "quartiles (inclusive)": quartiles}
+        if name in ("covariance","correlation"):
+            require(len(a)==2, name+" expects two data lists")
+            xs=flatten(a[0]); ys=flatten(a[1])
+            require(len(xs)==len(ys),"Covariance and correlation require equal data lengths")
+            n=len(xs)
+            require(n>0,"Enter paired data")
+            mx=sum(xs)/n; my=sum(ys)/n
+            covariance=sum((x-mx)*(y-my) for x,y in zip(xs,ys))/n
+            if name=="covariance": return covariance
+            vx=sum((x-mx)**2 for x in xs)/n; vy=sum((y-my)**2 for y in ys)/n
+            require(vx*vy!=0,"Correlation requires variation in both data sets")
+            return s.simplify(covariance/s.sqrt(vx*vy))
         if name == "regression":
             rows = a[0]; mode = str(a[1]) if len(a)>1 else "linear"
             require(len(rows)>=2 and all(len(row)==2 for row in rows),"Regression requires x,y pairs")
@@ -405,6 +613,8 @@ class Engine:
             old = self.bindings.copy(); self.bindings.update(zip(function["parameters"],a)); self.resolving.add(name)
             try: return self.build(function["body"])
             finally: self.bindings = old; self.resolving.remove(name)
+        if name.isidentifier():
+            return s.Function(name)(*a)
         raise MathError("Unknown function: " + name)
 
 def walk(node):
@@ -493,7 +703,16 @@ def result_ast(x):
         return result
     if isinstance(x,s.Pow): return node("binary","^",[result_ast(x.base),result_ast(x.exp)])
     if isinstance(x,Relational): return node("relation",x.rel_op,[result_ast(x.lhs),result_ast(x.rhs)])
-    if isinstance(x,s.Function): return node("frozen_call",{"log":"ln","Abs":"abs","conjugate":"conj"}.get(x.func.__name__,x.func.__name__),[result_ast(v) for v in x.args])
+    if isinstance(x,s.Function):
+        name=x.func.__name__
+        reusable={"log":"ln","Abs":"abs","conjugate":"conj","Piecewise":"piecewise","exp":"exp",
+                  "sin":"sin","cos":"cos","tan":"tan","asin":"asin","acos":"acos","atan":"atan",
+                  "sinh":"sinh","cosh":"cosh","tanh":"tanh","asinh":"asinh","acosh":"acosh","atanh":"atanh",
+                  "sinc":"sinc","gamma":"gamma","erf":"erf","erfc":"erfc","Ei":"Ei","Si":"Si","Ci":"Ci",
+                  "zeta":"zeta","re":"re","im":"im","arg":"arg","sign":"sign","floor":"floor","ceiling":"ceil",
+                  "atan2":"atan2"}
+        require(name in reusable,"This result cannot be stored as a reusable expression")
+        return node("frozen_call",reusable[name],[result_ast(v) for v in x.args])
     raise MathError("This result cannot be stored as a reusable expression")
 
 def graph(engine, request):
@@ -626,8 +845,8 @@ def programmer(request):
 def dispatch(payload):
     request=json.loads(payload)
     tree=request.get("tree",{})
-    integration=tree.get("kind")=="call" and tree.get("value")=="integrate"
-    budget=Budget(float(request.get("budget",8)),steps=6000000 if integration else 1500000)
+    heavy = tree.get("kind")=="call" and tree.get("value") in ("integrate","dsolve","desolve","laplace","ilaplace","fourier","ifourier","domain","range")
+    budget=Budget(float(request.get("budget",20 if heavy else 8)),steps=6000000 if heavy else 1500000)
     try:
         sys.settrace(budget.trace)
         engine=Engine(request)

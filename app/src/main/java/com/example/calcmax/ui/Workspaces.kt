@@ -88,7 +88,33 @@ import java.util.Date
     }
 }
 
-val UnitGroups=linkedMapOf("Length" to listOf("m","km","cm","mm","in","ft","yd","mi"),"Area" to listOf("m2","cm2","km2","ha","acre"),"Volume" to listOf("L","mL","m3","galUS"),"Mass" to listOf("kg","g","mg","lb","oz"),"Temperature" to listOf("degC","degF","K"),"Speed" to listOf("mps","kph","mph","knot"),"Acceleration" to listOf("mps2","g0"),"Pressure" to listOf("Pa","kPa","bar","atm"),"Force" to listOf("N","kN","lbf"),"Energy" to listOf("J","kJ","cal","kWh","eV"),"Power" to listOf("W","kW"),"Time" to listOf("s","min","h","day","ms"),"Frequency" to listOf("Hz","kHz","MHz"),"Angle" to listOf("rad","deg","grad"),"Data" to listOf("bit","byte","kB","KiB","MB","MiB","GB"))
+val UnitGroups=linkedMapOf(
+    "Length" to listOf("m","km","cm","mm","in","ft","yd","mi"),
+    "Area" to listOf("m2","cm2","km2","ha","acre"),
+    "Volume" to listOf("L","mL","m3","galUS"),
+    "Mass" to listOf("kg","g","mg","lb","oz"),
+    "Temperature" to listOf("degC","degF","K"),
+    "Speed" to listOf("mps","kph","mph","knot"),
+    "Acceleration" to listOf("mps2","g0"),
+    "Pressure" to listOf("Pa","kPa","bar","atm"),
+    "Force" to listOf("N","kN","lbf"),
+    "Energy" to listOf("J","kJ","cal","kWh","eV"),
+    "Power" to listOf("W","kW"),
+    "Time" to listOf("s","min","h","day","ms"),
+    "Frequency" to listOf("Hz","kHz","MHz"),
+    "Angle" to listOf("rad","deg","grad"),
+    "Data" to listOf("bit","byte","kB","KiB","MB","MiB","GB"),
+    "Current" to listOf("A","mA","uA"),
+    "Charge" to listOf("C","mC","uC"),
+    "Voltage" to listOf("V","mV","kV"),
+    "Resistance" to listOf("ohm","kohm","Mohm","Ω"),
+    "Conductance" to listOf("S","mS"),
+    "Capacitance" to listOf("F","uF","nF","pF"),
+    "Inductance" to listOf("H","mH","uH"),
+    "Magnetic flux" to listOf("Wb","Vs"),
+    "Magnetic flux density" to listOf("T","mT","uT"),
+    "Amount" to listOf("mol","mmol","umol")
+)
 @Composable fun UnitsScreen(m: CalculatorModel) {
     var group by rememberSaveable { mutableStateOf("Length") }; var from by rememberSaveable { mutableStateOf("m") }; var to by rememberSaveable { mutableStateOf("ft") }; var value by rememberSaveable { mutableStateOf("1") }
     Panel("Unit conversion","Dimension-checked conversions with exact factors and temperature offsets.") {

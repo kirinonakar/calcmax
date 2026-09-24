@@ -54,6 +54,12 @@ regression([[1,2],[2,4],[3,6]],linear)
 convert(32,degF,degC)
 qty(2,m)+qty(30,cm)
 convert(qty(1,kg)*qty(2,mps2),N)
+apart(1/(x*(x+1)),x)
+gradient(x^2+y^2,[x,y])
+dsolve(diff(y(t),t)=y(t),y(t),t)
+laplace(sin(t),t,s)
+charpoly([[1,2],[3,4]],x)
+convert(qty(1,V)/qty(1,ohm),A)
 ```
 
 Decimal literals are exact rationals. Decimal results use 3–200 configurable significant digits, with 3/10/15/30/50/100/200 presets and a custom entry. Numeric trig honors DEG/RAD/GRAD; explicit π or ° specifies a radian/degree expression. Symbolic calculus is in radians. Complex values use `i`; `polar(r,theta)`, `rectpolar(z)`, `re`, `im`, `arg` and `conj` are available.
@@ -72,7 +78,7 @@ Statistics distinguish population and sample variance/SD; quartiles use the incl
 
 Equations provides coefficient forms for linear/quadratic/cubic equations, multi-line systems and general exact/numeric solving. Functions provides creation, editing, insertion and deletion of reusable formulas.
 
-Units use exact conversion factors, explicit dimensions and affine temperature conversion. Use `qty(value,unit)` inside expressions. Absolute temperatures support conversion, not compound algebra; temperature differences should be represented separately. Constants use SI definitions and [NIST CODATA 2022](https://physics.nist.gov/cuu/Constants/). Measured constants are marked as approximate and retain their published precision.
+Units use exact conversion factors, explicit dimensions and affine temperature conversion. Use `qty(value,unit)` inside expressions. Absolute temperatures support conversion, not compound algebra; temperature differences should be represented separately. The unit catalog also covers current, charge, voltage, resistance, conductance, capacitance, inductance, magnetic flux and amount. Constants use SI definitions and [NIST CODATA 2022](https://physics.nist.gov/cuu/Constants/). Measured constants are marked as approximate and retain their published precision.
 
 ## Build
 

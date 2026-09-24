@@ -2,19 +2,24 @@
 import sympy as sp
 from calc_engine import Engine, Quantity
 
-x, y, z, t = sp.symbols("x y z t")
+x, y, z, t, u, v, w, s = sp.symbols("x y z t u v w s")
 pi = sp.pi
 true, false = sp.true, sp.false
-left, right, linear = "left", "right", "linear"
+left, right, both, linear = "left", "right", "both", "linear"
 m, cm = "m", "cm"
-
 _names = set("""
-abs floor ceil round sign sqrt cbrt nthroot log ln exp sinc sinh cosh tanh asinh acosh atanh gamma
-sin cos tan asin acos atan
-factorial nCr nPr gcd lcm prime isprime factorint divisors simplify expand factor collect subs diff integrate
-limit series sum product solve nsolve nintegrate nderivative minimum maximum piecewise re im conj arg polar
-rectpolar det inverse transpose rank trace ref rref lu linsolve eigenvalues eigenvectors dot cross norm
-normalize angle projection stats mean median variance stdev quartiles regression qty convert
+abs floor ceil round sign sqrt cbrt nthroot atan2 frac iPart log ln exp sinc sinh cosh tanh asin acos atan sin cos tan
+asinh acosh atanh gamma erf erfc Ei Si Ci zeta factorial nCr nPr gcd lcm prime isprime factorint divisors
+rnd eng pol rec randInt sexagesimal dms mixed quotient remainder sumdata
+simplify expand factor collect subs diff integrate limit series taylor sum product solve nsolve nintegrate
+nderivative minimum maximum piecewise apart partfrac together cancel trigsimp trigexpand powsimp powdenest hyperexpand
+nsimplify comDenom numden coeff quo rem resultant discriminant domain range
+re im conj arg polar rectpolar
+det inverse transpose rank trace ref rref lu linsolve eigenvalues eigenvectors dot cross norm normalize angle projection
+charpoly identity diag qr cholesky nullspace cofactor adjugate rowspace singularvalues frob jordan dim
+gradient divergence curl hessian jacobian laplacian
+dsolve desolve laplace ilaplace fourier ifourier fft ifft
+stats mean median variance stdev quartiles regression covariance correlation qty convert
 """.split())
 _functions = {}
 _variables = {}

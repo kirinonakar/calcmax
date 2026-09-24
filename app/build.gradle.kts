@@ -16,8 +16,8 @@ android {
         applicationId = "com.example.calcmax"
         minSdk = 26
         targetSdk = 36
-        versionCode = 9
-        versionName = "1.0.9"
+        versionCode = 10
+        versionName = "1.1.0"
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
