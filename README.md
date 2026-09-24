@@ -135,6 +135,7 @@ The desktop tests consume AST fixtures produced by the actual Kotlin parser. The
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
 Copyright (c) 2026 **kirinonakar**. All rights reserved.
 
 ## Third-party notices
