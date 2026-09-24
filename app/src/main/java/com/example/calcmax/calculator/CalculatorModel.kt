@@ -90,6 +90,10 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     var graphSource by mutableStateOf(graphSources.optString(prefs.getString("graphKind","cartesian"),prefs.getString("graphSource","sin(x)\ncos(x)") ?: "sin(x)\ncos(x)"))
     var pythonSource by mutableStateOf(prefs.getString("pythonSource","") ?: "")
         private set
+    var pythonSelectionStart by mutableIntStateOf(pythonSource.length)
+        private set
+    var pythonSelectionEnd by mutableIntStateOf(pythonSource.length)
+        private set
     var pythonFileName by mutableStateOf(prefs.getString("pythonFileName","untitled.py") ?: "untitled.py")
         private set
     var pythonUri by mutableStateOf(prefs.getString("pythonUri","") ?: "")
@@ -410,9 +414,22 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
             } finally { graphBusy=false }
         }
     }
-    fun editPython(source:String) {pythonSource=source;pythonDirty=true;save()}
-    fun newPythonFile() {pythonSource="";pythonFileName="untitled.py";pythonUri="";pythonDirty=false;pythonOutput="";pythonError="";pythonHasRun=false;save()}
-    fun openPythonFile(source:String,name:String,uri:String) {pythonSource=source;pythonFileName=name;pythonUri=uri;pythonDirty=false;pythonOutput="";pythonError="";pythonHasRun=false;save()}
+    fun editPython(source:String,start:Int=source.length,end:Int=start) {
+        val changed=source!=pythonSource
+        pythonSource=source
+        pythonSelectionStart=start.coerceIn(0,source.length)
+        pythonSelectionEnd=end.coerceIn(0,source.length)
+        if(changed) {pythonDirty=true;save()}
+    }
+    fun insertPython(snippet:String,inside:Int=snippet.length) {
+        val a=minOf(pythonSelectionStart,pythonSelectionEnd).coerceIn(0,pythonSource.length)
+        val b=maxOf(pythonSelectionStart,pythonSelectionEnd).coerceIn(a,pythonSource.length)
+        val source=pythonSource.substring(0,a)+snippet+pythonSource.substring(b)
+        val cursor=a+inside.coerceIn(0,snippet.length)
+        editPython(source,cursor,cursor)
+    }
+    fun newPythonFile() {pythonSource="";pythonSelectionStart=0;pythonSelectionEnd=0;pythonFileName="untitled.py";pythonUri="";pythonDirty=false;pythonOutput="";pythonError="";pythonHasRun=false;save()}
+    fun openPythonFile(source:String,name:String,uri:String) {pythonSource=source;pythonSelectionStart=source.length;pythonSelectionEnd=source.length;pythonFileName=name;pythonUri=uri;pythonDirty=false;pythonOutput="";pythonError="";pythonHasRun=false;save()}
     fun savedPythonFile(name:String,uri:String) {pythonFileName=name;pythonUri=uri;pythonDirty=false;save()}
     fun pythonFileError(message:String) {pythonError=message}
     fun runPython() {
@@ -421,7 +438,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         pythonJob=viewModelScope.launch {
             pythonBusy=true;pythonOutput="";pythonError="";pythonHasRun=false
             try {
-                val response=engine.execute(JSONObject().put("action","python").put("source",source).put("filename",filename))
+                val response=engine.execute(JSONObject().put("action","python").put("source",source).put("filename",filename).put("functions",functions).put("variables",variables).put("assumptions",assumptions))
                 pythonOutput=response.optString("output","")
                 pythonError=if(response.optBoolean("ok"))"" else response.optString("error","Python execution failed")
                 pythonHasRun=true

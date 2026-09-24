@@ -210,11 +210,12 @@ private fun domainText(result:JSONObject?):String {
     val conditions=result?.optJSONArray("conditions") ?: return ""
     return if(conditions.length()==0)"" else "Domain: "+(0 until conditions.length()).joinToString{conditions.getString(it)}
 }
-@Composable fun SmallAction(text:String,active:Boolean?=null,description:String?=null,action:()->Unit){
+@Composable fun SmallAction(text:String,active:Boolean?=null,description:String?=null,shaded:Boolean=false,action:()->Unit){
     val c=LocalInstrument.current
     val color=when(active){true->c.accent;false->c.muted.copy(alpha=.45f);null->MaterialTheme.colorScheme.onSurface}
     val modifier=description?.let{value->Modifier.semantics{contentDescription=value}} ?: Modifier
-    TextButton(onClick=action,contentPadding=PaddingValues(horizontal=8.dp,vertical=0.dp),modifier=modifier){
+    TextButton(onClick=action,contentPadding=PaddingValues(horizontal=8.dp,vertical=0.dp),modifier=modifier,
+        colors=ButtonDefaults.textButtonColors(containerColor=if(shaded)c.accent.copy(alpha=.22f) else androidx.compose.ui.graphics.Color.Transparent)){
         Text(text,fontSize=11.sp,color=color,fontWeight=if(active==true)FontWeight.SemiBold else FontWeight.Normal)
     }
 }

@@ -26,7 +26,7 @@ import com.example.calcmax.ui.theme.LocalInstrument
     val context=LocalContext.current
     val clipboard=LocalClipboardManager.current
     val c=LocalInstrument.current
-    var editor by remember { mutableStateOf(TextFieldValue(m.pythonSource,selection=TextRange(m.pythonSource.length))) }
+    var editor by remember { mutableStateOf(TextFieldValue(m.pythonSource,selection=TextRange(m.pythonSelectionStart,m.pythonSelectionEnd))) }
     var importsOpen by remember {mutableStateOf(false)}
     var templatesOpen by remember {mutableStateOf(false)}
     var confirm by remember {mutableStateOf("")}
@@ -35,7 +35,11 @@ import com.example.calcmax.ui.theme.LocalInstrument
         window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
         onDispose {window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)}
     }
-    fun update(value:TextFieldValue) {editor=value;if(value.text!=m.pythonSource)m.editPython(value.text)}
+    LaunchedEffect(m.pythonSource,m.pythonSelectionStart,m.pythonSelectionEnd) {
+        if(editor.text!=m.pythonSource || editor.selection.start!=m.pythonSelectionStart || editor.selection.end!=m.pythonSelectionEnd)
+            editor=TextFieldValue(m.pythonSource,selection=TextRange(m.pythonSelectionStart,m.pythonSelectionEnd))
+    }
+    fun update(value:TextFieldValue) {editor=value;m.editPython(value.text,value.selection.start,value.selection.end)}
     fun apply(edit:PythonEdit) {update(TextFieldValue(edit.source,selection=TextRange(edit.cursor)))}
     fun documentName(uri:Uri):String = runCatching {
         context.contentResolver.query(uri,arrayOf(OpenableColumns.DISPLAY_NAME),null,null,null)?.use {cursor->
@@ -64,7 +68,7 @@ import com.example.calcmax.ui.theme.LocalInstrument
     val suggestions=remember(editor.text,position,editor.selection) {
         if(editor.selection.collapsed)PythonEditorTools.completions(editor.text,position) else emptyList()
     }
-    Column(Modifier.fillMaxSize().padding(horizontal=12.dp,vertical=8.dp),verticalArrangement=Arrangement.spacedBy(5.dp)) {
+    Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(horizontal=12.dp,vertical=8.dp),verticalArrangement=Arrangement.spacedBy(5.dp)) {
         Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("PYTHON",style=MaterialTheme.typography.titleMedium,color=c.ink)
@@ -92,7 +96,7 @@ import com.example.calcmax.ui.theme.LocalInstrument
                 DropdownMenu(templatesOpen,{templatesOpen=false}) {PythonEditorTools.snippets.forEach {snippet->DropdownMenuItem(text={Text(snippet.label)},onClick={apply(PythonEditorTools.replace(editor.text,editor.selection.min,editor.selection.max,snippet.code,snippet.cursorOffset));templatesOpen=false})}}
             }
         }
-        OutlinedTextField(editor,::update,Modifier.fillMaxWidth().weight(1f),textStyle=MaterialTheme.typography.bodyMedium.copy(fontFamily=FontFamily.Monospace),label={Text("Python code")},placeholder={Text("print('Hello, world!')")},singleLine=false)
+        OutlinedTextField(editor,::update,Modifier.fillMaxWidth().height(320.dp),textStyle=MaterialTheme.typography.bodyMedium.copy(fontFamily=FontFamily.Monospace),label={Text("Python code")},placeholder={Text("print('Hello, world!')")},singleLine=false)
         if(suggestions.isNotEmpty())Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
             suggestions.forEach {candidate->SmallAction(candidate) {
                 val start=PythonEditorTools.wordStart(editor.text,position)

@@ -35,7 +35,7 @@ import kotlin.math.*
         OutlinedTextField(m.graphSource,{m.updateGraphSource(it)},Modifier.fillMaxWidth().padding(start=10.dp,end=10.dp,top=8.dp),label={Text(if(m.graphKind=="parametric") "One [x(t),y(t)] pair per line" else if(m.graphKind=="polar") "r(t) · radians · one curve per line" else "f(x) · one function per line · up to six")},minLines=2,maxLines=4)
         Column {
             Choices(listOf("cartesian","parametric","polar"),m.graphKind,{m.changeGraphKind(it)})
-            Row(Modifier.horizontalScroll(rememberScrollState())) { SmallAction("Plot") {m.plot()};SmallAction("Range") {rangeDialog=true};SmallAction("Analyze") {analysis=!analysis};SmallAction(if(m.radianAxis)"x: π rad" else "x: decimal"){m.radianAxis=!m.radianAxis;m.save()} }
+            Row(Modifier.horizontalScroll(rememberScrollState())) { SmallAction("Plot") {m.plot()};SmallAction("Range") {rangeDialog=true};SmallAction("Analyze",active=if(analysis)true else null,shaded=analysis) {analysis=!analysis};SmallAction(if(m.radianAxis)"x: π rad" else "x: decimal"){m.radianAxis=!m.radianAxis;m.save()} }
         }
         val curves=remember(m.graphData) {
             val array=m.graphData?.optJSONArray("curves")

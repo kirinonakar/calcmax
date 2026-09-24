@@ -47,6 +47,15 @@ class CalculatorInstrumentedTest {
             assertEquals("import math\nprint(math.sqrt(81))",model().pythonSource)
         }
     }
+    @Test fun pythonCatalogInsertsIntoCodeAtCursor() {
+        compose.runOnIdle {model().mode="Python";model().newPythonFile();model().editPython("print()",6,6)}
+        compose.onNodeWithText("Catalog").performClick()
+        compose.onNodeWithText("abs()").performClick()
+        compose.runOnIdle {
+            assertEquals("import calcmax_catalog as calc\nfrom calcmax_catalog import x, y, z, t, pi\nprint(calc.abs())",model().pythonSource)
+            assertTrue(model().pythonSource.substring(0,model().pythonSelectionStart).endsWith("print(calc.abs("))
+        }
+    }
     @Test fun secondPageInsertsStructuresAndGraphsCurrentExpression() {
         compose.runOnIdle {model().mode="Scientific";model().clear();model().secondKeys=true;model().edit(Editor("y=x^2+1"))}
         compose.onNodeWithContentDescription("Graph current expression").performClick()

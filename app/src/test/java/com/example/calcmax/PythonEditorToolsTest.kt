@@ -21,4 +21,26 @@ class PythonEditorToolsTest {
         assertTrue(PythonEditorTools.completions(source,source.indexOf(')')).contains("sqrt"))
         assertEquals("import math",PythonEditorTools.requiredImport(source,source.indexOf("sq"),"sqrt"))
     }
+    @Test fun catalogAddsOneTopImportAndPythonNames() {
+        val first=PythonEditorTools.insertCatalog("print()",6,6,"mean([])",6)
+        assertEquals("import calcmax_catalog as calc\nfrom calcmax_catalog import x, y, z, t, pi\nprint(calc.mean([]))",first.source)
+        assertEquals("[]",first.source.substring(first.cursor-1,first.cursor+1))
+        val second=PythonEditorTools.insertCatalog(first.source,first.cursor,first.cursor,"diff(,x)",5)
+        assertEquals(1,second.source.lines().count {it=="import calcmax_catalog as calc"})
+        assertEquals(1,second.source.lines().count {it=="from calcmax_catalog import x, y, z, t, pi"})
+        assertTrue(second.source.contains("calc.diff(,calc.x)"))
+        assertEquals(0,second.source.indexOf("import calcmax_catalog as calc"))
+    }
+    @Test fun catalogInEmptyFileCreatesRunnableOutputTemplate() {
+        val edit=PythonEditorTools.insertCatalog("",0,0,"factorint()",10)
+        assertTrue(edit.source.startsWith("import calcmax_catalog as calc\nfrom calcmax_catalog import x, y, z, t, pi\n"))
+        assertTrue(edit.source.endsWith("print(calc.factorint())"))
+        assertEquals(')',edit.source[edit.cursor])
+    }
+    @Test fun existingImportIsMovedToTopWithoutDuplicates() {
+        val source="print(1)\nimport calcmax_catalog as calc\nimport calcmax_catalog as calc\n"
+        val edit=PythonEditorTools.insertImport(source,7,"import calcmax_catalog as calc")
+        assertEquals("import calcmax_catalog as calc\nprint(1)\n",edit.source)
+        assertEquals("import calcmax_catalog as calc\nprint(1",edit.source.substring(0,edit.cursor))
+    }
 }
