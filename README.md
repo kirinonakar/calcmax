@@ -21,7 +21,6 @@ You can download the latest release from the [Releases Page](https://github.com/
 * MODE opens scientific, CAS, graphing, Python, equations, matrix, vector, statistics, programmer, units, constants, tip and currency workspaces.
 * SETUP chooses Light, Dark, or System (the default), angle unit, precision, haptics, sound and optional persistent history. Theme changes preserve the current calculation and editor state.
 * RCL / SHIFT RCL open variable recall and storage. `radius=5` and `f(x)=x^2+1` are supported at the top level outside Equation mode. Use `solve(...)` to solve equations. Stored values are snapshots; user functions retain their expression bodies.
-* The integral key inserts a definite integral; SHIFT integral inserts a derivative evaluated at a point. The display toolbar also provides indefinite integral, definite integral, symbolic derivative and point derivative templates.
 
 ## Examples
 
@@ -54,19 +53,19 @@ qty(2,m)+qty(30,cm)
 convert(qty(1,kg)*qty(2,mps2),N)
 ```
 
-Decimal literals are exact rationals. Decimal results use 3–200 configurable significant digits, with 3/10/15/30/50/100/200 presets and a custom entry. Numeric trig honors DEG/RAD/GRAD; explicit π or ° specifies a radian/degree expression. Symbolic calculus is in radians. Complex values use `i`; `polar(r,theta)`, `rectpolar(z)`, `re`, `im`, `arg` and `conj` are available. `log(x)` is base 10 and `ln(x)` is natural log. M+/M− update independent memory without replacing the displayed result with the memory total.
+Decimal literals are exact rationals. Decimal results use 3–200 configurable significant digits, with 3/10/15/30/50/100/200 presets and a custom entry. Numeric trig honors DEG/RAD/GRAD; explicit π or ° specifies a radian/degree expression. Symbolic calculus is in radians. Complex values use `i`; `polar(r,theta)`, `rectpolar(z)`, `re`, `im`, `arg` and `conj` are available.
 
-The graph workspace accepts one expression per line (six curves), including user functions. Cartesian variable: `x`. Parametric input: `[cos(t),sin(t)]`; polar input: `2*cos(3*t)`. Each graph type keeps its own expressions. Traces show sampled approximations. Cartesian analysis lists and marks roots and intersections in a selected interval, along with extrema, derivatives and integrals. Graphing is a visual numerical tool, not a proof that all roots or singularities have been found.
+The graph workspace accepts one expression per line (six curves), including user functions. Cartesian variable: `x`. Parametric input: `[cos(t),sin(t)]`; polar input: `2*cos(3*t)`. Cartesian analysis lists and marks roots and intersections in a selected interval, along with extrema, derivatives and integrals.
 
-Python mode edits and runs scripts using the bundled interpreter. The workspace scrolls above the on-screen keyboard. New/Open/Save/Save as use Android's document picker for `.py` files. Copy and Paste work with the current selection; Import and Function menus insert common statements and templates. Choosing a function from the shared Catalog inserts `calc.function(...)` at the Python cursor, or `print(calc.function(...))` in an empty file, and places the catalog and symbol imports once at the top. The bundled adapter supports calculator catalog functions, symbols and saved custom functions; use Python's `**` for exponentiation. Completion suggestions include Python names, names in the script and common module members. Choosing a module completion also inserts its import if needed. The current draft is saved locally between launches. Script output and tracebacks appear below the editor. Execution can be stopped and has a 20-second service deadline. Imports are limited to Python's bundled and installed packages; this mode does not install packages at runtime.
-
-The `x: decimal` / `x: π rad` control changes horizontal tick labels to radians expressed in multiples of π. It changes axis notation, not the underlying expression or samples.
+Python mode edits and runs scripts using the bundled interpreter. New/Open/Save/Save as use Android's document picker for `.py` files. Import and Function menus insert common statements and templates. Choosing a function from the shared Catalog inserts `calc.function(...)` at the Python cursor, or `print(calc.function(...))` in an empty file, and places the catalog and symbol imports once at the top. The bundled adapter supports calculator catalog functions, symbols and saved custom functions; use Python's `**` for exponentiation. Completion suggestions include Python names, names in the script and common module members. Choosing a module completion also inserts its import if needed. Execution can be stopped and has a 20-second service deadline. Imports are limited to Python's bundled and installed packages; this mode does not install packages at runtime.
 
 The tip calculator supports a pre-tax bill, separate tip/tax percentages, currency precision and splitting between people. A remainder allocation ensures rounded shares sum exactly to the total.
 
-The currency converter supports a manual rate or the latest [ExchangeRate-API daily reference rates](https://www.exchangerate-api.com/docs/free). A successful download is cached privately with both its provider reference time and local fetch time. Online-mode entry checks the cache; a download is performed only when at least 24 hours old. If the screen stays open, it checks again when the cache expires. When offline, the last saved snapshot remains usable with its original timestamp. Manual rates are explicitly labeled. These are indicative daily reference rates, not streaming market/trading quotes; there is no background fetch while the app is closed.
+The currency converter supports a manual rate or the latest [ExchangeRate-API daily reference rates](https://www.exchangerate-api.com/docs/free). A successful download is cached privately with both its provider reference time and local fetch time. Online-mode entry checks the cache; a download is performed only when at least 24 hours old. If the screen stays open, it checks again when the cache expires. When offline, the last saved snapshot remains usable with its original timestamp. Manual rates are explicitly labeled.
 
 Statistics distinguish population and sample variance/SD; quartiles use the inclusive interpolation convention. Regression supports linear, quadratic, logarithmic, exponential and power models. Programmer inputs use the selected base, mask to 8/16/32/64 bits, and expose all four bases; right shifts are arithmetic in signed mode and logical in unsigned mode. Shift counts are entered in the selected base.
+
+Equations provides coefficient forms for linear/quadratic/cubic equations, multi-line systems and general exact/numeric solving. Functions provides creation, editing, insertion and deletion of reusable formulas.
 
 Units use exact conversion factors, explicit dimensions and affine temperature conversion. Use `qty(value,unit)` inside expressions. Absolute temperatures support conversion, not compound algebra; temperature differences should be represented separately. Constants use SI definitions and [NIST CODATA 2022](https://physics.nist.gov/cuu/Constants/). Measured constants are marked as approximate and retain their published precision.
 
@@ -104,8 +103,6 @@ History is capped at 500 entries and stored privately on the device. Turning per
 ## Validation
 
 Recent interaction additions: directional pinches lock to x for horizontal finger placement, y for vertical placement, and equal x/y scaling for diagonal placement. Software keyboard input overlays the lower keys without resizing the instrument. Tap a number once to select it and again to place its blinking internal cursor. Setup offers separate input/output font sizes. RCL lists stored values; SHIFT AC is CLR ALL and clears the visible tape and variables while preserving History, settings, assumptions and custom functions.
-
-Equations provides coefficient forms for linear/quadratic/cubic equations, multi-line systems and general exact/numeric solving. Functions provides creation, editing, insertion and deletion of reusable formulas. The second keypad and catalog include the unnormalized radian function `sinc(x) = sin(x)/x`, with `sinc(0) = 1`.
 
 ```powershell
 .\gradlew.bat :math:test :math:exportCases :app:lintDebug
