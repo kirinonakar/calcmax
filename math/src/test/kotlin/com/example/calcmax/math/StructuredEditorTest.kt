@@ -202,6 +202,20 @@ class StructuredEditorTest {
         assertEquals("3^(2+3)+6",editor.insert("+3").source)
         assertEquals("3^(2)+3+6",editor.move(1).insert("+3").source)
     }
+    @Test fun emptyPowerTemplateLandsInsideHiddenExponentParenthesis() {
+        val template=Editor("()^()",1)
+        val base=template.insert("2")
+        assertEquals("(2)^()",base.source)
+        val exponent=base.move(1)
+        assertEquals(base.source.indexOf("^(")+2,exponent.cursor)
+        assertEquals(5..5,exponent.cursorTarget())
+        assertEquals("(2)^(3)",exponent.insert("3").source)
+        assertEquals(2,exponent.move(-1).cursor)
+        assertEquals(1,template.move(1).move(-1).cursor)
+        assertEquals("()^(3)",template.move(1).insert("3").source)
+        assertEquals("(2)^(89)",Editor("(2)^(9)",2).move(1).insert("8").source)
+        assertEquals("(2)^(89)*4",Editor("(2)^(9)",2).move(1).insert("8").move(1).move(1).insert("4").source)
+    }
     @Test fun leavingDenominatorPlacesCaretOnTheFractionAxis(){
         val editor=Editor("(1)/(3)+6",6).move(1)
         assertEquals(0..7,editor.cursorTarget())

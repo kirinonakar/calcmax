@@ -154,7 +154,11 @@ data class Editor(val source: String = "", val cursor: Int = source.length, val 
         if(cursor==source.length&&outside!=null&&delta>0)return this
         if(cursor==anchor && delta>0) {
             val power=tree()?.nodes()?.firstOrNull {node->hiddenPowerBase(node)?.end?.minus(1)==cursor}
-            if(power!=null)return Editor(source,power.args[1].start,exponent=power.args[1].let{it.start..it.end})
+            val exponent=power?.args?.get(1)
+            if(exponent!=null) {
+                if(exponent.kind=="group")return Editor(source,exponent.start+1)
+                return Editor(source,exponent.start,exponent=exponent.start..exponent.end)
+            }
         }
         if(cursor==anchor && delta<0) {
             val base=tree()?.nodes()?.firstNotNullOfOrNull {node->

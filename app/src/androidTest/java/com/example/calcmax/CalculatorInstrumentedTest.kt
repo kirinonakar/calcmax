@@ -107,6 +107,19 @@ class CalculatorInstrumentedTest {
         yCell.performTextInput("5")
         yCell.assertTextContains("5",substring=true)
     }
+    @Test fun statisticsCellFocusSurvivesFingerRollPastTouchSlop() {
+        compose.runOnIdle {model().mode="Statistics"}
+        compose.onNodeWithText("New").performClick()
+        val slop=android.view.ViewConfiguration.get(compose.activity).scaledTouchSlop
+        val roll=slop*1.25f
+        val cell=compose.onNodeWithTag("statistics-cell-1-0").performScrollTo()
+        // Physical fingers roll slightly while tapping and the table scroll already claims that movement,
+        // which used to cancel the tap and leave the cell unfocused on real devices.
+        cell.performTouchInput {swipeUp(startY=height/2f+roll/2f,endY=height/2f-roll/2f,durationMillis=40)}
+        cell.assertIsFocused()
+        cell.performTextInput("7")
+        cell.assertTextContains("7",substring=true)
+    }
     @Test fun statisticsCellTapImmediatelyAfterFlingFocuses() {
         compose.runOnIdle {
             model().saveDataSet("AaTouchRows",(1..60).joinToString("\n"),"list")
