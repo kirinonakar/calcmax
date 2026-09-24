@@ -7,11 +7,13 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.*
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
@@ -19,6 +21,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.*
 import com.example.calcmax.calculator.CalculatorModel
 import com.example.calcmax.math.Editor
@@ -42,7 +45,8 @@ import kotlin.math.max
     Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)) { values.forEach { value->FilterChip(selected==value,onClick={choose(value)},label={Text(value,fontSize=12.sp)}) } }
 }
 @Composable fun Field(value: String,label: String,modifier: Modifier=Modifier,onValue: (String)->Unit) { OutlinedTextField(value,onValue,modifier=modifier,label={Text(label)},singleLine=true) }
-@Composable private fun CompactField(value: String,label: String,modifier: Modifier=Modifier,onValue: (String)->Unit) { OutlinedTextField(value,onValue,modifier=modifier.height(44.dp),label={Text(label)},textStyle=MaterialTheme.typography.bodyMedium,singleLine=true) }
+@Composable private fun StatHeader(text:String,modifier:Modifier) { val c=LocalInstrument.current; Box(modifier.fillMaxHeight(),contentAlignment=Alignment.Center){Text(text,fontSize=11.sp,color=c.muted,fontWeight=FontWeight.SemiBold)} }
+@Composable private fun StatCell(value:String,modifier:Modifier,onValue:(String)->Unit) { val c=LocalInstrument.current; Box(modifier.fillMaxHeight().background(c.display).padding(horizontal=8.dp),contentAlignment=Alignment.CenterStart){BasicTextField(value,onValue,Modifier.fillMaxWidth(),textStyle=MaterialTheme.typography.bodyMedium.copy(fontSize=12.sp,color=c.ink),singleLine=true,cursorBrush=SolidColor(c.accent))} }
 
 @Composable fun MatrixScreen(m: CalculatorModel) {
     var rows by rememberSaveable { mutableIntStateOf(2) }; var cols by rememberSaveable { mutableIntStateOf(if(m.mode=="Vector")1 else 2) }
@@ -134,14 +138,31 @@ import kotlin.math.max
             SmallAction("Add row"){if(parsedRows.size<999)data+=if(data.isBlank())if(dataKind=="xy")"0,0" else "0" else if(dataKind=="xy")"\n0,0" else "\n0"}
         }
         if(csv)OutlinedTextField(data,{data=it},Modifier.fillMaxWidth().height(180.dp),label={Text(if(dataKind=="xy")"x, y values" else "One value per line")},textStyle=MaterialTheme.typography.bodyLarge.copy(fontFamily=FontFamily.Monospace))
-        else Column(Modifier.heightIn(max=300.dp).verticalScroll(rememberScrollState())) {
-            parsedRows.forEachIndexed {index,row->Row(horizontalArrangement=Arrangement.spacedBy(5.dp),verticalAlignment=Alignment.CenterVertically) {
-                Text("${index+1}",fontSize=11.sp,modifier=Modifier.width(20.dp))
-                repeat(if(dataKind=="xy")2 else 1) {column->CompactField(row.getOrElse(column){""},if(dataKind=="list")"value" else if(column==0)"x" else "y",Modifier.weight(1f)) {text->
-                    val next=parsedRows.map {it.toMutableList().apply {while(size<(if(dataKind=="xy")2 else 1))add("")}}.toMutableList();next[index][column]=text;data=next.joinToString("\n"){it.joinToString(",")}
-                }}
-                SmallAction("−"){data=parsedRows.filterIndexed {i,_->i!=index}.joinToString("\n"){it.joinToString(",")}}
-            }}
+        else {
+            val grid=LocalInstrument.current.grid
+            val tableColumns=if(dataKind=="xy")listOf("x","y") else listOf("value")
+            Column(Modifier.fillMaxWidth().border(1.dp,grid).heightIn(max=300.dp).verticalScroll(rememberScrollState())) {
+                Row(Modifier.fillMaxWidth().height(30.dp).background(LocalInstrument.current.scientific)) {
+                    StatHeader("#",Modifier.width(30.dp)); VerticalDivider(color=grid,thickness=1.dp)
+                    tableColumns.forEach {name->StatHeader(name,Modifier.weight(1f));VerticalDivider(color=grid,thickness=1.dp)}
+                    StatHeader("",Modifier.width(40.dp))
+                }
+                HorizontalDivider(color=grid,thickness=1.dp)
+                parsedRows.forEachIndexed {index,row->
+                    Row(Modifier.fillMaxWidth().height(38.dp)) {
+                        Box(Modifier.width(30.dp).fillMaxHeight(),contentAlignment=Alignment.Center){Text("${index+1}",fontSize=12.sp,color=LocalInstrument.current.muted)}
+                        VerticalDivider(color=grid,thickness=1.dp)
+                        repeat(tableColumns.size) {column->
+                            StatCell(row.getOrElse(column){""},Modifier.weight(1f)) {text->
+                                val next=parsedRows.map {it.toMutableList().apply {while(size<tableColumns.size)add("")}}.toMutableList();next[index][column]=text;data=next.joinToString("\n"){it.joinToString(",")}
+                            }
+                            VerticalDivider(color=grid,thickness=1.dp)
+                        }
+                        Box(Modifier.width(40.dp).fillMaxHeight(),contentAlignment=Alignment.Center){SmallAction("−"){data=parsedRows.filterIndexed {i,_->i!=index}.joinToString("\n"){it.joinToString(",")}}}
+                    }
+                    if(index<parsedRows.lastIndex)HorizontalDivider(color=grid,thickness=1.dp)
+                }
+            }
         }
         Row(Modifier.horizontalScroll(rememberScrollState())) {
             Button(onClick={val values=vector(0);if(values!="[]"){m.edit(Editor("stats($values)"));m.calculate()}}){Text(if(dataKind=="xy")"Summarize x" else "Summarize list")}
