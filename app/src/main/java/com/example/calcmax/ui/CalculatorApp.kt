@@ -32,6 +32,7 @@ val Modes=listOf("Scientific","CAS","Graph","Python","Equations","Matrix","Vecto
 @Composable fun CalculatorApp(m:CalculatorModel) {
     val c=LocalInstrument.current
     var overlay by rememberSaveable {mutableStateOf("")}
+    var screenExpanded by rememberSaveable {mutableStateOf(false)}
     val workspaces=rememberSaveableStateHolder()
     LaunchedEffect(m.mode){m.save()}
     Column(Modifier.fillMaxSize().background(c.body).windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.displayCutout))) {
@@ -61,12 +62,17 @@ val Modes=listOf("Scientific","CAS","Graph","Python","Equations","Matrix","Vecto
                 "Currency"->CurrencyScreen(m)
                 else->BoxWithConstraints(Modifier.fillMaxSize()) {
                     val keyboardHeight=minOf(520.dp,maxHeight*.68f)
-                    if(maxWidth>650.dp && maxHeight<500.dp) Row(Modifier.fillMaxSize()) {
-                        CalculationTape(m,Modifier.weight(1f))
-                        Keypad(m,Modifier.weight(1f).fillMaxHeight(),{overlay=it})
+                    val landscape=maxWidth>650.dp && maxHeight<500.dp
+                    val fullKeypadHeight=if(landscape)maxHeight else keyboardHeight
+                    // Keep each numeric row the same height after removing the upper keypad rows.
+                    val numericRowHeight=(fullKeypadHeight-36.dp)/9f
+                    val numericKeypadHeight=numericRowHeight*4f+20.dp
+                    if(landscape) Row(Modifier.fillMaxSize(),verticalAlignment=Alignment.Bottom) {
+                        CalculationTape(m,Modifier.weight(1f).fillMaxHeight(),screenExpanded){screenExpanded=!screenExpanded}
+                        Keypad(m,Modifier.weight(if(screenExpanded) .7f else 1f).height(if(screenExpanded)numericKeypadHeight else fullKeypadHeight),screenExpanded,numericRowHeight,{overlay=it})
                     } else Column(Modifier.fillMaxSize()) {
-                        CalculationTape(m,Modifier.weight(1f))
-                        Keypad(m,Modifier.fillMaxWidth().height(keyboardHeight),{overlay=it})
+                        CalculationTape(m,Modifier.weight(1f),screenExpanded){screenExpanded=!screenExpanded}
+                        Keypad(m,Modifier.fillMaxWidth().height(if(screenExpanded)numericKeypadHeight else fullKeypadHeight),screenExpanded,numericRowHeight,{overlay=it})
                     }
                 }
             }
@@ -88,12 +94,12 @@ val Modes=listOf("Scientific","CAS","Graph","Python","Equations","Matrix","Vecto
     }
 }
 
-@Composable fun CalculationTape(m:CalculatorModel,modifier:Modifier=Modifier) {
+@Composable fun CalculationTape(m:CalculatorModel,modifier:Modifier=Modifier,screenExpanded:Boolean=false,onToggleScreen:(()->Unit)?=null) {
     val c=LocalInstrument.current
     val scroll=rememberLazyListState()
     LaunchedEffect(m.inputVersion,m.tape.size){scroll.scrollToItem(0)}
     LazyColumn(modifier.fillMaxWidth().background(c.display).semantics {contentDescription="Calculation history, swipe vertically"},state=scroll,reverseLayout=true) {
-        item(key="active") {Display(m)}
+        item(key="active") {Display(m,screenExpanded,onToggleScreen)}
         items(m.tape.asReversed()) {entry->
             Column(Modifier.fillMaxWidth().padding(horizontal=14.dp,vertical=10.dp)) {
                 Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).clickable {m.reuse(entry)}) {MathNode(JSONObject(entry.input),m.inputFont*.84f)}
@@ -107,7 +113,7 @@ val Modes=listOf("Scientific","CAS","Graph","Python","Equations","Matrix","Vecto
     }
 }
 
-@Composable fun Display(m:CalculatorModel) {
+@Composable fun Display(m:CalculatorModel,screenExpanded:Boolean=false,onToggleScreen:(()->Unit)?=null) {
     val c=LocalInstrument.current
     val clipboard=LocalClipboardManager.current
     val context=LocalContext.current
@@ -177,6 +183,7 @@ val Modes=listOf("Scientific","CAS","Graph","Python","Equations","Matrix","Vecto
             SmallAction(if(m.decimal)"≈ Decimal" else "Exact"){m.decimal=!m.decimal}
             SmallAction(if(m.resultDisplayMode==ResultDisplayMode.SCIENTIFIC)"SCI" else "ENG",active=m.resultDisplayMode!=ResultDisplayMode.OFF,description="Result notation"){m.cycleResultDisplayMode()}
             SmallAction(",",active=m.thousandsSeparator,description="Thousands separators"){m.thousandsSeparator=!m.thousandsSeparator;m.save()}
+            if(onToggleScreen!=null)SmallAction("scr",active=screenExpanded,description=if(screenExpanded)"Restore full keypad" else "Expand calculation screen"){onToggleScreen()}
             SmallAction("∫"){m.insert("integrate(,x)",10)}
             SmallAction("∫ₐᵇ"){m.insert("integrate(,x,,)",10)}
             SmallAction("d/dx"){m.insert("diff(,x)",5)}

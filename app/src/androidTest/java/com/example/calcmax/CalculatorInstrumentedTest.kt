@@ -314,6 +314,22 @@ class CalculatorInstrumentedTest {
         assertEquals(top,compose.onNodeWithContentDescription("Calculator keypad").fetchSemanticsNode().boundsInRoot.top,.5f)
         compose.onAllNodesWithText("OFFLINE MATHEMATICS",substring=true).assertCountEquals(0)
     }
+    @Test fun screenButtonExpandsDisplayAndKeepsNumericKeys() {
+        compose.runOnIdle {model().mode="Scientific";model().secondKeys=false;model().clear()}
+        val originalTop=compose.onNodeWithContentDescription("Calculator keypad").fetchSemanticsNode().boundsInRoot.top
+        val originalNumericHeight=compose.onNodeWithContentDescription("7").fetchSemanticsNode().boundsInRoot.height
+        compose.onNodeWithContentDescription("Expand calculation screen").performClick()
+        compose.onNodeWithContentDescription("sin").assertDoesNotExist()
+        compose.onNodeWithContentDescription("SHIFT").assertDoesNotExist()
+        compose.onNodeWithContentDescription("7").assertExists()
+        assertEquals(originalNumericHeight,compose.onNodeWithContentDescription("7").fetchSemanticsNode().boundsInRoot.height,.5f)
+        assertTrue(compose.onNodeWithContentDescription("Calculator keypad").fetchSemanticsNode().boundsInRoot.top>originalTop)
+        compose.onNodeWithContentDescription("7").performClick()
+        compose.runOnIdle {assertEquals("7",model().editor.source)}
+        compose.onNodeWithContentDescription("Restore full keypad").performClick()
+        compose.onNodeWithContentDescription("sin").assertExists()
+        assertEquals(originalTop,compose.onNodeWithContentDescription("Calculator keypad").fetchSemanticsNode().boundsInRoot.top,.5f)
+    }
     @Test fun symbolicRenderingCalculusAndFractionExit() {
         compose.runOnIdle {model().mode="Scientific";model().clear();model().decimal=true;model().edit(Editor("integrate(x,x)"))}
         compose.waitUntil(15000){model().result?.optString("exact")=="C + x**2/2"}
