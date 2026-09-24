@@ -154,6 +154,54 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
         layout(boxWidth,glyph.height,mapOf(MathAxis to glyph.axis())){box.place(0,(glyph.height-boxHeight)/2)}
     }
 }
+/** Compact empty slot for a logarithm base so the box matches the small subscript glyph. */
+@Composable private fun LogBaseSlot(size:Float,active:Boolean) {
+    val c=LocalInstrument.current
+    Layout(content={
+        MathText("a",size)
+        Box(Modifier.border(1.dp,if(active)c.accent else c.muted,RoundedCornerShape(1.dp))
+            .then(if(active)Modifier else Modifier.semantics{contentDescription="Empty expression slot"}),contentAlignment=Alignment.Center){
+            if(active)MathText("│",size*.7f,blink=true)
+        }
+    }){ms,constraints->
+        val glyph=ms[0].measure(constraints.copy(minWidth=0,minHeight=0))
+        val boxWidth=glyph.width.coerceAtLeast(9.dp.roundToPx())
+        val boxHeight=glyph.height
+        val box=ms[1].measure(Constraints.fixed(boxWidth,boxHeight))
+        layout(boxWidth,glyph.height,mapOf(MathAxis to glyph.axis())){box.place(0,0)}
+    }
+}
+/** Compact empty slot for a power exponent so the box matches the small superscript font. */
+@Composable private fun ExponentSlot(size:Float,active:Boolean) {
+    val c=LocalInstrument.current
+    Layout(content={
+        MathText("8",size)
+        Box(Modifier.border(1.dp,if(active)c.accent else c.muted,RoundedCornerShape(1.dp))
+            .then(if(active)Modifier else Modifier.semantics{contentDescription="Empty expression slot"}),contentAlignment=Alignment.Center){
+            if(active)MathText("│",size*.7f,blink=true)
+        }
+    }){ms,constraints->
+        val glyph=ms[0].measure(constraints.copy(minWidth=0,minHeight=0))
+        val boxWidth=glyph.width.coerceAtLeast(9.dp.roundToPx())
+        val boxHeight=(glyph.height*.72f).roundToInt().coerceAtLeast(12.dp.roundToPx())
+        val box=ms[1].measure(Constraints.fixed(boxWidth,boxHeight))
+        layout(boxWidth,glyph.height,mapOf(MathAxis to glyph.axis())){box.place(0,(glyph.height-boxHeight)/2)}
+    }
+}
+/** Places a logarithm base as a subscript under the operator's baseline. */
+@Composable private fun LogBaseLayout(head:@Composable ()->Unit,base:@Composable ()->Unit) {
+    Layout(content={head();base()}){ms,constraints->
+        val inner=constraints.copy(minWidth=0,minHeight=0)
+        val h=ms[0].measure(inner);val b=ms[1].measure(inner)
+        val gap=1.dp.roundToPx()
+        val drop=(h.height*.3f).roundToInt()
+        val baseTop=(h.axis()+drop-b.axis()).coerceAtLeast(0)
+        layout(h.width+gap+b.width,max(h.height,baseTop+b.height),mapOf(MathAxis to h.axis())){
+            h.place(0,0)
+            b.place(h.width+gap,baseTop)
+        }
+    }
+}
 @Composable private fun SquareBrackets(content:@Composable ()->Unit) {
     val ink=LocalInstrument.current.ink
     Box(Modifier.drawBehind {
@@ -167,7 +215,7 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
     }.padding(horizontal=12.dp,vertical=3.dp)) {content()}
 }
 
-@Composable fun MathNode(node:JSONObject,size:Float=25f,select:((Int,Int)->Unit)?=null,selection:IntRange?=null,depth:Int=0,hideGroup:Boolean=false,compactRootIndexHole:Boolean=false) {
+@Composable fun MathNode(node:JSONObject,size:Float=25f,select:((Int,Int)->Unit)?=null,selection:IntRange?=null,depth:Int=0,hideGroup:Boolean=false,compactRootIndexHole:Boolean=false,compactLogBaseHole:Boolean=false,compactExponentHole:Boolean=false) {
     if(depth>36){MathText("…",size);return}
     val c=LocalInstrument.current
     val raw=node.optString("kind")
@@ -191,7 +239,7 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
     val touch=Modifier.then(if(selected||activeHole)Modifier.background(c.accent.copy(alpha=.17f),RoundedCornerShape(2.dp))else Modifier)
         .then(if(emptyContainer&&select!=null)Modifier.semantics(mergeDescendants=true){contentDescription=if(kind=="list")"Empty list; tap to enter values" else "Empty set; tap to enter values"}else Modifier)
         .then(if(select!=null&&start>=0)Modifier.clickable{if(emptyContainer){if(placeCursor!=null)placeCursor(start,end,start+1)else select(start+1,start+1)}else select(start,end)}else Modifier)
-    @Composable fun child(i:Int,scale:Float=1f,hidden:Boolean=false) {children.getOrNull(i)?.let{MathNode(it,(size*scale).coerceAtLeast(11f),select,selection,depth+1,hidden)}}
+    @Composable fun child(i:Int,scale:Float=1f,hidden:Boolean=false,compactExponentHole:Boolean=false) {children.getOrNull(i)?.let{MathNode(it,(size*scale).coerceAtLeast(11f),select,selection,depth+1,hidden,compactExponentHole=compactExponentHole)}}
     @Composable fun integralPart(i:Int,scale:Float=1f) {
         if(i==0||integrationTuple==null)child(i,scale)
         else integrationTuple.optJSONObject(i-1)?.let{MathNode(it,(size*scale).coerceAtLeast(11f),select,selection,depth+1)}
@@ -212,7 +260,7 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
                 val groupInner=base?.optJSONArray("args")?.optJSONObject(0)
                 val hide=base?.optString("kind")=="group"&&groupInner?.optString("kind") in listOf("number","symbol","hole","call")
                 if(base?.optString("kind") in listOf("sum","product","unary"))wrapped(0)else child(0,hidden=hide)
-            },{child(1,.67f,true)})
+            },{child(1,.67f,true,compactExponentHole=true)})
             kind=="root"||kind=="call"&&value in listOf("sqrt","cbrt","nthroot")->
                 if(value=="cbrt"||value=="nthroot")IndexedRadical(size,
                     index={
@@ -237,8 +285,8 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
             kind=="list"&&children.isNotEmpty()->SquareBrackets {MathRow(2.dp){children.indices.forEach {i->if(i>0)label(", ");child(i)}}}
             emptyContainer->MathRow {label(if(kind=="list")"[" else "{");if(caret&&cursor==start+1)MathText("│",size,blink=true);label(if(kind=="list")"]" else "}")}
             kind=="rows"->Column{children.forEach{row->MathRow{label(row.optString("value")+": ",.65f);row.optJSONArray("args")?.optJSONObject(0)?.let{MathNode(it,size*.8f,depth=depth+1)}}}}
-            kind=="hole"->if(compactRootIndexHole)RootIndexSlot(size,activeHole)else
-                Box(Modifier.width(18.dp).height(26.dp).border(1.dp,if(activeHole)c.accent else c.muted,RoundedCornerShape(1.dp)).then(if(activeHole)Modifier else Modifier.semantics{contentDescription="Empty expression slot"}),contentAlignment=Alignment.Center){
+            kind=="hole"->if(compactRootIndexHole)RootIndexSlot(size,activeHole)else if(compactLogBaseHole)LogBaseSlot(size,activeHole)else if(compactExponentHole)ExponentSlot(size,activeHole)else
+                Box(Modifier.width((size*.72f).dp).height((size*1.04f).dp).border(1.dp,if(activeHole)c.accent else c.muted,RoundedCornerShape(1.dp)).then(if(activeHole)Modifier else Modifier.semantics{contentDescription="Empty expression slot"}),contentAlignment=Alignment.Center){
                     if(activeHole)MathText("│",size,blink=true)
                 }
             kind=="answer"->Box(Modifier.border(1.dp,c.muted,RoundedCornerShape(4.dp)).padding(horizontal=5.dp,vertical=2.dp).semantics{contentDescription="Previous answer"}){children.firstOrNull()?.let{MathNode(it,size*.9f,depth=depth+1)}}
@@ -252,7 +300,7 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
                 if(children.size>2&&showSecondField)child(2)
                 if(value=="")label("″")
             }
-            kind=="group"->if(hideGroup)child(0)else MathRow{label("(");if(children.getOrNull(0)?.optString("kind")!="hole")child(0);if(value!="open")label(")")}
+            kind=="group"->if(hideGroup)child(0,compactExponentHole=compactExponentHole)else MathRow{label("(");if(children.getOrNull(0)?.optString("kind")!="hole")child(0);if(value!="open")label(")")}
             kind=="call"&&value=="mixed"->MathRow(3.dp){child(0);FractionLayout({child(1,.85f)},{child(2,.85f)})}
             kind=="call"&&value=="eng"->child(0)
             kind in listOf("number","symbol","text")-> {
@@ -280,7 +328,8 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
             kind in listOf("call","function")&&value=="factorial"->MathRow{child(0);label("!")}
             kind in listOf("call","function")&&value in listOf("degree","rad","gradian","percent")->MathRow{child(0);label(when(value){"degree"->"°";"rad"->"ʳ";"gradian"->"ᵍ";else->"%"})}
             kind in listOf("call","function")&&value in listOf("abs","Abs")->MathRow{label("│");child(0);label("│")}
-            kind=="call"&&value=="log"&&children.size>1->MathRow{label("log");Box(Modifier.padding(top=12.dp)){child(1,.6f)};wrapped(0)}
+            kind in listOf("call","function")&&value in listOf("exp","Exp")&&children.size==1->PowerLayout({label("e")},{child(0,.67f,true,compactExponentHole=true)})
+            kind=="call"&&value=="log"&&children.size>1->MathRow{LogBaseLayout({label("log")},{MathNode(children[1],(size*.6f).coerceAtLeast(11f),select,selection,depth+1,compactLogBaseHole=true)});wrapped(0)}
             kind=="call"&&value in listOf("diff","nderivative")->MathRow(3.dp){
                 FractionLayout({if(value=="diff"&&children.size>2)PowerLayout({label("d",.8f)},{child(2,.5f)})else label("d",.8f)},
                     {MathRow{label("d",.8f);if(value=="diff"&&children.size>2)PowerLayout({child(1,.8f)},{child(2,.5f)})else child(1,.8f)}})

@@ -584,20 +584,7 @@ class Engine:
             return s.simplify(covariance/s.sqrt(vx*vy))
         if name == "regression":
             rows = a[0]; mode = str(a[1]) if len(a)>1 else "linear"
-            require(len(rows)>=2 and all(len(row)==2 for row in rows),"Regression requires x,y pairs")
-            xs,ys = zip(*rows)
-            require(mode in ("linear","quadratic","logarithmic","exponential","power"),"Unknown regression type")
-            if mode in ("logarithmic","power"): require(all(x>0 for x in xs),"Logarithmic x values must be positive"); xs = tuple(s.log(x) for x in xs)
-            if mode in ("exponential","power"): require(all(y>0 for y in ys),"Logarithmic y values must be positive"); ys = tuple(s.log(y) for y in ys)
-            degree = 2 if mode == "quadratic" else 1
-            design = s.Matrix([[x**i for i in range(degree+1)] for x in xs]); target = s.Matrix(ys)
-            coef = (design.T*design).inv()*design.T*target
-            x = self.symbol("x")
-            result = sum(c*x**i for i,c in enumerate(coef))
-            if mode == "logarithmic": result = result.subs(x,s.log(x))
-            if mode == "exponential": result = s.exp(result)
-            if mode == "power": result = s.exp(coef[0])*x**coef[1]
-            return result
+            return fit_regression(self, rows, mode)
         if name == "convert":
             if len(a)==2 and isinstance(a[0],Quantity):
                 self.note="Result in "+nodes[1]["value"]
@@ -718,6 +705,40 @@ def result_ast(x):
         require(name in reusable,"This result cannot be stored as a reusable expression")
         return node("frozen_call",reusable[name],[result_ast(v) for v in x.args])
     raise MathError("This result cannot be stored as a reusable expression")
+
+def fit_regression(engine, rows, mode):
+    require(len(rows)>=2 and all(len(row)==2 for row in rows),"Regression requires x,y pairs")
+    xs,ys = zip(*rows)
+    require(mode in ("linear","quadratic","logarithmic","exponential","power"),"Unknown regression type")
+    if mode in ("logarithmic","power"): require(all(x>0 for x in xs),"Logarithmic x values must be positive"); xs = tuple(s.log(x) for x in xs)
+    if mode in ("exponential","power"): require(all(y>0 for y in ys),"Logarithmic y values must be positive"); ys = tuple(s.log(y) for y in ys)
+    degree = 2 if mode == "quadratic" else 1
+    design = s.Matrix([[x**i for i in range(degree+1)] for x in xs]); target = s.Matrix(ys)
+    coef = (design.T*design).inv()*design.T*target
+    x = engine.symbol("x")
+    result = sum(c*x**i for i,c in enumerate(coef))
+    if mode == "logarithmic": result = result.subs(x,s.log(x))
+    if mode == "exponential": result = s.exp(result)
+    if mode == "power": result = s.exp(coef[0])*x**coef[1]
+    return result
+
+def regression_samples(engine, value, rows, request):
+    xs = [point for point in (_finite_real(row[0]) for row in rows) if point is not None]
+    require(len(xs)>=2,"Regression requires x,y pairs")
+    low,high = min(xs),max(xs)
+    if high<=low: low-=1.0; high+=1.0
+    padding=(high-low)*0.05
+    start,end=low-padding,high+padding
+    count=min(600,max(120,int(request.get("samples",240))))
+    x=next(iter(value.free_symbols),engine.symbol("x"))
+    function=s.lambdify(x,value,modules="math",cse=True,docstring_limit=0)
+    curve=[]
+    for index in range(count+1):
+        at=start+(end-start)*index/count
+        try: y=float(function(at))
+        except (TypeError,ValueError,ZeroDivisionError,OverflowError): continue
+        if math.isfinite(y) and abs(y)<1e100: curve.append([at,y])
+    return curve
 
 def graph(engine, request):
     kind = request.get("graphKind","cartesian")
@@ -1041,6 +1062,9 @@ def dispatch(payload):
                 power={"kind":"power","args":[{"kind":"text","value":"10"},{"kind":"text","value":str(exponent)}]}
                 result["tree"]=result["decimalTree"]={"kind":"product","args":[display_tree(mantissa),power]}
             if request["tree"].get("value")=="dms" and isinstance(value,list):result["tree"]=result["decimalTree"]={"kind":"dms","args":[display_tree(x) for x in value]}
+            if request["tree"].get("kind")=="call" and request["tree"].get("value")=="regression":
+                try: result["curve"]=regression_samples(engine,value,engine.build(request["tree"]["args"][0]),request)
+                except Exception: result["curve"]=[]
             try:
                 ast=result_ast(value)
                 if dms_result:

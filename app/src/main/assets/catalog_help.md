@@ -1,0 +1,342 @@
+# Catalog function reference
+
+The function catalog inserts ready-to-fill templates into the current editor. Tap a template to insert it, then tap each empty slot (shown as `[]` or as a blank argument such as `round(x,)`) and type its value. In Python mode the same catalog inserts `calc.<function>(...)` and adds the shared `import calcmax_catalog as calc` line and the symbols `x, y, z, t, pi` once at the top of the file.
+
+Use the search box above to filter by function name, template, example or description. The search matches every category at once. Clear the box to see the full reference again.
+
+## Using the catalog
+- Numeric trigonometry follows the selected DEG/RAD/GRAD angle unit. An explicit `pi` or `°` inside the expression overrides it.
+- Symbolic calculus is always evaluated in radians.
+- Matrix and vector commands accept literals such as `[[1,2],[3,4]]`.
+- A saved custom function appears in the `Custom` category of the catalog.
+- Read the hint line under the catalog list for category-specific guidance.
+
+## Scientific
+`sin(x)` — Sine of x (uses the current angle unit).
+Example: sin(pi/6)
+`cos(x)` — Cosine of x (uses the current angle unit).
+Example: cos(0)
+`tan(x)` — Tangent of x (uses the current angle unit).
+Example: tan(pi/4)
+`asin(x)` — Inverse sine; result is an angle in the current unit.
+Example: asin(1)
+`acos(x)` — Inverse cosine; result is an angle in the current unit.
+Example: acos(0)
+`atan(x)` — Inverse tangent; result is an angle in the current unit.
+Example: atan(1)
+`abs(x)` — Absolute value, magnitude or complex modulus |x|.
+Example: abs(-3)
+`floor(x)` — Greatest integer less than or equal to x.
+Example: floor(2.7)
+`ceil(x)` — Least integer greater than or equal to x.
+Example: ceil(2.1)
+`round(x,n)` — Round x to n decimal places; n defaults to 0.
+Example: round(3.14159,2)
+`sign(x)` — Sign of x: −1, 0 or 1.
+Example: sign(-5)
+`sqrt(x)` — Principal square root.
+Example: sqrt(16)
+`cbrt(x)` — Cube root.
+Example: cbrt(27)
+`nthroot(x,n)` — Real n-th root of x.
+Example: nthroot(81,4)
+`atan2(y,x)` — Angle of the point (x,y) across all four quadrants.
+Example: atan2(1,1)
+`frac(x)` — Fractional part, x − floor(x).
+Example: frac(3.75)
+`iPart(x)` — Integer part, truncating toward zero.
+Example: iPart(-3.75)
+`log(x,b)` — Logarithm of x to base b; base 10 is used when b is omitted.
+Example: log(1000,10)
+`ln(x)` — Natural logarithm.
+Example: ln(e)
+`exp(x)` — e raised to the power x.
+Example: exp(1)
+`sinc(x)` — sin(x) / x, with sinc(0) = 1.
+Example: sinc(0)
+`sinh(x)` — Hyperbolic sine.
+Example: sinh(1)
+`cosh(x)` — Hyperbolic cosine.
+Example: cosh(0)
+`tanh(x)` — Hyperbolic tangent.
+Example: tanh(1)
+`asinh(x)` — Inverse hyperbolic sine.
+Example: asinh(1)
+`acosh(x)` — Inverse hyperbolic cosine, defined for x ≥ 1.
+Example: acosh(2)
+`atanh(x)` — Inverse hyperbolic tangent, defined for |x| < 1.
+Example: atanh(0.5)
+`gamma(x)` — Gamma function.
+Example: gamma(5)
+`erf(x)` — Error function.
+Example: erf(1)
+`erfc(x)` — Complementary error function, 1 − erf(x).
+Example: erfc(1)
+`Ei(x)` — Exponential integral.
+Example: Ei(1)
+`Si(x)` — Sine integral.
+Example: Si(1)
+`Ci(x)` — Cosine integral.
+Example: Ci(1)
+`zeta(x)` — Riemann zeta function.
+Example: zeta(2)
+`factorial(n)` — n! for a non-negative integer.
+Example: factorial(5)
+`nCr(n,r)` — Binomial coefficient, combinations of n taken r at a time.
+Example: nCr(5,2)
+`nPr(n,r)` — Number of ordered permutations.
+Example: nPr(5,2)
+`gcd(a,b)` — Greatest common divisor.
+Example: gcd(12,18)
+`lcm(a,b)` — Least common multiple.
+Example: lcm(4,6)
+`prime(n)` — Returns the n-th prime number.
+Example: prime(1000)
+`isprime(n)` — True when n is prime, otherwise false.
+Example: isprime(97)
+`factorint(n)` — Prime factorisation of an integer.
+Example: factorint(360)
+`divisors(n)` — All positive divisors of n.
+Example: divisors(28)
+`rnd()` — Random real number in the interval [0,1).
+Example: rnd()
+`eng(x)` — Engineering notation with a power-of-three exponent.
+Example: eng(12345)
+`pol(x,y)` — Polar coordinates (r,θ) from rectangular (x,y).
+Example: pol(1,1)
+`rec(r,θ)` — Rectangular coordinates (x,y) from polar (r,θ).
+Example: rec(1,0)
+`randInt(a,b)` — Random integer in the inclusive range [a,b].
+Example: randInt(1,6)
+`sexagesimal(h,m,s)` — Hours, minutes and seconds converted to decimal degrees.
+Example: sexagesimal(1,30,0)
+`dms(x)` — Decimal degrees converted to degrees, minutes and seconds.
+Example: dms(1.5)
+`mixed(a,b,c)` — Mixed fraction a b/c.
+Example: mixed(1,1,2)
+`quotient(a,b)` — Integer quotient of a divided by b.
+Example: quotient(17,5)
+`remainder(a,b)` — Remainder of a divided by b.
+Example: remainder(17,5)
+`sumdata(values)` — Sum of a list of values.
+Example: sumdata([1,2,3])
+
+## Symbolic
+`simplify(expr)` — Simplify an expression.
+Example: simplify(sin(x)^2+cos(x)^2)
+`expand(expr)` — Expand products and powers.
+Example: expand((x+1)^3)
+`factor(expr)` — Factor a polynomial over the rationals.
+Example: factor(x^2-1)
+`collect(expr,x)` — Collect terms as a polynomial in x.
+Example: collect(x^2+2x+1,x)
+`subs(expr,x,value)` — Substitute value for x.
+Example: subs(x^2+1,x,3)
+`diff(expr,x)` — First derivative with respect to x.
+Example: diff(sin(x),x)
+`diff(expr,x,n)` — n-th derivative with respect to x.
+Example: diff(x^4,x,2)
+`integrate(expr,x)` — Indefinite integral (antiderivative).
+Example: integrate(x^2,x)
+`integrate(expr,x,a,b)` — Definite integral from a to b.
+Example: integrate(x^2,x,0,1)
+`limit(expr,x,a)` — Two-sided limit as x tends to a.
+Example: limit(sin(x)/x,x,0)
+`limit(expr,x,a,left)` — Limit approaching a from the left.
+Example: limit(1/x,x,0,left)
+`limit(expr,x,a,right)` — Limit approaching a from the right.
+Example: limit(1/x,x,0,right)
+`series(expr,x,a,n)` — Series expansion about a up to order n.
+Example: series(exp(x),x,0,6)
+`taylor(expr,x,a,n)` — Taylor polynomial of order n about a.
+Example: taylor(sin(x),x,0,5)
+`sum(expr,x,a,b)` — Summation of expr over integer x from a to b.
+Example: sum(x^2,x,1,10)
+`product(expr,x,a,b)` — Product of expr over integer x from a to b.
+Example: product(x,x,1,5)
+`solve(eq,x)` — Solve an equation or system for x.
+Example: solve(x^2-5x+6=0,x)
+`nsolve(expr,x,a,b)` — Numeric root search in the interval [a,b].
+Example: nsolve(cos(x)-x,x,0,1)
+`nintegrate(expr,x,a,b)` — Numeric definite integral from a to b.
+Example: nintegrate(sin(x),x,0,pi)
+`nderivative(expr,x,a)` — Numeric derivative evaluated at x = a.
+Example: nderivative(sin(x),x,0)
+`minimum(expr,x,a,b)` — Minimum value of expr on the interval [a,b].
+Example: minimum(x^2,x,-1,2)
+`maximum(expr,x,a,b)` — Maximum value of expr on the interval [a,b].
+Example: maximum(x^2,x,-1,2)
+`piecewise([expr,cond],...)` — Piecewise-defined function.
+Example: piecewise([1,x>0],[0,true])
+`apart(expr,x)` — Partial-fraction decomposition in x.
+Example: apart(1/(x*(x+1)),x)
+`partfrac(expr,x)` — Partial fractions; alias of apart.
+Example: partfrac(1/(x^2-1),x)
+`together(expr)` — Combine terms into a single fraction.
+Example: together(1/x+1/(x+1))
+`cancel(expr)` — Cancel common factors in a rational expression.
+Example: cancel((x^2-1)/(x-1))
+`trigsimp(expr)` — Simplify using trigonometric identities.
+Example: trigsimp(sin(x)^2+cos(x)^2)
+`trigexpand(expr)` — Expand trigonometric functions of sums and multiples.
+Example: trigexpand(sin(x+y))
+`powsimp(expr)` — Combine powers that share a base.
+Example: powsimp(x^a*x^b)
+`powdenest(expr)` — Simplify nested powers and radicals.
+Example: powdenest((x^2)^(1/2))
+`hyperexpand(expr)` — Expand hypergeometric functions.
+Example: hyperexpand(exp(x))
+`nsimplify(expr)` — Guess an exact closed form for a numeric value.
+Example: nsimplify(0.333333)
+`comDenom(expr)` — Common denominator of a sum of fractions.
+Example: comDenom(1/(x+1)+1/(x+2))
+`numden(expr)` — Numerator and denominator of an expression.
+Example: numden((x+1)/(x-1))
+`coeff(expr,x)` — Coefficient of the indicated power of x.
+Example: coeff(3x^2+2x+1,x)
+`quo(a,b,x)` — Polynomial quotient of a divided by b in x.
+Example: quo(x^3-1,x-1,x)
+`rem(a,b,x)` — Polynomial remainder of a divided by b in x.
+Example: rem(x^3-1,x-1,x)
+`resultant(a,b,x)` — Resultant of two polynomials in x.
+Example: resultant(x^2-1,x-2,x)
+`discriminant(poly,x)` — Discriminant of a polynomial in x.
+Example: discriminant(x^2-4x+3,x)
+`domain(expr,x)` — Real domain of the expression in x.
+Example: domain(1/(x-1),x)
+`range(expr,x)` — Range of the expression over its domain.
+Example: range(x^2,x)
+
+## Complex
+`re(z)` — Real part of a complex number.
+Example: re(3+4i)
+`im(z)` — Imaginary part of a complex number.
+Example: im(3+4i)
+`conj(z)` — Complex conjugate.
+Example: conj(3+4i)
+`abs(z)` — Modulus (absolute value) of a complex number.
+Example: abs(3+4i)
+`arg(z)` — Argument (angle) of a complex number.
+Example: arg(1+i)
+`polar(r,θ)` — Complex number in polar form, r·e^(iθ).
+Example: polar(2,pi/3)
+`rectpolar(z)` — Rectangular and polar forms of a complex number.
+Example: rectpolar(1+i)
+
+## ODE & transforms
+`dsolve(eq,y(t),t)` — Solve an ordinary differential equation.
+Example: dsolve(diff(y(t),t)=y(t),y(t),t)
+`laplace(f,t,s)` — Laplace transform from the time variable t to s.
+Example: laplace(sin(t),t,s)
+`ilaplace(F,s,t)` — Inverse Laplace transform from s back to t.
+Example: ilaplace(1/(s^2+1),s,t)
+`fourier(f,t,w)` — Fourier transform from t to the angular frequency w.
+Example: fourier(exp(-t^2),t,w)
+`ifourier(F,w,t)` — Inverse Fourier transform from w back to t.
+Example: ifourier(exp(-w^2/4),w,t)
+`fft(list)` — Discrete fast Fourier transform of a list.
+Example: fft([1,0,0,0])
+`ifft(list)` — Inverse discrete fast Fourier transform of a list.
+Example: ifft([1,1,1,1])
+
+## Vector calculus
+`gradient(f,[x,y])` — Gradient vector of a scalar field.
+Example: gradient(x^2+y^2,[x,y])
+`divergence(f,[x,y])` — Divergence of a vector field.
+Example: divergence([x,y],[x,y])
+`curl(f,[x,y])` — Curl of a two- or three-dimensional vector field.
+Example: curl([-y,x],[x,y])
+`hessian(f,[x,y])` — Hessian matrix of second derivatives.
+Example: hessian(x^2*y,[x,y])
+`jacobian(f,[x,y])` — Jacobian matrix of a vector function.
+Example: jacobian([x*y,x+y],[x,y])
+`laplacian(f,[x,y])` — Laplacian of a scalar field.
+Example: laplacian(x^2+y^2,[x,y])
+
+## Matrix & vector
+`det(A)` — Determinant.
+Example: det([[1,2],[3,4]])
+`inverse(A)` — Matrix inverse.
+Example: inverse([[1,2],[3,4]])
+`transpose(A)` — Transpose.
+Example: transpose([[1,2],[3,4]])
+`rank(A)` — Rank.
+Example: rank([[1,2],[2,4]])
+`trace(A)` — Trace, the sum of the diagonal entries.
+Example: trace([[1,2],[3,4]])
+`ref(A)` — Row echelon form.
+Example: ref([[1,2],[3,4]])
+`rref(A)` — Reduced row echelon form.
+Example: rref([[1,2],[3,4]])
+`lu(A)` — LU decomposition with row permutations.
+Example: lu([[2,1],[1,3]])
+`linsolve(A,b)` — Solve the linear system A·x = b.
+Example: linsolve([[2,1],[1,3]],[1,2])
+`eigenvalues(A)` — Eigenvalues.
+Example: eigenvalues([[2,0],[0,3]])
+`eigenvectors(A)` — Eigenvectors.
+Example: eigenvectors([[2,0],[0,3]])
+`dot(u,v)` — Dot product.
+Example: dot([1,2,3],[4,5,6])
+`cross(u,v)` — Cross product of two three-dimensional vectors.
+Example: cross([1,0,0],[0,1,0])
+`norm(v)` — Euclidean norm (length) of a vector.
+Example: norm([3,4])
+`normalize(v)` — Unit vector in the direction of v.
+Example: normalize([3,4])
+`angle(u,v)` — Angle between two vectors.
+Example: angle([1,0],[0,1])
+`projection(u,v)` — Projection of u onto v.
+Example: projection([1,1],[1,0])
+`charpoly(A,x)` — Characteristic polynomial in x.
+Example: charpoly([[1,2],[3,4]],x)
+`identity(n)` — n×n identity matrix.
+Example: identity(3)
+`diag(list)` — Diagonal matrix built from a list.
+Example: diag([1,2,3])
+`qr(A)` — QR decomposition.
+Example: qr([[1,2],[3,4]])
+`cholesky(A)` — Cholesky decomposition, A = L·Lᵀ.
+Example: cholesky([[4,2],[2,3]])
+`nullspace(A)` — Basis of the null space.
+Example: nullspace([[1,2],[2,4]])
+`cofactor(A)` — Matrix of cofactors.
+Example: cofactor([[1,2],[3,4]])
+`adjugate(A)` — Adjugate (classical adjoint) matrix.
+Example: adjugate([[1,2],[3,4]])
+`rowspace(A)` — Basis of the row space.
+Example: rowspace([[1,2],[3,4]])
+`singularvalues(A)` — Singular values.
+Example: singularvalues([[1,0],[0,2]])
+`frob(A)` — Frobenius norm.
+Example: frob([[1,2],[3,4]])
+`jordan(A)` — Jordan canonical form.
+Example: jordan([[2,1],[0,2]])
+`dim(v)` — Dimension of a vector or length of a list.
+Example: dim([1,2,3])
+
+## Data & units
+`stats(list)` — Summary statistics of a list.
+Example: stats([1,2,3,4])
+`mean(list)` — Arithmetic mean.
+Example: mean([1,2,3,4])
+`median(list)` — Median.
+Example: median([3,1,2])
+`variance(list)` — Sample variance.
+Example: variance([1,2,3,4])
+`stdev(list)` — Sample standard deviation.
+Example: stdev([1,2,3,4])
+`quartiles(list)` — Q1, median and Q3 using inclusive interpolation.
+Example: quartiles([1,2,3,4,5])
+`sumdata(list)` — Sum of the data values.
+Example: sumdata([1,2,3,4])
+`regression(data,model)` — Regression fit; model is linear, quadratic, logarithmic, exponential or power.
+Example: regression([[1,2],[2,4],[3,6]],linear)
+`covariance(x,y)` — Covariance of two paired lists.
+Example: covariance([1,2,3],[2,4,6])
+`correlation(x,y)` — Correlation coefficient of two paired lists.
+Example: correlation([1,2,3],[2,4,6])
+`qty(value,unit)` — Quantity with a unit, for example qty(2,m).
+Example: qty(2,m)+qty(30,cm)
+`convert(value,from,to)` — Unit conversion, for example convert(2,m,cm).
+Example: convert(32,degF,degC)

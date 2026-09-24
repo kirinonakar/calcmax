@@ -4,8 +4,6 @@ import android.graphics.Paint
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -21,8 +19,6 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -57,23 +53,12 @@ import kotlin.math.max
 @Composable private fun StatCell(value:String,modifier:Modifier,focus:FocusRequester,tag:String,onValue:(String)->Unit) {
     val c=LocalInstrument.current
     val keyboard=LocalSoftwareKeyboardController.current
-    Box(modifier.fillMaxHeight().background(c.display).pointerInput(focus,keyboard) {
-            val tolerance=viewConfiguration.touchSlop
-            awaitEachGesture {
-                val down=awaitFirstDown(requireUnconsumed=false,pass=PointerEventPass.Initial)
-                var moved=false
-                while(true) {
-                    val event=awaitPointerEvent(PointerEventPass.Initial)
-                    val change=event.changes.firstOrNull {it.id==down.id}
-                    if(change==null) {if(event.changes.none {it.pressed})break;continue}
-                    if((change.position-down.position).getDistance()>tolerance)moved=true
-                    if(!change.pressed) {
-                        if(!moved){focus.requestFocus();keyboard?.show()}
-                        break
-                    }
-                }
-            }
-        }) {
+    // Attach the tap handler to the full-height container so the entire cell responds to touch,
+    // not just the text line handled by the inner text field.
+    Box(modifier.fillMaxHeight().background(c.display).clickable {
+        runCatching {focus.requestFocus()}
+        keyboard?.show()
+    }) {
         BasicTextField(value,onValue,Modifier.fillMaxSize().focusRequester(focus).testTag(tag),
             textStyle=MaterialTheme.typography.bodyMedium.copy(fontSize=12.sp,color=c.ink),singleLine=true,cursorBrush=SolidColor(c.accent),
             decorationBox={innerTextField->Box(Modifier.fillMaxSize().padding(horizontal=8.dp),contentAlignment=Alignment.CenterStart){innerTextField()}})
@@ -103,21 +88,16 @@ import kotlin.math.max
     val context=LocalContext.current
     val scope=rememberCoroutineScope()
     val names=remember(m.dataSets) {m.dataSets.keys().asSequence().toList().sorted()}
-    var selected by rememberSaveable {mutableStateOf("")}
-    var isNew by rememberSaveable {mutableStateOf(false)}
+    var selected by rememberSaveable {mutableStateOf(m.statisticsSelected)}
+    var isNew by rememberSaveable {mutableStateOf(m.statisticsIsNew)}
     val activeName=if(isNew)"" else selected.ifBlank {names.firstOrNull().orEmpty()}
-    var datasetName by rememberSaveable {mutableStateOf("D1")}
-    var data by rememberSaveable {mutableStateOf("1\n2\n3\n4")}
-    var dataKind by rememberSaveable {mutableStateOf("list")}
-    var regression by rememberSaveable {mutableStateOf("linear")}
-    var plotType by rememberSaveable {mutableStateOf("Histogram")}
-    var csv by rememberSaveable {mutableStateOf(false)}
-    LaunchedEffect(activeName) {
-        if(activeName.isNotBlank())m.dataSets.optJSONObject(activeName)?.let {item->
-            datasetName=activeName;data=item.optString("csv");dataKind=item.optString("kind","list")
-            plotType=if(dataKind=="xy")"Scatter" else "Histogram"
-        }
-    }
+    var datasetName by rememberSaveable {mutableStateOf(m.statisticsName)}
+    var data by rememberSaveable {mutableStateOf(m.statisticsData)}
+    var dataKind by rememberSaveable {mutableStateOf(m.statisticsKind)}
+    var regression by rememberSaveable {mutableStateOf(m.statisticsRegression)}
+    var plotType by rememberSaveable {mutableStateOf(m.statisticsPlot)}
+    var csv by rememberSaveable {mutableStateOf(m.statisticsCsv)}
+    LaunchedEffect(data,datasetName,dataKind,regression,plotType,csv,selected,isNew) {m.saveStatistics(datasetName,data,dataKind,regression,plotType,csv,selected,isNew)}
     val importCsv=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {uri->
         if(uri!=null)scope.launch {
             val content=withContext(Dispatchers.IO) {runCatching {context.contentResolver.openInputStream(uri)?.bufferedReader()?.use {it.readText()}}.getOrNull()}
@@ -154,7 +134,7 @@ import kotlin.math.max
     val xValues=parsedRows.mapNotNull {it.getOrNull(0)?.toDoubleOrNull()?.takeIf {v->v.isFinite()}}
     val paired=parsedRows.mapNotNull {row->val x=row.getOrNull(0)?.toDoubleOrNull();val y=row.getOrNull(1)?.toDoubleOrNull();if(x!=null&&y!=null&&x.isFinite()&&y.isFinite())x to y else null}
     Panel("Data & statistics","Save named lists or paired x,y datasets, import/export CSV, calculate summaries and view statistical plots.") {
-        if(names.isNotEmpty())Choices(names,activeName,{selected=it;isNew=false})
+        if(names.isNotEmpty())Choices(names,activeName,{name->selected=name;isNew=false;m.dataSets.optJSONObject(name)?.let {item->datasetName=name;data=item.optString("csv");dataKind=item.optString("kind","list");plotType=if(dataKind=="xy")"Scatter" else "Histogram"}})
         Row(horizontalArrangement=Arrangement.spacedBy(6.dp),verticalAlignment=Alignment.CenterVertically) {
             Field(datasetName,"Dataset name",Modifier.weight(1f)){datasetName=it}
             SmallAction("New"){startNew()}
@@ -182,7 +162,7 @@ import kotlin.math.max
                 HorizontalDivider(color=grid,thickness=1.dp)
                 parsedRows.forEachIndexed {index,row->
                     val cellFocus=remember(index,tableColumns.size) {List(tableColumns.size){FocusRequester()} }
-                    Row(Modifier.fillMaxWidth().height(56.dp)) {
+                    Row(Modifier.fillMaxWidth().height(40.dp)) {
                         Box(Modifier.width(30.dp).fillMaxHeight().clickable {cellFocus.first().requestFocus()},contentAlignment=Alignment.Center){Text("${index+1}",fontSize=12.sp,color=LocalInstrument.current.muted)}
                         VerticalDivider(color=grid,thickness=1.dp)
                         repeat(tableColumns.size) {column->
@@ -200,11 +180,13 @@ import kotlin.math.max
         Row(Modifier.horizontalScroll(rememberScrollState())) {
             Button(onClick={val values=vector(0);if(values!="[]"){m.edit(Editor("stats($values)"));m.calculate()}}){Text(if(dataKind=="xy")"Summarize x" else "Summarize list")}
             if(dataKind=="xy")SmallAction("Summarize y"){val values=vector(1);if(values!="[]"){m.edit(Editor("stats($values)"));m.calculate()}}
-            if(dataKind=="xy")SmallAction("Fit regression"){val table=parsedRows.filter {it.size>=2&&it[0].isNotBlank()&&it[1].isNotBlank()}.joinToString(",","[","]"){it.take(2).joinToString(",","[","]")};m.edit(Editor("regression($table,$regression)"));m.calculate()}
+            if(dataKind=="xy")SmallAction("Fit regression"){val table=parsedRows.filter {it.size>=2&&it[0].isNotBlank()&&it[1].isNotBlank()}.joinToString(",","[","]"){it.take(2).joinToString(",","[","]")};m.fitRegression("regression($table,$regression)",data)}
         }
         if(dataKind=="xy")Choices(listOf("linear","quadratic","logarithmic","exponential","power"),regression,{regression=it})
         Choices(if(dataKind=="xy")listOf("Scatter","Histogram","Box plot") else listOf("Histogram","Box plot"),plotType,{plotType=it})
-        StatisticsPlot(plotType,if(plotType=="Scatter")paired else xValues.mapIndexed {i,v->i.toDouble() to v},xValues)
+        val fitVisible=dataKind=="xy"&&plotType=="Scatter"&&m.regressionData==data
+        StatisticsPlot(plotType,if(plotType=="Scatter")paired else xValues.mapIndexed {i,v->i.toDouble() to v},xValues,if(fitVisible)m.regressionCurve.orEmpty() else emptyList(),if(fitVisible)m.regressionFit else "")
+        if(m.regressionBusy)Text("Fitting regression…",fontSize=11.sp,color=LocalInstrument.current.muted)
         Display(m)
         if(dataKind=="xy")SmallAction("Graph fitted expression"){val exact=m.result?.optString("exact");if(!exact.isNullOrBlank()){m.changeGraphKind("cartesian");m.updateGraphSource(exact.replace("**","^"));m.mode="Graph";m.plot()}}
     }
@@ -225,7 +207,7 @@ private fun String.splitCsvRecord():List<String> {
     cells+=current.toString().trim();return cells
 }
 
-@Composable private fun StatisticsPlot(type:String,points:List<Pair<Double,Double>>,values:List<Double>) {
+@Composable private fun StatisticsPlot(type:String,points:List<Pair<Double,Double>>,values:List<Double>,curve:List<Pair<Double,Double>> = emptyList(),fitLabel:String="") {
     val c=LocalInstrument.current
     Canvas(Modifier.fillMaxWidth().height(220.dp).background(c.display)) {
         val left=38.dp.toPx();val right=12.dp.toPx();val top=14.dp.toPx();val bottom=28.dp.toPx()
@@ -235,11 +217,21 @@ private fun String.splitCsvRecord():List<String> {
         drawLine(c.grid,Offset(left,top),Offset(left,top+height),1.dp.toPx())
         if(type=="Scatter") {
             if(points.isEmpty())return@Canvas
-            var x0=points.minOf {it.first};var x1=points.maxOf {it.first};var y0=points.minOf {it.second};var y1=points.maxOf {it.second}
+            val range=if(curve.isEmpty())points else points+curve
+            var x0=range.minOf {it.first};var x1=range.maxOf {it.first};var y0=range.minOf {it.second};var y1=range.maxOf {it.second}
             if(x0==x1){x0-=1;x1+=1};if(y0==y1){y0-=1;y1+=1}
             fun px(x:Double)=left+((x-x0)/(x1-x0)).toFloat()*width
             fun py(y:Double)=top+height-((y-y0)/(y1-y0)).toFloat()*height
+            if(curve.size>1) {
+                val path=androidx.compose.ui.graphics.Path()
+                curve.forEachIndexed {index,point->val at=Offset(px(point.first),py(point.second));if(index==0)path.moveTo(at.x,at.y) else path.lineTo(at.x,at.y)}
+                drawPath(path,c.danger,style=Stroke(2.dp.toPx()))
+            }
             points.forEach {drawCircle(c.accent,4.dp.toPx(),Offset(px(it.first),py(it.second)))}
+            if(fitLabel.isNotBlank()) {
+                val fitText=Paint(Paint.ANTI_ALIAS_FLAG).apply {color=c.danger.toArgb();textSize=10.sp.toPx()}
+                drawContext.canvas.nativeCanvas.drawText("y ≈ "+fitLabel.take(54),left,top+11.dp.toPx(),fitText)
+            }
             drawContext.canvas.nativeCanvas.drawText("x",left+width-4,top+height+20.dp.toPx(),text)
             drawContext.canvas.nativeCanvas.drawText("y",5.dp.toPx(),top+12.dp.toPx(),text)
             drawContext.canvas.nativeCanvas.drawText("%.4g".format(x0),left,top+height+16.dp.toPx(),text)

@@ -4,8 +4,15 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.*
 import com.example.calcmax.calculator.CalculatorModel
+import com.example.calcmax.ui.theme.LocalInstrument
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 private val Catalog=linkedMapOf(
     "Scientific" to listOf("sin()","cos()","tan()","asin()","acos()","atan()","abs()","floor()","ceil()","round(,0)","sign()","sqrt()","cbrt()","nthroot(,3)","atan2(,1)","frac()","iPart()","log(,10)","ln()","exp()","sinc()","sinh()","cosh()","tanh()","asinh()","acosh()","atanh()","gamma()","erf()","erfc()","Ei()","Si()","Ci()","zeta()","factorial()","nCr(,)","nPr(,)","gcd(,)","lcm(,)","prime()","isprime()","factorint()","divisors()","rnd()","eng()","pol(,)","rec(,)","randInt(,)","sexagesimal(,,)","dms()","mixed(,,)","quotient(,)","remainder(,)","sumdata([])"),
@@ -17,14 +24,14 @@ private val Catalog=linkedMapOf(
     "Data & units" to listOf("stats([])","mean([])","median([])","variance([])","stdev([])","quartiles([])","sumdata([])","regression([],linear)","covariance([],[])","correlation([],[])","qty(,m)","convert(,m,cm)")
 )
 @Composable fun CatalogDialog(m: CalculatorModel,close: ()->Unit) {
-    var category by remember {mutableStateOf("Scientific")};var search by remember {mutableStateOf("")}
+    var category by remember {mutableStateOf("Scientific")};var search by remember {mutableStateOf("")};var showHelp by remember {mutableStateOf(false)}
     val custom=m.functions.keys().asSequence().toList().sorted().map {name->
         val count=m.functions.getJSONObject(name).getJSONArray("parameters").length()
         "$name(${if(count>0)",".repeat(count-1) else ""})"
     }
     val categories=linkedMapOf("Custom" to custom).apply {putAll(Catalog)}
-    AlertDialog(onDismissRequest=close,title={Text("Function catalog")},text={Column(Modifier.verticalScroll(rememberScrollState())) {
-        Field(search,"Find function",Modifier.fillMaxWidth()) {search=it}
+    AlertDialog(onDismissRequest=close,title={Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {Text("Function catalog",Modifier.weight(1f));SmallAction("Help",description="Open the function catalog help"){showHelp=true}}},text={Column(Modifier.verticalScroll(rememberScrollState())) {
+        SearchField(search,"Find function") {search=it}
         Choices(categories.keys.toList(),category,{category=it})
         val entries=if(search.isBlank())categories[category].orEmpty() else categories.values.flatten().filter {it.contains(search,true)}
         if(category=="Custom"&&entries.isEmpty()&&search.isBlank())Text("Save a function in Functions to see it here.",fontSize=12.sp)
@@ -38,4 +45,111 @@ private val Catalog=linkedMapOf(
         }
         Text(hint,fontSize=11.sp)
     }},confirmButton={TextButton(onClick=close) {Text("Done")}})
+    if(showHelp)CatalogHelpDialog{showHelp=false}
+}
+
+private sealed interface HelpBlock {
+    data class Section(val text:String):HelpBlock
+    data class Category(val text:String):HelpBlock
+    data class Entry(val signature:String,val description:String,val example:String?=null):HelpBlock
+    data class Bullet(val text:String):HelpBlock
+    data class Body(val text:String):HelpBlock
+}
+
+@Composable fun CatalogHelpDialog(close:()->Unit) {
+    val context=LocalContext.current
+    var document by remember {mutableStateOf<String?>(null)}
+    var search by remember {mutableStateOf("")}
+    LaunchedEffect(Unit) {
+        document=withContext(Dispatchers.IO) {runCatching {context.assets.open("catalog_help.md").bufferedReader().use {it.readText()}}.getOrNull()}
+    }
+    AlertDialog(onDismissRequest=close,title={Text("Function catalog - help")},text={Column(Modifier.fillMaxWidth()) {
+        SearchField(search,"Search"){search=it}
+        val loaded=document
+        if(loaded==null) Text("Loading the catalog reference...",fontSize=12.sp)
+        else Column(Modifier.fillMaxWidth().heightIn(max=460.dp).verticalScroll(rememberScrollState())) {HelpDocument(loaded,search)}
+    }},confirmButton={TextButton(onClick=close){Text("Close")}})
+}
+
+@Composable private fun HelpDocument(markdown:String,query:String) {
+    val c=LocalInstrument.current
+    val blocks=remember(markdown,query){parseHelp(markdown,query)}
+    if(blocks.isEmpty()) {Text("No entries match \"${query.trim()}\".",fontSize=12.sp,color=c.muted);return}
+    blocks.forEach {block->
+        when(block) {
+            is HelpBlock.Section -> Text(plainHelp(block.text),style=MaterialTheme.typography.titleMedium,modifier=Modifier.padding(top=4.dp,bottom=2.dp))
+            is HelpBlock.Category -> Text(plainHelp(block.text),style=MaterialTheme.typography.titleSmall,color=c.accent,fontWeight=FontWeight.SemiBold,modifier=Modifier.padding(top=10.dp))
+            is HelpBlock.Entry -> Column(Modifier.fillMaxWidth().padding(vertical=2.dp)) {
+                Text(block.signature,fontFamily=FontFamily.Monospace,fontSize=13.sp,color=c.ink)
+                Text(plainHelp(block.description),fontSize=12.sp,color=c.muted)
+                if(!block.example.isNullOrBlank()) Text("Example: "+plainHelp(block.example),fontFamily=FontFamily.Monospace,fontSize=12.sp,color=c.accent,modifier=Modifier.padding(top=1.dp))
+            }
+            is HelpBlock.Bullet -> Text("- "+plainHelp(block.text),fontSize=12.sp,color=c.ink,modifier=Modifier.padding(vertical=1.dp))
+            is HelpBlock.Body -> Text(plainHelp(block.text),fontSize=12.sp,color=c.ink,modifier=Modifier.padding(vertical=2.dp))
+        }
+    }
+}
+
+private fun plainHelp(text:String)=text.replace("**","").replace("`","")
+
+@Composable private fun SearchField(value:String,label:String,onValue:(String)->Unit) {
+    OutlinedTextField(value,onValue,modifier=Modifier.fillMaxWidth(),label={Text(label)},singleLine=true,
+        trailingIcon={if(value.isNotEmpty()) IconButton(onClick={onValue("")}){Text("\u2715",fontSize=15.sp)}})
+}
+
+private fun parseHelp(markdown:String,query:String):List<HelpBlock> {
+    val all=parseHelpEntries(markdown)
+    val needle=query.trim().lowercase()
+    if(needle.isEmpty())return all
+    val result=mutableListOf<HelpBlock>()
+    var heading:HelpBlock.Category?=null
+    var headingMatched=false
+    fun flush() {
+        val pending=heading
+        if(pending!=null&&headingMatched)result+=pending
+        heading=null;headingMatched=false
+    }
+    all.forEach {block->
+        when(block) {
+            is HelpBlock.Section -> {}
+            is HelpBlock.Category -> {flush();heading=block}
+            else -> if(block.searchText().contains(needle)) {result+=block;headingMatched=true}
+        }
+    }
+    flush()
+    return result
+}
+
+private fun HelpBlock.searchText():String=when(this) {
+    is HelpBlock.Entry -> "$signature $description ${example.orEmpty()}"
+    is HelpBlock.Bullet -> text
+    is HelpBlock.Body -> text
+    else -> ""
+}.lowercase()
+
+private fun parseHelpEntries(markdown:String):List<HelpBlock> {
+    val result=mutableListOf<HelpBlock>()
+    var lastEntry=-1
+    markdown.lineSequence().forEach {raw->
+        val line=raw.trimEnd()
+        when {
+            line.isBlank() -> {}
+            line.startsWith("## ") -> {result+=HelpBlock.Category(line.removePrefix("## ").trim());lastEntry=-1}
+            line.startsWith("# ") -> {result+=HelpBlock.Section(line.removePrefix("# ").trim());lastEntry=-1}
+            line.startsWith("Example:") -> if(lastEntry>=0) {
+                val current=result[lastEntry]
+                if(current is HelpBlock.Entry)result[lastEntry]=current.copy(example=line.removePrefix("Example:").trim())
+            }
+            line.startsWith("- ") -> {result+=HelpBlock.Bullet(line.removePrefix("- "));lastEntry=-1}
+            line.startsWith("`") -> {
+                val end=line.indexOf('`',1)
+                if(end>1) {
+                    result+=HelpBlock.Entry(line.substring(1,end),line.substring(end+1).trim().trimStart(' ','\t','—','–','-'))
+                    lastEntry=result.lastIndex
+                } else {result+=HelpBlock.Body(line);lastEntry=-1}
+            }
+            else -> {result+=HelpBlock.Body(line);lastEntry=-1}
+        }
+    }
+    return result
 }

@@ -161,12 +161,29 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     var parameterMin by mutableDoubleStateOf(prefs.getString("parameterMin","0")!!.toDouble())
     var parameterMax by mutableDoubleStateOf(prefs.getString("parameterMax","6.283185307179586")!!.toDouble())
     var shadedInterval by mutableStateOf<Pair<Double,Double>?>(null)
+    var regressionCurve by mutableStateOf(loadRegressionCurve())
+        private set
+    var regressionFit by mutableStateOf(prefs.getString("regressionFit","") ?: "")
+        private set
+    var regressionData by mutableStateOf(prefs.getString("regressionData","") ?: "")
+        private set
+    var regressionBusy by mutableStateOf(false)
+        private set
     var radianAxis by mutableStateOf(prefs.getBoolean("radianAxis",false))
+    var statisticsName by mutableStateOf(prefs.getString("statisticsName","D1") ?: "D1")
+    var statisticsData by mutableStateOf(prefs.getString("statisticsData","1\n2\n3\n4") ?: "1\n2\n3\n4")
+    var statisticsKind by mutableStateOf(prefs.getString("statisticsKind","list") ?: "list")
+    var statisticsRegression by mutableStateOf(prefs.getString("statisticsRegression","linear") ?: "linear")
+    var statisticsPlot by mutableStateOf(prefs.getString("statisticsPlot","Histogram") ?: "Histogram")
+    var statisticsSelected by mutableStateOf(prefs.getString("statisticsSelected","") ?: "")
+    var statisticsIsNew by mutableStateOf(prefs.getBoolean("statisticsIsNew",false))
+    var statisticsCsv by mutableStateOf(prefs.getBoolean("statisticsCsv",false))
     var constants by mutableStateOf<JSONArray?>(null)
         private set
     private var job: Job? = null
     private var graphJob: Job? = null
     private var analysisJob: Job? = null
+    private var regressionJob: Job? = null
     private var pythonJob: Job? = null
     init {
         tape=history.filterIndexed{index,entry->entry.id>prefs.getLong("screenClearedAt",0)&&(index!=0||!committed||entry.source!=editor.source)}.take(maxTapeEntries).asReversed().map(HistoryEntry::toTapeEntry)
@@ -178,6 +195,10 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         val array = JSONArray(prefs.getString("history","[]"))
         (0 until array.length()).map { i -> array.getJSONObject(i).let { HistoryEntry(it.getLong("id"),it.getString("source"),it.getString("exact"),it.getString("decimal"),it.getString("mode"),it.optBoolean("favorite"),it.optString("inputTree"),it.optString("response"),it.optString("answer")) } }
     }.getOrDefault(emptyList())
+    private fun loadRegressionCurve():List<Pair<Double,Double>>? = runCatching {
+        val array=JSONArray(prefs.getString("regressionCurve","[]"))
+        if(array.length()==0)null else (0 until array.length()).map {i->val pair=array.getJSONArray(i);pair.getDouble(0) to pair.getDouble(1)}
+    }.getOrNull()
     fun save() {
         prefs.edit().putString("expression",editor.source).putInt("cursor",editor.cursor).putString("mode",mode).putString("angle",angle).putString("theme",theme)
             .putString("result",result?.toString() ?: "{}").putString("resultSource",resultSource).putBoolean("committed",committed)
@@ -194,6 +215,11 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
             .putString("equationSystem",equationSystem).putString("equationGeneral",equationGeneral).putString("equationVariables",equationVariables)
             .putString("equationVariable",equationVariable).putString("equationGuess",equationGuess).putBoolean("equationNumeric",equationNumeric)
             .putBoolean("radianAxis",radianAxis)
+            .putString("statisticsName",statisticsName).putString("statisticsData",statisticsData).putString("statisticsKind",statisticsKind)
+            .putString("statisticsRegression",statisticsRegression).putString("statisticsPlot",statisticsPlot).putString("statisticsSelected",statisticsSelected)
+            .putBoolean("statisticsIsNew",statisticsIsNew).putBoolean("statisticsCsv",statisticsCsv)
+            .putString("regressionFit",regressionFit).putString("regressionData",regressionData)
+            .putString("regressionCurve",regressionCurve?.let {list->JSONArray(list.map {point->JSONArray().put(point.first).put(point.second)}).toString()} ?: "[]")
             .putString("history",if(persistHistory) JSONArray(history.map { JSONObject().put("id",it.id).put("source",it.source).put("exact",it.exact).put("decimal",it.decimal).put("mode",it.mode).put("favorite",it.favorite).put("inputTree",it.inputTree).put("response",it.response).put("answer",it.answer) }).toString() else "[]").apply()
     }
     fun inputTree(): JSONObject? {
@@ -471,7 +497,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
             } finally { busy=false }
         }
     }
-    fun cancel() { inputVersion++;commitRequested=false;previewRunner?.cancel();job?.cancel(); graphJob?.cancel();pythonJob?.cancel(); engine.cancel(); busy=false; graphBusy=false;pythonBusy=false;pythonInputPrompt=null;pythonInputSubmit=null;previewBusy=false;error="Calculation cancelled" }
+    fun cancel() { inputVersion++;commitRequested=false;previewRunner?.cancel();job?.cancel(); graphJob?.cancel();analysisJob?.cancel();regressionJob?.cancel();pythonJob?.cancel(); engine.cancel(); busy=false; graphBusy=false;regressionBusy=false;pythonBusy=false;pythonInputPrompt=null;pythonInputSubmit=null;previewBusy=false;error="Calculation cancelled" }
     fun transform(operation: String) { val source=editor.source.ifBlank { "Ans" }; edit(Editor("$operation($source)")); calculate() }
     fun store(name: String, source: String = editor.source.ifBlank { "Ans" },showResult:Boolean=true) {
         try {
@@ -542,6 +568,34 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     fun deleteDataSet(name:String) {
         dataSets=JSONObject(dataSets.toString()).apply { remove(name) }
         save()
+    }
+    fun saveStatistics(name:String,data:String,kind:String,regression:String,plot:String,csv:Boolean,selected:String,isNew:Boolean) {
+        statisticsName=name;statisticsData=data;statisticsKind=kind;statisticsRegression=regression
+        statisticsPlot=plot;statisticsCsv=csv;statisticsSelected=selected;statisticsIsNew=isNew
+        prefs.edit().putString("statisticsName",name).putString("statisticsData",data).putString("statisticsKind",kind)
+            .putString("statisticsRegression",regression).putString("statisticsPlot",plot).putBoolean("statisticsCsv",csv)
+            .putString("statisticsSelected",selected).putBoolean("statisticsIsNew",isNew).apply()
+    }
+    fun fitRegression(source: String, data: String) {
+        regressionJob?.cancel()
+        val tree=try {Parser(source).parse()} catch(e:Exception) {error=e.message ?: "Syntax ERROR";return}
+        regressionJob=viewModelScope.launch {
+            regressionBusy=true;error=""
+            try {
+                val response=engine.execute(request().put("tree",JSONObject(tree.json())))
+                if(response.optBoolean("ok")) {
+                    result=response;dmsDisplay=false;dmsConversion=false
+                    val array=response.optJSONArray("curve")
+                    regressionCurve=if(array==null)emptyList() else (0 until array.length()).mapNotNull {index->array.optJSONArray(index)?.let {pair->pair.optDouble(0) to pair.optDouble(1)}}
+                    regressionFit=response.optString("exact");regressionData=data
+                    val next=JSONObject(variables.toString())
+                    if(response.has("resultAst")) next.put("Ans",response.getJSONObject("resultAst")) else next.remove("Ans")
+                    variables=next
+                    history=(listOf(HistoryEntry(System.currentTimeMillis(),source,response.optString("exact"),response.optString("decimal"),mode))+history).take(500)
+                    save()
+                } else {regressionCurve=emptyList();regressionFit="";regressionData="";error=response.optString("error","Math ERROR")}
+            } finally {regressionBusy=false}
+        }
     }
     fun plot() {
         graphJob?.cancel()
