@@ -2,6 +2,7 @@ package com.example.calcmax.ui
 
 import android.graphics.Paint
 import androidx.compose.foundation.*
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -57,12 +58,13 @@ import kotlin.math.*
             val array=m.graphData?.optJSONArray("curves")
             (0 until (array?.length() ?: 0)).map { ci->val curve=array!!.getJSONArray(ci); (0 until curve.length()).map { k->curve.optJSONArray(k)?.let { it.getDouble(0) to it.getDouble(1) } } }
         }
+        val latestCurves by rememberUpdatedState(curves)
         val sources=m.graphSource.lines().filter {it.isNotBlank()}.take(if(m.graphKind in listOf("surface","differential"))1 else 6)
         val markers=remember(m.graphAnalysis) {
             val array=m.graphAnalysis?.optJSONArray("points")
             (0 until (array?.length() ?: 0)).mapNotNull {i->array?.optJSONArray(i)?.let {it.getDouble(0) to it.getDouble(1)}}
         }
-        val transform=Modifier.pointerInput(Unit) {awaitEachGesture {
+        val transform=Modifier.pointerInput(m.graphKind) {awaitEachGesture {
             awaitFirstDown(requireUnconsumed=false)
             var axis:String?=null
             var totalPan=Offset.Zero
@@ -95,14 +97,19 @@ import kotlin.math.*
             }while(event.changes.any{it.pressed})
         }}
         if(m.graphKind=="surface") {
-            SurfaceGraph(m,surfaceRotation,Modifier.fillMaxWidth().weight(1f).heightIn(min=180.dp))
+            SurfaceGraph(m,surfaceRotation,Modifier.fillMaxWidth().weight(1f).heightIn(min=180.dp).pointerInput(m.graphKind) {
+                detectDragGestures {change,dragAmount->
+                    surfaceRotation=((surfaceRotation+dragAmount.x*.7f)%360f+360f)%360f
+                    change.consume()
+                }
+            })
             Row(Modifier.fillMaxWidth().padding(horizontal=14.dp),verticalAlignment=Alignment.CenterVertically) {
                 Text("Rotate",fontSize=11.sp,color=c.muted);Slider(surfaceRotation,{surfaceRotation=it},Modifier.weight(1f),valueRange=0f..360f);Text("${surfaceRotation.toInt()}°",fontSize=11.sp,color=c.muted);SmallAction("Reset"){m.xMin=-3.0;m.xMax=3.0;m.yMin=-3.0;m.yMax=3.0;m.save();m.plot()}
             }
-        } else Canvas(Modifier.fillMaxWidth().weight(1f).heightIn(min=180.dp).background(c.display).then(transform).pointerInput(curves,selected) { detectTapGestures { p ->
+        } else Canvas(Modifier.fillMaxWidth().weight(1f).heightIn(min=180.dp).background(c.display).then(transform).pointerInput(m.graphKind,selected) { detectTapGestures { p ->
             val target=m.xMin+(m.xMax-m.xMin)*p.x/size.width
             val targetY=m.yMax-(m.yMax-m.yMin)*p.y/size.height
-            m.trace=curves.getOrNull(selected)?.filterNotNull()?.minByOrNull { ((it.first-target)/(m.xMax-m.xMin)).pow(2)+((it.second-targetY)/(m.yMax-m.yMin)).pow(2) }
+            m.trace=latestCurves.getOrNull(selected)?.filterNotNull()?.minByOrNull { ((it.first-target)/(m.xMax-m.xMin)).pow(2)+((it.second-targetY)/(m.yMax-m.yMin)).pow(2) }
         } }.semantics { contentDescription="Graph with ${curves.size} curves. Pinch to zoom, drag to pan, tap to trace. Use Range and Analyze for accessible controls." }) {
             val xlo=m.xMin;val xhi=m.xMax
             fun px(x:Double)=((x-xlo)/(xhi-xlo)*size.width).toFloat()

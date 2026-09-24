@@ -85,8 +85,8 @@ import kotlin.math.max
         if(uri!=null)scope.launch {
             val content=withContext(Dispatchers.IO) {runCatching {context.contentResolver.openInputStream(uri)?.bufferedReader()?.use {it.readText()}}.getOrNull()}
             if(content!=null) {
-                data=content
-                val first=content.lineSequence().firstOrNull {it.isNotBlank()}.orEmpty().splitCsvRecord()
+                data=content.trimEnd('\r','\n')
+                val first=data.lineSequence().firstOrNull {it.isNotBlank()}.orEmpty().splitCsvRecord()
                 dataKind=if(first.size>=2)"xy" else "list"
                 datasetName=datasetName.ifBlank {activeName.ifBlank {"D1"}}
                 m.saveDataSet(datasetName,data,dataKind);selected=datasetName;isNew=false
@@ -99,10 +99,16 @@ import kotlin.math.max
             if(!success)m.error="Could not write the CSV file"
         }
     }
-    fun rows()=data.lineSequence().filter {it.isNotBlank()}.map {it.splitCsvRecord().map(String::trim)}.filter {it.isNotEmpty()}
-        .filterIndexed {index,row->!(index==0&&row.firstOrNull()?.lowercase() in listOf("x","n","value","y"))}.toList()
+    fun rows():List<List<String>> {
+        val normalized=data.replace("\r\n","\n").replace('\r','\n')
+        val lines=mutableListOf<String>();var start=0
+        normalized.forEachIndexed {index,char->if(char=='\n'){lines+=normalized.substring(start,index);start=index+1}}
+        lines+=normalized.substring(start)
+        return lines.map {it.splitCsvRecord().map(String::trim)}
+            .filterIndexed {index,row->!(index==0&&row.firstOrNull()?.lowercase() in listOf("x","n","value","y"))}
+    }
     fun vector(column:Int)=rows().mapNotNull {it.getOrNull(column)?.takeIf(String::isNotBlank)}.joinToString(",","[","]")
-    fun variableSource():String=if(dataKind=="list")vector(0) else rows().joinToString(",","[","]") {row->"[${row.getOrElse(0){"0"}},${row.getOrElse(1){"0"}}]"}
+    fun variableSource():String=if(dataKind=="list")vector(0) else rows().filter {row->row.getOrNull(0).orEmpty().isNotBlank()&&row.getOrNull(1).orEmpty().isNotBlank()}.joinToString(",","[","]") {row->"[${row[0]},${row[1]}]"}
     fun startNew() {
         var index=1;val existing=names.toSet();while("D$index" in existing)index++
         datasetName="D$index";data=if(dataKind=="xy")"0,0\n1,1" else "1\n2\n3";isNew=true;selected=""
@@ -139,7 +145,7 @@ import kotlin.math.max
         Row(Modifier.horizontalScroll(rememberScrollState())) {
             Button(onClick={val values=vector(0);if(values!="[]"){m.edit(Editor("stats($values)"));m.calculate()}}){Text(if(dataKind=="xy")"Summarize x" else "Summarize list")}
             if(dataKind=="xy")SmallAction("Summarize y"){val values=vector(1);if(values!="[]"){m.edit(Editor("stats($values)"));m.calculate()}}
-            if(dataKind=="xy")SmallAction("Fit regression"){val table=parsedRows.filter {it.size>=2}.joinToString(",","[","]"){it.take(2).joinToString(",","[","]")};m.edit(Editor("regression($table,$regression)"));m.calculate()}
+            if(dataKind=="xy")SmallAction("Fit regression"){val table=parsedRows.filter {it.size>=2&&it[0].isNotBlank()&&it[1].isNotBlank()}.joinToString(",","[","]"){it.take(2).joinToString(",","[","]")};m.edit(Editor("regression($table,$regression)"));m.calculate()}
         }
         if(dataKind=="xy")Choices(listOf("linear","quadratic","logarithmic","exponential","power"),regression,{regression=it})
         Choices(if(dataKind=="xy")listOf("Scatter","Histogram","Box plot") else listOf("Histogram","Box plot"),plotType,{plotType=it})
