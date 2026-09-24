@@ -301,7 +301,6 @@ data class ConstantEntry(val symbol: String,val name: String,val value: String,v
         Text("Angle unit"); Choices(listOf("DEG","RAD","GRAD"),m.angle,{m.angle=it;m.recalculatePreview();m.save()})
         Text("Maximum significant digits"); Choices(digits+"Custom",if(customVisible)"Custom" else m.precision.toString(),{if(it=="Custom")customVisible=true else {customVisible=false;m.precision=it.toInt();m.recalculatePreview();m.save()}})
         if(customVisible) {Field(custom,"Custom precision · 3–200",Modifier.fillMaxWidth()){custom=it};TextButton(onClick={m.precision=custom.toInt();m.recalculatePreview();m.save()},enabled=custom.toIntOrNull() in 3..200){Text("Apply precision")}}
-        Text("Trailing decimal zeros are omitted. Precision controls accuracy, not a fixed number of displayed places.",fontSize=11.sp)
         Text("Input font · ${m.inputFont.toInt()} sp")
         Slider(m.inputFont,{m.inputFont=it},valueRange=16f..42f,steps=25,onValueChangeFinished={m.save()})
         Text("Output font · ${m.outputFont.toInt()} sp")
@@ -309,9 +308,6 @@ data class ConstantEntry(val symbol: String,val name: String,val value: String,v
         Row(verticalAlignment=Alignment.CenterVertically) { Text("Key vibration",Modifier.weight(1f)); Switch(m.haptics,{m.haptics=it;m.save()}) }
         Row(verticalAlignment=Alignment.CenterVertically) { Text("Key sound",Modifier.weight(1f)); Switch(m.sound,{m.sound=it;m.save()}) }
         Row(verticalAlignment=Alignment.CenterVertically) { Text("Save history locally",Modifier.weight(1f)); Switch(m.persistHistory,{m.persistHistory=it;m.save()}) }
-        Text("Turning history off removes its saved copy. The current session remains visible until you clear it.",fontSize=11.sp)
-        Text("Symbolic calculus uses radians. Numeric trig follows the selected angle unit; explicit π and ° override it.",fontSize=12.sp)
-        Text("CalcMax 1.0 · Offline mathematics: SymPy 1.14 (BSD), mpmath 1.3 (BSD), Chaquopy 17 (MIT). Only currency-rate updates use the internet.",fontSize=11.sp)
     }},confirmButton={TextButton(onClick=close) { Text("Done") }})
 }
 
