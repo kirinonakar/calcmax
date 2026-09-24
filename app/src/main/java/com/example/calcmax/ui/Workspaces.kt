@@ -150,14 +150,17 @@ data class ConstantEntry(val symbol: String,val name: String,val value: String,v
         if(m.history.isEmpty()) Text("Your calculations will appear here.")
         m.history.filter { !favorites||it.favorite }.forEach { entry ->
             Column(Modifier.fillMaxWidth().padding(vertical=8.dp)) {
-                Text(entry.source,fontFamily=FontFamily.Monospace,fontSize=13.sp)
-                Text("= ${entry.exact}",fontFamily=FontFamily.Serif,fontSize=20.sp)
+                Text(entry.source.historyPreview(),fontFamily=FontFamily.Monospace,fontSize=13.sp)
+                Text("= ${entry.exact.historyPreview()}",fontFamily=FontFamily.Serif,fontSize=20.sp)
                 Text("${entry.mode} · ${DateFormat.getDateTimeInstance(DateFormat.SHORT,DateFormat.SHORT).format(Date(entry.id))}",fontSize=10.sp,color=LocalInstrument.current.muted)
                 Row { SmallAction("Reuse") { m.edit(Editor(entry.source));m.mode="Scientific";close() }; SmallAction(if(entry.favorite)"★" else "☆") { m.favorite(entry.id) }; SmallAction("Copy") { clipboard.setText(AnnotatedString(entry.exact)) }; SmallAction("Delete") { m.deleteHistory(entry.id) } }
             };HorizontalDivider()
         }
     }},confirmButton={TextButton(onClick=close) { Text("Done") }},dismissButton={TextButton(onClick={m.clearHistory()}) { Text("Clear all") }})
 }
+
+private fun String.historyPreview(): String =
+    if(codePointCount(0,length)>50) substring(0,offsetByCodePoints(0,49))+"…" else this
 
 @Composable fun VariablesDialog(m: CalculatorModel,operation: String,close: ()->Unit) {
     var name by rememberSaveable { mutableStateOf("A") }; var value by rememberSaveable { mutableStateOf(m.editor.source.ifBlank { "0" }) }; var parameters by rememberSaveable { mutableStateOf("x") }; var function by rememberSaveable { mutableStateOf(false) }
