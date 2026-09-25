@@ -84,6 +84,7 @@ val Modes=listOf("Scientific","CAS","Graph","Python","Equations","Matrix","Vecto
     when(overlay) {
         "Mode"->AlertDialog(onDismissRequest={overlay=""},title={Text("Calculation mode")},text={Column(Modifier.verticalScroll(rememberScrollState())) {Modes.chunked(2).forEach {row->Row {row.forEach {name->TextButton(onClick={m.mode=name;overlay=""},modifier=Modifier.weight(1f)){Text(name)}}}}}},confirmButton={TextButton(onClick={overlay=""}){Text("Close")}})
         "Settings"->SettingsDialog(m){overlay=""}
+        "MatrixSize"->MatrixSizeDialog(m){overlay=""}
         "History"->HistoryDialog(m){overlay=""}
         "Variables","STO","RCL"->VariablesDialog(m,overlay){overlay=""}
         "Catalog"->CatalogDialog(m){overlay=""}
@@ -159,13 +160,13 @@ private fun largeHistoryTree(root:JSONObject?,compactStructured:Boolean=true):Bo
     return false
 }
 
-@Composable fun Display(m:CalculatorModel,screenExpanded:Boolean=false,onToggleScreen:(()->Unit)?=null) {
+@Composable fun Display(m:CalculatorModel,screenExpanded:Boolean=false,onToggleScreen:(()->Unit)?=null,requestInitialFocus:Boolean=true) {
     val c=LocalInstrument.current
     var typing by rememberSaveable {mutableStateOf(false)}
     LaunchedEffect(m.calcSession!=null){if(m.calcSession!=null)typing=false}
     Column(Modifier.fillMaxWidth().background(c.display).padding(vertical=4.dp)) {
         DisplayToolbar(m,typing){typing=!typing}
-        DisplayContent(m,typing)
+        DisplayContent(m,typing,requestInitialFocus)
         DisplayActions(m,screenExpanded,onToggleScreen)
     }
 }

@@ -196,11 +196,14 @@ class CalculatorInstrumentedTest {
         compose.onNodeWithContentDescription("Graph current expression").performClick()
         compose.runOnIdle {assertEquals("Graph",model().mode);assertEquals("cartesian",model().graphKind);assertEquals("x^2+1",model().graphSource)}
         compose.runOnIdle {model().mode="Scientific";model().clear();model().secondKeys=true}
-        compose.onNodeWithContentDescription("Insert 2 by 2 matrix").performClick()
+        compose.onNodeWithContentDescription("Insert matrix, choose size").performClick()
+        compose.onNodeWithText("Insert").performClick()
         compose.runOnIdle {assertEquals("[[,],[,]]",model().editor.source);assertEquals(2,model().editor.cursor)}
         compose.runOnIdle {model().clear();model().secondKeys=true}
         compose.onNodeWithContentDescription("SHIFT").performClick()
-        compose.onNodeWithContentDescription("Insert 3 by 3 matrix").performClick()
+        compose.onNodeWithContentDescription("Insert matrix, choose size").performClick()
+        compose.onNodeWithContentDescription("Increase Size").performClick()
+        compose.onNodeWithText("Insert").performClick()
         compose.runOnIdle {assertEquals("[[,,],[,,],[,,]]",model().editor.source);assertEquals(2,model().editor.cursor)}
         compose.runOnIdle {model().clear();model().secondKeys=true}
         listOf("{","x",",","y","}").forEach {key->compose.onNodeWithContentDescription(key).performClick()}

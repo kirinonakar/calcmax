@@ -35,7 +35,7 @@ private val ScientificKeys=listOf(
 private val SecondKeys=listOf(
     listOf(KeySpec("simp","simplify()"),KeySpec("factor","factor()","factorint","factorint()"),KeySpec("expand","expand()"),KeySpec("x"),KeySpec("y"),KeySpec("z")),
     listOf(KeySpec("⌊x⌋","floor()"),KeySpec("⌈x⌉","ceil()"),KeySpec("∞","oo","sign","sign()"),KeySpec(","),KeySpec("{",secondary="[",alternate="["),KeySpec("}",secondary="]",alternate="]")),
-    listOf(KeySpec("MATRIX","MATRIX_INPUT",secondary="3×3",alternate="MATRIX_INPUT_3",type="action"),KeySpec("det","det()"),KeySpec("inv","inverse()"),KeySpec("T","transpose()"),KeySpec("‖v‖","norm()"),KeySpec("GRAPH","TO_GRAPH",type="action"))
+    listOf(KeySpec("MATRIX","MATRIX_INPUT",secondary="n×n",type="action"),KeySpec("det","det()"),KeySpec("inv","inverse()"),KeySpec("T","transpose()"),KeySpec("‖v‖","norm()"),KeySpec("GRAPH","TO_GRAPH",type="action"))
 )
 private val NumericKeys=listOf(
     listOf(KeySpec("7",secondary="CONST",alternate="Constants"),KeySpec("8",secondary="CONV",alternate="Units"),KeySpec("9",secondary="CLR",alternate="Clear"),KeySpec("DEL",secondary="INS",alternate="INS",type="danger"),KeySpec("AC",secondary="CLR ALL",alternate="CLR ALL",type="danger")),
@@ -111,8 +111,7 @@ private fun pressedShade(base:Color)=if(base.luminance()>.45f)Color.Black.copy(a
             "DMS_INPUT"->m.insertDmsSymbol()
             "DMS"->m.toggleDms()
             "TO_GRAPH"->m.sendExpressionToGraph()
-            "MATRIX_INPUT"->m.insert("[[,],[,]]",2)
-            "MATRIX_INPUT_3"->m.insert("[[,,],[,,],[,,]]",2)
+            "MATRIX_INPUT"->open("MatrixSize")
             "*10^()"->{val text=if(m.editor.source.isBlank()||m.committed)"1$value" else value;m.insert(text,text.indexOf('(')+1)}
             else->{val at=when {value=="()/()"->1;value.contains('(')->value.indexOf('(')+1;else->value.length};m.insert(value,at)}
         }
@@ -163,7 +162,7 @@ private fun pressedShade(base:Color)=if(base.luminance()>.45f)Color.Black.copy(a
     }
     val bg=when(key.type){"numeric"->c.numeric;"danger"->c.clearKey;"action"->c.operator;else->c.scientific}
     val ink=if(key.type=="danger")c.clearInk else c.ink
-    BoxWithConstraints(modifier.clickable(interactionSource=interaction,indication=null,onClick=onClick).semantics(mergeDescendants=true){contentDescription=when(key.input){"TO_GRAPH"->"Graph current expression";"MATRIX_INPUT"->if(shifted)"Insert 3 by 3 matrix" else "Insert 2 by 2 matrix";else->if(shifted&&key.alternate.isNotBlank())key.alternate else key.title};stateDescription=if(active)"Active" else listOf(key.secondary,key.alpha).filter{it.isNotBlank()}.joinToString()}) {
+    BoxWithConstraints(modifier.clickable(interactionSource=interaction,indication=null,onClick=onClick).semantics(mergeDescendants=true){contentDescription=when(key.input){"TO_GRAPH"->"Graph current expression";"MATRIX_INPUT"->"Insert matrix, choose size";else->if(shifted&&key.alternate.isNotBlank())key.alternate else key.title};stateDescription=if(active)"Active" else listOf(key.secondary,key.alpha).filter{it.isNotBlank()}.joinToString()}) {
         val labelHeight=(maxHeight*.25f).coerceAtMost(15.dp)
         val keyFont=(maxHeight.value*(when(key.type){"numeric","danger"->.44f;"action"->.24f;else->.32f})).coerceIn(10f,24f).sp
         val smallFont=(labelHeight.value*.66f).coerceIn(6f,if(key.secondary.length+key.alpha.length>10)7.5f else 10f).sp
@@ -177,6 +176,16 @@ private fun pressedShade(base:Color)=if(base.luminance()>.45f)Color.Black.copy(a
             Box(Modifier.then(if(key.type=="round")Modifier.aspectRatio(1f).weight(1f,false) else Modifier.fillMaxWidth().weight(1f)).clip(shape).background(Brush.verticalGradient(listOf(bg,bg.copy(alpha=.85f)))).background(if(pressed)pressedShade(bg) else Color.Transparent).border(if(active)2.dp else 1.dp,if(active)c.accent else c.muted.copy(alpha=.26f),shape),contentAlignment=Alignment.Center){
                 if(key.title=="a/b")Column(horizontalAlignment=Alignment.CenterHorizontally){Text("□",color=ink,fontSize=9.sp,lineHeight=10.sp);Box(Modifier.width(15.dp).height(1.dp).background(ink));Text("□",color=ink,fontSize=9.sp,lineHeight=10.sp)}
                 else if(key.title=="x□")Text(buildAnnotatedString{append("x");withStyle(SpanStyle(baselineShift=BaselineShift.Superscript,fontSize=(keyFont.value*.65f).sp)){append("□")}},color=ink,fontSize=keyFont)
+                else if(key.title=="∫"){
+                    val limitFont=(keyFont.value*.52f).coerceAtLeast(6f).sp
+                    Row(verticalAlignment=Alignment.CenterVertically) {
+                        Text("∫",color=ink,fontSize=keyFont,fontWeight=FontWeight.Medium)
+                        Column(Modifier.padding(start=1.dp),horizontalAlignment=Alignment.CenterHorizontally) {
+                            Text("b",color=ink,fontSize=limitFont,lineHeight=limitFont)
+                            Text("a",color=ink,fontSize=limitFont,lineHeight=limitFont)
+                        }
+                    }
+                }
                 else if(key.type!="round")Text(key.title,color=ink,fontSize=keyFont,fontWeight=FontWeight.Medium,maxLines=1)
                 else Box(Modifier.fillMaxSize(.55f).border(1.dp,c.muted.copy(alpha=.25f),CircleShape))
             }

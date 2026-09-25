@@ -229,7 +229,8 @@ private fun treeSource(node:JSONObject?):String? {
             Text("Stored values · tap to use as the second operand",fontSize=11.sp,color=c.muted)
             Row(Modifier.horizontalScroll(rememberScrollState())) {stored.forEach {key->SmallAction(key){other=key}}}
         }
-        Display(m)
+        // The workspace panel scrolls: an initial focus request would pull it down to the display.
+        Display(m,requestInitialFocus=false)
         Text(if(vector)"The grid holds up to 4 components and expressions support larger vectors. The second operand may be a stored variable or a literal." else "The grid holds up to 4 × 4 and expressions support matrices up to 32 × 32. LU returns L, U and row permutations.",fontSize=11.sp,color=c.muted)
     }
 }
@@ -579,3 +580,13 @@ private fun String.historyPreview(): String =
         if(m.error.isNotBlank()) Text(m.error,color=LocalInstrument.current.danger)
     }},confirmButton={TextButton(onClick=close) { Text("Done") }})
 }
+
+@Composable fun MatrixSizeDialog(m:CalculatorModel,close:()->Unit) {
+    val c=LocalInstrument.current
+    var size by rememberSaveable {mutableIntStateOf(2)}
+    AlertDialog(onDismissRequest=close,title={Text("Matrix size")},text={Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
+        DimStepper("Size",size,2..9){size=it}
+        Text("$size × $size matrix",fontSize=11.sp,color=c.muted)
+    }},confirmButton={TextButton(onClick={m.insert(matrixTemplate(size),2);close()}){Text("Insert")}},dismissButton={TextButton(onClick=close){Text("Cancel")}})
+}
+private fun matrixTemplate(size:Int)=List(size){"["+",".repeat(size-1)+"]"}.joinToString(",","[","]")
