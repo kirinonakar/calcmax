@@ -46,6 +46,7 @@ import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.ln
 import kotlin.math.max
+import org.json.JSONObject
 
 @Composable fun Panel(title: String,subtitle: String,content: @Composable ColumnScope.()->Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(14.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
@@ -144,6 +145,28 @@ import kotlin.math.max
 @Composable private fun OpChips(ops:List<String>,run:(String)->Unit) {
     ops.chunked(3).forEach {row->Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(4.dp)){row.forEach {op->SmallAction(op){run(op)}}}}
 }
+// Stored values keep the engine result tree; convert it back to source text so operands can be shown as matrices.
+private fun treeSource(node:JSONObject?):String? {
+    if(node==null)return null
+    val args=node.optJSONArray("args")
+    fun child(index:Int):String?=treeSource(args?.optJSONObject(index))
+    fun children():String? {
+        val count=args?.length() ?: return null
+        val parts=ArrayList<String>(count)
+        for(index in 0 until count)parts.add(child(index) ?: return null)
+        return parts.joinToString(",")
+    }
+    return when(node.optString("kind")) {
+        "list"->children()?.let{"[$it]"}
+        "set"->children()?.let{"{"+it+"}"}
+        "number","float","snapshot_symbol"->node.optString("value").takeIf{it.isNotBlank()}
+        "constant"->when(node.optString("value")){"pi"->"pi";"E"->"e";"I"->"i";"oo"->"oo";"-oo"->"-oo";else->null}
+        "binary"->{val a=child(0) ?:return null;val b=child(1) ?:return null;"($a)${node.optString("value")}($b)"}
+        "unary"->{val a=child(0) ?:return null;"${node.optString("value","-")}($a)"}
+        "call","frozen_call"->{val name=node.optString("value");val inner=children() ?:return null;if(name.matches(Regex("[A-Za-z_][A-Za-z0-9_]*")))"$name($inner)" else null}
+        else->null
+    }
+}
 @Composable fun MatrixScreen(m: CalculatorModel) {
     val c=LocalInstrument.current
     val vector=m.mode=="Vector"
@@ -154,8 +177,20 @@ import kotlin.math.max
     var other by rememberSaveable { mutableStateOf("B") }
     val cols=if(vector)1 else columns
     fun source()=(0 until rows).joinToString(",","[","]") {r->(0 until cols).joinToString(",","[","]") {column->cells[r*4+column].ifBlank {"0"} }}
+    fun resolved(text:String):String {
+        val key=text.trim().trim('[',']').trim()
+        if(!key.matches(Regex("[A-Za-z][A-Za-z0-9_]*")))return text
+        return treeSource(m.variables.optJSONObject(key)) ?: text
+    }
     fun applyOp(op:String) {
-        val expression="$op(${source()}${if(op in listOf("dot","cross","angle","projection","linsolve")) ",$other" else ""})"
+        val left=source()
+        val right=resolved(other)
+        val expression=when(op) {
+            "A+B"->"$left+$right"
+            "A−B"->"$left−$right"
+            "A×B"->"$left×$right"
+            else->"$op($left${if(op in listOf("dot","cross","angle","projection","linsolve")) ",$right" else ""})"
+        }
         m.edit(Editor(expression));m.calculate()
     }
     Panel(if(vector)"Vector workspace" else "Matrix workspace",if(vector)"Set the component count, edit entries, then run an operation." else "Set the size, edit entries, then run an operation.") {
@@ -164,7 +199,7 @@ import kotlin.math.max
             if(vector)DimStepper("Components",rows,1..4){rows=it} else {DimStepper("Rows",rows,1..4){rows=it};DimStepper("Columns",columns,1..4){columns=it}}
         }
         MatrixGrid(rows,cols,cells,"matrix-grid") {row,column,text->cells=cells.toMutableList().also {it[row*4+column]=text}}
-        Text("Expression  "+source()+(if(other.isBlank())"" else ", $other"),fontFamily=FontFamily.Monospace,fontSize=11.sp,color=c.muted)
+        Text("Expression  "+source()+(if(other.isBlank())"" else ", "+resolved(other)),fontFamily=FontFamily.Monospace,fontSize=11.sp,color=c.muted)
         Choices(listOf("A","B","C"),name,{name=it})
         val storedTree=m.variables.optJSONObject(name)
         if(storedTree!=null) Row(verticalAlignment=Alignment.CenterVertically) {
@@ -188,7 +223,7 @@ import kotlin.math.max
             Text("$referenced = ",fontSize=15.sp,color=c.muted)
             Box(Modifier.horizontalScroll(rememberScrollState())){MathNode(referencedTree,m.outputFont*.75f)}
         }
-        OpChips(if(vector)listOf("dot","cross","angle","projection") else listOf("linsolve")){applyOp(it)}
+        OpChips(if(vector)listOf("dot","cross","angle","projection") else listOf("A+B","A−B","A×B","linsolve")){applyOp(it)}
         val stored=remember(m.variables) {m.variables.keys().asSequence().toList().sorted()}
         if(stored.isNotEmpty()) {
             Text("Stored values · tap to use as the second operand",fontSize=11.sp,color=c.muted)
