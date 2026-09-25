@@ -202,17 +202,19 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
         }
     }
 }
-@Composable private fun SquareBrackets(content:@Composable ()->Unit) {
+@Composable private fun SquareBrackets(close:Boolean=true,content:@Composable ()->Unit) {
     val ink=LocalInstrument.current.ink
     Box(Modifier.drawBehind {
         val stroke=1.5.dp.toPx();val arm=7.dp.toPx();val left=stroke/2;val right=this.size.width-stroke/2
         drawLine(ink,Offset(left,0f),Offset(left,this.size.height),stroke)
         drawLine(ink,Offset(left,0f),Offset(left+arm,0f),stroke)
         drawLine(ink,Offset(left,this.size.height),Offset(left+arm,this.size.height),stroke)
-        drawLine(ink,Offset(right,0f),Offset(right,this.size.height),stroke)
-        drawLine(ink,Offset(right-arm,0f),Offset(right,0f),stroke)
-        drawLine(ink,Offset(right-arm,this.size.height),Offset(right,this.size.height),stroke)
-    }.padding(horizontal=12.dp,vertical=3.dp)) {content()}
+        if(close) {
+            drawLine(ink,Offset(right,0f),Offset(right,this.size.height),stroke)
+            drawLine(ink,Offset(right-arm,0f),Offset(right,0f),stroke)
+            drawLine(ink,Offset(right-arm,this.size.height),Offset(right,this.size.height),stroke)
+        }
+    }.padding(start=12.dp,end=if(close)12.dp else 4.dp,top=3.dp,bottom=3.dp)) {content()}
 }
 
 @Composable fun MathNode(node:JSONObject,size:Float=25f,select:((Int,Int)->Unit)?=null,selection:IntRange?=null,depth:Int=0,hideGroup:Boolean=false,compactRootIndexHole:Boolean=false,compactLogBaseHole:Boolean=false,compactExponentHole:Boolean=false,operandHole:Boolean=false) {
@@ -289,10 +291,10 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
                     },
                     content={child(0,hidden=true)})
                 else RadicalSign{child(0,hidden=true)}
-            kind=="matrix"||kind=="list"&&children.isNotEmpty()&&children.all{it.optString("kind")=="list"}->SquareBrackets {
+            kind=="matrix"||kind=="list"&&children.isNotEmpty()&&children.all{it.optString("kind")=="list"}->SquareBrackets(close=value!="open") {
                 Column(verticalArrangement=Arrangement.spacedBy(4.dp)){children.forEach{row->MathRow(10.dp){val cells=row.optJSONArray("args");for(i in 0 until(cells?.length() ?: 0))cells?.optJSONObject(i)?.let{MathNode(it,size*.85f,select,selection,depth+1)}}}}
             }
-            kind=="list"&&children.isNotEmpty()->SquareBrackets {MathRow(2.dp){children.indices.forEach {i->if(i>0)label(", ");child(i)}}}
+            kind=="list"&&children.isNotEmpty()->SquareBrackets(close=value!="open") {MathRow(2.dp){children.indices.forEach {i->if(i>0)label(", ");child(i)}}}
             emptyContainer->MathRow {label(if(kind=="list")"[" else "{");if(caret&&cursor==start+1)MathText("│",size,blink=true);label(if(kind=="list")"]" else "}")}
             kind=="rows"->Column{children.forEach{row->MathRow{label(row.optString("value")+": ",.65f);row.optJSONArray("args")?.optJSONObject(0)?.let{MathNode(it,size*.8f,depth=depth+1)}}}}
             kind=="hole"->if(compactRootIndexHole)RootIndexSlot(size,activeHole)else if(compactLogBaseHole)LogBaseSlot(size,activeHole)else if(compactExponentHole)ExponentSlot(size,activeHole)else if(operandHole){
@@ -369,6 +371,7 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
             kind in listOf("call","function")&&value in listOf("piecewise","Piecewise")->MathRow{label("{",1.7f);Column{children.indices.forEach{child(it,.85f)}}}
             else->MathRow(if(coefficient)0.dp else 2.dp){
                 val wrap=kind in listOf("call","function","list","tuple","set")
+                val openContainer=value=="open"&&kind in listOf("list","set")
                 val operandHoles=kind=="binary"||kind=="relation"
                 if(kind in listOf("call","function"))label(value,.9f)
                 if(wrap)label(when(kind){"list"->"[";"set"->"{";else->"("})
@@ -383,7 +386,7 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
                     }
                 }
                 if(kind=="tuple"&&children.size==1)label(",")
-                if(wrap)label(when(kind){"list"->"]";"set"->"}";else->")"})
+                if(wrap&&!openContainer)label(when(kind){"list"->"]";"set"->"}";else->")"})
                 if(children.isEmpty())label(value)
             }
         }

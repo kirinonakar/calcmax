@@ -122,12 +122,14 @@ class Parser(private val source: String, private val allowHoles: Boolean = false
             first.text == "[" -> {
                 val args = mutableListOf<Expr>()
                 if(token.text != "]") { args += expression(0); while(token.text == ",") { take(); args += expression(0) } }
-                Expr("list", args = args, start = first.start, end = expect("]").end)
+                val unclosed = allowHoles && token.text.isEmpty()
+                Expr("list", if(unclosed) "open" else "", args = args, start = first.start, end = expect("]").end)
             }
             first.text == "{" -> {
                 val args = mutableListOf<Expr>()
                 if(token.text != "}") { args += expression(0); while(token.text == ",") { take(); args += expression(0) } }
-                Expr("set", args = args, start = first.start, end = expect("}").end)
+                val unclosed = allowHoles && token.text.isEmpty()
+                Expr("set", if(unclosed) "open" else "", args = args, start = first.start, end = expect("}").end)
             }
             first.text.firstOrNull()?.let { it.isDigit() || it == '.' } == true -> {
                 try { first.text.toBigDecimal() } catch(_: Exception) { throw SyntaxException("Invalid number", first.start) }

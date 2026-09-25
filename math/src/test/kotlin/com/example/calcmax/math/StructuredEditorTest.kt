@@ -208,6 +208,12 @@ class StructuredEditorTest {
         assertEquals("group",Editor("3*(5)").tree()!!.args[1].kind)
         assertEquals("",Editor("3*(5)").tree()!!.args[1].value)
     }
+    @Test fun unclosedContainersAreMarkedOpen() {
+        assertEquals("open",Parser("{1,2",true).parse().value)
+        assertEquals("open",Parser("[1,2",true).parse().value)
+        assertEquals("",Parser("{1,2}",true).parse().value)
+        assertEquals("",Parser("[1,2]",true).parse().value)
+    }
     @Test fun adjacentTermsHaveOneCaretOwner() {
         val editor=Editor("sin(3pi)",5)
         assertEquals(4..5,editor.cursorTarget())
