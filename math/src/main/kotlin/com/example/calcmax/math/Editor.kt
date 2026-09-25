@@ -4,6 +4,12 @@ package com.example.calcmax.math
 data class Editor(val source: String = "", val cursor: Int = source.length, val anchor: Int = cursor,
                   val exponent: IntRange? = null, val outside: IntRange? = null, val activeToken: IntRange? = null) {
     fun insert(text: String, inside: Int = text.length): Editor {
+        if(cursor==anchor && text in listOf("+","-","−","×","*","·","÷","/","^","∠","=")) {
+            val nodes=tree()?.nodes()
+            val slot=nodes?.firstOrNull {node->node.kind=="group" && node.args.firstOrNull()?.kind=="hole" && node.start==cursor-1}
+            if(slot!=null && nodes.any {node->node.kind=="binary" && node.value=="*" && node.displayOperator=="∘" && node.args.any {it.start==slot.start && it.end==slot.end}}==true)
+                return Editor(source.substring(0,slot.start)+text+source.substring(slot.end),slot.start+text.length)
+        }
         if(cursor==anchor && exponent==null && text.firstOrNull()?.let{it.isLetterOrDigit()||it=='.'||it=='('||it=='√'}==true &&
             tree()?.nodes()?.any {it.kind=="binary"&&it.value=="^"&&it.end==cursor&&it.args[1].kind !in setOf("hole","group")}==true)
             return Editor(source,cursor).insert("*$text",inside+1)
@@ -51,12 +57,17 @@ data class Editor(val source: String = "", val cursor: Int = source.length, val 
         }
     }==true
     private fun remove(start:Int,end:Int):Editor {
-        val structuralOperand=tree()?.nodes()?.any {node->
+        val nodes=tree()?.nodes()
+        val structuralOperand=nodes?.any {node->
             node.kind=="binary" && (node.value=="^" && node.args[0].start==start && node.args[0].end==end ||
                 node.value=="*" && node.args.any {it.start==start && it.end==end} ||
                 fraction(node) && node.args.any {it.start==start && it.end==end})
         }==true
-        return copy(cursor=end,anchor=start).insert(if(structuralOperand)"()" else "",if(structuralOperand)1 else 0)
+        val operatorSlot=(cursor!=anchor)&&nodes?.any {node->
+            node.kind=="binary" && node.value!="^" && !(node.value=="/" && node.displayOperator!="÷") &&
+                node.args.size==2 && node.args[0].end<=start && end<=node.args[1].start && node.args[0].end<node.args[1].start
+        }==true
+        return copy(cursor=end,anchor=start).insert(if(structuralOperand||operatorSlot)"()" else "",if(structuralOperand||operatorSlot)1 else 0)
     }
     private fun powerAtExponentStart(position:Int):Expr? = if(source.getOrNull(position-1)!='^')null else
         tree()?.nodes()?.filter {it.kind=="binary"&&it.value=="^"&&it.args[1].start==position}

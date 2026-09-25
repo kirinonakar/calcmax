@@ -19,14 +19,20 @@ class StructuredEditorTest {
         assertEquals("integrate(3 * () * 4,x,,)",spacedHole.source)
         assertEquals("integrate(3 * 4,x,,)",spacedHole.delete().source)
     }
-    @Test fun deletingOperatorBetweenMatricesKeepsBothOperands() {
+    @Test fun deletingOperatorLeavesReusableSlotPreservingMatrices() {
         val source="[[1,0],[0,1]]+[[4,5],[6,7]]"
         val at=source.indexOf('+')
-        val deleted=Editor(source).selectRange(at,at+1).delete()
-        assertEquals("[[1,0],[0,1]][[4,5],[6,7]]",deleted.source)
-        assertEquals("*",deleted.tree()?.value)
-        assertEquals("binary",deleted.tree()?.kind)
+        val slot=Editor(source).selectRange(at,at+1).delete()
+        assertEquals("[[1,0],[0,1]]()[[4,5],[6,7]]",slot.source)
+        assertEquals(at+1,slot.cursor)
+        assertEquals("[[1,0],[0,1]]×[[4,5],[6,7]]",slot.insert("×").source)
+        assertEquals("binary",slot.tree()?.kind)
+        assertEquals("[[1,0],[0,1]][[4,5],[6,7]]",Editor(slot.source,slot.cursor).delete().source)
         assertEquals("3",Editor("-3").selectRange(0,1).delete().source)
+        assertEquals("2()3",Editor("2+3").selectRange(1,2).delete().source)
+        assertEquals("2×3",Editor("2()3",2).insert("×").source)
+        assertEquals("23",Editor("2+3",2).delete().source)
+        assertEquals("23",Editor("2+3",1).deleteForward().source)
     }
     @Test fun deletingEmptyExponentBoxRemovesPowerTailInsideIntegral() {
         val source="integrate(3^(2),x,,)"

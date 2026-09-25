@@ -156,14 +156,15 @@ class Parser(private val source: String, private val allowHoles: Boolean = false
                     else -> Expr("call", when(op) { "!" -> "factorial"; "%" -> "percent"; else -> "degree" }, listOf(left), left.start, end)
                 }; continue
             }
-            val implicit = op.isNotEmpty() && (op == "(" || op.first().isLetter() && op != "mod" || op == "√" || op == "[" && left.kind == "list")
+            val slotTail = left.kind=="binary" && left.value=="*" && left.args.lastOrNull()?.let {it.kind=="group" && it.args.firstOrNull()?.kind=="hole"}==true
+            val implicit = op.isNotEmpty() && (op == "(" || op.first().isLetter() && op != "mod" || op == "√" || op == "[" && (left.kind=="list" || slotTail) || op.first().isDigit() && slotTail)
             val actual = if(implicit) "*" else op
             val binding = when(actual) { ":=" -> 1; "=", "==", "<", ">", "<=", ">=", "!=", "->" -> 5; "+", "-" -> 10; "*", "/", "mod", "∠" -> 20; "^" -> 30; else -> -1 }
             if(binding < min) break
             val operatorToken=if(implicit) null else take()
             val right = expression(if(actual in listOf("^", ":=")) binding else binding+1)
             left = Expr(if(binding == 5) "relation" else "binary", actual, listOf(left,right), left.start,right.end,
-                if(actual=="/" && operatorToken!=null && source[operatorToken.start]=='÷')"÷" else "")
+                if(actual=="/" && operatorToken!=null && source[operatorToken.start]=='÷')"÷" else if(implicit)"∘" else "")
         }
         depth--
         return left
