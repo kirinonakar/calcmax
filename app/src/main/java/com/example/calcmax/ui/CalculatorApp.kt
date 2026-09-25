@@ -173,11 +173,18 @@ private fun largeHistoryTree(root:JSONObject?,compactStructured:Boolean=true):Bo
 @Composable fun DisplayToolbar(m:CalculatorModel,typing:Boolean,onToggleTyping:()->Unit) {
     val c=LocalInstrument.current
     val clipboard=LocalClipboardManager.current
+    var copyExpression by remember{mutableStateOf(false)}
+    // The Copy button cycles answer → expression; a new result or input starts over at the answer.
+    LaunchedEffect(m.result,m.editor.source){copyExpression=false}
     Row(Modifier.fillMaxWidth().height(36.dp).padding(horizontal=14.dp),verticalAlignment=Alignment.CenterVertically) {
         Text(if(m.committed)"=" else "MATH",fontSize=10.sp,color=c.muted,letterSpacing=1.sp)
         Spacer(Modifier.weight(1f))
         TextButton(onClick={m.undo()},enabled=m.canUndo,modifier=Modifier.height(36.dp).semantics{contentDescription="Undo last input"},contentPadding=PaddingValues(horizontal=8.dp)){Text("Undo",fontSize=11.sp)}
-        TextButton(onClick={m.result?.let{clipboard.setText(AnnotatedString(it.optString(if(m.decimal)"decimal" else "exact")))}},modifier=Modifier.height(36.dp),contentPadding=PaddingValues(horizontal=8.dp)){Text("Copy",fontSize=11.sp)}
+        val copyTarget=CopyCycle.next(m.result?.optString(if(m.decimal)"decimal" else "exact"),m.editor.source,copyExpression)
+        TextButton(onClick={
+            if(copyTarget.text.isNotBlank())clipboard.setText(AnnotatedString(copyTarget.text))
+            copyExpression=copyTarget.expressionNext
+        },modifier=Modifier.height(36.dp),contentPadding=PaddingValues(horizontal=8.dp)){Text(copyTarget.label,fontSize=11.sp)}
         TextButton(onClick={clipboard.getText()?.text?.let{if(m.calcSession!=null)m.insertCalcValue(it)else m.insert(it)}},modifier=Modifier.height(36.dp),contentPadding=PaddingValues(horizontal=8.dp)){Text("Paste",fontSize=11.sp)}
         if(m.calcSession==null)TextButton(onClick=onToggleTyping,modifier=Modifier.height(36.dp),contentPadding=PaddingValues(horizontal=8.dp)){Text(if(typing)"Math input" else "Keyboard",fontSize=11.sp)}
     }
