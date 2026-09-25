@@ -341,7 +341,8 @@ private fun treeSource(node:JSONObject?):String? {
         val fitVisible=dataKind=="xy"&&plotType=="Scatter"&&m.regressionData==data
         StatisticsPlot(plotType,if(plotType=="Scatter")paired else xValues.mapIndexed {i,v->i.toDouble() to v},xValues,yValues,if(fitVisible)m.regressionCurve.orEmpty() else emptyList(),if(fitVisible)m.regressionFit else "")
         if(m.regressionBusy)Text("Fitting regression…",fontSize=11.sp,color=LocalInstrument.current.muted)
-        Display(m)
+        // The workspace panel scrolls: an initial focus request would pull it down to the display.
+        Display(m,requestInitialFocus=false)
         if(dataKind=="xy")SmallAction("Graph fitted expression"){val exact=m.result?.optString("exact");if(!exact.isNullOrBlank()){m.changeGraphKind("cartesian");m.updateGraphSource(exact.replace("**","^"));m.mode="Graph";m.plot()}}
     }
 }
