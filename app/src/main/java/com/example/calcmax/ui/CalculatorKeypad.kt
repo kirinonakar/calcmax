@@ -28,7 +28,7 @@ import kotlin.random.Random
 
 data class KeySpec(val title:String,val input:String=title,val secondary:String="",val alternate:String="",val alpha:String="",val type:String="scientific")
 private val ScientificKeys=listOf(
-    listOf(KeySpec("a/b","()/()","mixed","mixed(,,)"),KeySpec("√","sqrt()","³√","cbrt()"),KeySpec("x²","^2","x³","^3"),KeySpec("x□","^()","ⁿ√","nthroot(,)"),KeySpec("log","log()","10ˣ","10^()","z"),KeySpec("ln","ln()","eˣ","e^()","t")),
+    listOf(KeySpec("a/b","()/()","mixed","mixed(,,)"),KeySpec("√","sqrt()","³√","cbrt()"),KeySpec("x²","^2","x³","^3"),KeySpec("x□","^()","ⁿ√","nthroot(,)"),KeySpec("log","log()","10ˣ","10^()","n"),KeySpec("ln","ln()","eˣ","e^()","t")),
     listOf(KeySpec("(−)","NEG","∠","∠","A"),KeySpec("°′″","DMS_INPUT","←","DMS","B"),KeySpec("hyp","HYP","Abs","abs()","C"),KeySpec("sin","sin()","sin⁻¹","asin()","D"),KeySpec("cos","cos()","cos⁻¹","acos()","E"),KeySpec("tan","tan()","tan⁻¹","atan()","F")),
     listOf(KeySpec("RCL",secondary="STO",alternate="STO"),KeySpec("ENG",secondary="←",alternate="ENG−",alpha="i"),KeySpec("(",secondary="%",alternate="%",alpha="z"),KeySpec(")",secondary=",",alternate=",",alpha="x"),KeySpec("S⇔D",secondary="a b/c ⇔ d/c",alternate="MIXED",alpha="y"),KeySpec("M+",secondary="M−",alternate="M−",alpha="M"))
 )
