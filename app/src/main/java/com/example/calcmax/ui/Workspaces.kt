@@ -583,10 +583,12 @@ private fun String.historyPreview(): String =
 
 @Composable fun MatrixSizeDialog(m:CalculatorModel,close:()->Unit) {
     val c=LocalInstrument.current
-    var size by rememberSaveable {mutableIntStateOf(2)}
+    var rows by rememberSaveable {mutableIntStateOf(2)}
+    var columns by rememberSaveable {mutableIntStateOf(2)}
     AlertDialog(onDismissRequest=close,title={Text("Matrix size")},text={Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
-        DimStepper("Size",size,2..9){size=it}
-        Text("$size × $size matrix",fontSize=11.sp,color=c.muted)
-    }},confirmButton={TextButton(onClick={m.insert(matrixTemplate(size),2);close()}){Text("Insert")}},dismissButton={TextButton(onClick=close){Text("Cancel")}})
+        DimStepper("Rows",rows,1..9){rows=it}
+        DimStepper("Columns",columns,1..9){columns=it}
+        Text("$rows × $columns matrix",fontSize=11.sp,color=c.muted)
+    }},confirmButton={TextButton(onClick={m.insert(matrixTemplate(rows,columns),2);close()}){Text("Insert")}},dismissButton={TextButton(onClick=close){Text("Cancel")}})
 }
-private fun matrixTemplate(size:Int)=List(size){"["+",".repeat(size-1)+"]"}.joinToString(",","[","]")
+private fun matrixTemplate(rows:Int,columns:Int)=List(rows){"["+",".repeat(columns-1)+"]"}.joinToString(",","[","]")

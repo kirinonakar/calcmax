@@ -202,9 +202,9 @@ class CalculatorInstrumentedTest {
         compose.runOnIdle {model().clear();model().secondKeys=true}
         compose.onNodeWithContentDescription("SHIFT").performClick()
         compose.onNodeWithContentDescription("Insert matrix, choose size").performClick()
-        compose.onNodeWithContentDescription("Increase Size").performClick()
+        compose.onNodeWithContentDescription("Increase Rows").performClick()
         compose.onNodeWithText("Insert").performClick()
-        compose.runOnIdle {assertEquals("[[,,],[,,],[,,]]",model().editor.source);assertEquals(2,model().editor.cursor)}
+        compose.runOnIdle {assertEquals("[[,],[,],[,]]",model().editor.source);assertEquals(2,model().editor.cursor)}
         compose.runOnIdle {model().clear();model().secondKeys=true}
         listOf("{","x",",","y","}").forEach {key->compose.onNodeWithContentDescription(key).performClick()}
         compose.runOnIdle {assertEquals("{x,y}",model().editor.source);assertEquals("set",model().editor.tree()?.kind)}
