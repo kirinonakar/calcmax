@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.contentDescription
@@ -32,6 +33,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.*
 import com.example.calcmax.calculator.CalculatorModel
@@ -97,10 +99,10 @@ import org.json.JSONObject
     val c=LocalInstrument.current
     Box(Modifier.size(32.dp).border(1.dp,c.muted.copy(alpha=.4f)).clickable(onClick=onClick).semantics(mergeDescendants=true){contentDescription=description},contentAlignment=Alignment.Center){Text(label,fontSize=15.sp,color=c.ink)}
 }
-@Composable private fun DimStepper(label:String,value:Int,range:IntRange,onValue:(Int)->Unit) {
+@Composable private fun DimStepper(label:String,value:Int,range:IntRange,labelWidth:Dp?=null,onValue:(Int)->Unit) {
     val c=LocalInstrument.current
     Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(4.dp)) {
-        Text(label,fontSize=11.sp,color=c.muted)
+        Text(label,if(labelWidth==null)Modifier else Modifier.width(labelWidth),fontSize=11.sp,color=c.muted)
         StepKey("−","Decrease $label"){onValue((value-1).coerceIn(range))}
         Text("$value",Modifier.widthIn(min=20.dp),textAlign=TextAlign.Center,fontSize=15.sp,fontWeight=FontWeight.SemiBold)
         StepKey("+","Increase $label"){onValue((value+1).coerceIn(range))}
@@ -586,8 +588,12 @@ private fun String.historyPreview(): String =
     var rows by rememberSaveable {mutableIntStateOf(2)}
     var columns by rememberSaveable {mutableIntStateOf(2)}
     AlertDialog(onDismissRequest=close,title={Text("Matrix size")},text={Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
-        DimStepper("Rows",rows,1..9){rows=it}
-        DimStepper("Columns",columns,1..9){columns=it}
+        val density=LocalDensity.current
+        val measurer=rememberTextMeasurer()
+        val labelStyle=LocalTextStyle.current.copy(fontSize=11.sp)
+        val labelWidth=remember(measurer,density,labelStyle){with(density){listOf("Rows","Columns").maxOf{measurer.measure(AnnotatedString(it),labelStyle).size.width}.toDp()}}
+        DimStepper("Rows",rows,1..9,labelWidth){rows=it}
+        DimStepper("Columns",columns,1..9,labelWidth){columns=it}
         Text("$rows × $columns matrix",fontSize=11.sp,color=c.muted)
     }},confirmButton={TextButton(onClick={m.insert(matrixTemplate(rows,columns),2);close()}){Text("Insert")}},dismissButton={TextButton(onClick=close){Text("Cancel")}})
 }
