@@ -25,23 +25,37 @@ private fun decimalInput(text:String):BigDecimal {require(text.length<=128);retu
 @Composable fun TipScreen() {
     var bill by rememberSaveable{mutableStateOf("100")}
     var percent by rememberSaveable{mutableStateOf("15")}
+    var tipAmount by rememberSaveable{mutableStateOf("")}
+    var tipIsAmount by rememberSaveable{mutableStateOf(false)}
     var tax by rememberSaveable{mutableStateOf("0")}
     var people by rememberSaveable{mutableStateOf("1")}
-    var currency by rememberSaveable{mutableStateOf("USD")}
-    val places=if(currency in listOf("KRW","JPY"))0 else 2
-    val result=runCatching{Money.tip(decimalInput(bill),decimalInput(percent),decimalInput(tax),people.toInt(),places)}
-    Panel("Tip calculator","Tip on the bill before tax · totals update as you type") {
-        Choices(listOf("USD","KRW","EUR","JPY","GBP"),currency,{currency=it})
-        Field(bill,"Bill before tax ($currency)",Modifier.fillMaxWidth()){bill=it}
-        Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){Field(percent,"Tip %",Modifier.weight(1f)){percent=it};Field(tax,"Tax %",Modifier.weight(1f)){tax=it}}
-        Choices(listOf("0","5","10","15","18","20","25"),percent,{percent=it})
-        Field(people,"Number of people",Modifier.fillMaxWidth()){people=it}
+    val places=2
+    val result=runCatching{
+        if(tipIsAmount)Money.tipFromAmount(decimalInput(bill),decimalInput(tipAmount),decimalInput(tax),people.toInt(),places)
+        else Money.tip(decimalInput(bill),decimalInput(percent),decimalInput(tax),people.toInt(),places)
+    }
+    Panel("Tip calculator","") {
+        Field(bill,"Bill before tax",Modifier.fillMaxWidth()){bill=it}
+        Choices(listOf("Tip %","Tip amount"),if(tipIsAmount)"Tip amount" else "Tip %",{tipIsAmount=it=="Tip amount"})
+        Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
+            Field(percent,"Tip %",Modifier.weight(1f),enabled=!tipIsAmount){percent=it}
+            Field(tipAmount,"Tip amount",Modifier.weight(1f),enabled=tipIsAmount){tipAmount=it}
+        }
+        Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
+            Field(tax,"Tax %",Modifier.weight(1f)){tax=it}
+            Field(people,"Number of people",Modifier.weight(1f)){people=it}
+        }
+        if(!tipIsAmount)Choices(listOf("0","5","10","15","18","20","25"),percent,{percent=it})
         result.getOrNull()?.let {r->
-            Text("Total  ${Money.format(r.total)} $currency",style=MaterialTheme.typography.headlineMedium)
-            Text("Tip  ${Money.format(r.tip)} $currency   ·   Tax  ${Money.format(r.tax)} $currency")
+            val implied=runCatching{
+                if(tipIsAmount)Money.impliedTipPercent(decimalInput(bill),r.tip)?.setScale(4,RoundingMode.HALF_UP)?.stripTrailingZeros()
+                else decimalInput(percent).stripTrailingZeros()
+            }.getOrNull()
+            Text("Total  ${Money.format(r.total)}",style=MaterialTheme.typography.headlineMedium)
+            Text("Tip  ${Money.format(r.tip)}${if(implied!=null)"   ·   ${Money.format(implied)}%" else ""}   ·   Tax  ${Money.format(r.tax)}")
             HorizontalDivider()
-            Text("Per person  ${Money.format(r.share)} $currency",style=MaterialTheme.typography.titleLarge)
-            if(r.extraPeople>0)Text("${r.extraPeople} ${if(r.extraPeople==1)"person pays" else "people pay"} ${Money.format(r.extraShare)} $currency; the others pay ${Money.format(r.share)} $currency. This keeps the split equal to the total.",fontSize=12.sp)
+            Text("Per person  ${Money.format(r.share)}",style=MaterialTheme.typography.titleLarge)
+            if(r.extraPeople>0)Text("${r.extraPeople} ${if(r.extraPeople==1)"person pays" else "people pay"} ${Money.format(r.extraShare)}; the others pay ${Money.format(r.share)}. This keeps the split equal to the total.",fontSize=12.sp)
         } ?: Text("Enter valid non-negative amounts and a whole number of people.",color=LocalInstrument.current.danger)
     }
 }
@@ -52,6 +66,8 @@ private fun decimalInput(text:String):BigDecimal {require(text.length<=128);retu
     var to by rememberSaveable{mutableStateOf("KRW")}
     var manual by rememberSaveable{mutableStateOf(false)}
     var manualRate by rememberSaveable{mutableStateOf("")}
+    var dropDecimals by rememberSaveable{mutableStateOf(false)}
+    val quickCurrencies=listOf("KRW","USD","EUR","JPY","CNY","GBP","CAD","AUD","CHF","TWD","HKD","SGD","NZD","THB","VND","INR","IDR","MYR","PHP","SEK","NOK","MXN")
     val uri=LocalUriHandler.current
     val table=m.exchangeRates
     LaunchedEffect(manual){if(!manual)m.loadExchangeRates()}
@@ -60,20 +76,25 @@ private fun decimalInput(text:String):BigDecimal {require(text.length<=128);retu
     }
     val rate=runCatching{if(manual)decimalInput(manualRate).also{require(it.signum()>0)} else table?.rate(from,to,m.precision.coerceAtLeast(16)) ?: error("No cached rates")}
     val converted=runCatching{decimalInput(amount).multiply(rate.getOrThrow(),MathContext(m.precision.coerceAtLeast(16),RoundingMode.HALF_EVEN))}
-    Panel("Currency converter","Latest online reference rates with an offline cache. These are indicative daily rates, not trading quotes.") {
+    Panel("Currency converter","") {
         Choices(listOf("Online / cache","Manual"),if(manual)"Manual" else "Online / cache",{manual=it=="Manual"})
         Field(amount,"Amount",Modifier.fillMaxWidth()){amount=it}
         Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
             Field(from,"From (ISO code)",Modifier.weight(1f)){from=it.uppercase().take(4);manualRate=""}
             Field(to,"To (ISO code)",Modifier.weight(1f)){to=it.uppercase().take(4);manualRate=""}
         }
-        Choices(listOf("KRW","USD","EUR","JPY","CNY","GBP","CAD","AUD","CHF"),to,{to=it;manualRate=""})
-        SmallAction("Swap currencies") {
-            val previous=from;from=to;to=previous
-            if(manual)manualRate=runCatching{Money.format(BigDecimal.ONE.divide(decimalInput(manualRate),MathContext.DECIMAL128))}.getOrDefault("")
+        Choices(quickCurrencies,from,{from=it;manualRate=""})
+        Choices(quickCurrencies,to,{to=it;manualRate=""})
+        Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)){
+            SmallAction("⇄ Swap currencies",fontSize=15.sp) {
+                val previous=from;from=to;to=previous
+                if(manual)manualRate=runCatching{Money.format(BigDecimal.ONE.divide(decimalInput(manualRate),MathContext.DECIMAL128))}.getOrDefault("")
+            }
+            FilterChip(selected=dropDecimals,onClick={dropDecimals=!dropDecimals},label={Text("Drop decimals",fontSize=13.sp)})
         }
         converted.getOrNull()?.let {value->
-            Text("≈ ${Money.format(value.round(MathContext(m.precision,RoundingMode.HALF_EVEN)))} $to",style=MaterialTheme.typography.headlineMedium)
+            val shown=if(dropDecimals)value.setScale(0,RoundingMode.DOWN) else value.round(MathContext(m.precision,RoundingMode.HALF_EVEN))
+            Text("≈ ${Money.format(shown)} $to",style=MaterialTheme.typography.headlineMedium)
             Text("1 $from = ${Money.format(rate.getOrThrow().round(MathContext(minOf(m.precision,12))))} $to",fontSize=13.sp)
         } ?: Text(if(manual)"Enter a positive conversion rate." else if(table==null)"A saved rate or manual rate is needed." else "Check the currency codes.",color=LocalInstrument.current.muted)
         if(manual)Field(manualRate,"1 $from = ? $to",Modifier.fillMaxWidth()){manualRate=it}
@@ -87,7 +108,7 @@ private fun decimalInput(text:String):BigDecimal {require(text.length<=128);retu
                 Text("Saved on device: ${date.format(Date(it.fetchedMillis))}",fontSize=11.sp)
                 Text("Next update: ${date.format(Date(it.fetchedMillis+RateTable.TTL))}",fontSize=11.sp)
             }
-            TextButton(onClick={m.loadExchangeRates()},enabled=!m.exchangeBusy&&(table==null||table.due(System.currentTimeMillis()))){Text(if(table!=null&&!table.due(System.currentTimeMillis()))"24-hour cache is current" else "Update rates")}
+            if(table==null||table.due(System.currentTimeMillis()))TextButton(onClick={m.loadExchangeRates()},enabled=!m.exchangeBusy){Text("Update rates")}
         }
         Text("Rates By Exchange Rate API",Modifier.clickable{uri.openUri(ExchangeRepository.SOURCE)},color=LocalInstrument.current.accent,fontSize=12.sp)
     }

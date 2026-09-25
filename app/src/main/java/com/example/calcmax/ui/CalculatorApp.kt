@@ -31,6 +31,7 @@ import com.example.calcmax.math.Lexer
 import com.example.calcmax.math.Expr
 
 val Modes=listOf("Scientific","CAS","Graph","Python","Equations","Matrix","Vector","Statistics","Programmer","Units","Constants","Tip","Currency","Functions")
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable fun CalculatorApp(m:CalculatorModel) {
     val c=LocalInstrument.current
     var overlay by rememberSaveable {mutableStateOf("")}
@@ -43,8 +44,11 @@ val Modes=listOf("Scientific","CAS","Graph","Python","Equations","Matrix","Vecto
             SmallAction("History"){overlay="History"};SmallAction("Catalog"){overlay="Catalog"};SmallAction("Setup"){overlay="Settings"}
         }
         Row(Modifier.fillMaxWidth().height(48.dp).zIndex(2f).background(c.scientific).padding(horizontal=8.dp),verticalAlignment=Alignment.CenterVertically) {
-            TextButton(onClick={overlay="Mode"},modifier=Modifier.weight(1f).fillMaxHeight().semantics{contentDescription="Choose calculation mode"},contentPadding=PaddingValues(horizontal=8.dp)) {Text(m.mode.uppercase()+" ▾",Modifier.fillMaxWidth(),fontSize=12.sp,color=c.ink)}
+            Box(Modifier.weight(1f).fillMaxHeight().combinedClickable(onClick={overlay="Mode"},onLongClick={m.mode="Scientific"},onLongClickLabel="Go to Scientific mode").semantics{contentDescription="Choose calculation mode, long press for Scientific mode"},contentAlignment=Alignment.CenterStart) {
+                Text(m.mode.uppercase()+" ▾",Modifier.fillMaxWidth().padding(horizontal=8.dp),fontSize=12.sp,color=c.ink)
+            }
             if(m.variables.has("M"))Text("M  ",fontSize=10.sp,color=c.muted,modifier=Modifier.semantics{contentDescription="Stored memory"})
+            if(m.mixedNumbers)Text("mix  ",fontSize=10.sp,color=c.accent,modifier=Modifier.semantics{contentDescription="Mixed numbers"})
             Text(if(m.shift)"SHIFT  " else if(m.alpha)"ALPHA  " else if(m.hyperbolic)"HYP  " else if(m.secondKeys)"2ND  " else "",fontSize=10.sp,color=if(m.alpha)c.alpha else c.shift)
             Text(m.angle,Modifier.clickable {m.angle=when(m.angle){"DEG"->"RAD";"RAD"->"GRAD";else->"DEG"};m.recalculatePreview();m.save()}.padding(horizontal=12.dp),fontSize=11.sp,color=c.accent)
             Text("≤ ${m.precision} digits",fontSize=10.sp,color=c.muted)
@@ -344,13 +348,13 @@ private fun domainText(result:JSONObject?):String {
     val conditions=result?.optJSONArray("conditions") ?: return ""
     return if(conditions.length()==0)"" else "Domain: "+(0 until conditions.length()).joinToString{conditions.optString(it)}
 }
-@Composable fun SmallAction(text:String,active:Boolean?=null,description:String?=null,shaded:Boolean=false,action:()->Unit){
+@Composable fun SmallAction(text:String,active:Boolean?=null,description:String?=null,shaded:Boolean=false,fontSize:TextUnit=11.sp,action:()->Unit){
     val c=LocalInstrument.current
     val color=when(active){true->c.accent;false->c.muted.copy(alpha=.45f);null->MaterialTheme.colorScheme.onSurface}
     val modifier=description?.let{value->Modifier.semantics{contentDescription=value}} ?: Modifier
     TextButton(onClick=action,contentPadding=PaddingValues(horizontal=8.dp,vertical=0.dp),modifier=modifier,
         colors=ButtonDefaults.textButtonColors(containerColor=if(shaded)c.accent.copy(alpha=.22f) else androidx.compose.ui.graphics.Color.Transparent)){
-        Text(text,fontSize=11.sp,color=color,fontWeight=if(active==true)FontWeight.SemiBold else FontWeight.Normal)
+        Text(text,fontSize=fontSize,color=color,fontWeight=if(active==true)FontWeight.SemiBold else FontWeight.Normal)
     }
 }
 @Composable fun Templates(m:CalculatorModel){Row(Modifier.horizontalScroll(rememberScrollState())){listOf("Factor" to "factor(x^4-1)","Solve" to "solve(x^2-5x+6=0,x)","Derivative" to "diff(sin(x^2),x)","Integral" to "integrate(x^2*exp(x),x)").forEach{(label,source)->SmallAction(label){m.edit(Editor(source))}}}}

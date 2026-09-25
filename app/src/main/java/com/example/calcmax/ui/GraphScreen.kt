@@ -2,7 +2,7 @@ package com.example.calcmax.ui
 
 import android.graphics.Paint
 import androidx.compose.foundation.*
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -31,6 +31,8 @@ import kotlin.math.*
     var analysis by remember { mutableStateOf(false) }
     var showTable by rememberSaveable { mutableStateOf(false) }
     var surfaceRotation by rememberSaveable { mutableFloatStateOf(35f) }
+    var surfaceElevation by rememberSaveable { mutableFloatStateOf(32f) }
+    var surfaceZoom by rememberSaveable { mutableFloatStateOf(1f) }
     var first by rememberSaveable { mutableStateOf(m.xMin.toString()) }; var second by rememberSaveable { mutableStateOf(m.xMax.toString()) }
     var selected by rememberSaveable { mutableIntStateOf(0) }
     var other by rememberSaveable { mutableIntStateOf(1) }
@@ -98,15 +100,26 @@ import kotlin.math.*
             }while(event.changes.any{it.pressed})
         }}
         if(m.graphKind=="surface") {
-            SurfaceGraph(m,surfaceRotation,Modifier.fillMaxWidth().weight(1f).clipToBounds().pointerInput(m.graphKind) {
-                detectDragGestures {change,dragAmount->
-                    surfaceRotation=((surfaceRotation+dragAmount.x*.7f)%360f+360f)%360f
-                    change.consume()
+            SurfaceGraph(m,surfaceRotation,surfaceElevation,surfaceZoom,Modifier.fillMaxWidth().weight(1f).clipToBounds().pointerInput(m.graphKind) {
+                detectTransformGestures { _,pan,zoom,_->
+                    surfaceRotation=((surfaceRotation+pan.x*.7f)%360f+360f)%360f
+                    surfaceElevation=(surfaceElevation+pan.y*.5f).coerceIn(5f,85f)
+                    surfaceZoom=(surfaceZoom*zoom).coerceIn(.4f,3f)
                 }
             })
+            val surfaceZMin=m.graphData?.optDouble("zMin",Double.NaN)?.takeIf { it.isFinite() }
+            val surfaceZMax=m.graphData?.optDouble("zMax",Double.NaN)?.takeIf { it.isFinite() }
+            Text("x: %.3g ~ %.3g   y: %.3g ~ %.3g".format(m.xMin,m.xMax,m.yMin,m.yMax)+(if(surfaceZMin!=null&&surfaceZMax!=null)"   z: %.3g ~ %.3g".format(surfaceZMin,surfaceZMax) else ""),Modifier.padding(horizontal=14.dp,vertical=2.dp),fontSize=11.sp,color=c.muted)
             Row(Modifier.fillMaxWidth().padding(horizontal=14.dp),verticalAlignment=Alignment.CenterVertically) {
-                Text("Rotate",fontSize=11.sp,color=c.muted);Slider(surfaceRotation,{surfaceRotation=it},Modifier.weight(1f),valueRange=0f..360f);Text("${surfaceRotation.toInt()}°",fontSize=11.sp,color=c.muted);SmallAction("Reset"){m.xMin=-3.0;m.xMax=3.0;m.yMin=-3.0;m.yMax=3.0;m.save();m.plot()}
+                Text("Rotate",fontSize=11.sp,color=c.muted);Slider(surfaceRotation,{surfaceRotation=it},Modifier.weight(1f),valueRange=0f..360f);Text("${surfaceRotation.toInt()}°",fontSize=11.sp,color=c.muted)
             }
+            Row(Modifier.fillMaxWidth().padding(horizontal=14.dp),verticalAlignment=Alignment.CenterVertically) {
+                Text("Tilt",fontSize=11.sp,color=c.muted);Slider(surfaceElevation,{surfaceElevation=it},Modifier.weight(1f),valueRange=5f..85f);Text("${surfaceElevation.toInt()}°",fontSize=11.sp,color=c.muted)
+            }
+            Row(Modifier.fillMaxWidth().padding(horizontal=14.dp),verticalAlignment=Alignment.CenterVertically) {
+                Text("Zoom",fontSize=11.sp,color=c.muted);Slider(surfaceZoom,{surfaceZoom=it},Modifier.weight(1f),valueRange=.4f..3f);Text("${(surfaceZoom*100).toInt()}%",fontSize=11.sp,color=c.muted);SmallAction("Reset"){m.xMin=-3.0;m.xMax=3.0;m.yMin=-3.0;m.yMax=3.0;surfaceRotation=35f;surfaceElevation=32f;surfaceZoom=1f;m.save();m.plot()}
+            }
+            Text("Drag to rotate freely · Pinch to zoom",Modifier.padding(horizontal=14.dp,vertical=2.dp),fontSize=11.sp,color=c.muted)
         } else Canvas(Modifier.fillMaxWidth().weight(1f).clipToBounds().background(c.display).then(transform).pointerInput(m.graphKind,selected) { detectTapGestures { p ->
             val target=m.xMin+(m.xMax-m.xMin)*p.x/size.width
             val targetY=m.yMax-(m.yMax-m.yMin)*p.y/size.height
@@ -254,7 +267,7 @@ import kotlin.math.*
     }
 }
 
-@Composable private fun SurfaceGraph(m:CalculatorModel,rotation:Float,modifier:Modifier=Modifier) {
+@Composable private fun SurfaceGraph(m:CalculatorModel,rotation:Float,elevationDeg:Float,zoom:Float,modifier:Modifier=Modifier) {
     val c=LocalInstrument.current
     val mesh=remember(m.graphData) {
         val rows=m.graphData?.optJSONArray("surface")
@@ -266,14 +279,14 @@ import kotlin.math.*
             }
         }
     }
-    Canvas(modifier.background(c.display).semantics { contentDescription="Three dimensional surface. Rotate with the slider and adjust x and y ranges." }) {
+    Canvas(modifier.background(c.display).semantics { contentDescription="Three dimensional surface. Drag to rotate freely, pinch to zoom, and adjust x and y ranges." }) {
         if(mesh.isEmpty())return@Canvas
         val xmin=m.xMin;val xmax=m.xMax;val ymin=m.yMin;val ymax=m.yMax
         val zmin=m.graphData?.optDouble("zMin",-1.0) ?: -1.0
         val zmax=m.graphData?.optDouble("zMax",1.0) ?: 1.0
         val zspan=(zmax-zmin).takeIf { it>1e-12 } ?: 1.0
-        val theta=Math.toRadians(rotation.toDouble());val elevation=.62
-        val scale=min(size.width,size.height)*.39f
+        val theta=Math.toRadians(rotation.toDouble());val elevation=Math.toRadians(elevationDeg.toDouble())
+        val scale=min(size.width,size.height)*.34f*zoom
         fun project(point:DoubleArray):Offset {
             val xx=2*(point[0]-(xmin+xmax)/2)/(xmax-xmin)
             val yy=2*(point[1]-(ymin+ymax)/2)/(ymax-ymin)
@@ -283,6 +296,13 @@ import kotlin.math.*
             val vertical=depth*sin(elevation)+zz*cos(elevation)
             return Offset(size.width/2+horizontal.toFloat()*scale,size.height/2-vertical.toFloat()*scale)
         }
+        fun niceStep(range:Double):Double {
+            if(!range.isFinite()||range<=0.0)return 1.0
+            val raw=range/4;val p=10.0.pow(floor(log10(raw)));val v=raw/p
+            return p*(if(v>5)10 else if(v>2)5 else if(v>1)2 else 1)
+        }
+        val axisPaint=Paint(Paint.ANTI_ALIAS_FLAG).apply { color=c.muted.toArgb();textSize=11.sp.toPx() }
+        val labelPaint=Paint(Paint.ANTI_ALIAS_FLAG).apply { color=c.ink.toArgb();textSize=12.sp.toPx();isFakeBoldText=true }
         clipRect {
             mesh.forEachIndexed { ri,row->
                 for(ci in 0 until row.lastIndex) {
@@ -296,6 +316,39 @@ import kotlin.math.*
                     if(a!=null&&b!=null)drawLine(c.accent.copy(alpha=.62f),project(a),project(b),1.dp.toPx())
                 }
             }
+            val x0=doubleArrayOf(xmin,ymin,zmin)
+            val x1=doubleArrayOf(xmax,ymin,zmin)
+            val y1=doubleArrayOf(xmin,ymax,zmin)
+            val z1=doubleArrayOf(xmin,ymin,zmax)
+            drawLine(c.muted,project(x0),project(x1),2.dp.toPx())
+            drawLine(c.muted,project(x0),project(y1),2.dp.toPx())
+            drawLine(c.muted,project(x0),project(z1),2.dp.toPx())
+            val xStep=niceStep(xmax-xmin);val yStep=niceStep(ymax-ymin);val zStep=niceStep(zmax-zmin)
+            var tick=ceil(xmin/xStep)*xStep
+            var guard=0
+            while(tick<=xmax+1e-12&&guard++<12) {
+                val p=project(doubleArrayOf(tick,ymin,zmin))
+                drawCircle(c.muted,3.dp.toPx()/2,p)
+                drawContext.canvas.nativeCanvas.drawText("%.3g".format(tick),p.x+3f,p.y+12.sp.toPx(),axisPaint)
+                tick+=xStep
+            }
+            tick=ceil(ymin/yStep)*yStep;guard=0
+            while(tick<=ymax+1e-12&&guard++<12) {
+                val p=project(doubleArrayOf(xmin,tick,zmin))
+                drawCircle(c.muted,3.dp.toPx()/2,p)
+                drawContext.canvas.nativeCanvas.drawText("%.3g".format(tick),p.x+3f,p.y+12.sp.toPx(),axisPaint)
+                tick+=yStep
+            }
+            tick=ceil(zmin/zStep)*zStep;guard=0
+            while(tick<=zmax+1e-12&&guard++<12) {
+                val p=project(doubleArrayOf(xmin,ymin,tick))
+                drawCircle(c.muted,3.dp.toPx()/2,p)
+                drawContext.canvas.nativeCanvas.drawText("%.3g".format(tick),p.x+4f,p.y-4f,axisPaint)
+                tick+=zStep
+            }
+            drawContext.canvas.nativeCanvas.drawText("x",project(x1).x+6f,project(x1).y+4f,labelPaint)
+            drawContext.canvas.nativeCanvas.drawText("y",project(y1).x+6f,project(y1).y+4f,labelPaint)
+            drawContext.canvas.nativeCanvas.drawText("z",project(z1).x+6f,project(z1).y+4f,labelPaint)
         }
     }
 }

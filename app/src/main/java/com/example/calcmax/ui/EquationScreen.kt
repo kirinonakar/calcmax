@@ -43,7 +43,7 @@ import org.json.JSONObject
         append("=0")
     }
     val expression=when(kind){"General"->equation;"System"->"["+equations.lines().filter{it.isNotBlank()}.joinToString(",")+"]";else->polynomial}
-    Panel("Equation solver","Enter coefficients or equations, then find exact solutions. Numeric solving uses an initial guess and returns a nearby root.") {
+    Panel("Equation solver","") {
         Choices(listOf("Linear","Quadratic","Cubic","System","General"),kind,{m.equationKind=it})
         if(kind=="System") {
             OutlinedTextField(equations,{m.equationSystem=it},Modifier.fillMaxWidth(),label={Text("One equation per line")},minLines=2)
@@ -76,7 +76,7 @@ import org.json.JSONObject
     var parameters by rememberSaveable{mutableStateOf("x")}
     var body by rememberSaveable{mutableStateOf("x^2+1")}
     var message by rememberSaveable{mutableStateOf("")}
-    Panel("Custom functions","Define a formula once and use it in calculations or graphs. sinc(x) means sin(x)/x in radians, with sinc(0) = 1.") {
+    Panel("Custom functions","") {
         Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){Field(name,"Name",Modifier.weight(1f)){name=it;message=""};Field(parameters,"Parameters",Modifier.weight(2f)){parameters=it;message=""}}
         Field(body,"Formula",Modifier.fillMaxWidth()){body=it;message=""}
         val preview=runCatching{JSONObject(Parser(body,true).parse().json())}.getOrNull()

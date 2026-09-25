@@ -10,6 +10,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 private const val maxTapeEntries = 10
+private const val maxHistoryEntries = 500
 private var tapeEntrySequence = 0L
 private fun nextTapeEntryId():Long = ++tapeEntrySequence
 data class HistoryEntry(val id: Long, val source: String, val exact: String, val decimal: String, val mode: String, val favorite: Boolean = false,val inputTree:String="",val response:String="",val answer:String="")
@@ -197,6 +198,15 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         val array = JSONArray(prefs.getString("history","[]"))
         (0 until array.length()).map { i -> array.getJSONObject(i).let { HistoryEntry(it.getLong("id"),it.getString("source"),it.getString("exact"),it.getString("decimal"),it.getString("mode"),it.optBoolean("favorite"),it.optString("inputTree"),it.optString("response"),it.optString("answer")) } }
     }.getOrDefault(emptyList())
+    private fun trimHistory(all: List<HistoryEntry>): List<HistoryEntry> {
+        if(all.size<=maxHistoryEntries) return all
+        val favoriteCount=all.count { it.favorite }
+        if(favoriteCount>=maxHistoryEntries) return all.filter { it.favorite }.take(maxHistoryEntries)
+        val nonFavoriteLimit=maxHistoryEntries-favoriteCount
+        var seen=0
+        return all.filter { if(it.favorite) true else if(seen<nonFavoriteLimit) { seen++; true } else false }
+    }
+    private fun appendHistory(entry: HistoryEntry) { history=trimHistory(listOf(entry)+history) }
     private fun loadRegressionCurve():List<Pair<Double,Double>>? = runCatching {
         val array=JSONArray(prefs.getString("regressionCurve","[]"))
         if(array.length()==0)null else (0 until array.length()).map {i->val pair=array.getJSONArray(i);pair.getDouble(0) to pair.getDouble(1)}
@@ -409,7 +419,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         if(response.has("resultAst"))next.put("Ans",response.getJSONObject("resultAst")) else next.remove("Ans")
         variables=next
         lastAnswerResult=response
-        history=(listOf(HistoryEntry(System.currentTimeMillis(),source,response.optString("exact"),response.optString("decimal"),mode,inputTree=inputTree()?.toString() ?: "",response=response.toString(),answer=inputAnswer?.toString() ?: ""))+history).take(500)
+        appendHistory(HistoryEntry(System.currentTimeMillis(),source,response.optString("exact"),response.optString("decimal"),mode,inputTree=inputTree()?.toString() ?: "",response=response.toString(),answer=inputAnswer?.toString() ?: ""))
         save()
     }
     fun request(action: String = "evaluate") = JSONObject().put("action",action).put("precision",precision).put("angle",angle).put("variables",JSONObject(variables.toString()).apply{inputAnswer?.let{put("Ans",it)}}).put("functions",functions).put("assumptions",assumptions)
@@ -507,7 +517,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
                     val next=JSONObject(variables.toString())
                     if(response.has("resultAst")) next.put("Ans",response.getJSONObject("resultAst")) else next.remove("Ans")
                     variables=next
-                    history=(listOf(HistoryEntry(System.currentTimeMillis(),source,exact,approx,mode))+history).take(500)
+                    appendHistory(HistoryEntry(System.currentTimeMillis(),source,exact,approx,mode))
                     save()
                 } else error=response.optString("error","Math ERROR")
             } finally { busy=false }
@@ -572,7 +582,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     fun removeVariable(name: String) { variables=JSONObject(variables.toString()).apply { remove(name) }; functions=JSONObject(functions.toString()).apply { remove(name) }; save() }
     fun favorite(id: Long) { history=history.map { if(it.id==id) it.copy(favorite=!it.favorite) else it }; save() }
     fun deleteHistory(id: Long) { history=history.filter { it.id!=id }; save() }
-    fun clearHistory() { history=emptyList();tape=emptyList();save() }
+    fun clearHistory() { history=history.filter { it.favorite };tape=emptyList();save() }
     fun saveDataSet(name:String,csv:String,kind:String) {
         try {
             require(name.matches(Regex("[A-Za-z][A-Za-z0-9_]*"))) { "Use a letter followed by letters, digits or underscores for the dataset name" }
@@ -607,7 +617,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
                     val next=JSONObject(variables.toString())
                     if(response.has("resultAst")) next.put("Ans",response.getJSONObject("resultAst")) else next.remove("Ans")
                     variables=next
-                    history=(listOf(HistoryEntry(System.currentTimeMillis(),source,response.optString("exact"),response.optString("decimal"),mode))+history).take(500)
+                    appendHistory(HistoryEntry(System.currentTimeMillis(),source,response.optString("exact"),response.optString("decimal"),mode))
                     save()
                 } else {regressionCurve=emptyList();regressionFit="";regressionData="";error=response.optString("error","Math ERROR")}
             } finally {regressionBusy=false}
@@ -693,14 +703,24 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         val source=editor.source.trim()
         if(source.isEmpty()) {error="Enter an expression to graph";return}
         val tree=try {Parser(source).parse()} catch(e:Exception) {error=e.message ?: "Syntax ERROR";return}
-        val expression=if(tree.kind=="relation" && tree.value=="=" && tree.args.firstOrNull()?.kind=="symbol" && tree.args.first().value=="y") {
-            source.substring(tree.args[1].start,tree.args[1].end)
+        var lhsVar:String?=null
+        var rhsTree=tree
+        var rhsSource=source
+        if(tree.kind=="relation" && tree.value=="=" && tree.args.size==2 && tree.args[0].kind=="symbol" && tree.args[0].value in listOf("y","z")) {
+            lhsVar=tree.args[0].value
+            rhsTree=tree.args[1]
+            rhsSource=source.substring(rhsTree.start,rhsTree.end)
+        } else if(tree.kind=="relation") {error="Graph an expression, y = f(x), or z = f(x,y)";return}
+        val symbols=rhsTree.nodes().filter {it.kind=="symbol"}.map {it.value}.toSet()
+        val wantSurface=(lhsVar=="z")||("x" in symbols && "y" in symbols)
+        if(wantSurface) {
+            try {Parser(rhsSource).parse()} catch(e:Exception) {error=e.message ?: "Syntax ERROR";return}
+            changeGraphKind("surface")
+            updateGraphSource(rhsSource)
         } else {
-            if(tree.kind=="relation") {error="Graph an expression or y = f(x)";return}
-            source
+            changeGraphKind("cartesian")
+            updateGraphSource(rhsSource)
         }
-        changeGraphKind("cartesian")
-        updateGraphSource(expression)
         error="";mode="Graph"
     }
     fun changeGraphKind(kind:String) {

@@ -55,13 +55,13 @@ import org.json.JSONObject
 
 @Composable fun Panel(title: String,subtitle: String,content: @Composable ColumnScope.()->Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(14.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
-        Text(title,style=MaterialTheme.typography.titleLarge); Text(subtitle,color=LocalInstrument.current.muted,fontSize=12.sp); content()
+        Text(title,style=MaterialTheme.typography.titleLarge); if(subtitle.isNotBlank())Text(subtitle,color=LocalInstrument.current.muted,fontSize=12.sp); content()
     }
 }
 @Composable fun Choices(values: List<String>,selected: String,choose: (String)->Unit) {
     Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)) { values.forEach { value->FilterChip(selected==value,onClick={choose(value)},label={Text(value,fontSize=12.sp)}) } }
 }
-@Composable fun Field(value: String,label: String,modifier: Modifier=Modifier,onValue: (String)->Unit) { OutlinedTextField(value,onValue,modifier=modifier,label={Text(label)},singleLine=true) }
+@Composable fun Field(value: String,label: String,modifier: Modifier=Modifier,enabled: Boolean=true,onValue: (String)->Unit) { OutlinedTextField(value,onValue,modifier=modifier,label={Text(label)},singleLine=true,enabled=enabled) }
 @Composable private fun StatHeader(text:String,modifier:Modifier) { val c=LocalInstrument.current; Box(modifier.fillMaxHeight(),contentAlignment=Alignment.Center){Text(text,fontSize=11.sp,color=c.muted,fontWeight=FontWeight.SemiBold)} }
 /** Whole-cell activation for the statistics grid. The inner text field consumes pointer events and its own
  *  tap handling is cancelled once a scrolling parent claims the gesture, so watch the cell container instead:
@@ -236,7 +236,7 @@ private fun treeSource(node:JSONObject?):String? {
         }
         m.edit(Editor(expression));m.calculate()
     }
-    Panel(if(vector)"Vector workspace" else "Matrix workspace",if(vector)"Set the component count, edit entries, then run an operation." else "Set the size, edit entries, then run an operation.") {
+    Panel(if(vector)"Vector workspace" else "Matrix workspace","") {
         Choices(listOf("Matrix","Vector"),m.mode,{m.mode=it})
         Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
             if(vector)DimStepper("Components",rows,1..4){rows=it} else {DimStepper("Rows",rows,1..4){rows=it};DimStepper("Columns",columns,1..4){columns=it}}
@@ -328,7 +328,7 @@ private fun treeSource(node:JSONObject?):String? {
     val xValues=parsedRows.mapNotNull {it.getOrNull(0)?.toDoubleOrNull()?.takeIf {v->v.isFinite()}}
     val yValues=parsedRows.mapNotNull {it.getOrNull(1)?.toDoubleOrNull()?.takeIf {v->v.isFinite()}}
     val paired=parsedRows.mapNotNull {row->val x=row.getOrNull(0)?.toDoubleOrNull();val y=row.getOrNull(1)?.toDoubleOrNull();if(x!=null&&y!=null&&x.isFinite()&&y.isFinite())x to y else null}
-    Panel("Data & statistics","Save named lists or paired x,y datasets, import/export CSV, calculate summaries and view statistical plots.") {
+    Panel("Data & statistics","") {
         if(names.isNotEmpty())Choices(names,activeName,{name->selected=name;isNew=false;m.dataSets.optJSONObject(name)?.let {item->datasetName=name;data=item.optString("csv");dataKind=item.optString("kind","list");plotType=if(dataKind=="xy")"Scatter" else "Histogram"}})
         Row(horizontalArrangement=Arrangement.spacedBy(6.dp),verticalAlignment=Alignment.CenterVertically) {
             Field(datasetName,"Dataset name",Modifier.weight(1f)){datasetName=it}
@@ -525,7 +525,7 @@ val UnitGroups=linkedMapOf(
 )
 @Composable fun UnitsScreen(m: CalculatorModel) {
     var group by rememberSaveable { mutableStateOf("Length") }; var from by rememberSaveable { mutableStateOf("m") }; var to by rememberSaveable { mutableStateOf("ft") }; var value by rememberSaveable { mutableStateOf("1") }
-    Panel("Unit conversion","Dimension-checked conversions with exact factors and temperature offsets.") {
+    Panel("Unit conversion","") {
         Choices(UnitGroups.keys.toList(),group,{group=it;from=UnitGroups[it]!![0];to=UnitGroups[it]!![1]})
         Field(value,"Value or expression",Modifier.fillMaxWidth()) { value=it }
         Text("From"); Choices(UnitGroups[group]!!,from,{from=it})

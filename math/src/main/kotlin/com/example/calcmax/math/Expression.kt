@@ -121,13 +121,13 @@ class Parser(private val source: String, private val allowHoles: Boolean = false
             }
             first.text == "[" -> {
                 val args = mutableListOf<Expr>()
-                if(token.text != "]") { args += expression(0); while(token.text == ",") { take(); args += expression(0) } }
+                if(token.text != "]" || allowHoles) { args += expression(0); while(token.text == ",") { take(); args += expression(0) } }
                 val unclosed = allowHoles && token.text.isEmpty()
                 Expr("list", if(unclosed) "open" else "", args = args, start = first.start, end = expect("]").end)
             }
             first.text == "{" -> {
                 val args = mutableListOf<Expr>()
-                if(token.text != "}") { args += expression(0); while(token.text == ",") { take(); args += expression(0) } }
+                if(token.text != "}" || allowHoles) { args += expression(0); while(token.text == ",") { take(); args += expression(0) } }
                 val unclosed = allowHoles && token.text.isEmpty()
                 Expr("set", if(unclosed) "open" else "", args = args, start = first.start, end = expect("}").end)
             }
