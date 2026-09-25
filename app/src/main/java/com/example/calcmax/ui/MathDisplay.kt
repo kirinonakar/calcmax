@@ -245,6 +245,15 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
         else integrationTuple.optJSONObject(i-1)?.let{MathNode(it,(size*scale).coerceAtLeast(11f),select,selection,depth+1)}
     }
     @Composable fun label(text:String,scale:Float=1f){MathText(text,size*scale)}
+    @Composable fun opLabel(index:Int,text:String,scale:Float=1f) {
+        val pick=select
+        val from=if(index>0)children.getOrNull(index-1)?.optInt("end",-1) ?: -1 else -1
+        val to=children.getOrNull(index)?.optInt("start",-1) ?: -1
+        if(pick!=null&&(kind=="binary"||kind=="relation")&&from>=0&&to>from) {
+            val on=selection!=null&&selection.first==from&&selection.last==to
+            Box(Modifier.then(if(on)Modifier.background(c.accent.copy(alpha=.17f),RoundedCornerShape(2.dp))else Modifier).clickable{pick?.invoke(from,to)}){label(text,scale)}
+        } else label(text,scale)
+    }
     @Composable fun wrapped(i:Int,scale:Float=1f){MathRow{label("(",scale);child(i,scale);label(")",scale)}}
     val fraction=kind=="fraction"||kind=="binary"&&value=="/"&&node.optString("displayOperator")!="÷"
     val power=kind=="power"||kind=="binary"&&value=="^"
@@ -324,7 +333,15 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
                     }},onLayout={textLayout=it})
                 }
             }
-            kind=="unary"->MathRow{label(if(value=="-")"−" else value);child(0)}
+            kind=="unary"->MathRow{
+                val pick=select
+                val gapTo=children.getOrNull(0)?.optInt("start",-1) ?: -1
+                if(pick!=null&&gapTo>start) {
+                    val on=selection!=null&&selection.first==start&&selection.last==gapTo
+                    Box(Modifier.then(if(on)Modifier.background(c.accent.copy(alpha=.17f),RoundedCornerShape(2.dp))else Modifier).clickable{pick?.invoke(start,gapTo)}){label(if(value=="-")"−" else value)}
+                } else label(if(value=="-")"−" else value)
+                child(0)
+            }
             kind in listOf("call","function")&&value=="factorial"->MathRow{child(0);label("!")}
             kind in listOf("call","function")&&value in listOf("degree","rad","gradian","percent")->MathRow{child(0);label(when(value){"degree"->"°";"rad"->"ʳ";"gradian"->"ᵍ";else->"%"})}
             kind in listOf("call","function")&&value in listOf("abs","Abs")->MathRow{label("│");child(0);label("│")}
@@ -356,7 +373,7 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
                     if(negativePart!=null){label(if(i==0)"−" else " − ");MathNode(negativePart,size,select,selection,depth+1)}
                     else {
                         val adjacentCoefficient=kind=="product"&&i>0&&children[i-1].optString("kind")=="number"&&n.optString("kind")=="symbol"
-                        if(i>0&&!coefficient&&!adjacentCoefficient)label(when(kind){"sum"->" + ";"product"->" · ";"binary","relation"->when(value){"*"->" × ";"/"->" ÷ ";"-"->" − ";"!="->" ≠ ";"<="->" ≤ ";">="->" ≥ ";else->" $value "};else->", "})
+                        if(i>0&&!coefficient&&!adjacentCoefficient)opLabel(i,when(kind){"sum"->" + ";"product"->" · ";"binary","relation"->when(value){"*"->" × ";"/"->" ÷ ";"-"->" − ";"!="->" ≠ ";"<="->" ≤ ";">="->" ≥ ";else->" $value "};else->", "})
                         if(kind=="product"&&n.optString("kind")=="sum")wrapped(i)
                         else child(i,hidden=kind=="binary"&&value=="*"&&n.optString("kind")=="group"&&n.optJSONArray("args")?.optJSONObject(0)?.optString("kind")=="hole")
                     }

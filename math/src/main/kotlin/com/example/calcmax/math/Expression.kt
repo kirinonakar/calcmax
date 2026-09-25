@@ -156,7 +156,7 @@ class Parser(private val source: String, private val allowHoles: Boolean = false
                     else -> Expr("call", when(op) { "!" -> "factorial"; "%" -> "percent"; else -> "degree" }, listOf(left), left.start, end)
                 }; continue
             }
-            val implicit = op.isNotEmpty() && (op == "(" || op.first().isLetter() && op != "mod" || op == "√")
+            val implicit = op.isNotEmpty() && (op == "(" || op.first().isLetter() && op != "mod" || op == "√" || op == "[" && left.kind == "list")
             val actual = if(implicit) "*" else op
             val binding = when(actual) { ":=" -> 1; "=", "==", "<", ">", "<=", ">=", "!=", "->" -> 5; "+", "-" -> 10; "*", "/", "mod", "∠" -> 20; "^" -> 30; else -> -1 }
             if(binding < min) break

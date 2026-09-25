@@ -81,7 +81,10 @@ import org.json.JSONObject
         Field(body,"Formula",Modifier.fillMaxWidth()){body=it;message=""}
         val preview=runCatching{JSONObject(Parser(body,true).parse().json())}.getOrNull()
         if(preview!=null)Box(Modifier.horizontalScroll(rememberScrollState())){MathNode(preview,m.inputFont)}
-        Button(onClick={m.define(name.trim(),parameters,body,showResult=false);message=if(m.error.isEmpty())"Saved ${name.trim()}($parameters)" else ""}){Text("Save function")}
+        Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+            Button(onClick={m.define(name.trim(),parameters,body,showResult=false);message=if(m.error.isEmpty())"Saved ${name.trim()}($parameters)" else ""}){Text("Save function")}
+            SmallAction("Clear"){name="";parameters="";body="";message="";m.error=""}
+        }
         if(message.isNotEmpty())Text(message)
         if(m.error.isNotEmpty())Text(m.error,color=MaterialTheme.colorScheme.error)
         HorizontalDivider()

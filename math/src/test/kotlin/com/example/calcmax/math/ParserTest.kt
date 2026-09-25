@@ -7,6 +7,7 @@ class ParserTest {
     @Test fun precedence() { assertEquals("*",p("2+3*4").args[1].value); assertEquals("unary",p("-2^2").kind); assertEquals("^",p("2^3^2").args[1].value) }
     @Test fun exactLiteral() { assertEquals("1",p("1/3").args[0].value); assertEquals("number",p("1.234567890123456789").kind) }
     @Test fun structures() { assertEquals("list",p("det([[1,2],[3,4]])").args[0].kind); assertEquals("relation",p("solve(x^2=1,x)").args[0].kind); assertEquals("*",p("2x").value) }
+    @Test fun adjacentListsMultiplyImplicitly() { assertEquals("*",p("[1,2][3,4]").value); assertEquals("binary",p("[[1,0],[0,1]][[4,5],[6,7]]").kind) }
     @Test fun directSecondPageStructures() {
         assertEquals(listOf("x","y"),p("{x,y}").args.map{it.value})
         assertEquals("set",p("{x,y}").kind)
