@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
@@ -31,8 +32,10 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.*
@@ -108,11 +111,36 @@ import org.json.JSONObject
         StepKey("+","Increase $label"){onValue((value+1).coerceIn(range))}
     }
 }
-@Composable private fun MatrixCell(value:String,modifier:Modifier,focus:FocusRequester,tag:String,onValue:(String)->Unit) {
+/** Arrow-key navigation shared by the grid cells: null keeps the tapped cursor position,
+ *  true places the cursor at the end of the newly focused cell, false at its start. */
+private class MatrixNav{var cursorEnd:Boolean?=null}
+@Composable private fun MatrixCell(value:String,modifier:Modifier,focus:FocusRequester,tag:String,nav:MatrixNav,onMove:(Int,Int,Boolean)->Boolean,onValue:(String)->Unit) {
     val c=LocalInstrument.current
     var focused by remember {mutableStateOf(false)}
+    var fieldValue by remember {mutableStateOf(TextFieldValue(value,TextRange(value.length)))}
+    LaunchedEffect(value){if(fieldValue.text!=value)fieldValue=TextFieldValue(value,TextRange(value.length))}
     Box(modifier.fillMaxHeight().background(if(focused)c.accent.copy(alpha=.12f) else c.display).then(statCellTouch(focus))) {
-        BasicTextField(value,onValue,Modifier.fillMaxSize().focusRequester(focus).onFocusChanged {focused=it.isFocused}.testTag(tag),
+        BasicTextField(fieldValue,{fieldValue=it;onValue(it.text)},
+            Modifier.fillMaxSize().focusRequester(focus)
+                .onFocusChanged {state->
+                    focused=state.isFocused
+                    val cursorEnd=if(state.isFocused)nav.cursorEnd else null
+                    if(cursorEnd!=null) {
+                        nav.cursorEnd=null
+                        val text=fieldValue.text
+                        fieldValue=TextFieldValue(text,if(cursorEnd)TextRange(text.length) else TextRange(0))
+                    }
+                }
+                .onPreviewKeyEvent {event->
+                    if(event.type!=KeyEventType.KeyDown)false else when(event.key) {
+                        Key.DirectionRight->if(fieldValue.selection.max>=fieldValue.text.length)onMove(0,1,true) else false
+                        Key.DirectionLeft->if(fieldValue.selection.min<=0)onMove(0,-1,false) else false
+                        Key.DirectionUp->onMove(-1,0,false)
+                        Key.DirectionDown->onMove(1,0,true)
+                        else->false
+                    }
+                }
+                .testTag(tag),
             textStyle=MaterialTheme.typography.bodyMedium.copy(fontSize=13.sp,color=c.ink,fontFamily=FontFamily.Monospace,textAlign=TextAlign.Center),singleLine=true,cursorBrush=SolidColor(c.accent),
             decorationBox={inner->Box(Modifier.fillMaxSize().padding(horizontal=6.dp),contentAlignment=Alignment.Center){inner()}})
     }
@@ -121,6 +149,19 @@ import org.json.JSONObject
     val c=LocalInstrument.current
     val grid=c.grid
     val focuses=remember(rows,cols){List(rows*cols){FocusRequester()}}
+    val nav=remember{MatrixNav()}
+    fun moveFocus(fromRow:Int,fromColumn:Int,dRow:Int,dColumn:Int,atEnd:Boolean):Boolean {
+        val (targetRow,targetColumn)=when {
+            dColumn>0->if(fromColumn+1<cols)Pair(fromRow,fromColumn+1) else Pair(fromRow+1,0)
+            dColumn<0->if(fromColumn-1>=0)Pair(fromRow,fromColumn-1) else Pair(fromRow-1,cols-1)
+            else->Pair(fromRow+dRow,fromColumn)
+        }
+        if(targetRow in 0 until rows&&targetColumn in 0 until cols) {
+            nav.cursorEnd=atEnd
+            runCatching {focuses[targetRow*cols+targetColumn].requestFocus()}.onFailure {nav.cursorEnd=null}
+        }
+        return true
+    }
     Column(Modifier.fillMaxWidth().border(1.dp,grid).testTag(tag)) {
         Row(Modifier.fillMaxWidth().height(26.dp).background(c.scientific)) {
             Box(Modifier.width(32.dp).fillMaxHeight())
@@ -136,7 +177,7 @@ import org.json.JSONObject
                 Box(Modifier.width(32.dp).fillMaxHeight().background(c.scientific),contentAlignment=Alignment.Center){Text("${row+1}",fontSize=11.sp,color=c.muted,fontWeight=FontWeight.SemiBold)}
                 VerticalDivider(color=grid,thickness=1.dp)
                 repeat(cols) {column->
-                    MatrixCell(cells[row*4+column],Modifier.weight(1f),focuses[row*cols+column],tag+"-cell-$row-$column"){text->onCell(row,column,text)}
+                    MatrixCell(cells[row*4+column],Modifier.weight(1f),focuses[row*cols+column],tag+"-cell-$row-$column",nav,{dRow,dColumn,atEnd->moveFocus(row,column,dRow,dColumn,atEnd)}) {text->onCell(row,column,text)}
                     VerticalDivider(color=grid,thickness=1.dp)
                 }
             }
@@ -524,9 +565,9 @@ data class ConstantEntry(val symbol: String,val name: String,val value: String,v
         Text("Maximum significant digits"); Choices(digits+"Custom",if(customVisible)"Custom" else m.precision.toString(),{if(it=="Custom")customVisible=true else {customVisible=false;m.precision=it.toInt();m.recalculatePreview();m.save()}})
         if(customVisible) {Field(custom,"Custom precision · 3–200",Modifier.fillMaxWidth()){custom=it};TextButton(onClick={m.precision=custom.toInt();m.recalculatePreview();m.save()},enabled=custom.toIntOrNull() in 3..200){Text("Apply precision")}}
         Text("Input font · ${m.inputFont.toInt()} sp")
-        Slider(m.inputFont,{m.inputFont=it},valueRange=16f..42f,steps=25,onValueChangeFinished={m.save()})
+        Slider(m.inputFont,{m.inputFont=it},valueRange=10f..42f,steps=31,onValueChangeFinished={m.save()})
         Text("Output font · ${m.outputFont.toInt()} sp")
-        Slider(m.outputFont,{m.outputFont=it},valueRange=16f..48f,steps=31,onValueChangeFinished={m.save()})
+        Slider(m.outputFont,{m.outputFont=it},valueRange=10f..48f,steps=37,onValueChangeFinished={m.save()})
         Row(verticalAlignment=Alignment.CenterVertically) { Text("Key vibration",Modifier.weight(1f)); Switch(m.haptics,{m.haptics=it;m.save()}) }
         Row(verticalAlignment=Alignment.CenterVertically) { Text("Key sound",Modifier.weight(1f)); Switch(m.sound,{m.sound=it;m.save()}) }
         Row(verticalAlignment=Alignment.CenterVertically) { Text("Save history locally",Modifier.weight(1f)); Switch(m.persistHistory,{m.persistHistory=it;m.save()}) }
