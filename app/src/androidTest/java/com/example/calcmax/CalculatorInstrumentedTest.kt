@@ -3,6 +3,7 @@ package com.example.calcmax
 import android.graphics.Bitmap
 import android.app.UiModeManager
 import android.content.Context
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.graphics.asAndroidBitmap
@@ -527,7 +528,7 @@ class CalculatorInstrumentedTest {
             }
         } finally {client.close()}
         val setTape=CalculatorModel::class.java.getDeclaredMethod("setTape",List::class.java).apply {isAccessible=true}
-        compose.runOnIdle {model().mode="Scientific";model().clearHistory();model().clear();setTape.invoke(model(),List(4){entries}.flatten())}
+        compose.runOnIdle {model().mode="Scientific";model().clearHistory();model().clear();setTape.invoke(model(),List(4){entries.map {entry->TapeEntry(entry.source,entry.input,entry.result,entry.answer)}}.flatten())}
         val tape=compose.onNodeWithContentDescription("Calculation history, swipe vertically")
         compose.onNodeWithContentDescription("Expand calculation screen").performClick()
         for(index in 1..32 step 3) tape.performScrollToIndex(index)
@@ -580,6 +581,24 @@ class CalculatorInstrumentedTest {
         for(index in listOf(1,12,21,5,1))tape.performScrollToIndex(index)
         repeat(3){tape.performTouchInput {swipeDown()}}
         compose.runOnIdle {assertEquals(source,model().editor.source)}
+    }
+    @Test fun editingWhileHistoryIsScrolledReturnsToTheActiveItem() {
+        val entries=List(40) {index->HistoryEntry(index.toLong(),"$index+1",(index+1).toString(),(index+1).toString(),"Scientific").toTapeEntry()}
+        val setTape=CalculatorModel::class.java.getDeclaredMethod("setTape",List::class.java).apply {isAccessible=true}
+        compose.runOnIdle {model().mode="Scientific";model().clearHistory();model().clear();setTape.invoke(model(),entries)}
+        val tape=compose.onNodeWithContentDescription("Calculation history, swipe vertically")
+        // Let the automatic jump triggered by the setup settle before the swipes move the list.
+        compose.runOnIdle {};compose.waitForIdle()
+        val scrollValue={runCatching {tape.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()}.getOrDefault(0f)}
+        var moved=false
+        repeat(6) {
+            tape.performTouchInput {swipeDown(durationMillis=60)}
+            if(scrollValue()>0f)moved=true
+        }
+        assertTrue("tape did not scroll away from the active item (value=${scrollValue()})",moved)
+        compose.runOnIdle {model().insert("7")}
+        compose.waitUntil(8000) {scrollValue()==0f}
+        compose.runOnIdle {assertEquals("7",model().editor.source)}
     }
     @Test fun symbolicRenderingCalculusAndFractionExit() {
         compose.runOnIdle {model().mode="Scientific";model().clear();model().decimal=true;model().edit(Editor("integrate(x,x)"))}

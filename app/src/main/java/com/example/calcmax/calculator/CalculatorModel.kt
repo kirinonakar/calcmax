@@ -10,8 +10,10 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 private const val maxTapeEntries = 10
+private var tapeEntrySequence = 0L
+private fun nextTapeEntryId():Long = ++tapeEntrySequence
 data class HistoryEntry(val id: Long, val source: String, val exact: String, val decimal: String, val mode: String, val favorite: Boolean = false,val inputTree:String="",val response:String="",val answer:String="")
-data class TapeEntry(val source: String,val input: String,val result: String,val answer:String="")
+data class TapeEntry(val source: String,val input: String,val result: String,val answer:String="",val id:Long=nextTapeEntryId())
 data class CalcSession(val source:String,val names:List<String>,val index:Int=0,val input:Editor=Editor(),val accepted:Map<String,JSONObject> = emptyMap()) {
     val name get()=names[index]
 }

@@ -4,6 +4,7 @@ import android.content.Intent
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.BasicTextField
@@ -103,15 +104,20 @@ val Modes=listOf("Scientific","CAS","Graph","Python","Equations","Matrix","Vecto
     // Requesting focus on every re-entry pulls it back into view during a gesture.
     var focusPending by remember {mutableStateOf(true)}
     LaunchedEffect(m.calcSession!=null){if(m.calcSession!=null){typing=false;focusPending=true}}
-    LaunchedEffect(scroll.isScrollInProgress){
-        if(scroll.isScrollInProgress)focusPending=false
+    LaunchedEffect(scroll){
+        // Gesture state is observed outside composition so a swipe never recomposes the tape or its items.
+        snapshotFlow{scroll.isScrollInProgress}.collect{if(it)focusPending=false}
     }
-    LaunchedEffect(m.inputVersion,m.tape.size){scroll.scrollToItem(0)}
+    LaunchedEffect(m.inputVersion,m.tape.size){
+        // Let an in-flight drag or fling finish before moving the list programmatically.
+        while(scroll.isScrollInProgress)delay(16)
+        if(scroll.firstVisibleItemIndex!=0||scroll.firstVisibleItemScrollOffset!=0)scroll.scrollToItem(0)
+    }
     Column(modifier.fillMaxWidth().background(c.display)) {
         DisplayToolbar(m,typing){typing=!typing;if(!typing)focusPending=true}
         LazyColumn(Modifier.fillMaxWidth().weight(1f).semantics {contentDescription="Calculation history, swipe vertically"},state=scroll,reverseLayout=true) {
-            item(key="active") {DisplayContent(m,typing,requestInitialFocus=focusPending&&!scroll.isScrollInProgress,onInitialFocus={focusPending=false})}
-        items(m.tape.asReversed()) {entry->
+            item(key="active") {DisplayContent(m,typing,focusPending,scroll){focusPending=false}}
+        items(m.tape.asReversed(),key={it.id}) {entry->
             Column(Modifier.fillMaxWidth().padding(horizontal=14.dp,vertical=10.dp)) {
                 val input=remember(entry.input){runCatching {JSONObject(entry.input)}.getOrNull()}
                 val response=remember(entry.result){runCatching {JSONObject(entry.result)}.getOrNull()}
@@ -177,7 +183,7 @@ private fun largeHistoryTree(root:JSONObject?,compactStructured:Boolean=true):Bo
     }
 }
 
-@Composable fun DisplayContent(m:CalculatorModel,typing:Boolean,requestInitialFocus:Boolean=true,onInitialFocus:()->Unit={}) {
+@Composable fun DisplayContent(m:CalculatorModel,typing:Boolean,requestInitialFocus:Boolean=true,scrollState:LazyListState?=null,onInitialFocus:()->Unit={}) {
     val c=LocalInstrument.current
     val inputTree=remember(m.editor,m.answerDisplay,typing) {
         if(typing||m.editor.source.length>800)null else m.inputTree()
@@ -188,7 +194,7 @@ private fun largeHistoryTree(root:JSONObject?,compactStructured:Boolean=true):Bo
     var caretVisible by remember{mutableStateOf(true)}
     LaunchedEffect(m.editor,m.committed){caretVisible=true;while(!m.committed){delay(500);caretVisible=!caretVisible}}
     LaunchedEffect(typing,compactInput,m.poweredOn,requestInitialFocus){
-        if(requestInitialFocus&&!typing&&!compactInput&&m.poweredOn&&requestInputFocus())onInitialFocus()
+        if(requestInitialFocus&&!typing&&!compactInput&&m.poweredOn&&scrollState?.isScrollInProgress!=true&&requestInputFocus())onInitialFocus()
     }
     val calculating=m.busy||m.previewBusy
     var showCalculationStatus by remember{mutableStateOf(false)}
