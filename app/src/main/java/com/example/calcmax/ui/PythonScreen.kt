@@ -111,14 +111,14 @@ import com.example.calcmax.ui.theme.LocalInstrument
             }}
         }
         HorizontalDivider()
-        Text(if(m.pythonBusy)"Running…" else "Output",fontSize=12.sp,color=c.muted)
-        Box(Modifier.fillMaxWidth().heightIn(min=90.dp,max=170.dp).background(c.display).verticalScroll(rememberScrollState()).padding(10.dp)) {
+        Text(if(m.pythonBusy)"Running…" else "Output",fontSize=13.sp,color=c.muted)
+        Box(Modifier.fillMaxWidth().heightIn(min=160.dp,max=320.dp).background(c.display).verticalScroll(rememberScrollState()).padding(10.dp)) {
             SelectionContainer {
                 Text(buildString {
                     append(m.pythonOutput)
                     if(m.pythonError.isNotBlank()) {if(isNotEmpty())append('\n');append(m.pythonError)}
                     if(isEmpty()&&!m.pythonBusy)append(if(m.pythonHasRun)"Finished (no output)." else "Run a script to see its output here.")
-                },fontFamily=FontFamily.Monospace,fontSize=12.sp,color=if(m.pythonError.isNotBlank())c.danger else c.ink)
+                },fontFamily=FontFamily.Monospace,fontSize=15.sp,lineHeight=22.sp,color=if(m.pythonError.isNotBlank())c.danger else c.ink)
             }
         }
         m.pythonInputPrompt?.let { prompt ->
