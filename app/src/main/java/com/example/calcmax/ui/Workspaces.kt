@@ -164,8 +164,13 @@ import kotlin.math.max
             if(vector)DimStepper("Components",rows,1..4){rows=it} else {DimStepper("Rows",rows,1..4){rows=it};DimStepper("Columns",columns,1..4){columns=it}}
         }
         MatrixGrid(rows,cols,cells,"matrix-grid") {row,column,text->cells=cells.toMutableList().also {it[row*4+column]=text}}
-        Text("Expression  "+source(),fontFamily=FontFamily.Monospace,fontSize=11.sp,color=c.muted)
+        Text("Expression  "+source()+(if(other.isBlank())"" else ", $other"),fontFamily=FontFamily.Monospace,fontSize=11.sp,color=c.muted)
         Choices(listOf("A","B","C"),name,{name=it})
+        val storedTree=m.variables.optJSONObject(name)
+        if(storedTree!=null) Row(verticalAlignment=Alignment.CenterVertically) {
+            Text("$name = ",fontSize=15.sp,color=c.muted)
+            Box(Modifier.horizontalScroll(rememberScrollState())){MathNode(storedTree,m.outputFont*.75f)}
+        } else Text("Nothing stored in $name",fontSize=11.sp,color=c.muted)
         Row(Modifier.horizontalScroll(rememberScrollState()),verticalAlignment=Alignment.CenterVertically) {
             Button(onClick={m.store(name,source())}) {Text("Store as $name")}
             SmallAction("Insert into calculator") {m.edit(Editor(source()));m.mode="Scientific"}
@@ -177,6 +182,12 @@ import kotlin.math.max
         else if(rows!=cols)Text("det, inverse, rank, trace, LU and eigenvalues need a square matrix.",fontSize=11.sp,color=c.muted)
         Text("Operations with the second operand",fontSize=12.sp,fontWeight=FontWeight.SemiBold)
         Field(other,"Variable name or literal such as [[4,5,6]]") {other=it}
+        val referenced=other.trim().trim('[',']').trim()
+        val referencedTree=m.variables.optJSONObject(referenced)
+        if(referencedTree!=null) Row(verticalAlignment=Alignment.CenterVertically) {
+            Text("$referenced = ",fontSize=15.sp,color=c.muted)
+            Box(Modifier.horizontalScroll(rememberScrollState())){MathNode(referencedTree,m.outputFont*.75f)}
+        }
         OpChips(if(vector)listOf("dot","cross","angle","projection") else listOf("linsolve")){applyOp(it)}
         val stored=remember(m.variables) {m.variables.keys().asSequence().toList().sorted()}
         if(stored.isNotEmpty()) {
