@@ -215,7 +215,7 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
     }.padding(horizontal=12.dp,vertical=3.dp)) {content()}
 }
 
-@Composable fun MathNode(node:JSONObject,size:Float=25f,select:((Int,Int)->Unit)?=null,selection:IntRange?=null,depth:Int=0,hideGroup:Boolean=false,compactRootIndexHole:Boolean=false,compactLogBaseHole:Boolean=false,compactExponentHole:Boolean=false) {
+@Composable fun MathNode(node:JSONObject,size:Float=25f,select:((Int,Int)->Unit)?=null,selection:IntRange?=null,depth:Int=0,hideGroup:Boolean=false,compactRootIndexHole:Boolean=false,compactLogBaseHole:Boolean=false,compactExponentHole:Boolean=false,operandHole:Boolean=false) {
     if(depth>36){MathText("…",size);return}
     val c=LocalInstrument.current
     val raw=node.optString("kind")
@@ -236,10 +236,10 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
     val atomic=kind in listOf("number","symbol","text","hole")
     val emptyContainer=kind in listOf("list","set")&&children.isEmpty()&&end-start>=2
     val placeCursor=LocalPlaceCursor.current
-    val touch=Modifier.then(if(selected||activeHole)Modifier.background(c.accent.copy(alpha=.17f),RoundedCornerShape(2.dp))else Modifier)
+    val touch=Modifier.then(if(selected||(activeHole&&!operandHole))Modifier.background(c.accent.copy(alpha=.17f),RoundedCornerShape(2.dp))else Modifier)
         .then(if(emptyContainer&&select!=null)Modifier.semantics(mergeDescendants=true){contentDescription=if(kind=="list")"Empty list; tap to enter values" else "Empty set; tap to enter values"}else Modifier)
         .then(if(select!=null&&start>=0)Modifier.clickable{if(emptyContainer){if(placeCursor!=null)placeCursor(start,end,start+1)else select(start+1,start+1)}else select(start,end)}else Modifier)
-    @Composable fun child(i:Int,scale:Float=1f,hidden:Boolean=false,compactExponentHole:Boolean=false) {children.getOrNull(i)?.let{MathNode(it,(size*scale).coerceAtLeast(11f),select,selection,depth+1,hidden,compactExponentHole=compactExponentHole)}}
+    @Composable fun child(i:Int,scale:Float=1f,hidden:Boolean=false,compactExponentHole:Boolean=false,operandHole:Boolean=false) {children.getOrNull(i)?.let{MathNode(it,(size*scale).coerceAtLeast(11f),select,selection,depth+1,hidden,compactExponentHole=compactExponentHole,operandHole=operandHole)}}
     @Composable fun integralPart(i:Int,scale:Float=1f) {
         if(i==0||integrationTuple==null)child(i,scale)
         else integrationTuple.optJSONObject(i-1)?.let{MathNode(it,(size*scale).coerceAtLeast(11f),select,selection,depth+1)}
@@ -295,7 +295,9 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
             kind=="list"&&children.isNotEmpty()->SquareBrackets {MathRow(2.dp){children.indices.forEach {i->if(i>0)label(", ");child(i)}}}
             emptyContainer->MathRow {label(if(kind=="list")"[" else "{");if(caret&&cursor==start+1)MathText("│",size,blink=true);label(if(kind=="list")"]" else "}")}
             kind=="rows"->Column{children.forEach{row->MathRow{label(row.optString("value")+": ",.65f);row.optJSONArray("args")?.optJSONObject(0)?.let{MathNode(it,size*.8f,depth=depth+1)}}}}
-            kind=="hole"->if(compactRootIndexHole)RootIndexSlot(size,activeHole)else if(compactLogBaseHole)LogBaseSlot(size,activeHole)else if(compactExponentHole)ExponentSlot(size,activeHole)else
+            kind=="hole"->if(compactRootIndexHole)RootIndexSlot(size,activeHole)else if(compactLogBaseHole)LogBaseSlot(size,activeHole)else if(compactExponentHole)ExponentSlot(size,activeHole)else if(operandHole){
+                if(caret)MathText("│",size,blink=true)
+            }else
                 Box(Modifier.width((size*.72f).dp).height((size*1.04f).dp).border(1.dp,if(activeHole)c.accent else c.muted,RoundedCornerShape(1.dp)).then(if(activeHole)Modifier else Modifier.semantics{contentDescription="Empty expression slot"}),contentAlignment=Alignment.Center){
                     if(activeHole)MathText("│",size,blink=true)
                 }
@@ -341,7 +343,7 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
                     val on=selection!=null&&selection.first==start&&selection.last==gapTo
                     Box(Modifier.then(if(on)Modifier.background(c.accent.copy(alpha=.17f),RoundedCornerShape(2.dp))else Modifier).clickable{pick(start,gapTo)}){label(if(value=="-")"−" else value)}
                 } else label(if(value=="-")"−" else value)
-                child(0)
+                child(0,operandHole=true)
             }
             kind in listOf("call","function")&&value=="factorial"->MathRow{child(0);label("!")}
             kind in listOf("call","function")&&value in listOf("degree","rad","gradian","percent")->MathRow{child(0);label(when(value){"degree"->"°";"rad"->"ʳ";"gradian"->"ᵍ";else->"%"})}
@@ -367,6 +369,7 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
             kind in listOf("call","function")&&value in listOf("piecewise","Piecewise")->MathRow{label("{",1.7f);Column{children.indices.forEach{child(it,.85f)}}}
             else->MathRow(if(coefficient)0.dp else 2.dp){
                 val wrap=kind in listOf("call","function","list","tuple","set")
+                val operandHoles=kind=="binary"||kind=="relation"
                 if(kind in listOf("call","function"))label(value,.9f)
                 if(wrap)label(when(kind){"list"->"[";"set"->"{";else->"("})
                 children.forEachIndexed{i,n->
@@ -376,7 +379,7 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
                         val adjacentCoefficient=kind=="product"&&i>0&&children[i-1].optString("kind")=="number"&&n.optString("kind")=="symbol"
                         if(i>0&&!coefficient&&!adjacentCoefficient)opLabel(i,when(kind){"sum"->" + ";"product"->" · ";"binary","relation"->when(value){"*"->if(node.optString("displayOperator")=="∘")"" else " × ";"/"->" ÷ ";"-"->" − ";"!="->" ≠ ";"<="->" ≤ ";">="->" ≥ ";else->" $value "};else->", "})
                         if(kind=="product"&&n.optString("kind")=="sum")wrapped(i)
-                        else child(i,hidden=kind=="binary"&&value=="*"&&n.optString("kind")=="group"&&n.optJSONArray("args")?.optJSONObject(0)?.optString("kind")=="hole")
+                        else child(i,hidden=kind=="binary"&&value=="*"&&n.optString("kind")=="group"&&n.optJSONArray("args")?.optJSONObject(0)?.optString("kind")=="hole",operandHole=operandHoles)
                     }
                 }
                 if(kind=="tuple"&&children.size==1)label(",")
