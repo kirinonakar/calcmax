@@ -251,7 +251,7 @@ private fun treeSource(node:JSONObject?):String? {
         } else Text("Nothing stored in $name",fontSize=11.sp,color=c.muted)
         Row(Modifier.horizontalScroll(rememberScrollState()),verticalAlignment=Alignment.CenterVertically) {
             Button(onClick={m.store(name,source())}) {Text("Store as $name")}
-            SmallAction("Insert into calculator") {m.edit(Editor(source()));m.mode="Scientific"}
+            SmallAction("Insert into calculator") {m.edit(Editor(source()));m.mode="Scientific/CAS"}
             SmallAction("Clear grid") {cells=List(16){"0"}}
         }
         Text("Operations",fontSize=12.sp,fontWeight=FontWeight.SemiBold)
@@ -545,7 +545,7 @@ data class ConstantEntry(val symbol: String,val name: String,val value: String,v
         Field(search,"Search",Modifier.fillMaxWidth()) { search=it }
         if(m.constants==null) Text("Loading local constants…")
         constants.filter { it.name.contains(search,true)||it.symbol.contains(search,true) }.forEach { item ->
-            Column(Modifier.fillMaxWidth().clickable { m.insert(item.symbol);m.mode="Scientific" }.padding(vertical=8.dp)) {
+            Column(Modifier.fillMaxWidth().clickable { m.insert(item.symbol);m.mode="Scientific/CAS" }.padding(vertical=8.dp)) {
                 Text("${item.symbol}  ·  ${item.name}",style=MaterialTheme.typography.titleSmall)
                 Text("${item.value} ${item.unit}",fontSize=14.sp)
                 Text(if(item.exact) "Exact definition" else "Measured · CODATA 2022",fontSize=11.sp,color=LocalInstrument.current.muted)
@@ -587,7 +587,7 @@ data class ConstantEntry(val symbol: String,val name: String,val value: String,v
                     Text(entry.source.historyPreview(),fontFamily=FontFamily.Monospace,fontSize=13.sp)
                     Text("= ${entry.exact.historyPreview()}",fontFamily=FontFamily.Serif,fontSize=20.sp)
                     Text("${entry.mode} · ${DateFormat.getDateTimeInstance(DateFormat.SHORT,DateFormat.SHORT).format(Date(entry.id))}",fontSize=10.sp,color=LocalInstrument.current.muted)
-                    Row { SmallAction("Reuse") { m.edit(Editor(entry.source));m.mode="Scientific";close() }; SmallAction(if(entry.favorite)"★" else "☆") { m.favorite(entry.id) }; SmallAction("Copy") { clipboard.setText(AnnotatedString(entry.exact)) }; SmallAction("Delete") { m.deleteHistory(entry.id) } }
+                    Row { SmallAction("Reuse") { m.edit(Editor(entry.source));m.mode="Scientific/CAS";close() }; SmallAction(if(entry.favorite)"★" else "☆") { m.favorite(entry.id) }; SmallAction("Copy") { clipboard.setText(AnnotatedString(entry.exact)) }; SmallAction("Delete") { m.deleteHistory(entry.id) } }
                 }
                 HorizontalDivider()
             }

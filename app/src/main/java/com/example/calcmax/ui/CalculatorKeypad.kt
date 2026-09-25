@@ -30,10 +30,10 @@ data class KeySpec(val title:String,val input:String=title,val secondary:String=
 private val ScientificKeys=listOf(
     listOf(KeySpec("a/b","()/()","mixed","mixed(,,)"),KeySpec("√","sqrt()","³√","cbrt()"),KeySpec("x²","^2","x³","^3"),KeySpec("x□","^()","ⁿ√","nthroot(,)"),KeySpec("log","log()","10ˣ","10^()","z"),KeySpec("ln","ln()","eˣ","e^()","t")),
     listOf(KeySpec("(−)","NEG","∠","∠","A"),KeySpec("°′″","DMS_INPUT","←","DMS","B"),KeySpec("hyp","HYP","Abs","abs()","C"),KeySpec("sin","sin()","sin⁻¹","asin()","D"),KeySpec("cos","cos()","cos⁻¹","acos()","E"),KeySpec("tan","tan()","tan⁻¹","atan()","F")),
-    listOf(KeySpec("RCL",secondary="STO",alternate="STO"),KeySpec("ENG",secondary="←",alternate="ENG−",alpha="i"),KeySpec("(",secondary="%",alternate="%"),KeySpec(")",secondary=",",alternate=",",alpha="x"),KeySpec("S⇔D",secondary="a b/c ⇔ d/c",alternate="MIXED",alpha="y"),KeySpec("M+",secondary="M−",alternate="M−",alpha="M"))
+    listOf(KeySpec("RCL",secondary="STO",alternate="STO"),KeySpec("ENG",secondary="←",alternate="ENG−",alpha="i"),KeySpec("(",secondary="%",alternate="%",alpha="z"),KeySpec(")",secondary=",",alternate=",",alpha="x"),KeySpec("S⇔D",secondary="a b/c ⇔ d/c",alternate="MIXED",alpha="y"),KeySpec("M+",secondary="M−",alternate="M−",alpha="M"))
 )
 private val SecondKeys=listOf(
-    listOf(KeySpec("simp","simplify()"),KeySpec("factor","factor()","factorint","factorint()"),KeySpec("expand","expand()"),KeySpec("x"),KeySpec("y"),KeySpec("z")),
+    listOf(KeySpec("simp","simplify()"),KeySpec("factor","factor()","factorint","factorint()"),KeySpec("expand","expand()"),KeySpec("x", "x", "^", "^()"),KeySpec("y"),KeySpec("z")),
     listOf(KeySpec("⌊x⌋","floor()"),KeySpec("⌈x⌉","ceil()"),KeySpec("∞","oo","sign","sign()"),KeySpec(","),KeySpec("{",secondary="[",alternate="["),KeySpec("}",secondary="]",alternate="]")),
     listOf(KeySpec("MATRIX","MATRIX_INPUT",secondary="n×m",type="action"),KeySpec("det","det()"),KeySpec("inv","inverse()"),KeySpec("T","transpose()"),KeySpec("‖v‖","norm()"),KeySpec("GRAPH","TO_GRAPH",secondary="MODE",alternate="Graph",type="action"))
 )
@@ -41,7 +41,7 @@ private val NumericKeys=listOf(
     listOf(KeySpec("7",secondary="CONST",alternate="Constants"),KeySpec("8",secondary="CONV",alternate="Units"),KeySpec("9",secondary="CLR",alternate="Clear"),KeySpec("DEL",secondary="INS",alternate="INS",type="danger"),KeySpec("AC",secondary="CLR ALL",alternate="CLR ALL",type="danger")),
     listOf(KeySpec("4",secondary="MATRIX",alternate="Matrix"),KeySpec("5",secondary="VECTOR",alternate="Vector"),KeySpec("6",secondary="EQN",alternate="Equations"),KeySpec("×",secondary="nPr",alternate="nPr(,)"),KeySpec("÷",secondary="nCr",alternate="nCr(,)")),
     listOf(KeySpec("1",secondary="STAT",alternate="Statistics"),KeySpec("2",secondary="PY",alternate="Python"),KeySpec("3",secondary="BASE",alternate="Programmer"),KeySpec("+",secondary="Pol",alternate="pol(,)"),KeySpec("−",secondary="Rec",alternate="rec(,)")),
-    listOf(KeySpec("0",secondary="Rnd",alternate="rnd()"),KeySpec(".",secondary="Ran#",alternate="RANDOM",alpha="randInt(,)"),KeySpec("×10ˣ","*10^()","π","pi","e"),KeySpec("Ans",secondary="DRG▶",alternate="ANGLE"),KeySpec("="))
+    listOf(KeySpec("0",secondary="Rnd",alternate="rnd()"),KeySpec(".",secondary="Ran#",alternate="RANDOM",alpha="randInt(,)"),KeySpec("×10ˣ","*10^()","π","pi","e"),KeySpec("Ans",secondary="DRG▶",alternate="ANGLE"),KeySpec("=",secondary="GRAPH",alternate="Graph"))
 )
 
 private fun pressedShade(base:Color)=if(base.luminance()>.45f)Color.Black.copy(alpha=.18f) else Color.White.copy(alpha=.24f)
@@ -74,7 +74,7 @@ private fun pressedShade(base:Color)=if(base.luminance()>.45f)Color.Black.copy(a
                 "LEFT"->m.editCalcValue(m.calcSession!!.input.move(-1))
                 "RIGHT"->m.editCalcValue(m.calcSession!!.input.move(1))
                 "NEG"->m.insertCalcValue("-")
-                "RCL","STO","Clear","CLR ALL","MODE","SETUP","ENG","ENG−","S⇔D","MIXED","M+","M−","SOLVE","RELATION","Graph","Equations","Scientific","Python","TO_GRAPH"->Unit
+                "RCL","STO","Clear","CLR ALL","MODE","SETUP","ENG","ENG−","S⇔D","MIXED","M+","M−","SOLVE","RELATION","Graph","Equations","Scientific/CAS","Python","TO_GRAPH"->Unit
                 else->{val at=if(value.contains('('))value.indexOf('(')+1 else value.length;m.insertCalcValue(value,at)}
             }
             m.shift=false;m.alpha=false
@@ -96,8 +96,8 @@ private fun pressedShade(base:Color)=if(base.luminance()>.45f)Color.Black.copy(a
             "RIGHT"->if(m.engineeringConversion)m.shiftEngineering(-1)else m.edit(m.editor.moveMatrix(0,1) ?: m.editor.move(1))
             "UP"->m.edit(m.editor.moveMatrix(-1,0) ?: m.editor.parent());"DOWN"->m.edit(m.editor.moveMatrix(1,0) ?: m.editor.child())
             "RCL","STO","Clear"->open(value)
-            "Constants","Units","Matrix","Vector","Statistics","Programmer","Graph","Equations","Scientific","Python"->{m.mode=value}
-            "Complex"->{m.mode="Scientific";open("Catalog")}
+            "Constants","Units","Matrix","Vector","Statistics","Programmer","Graph","Equations","Scientific/CAS","Python"->{m.mode=value}
+            "Complex"->{m.mode="Scientific/CAS";open("Catalog")}
             "HYP"->{m.hyperbolic=!m.hyperbolic}
             "S⇔D"->m.decimal=!m.decimal
             "MIXED"->{m.mixedNumbers=!m.mixedNumbers;m.decimal=false}
@@ -135,7 +135,7 @@ private fun pressedShade(base:Color)=if(base.luminance()>.45f)Color.Black.copy(a
             BoxWithConstraints(Modifier.fillMaxWidth().weight(2f)) {
                 val column=maxWidth/6
                 val row=maxHeight/2
-                val top=listOf(KeySpec("SHIFT",type="utility"),KeySpec("ALPHA",type="utility"),KeySpec("MODE",alternate="Scientific",type="utility"),KeySpec(if(m.secondKeys)"1st" else "2nd","SECOND",type="utility"))
+                val top=listOf(KeySpec("SHIFT",type="utility"),KeySpec("ALPHA",type="utility"),KeySpec("MODE",alternate="Scientific/CAS",type="utility"),KeySpec(if(m.secondKeys)"1st" else "2nd","SECOND",type="utility"))
                 top.forEachIndexed {i,k->val col=if(i<2)i else i+2;Keycap(k,Modifier.offset(x=column*col).width(column-4.dp).height(row),m.shift&&k.title=="SHIFT"||m.alpha&&k.title=="ALPHA",onClick={press(k)},onLongClick={pressLong(k)})}
                 val bottom=if(m.secondKeys)listOf(KeySpec("d/dx","diff(,x)","∫","integrate(,x)"),KeySpec("lim","limit(,x,)"),KeySpec("sinc","sinc()"),KeySpec("Π","product(,x,,)")) else listOf(KeySpec("CALC",secondary="SOLVE",alternate="SOLVE",alpha="="),KeySpec("∫","integrate(,x,,)","d/dx","nderivative(,x,)",":"),KeySpec("x⁻¹","^(-1)","x!","!"),KeySpec("logₐ□","log(,)","Σ","sum(,x,,)"))
                 bottom.forEachIndexed {i,k->val col=if(i<2)i else i+2;Keycap(k,Modifier.offset(x=column*col,y=row).width(column-4.dp).height(row),onClick={press(k)},onLongClick={pressLong(k)})}

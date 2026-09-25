@@ -86,7 +86,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         private set
     var shift by mutableStateOf(false)
     var alpha by mutableStateOf(false)
-    var mode by mutableStateOf(prefs.getString("mode","Scientific") ?: "Scientific")
+    var mode by mutableStateOf(prefs.getString("mode","Scientific/CAS")?.let{if(it=="Scientific"||it=="CAS")"Scientific/CAS" else it} ?: "Scientific/CAS")
     var angle by mutableStateOf(prefs.getString("angle","DEG") ?: "DEG")
     var theme by mutableStateOf(prefs.getString("theme","System") ?: "System")
     var precision by mutableIntStateOf(prefs.getInt("precision",30))
@@ -386,7 +386,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         (functions.optJSONObject(name)?.optJSONArray("parameters")?.length() ?: 0)>1
     }.toSet()
     private fun schedulePreview() {
-        if(calcSession!=null || mode !in listOf("Scientific","CAS","Equations") || previewRunner?.isActive==true)return
+        if(calcSession!=null || mode !in listOf("Scientific/CAS","Equations") || previewRunner?.isActive==true)return
         previewRunner=viewModelScope.launch {
             try {
                 delay(100)
@@ -501,7 +501,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
             if(left.kind=="symbol") {store(left.value,source.substring(right.start,right.end));return}
             if(left.kind=="call" && left.args.all {it.kind=="symbol"}) {define(left.value,left.args.joinToString(","){it.value},source.substring(right.start,right.end));return}
         }
-        if(mode in listOf("Scientific","CAS","Equations") && source==editor.source) {
+        if(mode in listOf("Scientific/CAS","Equations") && source==editor.source) {
             if(resultSource==source && resultVersion==inputVersion && result?.optBoolean("ok")==true) commit(source,result!!)
             else {commitRequested=true;busy=true;schedulePreview()}
             return

@@ -96,7 +96,7 @@ import org.json.JSONObject
             Box(Modifier.horizontalScroll(rememberScrollState())){MathNode(definition.getJSONObject("body"),m.inputFont*.85f)}
             Row {
                 SmallAction("Edit"){name=key;parameters=params;body=definition.optString("source").ifBlank{editableSource(definition.getJSONObject("body"))};message=""}
-                SmallAction("Insert"){m.mode="Scientific";m.insert("$key(${",".repeat((args.length()-1).coerceAtLeast(0))})",key.length+1)}
+                SmallAction("Insert"){m.mode="Scientific/CAS";m.insert("$key(${",".repeat((args.length()-1).coerceAtLeast(0))})",key.length+1)}
                 SmallAction("Delete"){m.removeVariable(key)}
             }
         }

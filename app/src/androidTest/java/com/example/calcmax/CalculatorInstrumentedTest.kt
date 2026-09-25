@@ -30,7 +30,7 @@ class CalculatorInstrumentedTest {
         file.outputStream().use { val roots=compose.onAllNodes(isRoot());roots[roots.fetchSemanticsNodes().lastIndex].captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG,100,it) }
     }
     @Test fun undoRevertsEachInputAndClear() {
-        compose.runOnIdle {model().mode="Scientific";model().poweredOn=true;model().secondKeys=false;model().clear(recordUndo=false)}
+        compose.runOnIdle {model().mode="Scientific/CAS";model().poweredOn=true;model().secondKeys=false;model().clear(recordUndo=false)}
         listOf("1","+","2").forEach {compose.onNodeWithContentDescription(it).performClick()}
         compose.runOnIdle {assertEquals("1+2",model().editor.source)}
         compose.onNodeWithContentDescription("Undo last input").performClick()
@@ -52,7 +52,7 @@ class CalculatorInstrumentedTest {
         compose.runOnIdle {assertEquals("",model().calcSession?.input?.source);model().cancelCalc();model().clear(recordUndo=false)}
     }
     @Test fun integralPowerBaseMovesDirectlyToExponent() {
-        compose.runOnIdle {model().mode="Scientific";model().secondKeys=false;model().clear();model().edit(Editor("integrate(x^2,x,,)",11))}
+        compose.runOnIdle {model().mode="Scientific/CAS";model().secondKeys=false;model().clear();model().edit(Editor("integrate(x^2,x,,)",11))}
         compose.onNodeWithContentDescription("DEL").performClick()
         compose.runOnIdle {assertEquals("integrate(()^2,x,,)",model().editor.source)}
         compose.onNodeWithContentDescription("Cursor right").performClick()
@@ -61,7 +61,7 @@ class CalculatorInstrumentedTest {
         compose.runOnIdle {assertEquals("call",model().editor.tree()?.kind);assertEquals("integrate",model().editor.tree()?.value);model().clear()}
     }
     @Test fun calcPromptsForVariablesAndReusesStoredValues() {
-        compose.runOnIdle {model().mode="Scientific";model().clear();model().edit(Editor("A+2B"))}
+        compose.runOnIdle {model().mode="Scientific/CAS";model().clear();model().edit(Editor("A+2B"))}
         compose.onNodeWithContentDescription("CALC").performClick()
         compose.runOnIdle {assertEquals("A",model().calcSession?.name)}
         compose.onNodeWithContentDescription("3").performClick()
@@ -81,7 +81,7 @@ class CalculatorInstrumentedTest {
         compose.runOnIdle {assertEquals("11",model().result?.optString("exact"));model().clear()}
     }
     @Test fun tappingEmptyStatisticListPreservesItsBrackets() {
-        compose.runOnIdle {model().mode="Scientific";model().clear();model().insert("mean([])",6)}
+        compose.runOnIdle {model().mode="Scientific/CAS";model().clear();model().insert("mean([])",6)}
         compose.onNodeWithContentDescription("Empty list; tap to enter values").performClick()
         compose.runOnIdle {model().insert("1,2,3");assertEquals("mean([1,2,3])",model().editor.source)}
     }
@@ -138,7 +138,7 @@ class CalculatorInstrumentedTest {
         compose.runOnIdle {model().deleteDataSet("AaTouchRows")}
     }
     @Test fun divisionAndAdditionPlaceCaretWithoutAnEmptyBox() {
-        compose.runOnIdle {model().mode="Scientific";model().clear();model().edit(Editor("49"))}
+        compose.runOnIdle {model().mode="Scientific/CAS";model().clear();model().edit(Editor("49"))}
         compose.onNodeWithContentDescription("÷").performClick()
         compose.runOnIdle {assertEquals("49÷",model().editor.source);assertEquals(3..3,model().editor.cursorTarget())}
         compose.onNodeWithContentDescription("Empty expression slot").assertDoesNotExist()
@@ -192,10 +192,10 @@ class CalculatorInstrumentedTest {
         }
     }
     @Test fun secondPageInsertsStructuresAndGraphsCurrentExpression() {
-        compose.runOnIdle {model().mode="Scientific";model().clear();model().secondKeys=true;model().edit(Editor("y=x^2+1"))}
+        compose.runOnIdle {model().mode="Scientific/CAS";model().clear();model().secondKeys=true;model().edit(Editor("y=x^2+1"))}
         compose.onNodeWithContentDescription("Graph current expression").performClick()
         compose.runOnIdle {assertEquals("Graph",model().mode);assertEquals("cartesian",model().graphKind);assertEquals("x^2+1",model().graphSource)}
-        compose.runOnIdle {model().mode="Scientific";model().clear();model().secondKeys=true}
+        compose.runOnIdle {model().mode="Scientific/CAS";model().clear();model().secondKeys=true}
         compose.onNodeWithContentDescription("Insert matrix, choose size").performClick()
         compose.onNodeWithText("Insert").performClick()
         compose.runOnIdle {assertEquals("[[,],[,]]",model().editor.source);assertEquals(2,model().editor.cursor)}
@@ -216,12 +216,12 @@ class CalculatorInstrumentedTest {
         compose.runOnIdle {assertEquals("[]",model().editor.source)}
     }
     @Test fun tokenCursorMalformedInputAndClearAll() {
-        compose.runOnIdle {model().mode="Scientific";model().clear();model().edit(Editor("1234",4,0))}
+        compose.runOnIdle {model().mode="Scientific/CAS";model().clear();model().edit(Editor("1234",4,0))}
         val number=compose.onNode(hasText("1234") and hasAnyAncestor(hasContentDescription("Current expression")),useUnmergedTree=true)
         val widthWithoutCursor=number.fetchSemanticsNode().boundsInRoot.width
         compose.runOnIdle {model().edit(Editor("1234",2))}
         assertEquals(widthWithoutCursor,number.fetchSemanticsNode().boundsInRoot.width,0.1f)
-        compose.runOnIdle {model().mode="Scientific";model().clear();model().edit(Editor("1234"))}
+        compose.runOnIdle {model().mode="Scientific/CAS";model().clear();model().edit(Editor("1234"))}
         val token=compose.onNode(hasText("1234") and hasAnyAncestor(hasContentDescription("Current expression")),useUnmergedTree=true)
         token.performTouchInput{click(center)}
         compose.runOnIdle{assertEquals(0,model().editor.anchor);assertEquals(4,model().editor.cursor)}
@@ -255,13 +255,13 @@ class CalculatorInstrumentedTest {
         compose.onNodeWithText("Save function").performClick()
         compose.runOnIdle{assertTrue(model().functions.has("f"));assertEquals("x^2+1",model().functions.getJSONObject("f").getString("source"))}
         capture("custom-functions")
-        compose.runOnIdle{model().mode="Scientific";model().clear()}
+        compose.runOnIdle{model().mode="Scientific/CAS";model().clear()}
         compose.onNodeWithText("Catalog").performClick()
         compose.onNodeWithText("Custom").performClick()
         compose.onNodeWithText("f()").assertExists()
         compose.onNodeWithText("f()").performClick()
         compose.runOnIdle{assertEquals("f()",model().editor.source);assertEquals(2,model().editor.cursor)}
-        compose.runOnIdle{model().mode="Scientific";model().clear();model().edit(Editor("f(3)+sinc(0)"));model().calculate()}
+        compose.runOnIdle{model().mode="Scientific/CAS";model().clear();model().edit(Editor("f(3)+sinc(0)"));model().calculate()}
         compose.waitUntil(30000){!model().busy&&model().result!=null}
         compose.runOnIdle{assertEquals("11",model().result!!.getString("exact"))}
     }
@@ -292,7 +292,7 @@ class CalculatorInstrumentedTest {
         compose.runOnIdle {assertEquals("cartesian",model().graphKind)}
     }
     @Test fun keyboardOverlaysWithoutMovingKeys() {
-        compose.runOnIdle{model().mode="Scientific";model().clear()}
+        compose.runOnIdle{model().mode="Scientific/CAS";model().clear()}
         val before=compose.onNodeWithContentDescription("AC").fetchSemanticsNode().boundsInRoot
         compose.onNodeWithText("Keyboard").performClick()
         compose.onNodeWithContentDescription("Expression input").performClick().performTextInput("1234")
@@ -303,7 +303,7 @@ class CalculatorInstrumentedTest {
         compose.activityRule.scenario.onActivity{androidx.core.view.WindowCompat.getInsetsController(it.window,it.window.decorView).hide(androidx.core.view.WindowInsetsCompat.Type.ime())}
     }
     @Test fun scientificCalculationAndThemes() {
-        compose.runOnIdle { model().clear();model().mode="Scientific";model().theme="Light" }
+        compose.runOnIdle { model().clear();model().mode="Scientific/CAS";model().theme="Light" }
         compose.onNodeWithContentDescription("2").performClick()
         compose.onNodeWithContentDescription("+").performClick()
         compose.onNodeWithContentDescription("3").performClick()
@@ -318,7 +318,7 @@ class CalculatorInstrumentedTest {
         compose.runOnIdle { assertEquals("2+3×4",model().editor.source);assertEquals("14",model().result!!.getString("exact"));model().theme="System" }
     }
     @Test fun nativeCasAndGraphScreens() {
-        compose.runOnIdle { model().clear();model().mode="CAS";model().theme="Dark";model().edit(Editor("integrate(x^2*exp(x),x)"));model().calculate() }
+        compose.runOnIdle { model().clear();model().mode="Scientific/CAS";model().theme="Dark";model().edit(Editor("integrate(x^2*exp(x),x)"));model().calculate() }
         compose.waitUntil(30000) { !model().busy && model().result!=null }
         compose.runOnIdle { assertTrue(model().error,model().error.isEmpty());assertTrue(model().result!!.getString("exact").contains("exp(x)")) }
         capture("cas-dark")
@@ -333,7 +333,7 @@ class CalculatorInstrumentedTest {
         compose.waitForIdle();capture("statistics-light")
     }
     @Test fun multiArgumentInputWaitsForEquals() {
-        compose.runOnIdle {model().mode="CAS";model().clear();model().edit(Editor("integrate(e)"))}
+        compose.runOnIdle {model().mode="Scientific/CAS";model().clear();model().edit(Editor("integrate(e)"))}
         Thread.sleep(300)
         compose.runOnIdle {
             assertEquals("",model().error)
@@ -395,7 +395,7 @@ class CalculatorInstrumentedTest {
             file.outputStream().use{bitmap.compress(Bitmap.CompressFormat.PNG,100,it)};bitmap.recycle()
             return brightness
         }
-        compose.runOnIdle {model().theme="System";model().mode="Scientific";model().edit(Editor("sqrt(8)",5));model().save()}
+        compose.runOnIdle {model().theme="System";model().mode="Scientific/CAS";model().edit(Editor("sqrt(8)",5));model().save()}
         compose.activityRule.scenario.onActivity {(it.getSystemService(Context.UI_MODE_SERVICE)as UiModeManager).setApplicationNightMode(UiModeManager.MODE_NIGHT_YES)}
         settle();val dark=nativeCapture("system-dark")
         compose.activityRule.scenario.onActivity {it.requestedOrientation=android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE}
@@ -405,7 +405,7 @@ class CalculatorInstrumentedTest {
         assertTrue("System theme must actually change the rendered colors",light>dark+200)
     }
     @Test fun immediateCalculationFixedKeypadAndAnswerContinuation() {
-        compose.runOnIdle {model().poweredOn=true;model().mode="Scientific";model().theme="Light";model().clear()}
+        compose.runOnIdle {model().poweredOn=true;model().mode="Scientific/CAS";model().theme="Light";model().clear()}
         val top=compose.onNodeWithContentDescription("Calculator keypad").fetchSemanticsNode().boundsInRoot.top
         val historyCount=model().history.size
         compose.onNodeWithContentDescription("2").performClick()
@@ -434,7 +434,7 @@ class CalculatorInstrumentedTest {
         compose.onAllNodesWithText("OFFLINE MATHEMATICS",substring=true).assertCountEquals(0)
     }
     @Test fun screenButtonExpandsDisplayAndKeepsNumericKeys() {
-        compose.runOnIdle {model().mode="Scientific";model().secondKeys=false;model().clear()}
+        compose.runOnIdle {model().mode="Scientific/CAS";model().secondKeys=false;model().clear()}
         val originalTop=compose.onNodeWithContentDescription("Calculator keypad").fetchSemanticsNode().boundsInRoot.top
         val originalNumericHeight=compose.onNodeWithContentDescription("7").fetchSemanticsNode().boundsInRoot.height
         compose.onNodeWithContentDescription("Expand calculation screen").performClick()
@@ -463,7 +463,7 @@ class CalculatorInstrumentedTest {
         // Seed the screen tape directly so damaged entries are rendered only when scrolled into view.
         val setTape=CalculatorModel::class.java.getDeclaredMethod("setTape",List::class.java).apply {isAccessible=true}
         compose.runOnIdle {
-            model().mode="Scientific";model().clearHistory();model().clear()
+            model().mode="Scientific/CAS";model().clearHistory();model().clear()
             setTape.invoke(model(),entries)
         }
         val tape=compose.onNodeWithContentDescription("Calculation history, swipe vertically")
@@ -481,7 +481,7 @@ class CalculatorInstrumentedTest {
         val entries=List(40) {index->HistoryEntry(index.toLong(),"$index+1",(index+1).toString(),(index+1).toString(),"Scientific").toTapeEntry()}
         val setTape=CalculatorModel::class.java.getDeclaredMethod("setTape",List::class.java).apply {isAccessible=true}
         compose.runOnIdle {
-            model().mode="Scientific";model().clearHistory();model().clear()
+            model().mode="Scientific/CAS";model().clearHistory();model().clear()
             setTape.invoke(model(),entries)
         }
         val tape=compose.onNodeWithContentDescription("Calculation history, swipe vertically")
@@ -531,7 +531,7 @@ class CalculatorInstrumentedTest {
             }
         } finally {client.close()}
         val setTape=CalculatorModel::class.java.getDeclaredMethod("setTape",List::class.java).apply {isAccessible=true}
-        compose.runOnIdle {model().mode="Scientific";model().clearHistory();model().clear();setTape.invoke(model(),List(4){entries.map {entry->TapeEntry(entry.source,entry.input,entry.result,entry.answer)}}.flatten())}
+        compose.runOnIdle {model().mode="Scientific/CAS";model().clearHistory();model().clear();setTape.invoke(model(),List(4){entries.map {entry->TapeEntry(entry.source,entry.input,entry.result,entry.answer)}}.flatten())}
         val tape=compose.onNodeWithContentDescription("Calculation history, swipe vertically")
         compose.onNodeWithContentDescription("Expand calculation screen").performClick()
         for(index in 1..32 step 3) tape.performScrollToIndex(index)
@@ -549,7 +549,7 @@ class CalculatorInstrumentedTest {
         assertEquals("rows",result.getJSONObject("tree").getString("kind"))
         val entries=List(120) {TapeEntry(source,input.toString(),result.toString())}
         val setTape=CalculatorModel::class.java.getDeclaredMethod("setTape",List::class.java).apply {isAccessible=true}
-        compose.runOnIdle {model().mode="Scientific";model().clearHistory();model().clear();setTape.invoke(model(),entries);model().edit(Editor(source));model().calculate()}
+        compose.runOnIdle {model().mode="Scientific/CAS";model().clearHistory();model().clear();setTape.invoke(model(),entries);model().edit(Editor(source));model().calculate()}
         compose.waitUntil(15000) {model().committed || model().error.isNotBlank()}
         compose.runOnIdle {assertEquals("",model().error)}
         val tape=compose.onNodeWithContentDescription("Calculation history, swipe vertically")
@@ -576,7 +576,7 @@ class CalculatorInstrumentedTest {
         val entries=List(20) {HistoryEntry(it.toLong(),"$it+1",(it+1).toString(),(it+1).toString(),"Scientific").toTapeEntry()}+
             TapeEntry(source,input.toString(),"""{"exact":"summary"}""")
         val setTape=CalculatorModel::class.java.getDeclaredMethod("setTape",List::class.java).apply {isAccessible=true}
-        compose.runOnIdle {model().mode="Scientific";model().clearHistory();model().clear();setTape.invoke(model(),entries)}
+        compose.runOnIdle {model().mode="Scientific/CAS";model().clearHistory();model().clear();setTape.invoke(model(),entries)}
         val tape=compose.onNodeWithContentDescription("Calculation history, swipe vertically")
         tape.performScrollToIndex(1)
         compose.onNodeWithContentDescription("Reuse calculation: ${source.take(120)}").performClick()
@@ -588,7 +588,7 @@ class CalculatorInstrumentedTest {
     @Test fun editingWhileHistoryIsScrolledReturnsToTheActiveItem() {
         val entries=List(40) {index->HistoryEntry(index.toLong(),"$index+1",(index+1).toString(),(index+1).toString(),"Scientific").toTapeEntry()}
         val setTape=CalculatorModel::class.java.getDeclaredMethod("setTape",List::class.java).apply {isAccessible=true}
-        compose.runOnIdle {model().mode="Scientific";model().clearHistory();model().clear();setTape.invoke(model(),entries)}
+        compose.runOnIdle {model().mode="Scientific/CAS";model().clearHistory();model().clear();setTape.invoke(model(),entries)}
         val tape=compose.onNodeWithContentDescription("Calculation history, swipe vertically")
         // Let the automatic jump triggered by the setup settle before the swipes move the list.
         compose.runOnIdle {};compose.waitForIdle()
@@ -604,7 +604,7 @@ class CalculatorInstrumentedTest {
         compose.runOnIdle {assertEquals("7",model().editor.source)}
     }
     @Test fun symbolicRenderingCalculusAndFractionExit() {
-        compose.runOnIdle {model().mode="Scientific";model().clear();model().decimal=true;model().edit(Editor("integrate(x,x)"))}
+        compose.runOnIdle {model().mode="Scientific/CAS";model().clear();model().decimal=true;model().edit(Editor("integrate(x,x)"))}
         compose.waitUntil(15000){model().result?.optString("exact")=="C + x**2/2"}
         compose.onAllNodesWithText("integrate",substring=true).assertCountEquals(0)
         compose.onAllNodesWithText("**",substring=true).assertCountEquals(0)
@@ -626,7 +626,7 @@ class CalculatorInstrumentedTest {
         assertEquals(paste,keyboard,1f)
     }
     @Test fun structuredCursorBaselineMemoryAndSecondKeys() {
-        compose.runOnIdle{model().mode="Scientific";model().poweredOn=true;model().secondKeys=false;model().clearHistory();model().clear();model().edit(Editor("3^2+6").selectRange(2,3))}
+        compose.runOnIdle{model().mode="Scientific/CAS";model().poweredOn=true;model().secondKeys=false;model().clearHistory();model().clear();model().edit(Editor("3^2+6").selectRange(2,3))}
         val expression=hasAnyAncestor(hasContentDescription("Current expression"))
         val three=compose.onNode(hasText("3") and expression,useUnmergedTree=true).fetchSemanticsNode().boundsInRoot.top
         val six=compose.onNode(hasText("6") and expression,useUnmergedTree=true).fetchSemanticsNode().boundsInRoot.top
