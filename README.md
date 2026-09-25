@@ -19,6 +19,7 @@ You can download the latest release from the [Releases Page](https://github.com/
 * `Keyboard` enables Android text entry; hardware keyboards also work in the natural display. `Paste` inserts clipboard text.
 * S⇔D switches exact and decimal results; SHIFT S⇔D switches improper/mixed fractions. The top `Catalog` button opens the searchable function catalog. Decimal output omits trailing zeros, and symbolic expressions remain typeset in decimal mode.
 * MODE opens scientific, CAS, graphing, Python, equations, matrix, vector, statistics, programmer, units, constants, tip and currency workspaces.
+* Matrix and vector share one editor: labelled size steppers, a grid with row/column headers, a live expression preview and operations split into single-operand and second-operand groups. Store the grid as A, B or C and tap a stored name to reuse it as the second operand.
 * SETUP chooses Light, Dark, or System (the default), angle unit, precision, haptics, sound and optional persistent history. Theme changes preserve the current calculation and editor state.
 * RCL / SHIFT RCL open variable recall and storage. `radius=5` and `f(x)=x^2+1` are supported at the top level outside Equation mode. Use `solve(...)` to solve equations. Stored values are snapshots; user functions retain their expression bodies.
 * For an expression with variables, press `CALC` to enter each variable value in order and press `=` after each one. The last `=` evaluates the original expression. Empty input reuses a stored value or uses zero; `AC` closes the prompt.
@@ -128,7 +129,7 @@ The desktop tests consume AST fixtures produced by the actual Kotlin parser. The
 ## Explicit bounds
 
 * Symbolic integration/solving is subject to SymPy's algorithmic coverage and the computation budget. Unsolved integrals and conditional solution sets are retained with an explanatory message. There is no claim of solving every possible symbolic problem.
-* Matrix entry grid: up to 4×4; expression matrices: up to 32×32. Large exact factorizations/eigensystems may time out.
+* Matrix entry grid: up to 4×4 and vector entry: up to 4 components; expression matrices: up to 32×32. Large exact factorizations/eigensystems may time out.
 * Graphs use bounded adaptive samples; very narrow features can still be missed. Cartesian analysis controls apply only to Cartesian functions. The RK4 differential-equation plots are numerical approximations, and 3D surfaces use a finite wireframe grid.
 * General output such as condition sets and series remainder terms can use textual mathematical notation where a dedicated native layout is not available. Such results may be copyable but not reusable through Ans; the app disables result insertion for them.
 

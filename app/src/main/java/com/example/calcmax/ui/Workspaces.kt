@@ -27,9 +27,12 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.*
 import com.example.calcmax.calculator.CalculatorModel
 import com.example.calcmax.math.Editor
@@ -89,22 +92,99 @@ import kotlin.math.max
     }
 }
 
+@Composable private fun StepKey(label:String,description:String,onClick:()->Unit) {
+    val c=LocalInstrument.current
+    Box(Modifier.size(32.dp).border(1.dp,c.muted.copy(alpha=.4f)).clickable(onClick=onClick).semantics(mergeDescendants=true){contentDescription=description},contentAlignment=Alignment.Center){Text(label,fontSize=15.sp,color=c.ink)}
+}
+@Composable private fun DimStepper(label:String,value:Int,range:IntRange,onValue:(Int)->Unit) {
+    val c=LocalInstrument.current
+    Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(4.dp)) {
+        Text(label,fontSize=11.sp,color=c.muted)
+        StepKey("−","Decrease $label"){onValue((value-1).coerceIn(range))}
+        Text("$value",Modifier.widthIn(min=20.dp),textAlign=TextAlign.Center,fontSize=15.sp,fontWeight=FontWeight.SemiBold)
+        StepKey("+","Increase $label"){onValue((value+1).coerceIn(range))}
+    }
+}
+@Composable private fun MatrixCell(value:String,modifier:Modifier,focus:FocusRequester,tag:String,onValue:(String)->Unit) {
+    val c=LocalInstrument.current
+    var focused by remember {mutableStateOf(false)}
+    Box(modifier.fillMaxHeight().background(if(focused)c.accent.copy(alpha=.12f) else c.display).then(statCellTouch(focus))) {
+        BasicTextField(value,onValue,Modifier.fillMaxSize().focusRequester(focus).onFocusChanged {focused=it.isFocused}.testTag(tag),
+            textStyle=MaterialTheme.typography.bodyMedium.copy(fontSize=13.sp,color=c.ink,fontFamily=FontFamily.Monospace,textAlign=TextAlign.Center),singleLine=true,cursorBrush=SolidColor(c.accent),
+            decorationBox={inner->Box(Modifier.fillMaxSize().padding(horizontal=6.dp),contentAlignment=Alignment.Center){inner()}})
+    }
+}
+@Composable private fun MatrixGrid(rows:Int,cols:Int,cells:List<String>,tag:String,onCell:(Int,Int,String)->Unit) {
+    val c=LocalInstrument.current
+    val grid=c.grid
+    val focuses=remember(rows,cols){List(rows*cols){FocusRequester()}}
+    Column(Modifier.fillMaxWidth().border(1.dp,grid).testTag(tag)) {
+        Row(Modifier.fillMaxWidth().height(26.dp).background(c.scientific)) {
+            Box(Modifier.width(32.dp).fillMaxHeight())
+            VerticalDivider(color=grid,thickness=1.dp)
+            repeat(cols) {column->
+                Box(Modifier.weight(1f).fillMaxHeight(),contentAlignment=Alignment.Center){Text("${column+1}",fontSize=11.sp,color=c.muted,fontWeight=FontWeight.SemiBold)}
+                VerticalDivider(color=grid,thickness=1.dp)
+            }
+        }
+        HorizontalDivider(color=grid,thickness=1.dp)
+        repeat(rows) {row->
+            Row(Modifier.fillMaxWidth().height(46.dp)) {
+                Box(Modifier.width(32.dp).fillMaxHeight().background(c.scientific),contentAlignment=Alignment.Center){Text("${row+1}",fontSize=11.sp,color=c.muted,fontWeight=FontWeight.SemiBold)}
+                VerticalDivider(color=grid,thickness=1.dp)
+                repeat(cols) {column->
+                    MatrixCell(cells[row*4+column],Modifier.weight(1f),focuses[row*cols+column],tag+"-cell-$row-$column"){text->onCell(row,column,text)}
+                    VerticalDivider(color=grid,thickness=1.dp)
+                }
+            }
+            if(row<rows-1)HorizontalDivider(color=grid,thickness=1.dp)
+        }
+    }
+}
+@Composable private fun OpChips(ops:List<String>,run:(String)->Unit) {
+    ops.chunked(3).forEach {row->Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(4.dp)){row.forEach {op->SmallAction(op){run(op)}}}}
+}
 @Composable fun MatrixScreen(m: CalculatorModel) {
-    var rows by rememberSaveable { mutableIntStateOf(2) }; var cols by rememberSaveable { mutableIntStateOf(if(m.mode=="Vector")1 else 2) }
-    var cells by rememberSaveable { mutableStateOf(List(16) { if(it==0 || it==5) "1" else "0" }) }
+    val c=LocalInstrument.current
+    val vector=m.mode=="Vector"
+    var rows by rememberSaveable { mutableIntStateOf(if(vector)3 else 2) }
+    var columns by rememberSaveable { mutableIntStateOf(2) }
+    var cells by rememberSaveable { mutableStateOf(List(16) {if(it==0||it==5)"1" else "0"}) }
     var name by rememberSaveable { mutableStateOf("A") }
     var other by rememberSaveable { mutableStateOf("B") }
-    fun source()=(0 until rows).joinToString(",","[","]") { r->(0 until cols).joinToString(",","[","]") { c->cells[r*4+c].ifBlank { "0" } } }
-    Panel(if(m.mode=="Vector") "Vector workspace" else "Matrix workspace","Edit exact values, then calculate or store for reuse.") {
+    val cols=if(vector)1 else columns
+    fun source()=(0 until rows).joinToString(",","[","]") {r->(0 until cols).joinToString(",","[","]") {column->cells[r*4+column].ifBlank {"0"} }}
+    fun applyOp(op:String) {
+        val expression="$op(${source()}${if(op in listOf("dot","cross","angle","projection","linsolve")) ",$other" else ""})"
+        m.edit(Editor(expression));m.calculate()
+    }
+    Panel(if(vector)"Vector workspace" else "Matrix workspace",if(vector)"Set the component count, edit entries, then run an operation." else "Set the size, edit entries, then run an operation.") {
+        Choices(listOf("Matrix","Vector"),m.mode,{m.mode=it})
+        Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+            if(vector)DimStepper("Components",rows,1..4){rows=it} else {DimStepper("Rows",rows,1..4){rows=it};DimStepper("Columns",columns,1..4){columns=it}}
+        }
+        MatrixGrid(rows,cols,cells,"matrix-grid") {row,column,text->cells=cells.toMutableList().also {it[row*4+column]=text}}
+        Text("Expression  "+source(),fontFamily=FontFamily.Monospace,fontSize=11.sp,color=c.muted)
         Choices(listOf("A","B","C"),name,{name=it})
-        Row(verticalAlignment=Alignment.CenterVertically) { Text("Rows: $rows",Modifier.weight(1f)); SmallAction("−") { rows=(rows-1).coerceAtLeast(1) }; SmallAction("+") { rows=(rows+1).coerceAtMost(4) }; Text("Cols: $cols"); SmallAction("−") { cols=(cols-1).coerceAtLeast(1) }; SmallAction("+") { cols=(cols+1).coerceAtMost(4) } }
-        repeat(rows) { r -> Row(horizontalArrangement=Arrangement.spacedBy(5.dp)) { repeat(cols) { c -> Field(cells[r*4+c],"${r+1},${c+1}",Modifier.weight(1f)) { text->cells=cells.toMutableList().also { it[r*4+c]=text } } } } }
-        Row { Button(onClick={m.store(name,source())}) { Text("Store $name") }; SmallAction("Insert into calculator") { m.edit(Editor(source()));m.mode="Scientific" } }
-        Field(other,"Second matrix / vector") { other=it }
-        val ops=if(m.mode=="Vector") listOf("norm","normalize","dot","cross","angle","projection") else listOf("det","inverse","transpose","rank","trace","ref","rref","lu","eigenvalues","eigenvectors","linsolve")
-        ops.chunked(3).forEach { row -> Row { row.forEach { op -> SmallAction(op) { val expression="$op(${source()}${if(op in listOf("dot","cross","angle","projection","linsolve")) ",$other" else ""})"; m.edit(Editor(expression));m.calculate() } } } }
+        Row(Modifier.horizontalScroll(rememberScrollState()),verticalAlignment=Alignment.CenterVertically) {
+            Button(onClick={m.store(name,source())}) {Text("Store as $name")}
+            SmallAction("Insert into calculator") {m.edit(Editor(source()));m.mode="Scientific"}
+            SmallAction("Clear grid") {cells=List(16){"0"}}
+        }
+        Text("Operations",fontSize=12.sp,fontWeight=FontWeight.SemiBold)
+        OpChips(if(vector)listOf("norm","normalize") else listOf("det","inverse","transpose","rank","trace","ref","rref","lu","eigenvalues","eigenvectors")){applyOp(it)}
+        if(vector)Text("cross needs 3 components; dot, angle and projection need matching lengths.",fontSize=11.sp,color=c.muted)
+        else if(rows!=cols)Text("det, inverse, rank, trace, LU and eigenvalues need a square matrix.",fontSize=11.sp,color=c.muted)
+        Text("Operations with the second operand",fontSize=12.sp,fontWeight=FontWeight.SemiBold)
+        Field(other,"Variable name or literal such as [[4,5,6]]") {other=it}
+        OpChips(if(vector)listOf("dot","cross","angle","projection") else listOf("linsolve")){applyOp(it)}
+        val stored=remember(m.variables) {m.variables.keys().asSequence().toList().sorted()}
+        if(stored.isNotEmpty()) {
+            Text("Stored values · tap to use as the second operand",fontSize=11.sp,color=c.muted)
+            Row(Modifier.horizontalScroll(rememberScrollState())) {stored.forEach {key->SmallAction(key){other=key}}}
+        }
         Display(m)
-        Text("The grid supports up to 4 × 4. Expressions support matrices up to 32 × 32. LU returns L, U and row permutations.",fontSize=11.sp,color=LocalInstrument.current.muted)
+        Text(if(vector)"The grid holds up to 4 components and expressions support larger vectors. The second operand may be a stored variable or a literal." else "The grid holds up to 4 × 4 and expressions support matrices up to 32 × 32. LU returns L, U and row permutations.",fontSize=11.sp,color=c.muted)
     }
 }
 
@@ -156,6 +236,7 @@ import kotlin.math.max
     }
     val parsedRows=rows()
     val xValues=parsedRows.mapNotNull {it.getOrNull(0)?.toDoubleOrNull()?.takeIf {v->v.isFinite()}}
+    val yValues=parsedRows.mapNotNull {it.getOrNull(1)?.toDoubleOrNull()?.takeIf {v->v.isFinite()}}
     val paired=parsedRows.mapNotNull {row->val x=row.getOrNull(0)?.toDoubleOrNull();val y=row.getOrNull(1)?.toDoubleOrNull();if(x!=null&&y!=null&&x.isFinite()&&y.isFinite())x to y else null}
     Panel("Data & statistics","Save named lists or paired x,y datasets, import/export CSV, calculate summaries and view statistical plots.") {
         if(names.isNotEmpty())Choices(names,activeName,{name->selected=name;isNew=false;m.dataSets.optJSONObject(name)?.let {item->datasetName=name;data=item.optString("csv");dataKind=item.optString("kind","list");plotType=if(dataKind=="xy")"Scatter" else "Histogram"}})
@@ -209,7 +290,7 @@ import kotlin.math.max
         if(dataKind=="xy")Choices(listOf("linear","quadratic","logarithmic","exponential","power"),regression,{regression=it})
         Choices(if(dataKind=="xy")listOf("Scatter","Histogram","Box plot") else listOf("Histogram","Box plot"),plotType,{plotType=it})
         val fitVisible=dataKind=="xy"&&plotType=="Scatter"&&m.regressionData==data
-        StatisticsPlot(plotType,if(plotType=="Scatter")paired else xValues.mapIndexed {i,v->i.toDouble() to v},xValues,if(fitVisible)m.regressionCurve.orEmpty() else emptyList(),if(fitVisible)m.regressionFit else "")
+        StatisticsPlot(plotType,if(plotType=="Scatter")paired else xValues.mapIndexed {i,v->i.toDouble() to v},xValues,yValues,if(fitVisible)m.regressionCurve.orEmpty() else emptyList(),if(fitVisible)m.regressionFit else "")
         if(m.regressionBusy)Text("Fitting regression…",fontSize=11.sp,color=LocalInstrument.current.muted)
         Display(m)
         if(dataKind=="xy")SmallAction("Graph fitted expression"){val exact=m.result?.optString("exact");if(!exact.isNullOrBlank()){m.changeGraphKind("cartesian");m.updateGraphSource(exact.replace("**","^"));m.mode="Graph";m.plot()}}
@@ -231,7 +312,7 @@ private fun String.splitCsvRecord():List<String> {
     cells+=current.toString().trim();return cells
 }
 
-@Composable private fun StatisticsPlot(type:String,points:List<Pair<Double,Double>>,values:List<Double>,curve:List<Pair<Double,Double>> = emptyList(),fitLabel:String="") {
+@Composable private fun StatisticsPlot(type:String,points:List<Pair<Double,Double>>,values:List<Double>,secondary:List<Double> = emptyList(),curve:List<Pair<Double,Double>> = emptyList(),fitLabel:String="") {
     val c=LocalInstrument.current
     Canvas(Modifier.fillMaxWidth().height(220.dp).background(c.display)) {
         val left=38.dp.toPx();val right=12.dp.toPx();val top=14.dp.toPx();val bottom=28.dp.toPx()
@@ -260,31 +341,51 @@ private fun String.splitCsvRecord():List<String> {
             drawContext.canvas.nativeCanvas.drawText("y",5.dp.toPx(),top+12.dp.toPx(),text)
             drawContext.canvas.nativeCanvas.drawText("%.4g".format(x0),left,top+height+16.dp.toPx(),text)
             drawContext.canvas.nativeCanvas.drawText("%.4g".format(x1),left+width-34.dp.toPx(),top+height+16.dp.toPx(),text)
-        } else if(values.isEmpty()) {
+        } else if(values.isEmpty()&&secondary.isEmpty()) {
             drawContext.canvas.nativeCanvas.drawText("Add finite numeric observations to plot",left,top+20.dp.toPx(),text)
         } else if(type=="Histogram") {
-            var lo=values.min();var hi=values.max();if(lo==hi){lo-=.5;hi+=.5}
-            val bins=ceil(1+ln(values.size.coerceAtLeast(2).toDouble())/ln(2.0)).toInt().coerceIn(3,14)
-            val counts=IntArray(bins);values.forEach {v->counts[((v-lo)/(hi-lo)*bins).toInt().coerceIn(0,bins-1)]++}
-            val peak=counts.maxOrNull()?.coerceAtLeast(1) ?: 1;val bar=width/bins
-            counts.forEachIndexed {i,count->val h=height*count/peak;drawRect(c.accent.copy(alpha=.78f),Offset(left+i*bar+1,top+height-h),androidx.compose.ui.geometry.Size((bar-2).coerceAtLeast(1f),h))}
-            drawContext.canvas.nativeCanvas.drawText("${values.size} values · $bins bins",left,top+11.dp.toPx(),text)
+            val series=if(secondary.isEmpty())listOf(Triple("",values,c.accent)) else listOf(Triple("x",values,c.accent),Triple("y",secondary,c.danger)).filter {it.second.isNotEmpty()}
+            val all=series.flatMap {it.second}
+            var lo=all.min();var hi=all.max();if(lo==hi){lo-=.5;hi+=.5}
+            val bins=ceil(1+ln(all.size.coerceAtLeast(2).toDouble())/ln(2.0)).toInt().coerceIn(3,14)
+            val counts=series.map {entry->IntArray(bins).also {buckets->entry.second.forEach {v->buckets[((v-lo)/(hi-lo)*bins).toInt().coerceIn(0,bins-1)]++}}}
+            val peak=counts.maxOf {it.maxOrNull() ?: 0}.coerceAtLeast(1)
+            val bar=width/bins;val lane=(bar-2).coerceAtLeast(1f)/series.size
+            counts.forEachIndexed {seriesIndex,buckets->buckets.forEachIndexed {index,count->
+                val h=height*count/peak
+                drawRect(series[seriesIndex].third.copy(alpha=.78f),Offset(left+index*bar+1+lane*seriesIndex,top+height-h),androidx.compose.ui.geometry.Size((lane-1).coerceAtLeast(1f),h))
+            }}
+            if(series.size==1&&series[0].first.isEmpty())drawContext.canvas.nativeCanvas.drawText("${values.size} values · $bins bins",left,top+11.dp.toPx(),text)
+            else {
+                var cursor=left
+                series.forEach {entry->val paint=Paint(Paint.ANTI_ALIAS_FLAG).apply {color=entry.third.toArgb();textSize=10.sp.toPx()};val label="${entry.first} ${entry.second.size}";drawContext.canvas.nativeCanvas.drawText(label,cursor,top+11.dp.toPx(),paint);cursor+=paint.measureText(label)+8.dp.toPx()}
+                drawContext.canvas.nativeCanvas.drawText("· $bins bins",cursor,top+11.dp.toPx(),text)
+            }
             drawContext.canvas.nativeCanvas.drawText("%.4g".format(lo),left,top+height+16.dp.toPx(),text)
             drawContext.canvas.nativeCanvas.drawText("%.4g".format(hi),left+width-34.dp.toPx(),top+height+16.dp.toPx(),text)
         } else {
-            val sorted=values.sorted()
-            fun quantile(p:Double):Double {val position=(sorted.size-1)*p;val low=floor(position).toInt();val high=ceil(position).toInt();return sorted[low]+(sorted[high]-sorted[low])*(position-low)}
-            val lo=sorted.first();val q1=quantile(.25);val median=quantile(.5);val q3=quantile(.75);val hi=sorted.last()
-            var minValue=lo;var maxValue=hi;if(minValue==maxValue){minValue-=.5;maxValue+=.5}
+            val series=if(secondary.isEmpty())listOf(Triple("",values,c.accent)) else listOf(Triple("x",values,c.accent),Triple("y",secondary,c.danger)).filter {it.second.isNotEmpty()}
+            fun quantile(data:List<Double>,p:Double):Double {val position=(data.size-1)*p;val low=floor(position).toInt();val high=ceil(position).toInt();return data[low]+(data[high]-data[low])*(position-low)}
+            val all=series.flatMap {it.second}
+            var minValue=all.min();var maxValue=all.max();if(minValue==maxValue){minValue-=.5;maxValue+=.5}
             fun px(value:Double)=left+((value-minValue)/(maxValue-minValue)).toFloat()*width
-            val y=top+height/2
-            drawLine(c.muted,Offset(px(lo),y),Offset(px(hi),y),2.dp.toPx())
-            drawLine(c.muted,Offset(px(lo),y-9.dp.toPx()),Offset(px(lo),y+9.dp.toPx()),2.dp.toPx())
-            drawLine(c.muted,Offset(px(hi),y-9.dp.toPx()),Offset(px(hi),y+9.dp.toPx()),2.dp.toPx())
-            drawRect(c.accent.copy(alpha=.24f),Offset(px(q1),y-20.dp.toPx()),androidx.compose.ui.geometry.Size((px(q3)-px(q1)).coerceAtLeast(1f),40.dp.toPx()))
-            drawRect(c.accent,Offset(px(q1),y-20.dp.toPx()),androidx.compose.ui.geometry.Size((px(q3)-px(q1)).coerceAtLeast(1f),40.dp.toPx()),style=Stroke(1.5.dp.toPx()))
-            drawLine(c.danger,Offset(px(median),y-20.dp.toPx()),Offset(px(median),y+20.dp.toPx()),2.dp.toPx())
-            drawContext.canvas.nativeCanvas.drawText("min %.4g   Q1 %.4g   median %.4g   Q3 %.4g   max %.4g".format(lo,q1,median,q3,hi),left,top+13.dp.toPx(),text)
+            series.forEachIndexed {index,entry->
+                val sorted=entry.second.sorted()
+                val lo=sorted.first();val q1=quantile(sorted,.25);val median=quantile(sorted,.5);val q3=quantile(sorted,.75);val hi=sorted.last()
+                val single=series.size==1
+                val y=if(single)top+height/2 else top+height*(index+.5f)/series.size
+                val half=if(single)20.dp.toPx() else 15.dp.toPx()
+                drawLine(c.muted,Offset(px(lo),y),Offset(px(hi),y),2.dp.toPx())
+                drawLine(c.muted,Offset(px(lo),y-9.dp.toPx()),Offset(px(lo),y+9.dp.toPx()),2.dp.toPx())
+                drawLine(c.muted,Offset(px(hi),y-9.dp.toPx()),Offset(px(hi),y+9.dp.toPx()),2.dp.toPx())
+                drawRect(entry.third.copy(alpha=.24f),Offset(px(q1),y-half),androidx.compose.ui.geometry.Size((px(q3)-px(q1)).coerceAtLeast(1f),half*2))
+                drawRect(entry.third,Offset(px(q1),y-half),androidx.compose.ui.geometry.Size((px(q3)-px(q1)).coerceAtLeast(1f),half*2),style=Stroke(1.5.dp.toPx()))
+                drawLine(c.danger,Offset(px(median),y-half),Offset(px(median),y+half),2.dp.toPx())
+                val prefix=if(entry.first.isEmpty())"" else entry.first+"  "
+                val paint=if(entry.first.isEmpty())text else Paint(Paint.ANTI_ALIAS_FLAG).apply {color=entry.third.toArgb();textSize=10.sp.toPx()}
+                val summary="min %.4g   Q1 %.4g   median %.4g   Q3 %.4g   max %.4g".format(lo,q1,median,q3,hi)
+                drawContext.canvas.nativeCanvas.drawText(prefix+summary,left,top+(13+index*14).dp.toPx(),paint)
+            }
         }
     }
 }

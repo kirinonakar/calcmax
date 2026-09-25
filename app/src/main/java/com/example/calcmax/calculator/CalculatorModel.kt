@@ -317,6 +317,20 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         if(calcSession!=null)job?.cancel()
         calcSession=null;calcUndoHistory=emptyList();lastCalcValues=emptyMap();lastCalcSource="";inputVersion++;commitRequested=false;committed=false;editor=Editor();result=null;dmsDisplay=false;dmsConversion=false;resultSource="";error="";shift=false;alpha=false;hyperbolic=false;answerDisplay=null;inputAnswer=null;busy=false;exitEngineering();save()
     }
+    /** AC in the next-input state: the finished calculation moves up to the tape and a fresh input line appears. */
+    fun ac() {
+        if(committed&&result!=null&&editor.source.isNotBlank()) {
+            rememberUndo(editor)
+            nextEntry()
+            answerDisplay=null
+            lastCalcValues=emptyMap();lastCalcSource=""
+            error="";shift=false;alpha=false;hyperbolic=false
+            inputVersion++
+            save()
+            return
+        }
+        clear()
+    }
     fun fresh(value:Editor=Editor()) {if(editor.source.isNotEmpty())rememberUndo(editor);nextEntry();edit(value,recordUndo=false)}
     fun fraction() {
         var recordInEdit=true

@@ -101,7 +101,7 @@ private fun pressedShade(base:Color)=if(base.luminance()>.45f)Color.Black.copy(a
             "HYP"->{m.hyperbolic=!m.hyperbolic}
             "S⇔D"->m.decimal=!m.decimal
             "MIXED"->{m.mixedNumbers=!m.mixedNumbers;m.decimal=false}
-            "AC"->m.clear();"DEL"->m.edit(m.editor.delete());"INS"->m.overwrite=!m.overwrite
+            "AC"->m.ac();"DEL"->m.edit(m.editor.delete());"INS"->m.overwrite=!m.overwrite
             "M+","M−"->m.memory(if(value=="M+")1 else -1)
             "NEG"->{if(m.committed)m.fresh(Editor("-"))else m.insert("-")}
             "ANGLE"->open("Angle")
@@ -113,7 +113,7 @@ private fun pressedShade(base:Color)=if(base.luminance()>.45f)Color.Black.copy(a
             "TO_GRAPH"->m.sendExpressionToGraph()
             "MATRIX_INPUT"->m.insert("[[,],[,]]",2)
             "MATRIX_INPUT_3"->m.insert("[[,,],[,,],[,,]]",2)
-            "*10^()"->{val text=if(m.editor.source.isBlank())"1$value" else value;m.insert(text,text.indexOf('(')+1)}
+            "*10^()"->{val text=if(m.editor.source.isBlank()||m.committed)"1$value" else value;m.insert(text,text.indexOf('(')+1)}
             else->{val at=when {value=="()/()"->1;value.contains('(')->value.indexOf('(')+1;else->value.length};m.insert(value,at)}
         }
         if(value!="HYP")m.hyperbolic=false

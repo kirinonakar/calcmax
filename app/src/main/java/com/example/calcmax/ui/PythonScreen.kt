@@ -9,6 +9,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
@@ -112,11 +113,13 @@ import com.example.calcmax.ui.theme.LocalInstrument
         HorizontalDivider()
         Text(if(m.pythonBusy)"Running…" else "Output",fontSize=12.sp,color=c.muted)
         Box(Modifier.fillMaxWidth().heightIn(min=90.dp,max=170.dp).background(c.display).verticalScroll(rememberScrollState()).padding(10.dp)) {
-            Text(buildString {
-                append(m.pythonOutput)
-                if(m.pythonError.isNotBlank()) {if(isNotEmpty())append('\n');append(m.pythonError)}
-                if(isEmpty()&&!m.pythonBusy)append(if(m.pythonHasRun)"Finished (no output)." else "Run a script to see its output here.")
-            },fontFamily=FontFamily.Monospace,fontSize=12.sp,color=if(m.pythonError.isNotBlank())c.danger else c.ink)
+            SelectionContainer {
+                Text(buildString {
+                    append(m.pythonOutput)
+                    if(m.pythonError.isNotBlank()) {if(isNotEmpty())append('\n');append(m.pythonError)}
+                    if(isEmpty()&&!m.pythonBusy)append(if(m.pythonHasRun)"Finished (no output)." else "Run a script to see its output here.")
+                },fontFamily=FontFamily.Monospace,fontSize=12.sp,color=if(m.pythonError.isNotBlank())c.danger else c.ink)
+            }
         }
         m.pythonInputPrompt?.let { prompt ->
             Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {

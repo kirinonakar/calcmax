@@ -644,7 +644,10 @@ def display_tree(x):
         return t("product",args=[display_tree(a) for a in x.as_ordered_factors()])
     if isinstance(x,s.FiniteSet): return t("set",args=[display_tree(a) for a in sorted(x,key=s.default_sort_key)])
     if isinstance(x,Relational): return t("relation",x.rel_op,[display_tree(x.lhs),display_tree(x.rhs)])
-    if isinstance(x,s.Function): return t("function",x.func.__name__,[display_tree(a) for a in x.args])
+    if isinstance(x,s.Function):
+        name=x.func.__name__
+        if name=="log": name="ln"
+        return t("function",name,[display_tree(a) for a in x.args])
     if isinstance(x,s.Symbol): return t("symbol",readable(x))
     if isinstance(x,s.Number): return t("number",readable(x))
     return t("text",readable(x))
