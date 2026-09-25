@@ -269,4 +269,35 @@ data class Editor(val source: String = "", val cursor: Int = source.length, val 
         return node?.let(::select) ?: this
     }
     fun child(): Editor = tree()?.nodes()?.firstOrNull { it.start == minOf(cursor,anchor) && it.end == maxOf(cursor,anchor) }?.args?.firstOrNull()?.let(::select) ?: this
+    /** Arrow movement between the elements of a matrix literal such as [[1,2],[3,4]]: sideways steps
+     *  cross the delimiters and wrap onto the next or previous row, vertical steps keep the column.
+     *  Null outside a matrix so callers keep the ordinary cursor movement. */
+    fun moveMatrix(dRow:Int,dColumn:Int):Editor? {
+        if(dRow==0&&dColumn==0||cursor!=anchor)return null
+        val rows=tree()?.nodes()?.filter {node->
+            (node.kind=="list"||node.kind=="matrix")&&node.args.isNotEmpty()&&node.args.all {it.kind=="list"}&&cursor in node.start..node.end
+        }?.minByOrNull {it.end-it.start}?.args ?: return null
+        val rowIndex=rows.indexOfFirst {cursor<=it.end}
+        if(rowIndex<0)return null
+        val elements=rows[rowIndex].args
+        if(elements.isEmpty())return null
+        val column=elements.indexOfFirst {cursor<=it.end}.let {if(it<0)elements.lastIndex else it}
+        if(dRow!=0) {
+            val row=rows.getOrNull(rowIndex+dRow)?.args ?: return null
+            if(row.isEmpty())return null
+            val current=elements[column]
+            val target=row[minOf(column,row.size-1)]
+            val offset=(cursor-current.start).coerceIn(0,(current.end-current.start).coerceAtLeast(0))
+            return Editor(source,(target.start+offset).coerceAtMost(target.end))
+        }
+        if(dColumn>0) {
+            if(cursor<elements[column].end)return null
+            val target=elements.getOrNull(column+1) ?: rows.getOrNull(rowIndex+1)?.args?.firstOrNull() ?: return null
+            return Editor(source,target.start)
+        }
+        if(cursor>elements[column].start)return null
+        val target=if(column>0)elements[column-1] else rows.getOrNull(rowIndex-1)?.args?.lastOrNull()
+        if(target==null)return null
+        return Editor(source,target.end)
+    }
 }

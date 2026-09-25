@@ -236,8 +236,8 @@ private fun largeHistoryTree(root:JSONObject?,compactStructured:Boolean=true):Bo
                 Key.Enter,Key.NumPadEnter->{m.calculate();true}
                 Key.Backspace->{m.edit(m.editor.delete());true}
                 Key.Delete->{m.edit(m.editor.deleteForward());true}
-                Key.DirectionLeft->{if(m.engineeringConversion)m.shiftEngineering(1)else m.edit(m.editor.move(-1));true};Key.DirectionRight->{if(m.engineeringConversion)m.shiftEngineering(-1)else m.edit(m.editor.move(1));true}
-                Key.DirectionUp->{m.edit(m.editor.parent());true};Key.DirectionDown->{m.edit(m.editor.child());true}
+                Key.DirectionLeft->{if(m.engineeringConversion)m.shiftEngineering(1)else m.edit(m.editor.moveMatrix(0,-1) ?: m.editor.move(-1));true};Key.DirectionRight->{if(m.engineeringConversion)m.shiftEngineering(-1)else m.edit(m.editor.moveMatrix(0,1) ?: m.editor.move(1));true}
+                Key.DirectionUp->{m.edit(m.editor.moveMatrix(-1,0) ?: m.editor.parent());true};Key.DirectionDown->{m.edit(m.editor.moveMatrix(1,0) ?: m.editor.child());true}
                 else->{val ch=event.nativeKeyEvent.unicodeChar;if(ch>=32&&ch!=127){m.insert(ch.toChar().toString());true}else false}
             }
         }.focusable().horizontalScroll(rememberScrollState()).semantics{contentDescription="Current expression"},contentAlignment=Alignment.CenterStart){

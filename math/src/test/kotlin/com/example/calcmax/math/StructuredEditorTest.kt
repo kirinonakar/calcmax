@@ -266,4 +266,25 @@ class StructuredEditorTest {
         assertEquals("(49)/(2)",fraction.insert("2").source)
         assertEquals("",fraction.insert("2").tree()?.displayOperator)
     }
+
+    @Test fun matrixArrowKeysMoveBetweenElementsAndRows() {
+        val source="[[1,2],[3,4]]"
+        // right from the end of a row wraps onto the first element of the next row
+        assertEquals(8,Editor(source,5).moveMatrix(0,1)?.cursor)
+        // left from the first element of a row lands at the end of the previous row
+        assertEquals(5,Editor(source,8).moveMatrix(0,-1)?.cursor)
+        // up and down keep the column
+        assertEquals(2,Editor(source,8).moveMatrix(-1,0)?.cursor)
+        assertEquals(8,Editor(source,2).moveMatrix(1,0)?.cursor)
+        assertEquals(9,Editor(source,3).moveMatrix(1,0)?.cursor)
+        // inside an element and outside a matrix the ordinary movement keeps working
+        assertNull(Editor(source,2).moveMatrix(0,1))
+        assertNull(Editor("1+2",1).moveMatrix(0,1))
+        // the empty template the matrix dialog inserts navigates hole by hole
+        val template="[[,],[,]]"
+        assertEquals(3,Editor(template,2).moveMatrix(0,1)?.cursor)
+        assertEquals(6,Editor(template,3).moveMatrix(0,1)?.cursor)
+        assertEquals(3,Editor(template,6).moveMatrix(0,-1)?.cursor)
+        assertEquals(7,Editor(template,3).moveMatrix(1,0)?.cursor)
+    }
 }

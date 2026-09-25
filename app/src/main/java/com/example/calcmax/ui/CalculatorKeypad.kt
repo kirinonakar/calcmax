@@ -92,9 +92,9 @@ private fun pressedShade(base:Color)=if(base.luminance()>.45f)Color.Black.copy(a
             "()/()"->m.fraction()
             "^2","^3","^()","^(-1)"->m.powerTemplate(value)
             "SOLVE"->{m.edit(Editor("solve(${m.editor.source.ifBlank{"x"}},x)"));m.calculate()}
-            "LEFT"->if(m.engineeringConversion)m.shiftEngineering(1)else m.edit(m.editor.move(-1))
-            "RIGHT"->if(m.engineeringConversion)m.shiftEngineering(-1)else m.edit(m.editor.move(1))
-            "UP"->m.edit(m.editor.parent());"DOWN"->m.edit(m.editor.child())
+            "LEFT"->if(m.engineeringConversion)m.shiftEngineering(1)else m.edit(m.editor.moveMatrix(0,-1) ?: m.editor.move(-1))
+            "RIGHT"->if(m.engineeringConversion)m.shiftEngineering(-1)else m.edit(m.editor.moveMatrix(0,1) ?: m.editor.move(1))
+            "UP"->m.edit(m.editor.moveMatrix(-1,0) ?: m.editor.parent());"DOWN"->m.edit(m.editor.moveMatrix(1,0) ?: m.editor.child())
             "RCL","STO","Clear"->open(value)
             "Constants","Units","Matrix","Vector","Statistics","Programmer"->{m.mode=value}
             "Complex"->{m.mode="Scientific";open("Catalog")}
