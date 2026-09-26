@@ -556,8 +556,8 @@ data class ConstantEntry(val symbol: String,val name: String,val value: String,v
 }
 
 @Composable fun SettingsDialog(m: CalculatorModel,close: ()->Unit) {
-    val precisionChoices=listOf("3","10","15","30","50","100","200")
-    val displayChoices=listOf("3","5","8","10","12","15")
+    val precisionChoices=listOf("10","15","30","50","100","200")
+    val displayChoices=listOf("2","3","5","8","10","12","15")
     var customPrecision by rememberSaveable{mutableStateOf(m.precision.toString())}
     var customPrecisionVisible by rememberSaveable{mutableStateOf(m.precision.toString() !in precisionChoices)}
     var customDisplay by rememberSaveable{mutableStateOf(m.displayDigits.toString())}
@@ -568,7 +568,7 @@ data class ConstantEntry(val symbol: String,val name: String,val value: String,v
         Text("Internal precision · numeric algorithms"); Choices(precisionChoices+"Custom",if(customPrecisionVisible)"Custom" else m.precision.toString(),{if(it=="Custom")customPrecisionVisible=true else {customPrecisionVisible=false;m.precision=it.toInt();m.recalculatePreview();m.save()}})
         if(customPrecisionVisible) {Field(customPrecision,"Custom internal precision · 3–200",Modifier.fillMaxWidth()){customPrecision=it};TextButton(onClick={m.precision=customPrecision.toInt();m.recalculatePreview();m.save()},enabled=customPrecision.toIntOrNull() in 3..200){Text("Apply internal precision")}}
         Text("Display digits · result digits shown"); Choices(displayChoices+"Custom",if(customDisplayVisible)"Custom" else m.displayDigits.toString(),{if(it=="Custom")customDisplayVisible=true else {customDisplayVisible=false;m.displayDigits=it.toInt();m.recalculatePreview();m.save()}})
-        if(customDisplayVisible) {Field(customDisplay,"Custom display digits · 3–200",Modifier.fillMaxWidth()){customDisplay=it};TextButton(onClick={m.displayDigits=customDisplay.toInt();m.recalculatePreview();m.save()},enabled=customDisplay.toIntOrNull() in 3..200){Text("Apply display digits")}}
+        if(customDisplayVisible) {Field(customDisplay,"Custom display digits · 2–200",Modifier.fillMaxWidth()){customDisplay=it};TextButton(onClick={m.displayDigits=customDisplay.toInt();m.recalculatePreview();m.save()},enabled=customDisplay.toIntOrNull() in 2..200){Text("Apply display digits")}}
         Text("Internal precision governs numeric algorithms such as integration and solving. Display digits limit the digits a result shows; they never exceed internal precision, and exact integers, fractions and symbolic forms are not rounded.",fontSize=11.sp,color=LocalInstrument.current.muted)
         Text("Input font · ${m.inputFont.toInt()} sp")
         Slider(m.inputFont,{m.inputFont=it},valueRange=10f..42f,steps=31,onValueChangeFinished={m.save()})

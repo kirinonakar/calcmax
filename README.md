@@ -63,7 +63,7 @@ charpoly([[1,2],[3,4]],x)
 convert(qty(1,V)/qty(1,ohm),A)
 ```
 
-Decimal literals are exact rationals. Internal precision (3–200 significant digits, default 30, with 3/10/15/30/50/100/200 presets and a custom entry) drives numeric algorithms, while display digits (default 10, with 3/5/8/10/12/15 presets and a custom entry) limit how many digits a numeric or decimal result shows; exact integers, fractions and symbolic forms are never rounded, display digits never exceed internal precision, and Ans/STO keep the full-precision value. Numeric trig honors DEG/RAD/GRAD; explicit π or ° specifies a radian/degree expression. Symbolic calculus is in radians. Complex values use `i`; `polar(r,theta)`, `rectpolar(z)`, `re`, `im`, `arg` and `conj` are available.
+Decimal literals are exact rationals. Internal precision (3–200 significant digits, default 30, with 10/15/30/50/100/200 presets and a custom entry) drives numeric algorithms, while display digits (default 10, with 2/3/5/8/10/12/15 presets and a custom entry) limit how many digits a numeric or decimal result shows; exact integers, fractions and symbolic forms are never rounded, display digits never exceed internal precision, and Ans/STO keep the full-precision value. Numeric trig honors DEG/RAD/GRAD; explicit π or ° specifies a radian/degree expression. Symbolic calculus is in radians. Complex values use `i`; `polar(r,theta)`, `rectpolar(z)`, `re`, `im`, `arg` and `conj` are available.
 
 `prime(n)` returns the nth prime (for example, `prime(1000)` is 7919). `isprime(n)` returns true or false for an integer (for example, `isprime(123457)` is true).
 

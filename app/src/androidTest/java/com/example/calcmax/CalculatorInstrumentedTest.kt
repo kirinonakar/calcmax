@@ -687,7 +687,7 @@ class CalculatorInstrumentedTest {
         compose.onNodeWithText("Apply internal precision").performClick()
         compose.runOnIdle{assertEquals(42,model().precision)}
         compose.onAllNodesWithText("Custom")[1].performScrollTo().performClick()
-        compose.onNodeWithText("Custom display digits · 3–200").performTextReplacement("12")
+        compose.onNodeWithText("Custom display digits · 2–200").performTextReplacement("12")
         compose.onNodeWithText("Apply display digits").performClick()
         compose.runOnIdle{assertEquals(12,model().displayDigits)}
         compose.onNodeWithText("Done").performClick()
