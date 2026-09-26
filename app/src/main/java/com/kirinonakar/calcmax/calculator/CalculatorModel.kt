@@ -8,6 +8,9 @@ import com.kirinonakar.calcmax.math.*
 import kotlinx.coroutines.*
 import org.json.JSONArray
 import org.json.JSONObject
+import kotlin.math.PI
+import kotlin.math.abs
+import kotlin.math.sin
 
 private const val maxTapeEntries = 10
 private const val maxHistoryEntries = 500
@@ -18,6 +21,7 @@ data class TapeEntry(val source: String,val input: String,val result: String,val
 data class CalcSession(val source:String,val names:List<String>,val index:Int=0,val input:Editor=Editor(),val accepted:Map<String,JSONObject> = emptyMap()) {
     val name get()=names[index]
 }
+data class GraphParameter(val value:Double,val min:Double,val max:Double)
 
 internal fun HistoryEntry.toTapeEntry():TapeEntry {
     val input=runCatching {JSONObject(inputTree).takeIf {it.has("kind")}?.toString()}.getOrNull()
@@ -168,6 +172,11 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     var parameterMin by mutableDoubleStateOf(prefs.getString("parameterMin","0")!!.toDouble())
     var parameterMax by mutableDoubleStateOf(prefs.getString("parameterMax","6.283185307179586")!!.toDouble())
     var shadedInterval by mutableStateOf<Pair<Double,Double>?>(null)
+    var graphParameters by mutableStateOf(loadGraphParameters())
+        private set
+    var graphAnimating by mutableStateOf(false)
+        private set
+    private var animationPhase=0.0
     var regressionCurve by mutableStateOf(loadRegressionCurve())
         private set
     var regressionFit by mutableStateOf(prefs.getString("regressionFit","") ?: "")
@@ -192,11 +201,22 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     private var analysisJob: Job? = null
     private var regressionJob: Job? = null
     private var pythonJob: Job? = null
+    private var animationJob: Job? = null
     init {
         tape=history.filterIndexed{index,entry->entry.id>prefs.getLong("screenClearedAt",0)&&(index!=0||!committed||entry.source!=editor.source)}.take(maxTapeEntries).asReversed().map(HistoryEntry::toTapeEntry)
         if(!committed&&editor.source.isNotBlank())schedulePreview()
     }
     private fun loadObject(key: String) = runCatching { JSONObject(prefs.getString(key,"{}")!!) }.getOrDefault(JSONObject())
+    private fun loadGraphParameters():Map<String,GraphParameter> = runCatching {
+        val stored=JSONObject(prefs.getString("graphParameters","{}")!!)
+        stored.keys().asSequence().associateWith { name->
+            val entry=stored.optJSONObject(name)
+            val low=entry?.optDouble("min",-5.0)?.takeIf {it.isFinite()} ?: -5.0
+            val high=entry?.optDouble("max",5.0)?.takeIf {it.isFinite()} ?: 5.0
+            val value=entry?.optDouble("value",1.0)?.takeIf {it.isFinite()} ?: 1.0
+            if(low<high)GraphParameter(value.coerceIn(low,high),low,high) else GraphParameter(1.0,-5.0,5.0)
+        }
+    }.getOrDefault(emptyMap())
     private fun loadList(key:String,default:List<String>):List<String> = runCatching {val array=JSONArray(prefs.getString(key,"[]"));List(array.length()){array.getString(it)}}.getOrDefault(emptyList()).ifEmpty {default}
     private fun loadHistory(): List<HistoryEntry> = runCatching {
         val array = JSONArray(prefs.getString("history","[]"))
@@ -216,6 +236,8 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         if(array.length()==0)null else (0 until array.length()).map {i->val pair=array.getJSONArray(i);pair.getDouble(0) to pair.getDouble(1)}
     }.getOrNull()
     fun save() {
+        val parameterObject=JSONObject()
+        graphParameters.forEach { (name,spec)->parameterObject.put(name,JSONObject().put("value",spec.value).put("min",spec.min).put("max",spec.max)) }
         prefs.edit().putString("expression",editor.source).putInt("cursor",editor.cursor).putString("mode",mode).putString("angle",angle).putString("theme",theme)
             .putString("result",result?.toString() ?: "{}").putString("resultSource",resultSource).putBoolean("committed",committed)
             .putString("inputAnswer",inputAnswer?.toString() ?: "{}").putString("answerDisplay",answerDisplay?.toString() ?: "{}").putString("lastAnswerResult",lastAnswerResult?.toString() ?: "{}")
@@ -230,7 +252,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
             .putString("equationKind",equationKind).putString("equationCoefficients",JSONArray(equationCoefficients).toString())
             .putString("equationSystem",equationSystem).putString("equationGeneral",equationGeneral).putString("equationVariables",equationVariables)
             .putString("equationVariable",equationVariable).putString("equationGuess",equationGuess).putBoolean("equationNumeric",equationNumeric)
-            .putBoolean("radianAxis",radianAxis)
+            .putBoolean("radianAxis",radianAxis).putString("graphParameters",parameterObject.toString())
             .putString("statisticsName",statisticsName).putString("statisticsData",statisticsData).putString("statisticsKind",statisticsKind)
             .putString("statisticsRegression",statisticsRegression).putString("statisticsPlot",statisticsPlot).putString("statisticsSelected",statisticsSelected)
             .putBoolean("statisticsIsNew",statisticsIsNew).putBoolean("statisticsCsv",statisticsCsv)
@@ -549,7 +571,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
             } finally { busy=false }
         }
     }
-    fun cancel() { inputVersion++;commitRequested=false;previewRunner?.cancel();job?.cancel(); graphJob?.cancel();analysisJob?.cancel();regressionJob?.cancel();pythonJob?.cancel(); engine.cancel(); busy=false; graphBusy=false;regressionBusy=false;pythonBusy=false;pythonInputPrompt=null;pythonInputSubmit=null;previewBusy=false;error="Calculation cancelled" }
+    fun cancel() { inputVersion++;commitRequested=false;previewRunner?.cancel();job?.cancel(); graphJob?.cancel();animationJob?.cancel();graphAnimating=false;analysisJob?.cancel();regressionJob?.cancel();pythonJob?.cancel(); engine.cancel(); busy=false; graphBusy=false;regressionBusy=false;pythonBusy=false;pythonInputPrompt=null;pythonInputSubmit=null;previewBusy=false;error="Calculation cancelled" }
     fun transform(operation: String) { val source=editor.source.ifBlank { "Ans" }; edit(Editor("$operation($source)")); calculate() }
     fun store(name: String, source: String = editor.source.ifBlank { "Ans" },showResult:Boolean=true) {
         try {
@@ -666,12 +688,26 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     fun plot() {
         graphJob?.cancel()
         val limit=if(graphKind in listOf("surface","differential")) 1 else 6
-        val trees=try { graphSource.lines().filter { it.isNotBlank() }.take(limit).map { JSONObject(Parser(it).parse().json()) } } catch(e: Exception) { error=e.message ?: "Syntax ERROR"; return }
-        if(trees.isEmpty()) { error="Enter a function"; return }
+        val trees=mutableListOf<JSONObject>()
+        val shadings=JSONArray()
+        try {
+            graphSource.lines().filter { it.isNotBlank() }.take(if(graphKind in listOf("surface","differential")) 1 else 8).forEach { raw->
+                val line=raw.trim()
+                if(line.startsWith("[shade]")) {
+                    if(graphKind!="cartesian")throw SyntaxException("Shading is available on Cartesian graphs",0)
+                    if(shadings.length()<4)shadings.put(shadeEntry(line.removePrefix("[shade]").trim()))
+                    return@forEach
+                }
+                if(trees.size<limit)trees+=JSONObject(Parser(line).parse().json())
+            }
+        } catch(e:Exception) { error=e.message ?: "Syntax ERROR"; return }
+        if(trees.isEmpty() && shadings.length()==0) { error="Enter a function"; return }
         val source=graphSource;val kind=graphKind;val min=if(kind in listOf("cartesian","surface"))xMin else parameterMin;val max=if(kind in listOf("cartesian","surface"))xMax else parameterMax
         val request=request("graph").put("angle","RAD").put("trees",JSONArray(trees)).put("graphKind",kind)
             .put("variable",when(kind){"cartesian"->"x";"sequence"->"n";"surface"->"x";else->"t"})
             .put("min",min).put("max",max).put("samples",500).put("yMin",yMin).put("yMax",yMax)
+            .put("parameters",parameterPayload())
+        if(shadings.length()>0)request.put("shadings",shadings)
         if(kind=="surface")request.put("surfaceYMin",yMin).put("surfaceYMax",yMax)
         if(kind=="sequence") {
             try {
@@ -693,11 +729,98 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
             try {
                 val response=engine.execute(request)
                 if(source==graphSource && kind==graphKind && min==(if(kind in listOf("cartesian","surface"))xMin else parameterMin) && max==(if(kind in listOf("cartesian","surface"))xMax else parameterMax)) {
-                    if(response.optBoolean("ok")) graphData=response else {graphData=null;error=response.optString("error")}
+                    if(response.optBoolean("ok")) {graphData=response;syncGraphParameters(response.optJSONArray("parameters"))} else {graphData=null;error=response.optString("error")}
                 }
-                save()
+                if(!graphAnimating)save()
             } finally { graphBusy=false }
         }
+    }
+    private fun parameterPayload():JSONObject { val payload=JSONObject();graphParameters.forEach { (name,spec)->payload.put(name,spec.value) };return payload }
+    private fun syncGraphParameters(names:JSONArray?) {
+        val next=(0 until (names?.length() ?: 0)).mapNotNull {names?.optString(it)}.filter(String::isNotBlank).distinct().sorted().associateWith {name->graphParameters[name] ?: GraphParameter(1.0,-5.0,5.0)}
+        if(next!=graphParameters)graphParameters=next
+    }
+    fun setGraphParameter(name:String,value:Double) {
+        val spec=graphParameters[name] ?: return
+        if(!value.isFinite())return
+        val clamped=value.coerceIn(spec.min,spec.max)
+        if(clamped==spec.value)return
+        graphParameters=graphParameters+(name to spec.copy(value=clamped))
+    }
+    fun setGraphParameterRange(name:String,low:Double,high:Double) {
+        val spec=graphParameters[name] ?: return
+        if(!low.isFinite()||!high.isFinite()||low>=high||abs(low)>1e9||abs(high)>1e9) {error="Enter finite values with minimum < maximum";return}
+        graphParameters=graphParameters+(name to spec.copy(min=low,max=high,value=spec.value.coerceIn(low,high)))
+        error="";save()
+    }
+    fun resetGraphParameters() {
+        graphParameters=graphParameters.mapValues {(_,spec)->spec.copy(value=(if(spec.min<=1.0&&1.0<=spec.max)1.0 else (spec.min+spec.max)/2)) }
+        save()
+    }
+    fun toggleGraphAnimation() {
+        if(graphAnimating) {
+            graphAnimating=false
+            animationJob?.cancel()
+            animationJob=null
+            save()
+            return
+        }
+        if(graphParameters.isEmpty())return
+        animationJob?.cancel()
+        graphAnimating=true
+        animationPhase=0.0
+        var ticks=0
+        animationJob=viewModelScope.launch {
+            while(isActive&&graphAnimating) {
+                delay(50)
+                animationPhase+=0.05
+                if(animationPhase>2*PI)animationPhase-=2*PI
+                val swing=(sin(animationPhase)+1.0)/2.0
+                graphParameters=graphParameters.mapValues {(_,spec)->spec.copy(value=spec.min+(spec.max-spec.min)*swing) }
+                if(++ticks>=4) {ticks=0;plot()}
+            }
+        }
+    }
+    private fun splitTopLevel(text:String):List<String> {
+        val parts=mutableListOf<String>();var depth=0;var start=0
+        text.forEachIndexed { index,ch->
+            when(ch) {
+                '(', '[', '{'->depth++
+                ')', ']', '}'->if(depth>0)depth--
+                ','->if(depth==0) {parts+=text.substring(start,index);start=index+1}
+            }
+        }
+        parts+=text.substring(start)
+        return parts.map(String::trim).filter(String::isNotEmpty)
+    }
+    /** [shade] y<f(x) shades a region; [shade] f or [shade] f, g shades the area to the axis or between the curves, with an optional a..b interval. */
+    private fun shadeEntry(body:String):JSONObject {
+        val items=splitTopLevel(body)
+        if(items.isEmpty())throw SyntaxException("[shade] needs an inequality or one or two functions",0)
+        var range:Pair<String,String>?=null
+        val expressions=mutableListOf<String>()
+        items.forEach { item->
+            val pieces=item.split("..")
+            if(pieces.size==2&&pieces[0].isNotBlank()&&pieces[1].isNotBlank()&&range==null)range=pieces[0].trim() to pieces[1].trim()
+            else expressions+=item
+        }
+        if(expressions.isEmpty()||expressions.size>2)throw SyntaxException("[shade] takes one or two functions",0)
+        val entry=JSONObject()
+        range?.let {entry.put("a",JSONObject(Parser(it.first).parse().json())).put("b",JSONObject(Parser(it.second).parse().json()))}
+        val parsed=expressions.map {Parser(it).parse()}
+        if(parsed.size==1&&parsed[0].kind=="relation") {
+            val tree=parsed[0]
+            val left=tree.args.getOrNull(0);val right=tree.args.getOrNull(1)
+            if(left==null||right==null||tree.value !in listOf("<","<=",">",">="))throw SyntaxException("[shade] needs y < f(x) or y > f(x)",tree.start)
+            val boundary=when {
+                left.kind=="symbol"&&left.value=="y"->right
+                right.kind=="symbol"&&right.value=="y"->left
+                else->throw SyntaxException("[shade] needs y < f(x) or y > f(x)",tree.start)
+            }
+            val below=if(left.kind=="symbol"&&left.value=="y")tree.value.startsWith("<") else tree.value.startsWith(">")
+            entry.put("mode","halfplane").put("side",if(below)"below" else "above").put("trees",JSONArray(listOf(JSONObject(boundary.json()))))
+        } else entry.put("mode","band").put("trees",JSONArray(parsed.map {JSONObject(it.json())}))
+        return entry
     }
     fun editPython(source:String,start:Int=source.length,end:Int=start) {
         val changed=source!=pythonSource
@@ -769,6 +892,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         graphKind=kind
         graphSource=graphSources.optString(kind,when(kind){"parametric"->"[cos(t),sin(t)]";"polar"->"2*cos(3*t)";"sequence"->"n\nu(n-1)+u(n-2)";"surface"->"sin(sqrt(x^2+y^2))";"differential"->"y-t";else->"sin(x)\ncos(x)"})
         graphData=null;graphAnalysis=null;trace=null;shadedInterval=null
+        animationJob?.cancel();graphAnimating=false
         if(kind=="sequence") {
             parameterMin=0.0;parameterMax=20.0;xMin=0.0;xMax=20.0;yMin=-2.0;yMax=20.0
         } else if(kind=="differential") {
@@ -781,10 +905,11 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         save()
     }
     fun analyzeGraph(action:String,first:String,second:String,selected:Int,other:Int) {
-        if(graphKind!="cartesian") {error="Analysis requires a Cartesian graph";return}
-        val a=first.toDoubleOrNull();val b=if(action=="derivative")a else second.toDoubleOrNull()
-        if(a==null || !a.isFinite() || b==null || !b.isFinite() || (action!="derivative" && a>=b)) {error="Enter finite values with a < b";return}
-        val sources=graphSource.lines().filter {it.isNotBlank()}.take(6)
+        if(graphKind !in listOf("cartesian","parametric","polar")) {error="Analysis requires a Cartesian, parametric or polar graph";return}
+        val singled=action in listOf("derivative","tangent")
+        val a=first.toDoubleOrNull();val b=if(singled)a else second.toDoubleOrNull()
+        if(a==null || !a.isFinite() || b==null || !b.isFinite() || (!singled && a>=b)) {error="Enter finite values with a < b";return}
+        val sources=graphSource.lines().filter {it.isNotBlank()}.filter {graphKind!="cartesian" || !it.trim().startsWith("[shade]")}.take(6)
         if(sources.isEmpty() || selected !in sources.indices || action=="intersection" && (other !in sources.indices || other==selected)) {error="Select two different functions";return}
         val trees=try {JSONArray(sources.map {JSONObject(Parser(it).parse().json())})} catch(e:Exception) {error=e.message ?: "Syntax ERROR";return}
         analysisJob?.cancel()
@@ -792,11 +917,11 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         analysisJob=viewModelScope.launch {
             graphAnalysisBusy=true;error="";graphAnalysis=null
             try {
-                val response=engine.execute(request("graphAnalysis").put("angle","RAD").put("trees",trees).put("analysis",action).put("a",a).put("b",b).put("selected",selected).put("other",other))
-                if(source==graphSource && graphKind=="cartesian") {
+                val response=engine.execute(request("graphAnalysis").put("angle","RAD").put("trees",trees).put("graphKind",graphKind).put("analysis",action).put("a",a).put("b",b).put("selected",selected).put("other",other).put("variable",if(graphKind=="cartesian")"x" else "t").put("parameters",parameterPayload()).put("xMin",xMin).put("xMax",xMax).put("yMin",yMin).put("yMax",yMax))
+                if(source==graphSource && graphKind in listOf("cartesian","parametric","polar")) {
                     if(response.optBoolean("ok")) {
                         graphAnalysis=response
-                        shadedInterval=if(action=="integral")a to b else null
+                        shadedInterval=if(action=="integral" && graphKind=="cartesian")a to b else null
                         response.optJSONArray("points")?.optJSONArray(0)?.let {trace=it.getDouble(0) to it.getDouble(1)}
                     } else error=response.optString("error","Analysis failed")
                 }

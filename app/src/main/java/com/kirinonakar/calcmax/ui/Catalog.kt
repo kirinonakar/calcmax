@@ -112,20 +112,17 @@ private fun parseHelp(markdown:String,query:String):List<HelpBlock> {
     if(needle.isEmpty())return all
     val result=mutableListOf<HelpBlock>()
     var heading:HelpBlock.Category?=null
-    var headingMatched=false
-    fun flush() {
-        val pending=heading
-        if(pending!=null&&headingMatched)result+=pending
-        heading=null;headingMatched=false
-    }
     all.forEach {block->
         when(block) {
             is HelpBlock.Section -> {}
-            is HelpBlock.Category -> {flush();heading=block}
-            else -> if(block.searchText().contains(needle)) {result+=block;headingMatched=true}
+            is HelpBlock.Category -> heading=block
+            else -> if(block.searchText().contains(needle)) {
+                val pending=heading
+                if(pending!=null) {result+=pending;heading=null}
+                result+=block
+            }
         }
     }
-    flush()
     return result
 }
 

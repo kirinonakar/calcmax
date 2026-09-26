@@ -328,7 +328,9 @@ private fun treeSource(node:JSONObject?):String? {
     val xValues=parsedRows.mapNotNull {it.getOrNull(0)?.toDoubleOrNull()?.takeIf {v->v.isFinite()}}
     val yValues=if(dataKind=="xy")parsedRows.mapNotNull {it.getOrNull(1)?.toDoubleOrNull()?.takeIf {v->v.isFinite()}} else emptyList()
     val paired=parsedRows.mapNotNull {row->val x=row.getOrNull(0)?.toDoubleOrNull();val y=row.getOrNull(1)?.toDoubleOrNull();if(x!=null&&y!=null&&x.isFinite()&&y.isFinite())x to y else null}
-    Panel("Data & statistics","") {
+    var section by rememberSaveable {mutableStateOf("Data")}
+    if(section=="Data") Panel("Data & statistics","") {
+        Choices(listOf("Data","Distributions","Tests & intervals"),section,{section=it})
         if(names.isNotEmpty())Choices(names,activeName,{name->selected=name;isNew=false;m.dataSets.optJSONObject(name)?.let {item->datasetName=name;data=item.optString("csv");dataKind=item.optString("kind","list");plotType=if(dataKind=="xy")"Scatter" else "Histogram"}})
         Row(horizontalArrangement=Arrangement.spacedBy(6.dp),verticalAlignment=Alignment.CenterVertically) {
             Field(datasetName,"Dataset name",Modifier.weight(1f)){datasetName=it}
@@ -385,6 +387,11 @@ private fun treeSource(node:JSONObject?):String? {
         // The workspace panel scrolls: an initial focus request would pull it down to the display.
         Display(m,requestInitialFocus=false)
         if(dataKind=="xy")SmallAction("Graph fitted expression"){val exact=m.result?.optString("exact");if(!exact.isNullOrBlank()){m.changeGraphKind("cartesian");m.updateGraphSource(exact.replace("**","^"));m.mode="Graph";m.plot()}}
+    } else {
+        Panel(section,"") {
+            Choices(listOf("Data","Distributions","Tests & intervals"),section,{section=it})
+            if(section=="Distributions")DistributionSection(m) else TestSection(m)
+        }
     }
 }
 
@@ -479,6 +486,197 @@ private fun String.splitCsvRecord():List<String> {
             }
         }
     }
+}
+
+@Composable private fun DistributionSection(m: CalculatorModel) {
+    val c=LocalInstrument.current
+    var family by rememberSaveable {mutableStateOf("Normal")}
+    var query by rememberSaveable {mutableStateOf("Cumulative P(X ≤ x)")}
+    var mu by rememberSaveable {mutableStateOf("0")}
+    var sigma by rememberSaveable {mutableStateOf("1")}
+    var df by rememberSaveable {mutableStateOf("10")}
+    var df2 by rememberSaveable {mutableStateOf("10")}
+    var trials by rememberSaveable {mutableStateOf("10")}
+    var success by rememberSaveable {mutableStateOf("0.5")}
+    var poissonMean by rememberSaveable {mutableStateOf("2")}
+    var x by rememberSaveable {mutableStateOf("1")}
+    var low by rememberSaveable {mutableStateOf("-1.96")}
+    var high by rememberSaveable {mutableStateOf("1.96")}
+    var probability by rememberSaveable {mutableStateOf("0.975")}
+    var k by rememberSaveable {mutableStateOf("3")}
+    val queries=when(family) {
+        "Normal","Student t" -> listOf("Density f(x)","Cumulative P(X ≤ x)","Interval P(a ≤ X ≤ b)","Quantile")
+        "χ²","F" -> listOf("Density f(x)","Cumulative P(X ≤ x)","Interval P(a ≤ X ≤ b)")
+        "Binomial" -> listOf("P(X = k)","P(X ≤ k)","List P(X = k)","List P(X ≤ k)")
+        else -> listOf("P(X = k)","P(X ≤ k)")
+    }
+    val active=query.takeIf {it in queries} ?: queries[1]
+    fun expression():String=when(family) {
+        "Normal" -> when(active) {
+            "Density f(x)" -> "normpdf($x,$mu,$sigma)"
+            "Interval P(a ≤ X ≤ b)" -> "normcdf($low,$high,$mu,$sigma)"
+            "Quantile" -> "invnorm($probability,$mu,$sigma)"
+            else -> "normcdf(-oo,$x,$mu,$sigma)"
+        }
+        "Student t" -> when(active) {
+            "Density f(x)" -> "tpdf($x,$df)"
+            "Interval P(a ≤ X ≤ b)" -> "tcdf($low,$high,$df)"
+            "Quantile" -> "invt($probability,$df)"
+            else -> "tcdf($x,$df)"
+        }
+        "χ²" -> when(active) {
+            "Density f(x)" -> "chi2pdf($x,$df)"
+            "Interval P(a ≤ X ≤ b)" -> "chi2cdf($low,$high,$df)"
+            else -> "chi2cdf($x,$df)"
+        }
+        "F" -> when(active) {
+            "Density f(x)" -> "fpdf($x,$df,$df2)"
+            "Interval P(a ≤ X ≤ b)" -> "fcdf($low,$high,$df,$df2)"
+            else -> "fcdf($x,$df,$df2)"
+        }
+        "Binomial" -> when(active) {
+            "P(X = k)" -> "binompdf($trials,$success,$k)"
+            "P(X ≤ k)" -> "binomcdf($trials,$success,$k)"
+            "List P(X = k)" -> "binompdf($trials,$success)"
+            else -> "binomcdf($trials,$success)"
+        }
+        "Poisson" -> if(active=="P(X = k)")"poissonpdf($poissonMean,$k)" else "poissoncdf($poissonMean,$k)"
+        else -> if(active=="P(X = k)")"geometpdf($success,$k)" else "geometcdf($success,$k)"
+    }
+    fun ready():Boolean {
+        val used=when(family) {
+            "Normal" -> when(active) {
+                "Interval P(a ≤ X ≤ b)" -> listOf(low,high,mu,sigma)
+                "Quantile" -> listOf(probability,mu,sigma)
+                else -> listOf(x,mu,sigma)
+            }
+            "Student t" -> when(active) {
+                "Interval P(a ≤ X ≤ b)" -> listOf(low,high,df)
+                "Quantile" -> listOf(probability,df)
+                else -> listOf(x,df)
+            }
+            "χ²" -> if(active=="Interval P(a ≤ X ≤ b)")listOf(low,high,df) else listOf(x,df)
+            "F" -> if(active=="Interval P(a ≤ X ≤ b)")listOf(low,high,df,df2) else listOf(x,df,df2)
+            "Binomial" -> if(active.startsWith("List"))listOf(trials,success) else listOf(trials,success,k)
+            "Poisson" -> listOf(poissonMean,k)
+            else -> listOf(success,k)
+        }
+        return used.all {it.isNotBlank()}
+    }
+    Text("Distribution",fontSize=12.sp,fontWeight=FontWeight.SemiBold)
+    Choices(listOf("Normal","Student t","χ²","F","Binomial","Poisson","Geometric"),family,{family=it})
+    Text("Query",fontSize=12.sp,fontWeight=FontWeight.SemiBold)
+    Choices(queries,active,{query=it})
+    Text("Parameters",fontSize=12.sp,fontWeight=FontWeight.SemiBold)
+    when(family) {
+        "Student t","χ²" -> Field(df,"Degrees of freedom",Modifier.fillMaxWidth()){df=it}
+        "F" -> Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+            Field(df,"df₁",Modifier.weight(1f)){df=it}
+            Field(df2,"df₂",Modifier.weight(1f)){df2=it}
+        }
+        "Binomial" -> Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+            Field(trials,"Trials n",Modifier.weight(1f)){trials=it}
+            Field(success,"Success probability p",Modifier.weight(1f)){success=it}
+        }
+        "Poisson" -> Field(poissonMean,"Mean λ",Modifier.fillMaxWidth()){poissonMean=it}
+        "Geometric" -> Field(success,"Success probability p",Modifier.fillMaxWidth()){success=it}
+        else -> Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+            Field(mu,"Mean μ",Modifier.weight(1f)){mu=it}
+            Field(sigma,"Standard deviation σ",Modifier.weight(1f)){sigma=it}
+        }
+    }
+    Text("Input",fontSize=12.sp,fontWeight=FontWeight.SemiBold)
+    when(active) {
+        "Interval P(a ≤ X ≤ b)" -> Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+            Field(low,"a (lower bound)",Modifier.weight(1f)){low=it}
+            Field(high,"b (upper bound)",Modifier.weight(1f)){high=it}
+        }
+        "Quantile" -> Field(probability,"Probability p (0–1)",Modifier.fillMaxWidth()){probability=it}
+        "P(X = k)","P(X ≤ k)" -> Field(k,"k",Modifier.fillMaxWidth()){k=it}
+        "List P(X = k)","List P(X ≤ k)" -> Text("No single input: every k from 0 to n is listed.",fontSize=11.sp,color=c.muted)
+        else -> Field(x,"x",Modifier.fillMaxWidth()){x=it}
+    }
+    Text("Expression  "+expression(),fontFamily=FontFamily.Monospace,fontSize=11.sp,color=c.muted)
+    Row(Modifier.horizontalScroll(rememberScrollState()),verticalAlignment=Alignment.CenterVertically) {
+        Button(onClick={m.edit(Editor(expression()));m.calculate()},enabled=ready()){Text("Compute")}
+        SmallAction("Insert into calculator"){m.edit(Editor(expression()));m.mode="Scientific/CAS"}
+    }
+    Display(m,requestInitialFocus=false)
+    Text("Closed forms stay exact where the engine has one; other probabilities use the internal precision. Binomial list forms need n ≤ 100, and the normal cumulative uses -oo as its lower bound so μ and σ apply.",fontSize=11.sp,color=c.muted)
+}
+
+@Composable private fun TestSection(m: CalculatorModel) {
+    val c=LocalInstrument.current
+    var test by rememberSaveable {mutableStateOf("t test")}
+    var input by rememberSaveable {mutableStateOf("Data list")}
+    var tail by rememberSaveable {mutableStateOf("Two-sided")}
+    var mu0 by rememberSaveable {mutableStateOf("0")}
+    var sigma by rememberSaveable {mutableStateOf("2")}
+    var mean by rememberSaveable {mutableStateOf("2.5")}
+    var sd by rememberSaveable {mutableStateOf("1.29")}
+    var count by rememberSaveable {mutableStateOf("4")}
+    var level by rememberSaveable {mutableStateOf("95")}
+    var data by rememberSaveable {mutableStateOf("1, 2, 3, 4")}
+    var observed by rememberSaveable {mutableStateOf("10, 20, 30")}
+    var expected by rememberSaveable {mutableStateOf("15, 20, 25")}
+    var groups by rememberSaveable {mutableStateOf("1, 2, 3\n4, 5, 6")}
+    fun list(text:String):String?=text.split(',','\n',';',' ').map {it.trim()}.filter {it.isNotEmpty()}.takeIf {it.isNotEmpty()}?.joinToString(",","[","]")
+    fun tailArgument()=when(tail){"Left"->",left";"Right"->",right";else->""}
+    fun expression():String? {
+        return when(test) {
+            "t test" -> if(input=="Data list")list(data)?.let {values->"ttest($mu0,$values${tailArgument()})"} else if(listOf(mu0,mean,sd,count).all {it.isNotBlank()})"ttest($mu0,$mean,$sd,$count${tailArgument()})" else null
+            "z test" -> if(input=="Data list")list(data)?.let {values->"ztest($mu0,$sigma,$values${tailArgument()})"} else if(listOf(mu0,sigma,mean,count).all {it.isNotBlank()})"ztest($mu0,$sigma,$mean,$count${tailArgument()})" else null
+            "χ² test" -> list(observed)?.let {o->list(expected)?.let {e->"chi2test($o,$e)"}}
+            "ANOVA" -> {
+                val parsed=groups.split('\n').map {it.trim()}.filter {it.isNotEmpty()}.map {list(it)}.filterNotNull()
+                if(parsed.size<2)null else "anova(${parsed.joinToString(",")})"
+            }
+            "t interval" -> if(input=="Data list")list(data)?.let {values->"tinterval($level,$values)"} else if(listOf(level,mean,sd,count).all {it.isNotBlank()})"tinterval($level,$mean,$sd,$count)" else null
+            else -> if(input=="Data list")list(data)?.let {values->"zinterval($level,$sigma,$values)"} else if(listOf(level,sigma,mean,count).all {it.isNotBlank()})"zinterval($level,$sigma,$mean,$count)" else null
+        }
+    }
+    Text("Test or interval",fontSize=12.sp,fontWeight=FontWeight.SemiBold)
+    Choices(listOf("t test","z test","χ² test","ANOVA","t interval","z interval"),test,{test=it})
+    if(test in listOf("t test","z test","t interval","z interval"))Choices(listOf("Data list","Summary"),input,{input=it})
+    when(test) {
+        "χ² test" -> {
+            OutlinedTextField(observed,{observed=it},Modifier.fillMaxWidth().height(88.dp),label={Text("Observed counts")},textStyle=MaterialTheme.typography.bodyMedium.copy(fontFamily=FontFamily.Monospace))
+            OutlinedTextField(expected,{expected=it},Modifier.fillMaxWidth().height(88.dp),label={Text("Expected counts")},textStyle=MaterialTheme.typography.bodyMedium.copy(fontFamily=FontFamily.Monospace))
+        }
+        "ANOVA" -> OutlinedTextField(groups,{groups=it},Modifier.fillMaxWidth().height(120.dp),label={Text("One group per line")},textStyle=MaterialTheme.typography.bodyMedium.copy(fontFamily=FontFamily.Monospace))
+        else -> {
+            Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                if(test=="t test"||test=="z test") {
+                    Field(mu0,"Hypothesized mean μ₀",Modifier.weight(1f)){mu0=it}
+                } else {
+                    Field(level,"Confidence level (0–1 or %)",Modifier.weight(1f)){level=it}
+                }
+                if(test=="z test"||test=="z interval")Field(sigma,"Known σ",Modifier.weight(1f)){sigma=it}
+            }
+            if(input=="Data list") {
+                OutlinedTextField(data,{data=it},Modifier.fillMaxWidth().height(110.dp),label={Text("Sample values")},textStyle=MaterialTheme.typography.bodyMedium.copy(fontFamily=FontFamily.Monospace))
+            } else {
+                Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                    Field(mean,"Sample mean x̄",Modifier.weight(1f)){mean=it}
+                    if(test=="t test"||test=="t interval")Field(sd,"Sample SD s",Modifier.weight(1f)){sd=it}
+                    Field(count,"n",Modifier.weight(1f)){count=it}
+                }
+            }
+            if(test=="t test"||test=="z test") {
+                Text("Alternative hypothesis",fontSize=12.sp,fontWeight=FontWeight.SemiBold)
+                Choices(listOf("Two-sided","Left","Right"),tail,{tail=it})
+            }
+        }
+    }
+    val command=expression()
+    if(command==null)Text("Fill in the values this test needs.",fontSize=11.sp,color=c.muted)
+    else Text("Expression  $command",fontFamily=FontFamily.Monospace,fontSize=11.sp,color=c.muted)
+    Row(Modifier.horizontalScroll(rememberScrollState()),verticalAlignment=Alignment.CenterVertically) {
+        Button(onClick={command?.let {m.edit(Editor(it));m.calculate()}},enabled=command!=null){Text("Compute")}
+        SmallAction("Insert into calculator"){command?.let {m.edit(Editor(it));m.mode="Scientific/CAS"}}
+    }
+    Display(m,requestInitialFocus=false)
+    Text("Tests return a two-tailed p value unless Left or Right is chosen. Confidence levels accept 0.95 or 95. χ² accepts equal-length count lists; ANOVA needs two or more groups, one group per line.",fontSize=11.sp,color=c.muted)
 }
 
 @Composable fun ProgrammerScreen(m: CalculatorModel) {
