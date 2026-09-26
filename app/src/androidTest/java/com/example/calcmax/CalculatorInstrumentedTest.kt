@@ -486,7 +486,7 @@ class CalculatorInstrumentedTest {
                 else->HistoryEntry(index.toLong(),"$index+1",(index+1).toString(),(index+1).toString(),"Scientific").toTapeEntry()
             }
         }
-        // Seed the screen tape directly so damaged entries are rendered only when scrolled into view.
+        // Seed the screen tape directly; damaged entries fall back to compact text rendering.
         val setTape=CalculatorModel::class.java.getDeclaredMethod("setTape",List::class.java).apply {isAccessible=true}
         compose.runOnIdle {
             model().mode="Scientific/CAS";model().clearHistory();model().clear()
@@ -494,12 +494,11 @@ class CalculatorInstrumentedTest {
         }
         val tape=compose.onNodeWithContentDescription("Calculation history, swipe vertically")
         compose.onNodeWithContentDescription("Expand calculation screen").performClick()
-        tape.performScrollToIndex(10)
+        compose.onNodeWithContentDescription("Reuse calculation: 10+1").performScrollTo()
         repeat(3) {tape.performTouchInput {swipeDown()}}
         compose.onNodeWithContentDescription("Restore full keypad").performClick()
-        tape.performScrollToIndex(11)
-        compose.onNodeWithContentDescription("Reuse calculation: damaged").performClick()
-        for(index in listOf(1,20,4,15,1))tape.performScrollToIndex(index)
+        compose.onNodeWithContentDescription("Reuse calculation: damaged").performScrollTo().performClick()
+        for(label in listOf("1+1","20+1","4+1","nested","1+1"))compose.onNodeWithContentDescription("Reuse calculation: $label").performScrollTo()
         tape.assertExists()
         compose.runOnIdle {assertEquals(25,model().tape.size);assertEquals("damaged",model().editor.source)}
     }
@@ -516,8 +515,8 @@ class CalculatorInstrumentedTest {
                 model().edit(Editor(source).selectRange(0,source.length))
             }
             repeat(3) {
-                tape.performScrollToIndex(30)
-                tape.performScrollToIndex(0)
+                compose.onNodeWithContentDescription("Reuse calculation: 30+1").performScrollTo()
+                compose.onNodeWithContentDescription("Answer panel").performScrollTo()
                 tape.performTouchInput {swipeUp()}
                 tape.performTouchInput {swipeDown()}
             }
@@ -530,8 +529,8 @@ class CalculatorInstrumentedTest {
                 assertEquals(0,model().editor.anchor)
                 assertEquals(source.length,model().editor.cursor)
             }
-            tape.performScrollToIndex(0)
-            compose.onNodeWithContentDescription("After expression").performClick()
+            compose.onNodeWithContentDescription("Answer panel").performScrollTo()
+            compose.onNodeWithContentDescription("After expression").performScrollTo().performClick()
             compose.onNodeWithContentDescription("Current expression").assertIsFocused()
         }
     }
@@ -560,9 +559,9 @@ class CalculatorInstrumentedTest {
         compose.runOnIdle {model().mode="Scientific/CAS";model().clearHistory();model().clear();setTape.invoke(model(),List(4){entries.map {entry->TapeEntry(entry.source,entry.input,entry.result,entry.answer)}}.flatten())}
         val tape=compose.onNodeWithContentDescription("Calculation history, swipe vertically")
         compose.onNodeWithContentDescription("Expand calculation screen").performClick()
-        for(index in 1..32 step 3) tape.performScrollToIndex(index)
+        for(source in sources)compose.onAllNodesWithContentDescription("Reuse calculation: ${source.take(120)}").onFirst().performScrollTo()
         compose.onNodeWithContentDescription("Restore full keypad").performClick()
-        for(index in 32 downTo 1 step 3) tape.performScrollToIndex(index)
+        for(source in sources.reversed())compose.onAllNodesWithContentDescription("Reuse calculation: ${source.take(120)}").onFirst().performScrollTo()
         tape.assertExists()
         Unit
     }
@@ -584,13 +583,14 @@ class CalculatorInstrumentedTest {
             tape.performTouchInput {swipeDown(durationMillis=60)}
         }
         compose.onNodeWithContentDescription("Expand calculation screen").performClick()
-        for(index in 1 until 120 step 5)tape.performScrollToIndex(index)
+        val reuseRows=compose.onAllNodesWithContentDescription("Reuse calculation: $source")
+        for(index in listOf(0,30,60,90,119))reuseRows[index].performScrollTo()
         repeat(4){tape.performTouchInput {swipeDown()}}
         compose.onNodeWithContentDescription("Restore full keypad").performClick()
-        for(index in 119 downTo 1 step 7)tape.performScrollToIndex(index)
-        tape.performScrollToIndex(119)
-        compose.onAllNodesWithContentDescription("Reuse calculation: $source").onFirst().performClick()
-        for(index in listOf(1,60,120,30,2))tape.performScrollToIndex(index)
+        for(index in listOf(119,90,60,30,0))reuseRows[index].performScrollTo()
+        reuseRows[119].performScrollTo()
+        reuseRows[0].performScrollTo().performClick()
+        for(index in listOf(0,5,9,3,1))reuseRows[index].performScrollTo()
         repeat(3){tape.performTouchInput {swipeDown()}}
         tape.assertExists()
         compose.runOnIdle {assertEquals(source,model().editor.source)}
@@ -604,10 +604,9 @@ class CalculatorInstrumentedTest {
         val setTape=CalculatorModel::class.java.getDeclaredMethod("setTape",List::class.java).apply {isAccessible=true}
         compose.runOnIdle {model().mode="Scientific/CAS";model().clearHistory();model().clear();setTape.invoke(model(),entries)}
         val tape=compose.onNodeWithContentDescription("Calculation history, swipe vertically")
-        tape.performScrollToIndex(1)
-        compose.onNodeWithContentDescription("Reuse calculation: ${source.take(120)}").performClick()
+        compose.onNodeWithContentDescription("Reuse calculation: ${source.take(120)}").performScrollTo().performClick()
         compose.onNodeWithContentDescription("Expression input").assertExists()
-        for(index in listOf(1,12,21,5,1))tape.performScrollToIndex(index)
+        for(label in listOf("0+1","9+1","16+1","5+1","0+1"))compose.onNodeWithContentDescription("Reuse calculation: $label").performScrollTo()
         repeat(3){tape.performTouchInput {swipeDown()}}
         compose.runOnIdle {assertEquals(source,model().editor.source)}
     }

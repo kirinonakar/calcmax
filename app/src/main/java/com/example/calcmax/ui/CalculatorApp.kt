@@ -3,10 +3,6 @@ package com.example.calcmax.ui
 import android.content.Intent
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -23,6 +19,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
 import com.example.calcmax.calculator.CalculatorModel
 import com.example.calcmax.calculator.ResultDisplayMode
+import com.example.calcmax.calculator.TapeEntry
 import com.example.calcmax.math.Editor
 import com.example.calcmax.ui.theme.LocalInstrument
 import org.json.JSONObject
@@ -104,10 +101,12 @@ val Modes=listOf("Scientific/CAS","Graph","Python","Equations","Matrix","Vector"
 
 @Composable fun CalculationTape(m:CalculatorModel,modifier:Modifier=Modifier,screenExpanded:Boolean=false,onToggleScreen:(()->Unit)?=null) {
     val c=LocalInstrument.current
-    val scroll=rememberLazyListState()
+    // Plain scrolling is deliberate here: the tape never holds more than ten history rows, and
+    // staying away from LazyColumn keeps fling-time LazyLayout item-reuse crashes out of reach.
+    val scroll=rememberScrollState()
     var typing by rememberSaveable {mutableStateOf(false)}
-    // The active item leaves and re-enters composition while history is scrolled.
-    // Requesting focus on every re-entry pulls it back into view during a gesture.
+    // The active item stays composed; focus is handed over only between gestures, so a swipe
+    // never pulls the tape back to the newest line mid-drag.
     var focusPending by remember {mutableStateOf(true)}
     LaunchedEffect(m.calcSession!=null){if(m.calcSession!=null){typing=false;focusPending=true}}
     LaunchedEffect(scroll){
@@ -115,39 +114,47 @@ val Modes=listOf("Scientific/CAS","Graph","Python","Equations","Matrix","Vector"
         snapshotFlow{scroll.isScrollInProgress}.collect{if(it)focusPending=false}
     }
     LaunchedEffect(m.inputVersion,m.tape.size){
-        // Let an in-flight drag or fling finish before moving the list programmatically.
+        // Let an in-flight drag or fling finish before moving the tape programmatically.
         while(scroll.isScrollInProgress)delay(16)
-        if(scroll.firstVisibleItemIndex!=0||scroll.firstVisibleItemScrollOffset!=0)scroll.scrollToItem(0)
+        if(scroll.value!=0)scroll.scrollTo(0)
     }
     Column(modifier.fillMaxWidth().background(c.display)) {
         DisplayToolbar(m,typing){typing=!typing;if(!typing)focusPending=true}
-        LazyColumn(Modifier.fillMaxWidth().weight(1f).semantics {contentDescription="Calculation history, swipe vertically"},state=scroll,reverseLayout=true) {
-            item(key="active") {DisplayContent(m,typing,focusPending,scroll){focusPending=false}}
-        items(m.tape.asReversed(),key={it.id}) {entry->
-            Column(Modifier.fillMaxWidth().padding(horizontal=14.dp,vertical=10.dp)) {
-                val input=remember(entry.input){runCatching {JSONObject(entry.input)}.getOrNull()}
-                val response=remember(entry.result){runCatching {JSONObject(entry.result)}.getOrNull()}
-                val compact=remember(entry.input,entry.result) {
-                    input==null||response==null||entry.source.length>800||entry.result.length>20_000||response.optString("exact").contains('\n')||
-                        largeHistoryTree(input)||largeHistoryTree(response.optJSONObject("tree"))||largeHistoryTree(response.optJSONObject("decimalTree"))
-                }
-                Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).clickable {m.reuse(entry)}
-                    .semantics {contentDescription="Reuse calculation: ${entry.source.take(120)}"}) {
-                    if(!compact&&input!=null)MathNode(input,m.inputFont*.84f)
-                    else Text(entry.source.take(800),fontSize=(m.inputFont*.84f).sp,fontFamily=FontFamily.Monospace,color=c.ink,maxLines=4,overflow=TextOverflow.Ellipsis)
-                }
-                Box(Modifier.fillMaxWidth().padding(top=6.dp).horizontalScroll(rememberScrollState()),contentAlignment=Alignment.CenterEnd) {
-                    if(!compact&&response!=null)ResultMath(response,m.decimal,m.outputFont*.82f,
-                        displayMode=m.resultDisplayMode,thousandsSeparator=m.thousandsSeparator,dmsDisplay=response.optBoolean("dms"),displayDigits=m.displayDigits)
-                    else Text(response?.optString(if(m.decimal)"decimal" else "exact").orEmpty().ifBlank {entry.result}.take(1200),
-                        fontSize=(m.outputFont*.72f).sp,color=c.ink,maxLines=8,overflow=TextOverflow.Ellipsis)
-                }
-                if(response!=null&&domainText(response).isNotEmpty())Text(domainText(response),fontSize=10.sp,color=c.muted)
-                HorizontalDivider(Modifier.padding(top=10.dp),color=c.grid)
+        Column(Modifier.fillMaxWidth().weight(1f)) {
+            // The spacer bottom-anchors the tape: with reverseScrolling, 0 is the newest line at the
+            // bottom, so a short tape stays glued to the keypad instead of floating at the top.
+            Spacer(Modifier.weight(1f))
+            Column(Modifier.fillMaxWidth().verticalScroll(scroll,reverseScrolling=true).semantics {contentDescription="Calculation history, swipe vertically"}) {
+                m.tape.forEach {entry->key(entry.id){TapeEntryRow(entry,m)}}
+                key("active") {DisplayContent(m,typing,focusPending,scroll){focusPending=false}}
             }
         }
-        }
         DisplayActions(m,screenExpanded,onToggleScreen)
+    }
+}
+
+@Composable private fun TapeEntryRow(entry:TapeEntry,m:CalculatorModel) {
+    val c=LocalInstrument.current
+    Column(Modifier.fillMaxWidth().padding(horizontal=14.dp,vertical=10.dp)) {
+        val input=remember(entry.input){runCatching {JSONObject(entry.input)}.getOrNull()}
+        val response=remember(entry.result){runCatching {JSONObject(entry.result)}.getOrNull()}
+        val compact=remember(entry.input,entry.result) {
+            input==null||response==null||entry.source.length>800||entry.result.length>20_000||response.optString("exact").contains('\n')||
+                largeHistoryTree(input)||largeHistoryTree(response.optJSONObject("tree"))||largeHistoryTree(response.optJSONObject("decimalTree"))
+        }
+        Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).clickable {m.reuse(entry)}
+            .semantics {contentDescription="Reuse calculation: ${entry.source.take(120)}"}) {
+            if(!compact&&input!=null)MathNode(input,m.inputFont*.84f)
+            else Text(entry.source.take(800),fontSize=(m.inputFont*.84f).sp,fontFamily=FontFamily.Monospace,color=c.ink,maxLines=4,overflow=TextOverflow.Ellipsis)
+        }
+        Box(Modifier.fillMaxWidth().padding(top=6.dp).horizontalScroll(rememberScrollState()),contentAlignment=Alignment.CenterEnd) {
+            if(!compact&&response!=null)ResultMath(response,m.decimal,m.outputFont*.82f,
+                displayMode=m.resultDisplayMode,thousandsSeparator=m.thousandsSeparator,dmsDisplay=response.optBoolean("dms"),displayDigits=m.displayDigits)
+            else Text(response?.optString(if(m.decimal)"decimal" else "exact").orEmpty().ifBlank {entry.result}.take(1200),
+                fontSize=(m.outputFont*.72f).sp,color=c.ink,maxLines=8,overflow=TextOverflow.Ellipsis)
+        }
+        if(response!=null&&domainText(response).isNotEmpty())Text(domainText(response),fontSize=10.sp,color=c.muted)
+        HorizontalDivider(Modifier.padding(top=10.dp),color=c.grid)
     }
 }
 
@@ -196,7 +203,7 @@ private fun largeHistoryTree(root:JSONObject?,compactStructured:Boolean=true):Bo
     }
 }
 
-@Composable fun DisplayContent(m:CalculatorModel,typing:Boolean,requestInitialFocus:Boolean=true,scrollState:LazyListState?=null,onInitialFocus:()->Unit={}) {
+@Composable fun DisplayContent(m:CalculatorModel,typing:Boolean,requestInitialFocus:Boolean=true,scrollState:ScrollState?=null,onInitialFocus:()->Unit={}) {
     val c=LocalInstrument.current
     val inputTree=remember(m.editor,m.answerDisplay,typing) {
         if(typing||m.editor.source.length>800)null else m.inputTree()
