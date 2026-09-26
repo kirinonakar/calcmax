@@ -3,7 +3,7 @@
   <img src="app/src/main/ic_launcher-playstore.png" alt="CalcMax" width="100" height="100" />
 </p>
 
-A native Android scientific, graphing and Computer Algebra System (CAS) calculator. Kotlin and Jetpack Compose provide the instrument interface; an independent Kotlin AST and a bundled SymPy engine provide exact offline mathematics.
+A native Android scientific, graphing, programming and Computer Algebra System (CAS) calculator. A bundled SymPy engine provide exact offline mathematics.
 
 <img src="screenshot.png" alt="screenshot" width="50%">
 
@@ -13,10 +13,26 @@ You can download the latest release from the [Releases Page](https://github.com/
 ## Everyday use
 
 * The first keypad page groups scientific and numeric operations. The second page groups symbolic tools.
-* `Keyboard` enables Android text entry; hardware keyboards also work in the natural display. `Paste` inserts clipboard text. `Copy` copies the answer on the first press and the expression on the next (the label shows `Copy =` or `Copy ƒ`).
+* Long-press a key to apply its SHIFT function directly; long-press the mode indicator below the title bar to jump straight to the Scientific/CAS workspace.
+* `Keyboard` enables Android text entry; software keyboard input overlays the lower keys without resizing the instrument, and hardware keyboards also work in the natural display. `Paste` inserts clipboard text. `Copy` copies the answer on the first press and the expression on the next (the label shows `Copy =` or `Copy ƒ`).
 * S⇔D switches exact and decimal results; SHIFT S⇔D switches improper/mixed fractions. The top `Catalog` button opens the searchable function catalog.
-* MODE opens scientific/CAS, graphing, Python, equations, matrix, vector, statistics, programmer, units, constants, tip, currency and custom functions workspaces.
-* Long-press a key to apply its SHIFT function directly; long-press mode indicator below the title bar to jump straight to the Scientific/CAS workspace.
+* RCL lists stored values; SHIFT AC is CLR ALL and clears the visible tape and variables while preserving History, settings, assumptions and custom functions.
+
+### Numbers and precision
+
+Decimal literals are exact rationals. Internal precision (3–200 significant digits, default 30) drives numeric algorithms, while display digits (default 10) limit how many digits a numeric or decimal result shows; exact integers, fractions and symbolic forms are never rounded, display digits never exceed internal precision, and Ans/STO keep the full-precision value. Numeric trig honors DEG/RAD/GRAD; explicit π or ° specifies a radian/degree expression. Symbolic calculus is in radians. Complex values use `i`; `polar(r,theta)`, `rectpolar(z)`, `re`, `im`, `arg` and `conj` are available. `prime(n)` returns the nth prime and `isprime(n)` returns true or false for an integer.
+
+### Workspaces
+
+MODE opens scientific/CAS, graphing, Python, equations, matrix, vector, statistics, programmer, units, constants, tip, currency and custom functions workspaces.
+
+* **Graphing** — supports Cartesian, parametric, polar, sequence, 3D surface and first-order differential-equation graphs. Cartesian/parametric/polar/sequence modes accept up to six expressions per line; surfaces and differential equations accept one. Sequence rules use `n` and can refer to earlier values with `u(n-1)`; set the seed values in the graph panel. Surface input is `z=f(x,y)`. Differential input is `dy/dt=f(t,y)` with one or more initial y values at `t₀`; solutions use a fixed-step RK4 integrator and include a direction field. Graph tables show sampled values and tapping a row traces the corresponding point. Cartesian analysis lists and marks roots and intersections in a selected interval, along with extrema, derivatives and integrals. Curve sampling starts with a regular grid and adds points around detected curvature and breaks. Directional pinches lock to x for horizontal finger placement, y for vertical placement, and equal x/y scaling for diagonal placement. Tap a number once to select it and again to place its blinking internal cursor. Setup offers separate input/output font sizes.
+* **Python** — edits and runs scripts using the bundled interpreter. New/Open/Save/Save as use Android's document picker for `.py` files. Import and Function menus insert common statements and templates. Choosing a function from the shared Catalog inserts `calc.function(...)` at the Python cursor, or `print(calc.function(...))` in an empty file, and places the catalog and symbol imports once at the top. The bundled adapter supports calculator catalog functions, symbols and saved custom functions; use Python's `**` for exponentiation. Completion suggestions include Python names, names in the script and common module members. Choosing a module completion also inserts its import if needed. Execution can be stopped and has a 20-second service deadline. Imports are limited to Python's bundled and installed packages; this mode does not install packages at runtime.
+* **Equations** — provides coefficient forms for linear/quadratic/cubic equations, multi-line systems and general exact/numeric solving.
+* **Data & Statistics** — saves named one-column lists and paired x,y datasets locally, imports and exports CSV, and can store a dataset as a calculator variable. It provides summaries, scatterplots, histograms, box plots, and linear, quadratic, logarithmic, exponential and power regression. Statistics distinguish population and sample variance/SD; quartiles use the inclusive interpolation convention.
+* **Programmer** — inputs use the selected base, mask to 8/16/32/64 bits, and expose all four bases. Shift counts are entered in the selected base; right shifts are arithmetic in signed mode and logical in unsigned mode.
+* **Currency** — supports a manual rate or the latest [ExchangeRate-API daily reference rates](https://www.exchangerate-api.com/docs/free). A successful download is cached privately with both its provider reference time and local fetch time. Online-mode entry checks the cache; a download is performed only when the cache is at least 24 hours old.
+* **Functions** — provides creation, editing, insertion and deletion of reusable formulas, plus JSON export and import of the custom library through Android's document picker; importing validates each definition and reports added, replaced and skipped entries.
 
 ## Examples
 
@@ -57,22 +73,6 @@ charpoly([[1,2],[3,4]],x)
 convert(qty(1,V)/qty(1,ohm),A)
 ```
 
-Decimal literals are exact rationals. Internal precision (3–200 significant digits, default 30) drives numeric algorithms, while display digits (default 10) limit how many digits a numeric or decimal result shows; exact integers, fractions and symbolic forms are never rounded, display digits never exceed internal precision, and Ans/STO keep the full-precision value. Numeric trig honors DEG/RAD/GRAD; explicit π or ° specifies a radian/degree expression. Symbolic calculus is in radians. Complex values use `i`; `polar(r,theta)`, `rectpolar(z)`, `re`, `im`, `arg` and `conj` are available.
-
-`prime(n)` returns the nth prime (for example, `prime(1000)` is 7919). `isprime(n)` returns true or false for an integer (for example, `isprime(123457)` is true).
-
-The graph workspace supports Cartesian, parametric, polar, sequence, 3D surface and first-order differential-equation graphs. Cartesian/parametric/polar/sequence modes accept up to six expressions per line; surfaces and differential equations accept one. Sequence rules use `n` and can refer to earlier values with `u(n-1)`; set the seed values in the graph panel. Surface input is `z=f(x,y)`. Differential input is `dy/dt=f(t,y)` with one or more initial y values at `t₀`; solutions use a fixed-step RK4 integrator and include a direction field. Graph tables show sampled values and tapping a row traces the corresponding point. Cartesian analysis lists and marks roots and intersections in a selected interval, along with extrema, derivatives and integrals. Curve sampling starts with a regular grid and adds points around detected curvature and breaks.
-
-Python mode edits and runs scripts using the bundled interpreter. New/Open/Save/Save as use Android's document picker for `.py` files. Import and Function menus insert common statements and templates. Choosing a function from the shared Catalog inserts `calc.function(...)` at the Python cursor, or `print(calc.function(...))` in an empty file, and places the catalog and symbol imports once at the top. The bundled adapter supports calculator catalog functions, symbols and saved custom functions; use Python's `**` for exponentiation. Completion suggestions include Python names, names in the script and common module members. Choosing a module completion also inserts its import if needed. Execution can be stopped and has a 20-second service deadline. Imports are limited to Python's bundled and installed packages; this mode does not install packages at runtime.
-
-The currency converter supports a manual rate or the latest [ExchangeRate-API daily reference rates](https://www.exchangerate-api.com/docs/free). A successful download is cached privately with both its provider reference time and local fetch time. Online-mode entry checks the cache; a download is performed only when at least 24 hours old.
-
-The Data & Statistics workspace saves named one-column lists and paired x,y datasets locally, imports and exports CSV, and can store a dataset as a calculator variable. It provides summaries, scatterplots, histograms, box plots, and linear, quadratic, logarithmic, exponential and power regression. Statistics distinguish population and sample variance/SD; quartiles use the inclusive interpolation convention. Programmer inputs use the selected base, mask to 8/16/32/64 bits, and expose all four bases; right shifts are arithmetic in signed mode and logical in unsigned mode. Shift counts are entered in the selected base.
-
-Equations provides coefficient forms for linear/quadratic/cubic equations, multi-line systems and general exact/numeric solving. 
-
-Functions provides creation, editing, insertion and deletion of reusable formulas, plus JSON export and import of the custom library through Android's document picker; importing validates each definition and reports added, replaced and skipped entries.
-
 ## Build
 
 Requirements: JDK 21 (Android Studio's bundled runtime works), Android SDK 36.1, Python 3.14 on PATH, and an initial internet connection to download build dependencies. The installed application computes offline. Supported devices: Android 8/API 26 or later, arm64-v8a and x86_64.
@@ -105,8 +105,6 @@ Computation runs in a bound service in a separate `:math` process. The calculato
 History is capped at 500 entries and stored privately on the device. Turning persistence off deletes its saved copy. Variables/functions/preferences remain local. Android backup behavior follows the manifest backup configuration.
 
 ## Validation
-
-Recent interaction additions: directional pinches lock to x for horizontal finger placement, y for vertical placement, and equal x/y scaling for diagonal placement. Software keyboard input overlays the lower keys without resizing the instrument. Tap a number once to select it and again to place its blinking internal cursor. Setup offers separate input/output font sizes. RCL lists stored values; SHIFT AC is CLR ALL and clears the visible tape and variables while preserving History, settings, assumptions and custom functions.
 
 ```powershell
 .\gradlew.bat :math:test :math:exportCases :app:lintDebug
