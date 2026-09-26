@@ -16,6 +16,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.*
@@ -33,6 +35,10 @@ import kotlin.math.*
     var showTable by rememberSaveable { mutableStateOf(false) }
     var parametersOpen by rememberSaveable { mutableStateOf(true) }
     var rangeParameter by remember { mutableStateOf<String?>(null) }
+    var topChrome by remember { mutableStateOf(0.dp) }
+    var panelHeight by remember { mutableStateOf(0.dp) }
+    var bottomChrome by remember { mutableStateOf(0.dp) }
+    var surfaceExtra by remember { mutableStateOf(0.dp) }
     var surfaceRotation by rememberSaveable { mutableFloatStateOf(35f) }
     var surfaceElevation by rememberSaveable { mutableFloatStateOf(32f) }
     var surfaceZoom by rememberSaveable { mutableFloatStateOf(1f) }
@@ -42,7 +48,14 @@ import kotlin.math.*
     LaunchedEffect(m.graphKind){selected=0;other=1}
     val parameterSignature=m.graphParameters.entries.joinToString(","){"${it.key}=${it.value.value}"}
     LaunchedEffect(m.graphSource,m.xMin,m.xMax,m.yMin,m.yMax,m.graphKind,m.parameterMin,m.parameterMax,m.sequenceInitials,m.differentialInitials,m.differentialT0,parameterSignature) { delay(350);m.plot() }
-    Column(Modifier.fillMaxSize()) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+    val density=LocalDensity.current
+    val availableHeight=if(maxHeight.value.isFinite())maxHeight else 720.dp
+    val panelExtra=if(parametersOpen&&m.graphParameters.isNotEmpty())panelHeight else 0.dp
+    val surfaceExtraHeight=if(m.graphKind=="surface")surfaceExtra else 0.dp
+    val graphHeight=(availableHeight-topChrome+panelExtra-bottomChrome-surfaceExtraHeight).coerceAtLeast(200.dp)
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+    Column(Modifier.fillMaxWidth().zIndex(1f).onSizeChanged{topChrome=with(density){it.height.toDp()}}) {
         OutlinedTextField(m.graphSource,{m.updateGraphSource(it)},Modifier.fillMaxWidth().padding(start=10.dp,end=10.dp,top=8.dp),label={Text(when(m.graphKind){"parametric"->"One [x(t),y(t)] pair per line";"polar"->"r(t) · radians · one curve per line";"sequence"->"u(n) · use u(n−1) for recurrences";"surface"->"z = f(x,y)";"differential"->"dy/dt = f(t,y)";else->"f(x) · one per line · [shade] y<f(x) or f, g"})},minLines=if(m.graphKind in listOf("surface","differential"))1 else 2,maxLines=4)
         Column(Modifier.fillMaxWidth().zIndex(1f).background(c.body)) {
             Row(Modifier.fillMaxWidth().zIndex(2f).padding(vertical=8.dp).horizontalScroll(rememberScrollState()).semantics { contentDescription="Graph types" },horizontalArrangement=Arrangement.spacedBy(6.dp)) {
@@ -66,7 +79,7 @@ import kotlin.math.*
                     SmallAction(if(m.graphAnimating)"Stop" else "Animate",active=if(m.graphAnimating)true else null,shaded=m.graphAnimating){m.toggleGraphAnimation()}
                     SmallAction("Reset sliders"){m.resetGraphParameters()}
                 }
-                if(parametersOpen)Column(Modifier.fillMaxWidth().heightIn(max=170.dp).verticalScroll(rememberScrollState())) {
+                if(parametersOpen)Column(Modifier.fillMaxWidth().heightIn(max=170.dp).onSizeChanged{panelHeight=with(density){it.height.toDp()}}.verticalScroll(rememberScrollState())) {
                     m.graphParameters.entries.forEach { (name,spec)->
                         val low=spec.min.toFloat();val high=spec.max.toFloat()
                         Row(Modifier.fillMaxWidth().padding(horizontal=12.dp),verticalAlignment=Alignment.CenterVertically) {
@@ -78,6 +91,7 @@ import kotlin.math.*
                     }
                 }
             }
+        }
         }
         val curves=remember(m.graphData) {
             val array=m.graphData?.optJSONArray("curves")
@@ -144,7 +158,7 @@ import kotlin.math.*
             }while(event.changes.any{it.pressed})
         }}
         if(m.graphKind=="surface") {
-            SurfaceGraph(m,surfaceRotation,surfaceElevation,surfaceZoom,Modifier.fillMaxWidth().weight(1f).clipToBounds().pointerInput(m.graphKind) {
+            SurfaceGraph(m,surfaceRotation,surfaceElevation,surfaceZoom,Modifier.fillMaxWidth().height(graphHeight).clipToBounds().pointerInput(m.graphKind) {
                 detectTransformGestures { _,pan,zoom,_->
                     surfaceRotation=((surfaceRotation+pan.x*.7f)%360f+360f)%360f
                     surfaceElevation=(surfaceElevation+pan.y*.5f).coerceIn(5f,85f)
@@ -153,6 +167,7 @@ import kotlin.math.*
             })
             val surfaceZMin=m.graphData?.optDouble("zMin",Double.NaN)?.takeIf { it.isFinite() }
             val surfaceZMax=m.graphData?.optDouble("zMax",Double.NaN)?.takeIf { it.isFinite() }
+            Column(Modifier.fillMaxWidth().onSizeChanged{surfaceExtra=with(density){it.height.toDp()}}) {
             Text("x: %.3g ~ %.3g   y: %.3g ~ %.3g".format(m.xMin,m.xMax,m.yMin,m.yMax)+(if(surfaceZMin!=null&&surfaceZMax!=null)"   z: %.3g ~ %.3g".format(surfaceZMin,surfaceZMax) else ""),Modifier.padding(horizontal=14.dp,vertical=2.dp),fontSize=11.sp,color=c.muted)
             Row(Modifier.fillMaxWidth().padding(horizontal=14.dp),verticalAlignment=Alignment.CenterVertically) {
                 Text("Rotate",fontSize=11.sp,color=c.muted);Slider(surfaceRotation,{surfaceRotation=it},Modifier.weight(1f),valueRange=0f..360f);Text("${surfaceRotation.toInt()}°",fontSize=11.sp,color=c.muted)
@@ -164,7 +179,8 @@ import kotlin.math.*
                 Text("Zoom",fontSize=11.sp,color=c.muted);Slider(surfaceZoom,{surfaceZoom=it},Modifier.weight(1f),valueRange=.4f..3f);Text("${(surfaceZoom*100).toInt()}%",fontSize=11.sp,color=c.muted);SmallAction("Reset"){m.xMin=-3.0;m.xMax=3.0;m.yMin=-3.0;m.yMax=3.0;surfaceRotation=35f;surfaceElevation=32f;surfaceZoom=1f;m.save();m.plot()}
             }
             Text("Drag to rotate freely · Pinch to zoom",Modifier.padding(horizontal=14.dp,vertical=2.dp),fontSize=11.sp,color=c.muted)
-        } else Canvas(Modifier.fillMaxWidth().weight(1f).clipToBounds().background(c.display).then(transform).pointerInput(m.graphKind,selected) { detectTapGestures { p ->
+            }
+        } else Canvas(Modifier.fillMaxWidth().height(graphHeight).clipToBounds().background(c.display).then(transform).pointerInput(m.graphKind,selected) { detectTapGestures { p ->
             val target=m.xMin+(m.xMax-m.xMin)*p.x/size.width
             val targetY=m.yMax-(m.yMax-m.yMin)*p.y/size.height
             m.trace=latestCurves.getOrNull(selected)?.filterNotNull()?.minByOrNull { ((it.first-target)/(m.xMax-m.xMin)).pow(2)+((it.second-targetY)/(m.yMax-m.yMin)).pow(2) }
@@ -245,6 +261,7 @@ import kotlin.math.*
                 m.trace?.let { p -> val at=Offset(px(p.first),py(p.second));drawLine(c.muted,Offset(at.x,0f),Offset(at.x,size.height),1f);drawCircle(c.accent,6f,at) }
             }
         }
+        Column(Modifier.fillMaxWidth().onSizeChanged{bottomChrome=with(density){it.height.toDp()}}) {
         if(m.graphKind!="surface" && (curves.isNotEmpty()||shadeSources.isNotEmpty()))Row(Modifier.horizontalScroll(rememberScrollState()),verticalAlignment=Alignment.CenterVertically) {
             curves.forEachIndexed { i,_->
                 val prefix=when(m.graphKind){"sequence"->"u";"differential"->"y";else->"f"}
@@ -264,6 +281,7 @@ import kotlin.math.*
             }
         }
         if(m.graphKind!="surface")Text(if(m.graphBusy&&!m.graphAnimating) "Sampling locally…" else m.trace?.let { "Trace ≈ x: %.7g   y: %.7g".format(it.first,it.second) } ?: if(m.graphKind=="differential")"Direction field · tap a solution to trace · drag/pinch to explore" else "Tap to trace · drag to pan · pinch to zoom",Modifier.padding(horizontal=14.dp,vertical=5.dp),fontSize=11.sp,color=c.muted)
+        }
         if(showTable && m.graphKind!="surface") GraphValueTable(curves,selected,{m.trace=it},m.graphKind)
         if(analysis && m.graphKind in listOf("cartesian","parametric","polar")) Column(Modifier.heightIn(max=290.dp).verticalScroll(rememberScrollState()).padding(horizontal=10.dp)) {
             Text("Analyze ${if(m.graphKind=="cartesian")"Cartesian curves" else "the selected curve"} · ${if(m.graphKind=="cartesian")"x" else "t"} interval",fontSize=12.sp,color=c.muted)
@@ -291,6 +309,7 @@ import kotlin.math.*
             }
             SmallAction("Trace x") {first.toDoubleOrNull()?.let {x->m.trace=curves.getOrNull(selected)?.filterNotNull()?.minByOrNull {abs(it.first-x)}}}
         }
+    }
     }
     if(rangeDialog) {
         var xmin by remember {mutableStateOf(m.xMin.toString())};var xmax by remember {mutableStateOf(m.xMax.toString())};var ymin by remember {mutableStateOf(m.yMin.toString())};var ymax by remember {mutableStateOf(m.yMax.toString())}
