@@ -31,20 +31,22 @@ private val Catalog=linkedMapOf(
         "$name(${if(count>0)",".repeat(count-1) else ""})"
     }
     val categories=linkedMapOf("Custom" to custom).apply {putAll(Catalog)}
-    AlertDialog(onDismissRequest=close,title={Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {Text("Function catalog",Modifier.weight(1f));SmallAction("Help",description="Open the function catalog help"){showHelp=true}}},text={Column(Modifier.verticalScroll(rememberScrollState())) {
+    AlertDialog(onDismissRequest=close,title={Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {Text("Function catalog",Modifier.weight(1f));SmallAction("Help",description="Open the function catalog help"){showHelp=true}}},text={Column(Modifier.fillMaxWidth().heightIn(max=480.dp)) {
         SearchField(search,"Find function") {search=it}
         Choices(categories.keys.toList(),category,{category=it})
         val entries=if(search.isBlank())categories[category].orEmpty() else categories.values.flatten().filter {it.contains(search,true)}
-        if(category=="Custom"&&entries.isEmpty()&&search.isBlank())Text("Save a function in Functions to see it here.",fontSize=12.sp)
-        entries.chunked(2).forEach { row->Row {row.forEach { source->TextButton(onClick={val list=source.indexOf("[]");val at=if(list>=0)list+1 else source.indexOf('(')+1;if(m.mode=="Python") {val edit=PythonEditorTools.insertCatalog(m.pythonSource,m.pythonSelectionStart,m.pythonSelectionEnd,source,at);m.editPython(edit.source,edit.cursor)} else m.insert(source,at);close()},modifier=Modifier.weight(1f)) {Text(source,fontSize=12.sp)} } } }
-        val hint=when(category) {
-            "ODE & transforms" -> "ODE example: dsolve(diff(y(t),t)=y(t),y(t),t). Use t for time and s for Laplace frequency."
-            "Vector calculus" -> "Vector functions take a coordinate list, e.g. gradient(x^2+y^2,[x,y])."
-            "Matrix & vector" -> "Matrix commands accept a matrix literal such as [[1,2],[3,4]]."
-            "Scientific" -> "Numeric trig follows the selected angle unit; explicit π and ° override it."
-            else -> "Tap a template, then tap its empty slots to fill them. ↑ selects the enclosing expression; ↓ selects a child."
+        Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())) {
+            if(category=="Custom"&&entries.isEmpty()&&search.isBlank())Text("Save a function in Functions to see it here.",fontSize=12.sp)
+            entries.chunked(2).forEach { row->Row {row.forEach { source->TextButton(onClick={val list=source.indexOf("[]");val at=if(list>=0)list+1 else source.indexOf('(')+1;if(m.mode=="Python") {val edit=PythonEditorTools.insertCatalog(m.pythonSource,m.pythonSelectionStart,m.pythonSelectionEnd,source,at);m.editPython(edit.source,edit.cursor)} else m.insert(source,at);close()},modifier=Modifier.weight(1f)) {Text(source,fontSize=12.sp)} } } }
+            val hint=when(category) {
+                "ODE & transforms" -> "ODE example: dsolve(diff(y(t),t)=y(t),y(t),t). Use t for time and s for Laplace frequency."
+                "Vector calculus" -> "Vector functions take a coordinate list, e.g. gradient(x^2+y^2,[x,y])."
+                "Matrix & vector" -> "Matrix commands accept a matrix literal such as [[1,2],[3,4]]."
+                "Scientific" -> "Numeric trig follows the selected angle unit; explicit π and ° override it."
+                else -> "Tap a template, then tap its empty slots to fill them. ↑ selects the enclosing expression; ↓ selects a child."
+            }
+            Text(hint,fontSize=11.sp)
         }
-        Text(hint,fontSize=11.sp)
     }},confirmButton={TextButton(onClick=close) {Text("Done")}})
     if(showHelp)CatalogHelpDialog{showHelp=false}
 }

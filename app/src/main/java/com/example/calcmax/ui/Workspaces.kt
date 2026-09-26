@@ -541,17 +541,22 @@ data class ConstantEntry(val symbol: String,val name: String,val value: String,v
     var search by rememberSaveable { mutableStateOf("") }
     LaunchedEffect(Unit) {m.loadConstants()}
     val constants=remember(m.constants) {(0 until (m.constants?.length() ?: 0)).map {i->m.constants!!.getJSONObject(i).let {ConstantEntry(it.getString("symbol"),it.getString("name"),it.getString("value"),it.getString("unit"),it.getBoolean("exact"))}}}
-    Panel("Scientific constants","SI defining constants and CODATA 2022 reference values. Tap to insert.") {
-        Field(search,"Search",Modifier.fillMaxWidth()) { search=it }
-        if(m.constants==null) Text("Loading local constants…")
-        constants.filter { it.name.contains(search,true)||it.symbol.contains(search,true) }.forEach { item ->
-            Column(Modifier.fillMaxWidth().clickable { m.insert(item.symbol);m.mode="Scientific/CAS" }.padding(vertical=8.dp)) {
-                Text("${item.symbol}  ·  ${item.name}",style=MaterialTheme.typography.titleSmall)
-                Text("${item.value} ${item.unit}",fontSize=14.sp)
-                Text(if(item.exact) "Exact definition" else "Measured · CODATA 2022",fontSize=11.sp,color=LocalInstrument.current.muted)
-            }; HorizontalDivider()
+    Column(Modifier.fillMaxSize().padding(14.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
+        Text("Scientific constants",style=MaterialTheme.typography.titleLarge)
+        Text("SI defining constants and CODATA 2022 reference values. Tap to insert.",color=LocalInstrument.current.muted,fontSize=12.sp)
+        OutlinedTextField(search,{search=it},modifier=Modifier.fillMaxWidth(),label={Text("Search")},singleLine=true,
+            trailingIcon={if(search.isNotEmpty())IconButton(onClick={search=""}){Text("\u2715",fontSize=15.sp)}})
+        Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(10.dp)) {
+            if(m.constants==null) Text("Loading local constants…")
+            constants.filter { it.name.contains(search,true)||it.symbol.contains(search,true) }.forEach { item ->
+                Column(Modifier.fillMaxWidth().clickable { m.insert(item.symbol);m.mode="Scientific/CAS" }.padding(vertical=8.dp)) {
+                    Text("${item.symbol}  ·  ${item.name}",style=MaterialTheme.typography.titleSmall)
+                    Text("${item.value} ${item.unit}",fontSize=14.sp)
+                    Text(if(item.exact) "Exact definition" else "Measured · CODATA 2022",fontSize=11.sp,color=LocalInstrument.current.muted)
+                }; HorizontalDivider()
+            }
+            Text("Source: NIST physics.nist.gov/cuu/Constants · Measured values retain their published precision; they are not exact physical quantities.",fontSize=11.sp)
         }
-        Text("Source: NIST physics.nist.gov/cuu/Constants · Measured values retain their published precision; they are not exact physical quantities.",fontSize=11.sp)
     }
 }
 
@@ -583,11 +588,15 @@ data class ConstantEntry(val symbol: String,val name: String,val value: String,v
 @Composable fun HistoryDialog(m: CalculatorModel,close: ()->Unit) {
     val clipboard=LocalClipboardManager.current
     var favorites by remember { mutableStateOf(false) }
-    val entries=m.history.filter { !favorites||it.favorite }
+    var search by remember { mutableStateOf("") }
+    val needle=search.trim()
+    val entries=m.history.filter { entry->(!favorites||entry.favorite)&&(needle.isBlank()||entry.source.contains(needle,true)||entry.exact.contains(needle,true)) }
     AlertDialog(onDismissRequest=close,title={Text("Calculation history")},text={Column(Modifier.fillMaxWidth().heightIn(max=480.dp)) {
+        OutlinedTextField(search,{search=it},modifier=Modifier.fillMaxWidth(),label={Text("Search history")},singleLine=true,
+            trailingIcon={if(search.isNotEmpty())IconButton(onClick={search=""}){Text("\u2715",fontSize=15.sp)}})
         Choices(listOf("All","Favorites"),if(favorites)"Favorites" else "All",{favorites=it=="Favorites"})
         LazyColumn(Modifier.fillMaxWidth().weight(1f,fill=false)) {
-            if(entries.isEmpty())item {Text(if(favorites)"No favorites yet." else "Your calculations will appear here.")}
+            if(entries.isEmpty())item {Text(if(needle.isNotBlank())"No calculations match \"$needle\"." else if(favorites)"No favorites yet." else "Your calculations will appear here.")}
             items(entries) { entry ->
                 Column(Modifier.fillMaxWidth().padding(vertical=8.dp)) {
                     Text(entry.source.historyPreview(),fontFamily=FontFamily.Monospace,fontSize=13.sp)
