@@ -11,7 +11,7 @@ import calcmax_catalog
 
 class ScriptRunnerTests(unittest.TestCase):
     def test_every_catalog_name_has_a_python_callable(self):
-        source=(pathlib.Path(__file__).resolve().parents[1] / "app/src/main/java/com/example/calcmax/ui/Catalog.kt").read_text(encoding="utf-8")
+        source=(pathlib.Path(__file__).resolve().parents[1] / "app/src/main/java/com/kirinonakar/calcmax/ui/Catalog.kt").read_text(encoding="utf-8")
         names=set(re.findall(r'"([A-Za-z][A-Za-z0-9_]*)\(',source))
         self.assertGreater(len(names),70)
         for name in names:

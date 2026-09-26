@@ -5,13 +5,13 @@ plugins {
 }
 
 android {
-    namespace = "com.example.calcmax"
+    namespace = "com.kirinonakar.calcmax"
     compileSdk {
         version = release(37)
     }
 
     defaultConfig {
-        applicationId = "com.example.calcmax"
+        applicationId = "com.kirinonakar.calcmax"
         minSdk = 26
         targetSdk = 36
         versionCode = 12

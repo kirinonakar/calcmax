@@ -4,6 +4,6 @@ dependencies { testImplementation("junit:junit:4.13.2") }
 tasks.register<JavaExec>("exportCases") {
     dependsOn("testClasses")
     classpath = sourceSets["test"].runtimeClasspath
-    mainClass.set("com.example.calcmax.math.CasesKt")
+    mainClass.set("com.kirinonakar.calcmax.math.CasesKt")
     args(rootProject.layout.projectDirectory.file("build/math-cases.json").asFile.absolutePath)
 }
