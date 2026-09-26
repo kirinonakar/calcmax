@@ -17,4 +17,11 @@ class EvaluationPolicyTest {
         assertFalse(requiresExplicitEvaluation(Parser("cos(2*x)").parse()))
         assertFalse(requiresExplicitEvaluation(Parser("f(1)").parse()))
     }
+
+    @Test fun entryHelpersPreviewWhileTyping() {
+        assertFalse(requiresExplicitEvaluation(Parser("log(100)").parse()))
+        assertFalse(requiresExplicitEvaluation(Parser("log(100,10)").parse()))
+        assertFalse(requiresExplicitEvaluation(Parser("nthroot(8,3)").parse()))
+        assertFalse(requiresExplicitEvaluation(Parser("mixed(1,1,2)").parse()))
+    }
 }

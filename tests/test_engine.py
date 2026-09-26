@@ -157,6 +157,24 @@ class EngineTests(unittest.TestCase):
         output=json.loads(result.stdout)
         self.assertTrue(output["ok"],output)
         self.assertAlmostEqual(float(output["decimal"]),9,places=9)
+    def test_cold_fourier_transform_stays_within_the_step_budget(self):
+        # Regression: fourier(exp(-t^2),t,w) spends about 7.5M traced steps on a cold first
+        # evaluation; the former six-million step allowance cut it off after one second of work.
+        tree={"kind":"call","value":"fourier","args":[
+            {"kind":"call","value":"exp","args":[{"kind":"unary","value":"-","args":[
+                {"kind":"binary","value":"^","args":[{"kind":"symbol","value":"t"},{"kind":"number","value":"2"}]}]}]},
+            {"kind":"symbol","value":"t"},{"kind":"symbol","value":"w"}]}
+        dependencies_path=str(pathlib.Path(core.s.__file__).resolve().parent.parent)
+        script=("import sys,json\n"
+                f"sys.path.insert(0,{dependencies_path!r})\n"
+                f"sys.path.insert(0,{str(ROOT / 'app/src/main/python')!r})\n"
+                "import calc_engine\n"
+                f"print(calc_engine.dispatch({json.dumps(json.dumps({'tree':tree,'angle':'RAD','budget':8}))}))")
+        result=subprocess.run([sys.executable,"-c",script],cwd=ROOT,capture_output=True,text=True,timeout=20)
+        self.assertEqual(result.returncode,0,result.stderr)
+        output=json.loads(result.stdout)
+        self.assertTrue(output["ok"],output)
+        self.assertEqual(output["exact"],"sqrt(pi)*exp(-pi**2*w**2)")
     def test_graph(self):
         result=run("sin(x)",action="graph",trees=[TREES["sin(x)"]],min=-3,max=3,samples=100)
         self.assertTrue(result["ok"],result)

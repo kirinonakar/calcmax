@@ -230,7 +230,7 @@ Example: dsolve(diff(y(t),t)=y(t),y(t),t)
 Example: laplace(sin(t),t,s)
 `ilaplace(F,s,t)` — Inverse Laplace transform from s back to t.
 Example: ilaplace(1/(s^2+1),s,t)
-`fourier(f,t,w)` — Fourier transform from t to the angular frequency w.
+`fourier(f,t,w)` — Fourier transform from t to w using the e^(-2πiwt) kernel (ordinary frequency).
 Example: fourier(exp(-t^2),t,w)
 `ifourier(F,w,t)` — Inverse Fourier transform from w back to t.
 Example: ifourier(exp(-w^2/4),w,t)

@@ -1061,13 +1061,36 @@ def programmer(request):
     signed=a-(1<<width) if request.get("signed",False) and a&(1<<(width-1)) else a
     return {"exact":str(signed),"decimal":str(signed),"bases":{"BIN":format(a,f"0{width}b"),"OCT":format(a,"o"),"DEC":str(signed),"HEX":format(a,f"0{width//4}X")},"tree":display_tree(s.Integer(signed))}
 
+# Symbolic calls whose cold first evaluation is heavy enough that the generic step allowance used
+# to cut off legitimate work. Nested calls count too, so 1+fourier(exp(-t^2),t,w) is heavy as well.
+HEAVY_CALLS=("integrate","dsolve","desolve","laplace","ilaplace","fourier","ifourier","domain","range")
+def contains_heavy_call(node):
+    pending=[node]
+    while pending:
+        current=pending.pop()
+        if not isinstance(current, dict): continue
+        if current.get("kind")=="call" and current.get("value") in HEAVY_CALLS: return True
+        pending.extend(current.get("args") or [])
+    return False
+
 def dispatch(payload):
     request=json.loads(payload)
     tree=request.get("tree",{})
-    heavy = tree.get("kind")=="call" and tree.get("value") in ("integrate","dsolve","desolve","laplace","ilaplace","fourier","ifourier","domain","range")
+    heavy=contains_heavy_call(tree)
     # The first evaluation of an expression also fills SymPy's caches, so a cold computation can
-    # need several times the steps of a warm repeat; 1.5M steps cut off legitimate first evaluations.
-    budget=Budget(float(request.get("budget",20 if heavy else 8)),steps=6000000 if heavy else 3000000)
+    # need several times the steps of a warm repeat. 1.5M and 6M steps both cut off legitimate
+    # first evaluations: fourier(exp(-t^2),t,w) spends about 7.5M traced steps cold although the
+    # real work takes a fraction of a second. Heavy calls keep a step ceiling above what the time
+    # budget reaches on typical hardware, so the time limit stays the binding guard.
+    seconds=float(request.get("budget",20 if heavy else 8))
+    if heavy:
+        steps=100000000
+        # As-you-type previews pass two seconds; a committed heavy call (eight seconds and up) may
+        # use the rest of the 20-second IPC window.
+        if seconds>=8: seconds=max(seconds,16)
+    else:
+        steps=3000000
+    budget=Budget(seconds,steps=steps)
     try:
         sys.settrace(budget.trace)
         engine=Engine(request)
