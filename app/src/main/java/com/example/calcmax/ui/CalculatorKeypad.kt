@@ -166,7 +166,7 @@ private fun pressedShade(base:Color)=if(base.luminance()>.45f)Color.Black.copy(a
     val pressed by interaction.collectIsPressedAsState()
     if(key.type=="utility") {
         val bg=when(key.title){"SHIFT"->c.shift;"ALPHA"->c.alpha;"MODE"->c.accent;else->c.operator}
-        val ink=if(key.title=="2nd"||key.title=="1st")c.ink else Color.White
+        val ink=if(key.title=="2nd"||key.title=="1st")c.ink else if(bg.luminance()>.45f)c.clearInk else Color.White
         val shape=RoundedCornerShape(8.dp)
         Box(modifier.padding(top=3.dp,bottom=3.dp).clip(shape).background(bg).background(if(pressed)pressedShade(bg) else Color.Transparent).border(if(active)2.dp else 1.dp,if(active)c.ink else c.muted.copy(alpha=.25f),shape).combinedClickable(interactionSource=interaction,indication=LocalIndication.current,onClick=onClick,onLongClick=onLongClick).semantics{contentDescription=key.title;stateDescription=if(active)"Active" else ""},contentAlignment=Alignment.Center) {
             Text(key.title,color=ink,fontSize=13.sp,fontWeight=FontWeight.Bold,maxLines=1)
