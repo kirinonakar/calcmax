@@ -265,6 +265,32 @@ class CalculatorInstrumentedTest {
         compose.waitUntil(30000){!model().busy&&model().result!=null}
         compose.runOnIdle{assertEquals("11",model().result!!.getString("exact"))}
     }
+    @Test fun customFunctionTransferRoundTrips() {
+        compose.runOnIdle {model().clearMemory();model().mode="Functions";model().define("g","x,y","x+y",showResult=false)}
+        compose.onNodeWithText("Export").assertExists()
+        compose.onNodeWithText("Import").assertExists()
+        compose.runOnIdle {
+            val exported=model().exportFunctions()
+            assertTrue(exported.contains("calcmax.functions"))
+            model().removeVariable("g")
+            assertFalse(model().functions.has("g"))
+            assertEquals("Imported 1 function: 1 new",model().importFunctions(exported))
+            assertEquals("x+y",model().functions.getJSONObject("g").getString("source"))
+            assertEquals("Imported 1 function: 1 replaced",model().importFunctions(exported))
+            assertEquals("",model().importFunctions("not json"))
+            assertEquals("This file is not valid JSON",model().error)
+            model().removeVariable("g")
+        }
+    }
+    @Test fun functionsListScrollsWithoutMovingTheEditor() {
+        compose.runOnIdle {
+            model().clearMemory();model().mode="Functions"
+            (1..12).forEach{index->model().define("f$index","x","x+$index",showResult=false)}
+        }
+        compose.onNodeWithText("f9(x)").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Save function").assertIsDisplayed()
+        compose.runOnIdle {(1..12).forEach{index->model().removeVariable("f$index")}}
+    }
     @Test fun directionalGraphPinches() {
         compose.runOnIdle{model().mode="Graph";model().xMin=-10.0;model().xMax=10.0;model().yMin=-5.0;model().yMax=5.0}
         val graph=compose.onNode(hasContentDescription("Graph with",substring=true))
@@ -681,6 +707,14 @@ class CalculatorInstrumentedTest {
         compose.onNodeWithText("Manual").performClick()
         compose.onNodeWithText("1 USD = ? KRW").performTextReplacement("1300")
         compose.onNodeWithText("≈ 130,000 KRW").assertExists();capture("currency-manual")
+        compose.onNodeWithText("1 USD = ? KRW").performTextReplacement("1300.123456789")
+        compose.onNodeWithText("≈ 130,012.345679 KRW").assertExists()
+        compose.onNodeWithText("1 USD = 1,300.123457 KRW").assertExists()
+        compose.onNodeWithText(java.util.Currency.getInstance("USD").getDisplayName(java.util.Locale.ENGLISH)).assertExists()
+        compose.onNodeWithText(java.util.Currency.getInstance("KRW").getDisplayName(java.util.Locale.ENGLISH)).assertExists()
+        compose.onAllNodesWithText("TRY").assertCountEquals(2)
+        compose.onNodeWithText("From (ISO code)").performTextReplacement("TRY")
+        compose.onNodeWithText(java.util.Currency.getInstance("TRY").getDisplayName(java.util.Locale.ENGLISH)).assertExists()
         compose.onNodeWithText("Setup").performClick()
         compose.onAllNodesWithText("Custom")[0].performScrollTo().performClick()
         compose.onNodeWithText("Custom internal precision · 3–200").performTextReplacement("42")

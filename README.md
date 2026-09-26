@@ -13,16 +13,10 @@ You can download the latest release from the [Releases Page](https://github.com/
 ## Everyday use
 
 * The first keypad page groups scientific and numeric operations. The second page groups symbolic tools.
-* Arithmetic and single-argument functions preview as you type, as do `log`, `nthroot` and `mixed`. Other functions with multiple arguments, such as `integrate`, calculate when you press `=`. The next calculation appears underneath; beginning it with an operator inserts a boxed, frozen copy of the previous answer. Swipe the display vertically to revisit calculations.
-* Fractions, roots and calculus keys insert structural slots. Tap a slot or expression component to select it. Tap the space just after a fraction to leave its denominator. Left/right move the cursor; up selects its enclosing AST node; down selects a child.
-* Selecting an exponent and pressing right once places the cursor after its value **inside** the exponent. Press right again to leave it. Parentheses follow the same inside/outside behavior. Empty power bases and fraction fields are shaded slots; filled slots have no visible scaffolding parentheses. Expressions share a mathematical alignment axis, so powers and fractions do not shift adjacent operands vertically.
-* `Keyboard` enables Android text entry; hardware keyboards also work in the natural display. `Paste` inserts clipboard text.
-* S⇔D switches exact and decimal results; SHIFT S⇔D switches improper/mixed fractions. The top `Catalog` button opens the searchable function catalog. Decimal output omits trailing zeros, and symbolic expressions remain typeset in decimal mode.
-* MODE opens scientific, CAS, graphing, Python, equations, matrix, vector, statistics, programmer, units, constants, tip and currency workspaces.
-* Matrix and vector share one editor: labelled size steppers, a grid with row/column headers, a live expression preview and operations split into single-operand and second-operand groups. Store the grid as A, B or C and tap a stored name to reuse it as the second operand.
-* SETUP chooses Light, Dark, or System (the default), angle unit, internal precision, display digits, haptics, sound and optional persistent history. Theme changes preserve the current calculation and editor state.
-* RCL / SHIFT RCL open variable recall and storage. `radius=5` and `f(x)=x^2+1` are supported at the top level outside Equation mode. Use `solve(...)` to solve equations. Stored values are snapshots; user functions retain their expression bodies.
-* For an expression with variables, press `CALC` to enter each variable value in order and press `=` after each one. The last `=` evaluates the original expression. Empty input reuses a stored value or uses zero; `AC` closes the prompt.
+* `Keyboard` enables Android text entry; hardware keyboards also work in the natural display. `Paste` inserts clipboard text. `Copy` copies the answer on the first press and the expression on the next (the label shows `Copy =` or `Copy ƒ`).
+* S⇔D switches exact and decimal results; SHIFT S⇔D switches improper/mixed fractions. The top `Catalog` button opens the searchable function catalog.
+* MODE opens scientific/CAS, graphing, Python, equations, matrix, vector, statistics, programmer, units, constants, tip, currency and custom functions workspaces.
+* Long-press a key to apply its SHIFT function directly; long-press mode indicator below the title bar to jump straight to the Scientific/CAS workspace.
 
 ## Examples
 
@@ -63,7 +57,7 @@ charpoly([[1,2],[3,4]],x)
 convert(qty(1,V)/qty(1,ohm),A)
 ```
 
-Decimal literals are exact rationals. Internal precision (3–200 significant digits, default 30, with 10/15/30/50/100/200 presets and a custom entry) drives numeric algorithms, while display digits (default 10, with 2/3/5/8/10/12/15 presets and a custom entry) limit how many digits a numeric or decimal result shows; exact integers, fractions and symbolic forms are never rounded, display digits never exceed internal precision, and Ans/STO keep the full-precision value. Numeric trig honors DEG/RAD/GRAD; explicit π or ° specifies a radian/degree expression. Symbolic calculus is in radians. Complex values use `i`; `polar(r,theta)`, `rectpolar(z)`, `re`, `im`, `arg` and `conj` are available.
+Decimal literals are exact rationals. Internal precision (3–200 significant digits, default 30) drives numeric algorithms, while display digits (default 10) limit how many digits a numeric or decimal result shows; exact integers, fractions and symbolic forms are never rounded, display digits never exceed internal precision, and Ans/STO keep the full-precision value. Numeric trig honors DEG/RAD/GRAD; explicit π or ° specifies a radian/degree expression. Symbolic calculus is in radians. Complex values use `i`; `polar(r,theta)`, `rectpolar(z)`, `re`, `im`, `arg` and `conj` are available.
 
 `prime(n)` returns the nth prime (for example, `prime(1000)` is 7919). `isprime(n)` returns true or false for an integer (for example, `isprime(123457)` is true).
 
@@ -71,15 +65,13 @@ The graph workspace supports Cartesian, parametric, polar, sequence, 3D surface 
 
 Python mode edits and runs scripts using the bundled interpreter. New/Open/Save/Save as use Android's document picker for `.py` files. Import and Function menus insert common statements and templates. Choosing a function from the shared Catalog inserts `calc.function(...)` at the Python cursor, or `print(calc.function(...))` in an empty file, and places the catalog and symbol imports once at the top. The bundled adapter supports calculator catalog functions, symbols and saved custom functions; use Python's `**` for exponentiation. Completion suggestions include Python names, names in the script and common module members. Choosing a module completion also inserts its import if needed. Execution can be stopped and has a 20-second service deadline. Imports are limited to Python's bundled and installed packages; this mode does not install packages at runtime.
 
-The tip calculator supports a pre-tax bill, separate tip/tax percentages, currency precision and splitting between people. A remainder allocation ensures rounded shares sum exactly to the total.
-
-The currency converter supports a manual rate or the latest [ExchangeRate-API daily reference rates](https://www.exchangerate-api.com/docs/free). A successful download is cached privately with both its provider reference time and local fetch time. Online-mode entry checks the cache; a download is performed only when at least 24 hours old. If the screen stays open, it checks again when the cache expires. When offline, the last saved snapshot remains usable with its original timestamp. Manual rates are explicitly labeled.
+The currency converter supports a manual rate or the latest [ExchangeRate-API daily reference rates](https://www.exchangerate-api.com/docs/free). A successful download is cached privately with both its provider reference time and local fetch time. Online-mode entry checks the cache; a download is performed only when at least 24 hours old.
 
 The Data & Statistics workspace saves named one-column lists and paired x,y datasets locally, imports and exports CSV, and can store a dataset as a calculator variable. It provides summaries, scatterplots, histograms, box plots, and linear, quadratic, logarithmic, exponential and power regression. Statistics distinguish population and sample variance/SD; quartiles use the inclusive interpolation convention. Programmer inputs use the selected base, mask to 8/16/32/64 bits, and expose all four bases; right shifts are arithmetic in signed mode and logical in unsigned mode. Shift counts are entered in the selected base.
 
-Equations provides coefficient forms for linear/quadratic/cubic equations, multi-line systems and general exact/numeric solving. Functions provides creation, editing, insertion and deletion of reusable formulas.
+Equations provides coefficient forms for linear/quadratic/cubic equations, multi-line systems and general exact/numeric solving. 
 
-Units use exact conversion factors, explicit dimensions and affine temperature conversion. Use `qty(value,unit)` inside expressions. Absolute temperatures support conversion, not compound algebra; temperature differences should be represented separately. The unit catalog also covers current, charge, voltage, resistance, conductance, capacitance, inductance, magnetic flux and amount. Constants use SI definitions and [NIST CODATA 2022](https://physics.nist.gov/cuu/Constants/). Measured constants are marked as approximate and retain their published precision.
+Functions provides creation, editing, insertion and deletion of reusable formulas, plus JSON export and import of the custom library through Android's document picker; importing validates each definition and reports added, replaced and skipped entries.
 
 ## Build
 

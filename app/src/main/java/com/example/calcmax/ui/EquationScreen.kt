@@ -1,13 +1,18 @@
 package com.example.calcmax.ui
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.example.calcmax.calculator.CalculatorModel
+import com.example.calcmax.calculator.FunctionTransfer
 import com.example.calcmax.calculator.ResultDisplayMode
 import com.example.calcmax.math.Editor
 import com.example.calcmax.math.Parser
@@ -72,48 +77,59 @@ import org.json.JSONObject
 }
 
 @Composable fun FunctionsScreen(m:CalculatorModel) {
+    val context=LocalContext.current
     var name by rememberSaveable{mutableStateOf("f")}
     var parameters by rememberSaveable{mutableStateOf("x")}
     var body by rememberSaveable{mutableStateOf("x^2+1")}
     var message by rememberSaveable{mutableStateOf("")}
-    Panel("Custom functions","") {
-        Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){Field(name,"Name",Modifier.weight(1f)){name=it;message=""};Field(parameters,"Parameters",Modifier.weight(2f)){parameters=it;message=""}}
-        Field(body,"Formula",Modifier.fillMaxWidth()){body=it;message=""}
-        val preview=runCatching{JSONObject(Parser(body,true).parse().json())}.getOrNull()
-        if(preview!=null)Box(Modifier.horizontalScroll(rememberScrollState())){MathNode(preview,m.inputFont)}
-        Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-            Button(onClick={m.define(name.trim(),parameters,body,showResult=false);message=if(m.error.isEmpty())"Saved ${name.trim()}($parameters)" else ""}){Text("Save function")}
-            SmallAction("Clear"){name="";parameters="";body="";message="";m.error=""}
-        }
-        if(message.isNotEmpty())Text(message)
-        if(m.error.isNotEmpty())Text(m.error,color=MaterialTheme.colorScheme.error)
-        HorizontalDivider()
-        m.functions.keys().asSequence().toList().sorted().forEach{key->
-            val definition=m.functions.getJSONObject(key)
-            val args=definition.getJSONArray("parameters")
-            val params=(0 until args.length()).joinToString(","){args.getString(it)}
-            Text("$key($params)",style=MaterialTheme.typography.titleMedium)
-            Box(Modifier.horizontalScroll(rememberScrollState())){MathNode(definition.getJSONObject("body"),m.inputFont*.85f)}
-            Row {
-                SmallAction("Edit"){name=key;parameters=params;body=definition.optString("source").ifBlank{editableSource(definition.getJSONObject("body"))};message=""}
-                SmallAction("Insert"){m.mode="Scientific/CAS";m.insert("$key(${",".repeat((args.length()-1).coerceAtLeast(0))})",key.length+1)}
-                SmallAction("Delete"){m.removeVariable(key)}
+    fun write(uri:Uri) {
+        try {
+            context.contentResolver.openOutputStream(uri,"wt")?.use {it.write(m.exportFunctions().toByteArray(Charsets.UTF_8))} ?: error("Could not open the selected file for writing")
+            message="Exported ${m.functions.length()} function${if(m.functions.length()==1)"" else "s"}"
+        } catch(e:Exception) {m.error=e.message ?: "Could not save the functions file"}
+    }
+    val exportFile=rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) {uri->if(uri!=null)write(uri)}
+    val importFile=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {uri->
+        if(uri!=null)try {
+            val text=context.contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use {it.readText()} ?: error("Could not read the selected file")
+            val summary=m.importFunctions(text)
+            if(summary.isNotEmpty())message=summary
+        } catch(e:Exception) {m.error=e.message ?: "Could not read the selected file"}
+    }
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        // The editor stays fixed and only the saved list scrolls; on short screens the whole panel scrolls instead.
+        val scrollAll=maxHeight<480.dp
+        val panel=if(scrollAll) Modifier.fillMaxSize().verticalScroll(rememberScrollState()) else Modifier.fillMaxSize()
+        Column(panel.padding(14.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
+            Text("Custom functions",style=MaterialTheme.typography.titleLarge)
+            Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){Field(name,"Name",Modifier.weight(1f)){name=it;message=""};Field(parameters,"Parameters",Modifier.weight(2f)){parameters=it;message=""}}
+            Field(body,"Formula",Modifier.fillMaxWidth()){body=it;message=""}
+            val preview=runCatching{JSONObject(Parser(body,true).parse().json())}.getOrNull()
+            if(preview!=null)Box(Modifier.horizontalScroll(rememberScrollState())){MathNode(preview,m.inputFont)}
+            Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                Button(onClick={m.define(name.trim(),parameters,body,showResult=false);message=if(m.error.isEmpty())"Saved ${name.trim()}($parameters)" else ""}){Text("Save function")}
+                SmallAction("Clear"){name="";parameters="";body="";message="";m.error=""}
+                SmallAction("Export"){if(m.functions.length()==0)message="No custom functions to export" else exportFile.launch("calcmax-functions.json")}
+                SmallAction("Import"){importFile.launch(arrayOf("application/json","text/plain","application/octet-stream"))}
+            }
+            if(message.isNotEmpty())Text(message)
+            if(m.error.isNotEmpty())Text(m.error,color=MaterialTheme.colorScheme.error)
+            HorizontalDivider()
+            val list=if(scrollAll) Modifier.fillMaxWidth() else Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())
+            Column(list,verticalArrangement=Arrangement.spacedBy(10.dp)) {
+                m.functions.keys().asSequence().toList().sorted().forEach{key->
+                    val definition=m.functions.getJSONObject(key)
+                    val args=definition.getJSONArray("parameters")
+                    val params=(0 until args.length()).joinToString(","){args.getString(it)}
+                    Text("$key($params)",style=MaterialTheme.typography.titleMedium)
+                    Box(Modifier.horizontalScroll(rememberScrollState())){MathNode(definition.getJSONObject("body"),m.inputFont*.85f)}
+                    Row {
+                        SmallAction("Edit"){name=key;parameters=params;body=FunctionTransfer.storedSource(definition);message=""}
+                        SmallAction("Insert"){m.mode="Scientific/CAS";m.insert("$key(${",".repeat((args.length()-1).coerceAtLeast(0))})",key.length+1)}
+                        SmallAction("Delete"){m.removeVariable(key)}
+                    }
+                }
             }
         }
-    }
-}
-
-private fun editableSource(node:JSONObject):String {
-    val args=node.optJSONArray("args")
-    val parts=(0 until (args?.length() ?: 0)).map{editableSource(args!!.getJSONObject(it))}
-    val value=node.optString("value")
-    return when(node.optString("kind")){
-        "call"->"$value(${parts.joinToString(",")})"
-        "binary","relation"->"(${parts[0]}$value${parts[1]})"
-        "unary"->"$value(${parts[0]})"
-        "list"->"[${parts.joinToString(",")}]"
-        "tuple"->"(${parts.joinToString(",")}${if(parts.size==1) "," else ""})"
-        "group"->"(${parts[0]})"
-        else->value
     }
 }

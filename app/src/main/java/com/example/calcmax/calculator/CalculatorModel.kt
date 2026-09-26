@@ -570,14 +570,28 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     }
     fun define(name: String, parameters: String, source: String, showResult:Boolean=true) {
         try {
-            require(name.matches(Regex("[A-Za-z][A-Za-z0-9_]*")))
-            require(name !in ("sinc sin cos tan asin acos atan arcsin arccos arctan sinh cosh tanh asinh acosh atanh arcsinh arsinh arccosh arcosh arctanh artanh atan2 arctan2 sqrt cbrt nthroot abs floor ceil round sign factorial gamma ln log exp erf erfc Ei Si Ci zeta re im arg conj polar rectpolar simplify expand factor collect diff integrate limit series solve nsolve sum product piecewise subs gcd lcm nCr nPr prime isprime factorint divisors percent degree quotient remainder det inverse transpose rank trace rref ref lu eigenvalues eigenvectors norm normalize dot cross angle projection linsolve mean median variance stdev sumdata quartiles stats regression convert qty nintegrate nderivative minimum maximum".split(' '))) {"This function name is reserved"}
-            val names=parameters.split(',').map { it.trim() }; require(names.all { it.matches(Regex("[A-Za-z][A-Za-z0-9_]*")) } && names.distinct().size==names.size)
-            functions=JSONObject(functions.toString()).put(name,JSONObject().put("parameters",JSONArray(names)).put("source",source).put("body",JSONObject(Parser(source).parse().json()))); save()
+            val definition=FunctionTransfer.definition(name,parameters,source)
+            functions=JSONObject(functions.toString()).put(definition.name,definition.json()); save()
             error=""
-            val message="$name(${names.joinToString()}) defined"
+            val message="${definition.name}(${definition.parameters.joinToString()}) defined"
             if(showResult){result=JSONObject().put("exact",message).put("decimal",message).put("tree",JSONObject().put("kind","text").put("value",message));dmsDisplay=false;dmsConversion=false}
         } catch(e: Exception) { error=e.message ?: "Invalid function" }
+    }
+    fun exportFunctions():String = FunctionTransfer.encode(functions)
+    fun importFunctions(text:String):String {
+        val imported=try {FunctionTransfer.decode(text)} catch(e:Exception) {error=e.message ?: "Could not import functions";return ""}
+        val updated=JSONObject(functions.toString())
+        var added=0;var replaced=0
+        imported.definitions.forEach {definition->
+            if(updated.has(definition.name))replaced++ else added++
+            updated.put(definition.name,definition.json())
+        }
+        functions=updated;error="";save()
+        val details=mutableListOf<String>()
+        if(added>0)details.add("$added new")
+        if(replaced>0)details.add("$replaced replaced")
+        if(imported.skipped>0)details.add("${imported.skipped} skipped")
+        return "Imported ${imported.definitions.size} function${if(imported.definitions.size==1)"" else "s"}: ${details.joinToString(", ")}"
     }
     fun assume(name: String, assumption: String) { assumptions=JSONObject(assumptions.toString()).put(name,JSONArray(if(assumption=="none") emptyList<String>() else listOf(assumption))); save() }
     fun removeVariable(name: String) { variables=JSONObject(variables.toString()).apply { remove(name) }; functions=JSONObject(functions.toString()).apply { remove(name) }; save() }

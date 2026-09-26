@@ -9,6 +9,7 @@ Use the search box above to filter by function name, template, example or descri
 - Symbolic calculus is always evaluated in radians.
 - Matrix and vector commands accept literals such as `[[1,2],[3,4]]`.
 - A saved custom function appears in the `Custom` category of the catalog.
+- The Functions screen exports the custom library to a JSON file and imports it back; import validates each definition and reports added, replaced and skipped entries.
 - Read the hint line under the catalog list for category-specific guidance.
 
 ## Scientific

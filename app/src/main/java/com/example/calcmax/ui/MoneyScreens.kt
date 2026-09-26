@@ -20,8 +20,13 @@ import java.math.RoundingMode
 import java.text.DateFormat
 import java.util.Currency
 import java.util.Date
+import java.util.Locale
 
 private fun decimalInput(text:String):BigDecimal {require(text.length<=128);return text.replace(",","").toBigDecimal()}
+/** English full name of an ISO 4217 currency code; null when the code is unknown. */
+private fun currencyName(code:String):String?=runCatching{Currency.getInstance(code).getDisplayName(Locale.ENGLISH)}.getOrNull()
+/** Caps a displayed money amount at six decimal places and drops trailing zeros. */
+private fun displayAmount(value:BigDecimal)=value.setScale(6,RoundingMode.HALF_EVEN).stripTrailingZeros()
 @Composable fun TipScreen() {
     var bill by rememberSaveable{mutableStateOf("100")}
     var percent by rememberSaveable{mutableStateOf("15")}
@@ -67,7 +72,7 @@ private fun decimalInput(text:String):BigDecimal {require(text.length<=128);retu
     var manual by rememberSaveable{mutableStateOf(false)}
     var manualRate by rememberSaveable{mutableStateOf("")}
     var dropDecimals by rememberSaveable{mutableStateOf(false)}
-    val quickCurrencies=listOf("KRW","USD","EUR","JPY","CNY","GBP","CAD","AUD","CHF","TWD","HKD","SGD","NZD","THB","VND","INR","IDR","MYR","PHP","SEK","NOK","MXN")
+    val quickCurrencies=listOf("KRW","USD","EUR","JPY","CNY","GBP","CAD","AUD","CHF","TWD","HKD","SGD","NZD","THB","VND","INR","IDR","MYR","PHP","SEK","NOK","MXN","TRY")
     val uri=LocalUriHandler.current
     val table=m.exchangeRates
     LaunchedEffect(manual){if(!manual)m.loadExchangeRates()}
@@ -80,8 +85,14 @@ private fun decimalInput(text:String):BigDecimal {require(text.length<=128);retu
         Choices(listOf("Online / cache","Manual"),if(manual)"Manual" else "Online / cache",{manual=it=="Manual"})
         Field(amount,"Amount",Modifier.fillMaxWidth()){amount=it}
         Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
-            Field(from,"From (ISO code)",Modifier.weight(1f)){from=it.uppercase().take(4);manualRate=""}
-            Field(to,"To (ISO code)",Modifier.weight(1f)){to=it.uppercase().take(4);manualRate=""}
+            Column(Modifier.weight(1f)){
+                Field(from,"From (ISO code)",Modifier.fillMaxWidth()){from=it.uppercase().take(4);manualRate=""}
+                currencyName(from)?.let{Text(it,fontSize=12.sp,color=LocalInstrument.current.muted)}
+            }
+            Column(Modifier.weight(1f)){
+                Field(to,"To (ISO code)",Modifier.fillMaxWidth()){to=it.uppercase().take(4);manualRate=""}
+                currencyName(to)?.let{Text(it,fontSize=12.sp,color=LocalInstrument.current.muted)}
+            }
         }
         Choices(quickCurrencies,from,{from=it;manualRate=""})
         Choices(quickCurrencies,to,{to=it;manualRate=""})
@@ -93,9 +104,9 @@ private fun decimalInput(text:String):BigDecimal {require(text.length<=128);retu
             FilterChip(selected=dropDecimals,onClick={dropDecimals=!dropDecimals},label={Text("Drop decimals",fontSize=13.sp)})
         }
         converted.getOrNull()?.let {value->
-            val shown=if(dropDecimals)value.setScale(0,RoundingMode.DOWN) else value.round(MathContext(m.precision,RoundingMode.HALF_EVEN))
+            val shown=if(dropDecimals)value.setScale(0,RoundingMode.DOWN) else displayAmount(value.round(MathContext(m.precision,RoundingMode.HALF_EVEN)))
             Text("≈ ${Money.format(shown)} $to",style=MaterialTheme.typography.headlineMedium)
-            Text("1 $from = ${Money.format(rate.getOrThrow().round(MathContext(minOf(m.precision,12))))} $to",fontSize=13.sp)
+            Text("1 $from = ${Money.format(displayAmount(rate.getOrThrow().round(MathContext(minOf(m.precision,12)))))} $to",fontSize=13.sp)
         } ?: Text(if(manual)"Enter a positive conversion rate." else if(table==null)"A saved rate or manual rate is needed." else "Check the currency codes.",color=LocalInstrument.current.muted)
         if(manual)Field(manualRate,"1 $from = ? $to",Modifier.fillMaxWidth()){manualRate=it}
         HorizontalDivider()
