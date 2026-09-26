@@ -24,4 +24,13 @@ class EvaluationPolicyTest {
         assertFalse(requiresExplicitEvaluation(Parser("nthroot(8,3)").parse()))
         assertFalse(requiresExplicitEvaluation(Parser("mixed(1,1,2)").parse()))
     }
+
+    @Test fun distributionAndFinanceEntriesWaitForEquals() {
+        assertFalse(requiresExplicitEvaluation(Parser("normcdf(0)").parse()))
+        assertFalse(requiresExplicitEvaluation(Parser("invnorm(0.975)").parse()))
+        assertTrue(requiresExplicitEvaluation(Parser("tcdf(2.228)").parse()))
+        assertTrue(requiresExplicitEvaluation(Parser("invt(0.9)").parse()))
+        assertTrue(requiresExplicitEvaluation(Parser("npv(0.1)").parse()))
+        assertTrue(requiresExplicitEvaluation(Parser("tvmpmt(360,0.05/12,250000)").parse()))
+    }
 }

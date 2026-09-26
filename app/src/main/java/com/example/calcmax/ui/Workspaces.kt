@@ -582,6 +582,8 @@ data class ConstantEntry(val symbol: String,val name: String,val value: String,v
         Row(verticalAlignment=Alignment.CenterVertically) { Text("Key vibration",Modifier.weight(1f)); Switch(m.haptics,{m.haptics=it;m.save()}) }
         Row(verticalAlignment=Alignment.CenterVertically) { Text("Key sound",Modifier.weight(1f)); Switch(m.sound,{m.sound=it;m.save()}) }
         Row(verticalAlignment=Alignment.CenterVertically) { Text("Save history locally",Modifier.weight(1f)); Switch(m.persistHistory,{m.persistHistory=it;m.save()}) }
+        Row(verticalAlignment=Alignment.CenterVertically) { Text("Bracket auto-close",Modifier.weight(1f)); Switch(m.autoCloseBrackets,{m.autoCloseBrackets=it;m.save()}) }
+        Text("Bracket auto-close pairs ( { [ with the matching ) } ] and keeps the cursor between them.",fontSize=11.sp,color=LocalInstrument.current.muted)
     }},confirmButton={TextButton(onClick=close) { Text("Done") }})
 }
 

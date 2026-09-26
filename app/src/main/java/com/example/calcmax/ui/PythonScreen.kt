@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.*
 import com.example.calcmax.calculator.CalculatorModel
+import com.example.calcmax.math.BracketAutoClose
 import com.example.calcmax.ui.theme.LocalInstrument
 
 @Composable fun PythonScreen(m:CalculatorModel) {
@@ -42,6 +43,10 @@ import com.example.calcmax.ui.theme.LocalInstrument
             editor=TextFieldValue(m.pythonSource,selection=TextRange(m.pythonSelectionStart,m.pythonSelectionEnd))
     }
     fun update(value:TextFieldValue) {editor=value;m.editPython(value.text,value.selection.start,value.selection.end)}
+    fun typed(value:TextFieldValue) {
+        val auto=if(m.autoCloseBrackets&&editor.selection.collapsed&&value.selection.collapsed)BracketAutoClose.typed(editor.text,editor.selection.start,value.text,value.selection.start) else null
+        update(if(auto!=null)TextFieldValue(auto.source,selection=TextRange(auto.cursor)) else value)
+    }
     fun apply(edit:PythonEdit) {update(TextFieldValue(edit.source,selection=TextRange(edit.cursor)))}
     fun documentName(uri:Uri):String = runCatching {
         context.contentResolver.query(uri,arrayOf(OpenableColumns.DISPLAY_NAME),null,null,null)?.use {cursor->
@@ -98,7 +103,7 @@ import com.example.calcmax.ui.theme.LocalInstrument
                 DropdownMenu(templatesOpen,{templatesOpen=false}) {PythonEditorTools.snippets.forEach {snippet->DropdownMenuItem(text={Text(snippet.label)},onClick={apply(PythonEditorTools.replace(editor.text,editor.selection.min,editor.selection.max,snippet.code,snippet.cursorOffset));templatesOpen=false})}}
             }
         }
-        OutlinedTextField(editor,::update,Modifier.fillMaxWidth().height(320.dp),textStyle=MaterialTheme.typography.bodyMedium.copy(fontFamily=FontFamily.Monospace),label={Text("Python code")},placeholder={Text("print('Hello, world!')")},singleLine=false)
+        OutlinedTextField(editor,::typed,Modifier.fillMaxWidth().height(320.dp),textStyle=MaterialTheme.typography.bodyMedium.copy(fontFamily=FontFamily.Monospace),label={Text("Python code")},placeholder={Text("print('Hello, world!')")},singleLine=false)
         if(suggestions.isNotEmpty())Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
             suggestions.forEach {candidate->SmallAction(candidate) {
                 val start=PythonEditorTools.wordStart(editor.text,position)

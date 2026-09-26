@@ -19,6 +19,22 @@ class StructuredEditorTest {
         assertEquals("integrate(3 * () * 4,x,,)",spacedHole.source)
         assertEquals("integrate(3 * 4,x,,)",spacedHole.delete().source)
     }
+    @Test fun fillingAnEmptyProductSlotDropsTheParentheses() {
+        val slot=Editor("5*5*5",3).delete()
+        assertEquals("5*()*5",slot.source)
+        assertEquals(2..4,slot.emptyProductSlot())
+        assertEquals("5*5*5",slot.replaceSlot(2..4,"5").source)
+        assertEquals(3,slot.replaceSlot(2..4,"5").cursor)
+        assertEquals("5*sin()*5",slot.replaceSlot(2..4,"sin()",4).source)
+        assertEquals(2..4,Editor("5*()*5",4).emptyProductSlot())
+        assertEquals(2..4,Editor("5×()×5",3).emptyProductSlot())
+        assertEquals("5×5×5",Editor("5×()×5",3).replaceSlot(2..4,"5").source)
+        assertNull(Editor("2()3",2).emptyProductSlot())
+        assertNull(Editor("()^2",1).emptyProductSlot())
+        assertNull(Editor("5*(5)*5",4).emptyProductSlot())
+        val fraction="integrate((33)/()*3,x,,)"
+        assertNull(Editor(fraction,fraction.indexOf(")*3")+1).emptyProductSlot())
+    }
     @Test fun deletingOperatorLeavesReusableSlotPreservingMatrices() {
         val source="[[1,0],[0,1]]+[[4,5],[6,7]]"
         val at=source.indexOf('+')

@@ -34,6 +34,12 @@ MODE opens scientific/CAS, graphing, Python, equations, matrix, vector, statisti
 * **Currency** — supports a manual rate or the latest [ExchangeRate-API daily reference rates](https://www.exchangerate-api.com/docs/free). A successful download is cached privately with both its provider reference time and local fetch time. Online-mode entry checks the cache; a download is performed only when the cache is at least 24 hours old.
 * **Functions** — provides creation, editing, insertion and deletion of reusable formulas, plus JSON export and import of the custom library through Android's document picker; importing validates each definition and reports added, replaced and skipped entries.
 
+### Distributions, tests and finance
+
+The catalog adds probability distributions (`normpdf`, `normcdf`, `invnorm`, `tpdf`, `tcdf`, `invt`, `chi2pdf`, `chi2cdf`, `fpdf`, `fcdf`, `binompdf`, `binomcdf`, `poissonpdf`, `poissoncdf`, `geometpdf`, `geometcdf`), one-sample tests with optional one-sided p values (`ttest`, `ztest`, `chi2test`, `anova`) and confidence intervals (`tinterval`, `zinterval`). Results stay exact where SymPy supplies a closed form (`normcdf(0)` is 1/2, `fcdf(3,2,4)` is 0.84) and the remaining cumulative probabilities and quantiles use mpmath at the internal precision.
+
+Finance functions follow the TVM cash-flow convention with the rate per payment period: `tvmfv`, `tvmpv`, `tvmpmt`, `tvmn`, `tvmrate`, `npv`, `irr` and `amort` return numeric results, and an optional final `begin` selects payments at the start of each period.
+
 ## Examples
 
 ```text
@@ -71,6 +77,12 @@ dsolve(diff(y(t),t)=y(t),y(t),t)
 laplace(sin(t),t,s)
 charpoly([[1,2],[3,4]],x)
 convert(qty(1,V)/qty(1,ohm),A)
+normcdf(-1.96,1.96)
+invnorm(0.975)
+ttest(0,[1,2,3,4])
+tinterval(0.95,[1,2,3,4])
+npv(0.1,-1000,[300,400,500])
+tvmpmt(360,0.05/12,250000)
 ```
 
 ## Build
@@ -122,6 +134,7 @@ The desktop tests consume AST fixtures produced by the actual Kotlin parser. The
 * Matrix entry grid: up to 9×9 and vector entry: up to 9 components; expression matrices: up to 32×32. Large exact factorizations/eigensystems may time out.
 * Graphs use bounded adaptive samples; very narrow features can still be missed. Cartesian analysis controls apply only to Cartesian functions. The RK4 differential-equation plots are numerical approximations, and 3D surfaces use a finite wireframe grid.
 * General output such as condition sets and series remainder terms can use textual mathematical notation where a dedicated native layout is not available. Such results may be copyable but not reusable through Ans; the app disables result insertion for them.
+* Statistical tests cover one-sample z and t tests, goodness-of-fit χ² and one-way ANOVA; two-sample and proportion procedures are not included. Exact binomial sums cap the list form of `binom*` at n ≤ 100 and single probabilities at n ≤ 1000.
 
 ## 📄 License
 

@@ -42,6 +42,19 @@ data class Editor(val source: String = "", val cursor: Int = source.length, val 
         }
         return Editor(result, a + inside, activeToken=active)
     }
+    /** Range of the empty parentheses the caret sits in or directly after, when they are an operand of an explicit
+     *  multiplication; null otherwise. The range stores the group start and the index after its closing parenthesis. */
+    fun emptyProductSlot():IntRange? {
+        if(cursor!=anchor||exponent!=null)return null
+        if(source.getOrNull(cursor)!=')'&&source.getOrNull(cursor-1)!=')')return null
+        val nodes=tree()?.nodes() ?: return null
+        val slot=nodes.firstOrNull {node->
+            node.kind=="group" && node.args.firstOrNull()?.kind=="hole" && (node.start==cursor-1 || node.end==cursor)
+        } ?: return null
+        return if(nodes.any {node->node.kind=="binary" && node.value=="*" && node.displayOperator!="∘" && node.args.any {it.start==slot.start && it.end==slot.end}})slot.start..slot.end else null
+    }
+    /** Replaces the parentheses at [slot] with [text]; the caret ends [inside] the inserted text. */
+    fun replaceSlot(slot:IntRange,text:String,inside:Int=text.length)=Editor(source.substring(0,slot.first)+text+source.substring(slot.last),slot.first+inside.coerceIn(0,text.length))
     private fun hiddenCallOpen(position:Int):Boolean = source.getOrNull(position)=='(' &&
         tree()?.nodes()?.any {it.kind=="call" && it.start<position && it.args.firstOrNull()?.start==position+1}==true
     private fun fraction(node:Expr):Boolean = node.kind=="binary" && node.value=="/" && node.displayOperator!="÷"

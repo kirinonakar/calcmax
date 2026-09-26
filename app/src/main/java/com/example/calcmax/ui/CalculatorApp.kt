@@ -21,6 +21,7 @@ import com.example.calcmax.calculator.CalculatorModel
 import com.example.calcmax.calculator.ResultDisplayMode
 import com.example.calcmax.calculator.TapeEntry
 import com.example.calcmax.math.Editor
+import com.example.calcmax.math.BracketAutoClose
 import com.example.calcmax.ui.theme.LocalInstrument
 import org.json.JSONObject
 import kotlinx.coroutines.delay
@@ -227,10 +228,20 @@ private fun largeHistoryTree(root:JSONObject?,compactStructured:Boolean=true):Bo
         else if(typing||compactInput) BasicTextField(
             value=TextFieldValue(m.editor.source,TextRange(m.editor.anchor.coerceIn(0,m.editor.source.length),m.editor.cursor.coerceIn(0,m.editor.source.length))),
             onValueChange={
-                if(m.committed&&it.text!=m.editor.source){
+                val auto=if(!m.committed&&m.autoCloseBrackets&&m.editor.cursor==m.editor.anchor&&it.selection.collapsed)
+                    BracketAutoClose.typed(m.editor.source,m.editor.cursor,it.text,it.selection.end) else null
+                if(auto!=null){
+                    val inserted=auto.source!=m.editor.source
+                    m.edit(Editor(auto.source,auto.cursor,auto.cursor))
+                    if(inserted)m.markTypedParens(auto.cursor)
+                }
+                else if(m.committed&&it.text!=m.editor.source){
                     if(it.text.startsWith(m.editor.source))m.insert(it.text.removePrefix(m.editor.source))
                     else m.fresh(Editor(it.text,it.selection.end,it.selection.start))
-                }else m.edit(Editor(it.text,it.selection.end,it.selection.start))
+                }else{
+                    m.edit(Editor(it.text,it.selection.end,it.selection.start))
+                    m.markTypedParens(it.selection.end)
+                }
             },
             modifier=Modifier.fillMaxWidth().heightIn(min=60.dp).onPreviewKeyEvent{if(it.type==KeyEventType.KeyDown&&it.key==Key.Enter){m.calculate();true}else false}.semantics{contentDescription="Expression input"},
             textStyle=TextStyle(color=c.ink,fontSize=m.inputFont.sp,fontFamily=FontFamily.Monospace),
@@ -254,7 +265,7 @@ private fun largeHistoryTree(root:JSONObject?,compactStructured:Boolean=true):Bo
             }
         }.focusable().horizontalScroll(rememberScrollState()).semantics{contentDescription="Current expression"},contentAlignment=Alignment.CenterStart){
             Row(verticalAlignment=Alignment.CenterVertically){
-                CompositionLocalProvider(LocalMathCursorTarget provides if(m.committed)null else m.editor.cursorTarget(),LocalMathAfter provides {a,b->requestInputFocus();m.edit(m.editor.after(a,b))},LocalCaretVisible provides caretVisible,LocalActiveToken provides m.editor.activeToken,LocalPlaceCursor provides {a,b,p->requestInputFocus();m.edit(m.editor.placeInToken(a,b,p))}) {
+                CompositionLocalProvider(LocalMathCursorTarget provides if(m.committed)null else m.editor.cursorTarget(),LocalMathAfter provides {a,b->requestInputFocus();m.edit(m.editor.after(a,b))},LocalCaretVisible provides caretVisible,LocalActiveToken provides m.editor.activeToken,LocalTypedParens provides m.typedParens,LocalPlaceCursor provides {a,b,p->requestInputFocus();m.edit(m.editor.placeInToken(a,b,p))}) {
                     if(m.editor.source.isBlank())Text("│",fontSize=m.inputFont.sp,color=if(caretVisible)c.accent else androidx.compose.ui.graphics.Color.Transparent)
                     else if(inputTree!=null)MathNode(inputTree,m.inputFont,select={a,b->requestInputFocus();m.edit(m.editor.selectRange(a,b))},selection=minOf(m.editor.anchor,m.editor.cursor)..maxOf(m.editor.anchor,m.editor.cursor))
                     else Row {Lexer.scan(m.editor.source).filter{it.text.isNotEmpty()}.forEach{token->

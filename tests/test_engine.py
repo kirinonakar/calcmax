@@ -4,6 +4,7 @@ import sys
 import unittest
 import random
 import subprocess
+import math
 from fractions import Fraction
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -287,5 +288,142 @@ class EngineTests(unittest.TestCase):
         covariance=dispatch(call("covariance",node("list","",num(1),num(2),num(3)),node("list","",num(2),num(4),num(6))))
         self.assertTrue(covariance["ok"],covariance)
         self.assertEqual(covariance["exact"],"4/3")
+
+    def test_probability_distributions(self):
+        def node(kind,value="",*args): return {"kind":kind,"value":value,"args":list(args)}
+        def num(value): return node("number",str(value))
+        def sym(name): return node("symbol",name)
+        def call(name,*args): return node("call",name,*args)
+        def neg(value): return node("unary","-",value)
+        def dispatch(tree,**options): return json.loads(core.dispatch(json.dumps({"tree":tree,"angle":"RAD",**options})))
+        self.assertEqual(dispatch(call("normcdf",num(0)))["exact"],"1/2")
+        self.assertEqual(dispatch(call("normcdf",neg(sym("oo")),sym("oo")))["exact"],"1")
+        self.assertEqual(dispatch(call("normpdf",num(0)))["exact"],"sqrt(2)/(2*sqrt(pi))")
+        self.assertEqual(dispatch(call("normalcdf",num(0)))["exact"],"1/2")
+        self.assertAlmostEqual(float(dispatch(call("normcdf",num("1.96")))["decimal"]),0.9750021048517795,12)
+        self.assertAlmostEqual(float(dispatch(call("normcdf",neg(num("1.96")),num("1.96")))["decimal"]),0.950004209703559,12)
+        self.assertAlmostEqual(float(dispatch(call("normcdf",neg(sym("oo")),num(1),num(0),num(1)))["decimal"]),0.8413447460685429,12)
+        self.assertEqual(dispatch(call("invnorm",num("1/2")))["exact"],"0")
+        self.assertAlmostEqual(float(dispatch(call("invnorm",num("0.975")))["decimal"]),1.959963984540054,9)
+        self.assertEqual(dispatch(call("tpdf",num(0),num(10)))["exact"],"63*sqrt(10)/512")
+        self.assertEqual(dispatch(call("tpdf",num(1),num(1)))["exact"],"1/(2*pi)")
+        self.assertEqual(dispatch(call("tcdf",num(0),num(10)))["exact"],"0.5")
+        self.assertAlmostEqual(float(dispatch(call("tcdf",num(1),num(1)))["decimal"]),0.75,12)
+        self.assertAlmostEqual(float(dispatch(call("invt",num("0.975"),num(10)))["decimal"]),2.228138852,6)
+        self.assertAlmostEqual(float(dispatch(call("invt",num("0.99"),num(1)))["decimal"]),math.tan(0.49*math.pi),6)
+        self.assertEqual(dispatch(call("chi2pdf",num(2),num(2)))["exact"],"exp(-1)/2")
+        self.assertEqual(dispatch(call("chi2cdf",num(0),num(5)))["exact"],"0")
+        self.assertAlmostEqual(float(dispatch(call("chi2cdf",num(2),num(2)))["decimal"]),1-math.exp(-1),12)
+        self.assertEqual(dispatch(call("fcdf",num(3),num(2),num(4)))["exact"],"0.84")
+        self.assertEqual(dispatch(call("fpdf",num(1),num(2),num(4)))["exact"],"8/27")
+        self.assertEqual(dispatch(call("binompdf",num(10),num("1/2"),num(5)))["exact"],"63/256")
+        self.assertEqual(dispatch(call("binomcdf",num(10),num("1/2"),num(5)))["exact"],"319/512")
+        self.assertEqual(dispatch(call("binomcdf",num(4),num("1/2")))["exact"],"[1/16, 5/16, 11/16, 15/16, 1]")
+        self.assertEqual(dispatch(call("poissonpdf",num(2),num(3)))["exact"],"4*exp(-2)/3")
+        self.assertEqual(dispatch(call("poissoncdf",num(2),num(3)))["exact"],"19*exp(-2)/3")
+        self.assertEqual(dispatch(call("geometpdf",num("1/2"),num(3)))["exact"],"1/8")
+        self.assertEqual(dispatch(call("geometcdf",num("1/2"),num(3)))["exact"],"7/8")
+
+    def test_statistical_tests_and_intervals(self):
+        def node(kind,value="",*args): return {"kind":kind,"value":value,"args":list(args)}
+        def num(value): return node("number",str(value))
+        def sym(name): return node("symbol",name)
+        def call(name,*args): return node("call",name,*args)
+        def listing(*values): return node("list","",*values)
+        def dispatch(tree,**options): return json.loads(core.dispatch(json.dumps({"tree":tree,"angle":"RAD",**options})))
+        def payload(result):
+            self.assertTrue(result["ok"],result)
+            return dict(line.split(": ",1) for line in result["exact"].splitlines())
+        data=listing(num(1),num(2),num(3),num(4))
+        sample=payload(dispatch(call("ttest",num(0),data)))
+        self.assertAlmostEqual(float(sample["t"]),math.sqrt(15),9)
+        self.assertEqual(sample["df"],"3")
+        self.assertEqual(sample["sample mean"],"5/2")
+        self.assertEqual(sample["sample SD"],"sqrt(15)/3")
+        self.assertAlmostEqual(float(sample["p value"]),0.0304662916621710,9)
+        right=payload(dispatch(call("ttest",num(0),data,sym("right"))))
+        self.assertAlmostEqual(float(right["p value"]),0.0152331458310855,9)
+        left=dispatch(call("ttest",num(0),data,sym("left")))
+        self.assertIn("left",left["note"])
+        self.assertAlmostEqual(float(payload(left)["p value"]),0.9847668541689145,9)
+        summary=payload(dispatch(call("ttest",num(0),num("2.5"),num("1.291"),num(4))))
+        self.assertAlmostEqual(float(summary["t"]),3.8729666924864446,9)
+        z=payload(dispatch(call("ztest",num(0),num(2),num(1),num(4))))
+        self.assertAlmostEqual(float(z["z"]),1,12)
+        self.assertAlmostEqual(float(z["p value"]),math.erfc(1/math.sqrt(2)),12)
+        chi=payload(dispatch(call("chi2test",listing(num(10),num(20),num(30)),listing(num(15),num(20),num(25)))))
+        self.assertEqual(chi["chi-square"],"8/3")
+        self.assertEqual(chi["df"],"2")
+        self.assertAlmostEqual(float(chi["p value"]),math.exp(-4/3),12)
+        analysis=payload(dispatch(call("anova",listing(num(1),num(2),num(3)),listing(num(4),num(5),num(6)))))
+        self.assertEqual(analysis["F"],"27/2")
+        self.assertEqual(analysis["df numerator"],"1")
+        self.assertEqual(analysis["df denominator"],"4")
+        self.assertAlmostEqual(float(analysis["p value"]),0.021311641128756725,9)
+        interval=payload(dispatch(call("tinterval",num("0.95"),data)))
+        low,high=[float(part) for part in interval["confidence interval"].strip("[]").split(",")]
+        margin=3.182446305284263*math.sqrt(5/3)/2
+        self.assertAlmostEqual(low,2.5-margin,9)
+        self.assertAlmostEqual(high,2.5+margin,9)
+        zinterval=payload(dispatch(call("zinterval",num(95),num(2),num("2.5"),num(4))))
+        low,high=[float(part) for part in zinterval["confidence interval"].strip("[]").split(",")]
+        self.assertAlmostEqual(low,0.540036015459946,9)
+        self.assertAlmostEqual(high,4.459963984540054,9)
+
+    def test_finance_functions(self):
+        def node(kind,value="",*args): return {"kind":kind,"value":value,"args":list(args)}
+        def num(value): return node("number",str(value))
+        def sym(name): return node("symbol",name)
+        def call(name,*args): return node("call",name,*args)
+        def listing(*values): return node("list","",*values)
+        def dispatch(tree,**options): return json.loads(core.dispatch(json.dumps({"tree":tree,"angle":"RAD",**options})))
+        def payload(result):
+            self.assertTrue(result["ok"],result)
+            return dict(line.split(": ",1) for line in result["exact"].splitlines())
+        rate=node("binary","/",num("0.05"),num(12))
+        monthly=(1+0.05/12)**360
+        payment=dispatch(call("tvmpmt",num(360),rate,num(250000),num(0)))
+        self.assertAlmostEqual(float(payment["decimal"]),-250000*(0.05/12)*monthly/(monthly-1),6)
+        self.assertEqual(dispatch(call("tvmpmt",num(10),num(0),num(1000),num(0)))["exact"],"-100")
+        present=dispatch(call("tvmpv",num(10),num("0.05"),num(100),num(0)))
+        self.assertAlmostEqual(float(present["decimal"]),-100*(1-1.05**-10)/0.05,9)
+        periods=dispatch(call("tvmn",num("0.05"),num(0),num(100),num(-1000)))
+        self.assertAlmostEqual(float(periods["decimal"]),math.log(1.5)/math.log(1.05),9)
+        growth=(1+0.05/12)**12
+        future=dispatch(call("tvmfv",num(12),rate,num(-1000),num(-100)))
+        self.assertAlmostEqual(float(future["decimal"]),1000*growth+100*(growth-1)/(0.05/12),6)
+        begin=dispatch(call("tvmfv",num(12),rate,num(-1000),num(-100),sym("begin")))
+        self.assertAlmostEqual(float(begin["decimal"]),1000*growth+100*(1+0.05/12)*(growth-1)/(0.05/12),6)
+        rate_value=dispatch(call("tvmrate",num(10),num(1000),num(-150),num(0)))
+        self.assertAlmostEqual(float(rate_value["decimal"]),0.081441656464365663,12)
+        flows=listing(num(-1000),num(300),num(400),num(500))
+        net=dispatch(call("npv",num("0.1"),num(-1000),listing(num(300),num(400),num(500))))
+        self.assertEqual(net["exact"],"-28000/1331")
+        self.assertEqual(dispatch(call("npv",num(0),num(-1000),listing(num(300),num(400),num(500))))["exact"],"200")
+        internal=dispatch(call("irr",flows))
+        self.assertAlmostEqual(float(internal["decimal"]),0.08896339469334994,12)
+        residual=dispatch(call("npv",internal["resultAst"],flows))
+        self.assertAlmostEqual(float(residual["decimal"]),0,12)
+        schedule=payload(dispatch(call("amort",rate,num(250000),num(360))))
+        self.assertAlmostEqual(float(schedule["payment"]),-250000*(0.05/12)*monthly/(monthly-1),6)
+        self.assertEqual(schedule["balance"],"0")
+        self.assertEqual(schedule["principal paid"],"250000")
+        self.assertAlmostEqual(float(schedule["interest paid"]),-float(schedule["payment"])*360-250000,6)
+        start=payload(dispatch(call("amort",rate,num(250000),num(360),num(0))))
+        self.assertEqual(start["balance"],"250000")
+        self.assertEqual(start["interest paid"],"0")
+
+    def test_distribution_and_finance_errors(self):
+        def node(kind,value="",*args): return {"kind":kind,"value":value,"args":list(args)}
+        def num(value): return node("number",str(value))
+        def call(name,*args): return node("call",name,*args)
+        def listing(*values): return node("list","",*values)
+        def dispatch(tree,**options): return json.loads(core.dispatch(json.dumps({"tree":tree,"angle":"RAD",**options})))
+        for tree in [call("normcdf",num(1),num(2),num(3)),call("invnorm",num(0)),call("ttest",num(0),listing(num(1))),
+                     call("irr",listing(num(1),num(2),num(3))),call("npv",num(-1),num(-1000),listing(num(300))),
+                     call("tvmpmt",num(0),num("0.05"),num(100),num(0)),call("anova",listing(num(1),num(2))),
+                     call("amort",num("0.005"),num(200000),num(0)),call("binompdf",num(1000),num("1/2"))]:
+            with self.subTest(tree=tree): self.assertFalse(dispatch(tree)["ok"])
+        self.assertEqual(dispatch(call("tvmpmt",num(0),num("0.05"),num(100),num(0)))["error"],"The number of periods must be positive")
 
     if __name__=="__main__": unittest.main(verbosity=2)

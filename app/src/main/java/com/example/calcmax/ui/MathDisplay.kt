@@ -32,6 +32,7 @@ val LocalMathAfter=staticCompositionLocalOf<((Int,Int)->Unit)?>{null}
 val LocalCaretVisible=staticCompositionLocalOf{true}
 val LocalActiveToken=staticCompositionLocalOf<IntRange?>{null}
 val LocalPlaceCursor=staticCompositionLocalOf<((Int,Int,Int)->Unit)?>{null}
+val LocalTypedParens=staticCompositionLocalOf<List<IntRange>>{emptyList()}
 
 private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspecified)height/2 else it}
 @Composable private fun MathText(text:String,size:Float,modifier:Modifier=Modifier,blink:Boolean=false,onLayout:(TextLayoutResult)->Unit={}) {
@@ -238,6 +239,8 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
     val atomic=kind in listOf("number","symbol","text","hole")
     val emptyContainer=kind in listOf("list","set")&&children.isEmpty()&&end-start>=2
     val placeCursor=LocalPlaceCursor.current
+    val typedParens=LocalTypedParens.current
+    fun typedParen(node:JSONObject)=typedParens.any {it.first==node.optInt("start",-1)&&it.last==node.optInt("end",-1)}
     val touch=Modifier.then(if(selected||(activeHole&&!operandHole))Modifier.background(c.accent.copy(alpha=.17f),RoundedCornerShape(2.dp))else Modifier)
         .then(if(emptyContainer&&select!=null)Modifier.semantics(mergeDescendants=true){contentDescription=if(kind=="list")"Empty list; tap to enter values" else "Empty set; tap to enter values"}else Modifier)
         .then(if(select!=null&&start>=0)Modifier.clickable{if(emptyContainer){if(placeCursor!=null)placeCursor(start,end,start+1)else select(start+1,start+1)}else select(start,end)}else Modifier)
@@ -314,7 +317,8 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
                 if(children.size>2&&showSecondField)child(2)
                 if(value=="")label("″")
             }
-            kind=="group"->if(hideGroup)child(0,compactExponentHole=compactExponentHole)else MathRow{label("(");if(children.getOrNull(0)?.optString("kind")!="hole")child(0);if(value!="open")label(")")}
+            // Empty parentheses stay visible; the hole between them shows only a blinking caret.
+            kind=="group"->if(hideGroup)child(0,compactExponentHole=compactExponentHole)else MathRow{label("(");val inner=children.getOrNull(0);if(inner?.optString("kind")=="hole")child(0,operandHole=true)else if(inner!=null)child(0);if(value!="open")label(")")}
             kind=="call"&&value=="mixed"->MathRow(3.dp){child(0);FractionLayout({child(1,.85f)},{child(2,.85f)})}
             kind=="call"&&value=="eng"->child(0)
             kind in listOf("number","symbol","text")-> {
@@ -382,7 +386,8 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
                         val adjacentCoefficient=kind=="product"&&i>0&&children[i-1].optString("kind")=="number"&&n.optString("kind")=="symbol"
                         if(i>0&&!coefficient&&!adjacentCoefficient)opLabel(i,when(kind){"sum"->" + ";"product"->" · ";"binary","relation"->when(value){"*"->if(node.optString("displayOperator")=="∘")"" else " × ";"/"->" ÷ ";"-"->" − ";"!="->" ≠ ";"<="->" ≤ ";">="->" ≥ ";else->" $value "};else->", "})
                         if(kind=="product"&&n.optString("kind")=="sum")wrapped(i)
-                        else child(i,hidden=kind=="binary"&&value=="*"&&n.optString("kind")=="group"&&n.optJSONArray("args")?.optJSONObject(0)?.optString("kind")=="hole",operandHole=operandHoles)
+                        // Slots keep their box; directly typed parentheses stay visible.
+                        else child(i,hidden=kind=="binary"&&value=="*"&&n.optString("kind")=="group"&&n.optJSONArray("args")?.optJSONObject(0)?.optString("kind")=="hole"&&n.optString("value")!="open"&&!typedParen(n),operandHole=operandHoles)
                     }
                 }
                 if(kind=="tuple"&&children.size==1)label(",")

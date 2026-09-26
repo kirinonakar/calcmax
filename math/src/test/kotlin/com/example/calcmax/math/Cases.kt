@@ -24,7 +24,15 @@ fun main(args: Array<String>) {
         "sum(x^2,x,1,10)" to "385", "product(x,x,1,5)" to "120", "cbrt(-8)" to "-2", "log(8,2)" to "3",
         "piecewise([x,x>0],[-x,true])" to "Piecewise((x, x > 0), (-x, True))", "prime(1000)" to "7919", "isprime(123457)" to "True", "factorint(360)" to "Matrix([\n[2, 3],\n[3, 2],\n[5, 1]])",
         "qty(2,m)+qty(30,cm)" to "23/10 m", "convert(qty(1,kg)*qty(2,mps2),N)" to "2",
-        "qty(1,km)/qty(1,m)" to "1000", "convert(qty(32,degF),degC)" to "0"
+        "qty(1,km)/qty(1,m)" to "1000", "convert(qty(32,degF),degC)" to "0",
+        "normcdf(0)" to "1/2", "normcdf(-oo,oo)" to "1", "normcdf(-1.96,1.96)" to "erf(49*sqrt(2)/50)",
+        "normpdf(0)" to "sqrt(2)/(2*sqrt(pi))", "tpdf(0,10)" to "63*sqrt(10)/512", "tpdf(1,1)" to "1/(2*pi)",
+        "chi2pdf(2,2)" to "exp(-1)/2", "fpdf(1,2,4)" to "8/27", "fcdf(3,2,4)" to "0.84",
+        "chi2cdf(0,5)" to "0", "invnorm(1/2,3,2)" to "3", "invt(1/2,10)" to "0",
+        "binomcdf(10,1/2,5)" to "319/512", "binomcdf(4,1/2)" to "[1/16, 5/16, 11/16, 15/16, 1]",
+        "poissoncdf(2,3)" to "19*exp(-2)/3", "geometcdf(1/2,3)" to "7/8",
+        "npv(0.1,-1000,[300,400,500])" to "-28000/1331", "npv(0,-1000,[300,400,500])" to "200",
+        "tvmpmt(10,0,1000,0)" to "-100"
     )
     val extras=listOf("1/0","0^0","inverse([[1,2],[2,4]])","dot([1,2],[1,2,3])","convert(1,m,kg)","convert(-1,K,degC)","factorial(-1)","sqrt(x^2)","solve((x^2-1)/(x-1)=2,x)","sin(x)","cos(2*x)","[cos(t),sin(t)]","1/x","tan(x)","nsolve(cos(x)-x,x,0,1)","nintegrate(sin(x),x,0,pi)","stats([1,2,3])","series(exp(x),x,0,4)","solve([x+y=3,x-y=1],[x,y])","integrate(exp(-x^2),x)","integrate(exp(-x^2)*cos(2x),(x,0,oo))","integrate(exp(-x^2)*cos(2*x),x,0,oo)","minimum(x^2,x,-2,3)","maximum(x^2,x,-2,3)","eigenvalues([[1,0],[0,2]])","lu([[1,2],[3,4]])","f(3)","x+1")
     val values=cases.map { (source,expected)->"{\"source\":${quote(source)},\"expected\":${quote(expected)},\"tree\":${Parser(source).parse().json()}}" }+extras.map { "{\"source\":${quote(it)},\"tree\":${Parser(it).parse().json()}}" }

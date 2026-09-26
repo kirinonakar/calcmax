@@ -105,6 +105,9 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     var haptics by mutableStateOf(prefs.getBoolean("haptics",true))
     var sound by mutableStateOf(prefs.getBoolean("sound",false))
     var persistHistory by mutableStateOf(prefs.getBoolean("historyEnabled",true))
+    var autoCloseBrackets by mutableStateOf(prefs.getBoolean("autoCloseBrackets",false))
+    var typedParens by mutableStateOf<List<IntRange>>(emptyList())
+        private set
     var history by mutableStateOf(loadHistory())
         private set
     var variables by mutableStateOf(loadObject("variables"))
@@ -217,7 +220,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
             .putString("result",result?.toString() ?: "{}").putString("resultSource",resultSource).putBoolean("committed",committed)
             .putString("inputAnswer",inputAnswer?.toString() ?: "{}").putString("answerDisplay",answerDisplay?.toString() ?: "{}").putString("lastAnswerResult",lastAnswerResult?.toString() ?: "{}")
             .putString("resultDisplayMode",resultDisplayMode.name.lowercase()).putBoolean("thousandsSeparator",thousandsSeparator)
-            .putInt("precision",precision).putInt("displayDigits",displayDigits).putBoolean("haptics",haptics).putBoolean("sound",sound).putBoolean("historyEnabled",persistHistory)
+            .putInt("precision",precision).putInt("displayDigits",displayDigits).putBoolean("haptics",haptics).putBoolean("sound",sound).putBoolean("historyEnabled",persistHistory).putBoolean("autoCloseBrackets",autoCloseBrackets)
             .putFloat("inputFont",inputFont).putFloat("outputFont",outputFont)
             .putString("variables",variables.toString()).putString("functions",functions.toString()).putString("assumptions",assumptions.toString())
             .putString("dataSets",dataSets.toString()).putString("sequenceInitials",sequenceInitials).putString("differentialInitials",differentialInitials).putString("differentialT0",differentialT0)
@@ -263,6 +266,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     }
     fun edit(value: Editor,recordUndo:Boolean=true) {
         val changed=value.source!=editor.source
+        if(changed)typedParens=TypedParens.shift(typedParens,editor.source,value.source)
         if(changed&&recordUndo)rememberUndo(editor)
         if(changed && calcSession!=null){job?.cancel();busy=false;calcSession=null}
         if(changed){lastCalcValues=emptyMap();lastCalcSource=""}
@@ -288,16 +292,37 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     fun insert(text: String, inside: Int = text.length) {
         if(!poweredOn)return
         var recordInEdit=true
+        var value=text
         if(committed) {
             rememberUndo(editor);recordInEdit=false
             val last=result?.optJSONObject(if(decimal)"decimalTree" else "tree") ?: result?.optJSONObject("tree")
             nextEntry();answerDisplay=last
             if((text in listOf("+","-","−","*","×","/","÷","!","%","°","∠") || text.startsWith("^")) && variables.has("Ans")) {editor=Editor("Ans");inputAnswer=variables.getJSONObject("Ans")}
         }
+        if(autoCloseBrackets&&!overwrite&&text.length==1&&editor.cursor==editor.anchor&&editor.exponent==null) {
+            val typed=text[0]
+            val closer=when(typed){'('->')';'['->']';'{'->'}';else->null}
+            if(closer!=null)value=text+closer
+            else if(typed in ")]}" && editor.source.getOrNull(editor.cursor)==typed) {
+                edit(Editor(editor.source,editor.cursor+1,editor.cursor+1),recordUndo=recordInEdit)
+                return
+            }
+        }
         if(text=="Ans") {inputAnswer=variables.optJSONObject("Ans");answerDisplay=lastAnswerResult?.optJSONObject(if(decimal)"decimalTree" else "tree") ?: inputAnswer}
+        if(!overwrite&&(value.firstOrNull()?.let{it.isLetterOrDigit()||it=='.'}==true||value=="()")) {
+            val slot=editor.emptyProductSlot()
+            if(slot!=null&&typedParens.none {it.first==slot.first&&it.last==slot.last}) {
+                // Filling an editor-created slot with a plain operand drops its parentheses.
+                edit(editor.replaceSlot(slot,value,inside),recordUndo=recordInEdit)
+                if(value=="()")markTypedParens(editor.cursor)
+                return
+            }
+        }
         val target=if(overwrite&&editor.cursor==editor.anchor)editor.copy(anchor=(editor.cursor+text.length).coerceAtMost(editor.source.length)) else editor
-        edit(target.insert(text,inside),recordUndo=recordInEdit)
+        edit(target.insert(value,inside),recordUndo=recordInEdit)
+        if(value=="()"||value==")"||value=="(")markTypedParens(editor.cursor)
     }
+    fun markTypedParens(cursor:Int) {typedParens=TypedParens.mark(typedParens,editor.source,cursor)}
     fun insertDmsSymbol() {
         if(!poweredOn)return
         val position=minOf(editor.cursor,editor.anchor).coerceIn(0,editor.source.length)

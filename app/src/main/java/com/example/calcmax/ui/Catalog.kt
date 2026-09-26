@@ -22,7 +22,10 @@ private val Catalog=linkedMapOf(
     "ODE & transforms" to listOf("dsolve(,,)","laplace(,t,s)","ilaplace(,s,t)","fourier(,t,w)","ifourier(,w,t)","fft([])","ifft([])"),
     "Vector calculus" to listOf("gradient(,[x,y])","divergence(,[x,y])","curl(,[x,y])","hessian(,[x,y])","jacobian(,[x,y])","laplacian(,[x,y])"),
     "Matrix & vector" to listOf("det()","inverse()","transpose()","rank()","trace()","ref()","rref()","lu()","linsolve(,)","eigenvalues()","eigenvectors()","dot(,)","cross(,)","norm()","normalize()","angle(,)","projection(,)","charpoly(,x)","identity(2)","diag([])","qr()","cholesky()","nullspace()","cofactor()","adjugate()","rowspace()","singularvalues()","frob()","jordan()","dim()"),
-    "Data & units" to listOf("stats([])","mean([])","median([])","variance([])","stdev([])","quartiles([])","sumdata([])","regression([],linear)","covariance([],[])","correlation([],[])","qty(,m)","convert(,m,cm)")
+    "Data & units" to listOf("stats([])","mean([])","median([])","variance([])","stdev([])","quartiles([])","sumdata([])","regression([],linear)","covariance([],[])","correlation([],[])","qty(,m)","convert(,m,cm)"),
+    "Distributions" to listOf("normpdf(,0,1)","normcdf()","normcdf(,)","normcdf(,,0,1)","invnorm(,0,1)","tpdf(,10)","tcdf(,10)","tcdf(,,10)","invt(,10)","chi2pdf(,5)","chi2cdf(,5)","chi2cdf(,,5)","fpdf(,5,10)","fcdf(,5,10)","fcdf(,,5,10)","binompdf(,0.5,)","binomcdf(,0.5,)","poissonpdf(,)","poissoncdf(,)","geometpdf(,)","geometcdf(,)"),
+    "Tests & intervals" to listOf("ttest(,[])","ttest(,,,)","ztest(,,[])","ztest(,,,)","chi2test([],[])","anova([],[])","tinterval(,[])","tinterval(,,,)","zinterval(,,[])","zinterval(,,,)"),
+    "Finance" to listOf("tvmfv(,,,)","tvmpv(,,,)","tvmpmt(,,,)","tvmn(,,,)","tvmrate(,,,)","npv(,[])","npv(,,[])","irr([])","irr(,[])","amort(,,)","amort(,,,)")
 )
 @Composable fun CatalogDialog(m: CalculatorModel,close: ()->Unit) {
     var category by remember {mutableStateOf("Scientific")};var search by remember {mutableStateOf("")};var showHelp by remember {mutableStateOf(false)}
@@ -43,6 +46,9 @@ private val Catalog=linkedMapOf(
                 "Vector calculus" -> "Vector functions take a coordinate list, e.g. gradient(x^2+y^2,[x,y])."
                 "Matrix & vector" -> "Matrix commands accept a matrix literal such as [[1,2],[3,4]]."
                 "Scientific" -> "Numeric trig follows the selected angle unit; explicit π and ° override it."
+                "Distributions" -> "normcdf takes one bound, two bounds, or two bounds with μ and σ; the t, χ² and F entries take a bound and their degrees of freedom."
+                "Tests & intervals" -> "Tests take a data list or a summary, e.g. ttest(μ0,[...]) or ttest(μ0,x̄,s,n). Append left or right for a one-sided p value."
+                "Finance" -> "Rates are per payment period (0.05/12 for 5% a year); add begin for payments at the start of each period."
                 else -> "Tap a template, then tap its empty slots to fill them. ↑ selects the enclosing expression; ↓ selects a child."
             }
             Text(hint,fontSize=11.sp)

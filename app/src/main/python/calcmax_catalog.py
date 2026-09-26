@@ -6,6 +6,7 @@ x, y, z, t, u, v, w, s = sp.symbols("x y z t u v w s")
 pi = sp.pi
 true, false = sp.true, sp.false
 left, right, both, linear = "left", "right", "both", "linear"
+begin, end = "begin", "end"
 m, cm = "m", "cm"
 _names = set("""
 abs floor ceil round sign sqrt cbrt nthroot atan2 arctan2 frac iPart log ln exp sinc sinh cosh tanh asin acos atan arcsin arccos arctan sin cos tan
@@ -20,6 +21,9 @@ charpoly identity diag qr cholesky nullspace cofactor adjugate rowspace singular
 gradient divergence curl hessian jacobian laplacian
 dsolve desolve laplace ilaplace fourier ifourier fft ifft
 stats mean median variance stdev quartiles regression covariance correlation qty convert
+normpdf normalcdf normcdf normalpdf invnorm tpdf tcdf invt chi2pdf chi2cdf fpdf fcdf binompdf binomcdf poissonpdf poissoncdf geometpdf geometcdf
+ttest ztest chi2test anova tinterval zinterval
+tvmfv tvmpv tvmpmt tvmn tvmrate npv irr amort
 """.split())
 _functions = {}
 _variables = {}

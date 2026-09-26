@@ -98,6 +98,8 @@ CANONICAL_FUNCTION_ALIASES = {
     "arcosh": "acosh",
     "arctanh": "atanh",
     "artanh": "atanh",
+    "normalcdf": "normcdf",
+    "normalpdf": "normpdf",
 }
 
 def canonical_function_name(name):
@@ -188,6 +190,526 @@ def initial_conditions(value, dependent, independent):
         result[key]=value
     return result
 
+# --- Distributions, statistical tests and finance ---------------------------
+# Compact closed forms stay symbolic (erf, binomial coefficients, exp) while the
+# remaining cumulative probabilities use mpmath at the working precision.  The
+# tests reuse the same tail probabilities, and the finance functions follow the
+# TVM cash-flow convention: money received is positive, money paid is negative,
+# and rates are per payment period.
+
+def _real_value(value, message):
+    require(getattr(value, "is_number", False) and not value.has(s.I), message)
+    return value
+
+def _real_or_infinite(value, message):
+    if value in (s.oo, -s.oo): return value
+    return _real_value(value, message)
+
+def _positive(value, message):
+    require(getattr(value, "is_number", False) and value > 0, message)
+    return value
+
+def _mpf(value, digits):
+    if isinstance(value, s.Rational): return mp.mpf(int(value.p))/mp.mpf(int(value.q))
+    return mp.mpf(str(s.N(value, digits + 10)))
+
+def _mp_result(value, engine):
+    if value == 0: value = mp.mpf(0)
+    return s.Float(str(value), engine.precision)
+
+def _normal_cdf(x):
+    return (1 + mp.erf(x/mp.sqrt(2)))/2
+
+def _normal_sf(x):
+    return mp.erfc(x/mp.sqrt(2))/2
+
+def _t_tail(t, df):
+    """P(T > t) for t >= 0, the accurate half of the symmetric t tail."""
+    return mp.betainc(df/2, mp.mpf(1)/2, 0, df/(df + t*t), regularized=True)/2
+
+def _t_cdf(t, df):
+    return _t_tail(-t, df) if t <= 0 else 1 - _t_tail(t, df)
+
+def _t_sf(t, df):
+    return _t_tail(t, df) if t >= 0 else 1 - _t_tail(-t, df)
+
+def _chisq_cdf(x, df):
+    if x <= 0: return mp.mpf(0)
+    return mp.gammainc(df/2, 0, x/2, regularized=True)
+
+def _chisq_sf(x, df):
+    if x <= 0: return mp.mpf(1)
+    return mp.gammainc(df/2, x/2, mp.inf, regularized=True)
+
+def _f_cdf(x, d1, d2):
+    if x <= 0: return mp.mpf(0)
+    return mp.betainc(d1/2, d2/2, 0, d1*x/(d1*x + d2), regularized=True)
+
+def _f_sf(x, d1, d2):
+    if x <= 0: return mp.mpf(1)
+    return mp.betainc(d2/2, d1/2, 0, d2/(d2 + d1*x), regularized=True)
+
+def _bound_survival(sf, bound, digits):
+    if bound == s.oo: return mp.mpf(0)
+    if bound == -s.oo: return mp.mpf(1)
+    return sf(_mpf(bound, digits))
+
+def _quantile(cdf, probability, engine, lower, upper):
+    """Invert a monotone cumulative distribution with bracket expansion and bisection."""
+    target = _mpf(probability, engine.precision)
+    low, high = mp.mpf(lower), mp.mpf(upper)
+    width = high - low
+    for _ in range(200):
+        if cdf(low) < target <= cdf(high): break
+        width *= 2
+        if cdf(low) >= target: high = low; low = high - width
+        else: low = high; high = low + width
+    else:
+        raise MathError("Numeric quantile did not converge")
+    tolerance = mp.mpf(10)**(-(engine.precision + 4))*max(1, abs(low), abs(high))
+    while high - low > tolerance:
+        middle = (low + high)/2
+        if cdf(middle) < target: low = middle
+        else: high = middle
+    return (low + high)/2
+
+def _tail_probability(sf, statistic, tail):
+    """Two-sided p value by default; sf(x) is P(X >= x) for a symmetric distribution."""
+    if tail == "left": return min(mp.mpf(1), sf(-statistic))
+    if tail == "right": return sf(statistic)
+    return min(mp.mpf(1), 2*sf(abs(statistic)))
+
+def _tail_argument(a, nodes):
+    if nodes and isinstance(nodes[-1], dict) and nodes[-1].get("kind") == "symbol" and nodes[-1].get("value") in ("left", "right", "both"):
+        return nodes[-1]["value"], a[:-1]
+    return "both", a
+
+def _mode_argument(a, nodes):
+    if nodes and isinstance(nodes[-1], dict) and nodes[-1].get("kind") == "symbol" and nodes[-1].get("value") in ("begin", "end"):
+        return nodes[-1]["value"], a[:-1]
+    return "end", a
+
+def _sample_statistics(data):
+    values = flatten(data)
+    require(len(values) >= 2, "Enter at least two data values")
+    for value in values: _real_value(value, "Sample values must be real numbers")
+    n = s.Integer(len(values))
+    mean = s.Add(*values)/n
+    sd = s.sqrt(s.Add(*[(value - mean)**2 for value in values])/(n - 1))
+    require(sd > 0, "The sample needs some variation")
+    return mean, sd, n
+
+def _data_center(samples):
+    values = flatten(samples)
+    require(values, "Enter at least one data value")
+    for value in values: _real_value(value, "Sample values must be real numbers")
+    return s.Add(*values)/s.Integer(len(values)), s.Integer(len(values))
+
+def _confidence_level(value):
+    _real_value(value, "The confidence level must be a number")
+    level = value/100 if value > 1 else value
+    require(0 < level < 1, "The confidence level must be between 0 and 1, or between 1 and 100 percent")
+    return level
+
+def _binom_term(n, p, k):
+    return s.binomial(n, k)*p**k*(1 - p)**(n - k)
+
+def _tvm_value(n, i, pv, pmt, fv, begin):
+    """Value of pv*(1+i)^n + pmt*((1+i)^n - 1)/i + fv for mpmath numbers."""
+    if i == 0: return pv + pmt*n + fv
+    growth = (1 + i)**n
+    return pv*growth + pmt*(1 + i if begin else 1)*(growth - 1)/i + fv
+
+def distribution_value(engine, name, a):
+    digits = engine.precision
+    if name == "normpdf":
+        require(len(a) in (1, 3), "normpdf takes x, or x with μ and σ")
+        x, mu, sigma = (a[0], s.Integer(0), s.Integer(1)) if len(a) == 1 else a
+        _real_value(x, "normpdf requires numeric arguments")
+        _real_value(mu, "normpdf requires numeric arguments")
+        _positive(sigma, "Standard deviation must be positive")
+        z = (x - mu)/sigma
+        return s.exp(-z**2/2)/(sigma*s.sqrt(2*s.pi))
+    if name == "normcdf":
+        require(len(a) in (1, 2, 4), "normcdf takes one bound, two bounds, or two bounds with μ and σ")
+        if len(a) == 1:
+            x = _real_or_infinite(a[0], "normcdf requires a numeric bound")
+            if x == s.oo: return s.Integer(1)
+            if x == -s.oo: return s.Integer(0)
+            return (s.erf(x/s.sqrt(2)) + 1)/2
+        low = _real_or_infinite(a[0], "normcdf requires real bounds")
+        high = _real_or_infinite(a[1], "normcdf requires real bounds")
+        require(high >= low, "The lower bound must not be above the upper bound")
+        if len(a) == 2: mu, sigma = s.Integer(0), s.Integer(1)
+        else: mu, sigma = _real_value(a[2], "normcdf requires a numeric μ"), _positive(a[3], "Standard deviation must be positive")
+        return (s.erf((high - mu)/(sigma*s.sqrt(2))) - s.erf((low - mu)/(sigma*s.sqrt(2))))/2
+    if name == "invnorm":
+        require(len(a) in (1, 3), "invnorm takes a probability, or a probability with μ and σ")
+        p = a[0]
+        mu, sigma = (s.Integer(0), s.Integer(1)) if len(a) == 1 else (a[1], a[2])
+        require(getattr(p, "is_number", False) and not p.has(s.I) and 0 < p < 1, "invnorm requires a probability between 0 and 1")
+        _real_value(mu, "invnorm requires a numeric μ")
+        _positive(sigma, "Standard deviation must be positive")
+        if p == s.Rational(1, 2): return mu
+        with mp.workdps(digits + 10):
+            return _mp_result(_mpf(mu, digits) + _mpf(sigma, digits)*_quantile(_normal_cdf, p, engine, -2, 2), engine)
+    if name == "tpdf":
+        require(len(a) == 2, "tpdf takes x and the degrees of freedom")
+        x, df = a
+        _real_value(x, "tpdf requires numeric arguments")
+        _positive(df, "Degrees of freedom must be positive")
+        return s.gamma((df + 1)/2)/(s.sqrt(df*s.pi)*s.gamma(df/2))*(1 + x**2/df)**(-(df + 1)/2)
+    if name == "tcdf":
+        require(len(a) in (2, 3), "tcdf takes a bound and df, or two bounds and df")
+        if len(a) == 2:
+            x = _real_or_infinite(a[0], "tcdf requires a real bound")
+            df = _positive(a[1], "Degrees of freedom must be positive")
+            if x == s.oo: return s.Integer(1)
+            if x == -s.oo: return s.Integer(0)
+            with mp.workdps(digits + 10): return _mp_result(_t_cdf(_mpf(x, digits), _mpf(df, digits)), engine)
+        low = _real_or_infinite(a[0], "tcdf requires real bounds")
+        high = _real_or_infinite(a[1], "tcdf requires real bounds")
+        df = _positive(a[2], "Degrees of freedom must be positive")
+        require(high >= low, "The lower bound must not be above the upper bound")
+        with mp.workdps(digits + 10):
+            df_mp = _mpf(df, digits)
+            def survival(bound): return _bound_survival(lambda x: _t_sf(x, df_mp), bound, digits)
+            return _mp_result(survival(low) - survival(high), engine)
+    if name == "invt":
+        require(len(a) == 2, "invt takes a probability and the degrees of freedom")
+        p, df = a
+        require(getattr(p, "is_number", False) and not p.has(s.I) and 0 < p < 1, "invt requires a probability between 0 and 1")
+        _positive(df, "Degrees of freedom must be positive")
+        if p == s.Rational(1, 2): return s.Integer(0)
+        with mp.workdps(digits + 10):
+            df_mp = _mpf(df, digits)
+            return _mp_result(_quantile(lambda x: _t_cdf(x, df_mp), p, engine, -2, 2), engine)
+    if name == "chi2pdf":
+        require(len(a) == 2, "chi2pdf takes x and the degrees of freedom")
+        x, df = a
+        _real_value(x, "chi2pdf requires numeric arguments")
+        _positive(df, "Degrees of freedom must be positive")
+        require(x >= 0, "chi2pdf is defined for x ≥ 0")
+        require(x > 0 or df >= 2, "chi2pdf is not finite at x = 0 below df = 2")
+        return x**(df/2 - 1)*s.exp(-x/2)/(2**(df/2)*s.gamma(df/2))
+    if name == "chi2cdf":
+        require(len(a) in (2, 3), "chi2cdf takes a bound and df, or two bounds and df")
+        if len(a) == 2:
+            x = _real_or_infinite(a[0], "chi2cdf requires a real bound")
+            df = _positive(a[1], "Degrees of freedom must be positive")
+            if x == s.oo: return s.Integer(1)
+            if x == -s.oo: return s.Integer(0)
+            with mp.workdps(digits + 10): return _mp_result(_chisq_cdf(_mpf(x, digits), _mpf(df, digits)), engine)
+        low = _real_or_infinite(a[0], "chi2cdf requires real bounds")
+        high = _real_or_infinite(a[1], "chi2cdf requires real bounds")
+        df = _positive(a[2], "Degrees of freedom must be positive")
+        require(high >= low, "The lower bound must not be above the upper bound")
+        with mp.workdps(digits + 10):
+            df_mp = _mpf(df, digits)
+            def survival(bound): return _bound_survival(lambda x: _chisq_sf(x, df_mp), bound, digits)
+            return _mp_result(survival(low) - survival(high), engine)
+    if name == "fpdf":
+        require(len(a) == 3, "fpdf takes x and the two degrees of freedom")
+        x, d1, d2 = a
+        _real_value(x, "fpdf requires numeric arguments")
+        _positive(d1, "Degrees of freedom must be positive")
+        _positive(d2, "Degrees of freedom must be positive")
+        require(x > 0, "fpdf is defined for x > 0")
+        return s.sqrt((d1*x)**d1*d2**d2/(d1*x + d2)**(d1 + d2))/(x*s.beta(d1/2, d2/2))
+    if name == "fcdf":
+        require(len(a) in (3, 4), "fcdf takes a bound and two degrees of freedom, or two bounds")
+        if len(a) == 3:
+            x = _real_or_infinite(a[0], "fcdf requires a real bound")
+            d1 = _positive(a[1], "Degrees of freedom must be positive")
+            d2 = _positive(a[2], "Degrees of freedom must be positive")
+            if x == s.oo: return s.Integer(1)
+            if x == -s.oo: return s.Integer(0)
+            with mp.workdps(digits + 10): return _mp_result(_f_cdf(_mpf(x, digits), _mpf(d1, digits), _mpf(d2, digits)), engine)
+        low = _real_or_infinite(a[0], "fcdf requires real bounds")
+        high = _real_or_infinite(a[1], "fcdf requires real bounds")
+        d1 = _positive(a[2], "Degrees of freedom must be positive")
+        d2 = _positive(a[3], "Degrees of freedom must be positive")
+        require(high >= low, "The lower bound must not be above the upper bound")
+        with mp.workdps(digits + 10):
+            d1_mp, d2_mp = _mpf(d1, digits), _mpf(d2, digits)
+            def survival(bound): return _bound_survival(lambda x: _f_sf(x, d1_mp, d2_mp), bound, digits)
+            return _mp_result(survival(low) - survival(high), engine)
+    if name in ("binompdf", "binomcdf"):
+        require(len(a) in (2, 3), name + " takes n, p and optionally k")
+        n, p = a[0], a[1]
+        require(n.is_Integer and 0 < n <= 1000, "binom n must be an integer from 1 to 1000")
+        require(getattr(p, "is_number", False) and 0 <= p <= 1, "binom p must be a probability")
+        count = int(n)
+        if len(a) == 3:
+            k = a[2]
+            require(k.is_Integer and 0 <= k <= n, "binom k must be an integer from 0 to n")
+            if name == "binompdf": return _binom_term(count, p, int(k))
+            return s.Add(*[_binom_term(count, p, index) for index in range(int(k) + 1)])
+        require(count <= 100, "Use a k value for a single probability when n is above 100")
+        probabilities = [_binom_term(count, p, index) for index in range(count + 1)]
+        if name == "binompdf": return probabilities
+        running, cumulative = s.Integer(0), []
+        for term in probabilities:
+            running = running + term
+            cumulative.append(running)
+        return cumulative
+    if name in ("poissonpdf", "poissoncdf"):
+        require(len(a) == 2, name + " takes the mean μ and k")
+        mu, k = a
+        _positive(mu, "The Poisson mean must be positive")
+        require(k.is_Integer and 0 <= k <= 10000, "Poisson k must be an integer from 0 to 10000")
+        count = int(k)
+        if name == "poissonpdf": return s.exp(-mu)*mu**count/s.factorial(count)
+        if count <= 200: return s.exp(-mu)*s.Add(*[mu**index/s.factorial(index) for index in range(count + 1)])
+        with mp.workdps(digits + 10):
+            return _mp_result(mp.gammainc(count + 1, _mpf(mu, digits), mp.inf, regularized=True), engine)
+    if name in ("geometpdf", "geometcdf"):
+        require(len(a) == 2, name + " takes p and k")
+        p, k = a
+        require(getattr(p, "is_number", False) and 0 < p <= 1, "geomet p must be a probability above 0")
+        require(k.is_Integer and 1 <= k <= 10**6, "geomet k must be a positive integer")
+        if name == "geometpdf": return (1 - p)**(int(k) - 1)*p
+        return 1 - (1 - p)**int(k)
+    raise MathError("Unknown distribution: " + name)
+
+def statistical_test(engine, name, a, nodes):
+    digits = engine.precision
+    tail, args = _tail_argument(a, nodes)
+    if tail != "both": engine.note = "One-tailed probability (" + tail + " tail)."
+    if name == "ttest":
+        require(len(args) in (2, 4), "ttest takes μ0 and data, or μ0, x̄, s and n")
+        mu0 = _real_value(args[0], "ttest requires a numeric μ0")
+        if len(args) == 2:
+            require(isinstance(args[1], (list, tuple)), "ttest data must be a list")
+            mean, sd, n = _sample_statistics(args[1])
+        else:
+            mean, sd, n = args[1], args[2], args[3]
+            _real_value(mean, "ttest requires numeric summary values")
+            _positive(sd, "The sample SD must be positive")
+            require(n.is_Integer and n >= 2, "ttest n must be an integer of at least 2")
+        with mp.workdps(digits + 10):
+            statistic = (_mpf(mean, digits) - _mpf(mu0, digits))/(_mpf(sd, digits)/mp.sqrt(_mpf(n, digits)))
+            probability = _tail_probability(lambda t: _t_sf(t, _mpf(n - 1, digits)), statistic, tail)
+            return {"t": _mp_result(statistic, engine), "df": s.Integer(n - 1), "p value": _mp_result(probability, engine),
+                    "sample mean": mean, "sample SD": sd, "n": s.Integer(n)}
+    if name == "ztest":
+        require(len(args) in (3, 4), "ztest takes μ0, σ and data, or μ0, σ, x̄ and n")
+        mu0 = _real_value(args[0], "ztest requires a numeric μ0")
+        sigma = _positive(args[1], "σ must be positive")
+        if len(args) == 3:
+            require(isinstance(args[2], (list, tuple)), "ztest data must be a list")
+            mean, n = _data_center(args[2])
+        else:
+            mean, n = args[2], args[3]
+            _real_value(mean, "ztest requires numeric summary values")
+            require(n.is_Integer and n >= 1, "ztest n must be a positive integer")
+        with mp.workdps(digits + 10):
+            statistic = (_mpf(mean, digits) - _mpf(mu0, digits))/(_mpf(sigma, digits)/mp.sqrt(_mpf(n, digits)))
+            probability = _tail_probability(_normal_sf, statistic, tail)
+            return {"z": _mp_result(statistic, engine), "p value": _mp_result(probability, engine),
+                    "sample mean": mean, "n": s.Integer(n)}
+    if name == "chi2test":
+        require(len(args) == 2, "chi2test takes observed and expected counts")
+        observed, expected = flatten(args[0]), flatten(args[1])
+        require(len(observed) == len(expected) and len(observed) >= 2, "chi2test needs two lists of equal length with at least two counts")
+        for value in observed + expected: _real_value(value, "Counts must be real numbers")
+        require(all(value > 0 for value in expected), "Expected counts must be positive")
+        statistic = s.Add(*[((o - e)**2)/e for o, e in zip(observed, expected)])
+        df = len(observed) - 1
+        with mp.workdps(digits + 10):
+            probability = _chisq_sf(_mpf(statistic, digits), _mpf(s.Integer(df), digits))
+            return {"chi-square": statistic, "df": s.Integer(df), "p value": _mp_result(probability, engine)}
+    if name == "anova":
+        require(len(args) >= 2, "anova takes two or more data lists")
+        groups = []
+        for group in args:
+            require(isinstance(group, (list, tuple)), "anova arguments must be data lists")
+            values = flatten(group)
+            require(len(values) >= 2, "Each anova group needs at least two values")
+            for value in values: _real_value(value, "Sample values must be real numbers")
+            groups.append(values)
+        total = sum(len(group) for group in groups)
+        means = [s.Add(*group)/s.Integer(len(group)) for group in groups]
+        grand = s.Add(*[value for group in groups for value in group])/s.Integer(total)
+        between = s.Add(*[s.Integer(len(group))*(mean - grand)**2 for group, mean in zip(groups, means)])
+        within = s.Add(*[s.Add(*[(value - mean)**2 for value in group]) for group, mean in zip(groups, means)])
+        require(within != 0, "anova needs variation inside the groups")
+        count = len(groups)
+        statistic = (between/(count - 1))/(within/(total - count))
+        with mp.workdps(digits + 10):
+            probability = _f_sf(_mpf(statistic, digits), _mpf(s.Integer(count - 1), digits), _mpf(s.Integer(total - count), digits))
+            return {"F": statistic, "df numerator": s.Integer(count - 1), "df denominator": s.Integer(total - count), "p value": _mp_result(probability, engine)}
+    if name in ("tinterval", "zinterval"):
+        if name == "tinterval":
+            require(len(args) in (2, 4), "tinterval takes a confidence level and data, or a level, x̄, s and n")
+            level = _confidence_level(args[0])
+            if len(args) == 2:
+                require(isinstance(args[1], (list, tuple)), "tinterval data must be a list")
+                mean, sd, n = _sample_statistics(args[1])
+            else:
+                mean, sd, n = args[1], args[2], args[3]
+                _real_value(mean, "tinterval requires numeric summary values")
+                _positive(sd, "The sample SD must be positive")
+                require(n.is_Integer and n >= 2, "tinterval n must be an integer of at least 2")
+            with mp.workdps(digits + 10):
+                critical = _quantile(lambda x: _t_cdf(x, _mpf(n - 1, digits)), (1 + level)/2, engine, -2, 2)
+                margin = critical*_mpf(sd, digits)/mp.sqrt(_mpf(n, digits))
+                center = _mpf(mean, digits)
+                return {"confidence interval": [_mp_result(center - margin, engine), _mp_result(center + margin, engine)],
+                        "sample mean": mean, "sample SD": sd, "n": s.Integer(n), "df": s.Integer(n - 1)}
+        require(len(args) in (3, 4), "zinterval takes a confidence level, σ and data, or a level, σ, x̄ and n")
+        level = _confidence_level(args[0])
+        sigma = _positive(args[1], "σ must be positive")
+        if len(args) == 3:
+            require(isinstance(args[2], (list, tuple)), "zinterval data must be a list")
+            mean, n = _data_center(args[2])
+        else:
+            mean, n = args[2], args[3]
+            _real_value(mean, "zinterval requires numeric summary values")
+            require(n.is_Integer and n >= 1, "zinterval n must be a positive integer")
+        with mp.workdps(digits + 10):
+            critical = _quantile(_normal_cdf, (1 + level)/2, engine, -2, 2)
+            margin = critical*_mpf(sigma, digits)/mp.sqrt(_mpf(n, digits))
+            center = _mpf(mean, digits)
+            return {"confidence interval": [_mp_result(center - margin, engine), _mp_result(center + margin, engine)],
+                    "sample mean": mean, "n": s.Integer(n)}
+    raise MathError("Unknown statistical test: " + name)
+
+def finance_value(engine, name, a, nodes):
+    digits = engine.precision
+    mode, args = _mode_argument(a, nodes)
+    begin = mode == "begin"
+    if name == "npv":
+        require(len(args) in (2, 3), "npv takes a rate and a cash-flow list, or a rate, initial flow and list")
+        rate = _real_value(args[0], "npv requires a numeric rate")
+        require(rate > -1, "The rate must be greater than -100%")
+        if len(args) == 2:
+            require(isinstance(args[1], (list, tuple)), "npv needs a cash-flow list")
+            flows = list(args[1])
+        else:
+            require(isinstance(args[2], (list, tuple)), "npv needs a cash-flow list")
+            flows = [args[1]] + list(args[2])
+        require(2 <= len(flows) <= 500, "npv needs between 2 and 500 cash flows")
+        for flow in flows: _real_value(flow, "Cash flows must be numbers")
+        return s.Add(*[flow/(1 + rate)**index for index, flow in enumerate(flows)])
+    if name == "irr":
+        require(len(args) in (1, 2), "irr takes a cash-flow list, or an initial flow and list")
+        if len(args) == 1:
+            require(isinstance(args[0], (list, tuple)), "irr needs a cash-flow list")
+            flows = list(args[0])
+        else:
+            require(isinstance(args[1], (list, tuple)), "irr needs a cash-flow list")
+            flows = [args[0]] + list(args[1])
+        require(2 <= len(flows) <= 100, "irr needs between 2 and 100 cash flows")
+        for flow in flows: _real_value(flow, "Cash flows must be numbers")
+        if s.Add(*flows) == 0: return s.Integer(0)
+        with mp.workdps(digits + 15):
+            coefficients = [_mpf(flow, digits + 5) for flow in flows]
+            while coefficients and coefficients[0] == 0: coefficients.pop(0)
+            require(len(coefficients) >= 2, "irr needs at least one change of sign")
+            candidates = []
+            for root in mp.polyroots(coefficients, maxsteps=200, extraprec=10):
+                if abs(mp.im(root)) > mp.mpf(10)**(-max(digits - 6, 6))*(1 + abs(root)): continue
+                rate = mp.re(root) - 1
+                if rate > -1: candidates.append(rate)
+            require(candidates, "No rate of return solves this cash-flow list")
+            if len(candidates) > 1: engine.note = "Several rates solve this cash-flow list; the value closest to zero is shown."
+            return _mp_result(min(candidates, key=abs), engine)
+    if name in ("tvmfv", "tvmpv", "tvmpmt", "tvmn"):
+        orders = {"tvmfv": ("n", "i", "pv", "pmt"), "tvmpv": ("n", "i", "pmt", "fv"),
+                  "tvmpmt": ("n", "i", "pv", "fv"), "tvmn": ("i", "pv", "pmt", "fv")}
+        require(len(args) == 4, name + " takes " + ", ".join(orders[name]) + ", and optionally begin or end")
+        values = dict(zip(orders[name], args))
+        for value in values.values(): _real_value(value, name + " requires numeric arguments")
+        require(values["i"] > -1, "The interest rate must be greater than -100%")
+        if "n" in values: require(values["n"] >= 0, "The number of periods must not be negative")
+        with mp.workdps(digits + 10):
+            n = _mpf(values["n"], digits) if "n" in values else None
+            i = _mpf(values["i"], digits)
+            pv = _mpf(values.get("pv", s.Integer(0)), digits)
+            pmt = _mpf(values.get("pmt", s.Integer(0)), digits)
+            fv = _mpf(values.get("fv", s.Integer(0)), digits)
+            adjustment = 1 + i if begin else 1
+            if name == "tvmfv":
+                answer = -_tvm_value(n, i, pv, pmt, mp.mpf(0), begin)
+            elif name == "tvmpv":
+                if i == 0: answer = -(pmt*n + fv)
+                else: answer = -_tvm_value(n, i, mp.mpf(0), pmt, fv, begin)/(1 + i)**n
+            elif name == "tvmpmt":
+                require(n > 0, "The number of periods must be positive")
+                if i == 0:
+                    answer = -(pv + fv)/n
+                else:
+                    answer = -(pv*(1 + i)**n + fv)/_tvm_value(n, i, mp.mpf(0), mp.mpf(1), mp.mpf(0), begin)
+            else:
+                if i == 0:
+                    require(pmt != 0, "Zero interest needs a non-zero payment")
+                    answer = -(pv + fv)/pmt
+                else:
+                    payment = pmt*adjustment
+                    require(i*pv + payment != 0, "No number of periods solves this schedule")
+                    ratio = (payment - i*fv)/(i*pv + payment)
+                    require(ratio > 0, "No number of periods solves this schedule")
+                    answer = mp.log(ratio)/mp.log(1 + i)
+        return _mp_result(answer, engine)
+    if name == "tvmrate":
+        require(len(args) == 4, "tvmrate takes n, pv, pmt and fv, and optionally begin or end")
+        n, pv, pmt, fv = args
+        for value in args: _real_value(value, "tvmrate requires numeric arguments")
+        require(n > 0, "The number of periods must be positive")
+        if pv + pmt*n + fv == 0: return s.Integer(0)
+        with mp.workdps(digits + 10):
+            n_mp, pv_mp, pmt_mp, fv_mp = _mpf(n, digits), _mpf(pv, digits), _mpf(pmt, digits), _mpf(fv, digits)
+            def equation(rate): return _tvm_value(n_mp, rate, pv_mp, pmt_mp, fv_mp, begin)
+            rates = [mp.mpf(0)]
+            for k in range(1, 31): rates += [-1 + mp.mpf(2)**(-k), -mp.mpf(2)**(-k)]
+            for k in range(1, 16): rates += [mp.mpf(10)**(-k), mp.mpf(2)**k]
+            rates = sorted(set(rates))
+            roots, previous = [], None
+            for rate in rates:
+                current = equation(rate)
+                if current == 0: roots.append(rate)
+                elif previous is not None and current*previous[1] < 0:
+                    low, high = previous[0], rate
+                    low_value = previous[1]
+                    tolerance = mp.mpf(10)**(-(digits + 4))*(1 + abs(low))
+                    for _ in range(400):
+                        middle = (low + high)/2
+                        middle_value = equation(middle)
+                        if low_value*middle_value <= 0: high = middle
+                        else: low, low_value = middle, middle_value
+                        if high - low <= tolerance: break
+                    roots.append((low + high)/2)
+                previous = (rate, current)
+            require(roots, "No interest rate solves this payment schedule")
+            unique = []
+            for root in sorted(roots):
+                if not unique or root - unique[-1] > mp.mpf(10)**(-(digits + 4))*(1 + abs(root)): unique.append(root)
+            if len(unique) > 1: engine.note = "Several rates solve this schedule; the value closest to zero is shown."
+            return _mp_result(min(unique, key=abs), engine)
+    if name == "amort":
+        require(len(args) in (3, 4), "amort takes i, pv and n, and optionally k")
+        i, pv, n = args[0], args[1], args[2]
+        for value in args[:3]: _real_value(value, "amort requires numeric arguments")
+        require(i > -1, "The interest rate must be greater than -100%")
+        require(n.is_Integer and n > 0, "The number of payments must be a positive integer")
+        if len(args) == 4:
+            k = args[3]
+            require(k.is_Integer and 0 <= k <= n, "The payment index must be an integer from 0 to n")
+        else: k = n
+        with mp.workdps(digits + 10):
+            i_mp, principal = _mpf(i, digits), _mpf(pv, digits)
+            n_mp, k_mp = _mpf(n, digits), _mpf(k, digits)
+            growth = (1 + i_mp)**n_mp
+            if i_mp == 0: payment = -principal/n_mp
+            else: payment = -principal*i_mp*growth/((1 + i_mp if begin else 1)*(growth - 1))
+            balance = _tvm_value(k_mp, i_mp, principal, payment, mp.mpf(0), begin)
+            if abs(balance) <= mp.mpf(10)**(-(max(digits, 12) - 3))*max(1, abs(principal)): balance = mp.mpf(0)
+            interest = -payment*k_mp - (principal - balance)
+            return {"payment": _mp_result(payment, engine), "payments": s.Integer(k),
+                    "balance": _mp_result(balance, engine), "principal paid": _mp_result(principal - balance, engine),
+                    "interest paid": _mp_result(interest, engine)}
+    raise MathError("Unknown finance function: " + name)
 class Engine:
     def __init__(self, request):
         self.request = request
@@ -629,6 +1151,13 @@ class Engine:
             if d1=="temperature": require(base>=0,"Temperature below absolute zero")
             self.note = "Result in " + dst
             return s.simplify((base-o2)/f2)
+        if name in ("normpdf", "normcdf", "invnorm", "tpdf", "tcdf", "invt", "chi2pdf", "chi2cdf", "fpdf", "fcdf",
+                    "binompdf", "binomcdf", "poissonpdf", "poissoncdf", "geometpdf", "geometcdf"):
+            return distribution_value(self, name, a)
+        if name in ("ttest", "ztest", "chi2test", "anova", "tinterval", "zinterval"):
+            return statistical_test(self, name, a, nodes)
+        if name in ("tvmfv", "tvmpv", "tvmpmt", "tvmn", "tvmrate", "npv", "irr", "amort"):
+            return finance_value(self, name, a, nodes)
         if name in self.functions:
             function = self.functions[name]
             require(len(function["parameters"])==len(a),"Function argument count mismatch")
@@ -1063,7 +1592,7 @@ def programmer(request):
 
 # Symbolic calls whose cold first evaluation is heavy enough that the generic step allowance used
 # to cut off legitimate work. Nested calls count too, so 1+fourier(exp(-t^2),t,w) is heavy as well.
-HEAVY_CALLS=("integrate","dsolve","desolve","laplace","ilaplace","fourier","ifourier","domain","range")
+HEAVY_CALLS=("integrate","dsolve","desolve","laplace","ilaplace","fourier","ifourier","domain","range","invt","tinterval","tvmrate","irr")
 def contains_heavy_call(node):
     pending=[node]
     while pending:

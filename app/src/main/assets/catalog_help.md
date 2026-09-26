@@ -341,3 +341,102 @@ Example: correlation([1,2,3],[2,4,6])
 Example: qty(2,m)+qty(30,cm)
 `convert(value,from,to)` — Unit conversion, for example convert(2,m,cm).
 Example: convert(32,degF,degC)
+
+## Distributions
+
+`normpdf(x)` — Standard normal density at x.
+Example: normpdf(0)
+`normpdf(x,μ,σ)` — Normal density with mean μ and standard deviation σ.
+Example: normpdf(70,70,10)
+`normcdf(x)` — Standard normal cumulative probability P(Z ≤ x).
+Example: normcdf(1.96)
+`normcdf(low,high)` — P(low < Z < high) for the standard normal; -oo and oo are accepted bounds.
+Example: normcdf(-1.96,1.96)
+`normcdf(low,high,μ,σ)` — Normal probability for the interval with mean μ and standard deviation σ.
+Example: normcdf(-oo,60,70,10)
+`invnorm(p)` — Standard normal quantile: the x with P(Z ≤ x) = p.
+Example: invnorm(0.975)
+`invnorm(p,μ,σ)` — Quantile of the normal distribution with mean μ and standard deviation σ.
+Example: invnorm(0.9,70,10)
+`tpdf(x,df)` — Student t density.
+Example: tpdf(0,10)
+`tcdf(x,df)` — P(T ≤ x) for the t distribution with df degrees of freedom.
+Example: tcdf(2.228,10)
+`tcdf(low,high,df)` — P(low < T < high).
+Example: tcdf(-2.228,2.228,10)
+`invt(p,df)` — Student t quantile: the x with P(T ≤ x) = p.
+Example: invt(0.975,10)
+`chi2pdf(x,df)` — χ² density.
+Example: chi2pdf(2,2)
+`chi2cdf(x,df)` — P(X ≤ x) for the χ² distribution with df degrees of freedom.
+Example: chi2cdf(3.8415,1)
+`chi2cdf(low,high,df)` — P(low < X < high).
+Example: chi2cdf(2,4,3)
+`fpdf(x,df1,df2)` — F density with the two degrees of freedom.
+Example: fpdf(1,2,4)
+`fcdf(x,df1,df2)` — P(F ≤ x).
+Example: fcdf(3,2,4)
+`fcdf(low,high,df1,df2)` — P(low < F < high).
+Example: fcdf(1,3,2,4)
+`binompdf(n,p,k)` — Binomial probability P(X = k) for n trials with success probability p.
+Example: binompdf(10,1/2,5)
+`binompdf(n,p)` — List of the binomial probabilities for k = 0 to n (n ≤ 100).
+Example: binompdf(4,1/2)
+`binomcdf(n,p,k)` — Binomial cumulative probability P(X ≤ k).
+Example: binomcdf(10,1/2,5)
+`poissonpdf(μ,k)` — Poisson probability P(X = k) with mean μ.
+Example: poissonpdf(2,3)
+`poissoncdf(μ,k)` — Poisson cumulative probability P(X ≤ k).
+Example: poissoncdf(2,3)
+`geometpdf(p,k)` — Geometric probability P(X = k) = (1−p)^(k−1)·p.
+Example: geometpdf(1/2,3)
+`geometcdf(p,k)` — Geometric cumulative probability P(X ≤ k) = 1 − (1−p)^k.
+Example: geometcdf(1/2,3)
+
+## Statistical tests
+
+`ttest(μ0,[...])` — One-sample t test of the sample mean against μ0.
+Example: ttest(0,[1,2,3,4])
+`ttest(μ0,x̄,s,n)` — The same test from the summary statistics.
+Example: ttest(0,2.5,1.291,4)
+`ztest(μ0,σ,[...])` — One-sample z test with the known standard deviation σ.
+Example: ztest(0,2,[1,2,3,4])
+`ztest(μ0,σ,x̄,n)` — The same test from the summary statistics.
+Example: ztest(0,2,2.5,4)
+`chi2test(observed,expected)` — χ² goodness-of-fit test of observed counts against expected counts.
+Example: chi2test([10,20,30],[15,20,25])
+`anova([...],[...],...)` — One-way analysis of variance over two or more data lists.
+Example: anova([1,2,3],[4,5,6])
+`tinterval(level,[...])` — t confidence interval for the mean; the level is a fraction (0.95) or a percentage (95).
+Example: tinterval(0.95,[1,2,3,4])
+`tinterval(level,x̄,s,n)` — The same interval from the summary statistics.
+Example: tinterval(95,2.5,1.291,4)
+`zinterval(level,σ,[...])` — z confidence interval with the known standard deviation σ.
+Example: zinterval(0.95,2,[1,2,3,4])
+`zinterval(level,σ,x̄,n)` — The same interval from the summary statistics.
+Example: zinterval(95,2,2.5,4)
+- One-sample tests return two-tailed p values by default; append left or right for a one-sided test.
+
+## Finance
+
+`tvmfv(n,i,pv,pmt)` — Future value after n periods with the rate i per period.
+Example: tvmfv(12,0.05/12,-1000,-100)
+`tvmpv(n,i,pmt,fv)` — Present value of n payments and a final value.
+Example: tvmpv(10,0.05,100,0)
+`tvmpmt(n,i,pv,fv)` — Payment per period that clears pv against fv.
+Example: tvmpmt(360,0.05/12,250000,0)
+`tvmn(i,pv,pmt,fv)` — Number of periods.
+Example: tvmn(0.05,0,100,-1000)
+`tvmrate(n,pv,pmt,fv)` — Interest rate per period, found numerically.
+Example: tvmrate(10,1000,-150,0)
+`npv(rate,[...])` — Net present value of a cash-flow list; the first flow is at time 0.
+Example: npv(0.1,[-1000,300,400,500])
+`npv(rate,cf0,[...])` — The same with the initial flow given separately.
+Example: npv(0.1,-1000,[300,400,500])
+`irr([...])` — Internal rate of return that makes the net present value zero.
+Example: irr([-1000,300,400,500])
+`irr(cf0,[...])` — The same with the initial flow given separately.
+Example: irr(-1000,[500,500,500])
+`amort(i,pv,n)` — Payment and totals of a fully amortized loan; add k to stop after k payments.
+Example: amort(0.005,200000,360)
+- TVM values follow the cash-flow convention: money received is positive and money paid is negative. Add begin as the last argument for payments at the beginning of each period; the default is end. Rates are per payment period.
