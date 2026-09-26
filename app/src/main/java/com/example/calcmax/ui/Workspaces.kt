@@ -177,7 +177,7 @@ private class MatrixNav{var cursorEnd:Boolean?=null}
                 Box(Modifier.width(32.dp).fillMaxHeight().background(c.scientific),contentAlignment=Alignment.Center){Text("${row+1}",fontSize=11.sp,color=c.muted,fontWeight=FontWeight.SemiBold)}
                 VerticalDivider(color=grid,thickness=1.dp)
                 repeat(cols) {column->
-                    MatrixCell(cells[row*4+column],Modifier.weight(1f),focuses[row*cols+column],tag+"-cell-$row-$column",nav,{dRow,dColumn,atEnd->moveFocus(row,column,dRow,dColumn,atEnd)}) {text->onCell(row,column,text)}
+                    MatrixCell(cells[row*9+column],Modifier.weight(1f),focuses[row*cols+column],tag+"-cell-$row-$column",nav,{dRow,dColumn,atEnd->moveFocus(row,column,dRow,dColumn,atEnd)}) {text->onCell(row,column,text)}
                     VerticalDivider(color=grid,thickness=1.dp)
                 }
             }
@@ -215,11 +215,11 @@ private fun treeSource(node:JSONObject?):String? {
     val vector=m.mode=="Vector"
     var rows by rememberSaveable { mutableIntStateOf(if(vector)3 else 2) }
     var columns by rememberSaveable { mutableIntStateOf(2) }
-    var cells by rememberSaveable { mutableStateOf(List(16) {if(it==0||it==5)"1" else "0"}) }
+    var cells by rememberSaveable { mutableStateOf(List(81) {if(it==0||it==10)"1" else "0"}) }
     var name by rememberSaveable { mutableStateOf("A") }
     var other by rememberSaveable { mutableStateOf("B") }
     val cols=if(vector)1 else columns
-    fun source()=(0 until rows).joinToString(",","[","]") {r->(0 until cols).joinToString(",","[","]") {column->cells[r*4+column].ifBlank {"0"} }}
+    fun source()=(0 until rows).joinToString(",","[","]") {r->(0 until cols).joinToString(",","[","]") {column->cells[r*9+column].ifBlank {"0"} }}
     fun resolved(text:String):String {
         val key=text.trim().trim('[',']').trim()
         if(!key.matches(Regex("[A-Za-z][A-Za-z0-9_]*")))return text
@@ -239,9 +239,9 @@ private fun treeSource(node:JSONObject?):String? {
     Panel(if(vector)"Vector workspace" else "Matrix workspace","") {
         Choices(listOf("Matrix","Vector"),m.mode,{m.mode=it})
         Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
-            if(vector)DimStepper("Components",rows,1..4){rows=it} else {DimStepper("Rows",rows,1..4){rows=it};DimStepper("Columns",columns,1..4){columns=it}}
+            if(vector)DimStepper("Components",rows,1..9){rows=it} else {DimStepper("Rows",rows,1..9){rows=it};DimStepper("Columns",columns,1..9){columns=it}}
         }
-        MatrixGrid(rows,cols,cells,"matrix-grid") {row,column,text->cells=cells.toMutableList().also {it[row*4+column]=text}}
+        MatrixGrid(rows,cols,cells,"matrix-grid") {row,column,text->cells=cells.toMutableList().also {it[row*9+column]=text}}
         Text("Expression  "+source()+(if(other.isBlank())"" else ", "+resolved(other)),fontFamily=FontFamily.Monospace,fontSize=11.sp,color=c.muted)
         Choices(listOf("A","B","C"),name,{name=it})
         val storedTree=m.variables.optJSONObject(name)
@@ -252,7 +252,7 @@ private fun treeSource(node:JSONObject?):String? {
         Row(Modifier.horizontalScroll(rememberScrollState()),verticalAlignment=Alignment.CenterVertically) {
             Button(onClick={m.store(name,source())}) {Text("Store as $name")}
             SmallAction("Insert into calculator") {m.edit(Editor(source()));m.mode="Scientific/CAS"}
-            SmallAction("Clear grid") {cells=List(16){"0"}}
+            SmallAction("Clear grid") {cells=List(81){"0"}}
         }
         Text("Operations",fontSize=12.sp,fontWeight=FontWeight.SemiBold)
         OpChips(if(vector)listOf("norm","normalize") else listOf("det","inverse","transpose","rank","trace","ref","rref","lu","eigenvalues","eigenvectors")){applyOp(it)}
@@ -274,7 +274,7 @@ private fun treeSource(node:JSONObject?):String? {
         }
         // The workspace panel scrolls: an initial focus request would pull it down to the display.
         Display(m,requestInitialFocus=false)
-        Text(if(vector)"The grid holds up to 4 components and expressions support larger vectors. The second operand may be a stored variable or a literal." else "The grid holds up to 4 × 4 and expressions support matrices up to 32 × 32. LU returns L, U and row permutations.",fontSize=11.sp,color=c.muted)
+        Text(if(vector)"The grid holds up to 9 components and expressions support larger vectors. The second operand may be a stored variable or a literal." else "The grid holds up to 9 × 9 and expressions support matrices up to 32 × 32. LU returns L, U and row permutations.",fontSize=11.sp,color=c.muted)
     }
 }
 
