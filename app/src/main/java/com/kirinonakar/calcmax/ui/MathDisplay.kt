@@ -35,9 +35,9 @@ val LocalPlaceCursor=staticCompositionLocalOf<((Int,Int,Int)->Unit)?>{null}
 val LocalTypedParens=staticCompositionLocalOf<List<IntRange>>{emptyList()}
 
 private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspecified)height/2 else it}
-@Composable private fun MathText(text:String,size:Float,modifier:Modifier=Modifier,blink:Boolean=false,onLayout:(TextLayoutResult)->Unit={}) {
+@Composable private fun MathText(text:String,size:Float,modifier:Modifier=Modifier,blink:Boolean=false,onLayout:(TextLayoutResult)->Unit={},hide:Boolean=false) {
     val color=LocalInstrument.current.ink
-    val visible=!blink||LocalCaretVisible.current
+    val visible=!hide&&(!blink||LocalCaretVisible.current)
     val styled=buildAnnotatedString {append(text);if(!visible)text.forEachIndexed{i,ch->if(ch=='│')addStyle(SpanStyle(color=Color.Transparent),i,i+1)}}
     Text(styled,fontFamily=FontFamily.Serif,fontSize=size.sp,lineHeight=(size*1.18f).sp,color=color,softWrap=false,onTextLayout=onLayout,
         modifier=modifier.layout {measurable,constraints->
@@ -305,7 +305,8 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
                 if(caret)MathText("│",size,blink=true)
             }else
                 Box(Modifier.width((size*.72f).dp).height((size*1.04f).dp).border(1.dp,if(activeHole)c.accent else c.muted,RoundedCornerShape(1.dp)).then(if(activeHole)Modifier else Modifier.semantics{contentDescription="Empty expression slot"}),contentAlignment=Alignment.Center){
-                    if(activeHole)MathText("│",size,blink=true)
+                    // Keep the caret node laid out in both states; it defines the slot's MathAxis, so idle boxes no longer sit lower.
+                    MathText("│",size,modifier=if(activeHole)Modifier else Modifier.clearAndSetSemantics{},blink=true,hide=!activeHole)
                 }
             kind=="answer"->Box(Modifier.border(1.dp,c.muted,RoundedCornerShape(4.dp)).padding(horizontal=5.dp,vertical=2.dp).semantics{contentDescription="Previous answer"}){children.firstOrNull()?.let{MathNode(it,size*.9f,depth=depth+1)}}
             kind=="restricted"->child(0)
