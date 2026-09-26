@@ -11,7 +11,7 @@ m, cm = "m", "cm"
 _names = set("""
 abs floor ceil round sign sqrt cbrt nthroot atan2 arctan2 frac iPart log ln exp sinc sinh cosh tanh asin acos atan arcsin arccos arctan sin cos tan
 asinh acosh atanh arcsinh arsinh arccosh arcosh arctanh artanh gamma erf erfc Ei Si Ci zeta factorial nCr nPr gcd lcm prime isprime factorint divisors
-rnd eng pol rec randInt sexagesimal dms mixed quotient remainder sumdata
+rnd eng pol rec randInt sexagesimal dms mixed quotient remainder mod divmod sumdata
 simplify expand factor collect subs diff integrate limit series taylor sum product solve nsolve nintegrate
 nderivative minimum maximum piecewise apart partfrac together cancel trigsimp trigexpand powsimp powdenest hyperexpand
 nsimplify comDenom numden coeff quo rem resultant discriminant domain range

@@ -34,7 +34,7 @@ private val ScientificKeys=listOf(
 )
 private val SecondKeys=listOf(
     listOf(KeySpec("simp","simplify()"),KeySpec("factor","factor()","factorint","factorint()"),KeySpec("expand","expand()"),KeySpec("x", "x", "^", "^()"),KeySpec("y"),KeySpec("z")),
-    listOf(KeySpec("⌊x⌋","floor()"),KeySpec("⌈x⌉","ceil()"),KeySpec("∞","oo","sign","sign()"),KeySpec(","),KeySpec("{",secondary="[",alternate="["),KeySpec("}",secondary="]",alternate="]")),
+    listOf(KeySpec("⌊x⌋","floor()","mod","mod(,)"),KeySpec("⌈x⌉","ceil()","divmod","divmod(,)"),KeySpec("∞","oo","sign","sign()"),KeySpec(","),KeySpec("{",secondary="[",alternate="["),KeySpec("}",secondary="]",alternate="]")),
     listOf(KeySpec("MATRIX","MATRIX_INPUT",secondary="n×m",type="action"),KeySpec("det","det()"),KeySpec("inv","inverse()"),KeySpec("T","transpose()"),KeySpec("‖v‖","norm()"),KeySpec("GRAPH","TO_GRAPH",secondary="MODE",alternate="Graph",type="action"))
 )
 private val NumericKeys=listOf(

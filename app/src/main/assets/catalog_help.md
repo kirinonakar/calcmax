@@ -119,6 +119,10 @@ Example: mixed(1,1,2)
 Example: quotient(17,5)
 `remainder(a,b)` — Remainder of a divided by b.
 Example: remainder(17,5)
+`mod(a,b)` — Remainder of a divided by b; the mod operator gives the same result.
+Example: mod(17,5)
+`divmod(a,b)` — Integer quotient and remainder of a divided by b, as a list.
+Example: divmod(17,5)
 `sumdata(values)` — Sum of a list of values.
 Example: sumdata([1,2,3])
 

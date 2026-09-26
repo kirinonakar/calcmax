@@ -911,6 +911,11 @@ class Engine:
         if name in ("log","ln"): require(a[0]!=0,"Domain ERROR: logarithm of zero")
         if name=="log" and len(a)>1: require(a[1] not in (0,1),"Domain ERROR: invalid logarithm base")
         if name in basic: return basic[name](*a)
+        if name in ("mod","divmod"):
+            require(len(a)==2,name+" expects two arguments")
+            require(a[1]!=0,"Division by zero")
+            if name=="mod": return s.Mod(a[0],a[1])
+            return [s.floor(a[0]/a[1]),s.Mod(a[0],a[1])]
         if name in ("prime", "isprime"):
             require(len(a)==1, name+" expects one integer")
             require(a[0].is_Integer, name+" requires an integer")
