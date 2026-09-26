@@ -139,7 +139,7 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
         }
     }
 }
-/** Compact empty slot for a root index; the box matches the ordinary empty slot's height at the smaller index font size. */
+
 @Composable private fun RootIndexSlot(size:Float,active:Boolean) {
     val c=LocalInstrument.current
     Layout(content={
@@ -151,7 +151,7 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
     }){ms,constraints->
         val glyph=ms[0].measure(constraints.copy(minWidth=0,minHeight=0))
         val boxWidth=glyph.width.coerceAtLeast(9.dp.roundToPx())
-        val boxHeight=(size*1.04f).dp.roundToPx().coerceAtLeast(12.dp.roundToPx())
+        val boxHeight=(glyph.height*.72f).roundToInt().coerceAtLeast(12.dp.roundToPx())
         val box=ms[1].measure(Constraints.fixed(boxWidth,boxHeight))
         layout(boxWidth,glyph.height,mapOf(MathAxis to glyph.axis())){box.place(0,(glyph.height-boxHeight)/2)}
     }
