@@ -86,6 +86,24 @@ def require(condition, message):
     if not condition:
         raise MathError(message)
 
+# arcsin/arccos/arctan(및 쌍곡선 변형) 별칭을 정식 asin 계열 이름으로 정규화한다.
+CANONICAL_FUNCTION_ALIASES = {
+    "arcsin": "asin",
+    "arccos": "acos",
+    "arctan": "atan",
+    "arctan2": "atan2",
+    "arcsinh": "asinh",
+    "arsinh": "asinh",
+    "arccosh": "acosh",
+    "arcosh": "acosh",
+    "arctanh": "atanh",
+    "artanh": "atanh",
+}
+
+def canonical_function_name(name):
+    """Return the canonical builtin name for a user-typed function alias."""
+    return CANONICAL_FUNCTION_ALIASES.get(name, CANONICAL_FUNCTION_ALIASES.get(name.lower(), name))
+
 def matrix(a):
     if isinstance(a, s.MatrixBase): return a
     require(isinstance(a, (list, tuple)), "Expected a vector or matrix")
@@ -296,6 +314,9 @@ class Engine:
         finally:
             self.bindings = old
     def call(self, name, a, nodes):
+        # arcsin/arccos/arctan 계열 별칭은 사용자 정의 함수가 없을 때만 정식 이름으로 정규화한다.
+        if name not in self.functions:
+            name = canonical_function_name(name)
         if self.allow_sequence_calls and (name == "u" or name in ("u1", "u2", "u3", "u4", "u5", "u6")):
             require(len(a) == 1, "Sequence references take one integer index")
             return s.Function(name)(a[0])
