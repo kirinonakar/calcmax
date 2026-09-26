@@ -20,7 +20,7 @@ You can download the latest release from the [Releases Page](https://github.com/
 * S⇔D switches exact and decimal results; SHIFT S⇔D switches improper/mixed fractions. The top `Catalog` button opens the searchable function catalog. Decimal output omits trailing zeros, and symbolic expressions remain typeset in decimal mode.
 * MODE opens scientific, CAS, graphing, Python, equations, matrix, vector, statistics, programmer, units, constants, tip and currency workspaces.
 * Matrix and vector share one editor: labelled size steppers, a grid with row/column headers, a live expression preview and operations split into single-operand and second-operand groups. Store the grid as A, B or C and tap a stored name to reuse it as the second operand.
-* SETUP chooses Light, Dark, or System (the default), angle unit, precision, haptics, sound and optional persistent history. Theme changes preserve the current calculation and editor state.
+* SETUP chooses Light, Dark, or System (the default), angle unit, internal precision, display digits, haptics, sound and optional persistent history. Theme changes preserve the current calculation and editor state.
 * RCL / SHIFT RCL open variable recall and storage. `radius=5` and `f(x)=x^2+1` are supported at the top level outside Equation mode. Use `solve(...)` to solve equations. Stored values are snapshots; user functions retain their expression bodies.
 * For an expression with variables, press `CALC` to enter each variable value in order and press `=` after each one. The last `=` evaluates the original expression. Empty input reuses a stored value or uses zero; `AC` closes the prompt.
 
@@ -63,7 +63,7 @@ charpoly([[1,2],[3,4]],x)
 convert(qty(1,V)/qty(1,ohm),A)
 ```
 
-Decimal literals are exact rationals. Decimal results use 3–200 configurable significant digits, with 3/10/15/30/50/100/200 presets and a custom entry. Numeric trig honors DEG/RAD/GRAD; explicit π or ° specifies a radian/degree expression. Symbolic calculus is in radians. Complex values use `i`; `polar(r,theta)`, `rectpolar(z)`, `re`, `im`, `arg` and `conj` are available.
+Decimal literals are exact rationals. Internal precision (3–200 significant digits, default 30, with 3/10/15/30/50/100/200 presets and a custom entry) drives numeric algorithms, while display digits (default 10, with 3/5/8/10/12/15 presets and a custom entry) limit how many digits a numeric or decimal result shows; exact integers, fractions and symbolic forms are never rounded, display digits never exceed internal precision, and Ans/STO keep the full-precision value. Numeric trig honors DEG/RAD/GRAD; explicit π or ° specifies a radian/degree expression. Symbolic calculus is in radians. Complex values use `i`; `polar(r,theta)`, `rectpolar(z)`, `re`, `im`, `arg` and `conj` are available.
 
 `prime(n)` returns the nth prime (for example, `prime(1000)` is 7919). `isprime(n)` returns true or false for an integer (for example, `isprime(123457)` is true).
 

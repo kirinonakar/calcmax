@@ -44,6 +44,25 @@ class EngineTests(unittest.TestCase):
                 self.assertIn("resultAst",result)
                 again=json.loads(core.dispatch(json.dumps({"tree":result["resultAst"],"angle":"DEG"})))
                 self.assertEqual(again["exact"],result["exact"])
+    def test_angle_mode_applies_inside_nested_calls(self):
+        def call(name,argument): return {"kind":"call","value":name,"args":[argument]}
+        def number(value): return {"kind":"number","value":str(value)}
+        def evaluate(tree,angle="DEG",variables=None): return json.loads(core.dispatch(json.dumps({"tree":tree,"angle":angle,"variables":variables or {}})))
+        chain=number(9)
+        for name in ["sin","cos","tan","atan","acos","asin"]: chain=call(name,chain)
+        for angle in ("DEG","GRAD"):
+            with self.subTest(angle=angle):
+                result=evaluate(chain,angle)
+                self.assertTrue(result["ok"],result)
+                self.assertAlmostEqual(float(result["decimal"]),9,places=9)
+        tangent=evaluate(call("tan",call("cos",call("sin",number(9)))))
+        self.assertTrue(tangent["ok"],tangent)
+        self.assertLess(abs(float(tangent["decimal"])),0.1)  # Reading the inner value as radians would give ≈1.56
+        sixth={"kind":"binary","value":"/","args":[{"kind":"symbol","value":"pi"},number(6)]}
+        self.assertEqual(evaluate(call("sin",sixth))["exact"],"1/2")
+        self.assertEqual(evaluate(call("sin",call("degree",number(30))))["exact"],"1/2")
+        self.assertEqual(evaluate(call("sin",{"kind":"symbol","value":"x"}),variables={"x":sixth})["exact"],"1/2")
+        self.assertEqual(evaluate(call("sin",{"kind":"symbol","value":"x"}),variables={"x":number(2)})["exact"],"sin(pi/90)")
     def test_precision_and_budget(self):
         result=run("1/3+1/6",precision=100)
         self.assertEqual(result["decimal"],"0.5")
@@ -54,6 +73,21 @@ class EngineTests(unittest.TestCase):
         huge={"kind":"number","value":"1e100000000"}
         self.assertFalse(json.loads(core.dispatch(json.dumps({"tree":huge})))["ok"])
         self.assertFalse(run("integrate(x^2*sin(x),x)",budget=-1)["ok"])
+    def test_internal_precision_and_display_digits_are_separate(self):
+        third={"kind":"binary","value":"/","args":[{"kind":"number","value":"1"},{"kind":"number","value":"3"}]}
+        wide=json.loads(core.dispatch(json.dumps({"tree":third,"precision":100,"displayDigits":10})))
+        self.assertEqual(wide["exact"],"1/3")
+        self.assertEqual(wide["decimal"],"0.3333333333")
+        # Display digits never exceed internal precision.
+        self.assertEqual(json.loads(core.dispatch(json.dumps({"tree":third,"precision":10,"displayDigits":40})))["decimal"],"0.3333333333")
+        # The display cap must not shorten the value Ans and STO reuse.
+        reused=json.loads(core.dispatch(json.dumps({"tree":{"kind":"binary","value":"*","args":[wide["resultAst"],{"kind":"number","value":"3"}]},"precision":100,"displayDigits":10})))
+        self.assertEqual(reused["exact"],"1")
+        # Floating-point results follow the same split.
+        root=json.loads(core.dispatch(json.dumps({"tree":TREES["nsolve(cos(x)-x,x,0,1)"],"precision":50,"displayDigits":10})))
+        self.assertEqual(root["exact"],"0.7390851332")
+        self.assertEqual(root["tree"]["value"],"0.7390851332")
+        self.assertGreaterEqual(len(json.loads(core.dispatch(json.dumps({"tree":TREES["nsolve(cos(x)-x,x,0,1)"],"precision":50})))["exact"]),30)
     def test_large_exact_integer_serialization(self):
         # Results beyond CPython's default 4300-digit int->str cap must still serialize.
         for n in (2000,10000):
@@ -109,12 +143,31 @@ class EngineTests(unittest.TestCase):
         result=subprocess.run([sys.executable,"-c",script],cwd=ROOT,capture_output=True,text=True,timeout=20)
         self.assertEqual(result.returncode,0,result.stderr)
         self.assertTrue(json.loads(result.stdout)["ok"],result.stdout)
+    def test_cold_first_evaluation_stays_within_the_step_budget(self):
+        tree={"kind":"number","value":"9"}
+        for name in ["sin","cos","tan","atan","acos","asin"]: tree={"kind":"call","value":name,"args":[tree]}
+        dependencies_path=str(pathlib.Path(core.s.__file__).resolve().parent.parent)
+        script=("import sys,json\n"
+                f"sys.path.insert(0,{dependencies_path!r})\n"
+                f"sys.path.insert(0,{str(ROOT / 'app/src/main/python')!r})\n"
+                "import calc_engine\n"
+                f"print(calc_engine.dispatch({json.dumps(json.dumps({'tree':tree,'angle':'DEG'}))}))")
+        result=subprocess.run([sys.executable,"-c",script],cwd=ROOT,capture_output=True,text=True,timeout=20)
+        self.assertEqual(result.returncode,0,result.stderr)
+        output=json.loads(result.stdout)
+        self.assertTrue(output["ok"],output)
+        self.assertAlmostEqual(float(output["decimal"]),9,places=9)
     def test_graph(self):
         result=run("sin(x)",action="graph",trees=[TREES["sin(x)"]],min=-3,max=3,samples=100)
         self.assertTrue(result["ok"],result)
-        self.assertAlmostEqual(result["curves"][0][50][1],0)
+        self.assertAlmostEqual(min(result["curves"][0],key=lambda point:abs(point[0]))[1],0)
         result=run("1/x",action="graph",trees=[TREES["1/x"]],min=-1,max=1,samples=100)
-        self.assertIsNone(result["curves"][0][50])
+        self.assertTrue(result["ok"],result)
+        # Adaptive sampling inserts points around the break, so look for the gap rather than a fixed index.
+        curve=result["curves"][0]
+        singular=curve.index(None)
+        self.assertLess(curve[singular-1][0],0)
+        self.assertGreater(curve[singular+1][0],0)
     def test_graph_analysis_finds_all_intersections_and_tangencies(self):
         def node(kind, value="", args=()): return {"kind":kind,"value":value,"args":list(args)}
         x=node("symbol","x")

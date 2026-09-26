@@ -237,10 +237,10 @@ class CalculatorInstrumentedTest {
         capture("recall-values")
         compose.onNodeWithText("Done").performClick()
         var count=0
-        compose.runOnIdle{count=model().history.size;model().precision=10;model().inputFont=27f;model().haptics=true;model().sound=true;model().save()}
+        compose.runOnIdle{count=model().history.size;model().precision=10;model().displayDigits=8;model().inputFont=27f;model().haptics=true;model().sound=true;model().save()}
         compose.onNodeWithContentDescription("SHIFT").performClick()
         compose.onNodeWithContentDescription("AC").performClick()
-        compose.runOnIdle{assertEquals("",model().editor.source);assertEquals(0,model().variables.length());assertTrue(model().tape.isEmpty());assertEquals(count,model().history.size);assertEquals(10,model().precision);assertEquals(27f,model().inputFont);model().inputFont=25f;model().precision=30;model().sound=false;model().save()}
+        compose.runOnIdle{assertEquals("",model().editor.source);assertEquals(0,model().variables.length());assertTrue(model().tape.isEmpty());assertEquals(count,model().history.size);assertEquals(10,model().precision);assertEquals(8,model().displayDigits);assertEquals(27f,model().inputFont);model().inputFont=25f;model().precision=30;model().displayDigits=10;model().sound=false;model().save()}
     }
     @Test fun equationAndCustomFunctionWorkspaces() {
         compose.runOnIdle{model().clear();model().mode="Equations";model().equationKind="Quadratic";model().equationCoefficients=listOf("1","-5","6","0");model().equationSystem="x+y=3\nx-y=1";model().equationVariables="x,y"}
@@ -682,10 +682,14 @@ class CalculatorInstrumentedTest {
         compose.onNodeWithText("1 USD = ? KRW").performTextReplacement("1300")
         compose.onNodeWithText("≈ 130,000 KRW").assertExists();capture("currency-manual")
         compose.onNodeWithText("Setup").performClick()
-        compose.onNodeWithText("Custom").performScrollTo().performClick()
-        compose.onNodeWithText("Custom precision · 3–200").performTextReplacement("42")
-        compose.onNodeWithText("Apply precision").performClick()
+        compose.onAllNodesWithText("Custom")[0].performScrollTo().performClick()
+        compose.onNodeWithText("Custom internal precision · 3–200").performTextReplacement("42")
+        compose.onNodeWithText("Apply internal precision").performClick()
         compose.runOnIdle{assertEquals(42,model().precision)}
+        compose.onAllNodesWithText("Custom")[1].performScrollTo().performClick()
+        compose.onNodeWithText("Custom display digits · 3–200").performTextReplacement("12")
+        compose.onNodeWithText("Apply display digits").performClick()
+        compose.runOnIdle{assertEquals(12,model().displayDigits)}
         compose.onNodeWithText("Done").performClick()
     }
 }

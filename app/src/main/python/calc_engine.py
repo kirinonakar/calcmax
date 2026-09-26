@@ -26,7 +26,7 @@ class MathError(ValueError):
     pass
 
 class Budget:
-    def __init__(self, seconds=8, steps=1500000):
+    def __init__(self, seconds=8, steps=3000000):
         self.deadline = time.monotonic() + seconds
         self.steps = steps
     def trace(self, frame, event, arg):
@@ -192,6 +192,8 @@ class Engine:
     def __init__(self, request):
         self.request = request
         self.precision = max(3, min(200, int(request.get("precision", 30))))
+        # Display digits limit only what the result view shows; the numeric work keeps self.precision.
+        self.display_digits = max(1, min(self.precision, int(request.get("displayDigits", self.precision))))
         self.angle = request.get("angle", "RAD")
         self.variables = request.get("variables", {})
         self.functions = request.get("functions", {})
@@ -208,6 +210,17 @@ class Engine:
             options = {k: True for k in self.assumptions.get(name, []) if k in ("real", "positive", "negative", "integer", "nonzero")}
             self.symbols[name] = s.Symbol(name, **options)
         return self.symbols[name]
+    def has_explicit_angle(self, node, seen=()):
+        # 사용자가 쓴 각도 표시(π, °, ʳ, ᵍ)만 인정한다. 안쪽 DEG/GRAD 변환이 값을 만들며
+        # 끼워 넣은 π를 명시적 라디안으로 오인하면 중첩 호출에서 모드 변환이 누락된다.
+        if not isinstance(node, dict): return False
+        if node.get("value") in ("degree", "pi", "rad", "gradian"): return True
+        if node.get("kind") == "symbol":
+            name = node.get("value")
+            stored = self.variables.get(name) if isinstance(self.variables, dict) else None
+            return (name not in self.bindings and name not in seen and name not in ("e", "i", "I", "oo", "true", "false")
+                    and name not in CONSTANTS and isinstance(stored, dict) and self.has_explicit_angle(stored, seen + (name,)))
+        return any(self.has_explicit_angle(child, seen) for child in node.get("args", []))
     def build(self, node, depth=0):
         self.visited += 1
         require(depth < 100 and self.visited <= 12000, "Expression complexity limit")
@@ -320,7 +333,7 @@ class Engine:
         if self.allow_sequence_calls and (name == "u" or name in ("u1", "u2", "u3", "u4", "u5", "u6")):
             require(len(a) == 1, "Sequence references take one integer index")
             return s.Function(name)(a[0])
-        if name=="rnd":return s.N(a[0],self.precision)
+        if name=="rnd":return s.N(a[0],self.display_digits)
         if name=="eng":return a[0]
         if name=="pol":
             z=a[0]+s.I*a[1];angle=s.arg(z)*{"DEG":180/s.pi,"GRAD":200/s.pi}.get(self.angle,1)
@@ -347,13 +360,11 @@ class Engine:
             return angle if name=="arg" else [s.Abs(a[0]),angle]
         if name=="polar":
             theta=a[1]
-            explicit=theta.has(s.pi) or any(n.get("value")=="degree" for n in walk(nodes[1]))
-            if not explicit and not theta.free_symbols: theta *= {"DEG":s.pi/180,"GRAD":s.pi/200}.get(self.angle,1)
+            if not self.has_explicit_angle(nodes[1]) and not theta.free_symbols: theta *= {"DEG":s.pi/180,"GRAD":s.pi/200}.get(self.angle,1)
             return a[0]*(s.cos(theta)+s.I*s.sin(theta))
         if name in ("sin", "cos", "tan"):
             arg = a[0]
-            explicit = bool(arg.has(s.pi)) or any(n.get("value") in ("degree", "pi", "rad", "gradian") for n in walk(nodes[0]))
-            if not explicit and not getattr(arg, "free_symbols", set()):
+            if not self.has_explicit_angle(nodes[0]) and not getattr(arg, "free_symbols", set()):
                 arg *= {"DEG": s.pi/180, "GRAD": s.pi/200}.get(self.angle, 1)
             return getattr(s,name)(arg)
         if name=="atan2":
@@ -501,8 +512,8 @@ class Engine:
             expr = a[0].lhs-a[0].rhs if isinstance(a[0],s.Equality) else a[0]
             if len(a)==4:
                 # Bracketing does not lose convergence merely due to a zero derivative.
-                result=s.nsolve(expr,a[1],(a[2],a[3]),solver="bisect",prec=max(20,self.precision+10))
-            else: result=s.nsolve(expr,a[1],a[2],prec=max(20,self.precision+10))
+                result=s.nsolve(expr,a[1],(a[2],a[3]),solver="bisect",prec=max(20,self.precision+10),maxsteps=max(100,4*(self.precision+10)))
+            else: result=s.nsolve(expr,a[1],a[2],prec=max(20,self.precision+10),maxsteps=max(100,4*(self.precision+10)))
             require(all(c.subs(a[1],result)!=s.false for c in self.conditions),"No solution found in the expression domain")
             return s.N(result,self.precision)
         if name=="nderivative":
@@ -629,10 +640,6 @@ class Engine:
             return s.Function(name)(*a)
         raise MathError("Unknown function: " + name)
 
-def walk(node):
-    yield node
-    for child in node.get("args",[]): yield from walk(child)
-
 def is_dms_expression(node, variables=None):
     if not isinstance(node, dict): return False
     kind=node.get("kind")
@@ -697,6 +704,18 @@ def approximate(x, digits):
         return [s.N(v,digits) for v in sorted(x,key=s.default_sort_key)] if isinstance(x,s.FiniteSet) else x
     if x in (s.true,s.false): return x
     return s.N(x,digits) if hasattr(x,"evalf") else x
+
+def display_rounded(x, digits):
+    """Round floating-point values to the display digits, keeping exact forms exact."""
+    if isinstance(x,Quantity): return Quantity(display_rounded(x.base,digits),x.dimensions,x.absolute_temperature)
+    if isinstance(x,dict): return {k:display_rounded(v,digits) for k,v in x.items()}
+    if isinstance(x,(list,tuple)): return [display_rounded(v,digits) for v in x]
+    if isinstance(x,s.MatrixBase): return x.applyfunc(lambda v: display_rounded(v,digits))
+    if isinstance(x,s.Set): return s.FiniteSet(*(display_rounded(v,digits) for v in x)) if isinstance(x,s.FiniteSet) else x
+    if isinstance(x,s.Basic):
+        floats={f:s.N(f,digits) for f in x.atoms(s.Float)}
+        if floats: return x.xreplace(floats)
+    return x
 
 def result_ast(x):
     """Lossless result transfer for Ans and STO; never reparse printed mathematics."""
@@ -1046,7 +1065,9 @@ def dispatch(payload):
     request=json.loads(payload)
     tree=request.get("tree",{})
     heavy = tree.get("kind")=="call" and tree.get("value") in ("integrate","dsolve","desolve","laplace","ilaplace","fourier","ifourier","domain","range")
-    budget=Budget(float(request.get("budget",20 if heavy else 8)),steps=6000000 if heavy else 1500000)
+    # The first evaluation of an expression also fills SymPy's caches, so a cold computation can
+    # need several times the steps of a warm repeat; 1.5M steps cut off legitimate first evaluations.
+    budget=Budget(float(request.get("budget",20 if heavy else 8)),steps=6000000 if heavy else 3000000)
     try:
         sys.settrace(budget.trace)
         engine=Engine(request)
@@ -1063,29 +1084,31 @@ def dispatch(payload):
             if getattr(value,"is_number",False) and value.has(s.I): value=s.expand_complex(value)
             if isinstance(value,list) and value and all(isinstance(row,list) for row in value): value=matrix(value)
             if getattr(value,"has",lambda *_:False)(s.zoo,s.nan): raise MathError("Undefined or division by zero")
-            exact=readable(value)
+            # The result view rounds floating-point values to the display digits; the numeric work keeps engine.precision.
+            display_value=display_rounded(value,engine.display_digits)
+            exact=readable(display_value)
             require(len(exact)<=40000,"Result exceeds display size limit")
-            decimal_value=approximate(value,engine.precision)
+            decimal_value=approximate(value,engine.display_digits)
             dms_result=(is_dms_expression(request["tree"],request.get("variables",{}))
                         and getattr(value,"is_number",False) and not value.has(s.I))
-            result={"exact":exact,"decimal":readable(decimal_value),"tree":display_tree(value),"note":engine.note,
+            result={"exact":exact,"decimal":readable(decimal_value),"tree":display_tree(display_value),"note":engine.note,
                     "conditions":[readable(c.lhs)+" ≠ "+readable(c.rhs) if isinstance(c,s.Unequality) else str(c) for c in dict.fromkeys(engine.conditions)],"symbolic":bool(getattr(value,"free_symbols",False))}
             result["approximate"]=bool(getattr(value,"has",lambda *_:False)(s.Float))
             result["decimalTree"]=display_tree(decimal_value)
             if dms_result:
-                result["tree"]=dms_tree(value)
+                result["tree"]=dms_tree(display_value)
                 result["decimalTree"]=dms_tree(decimal_value)
-                result["numericTree"]=display_tree(value)
+                result["numericTree"]=display_tree(display_value)
                 result["numericDecimalTree"]=display_tree(decimal_value)
                 result["dms"]=True
             if request["tree"].get("value")=="eng" and getattr(value,"is_number",False):
                 offset=engine.build(request["tree"]["args"][1]) if len(request["tree"]["args"])>1 else 0
                 require(-300<=offset<=300,"Engineering exponent limit")
                 exponent=(int(s.floor(s.log(s.Abs(value),10)/3))*3 if value!=0 else 0)+int(offset)
-                mantissa=s.N(value/s.Integer(10)**exponent,engine.precision)
+                mantissa=s.N(value/s.Integer(10)**exponent,engine.display_digits)
                 power={"kind":"power","args":[{"kind":"text","value":"10"},{"kind":"text","value":str(exponent)}]}
                 result["tree"]=result["decimalTree"]={"kind":"product","args":[display_tree(mantissa),power]}
-            if request["tree"].get("value")=="dms" and isinstance(value,list):result["tree"]=result["decimalTree"]={"kind":"dms","args":[display_tree(x) for x in value]}
+            if request["tree"].get("value")=="dms" and isinstance(value,list):result["tree"]=result["decimalTree"]={"kind":"dms","args":[display_tree(x) for x in display_value]}
             if request["tree"].get("kind")=="call" and request["tree"].get("value")=="regression":
                 try: result["curve"]=regression_samples(engine,value,engine.build(request["tree"]["args"][0]),request)
                 except Exception: result["curve"]=[]

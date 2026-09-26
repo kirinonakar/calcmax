@@ -90,6 +90,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     var angle by mutableStateOf(prefs.getString("angle","DEG") ?: "DEG")
     var theme by mutableStateOf(prefs.getString("theme","System") ?: "System")
     var precision by mutableIntStateOf(prefs.getInt("precision",30))
+    var displayDigits by mutableIntStateOf(prefs.getInt("displayDigits",10))
     var inputFont by mutableFloatStateOf(prefs.getFloat("inputFont",25f))
     var outputFont by mutableFloatStateOf(prefs.getFloat("outputFont",28f))
     var decimal by mutableStateOf(false)
@@ -216,7 +217,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
             .putString("result",result?.toString() ?: "{}").putString("resultSource",resultSource).putBoolean("committed",committed)
             .putString("inputAnswer",inputAnswer?.toString() ?: "{}").putString("answerDisplay",answerDisplay?.toString() ?: "{}").putString("lastAnswerResult",lastAnswerResult?.toString() ?: "{}")
             .putString("resultDisplayMode",resultDisplayMode.name.lowercase()).putBoolean("thousandsSeparator",thousandsSeparator)
-            .putInt("precision",precision).putBoolean("haptics",haptics).putBoolean("sound",sound).putBoolean("historyEnabled",persistHistory)
+            .putInt("precision",precision).putInt("displayDigits",displayDigits).putBoolean("haptics",haptics).putBoolean("sound",sound).putBoolean("historyEnabled",persistHistory)
             .putFloat("inputFont",inputFont).putFloat("outputFont",outputFont)
             .putString("variables",variables.toString()).putString("functions",functions.toString()).putString("assumptions",assumptions.toString())
             .putString("dataSets",dataSets.toString()).putString("sequenceInitials",sequenceInitials).putString("differentialInitials",differentialInitials).putString("differentialT0",differentialT0)
@@ -368,7 +369,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         val selected=target.source.substring(minOf(target.anchor,target.cursor),maxOf(target.anchor,target.cursor))
         edit(target.insert("$function($selected)"),recordUndo=recordInEdit)
     }
-    fun resetSetup(){angle="DEG";precision=30;decimal=false;resultDisplayMode=ResultDisplayMode.OFF;thousandsSeparator=false;mixedNumbers=false;overwrite=false;clear(recordUndo=false);save()}
+    fun resetSetup(){angle="DEG";precision=30;displayDigits=10;decimal=false;resultDisplayMode=ResultDisplayMode.OFF;thousandsSeparator=false;mixedNumbers=false;overwrite=false;clear(recordUndo=false);save()}
     fun cycleResultDisplayMode(){resultDisplayMode=when(resultDisplayMode){ResultDisplayMode.OFF->ResultDisplayMode.ENGINEERING;ResultDisplayMode.ENGINEERING->ResultDisplayMode.SCIENTIFIC;ResultDisplayMode.SCIENTIFIC->ResultDisplayMode.OFF};save()}
     fun clearMemory(){variables=JSONObject();functions=JSONObject();assumptions=JSONObject();lastAnswerResult=null;clear(recordUndo=false);save()}
     fun clearAllScreen(){cancel();tape=emptyList();variables=JSONObject();lastAnswerResult=null;poweredOn=true;prefs.edit().putLong("screenClearedAt",System.currentTimeMillis()).apply();clear(recordUndo=false);save()}
@@ -422,7 +423,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         appendHistory(HistoryEntry(System.currentTimeMillis(),source,response.optString("exact"),response.optString("decimal"),mode,inputTree=inputTree()?.toString() ?: "",response=response.toString(),answer=inputAnswer?.toString() ?: ""))
         save()
     }
-    fun request(action: String = "evaluate") = JSONObject().put("action",action).put("precision",precision).put("angle",angle).put("variables",JSONObject(variables.toString()).apply{inputAnswer?.let{put("Ans",it)}}).put("functions",functions).put("assumptions",assumptions)
+    fun request(action: String = "evaluate") = JSONObject().put("action",action).put("precision",precision).put("displayDigits",displayDigits).put("angle",angle).put("variables",JSONObject(variables.toString()).apply{inputAnswer?.let{put("Ans",it)}}).put("functions",functions).put("assumptions",assumptions)
     private fun calculationTree(source:String):Expr {
         val tree=Parser(source,true).parse()
         if(tree.nodes().any {it.kind=="hole"})throw SyntaxException("Complete the empty expression slots",source.length)

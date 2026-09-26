@@ -52,7 +52,7 @@ val Modes=listOf("Scientific/CAS","Graph","Python","Equations","Matrix","Vector"
             if(m.mixedNumbers)Text("mix  ",fontSize=10.sp,color=c.accent,modifier=Modifier.semantics{contentDescription="Mixed numbers"})
             Text(if(m.shift)"SHIFT  " else if(m.alpha)"ALPHA  " else if(m.hyperbolic)"HYP  " else if(m.secondKeys)"2ND  " else "",fontSize=10.sp,color=if(m.alpha)c.alpha else c.shift)
             Text(m.angle,Modifier.clickable {m.angle=when(m.angle){"DEG"->"RAD";"RAD"->"GRAD";else->"DEG"};m.recalculatePreview();m.save()}.padding(horizontal=12.dp),fontSize=11.sp,color=c.accent)
-            Text("≤ ${m.precision} digits",fontSize=10.sp,color=c.muted)
+            Text("≤ ${m.displayDigits} digits",fontSize=10.sp,color=c.muted)
         }
         Box(Modifier.weight(1f)) {workspaces.SaveableStateProvider(m.mode) {
             when(m.mode) {
@@ -138,7 +138,7 @@ val Modes=listOf("Scientific/CAS","Graph","Python","Equations","Matrix","Vector"
                 }
                 Box(Modifier.fillMaxWidth().padding(top=6.dp).horizontalScroll(rememberScrollState()),contentAlignment=Alignment.CenterEnd) {
                     if(!compact&&response!=null)ResultMath(response,m.decimal,m.outputFont*.82f,
-                        displayMode=m.resultDisplayMode,thousandsSeparator=m.thousandsSeparator,dmsDisplay=response.optBoolean("dms"),precision=m.precision)
+                        displayMode=m.resultDisplayMode,thousandsSeparator=m.thousandsSeparator,dmsDisplay=response.optBoolean("dms"),displayDigits=m.displayDigits)
                     else Text(response?.optString(if(m.decimal)"decimal" else "exact").orEmpty().ifBlank {entry.result}.take(1200),
                         fontSize=(m.outputFont*.72f).sp,color=c.ink,maxLines=8,overflow=TextOverflow.Ellipsis)
                 }
@@ -285,7 +285,7 @@ private fun largeHistoryTree(root:JSONObject?,compactStructured:Boolean=true):Bo
                 }
                 if(compactResult)Text(currentResult.optString(if(m.decimal)"decimal" else "exact").take(1200),fontSize=m.outputFont.sp,color=c.ink,maxLines=8,overflow=TextOverflow.Ellipsis)
                 else ResultMath(currentResult,m.decimal,m.outputFont,m.mixedNumbers,
-                    displayMode=m.resultDisplayMode,thousandsSeparator=m.thousandsSeparator,engineeringConversion=m.engineeringConversion,engineeringShift=m.engineeringShift,dmsDisplay=m.dmsDisplay,dmsConversion=m.dmsConversion,precision=m.precision)
+                    displayMode=m.resultDisplayMode,thousandsSeparator=m.thousandsSeparator,engineeringConversion=m.engineeringConversion,engineeringShift=m.engineeringShift,dmsDisplay=m.dmsDisplay,dmsConversion=m.dmsConversion,displayDigits=m.displayDigits)
             } else Text(" ",fontSize=28.sp)
         }
         val shownCalcValues=m.calcSession?.accepted ?: if(m.committed&&m.lastCalcSource==m.editor.source)m.lastCalcValues else emptyMap()
@@ -319,7 +319,7 @@ private fun largeHistoryTree(root:JSONObject?,compactStructured:Boolean=true):Bo
     }
 }
 
-@Composable fun ResultMath(result:JSONObject,decimal:Boolean,size:Float,mixed:Boolean=false,displayMode:ResultDisplayMode=ResultDisplayMode.OFF,thousandsSeparator:Boolean=false,engineeringConversion:Boolean=false,engineeringShift:Int=0,dmsDisplay:Boolean=false,dmsConversion:Boolean=false,precision:Int=30) {
+@Composable fun ResultMath(result:JSONObject,decimal:Boolean,size:Float,mixed:Boolean=false,displayMode:ResultDisplayMode=ResultDisplayMode.OFF,thousandsSeparator:Boolean=false,engineeringConversion:Boolean=false,engineeringShift:Int=0,dmsDisplay:Boolean=false,dmsConversion:Boolean=false,displayDigits:Int=10) {
     val useDecimal=decimal||engineeringConversion
     val effectiveMode=if(engineeringConversion)ResultDisplayMode.ENGINEERING else displayMode
     val wantDms=dmsDisplay&&!engineeringConversion
@@ -342,8 +342,8 @@ private fun largeHistoryTree(root:JSONObject?,compactStructured:Boolean=true):Bo
         }.getOrDefault(tree)
     }
     val shift=if(engineeringConversion)engineeringShift else 0
-    val displayTree=tree?.let{ResultDisplayFormat.formatTree(it,effectiveMode,thousandsSeparator,shift,engineeringConversion,precision)}
-    if(displayTree!=null)MathNode(displayTree,size) else Text(ResultDisplayFormat.formatText(result.optString(if(useDecimal)"decimal" else "exact"),effectiveMode,thousandsSeparator,shift,engineeringConversion,precision),fontSize=size.sp,color=LocalInstrument.current.ink,fontFamily=FontFamily.Serif)
+    val displayTree=tree?.let{ResultDisplayFormat.formatTree(it,effectiveMode,thousandsSeparator,shift,engineeringConversion,displayDigits)}
+    if(displayTree!=null)MathNode(displayTree,size) else Text(ResultDisplayFormat.formatText(result.optString(if(useDecimal)"decimal" else "exact"),effectiveMode,thousandsSeparator,shift,engineeringConversion,displayDigits),fontSize=size.sp,color=LocalInstrument.current.ink,fontFamily=FontFamily.Serif)
 }
 private fun domainText(result:JSONObject?):String {
     val conditions=result?.optJSONArray("conditions") ?: return ""
