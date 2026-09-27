@@ -317,15 +317,15 @@ private fun largeHistoryTree(root:JSONObject?,compactStructured:Boolean=true):Bo
         val shownCalcSource=m.calcSession?.source ?: if(m.committed&&m.lastCalcSource==m.editor.source)m.lastCalcSource else ""
         val shownCalcFormula=m.variables.optJSONObject(shownCalcSource)?.takeIf {it.has("start")&&it.optString("kind")!="number"}
         if(shownCalcValues.isNotEmpty()||shownCalcFormula!=null)Row(Modifier.fillMaxWidth().heightIn(min=24.dp).horizontalScroll(rememberScrollState()),verticalAlignment=Alignment.CenterVertically){
-            Text("CALC  ",fontSize=11.sp,color=c.muted)
+            MathText("CALC  ",11f,modifier=Modifier.alignBy(MathAxis),tint=c.muted)
             if(shownCalcFormula!=null){
-                Text("$shownCalcSource = ",fontSize=13.sp,color=c.accent)
-                MathNode(shownCalcFormula,14f)
+                MathText("$shownCalcSource = ",13f,modifier=Modifier.alignBy(MathAxis),tint=c.accent)
+                Box(Modifier.alignBy(MathAxis).testTag("calc-formula")){MathNode(shownCalcFormula,14f)}
                 Spacer(Modifier.width(14.dp))
             }
             shownCalcValues.forEach {(name,value)->
-                Text("$name = ",fontSize=13.sp,color=c.accent)
-                MathNode(value,14f)
+                MathText("$name = ",13f,modifier=Modifier.alignBy(MathAxis),tint=c.accent)
+                Box(Modifier.alignBy(MathAxis)){MathNode(value,14f)}
                 Spacer(Modifier.width(14.dp))
             }
         }

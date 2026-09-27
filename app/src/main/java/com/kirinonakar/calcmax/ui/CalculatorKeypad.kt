@@ -46,6 +46,14 @@ private val NumericKeys=listOf(
 
 private fun pressedShade(base:Color)=if(base.luminance()>.45f)Color.Black.copy(alpha=.18f) else Color.White.copy(alpha=.24f)
 
+private fun keypadOperandInput(value:String,editor:Editor,startingFresh:Boolean):String {
+    if(startingFresh||editor.cursor!=editor.anchor)return value
+    val before=editor.source.getOrNull(editor.cursor-1) ?: return value
+    val first=value.firstOrNull()
+    val startsFactor=first?.isLetter()==true||value=="10^()"||first?.isDigit()==true&&(before.isLetter()||before in ")]}")
+    return if((before.isLetterOrDigit()||before in ")]}")&&startsFactor)"*$value" else value
+}
+
 @Composable fun Keypad(m:CalculatorModel,modifier:Modifier,numericOnly:Boolean,numericRowHeight:Dp,open:(String)->Unit) {
     val c=LocalInstrument.current
     val context=LocalContext.current
@@ -75,7 +83,7 @@ private fun pressedShade(base:Color)=if(base.luminance()>.45f)Color.Black.copy(a
                 "RIGHT"->m.editCalcValue(m.calcSession!!.input.move(1))
                 "NEG"->m.insertCalcValue("-")
                 "RCL","STO","Clear","CLR ALL","MODE","SETUP","ENG","ENG−","S⇔D","MIXED","M+","M−","SOLVE","RELATION","Graph","Equations","Scientific/CAS","Python","TO_GRAPH"->Unit
-                else->{val at=if(value.contains('('))value.indexOf('(')+1 else value.length;m.insertCalcValue(value,at)}
+                else->{val input=keypadOperandInput(value,m.calcSession!!.input,false);val at=if(input.contains('('))input.indexOf('(')+1 else input.length;m.insertCalcValue(input,at)}
             }
             m.shift=false;m.alpha=false
             return
@@ -113,7 +121,7 @@ private fun pressedShade(base:Color)=if(base.luminance()>.45f)Color.Black.copy(a
             "TO_GRAPH"->m.sendExpressionToGraph()
             "MATRIX_INPUT"->open("MatrixSize")
             "*10^()"->{val text=if(m.editor.source.isBlank()||m.committed)"1$value" else value;m.insert(text,text.indexOf('(')+1)}
-            else->{val at=when {value=="()/()"->1;value.contains('(')->value.indexOf('(')+1;else->value.length};m.insert(value,at)}
+            else->{val input=keypadOperandInput(value,m.editor,m.committed);val at=when {input=="()/()"->1;input.contains('(')->input.indexOf('(')+1;else->input.length};m.insert(input,at)}
         }
         if(value!="HYP")m.hyperbolic=false
         m.shift=false;m.alpha=false

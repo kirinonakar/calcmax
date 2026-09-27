@@ -51,6 +51,7 @@ import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.ln
 import kotlin.math.max
+import org.json.JSONArray
 import org.json.JSONObject
 
 @Composable fun Panel(title: String,subtitle: String,content: @Composable ColumnScope.()->Unit) {
@@ -188,6 +189,16 @@ private class MatrixNav{var cursorEnd:Boolean?=null}
 @Composable private fun OpChips(ops:List<String>,run:(String)->Unit) {
     ops.chunked(3).forEach {row->Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(4.dp)){row.forEach {op->SmallAction(op){run(op)}}}}
 }
+private fun isSquareRootExponent(exponent:JSONObject?):Boolean {
+    val value=if(exponent?.optString("kind")=="group")exponent.optJSONArray("args")?.optJSONObject(0) else exponent
+    val parts=value?.optJSONArray("args")
+    val numerator=parts?.optJSONObject(0)
+    val denominator=parts?.optJSONObject(1)
+    return value?.optString("kind")=="binary"&&value.optString("value")=="/"&&
+        numerator?.optString("kind")=="number"&&numerator.optString("value")=="1"&&
+        denominator?.optString("kind")=="number"&&denominator.optString("value")=="2"
+}
+
 // Stored values keep the engine result tree; convert it back to source text so operands can be shown as matrices.
 private fun treeSource(node:JSONObject?):String? {
     if(node==null)return null
@@ -206,7 +217,11 @@ private fun treeSource(node:JSONObject?):String? {
         "number","float","symbol","snapshot_symbol"->node.optString("value").takeIf{it.isNotBlank()}
         "constant"->when(node.optString("value")){"pi"->"pi";"E"->"e";"I"->"i";"oo"->"oo";"-oo"->"-oo";"True"->"true";"False"->"false";else->null}
         "group"->child(0)?.let{"($it)"}
-        "binary","relation"->{val a=child(0) ?:return null;val b=child(1) ?:return null;"($a)${node.optString("value")}($b)"}
+        "binary","relation"->{
+            val a=child(0) ?:return null
+            if(node.optString("value")=="^"&&isSquareRootExponent(args?.optJSONObject(1)))"sqrt($a)"
+            else {val b=child(1) ?:return null;"($a)${node.optString("value")}($b)"}
+        }
         "unary"->{val a=child(0) ?:return null;"${node.optString("value","-")}($a)"}
         "restricted"->child(0)
         "call","frozen_call"->{val name=node.optString("value");val inner=children() ?:return null;if(name.matches(Regex("[A-Za-z_][A-Za-z0-9_]*")))"$name($inner)" else null}
@@ -820,11 +835,22 @@ data class ConstantEntry(val symbol: String,val name: String,val value: String,v
 private fun String.historyPreview(): String =
     if(codePointCount(0,length)>50) substring(0,offsetByCodePoints(0,49))+"…" else this
 
-@Composable private fun StoredVariableRow(name:String,stored:JSONObject,selected:Boolean,fontSize:Float,onSelect:()->Unit) {
+private fun storedVariableDisplayTree(node:JSONObject):JSONObject {
+    val display=JSONObject(node.toString())
+    val args=display.optJSONArray("args")
+    if(args!=null)for(index in 0 until args.length())args.optJSONObject(index)?.let {args.put(index,storedVariableDisplayTree(it))}
+    val radicand=args?.optJSONObject(0)
+    return if(display.optString("kind")=="binary"&&display.optString("value")=="^"&&radicand!=null&&isSquareRootExponent(args.optJSONObject(1)))
+        JSONObject().put("kind","root").put("args",JSONArray().put(radicand))
+    else display
+}
+
+@Composable private fun StoredVariableRow(name:String,stored:JSONObject,selected:Boolean,labelSize:Float,valueSize:Float,onSelect:()->Unit) {
+    val display=remember(stored){storedVariableDisplayTree(stored)}
     Row(Modifier.fillMaxWidth().clickable(onClick=onSelect).testTag("stored-variable-$name").padding(vertical=4.dp)) {
-        MathText("$name = ",12f,modifier=Modifier.alignBy(MathAxis),tint=if(selected)LocalInstrument.current.accent else LocalInstrument.current.ink)
+        MathText("$name = ",labelSize,modifier=Modifier.alignBy(MathAxis),tint=if(selected)LocalInstrument.current.accent else LocalInstrument.current.ink)
         Box(Modifier.alignBy(MathAxis).horizontalScroll(rememberScrollState())) {
-            MathNode(stored,fontSize*.55f)
+            MathNode(display,valueSize)
         }
     }
 }
@@ -838,7 +864,7 @@ private fun storedVariableNames(variables:JSONObject):List<String> =
         if(names.isEmpty())Text("No stored variables")
         names.forEach {name->
             m.variables.optJSONObject(name)?.let {stored->
-                StoredVariableRow(name,stored,false,m.outputFont){m.insert(name);close()}
+                StoredVariableRow(name,stored,false,14f,m.outputFont*.62f){m.insert(name);close()}
             }
         }
     }},confirmButton={TextButton(onClick=close){Text("Close")}},dismissButton={if(names.isNotEmpty())TextButton(onClick={m.deleteAllVariables();close()}){Text("Delete all")}})
@@ -858,7 +884,7 @@ private fun storedVariableNames(variables:JSONObject):List<String> =
         if(m.variables.length()==0&&m.functions.length()==0)Text("No stored variables")
         storedVariableNames(m.variables).forEach{key->
             m.variables.optJSONObject(key)?.let {stored->
-                StoredVariableRow(key,stored,name==key&&!function,m.outputFont){selectVariable(key)}
+                StoredVariableRow(key,stored,name==key&&!function,12f,m.outputFont*.55f){selectVariable(key)}
             }
         }
         m.functions.keys().asSequence().toList().sorted().forEach {key->
@@ -871,7 +897,8 @@ private fun storedVariableNames(variables:JSONObject):List<String> =
             }.padding(vertical=4.dp),fontSize=12.sp,color=if(name==key&&function)LocalInstrument.current.accent else LocalInstrument.current.ink)
         }
         Field(name,"Name",Modifier.fillMaxWidth()) { name=it }
-        Field(value,"Value / expression",Modifier.fillMaxWidth()) { value=it }
+        OutlinedTextField(value,{value=it},modifier=Modifier.fillMaxWidth().testTag("stored-variable-value"),label={Text("Value / expression")},singleLine=true,
+            trailingIcon={TextButton(onClick={value=m.editor.source},enabled=m.editor.source.isNotBlank(),contentPadding=PaddingValues(horizontal=4.dp),modifier=Modifier.semantics{contentDescription="Paste current expression"}){Text("Paste",fontSize=11.sp)}})
         Row(verticalAlignment=Alignment.CenterVertically) { Checkbox(function,{function=it});Text("User function") }
         if(function) Field(parameters,"Parameters (comma separated)",Modifier.fillMaxWidth()) { parameters=it }
         Row { SmallAction("Store") { if(function)m.define(name,parameters,value) else m.store(name,value) }; SmallAction("Recall") { m.insert(if(function) "$name()" else name);close() }; SmallAction("Delete") { m.removeVariable(name) } }

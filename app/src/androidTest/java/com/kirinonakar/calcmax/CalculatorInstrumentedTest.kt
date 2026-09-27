@@ -258,6 +258,10 @@ class CalculatorInstrumentedTest {
         compose.onNodeWithText("Variables & functions").assertExists()
         compose.onNodeWithText("Value / expression").assertExists()
         compose.onNodeWithText("n").assertExists()
+        compose.onNodeWithText("A = ").performClick()
+        compose.onNodeWithTag("stored-variable-value").assertTextContains("42")
+        compose.onNodeWithContentDescription("Paste current expression").performClick()
+        compose.onNodeWithTag("stored-variable-value").assertTextContains("2+A")
         compose.onNodeWithText("Delete all").performClick()
         compose.runOnIdle {assertEquals(0,model().variables.length())}
         compose.onNodeWithText("Variables & functions").assertExists()
@@ -272,6 +276,43 @@ class CalculatorInstrumentedTest {
         val base=compose.onNode(hasText("x") and inRow,useUnmergedTree=true).fetchSemanticsNode().boundsInRoot
         assertEquals(label.center.y,base.center.y,with(compose.density){3.dp.toPx()})
         compose.onNodeWithText("Close").performClick()
+    }
+    @Test fun storedSquareRootUsesRadicalInRecallAndStore() {
+        compose.runOnIdle {model().mode="Scientific/CAS";model().poweredOn=true;model().secondKeys=false;model().clearAllScreen();model().edit(Editor("sqrt(2)"));model().calculate()}
+        compose.waitUntil(30000){model().committed&&model().variables.has("Ans")}
+        compose.onNodeWithContentDescription("RCL").performClick()
+        val answerRow=hasAnyAncestor(hasTestTag("stored-variable-Ans"))
+        compose.onNode(hasText("2") and answerRow,useUnmergedTree=true).assertExists()
+        compose.onNode(hasText("1") and answerRow,useUnmergedTree=true).assertDoesNotExist()
+        compose.onNodeWithText("Close").performClick()
+        compose.onNodeWithContentDescription("SHIFT").performClick()
+        compose.onNodeWithContentDescription("STO").performClick()
+        compose.onNodeWithText("Ans = ").performClick()
+        compose.onNodeWithText("sqrt(2)").assertExists()
+        compose.onNodeWithText("Done").performClick()
+    }
+    @Test fun rootKeyAfterVariableInsertsMultiplicationAndRadical() {
+        compose.runOnIdle {model().mode="Scientific/CAS";model().poweredOn=true;model().secondKeys=false;model().clear()}
+        compose.onNodeWithContentDescription("ALPHA").performClick()
+        compose.onNodeWithContentDescription("(−)").performClick()
+        compose.onNodeWithContentDescription("√").performClick()
+        compose.runOnIdle {assertEquals("A*sqrt()",model().editor.source);assertEquals("binary",model().editor.tree()?.kind);assertEquals("*",model().editor.tree()?.value)}
+        val expression=hasAnyAncestor(hasContentDescription("Current expression"))
+        compose.onNode(hasText("×",substring=true) and expression,useUnmergedTree=true).assertExists()
+        compose.onNode(hasText("sqrt",substring=true) and expression,useUnmergedTree=true).assertDoesNotExist()
+    }
+    @Test fun calculusKeysAfterVariableKeepTheirMathSymbols() {
+        compose.runOnIdle {model().mode="Scientific/CAS";model().poweredOn=true;model().secondKeys=false;model().clear();model().insert("A")}
+        compose.onNodeWithContentDescription("∫").performClick()
+        compose.runOnIdle {assertEquals("A*integrate(,x,,)",model().editor.source);assertEquals("*",model().editor.tree()?.value);assertEquals("integrate",model().editor.tree()?.args?.get(1)?.value)}
+        val expression=hasAnyAncestor(hasContentDescription("Current expression"))
+        compose.onNode(hasText("∫") and expression,useUnmergedTree=true).assertExists()
+        compose.onNode(hasText("integrate",substring=true) and expression,useUnmergedTree=true).assertDoesNotExist()
+        compose.runOnIdle {model().clear();model().insert("A")}
+        compose.onNodeWithContentDescription("2nd").performClick()
+        compose.onNodeWithContentDescription("d/dx").performClick()
+        compose.runOnIdle {assertEquals("A*diff(,x)",model().editor.source);assertEquals("*",model().editor.tree()?.value);assertEquals("diff",model().editor.tree()?.args?.get(1)?.value)}
+        compose.onNode(hasText("diff",substring=true) and expression,useUnmergedTree=true).assertDoesNotExist()
     }
     @Test fun storedFormulaUsesCurrentVariablesAndDeleteAllClearsList() {
         compose.runOnIdle {model().mode="Scientific/CAS";model().poweredOn=true;model().secondKeys=false;model().clear();model().store("A","2")}
@@ -317,6 +358,20 @@ class CalculatorInstrumentedTest {
         compose.waitUntil(30000){!model().busy&&model().committed}
         compose.runOnIdle {assertEquals("9",model().result?.optString("exact"));assertEquals("binary",model().variables.optJSONObject("C")?.optString("kind"))}
         compose.onNodeWithText("C = ").assertExists()
+    }
+    @Test fun calcPowerFormulaKeepsStatusOnOneLine() {
+        compose.runOnIdle {model().mode="Scientific/CAS";model().poweredOn=true;model().secondKeys=false;model().clear();model().store("A","2")}
+        compose.waitUntil(30000){!model().busy&&model().variables.has("A")}
+        compose.runOnIdle {model().store("C","A^2")}
+        compose.waitUntil(30000){!model().busy&&model().variables.has("C")}
+        compose.runOnIdle {model().edit(Editor("C"));model().startCalc();assertEquals(listOf("A"),model().calcSession?.names);model().insertCalcValue("3");model().submitCalcValue()}
+        compose.waitUntil(30000){!model().busy&&model().committed}
+        val label=compose.onNodeWithText("C = ",useUnmergedTree=true).fetchSemanticsNode().boundsInRoot
+        val base=compose.onNode(hasText("A") and hasAnyAncestor(hasTestTag("calc-formula")),useUnmergedTree=true).fetchSemanticsNode().boundsInRoot
+        val input=compose.onNodeWithText("A = ",useUnmergedTree=true).fetchSemanticsNode().boundsInRoot
+        val tolerance=with(compose.density){3.dp.toPx()}
+        assertEquals(label.center.y,base.center.y,tolerance)
+        assertEquals(label.center.y,input.center.y,tolerance)
     }
     @Test fun equationAndCustomFunctionWorkspaces() {
         compose.runOnIdle{model().clear();model().mode="Equations";model().equationKind="Quadratic";model().equationCoefficients=listOf("1","-5","6","0");model().equationSystem="x+y=3\nx-y=1";model().equationVariables="x,y"}

@@ -333,7 +333,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
                 return
             }
         }
-        if(text=="Ans") {inputAnswer=variables.optJSONObject("Ans");answerDisplay=lastAnswerResult?.optJSONObject(if(decimal)"decimalTree" else "tree") ?: inputAnswer}
+        if(text=="Ans"||text=="*Ans") {inputAnswer=variables.optJSONObject("Ans");answerDisplay=lastAnswerResult?.optJSONObject(if(decimal)"decimalTree" else "tree") ?: inputAnswer}
         if(!overwrite&&(value.firstOrNull()?.let{it.isLetterOrDigit()||it=='.'}==true||value=="()")) {
             val slot=editor.emptyProductSlot()
             if(slot!=null&&typedParens.none {it.first==slot.first&&it.last==slot.last}) {
