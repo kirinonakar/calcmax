@@ -18,6 +18,16 @@ You can download the latest release from the [Releases Page](https://github.com/
 * S⇔D switches exact and decimal results; SHIFT S⇔D switches improper/mixed fractions. The top `Catalog` button opens the searchable function catalog.
 * RCL lists stored variables; tap one to insert its name into the current expression. SHIFT RCL (STO) opens the variable editor for storing, recalling, and deleting values. CALC on a recalled expression prompts for its input variables and shows the expression alongside their values. SHIFT AC is CLR ALL and clears the visible tape and variables while preserving History, settings, assumptions and custom functions.
 
+### LaTeX paste
+
+Paste supported LaTeX into the calculator with `Paste` or the Android keyboard. CalcMax converts it to an editable expression that can be calculated. Display math delimiters (`\[...\]` and `$$...$$`), fractions, definite integrals, basic functions and symbols are supported. For example:
+
+```latex
+\[\frac{x^2+1}{x-1}\]
+\[\int_{1}^{e}\frac{1}{x}\,dx=1\]
+$$\int_{0}^{\infty} e^{-x^2} \times \cos(2x) \, dx$$
+```
+
 ### Numbers and precision
 
 Decimal literals are exact rationals. Internal precision (3–200 significant digits, default 30) drives numeric algorithms, while display digits (default 10) limit how many digits a numeric or decimal result shows; exact integers, fractions and symbolic forms are never rounded, display digits never exceed internal precision, and Ans/STO keep the full-precision value. Numeric trig honors DEG/RAD/GRAD; explicit π or ° specifies a radian/degree expression. Symbolic calculus is in radians. Complex values use `i`; `polar(r,theta)`, `rectpolar(z)`, `re`, `im`, `arg` and `conj` are available. `prime(n)` returns the nth prime and `isprime(n)` returns true or false for an integer.
