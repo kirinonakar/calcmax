@@ -347,8 +347,8 @@ private fun treeSource(node:JSONObject?):String? {
     val yValues=if(dataKind=="xy")parsedRows.mapNotNull {it.getOrNull(1)?.toDoubleOrNull()?.takeIf {v->v.isFinite()}} else emptyList()
     val paired=parsedRows.mapNotNull {row->val x=row.getOrNull(0)?.toDoubleOrNull();val y=row.getOrNull(1)?.toDoubleOrNull();if(x!=null&&y!=null&&x.isFinite()&&y.isFinite())x to y else null}
     var section by rememberSaveable {mutableStateOf("Data")}
-    if(section=="Data") Panel("Data & statistics","") {
-        Choices(listOf("Data","Distributions","Tests & intervals"),section,{section=it})
+    if(section=="Data") Panel("Data & statistics","Enter values once, then summarize, test, or plot the current dataset.") {
+        Choices(listOf("Data & analysis","Distributions"),"Data & analysis",{section=if(it=="Data & analysis")"Data" else it})
         if(names.isNotEmpty())Choices(names,activeName,{name->selected=name;isNew=false;m.dataSets.optJSONObject(name)?.let {item->datasetName=name;data=item.optString("csv");dataKind=item.optString("kind","list");plotType=if(dataKind=="xy")"Scatter" else "Histogram"}})
         Row(horizontalArrangement=Arrangement.spacedBy(6.dp),verticalAlignment=Alignment.CenterVertically) {
             Field(datasetName,"Dataset name",Modifier.weight(1f)){datasetName=it}
@@ -392,23 +392,27 @@ private fun treeSource(node:JSONObject?):String? {
                 }
             }
         }
+        Text("Quick summaries",style=MaterialTheme.typography.titleMedium)
         Row(Modifier.horizontalScroll(rememberScrollState())) {
             Button(onClick={val values=vector(0);if(values!="[]"){m.edit(Editor("stats($values)"));m.calculate()}}){Text(if(dataKind=="xy")"Summarize x" else "Summarize list")}
             if(dataKind=="xy")SmallAction("Summarize y"){val values=vector(1);if(values!="[]"){m.edit(Editor("stats($values)"));m.calculate()}}
-            if(dataKind=="xy")SmallAction("Fit regression"){val table=parsedRows.filter {it.size>=2&&it[0].isNotBlank()&&it[1].isNotBlank()}.joinToString(",","[","]"){it.take(2).joinToString(",","[","]")};m.fitRegression("regression($table,$regression)",data)}
         }
+        StatisticsAnalysis(m,parsedRows,dataKind)
+        // Keep the result beside the action that produced it.
+        Display(m,requestInitialFocus=false)
+        HorizontalDivider()
+        Text("Visualize",style=MaterialTheme.typography.titleMedium)
         if(dataKind=="xy")Choices(listOf("linear","quadratic","logarithmic","exponential","power"),regression,{regression=it})
+        if(dataKind=="xy")SmallAction("Fit regression"){val table=parsedRows.filter {it.size>=2&&it[0].isNotBlank()&&it[1].isNotBlank()}.joinToString(",","[","]"){it.take(2).joinToString(",","[","]")};m.fitRegression("regression($table,$regression)",data)}
         Choices(if(dataKind=="xy")listOf("Scatter","Histogram","Box plot") else listOf("Histogram","Box plot"),plotType,{plotType=it})
         val fitVisible=dataKind=="xy"&&plotType=="Scatter"&&m.regressionData==data
         StatisticsPlot(plotType,if(plotType=="Scatter")paired else xValues.mapIndexed {i,v->i.toDouble() to v},xValues,yValues,if(fitVisible)m.regressionCurve.orEmpty() else emptyList(),if(fitVisible)m.regressionFit else "")
         if(m.regressionBusy)Text("Fitting regression…",fontSize=11.sp,color=LocalInstrument.current.muted)
-        // The workspace panel scrolls: an initial focus request would pull it down to the display.
-        Display(m,requestInitialFocus=false)
-        if(dataKind=="xy")SmallAction("Graph fitted expression"){val exact=m.result?.optString("exact");if(!exact.isNullOrBlank()){m.changeGraphKind("cartesian");m.updateGraphSource(exact.replace("**","^"));m.mode="Graph";m.plot()}}
+        if(dataKind=="xy"&&m.regressionData==data&&m.regressionFit.isNotBlank())SmallAction("Graph fitted expression"){m.changeGraphKind("cartesian");m.updateGraphSource(m.regressionFit.replace("**","^"));m.mode="Graph";m.plot()}
     } else {
         Panel(section,"") {
-            Choices(listOf("Data","Distributions","Tests & intervals"),section,{section=it})
-            if(section=="Distributions")DistributionSection(m) else TestSection(m)
+            Choices(listOf("Data & analysis","Distributions"),section,{section=if(it=="Data & analysis")"Data" else it})
+            DistributionSection(m)
         }
     }
 }
@@ -623,46 +627,31 @@ private fun String.splitCsvRecord():List<String> {
     Text("Closed forms stay exact where the engine has one; other probabilities use the internal precision. Binomial list forms need n ≤ 100, and the normal cumulative uses -oo as its lower bound so μ and σ apply.",fontSize=11.sp,color=c.muted)
 }
 
-@Composable private fun TestSection(m: CalculatorModel) {
+@Composable private fun StatisticsAnalysis(m: CalculatorModel,rows:List<List<String>>,kind:String) {
     val c=LocalInstrument.current
     var test by rememberSaveable {mutableStateOf("t test")}
-    var input by rememberSaveable {mutableStateOf("Data list")}
+    var column by rememberSaveable {mutableStateOf("x")}
     var tail by rememberSaveable {mutableStateOf("Two-sided")}
     var mu0 by rememberSaveable {mutableStateOf("0")}
     var sigma by rememberSaveable {mutableStateOf("2")}
-    var mean by rememberSaveable {mutableStateOf("2.5")}
-    var sd by rememberSaveable {mutableStateOf("1.29")}
-    var count by rememberSaveable {mutableStateOf("4")}
     var level by rememberSaveable {mutableStateOf("95")}
-    var data by rememberSaveable {mutableStateOf("1, 2, 3, 4")}
-    var observed by rememberSaveable {mutableStateOf("10, 20, 30")}
-    var expected by rememberSaveable {mutableStateOf("15, 20, 25")}
-    var groups by rememberSaveable {mutableStateOf("1, 2, 3\n4, 5, 6")}
-    fun list(text:String):String?=text.split(',','\n',';',' ').map {it.trim()}.filter {it.isNotEmpty()}.takeIf {it.isNotEmpty()}?.joinToString(",","[","]")
-    fun tailArgument()=when(tail){"Left"->",left";"Right"->",right";else->""}
-    fun expression():String? {
-        return when(test) {
-            "t test" -> if(input=="Data list")list(data)?.let {values->"ttest($mu0,$values${tailArgument()})"} else if(listOf(mu0,mean,sd,count).all {it.isNotBlank()})"ttest($mu0,$mean,$sd,$count${tailArgument()})" else null
-            "z test" -> if(input=="Data list")list(data)?.let {values->"ztest($mu0,$sigma,$values${tailArgument()})"} else if(listOf(mu0,sigma,mean,count).all {it.isNotBlank()})"ztest($mu0,$sigma,$mean,$count${tailArgument()})" else null
-            "χ² test" -> list(observed)?.let {o->list(expected)?.let {e->"chi2test($o,$e)"}}
-            "ANOVA" -> {
-                val parsed=groups.split('\n').map {it.trim()}.filter {it.isNotEmpty()}.map {list(it)}.filterNotNull()
-                if(parsed.size<2)null else "anova(${parsed.joinToString(",")})"
-            }
-            "t interval" -> if(input=="Data list")list(data)?.let {values->"tinterval($level,$values)"} else if(listOf(level,mean,sd,count).all {it.isNotBlank()})"tinterval($level,$mean,$sd,$count)" else null
-            else -> if(input=="Data list")list(data)?.let {values->"zinterval($level,$sigma,$values)"} else if(listOf(level,sigma,mean,count).all {it.isNotBlank()})"zinterval($level,$sigma,$mean,$count)" else null
-        }
+    val populated=rows.filter {row->row.any {it.isNotBlank()}}
+    fun values(index:Int):List<String>? {
+        if(populated.isEmpty())return null
+        val entries=populated.map {it.getOrNull(index)?.trim().orEmpty()}
+        return entries.takeIf {list->list.all {it.isNotBlank()}}
     }
-    Text("Test or interval",fontSize=12.sp,fontWeight=FontWeight.SemiBold)
+    val x=values(0)
+    val y=if(kind=="xy")values(1) else null
+    val sample=if(kind=="xy"&&column=="y")y else x
+    val pairedTest=test=="χ² test"||test=="ANOVA"
+    val command=statisticsTestCommand(test,rows,kind,column,tail,mu0,sigma,level)
+    HorizontalDivider()
+    Text("Analyze current data",style=MaterialTheme.typography.titleMedium)
+    Text(if(kind=="xy")"Use either column as a sample. χ² uses x as observed counts and y as expected counts; ANOVA compares the two columns as groups." else "Tests use the values in the table above. Choose x,y data for χ² or ANOVA.",fontSize=12.sp,color=c.muted)
     Choices(listOf("t test","z test","χ² test","ANOVA","t interval","z interval"),test,{test=it})
-    if(test in listOf("t test","z test","t interval","z interval"))Choices(listOf("Data list","Summary"),input,{input=it})
-    when(test) {
-        "χ² test" -> {
-            OutlinedTextField(observed,{observed=it},Modifier.fillMaxWidth().height(88.dp),label={Text("Observed counts")},textStyle=MaterialTheme.typography.bodyMedium.copy(fontFamily=FontFamily.Monospace))
-            OutlinedTextField(expected,{expected=it},Modifier.fillMaxWidth().height(88.dp),label={Text("Expected counts")},textStyle=MaterialTheme.typography.bodyMedium.copy(fontFamily=FontFamily.Monospace))
-        }
-        "ANOVA" -> OutlinedTextField(groups,{groups=it},Modifier.fillMaxWidth().height(120.dp),label={Text("One group per line")},textStyle=MaterialTheme.typography.bodyMedium.copy(fontFamily=FontFamily.Monospace))
-        else -> {
+    if(kind=="xy"&&!pairedTest)Choices(listOf("x","y"),column,{column=it})
+    if(!pairedTest) {
             Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                 if(test=="t test"||test=="z test") {
                     Field(mu0,"Hypothesized mean μ₀",Modifier.weight(1f)){mu0=it}
@@ -671,30 +660,25 @@ private fun String.splitCsvRecord():List<String> {
                 }
                 if(test=="z test"||test=="z interval")Field(sigma,"Known σ",Modifier.weight(1f)){sigma=it}
             }
-            if(input=="Data list") {
-                OutlinedTextField(data,{data=it},Modifier.fillMaxWidth().height(110.dp),label={Text("Sample values")},textStyle=MaterialTheme.typography.bodyMedium.copy(fontFamily=FontFamily.Monospace))
-            } else {
-                Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                    Field(mean,"Sample mean x̄",Modifier.weight(1f)){mean=it}
-                    if(test=="t test"||test=="t interval")Field(sd,"Sample SD s",Modifier.weight(1f)){sd=it}
-                    Field(count,"n",Modifier.weight(1f)){count=it}
-                }
-            }
             if(test=="t test"||test=="z test") {
                 Text("Alternative hypothesis",fontSize=12.sp,fontWeight=FontWeight.SemiBold)
                 Choices(listOf("Two-sided","Left","Right"),tail,{tail=it})
             }
-        }
     }
-    val command=expression()
-    if(command==null)Text("Fill in the values this test needs.",fontSize=11.sp,color=c.muted)
-    else Text("Expression  $command",fontFamily=FontFamily.Monospace,fontSize=11.sp,color=c.muted)
+    val dataStatus=when {
+        populated.isEmpty()->"Add values to the table to run this analysis."
+        pairedTest&&kind!="xy"->"Switch to x,y data and enter both columns."
+        pairedTest&&(x==null||y==null)->"Fill every value in both columns."
+        !pairedTest&&sample==null->"Fill every value in the selected column."
+        else->"Check the required values and sample size."
+    }
+    if(command==null)Text(dataStatus,fontSize=12.sp,color=c.muted)
+    else Text("${if(pairedTest)populated.size else sample?.size ?: 0} rows ready · ${if(pairedTest)"x + y" else if(kind=="xy")column else "list"}",fontSize=12.sp,color=c.muted)
     Row(Modifier.horizontalScroll(rememberScrollState()),verticalAlignment=Alignment.CenterVertically) {
-        Button(onClick={command?.let {m.edit(Editor(it));m.calculate()}},enabled=command!=null){Text("Compute")}
-        SmallAction("Insert into calculator"){command?.let {m.edit(Editor(it));m.mode="Scientific/CAS"}}
+        Button(onClick={command?.let {m.edit(Editor(it));m.calculate()}},enabled=command!=null,modifier=Modifier.testTag("statistics-run-test")){Text(if(test.endsWith("interval"))"Compute interval" else "Run test")}
+        SmallAction("Insert expression"){command?.let {m.edit(Editor(it));m.mode="Scientific/CAS"}}
     }
-    Display(m,requestInitialFocus=false)
-    Text("Tests return a two-tailed p value unless Left or Right is chosen. Confidence levels accept 0.95 or 95. χ² accepts equal-length count lists; ANOVA needs two or more groups, one group per line.",fontSize=11.sp,color=c.muted)
+    Text("Tests use a two-sided alternative by default. Confidence levels accept 0.95 or 95.",fontSize=11.sp,color=c.muted)
 }
 
 @Composable fun ProgrammerScreen(m: CalculatorModel) {
@@ -864,7 +848,7 @@ private fun storedVariableNames(variables:JSONObject):List<String> =
         if(names.isEmpty())Text("No stored variables")
         names.forEach {name->
             m.variables.optJSONObject(name)?.let {stored->
-                StoredVariableRow(name,stored,false,14f,m.outputFont*.62f){m.insert(name);close()}
+                StoredVariableRow(name,stored,false,16f,m.outputFont*.72f){m.insert(name);close()}
             }
         }
     }},confirmButton={TextButton(onClick=close){Text("Close")}},dismissButton={if(names.isNotEmpty())TextButton(onClick={m.deleteAllVariables();close()}){Text("Delete all")}})
