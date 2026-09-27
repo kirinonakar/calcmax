@@ -1,7 +1,7 @@
 package com.kirinonakar.calcmax.math
 
 private val multiArgumentFunctions = setOf(
-    "round", "nCr", "nPr", "gcd", "lcm", "quotient", "remainder", "mod", "divmod",
+    "round", "roundh", "nCr", "nPr", "gcd", "lcm", "quotient", "remainder", "mod", "divmod",
     "collect", "subs", "diff", "integrate", "limit", "series", "sum", "product", "solve",
     "nsolve", "nintegrate", "nderivative", "minimum", "maximum", "piecewise",
     "polar", "pol", "rec", "rnd", "randInt", "eng", "dms",

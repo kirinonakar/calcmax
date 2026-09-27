@@ -200,17 +200,20 @@ class Engine:
         if name in ("asin", "acos", "atan"):
             result = getattr(s,name)(*a)
             return result * ({"DEG": 180/s.pi, "GRAD":200/s.pi}.get(self.angle, 1) if not result.free_symbols else 1)
-        if name=="round":
-            require(len(a) in (1,2),"round expects a number and optional decimal places")
-            require(a[0].is_number and a[0].is_real,"round requires a real number")
-            require(len(a)==1 or a[1].is_Integer,"round requires integer decimal places")
+        if name in ("round","roundh"):
+            require(len(a) in (1,2),name+" expects a number and optional decimal places")
+            require(a[0].is_number and a[0].is_real,name+" requires a real number")
+            require(len(a)==1 or a[1].is_Integer,name+" requires integer decimal places")
             places=int(a[1]) if len(a)==2 else 0
-            require(abs(places)<=200,"round decimal places must be between -200 and 200")
+            require(abs(places)<=200,name+" decimal places must be between -200 and 200")
             # Scale an exact rational before rounding so the result does not inherit
             # SymPy's low-precision Float from Number.round().
             number=a[0] if isinstance(a[0],s.Rational) else s.Rational(str(s.N(a[0],max(self.precision,abs(places)+5))))
             scale=s.Integer(10)**places
-            rounded=s.Rational(round(number*scale),1)/scale
+            scaled=number*scale
+            units=(s.sign(scaled)*s.floor(s.Abs(scaled)+s.Rational(1,2)) if name=="roundh"
+                   else round(scaled))
+            rounded=s.Rational(units,1)/scale
             return rounded if rounded.is_Integer else s.Float(rounded,max(self.precision,15,len(str(abs(rounded.p)))))
         basic = {"sqrt": s.sqrt, "cbrt": lambda x: s.real_root(x,3), "nthroot": s.root, "abs": s.Abs,
                  "floor": s.floor, "ceil": s.ceiling, "iPart": s.floor, "frac": s.frac,

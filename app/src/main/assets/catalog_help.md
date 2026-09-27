@@ -33,6 +33,8 @@ Example: floor(2.7)
 Example: ceil(2.1)
 `round(x,n)` — Round x to n decimal places; n defaults to 0.
 Example: round(3.14159,2)
+`roundh(x,n)` — Round x to n decimal places, with halfway values rounded away from zero; n defaults to 0.
+Example: roundh(1.225,2)
 `sign(x)` — Sign of x: −1, 0 or 1.
 Example: sign(-5)
 `sqrt(x)` — Principal square root.

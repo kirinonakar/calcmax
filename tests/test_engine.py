@@ -52,6 +52,21 @@ class EngineTests(unittest.TestCase):
         samples=[call("rnd") for _ in range(5)]
         self.assertTrue(all(item["ok"] and 0<=float(item["exact"])<1 for item in samples),samples)
         self.assertGreater(len({item["exact"] for item in samples}),1)
+    def test_roundh_half_up(self):
+        def number(value): return {"kind":"number","value":str(value)}
+        def call(name,*args):
+            return json.loads(core.dispatch(json.dumps({"tree":{"kind":"call","value":name,"args":list(args)}})))
+        for value,places,expected in [
+            ("3.1415",2,"3.14"),("1.225",2,"1.23"),("-1.225",2,"-1.23"),
+            ("2.5",0,"3"),("-2.5",0,"-3"),("125",-1,"130"),("-125",-1,"-130")
+        ]:
+            with self.subTest(value=value,places=places):
+                result=call("roundh",number(value),number(places))
+                self.assertTrue(result["ok"],result)
+                self.assertEqual(result["exact"],expected)
+        self.assertEqual(call("roundh",number("2.5"))["exact"],"3")
+        self.assertEqual(call("round",number("2.5"))["exact"],"2")
+        self.assertFalse(call("roundh",number(1),number("1.5"))["ok"])
     def test_exact_rational_properties(self):
         rng=random.Random(991)
         def rational(a,b): return {"kind":"binary","value":"/","args":[{"kind":"number","value":str(a)},{"kind":"number","value":str(b)}]}

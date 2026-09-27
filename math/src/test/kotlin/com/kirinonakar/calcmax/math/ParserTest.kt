@@ -6,6 +6,7 @@ class ParserTest {
     private fun p(s: String) = Parser(s).parse()
     @Test fun precedence() { assertEquals("*",p("2+3*4").args[1].value); assertEquals("unary",p("-2^2").kind); assertEquals("^",p("2^3^2").args[1].value) }
     @Test fun exactLiteral() { assertEquals("1",p("1/3").args[0].value); assertEquals("number",p("1.234567890123456789").kind) }
+    @Test fun halfUpRoundParses() { assertEquals("roundh",p("roundh(1.225,2)").value) }
     @Test fun randomCallTakesNoArguments() {
         assertEquals("rnd",p("rnd()").value)
         assertTrue(p("rnd()").args.isEmpty())

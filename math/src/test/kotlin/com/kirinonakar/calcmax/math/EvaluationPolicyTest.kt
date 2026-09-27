@@ -7,6 +7,7 @@ class EvaluationPolicyTest {
     @Test fun multiArgumentCallsWaitForEquals() {
         assertTrue(requiresExplicitEvaluation(Parser("rnd()",true).parse()))
         assertTrue(requiresExplicitEvaluation(Parser("integrate(e)").parse()))
+        assertTrue(requiresExplicitEvaluation(Parser("roundh(1.225,2)").parse()))
         assertTrue(requiresExplicitEvaluation(Parser("integrate(,x)",true).parse()))
         assertTrue(requiresExplicitEvaluation(Parser("integrate(exp(-x^2)*cos(2x),(x,0,oo))").parse()))
         assertTrue(requiresExplicitEvaluation(Parser("1+dot([1,2],[3,4])").parse()))
