@@ -2,6 +2,7 @@ package com.kirinonakar.calcmax.ui
 
 import android.graphics.Paint
 import androidx.compose.foundation.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -79,14 +80,16 @@ import kotlin.math.*
                     SmallAction(if(m.graphAnimating)"Stop" else "Animate",active=if(m.graphAnimating)true else null,shaded=m.graphAnimating){m.toggleGraphAnimation()}
                     SmallAction("Reset sliders"){m.resetGraphParameters()}
                 }
-                if(parametersOpen)Column(Modifier.fillMaxWidth().heightIn(max=170.dp).onSizeChanged{panelHeight=with(density){it.height.toDp()}}.verticalScroll(rememberScrollState())) {
+                if(parametersOpen)Column(Modifier.fillMaxWidth().heightIn(max=150.dp).onSizeChanged{panelHeight=with(density){it.height.toDp()}}.verticalScroll(rememberScrollState())) {
                     m.graphParameters.entries.forEach { (name,spec)->
                         val low=spec.min.toFloat();val high=spec.max.toFloat()
-                        Row(Modifier.fillMaxWidth().padding(horizontal=12.dp),verticalAlignment=Alignment.CenterVertically) {
+                        Row(Modifier.fillMaxWidth().height(38.dp).padding(horizontal=12.dp),verticalAlignment=Alignment.CenterVertically) {
                             Text(name,Modifier.width(24.dp),fontSize=13.sp,color=c.accent,fontWeight=FontWeight.SemiBold)
-                            Slider(spec.value.toFloat(),{m.setGraphParameter(name,it.toDouble())},Modifier.weight(1f),valueRange=(if(low<high)low else low-1f)..(if(high>low)high else low+1f))
-                            Text("%.3g".format(spec.value),Modifier.width(56.dp),fontSize=11.sp,color=c.muted)
-                            SmallAction("±"){rangeParameter=name}
+                            CompactSlider(spec.value.toFloat(),{m.setGraphParameter(name,it.toDouble())},Modifier.weight(1f),valueRange=(if(low<high)low else low-1f)..(if(high>low)high else low+1f))
+                            Text("%.3g".format(spec.value),Modifier.width(52.dp),fontSize=12.sp,color=c.ink)
+                            Box(Modifier.size(30.dp).background(c.scientific,RoundedCornerShape(8.dp)).clickable{rangeParameter=name}.semantics {contentDescription="Set $name slider range"},contentAlignment=Alignment.Center) {
+                                Text("±",fontSize=16.sp,color=c.accent)
+                            }
                         }
                     }
                 }
@@ -169,14 +172,20 @@ import kotlin.math.*
             val surfaceZMax=m.zMax ?: m.graphData?.optDouble("zMax",Double.NaN)?.takeIf { it.isFinite() }
             Column(Modifier.fillMaxWidth().onSizeChanged{surfaceExtra=with(density){it.height.toDp()}}) {
             Text("x: %.3g ~ %.3g   y: %.3g ~ %.3g".format(m.xMin,m.xMax,m.yMin,m.yMax)+(if(surfaceZMin!=null&&surfaceZMax!=null)"   z: %.3g ~ %.3g".format(surfaceZMin,surfaceZMax) else ""),Modifier.padding(horizontal=14.dp,vertical=2.dp),fontSize=11.sp,color=c.muted)
-            Row(Modifier.fillMaxWidth().padding(horizontal=14.dp),verticalAlignment=Alignment.CenterVertically) {
-                Text("Rotate",fontSize=11.sp,color=c.muted);Slider(surfaceRotation,{surfaceRotation=it},Modifier.weight(1f),valueRange=0f..360f);Text("${surfaceRotation.toInt()}°",fontSize=11.sp,color=c.muted)
+            Row(Modifier.fillMaxWidth().height(38.dp).padding(horizontal=14.dp),verticalAlignment=Alignment.CenterVertically) {
+                Text("Rotate",fontSize=11.sp,color=c.muted);CompactSlider(surfaceRotation,{surfaceRotation=it},Modifier.weight(1f),valueRange=0f..360f);Text("${surfaceRotation.toInt()}°",fontSize=11.sp,color=c.muted)
             }
-            Row(Modifier.fillMaxWidth().padding(horizontal=14.dp),verticalAlignment=Alignment.CenterVertically) {
-                Text("Tilt",fontSize=11.sp,color=c.muted);Slider(surfaceElevation,{surfaceElevation=it},Modifier.weight(1f),valueRange=5f..85f);Text("${surfaceElevation.toInt()}°",fontSize=11.sp,color=c.muted)
+            Row(Modifier.fillMaxWidth().height(38.dp).padding(horizontal=14.dp),verticalAlignment=Alignment.CenterVertically) {
+                Text("Tilt",fontSize=11.sp,color=c.muted);CompactSlider(surfaceElevation,{surfaceElevation=it},Modifier.weight(1f),valueRange=5f..85f);Text("${surfaceElevation.toInt()}°",fontSize=11.sp,color=c.muted)
             }
-            Row(Modifier.fillMaxWidth().padding(horizontal=14.dp),verticalAlignment=Alignment.CenterVertically) {
-                Text("Zoom",fontSize=11.sp,color=c.muted);Slider(surfaceZoom,{surfaceZoom=it},Modifier.weight(1f),valueRange=.4f..3f);Text("${(surfaceZoom*100).toInt()}%",fontSize=11.sp,color=c.muted);SmallAction("Reset"){m.xMin=-3.0;m.xMax=3.0;m.yMin=-3.0;m.yMax=3.0;m.zMin=null;m.zMax=null;surfaceRotation=35f;surfaceElevation=32f;surfaceZoom=1f;m.save();m.plot()}
+            Row(Modifier.fillMaxWidth().height(38.dp).padding(horizontal=14.dp),verticalAlignment=Alignment.CenterVertically) {
+                Text("Zoom",fontSize=11.sp,color=c.muted)
+                CompactSlider(surfaceZoom,{surfaceZoom=it},Modifier.weight(1f),valueRange=.4f..3f)
+                Text("${(surfaceZoom*100).toInt()}%",fontSize=11.sp,color=c.muted)
+                Text("Reset",Modifier.padding(start=4.dp).background(c.scientific,RoundedCornerShape(8.dp)).clickable {
+                    m.xMin=-3.0;m.xMax=3.0;m.yMin=-3.0;m.yMax=3.0;m.zMin=null;m.zMax=null
+                    surfaceRotation=35f;surfaceElevation=32f;surfaceZoom=1f;m.save();m.plot()
+                }.padding(horizontal=8.dp,vertical=7.dp),fontSize=11.sp,color=c.accent)
             }
             Text("Drag to rotate freely · Pinch to zoom",Modifier.padding(horizontal=14.dp,vertical=2.dp),fontSize=11.sp,color=c.muted)
             }
@@ -372,7 +381,7 @@ import kotlin.math.*
     }
     val low=(((minimum.toDoubleOrNull()?.takeIf(Double::isFinite) ?: bounds.first)-bounds.first)/range).coerceIn(0.0,1.0).toFloat()
     val high=(((maximum.toDoubleOrNull()?.takeIf(Double::isFinite) ?: bounds.second)-bounds.first)/range).coerceIn(0.0,1.0).toFloat()
-    RangeSlider(value=low.coerceAtMost(high)..high.coerceAtLeast(low),onValueChange={selected->
+    CompactRangeSlider(value=low.coerceAtMost(high)..high.coerceAtLeast(low),onValueChange={selected->
         onMin((bounds.first+selected.start*range).toString())
         onMax((bounds.first+selected.endInclusive*range).toString())
     },modifier=Modifier.fillMaxWidth())

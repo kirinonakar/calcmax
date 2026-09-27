@@ -775,10 +775,14 @@ data class ConstantEntry(val symbol: String,val name: String,val value: String,v
         Text("Display digits · result digits shown"); Choices(displayChoices+"Custom",if(customDisplayVisible)"Custom" else m.displayDigits.toString(),{if(it=="Custom")customDisplayVisible=true else {customDisplayVisible=false;m.displayDigits=it.toInt();m.recalculatePreview();m.save()}})
         if(customDisplayVisible) {Field(customDisplay,"Custom display digits · 2–200",Modifier.fillMaxWidth()){customDisplay=it};TextButton(onClick={m.displayDigits=customDisplay.toInt();m.recalculatePreview();m.save()},enabled=customDisplay.toIntOrNull() in 2..200){Text("Apply display digits")}}
         Text("Internal precision governs numeric algorithms such as integration and solving. Display digits limit the digits a result shows; they never exceed internal precision, and exact integers, fractions and symbolic forms are not rounded.",fontSize=11.sp,color=LocalInstrument.current.muted)
-        Text("Input font · ${m.inputFont.toInt()} sp")
-        Slider(m.inputFont,{m.inputFont=it},valueRange=10f..42f,steps=31,onValueChangeFinished={m.save()})
-        Text("Output font · ${m.outputFont.toInt()} sp")
-        Slider(m.outputFont,{m.outputFont=it},valueRange=10f..48f,steps=37,onValueChangeFinished={m.save()})
+        Column(verticalArrangement=Arrangement.spacedBy(2.dp)) {
+            Text("Input font · ${m.inputFont.toInt()} sp")
+            CompactSlider(m.inputFont,{m.inputFont=it},Modifier.fillMaxWidth(),valueRange=10f..42f,steps=31,onValueChangeFinished={m.save()})
+        }
+        Column(verticalArrangement=Arrangement.spacedBy(2.dp)) {
+            Text("Output font · ${m.outputFont.toInt()} sp")
+            CompactSlider(m.outputFont,{m.outputFont=it},Modifier.fillMaxWidth(),valueRange=10f..48f,steps=37,onValueChangeFinished={m.save()})
+        }
         Row(verticalAlignment=Alignment.CenterVertically) { Text("Key vibration",Modifier.weight(1f)); Switch(m.haptics,{m.haptics=it;m.save()}) }
         Row(verticalAlignment=Alignment.CenterVertically) { Text("Key sound",Modifier.weight(1f)); Switch(m.sound,{m.sound=it;m.save()}) }
         Row(verticalAlignment=Alignment.CenterVertically) { Text("Save history locally",Modifier.weight(1f)); Switch(m.persistHistory,{m.persistHistory=it;m.save()}) }
