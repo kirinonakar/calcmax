@@ -630,7 +630,7 @@ class CalculatorInstrumentedTest {
     }
     @Test fun symbolicRenderingCalculusAndFractionExit() {
         compose.runOnIdle {model().mode="Scientific/CAS";model().clear();model().decimal=true;model().edit(Editor("integrate(x,x)"))}
-        compose.waitUntil(15000){model().result?.optString("exact")=="C + x**2/2"}
+        compose.waitUntil(15000){model().result?.optString("exact")=="x**2/2 + C"}
         compose.onAllNodesWithText("integrate",substring=true).assertCountEquals(0)
         compose.onAllNodesWithText("**",substring=true).assertCountEquals(0)
         capture("symbolic-integral-decimal")

@@ -13,7 +13,7 @@ private val multiArgumentFunctions = setOf(
 )
 
 /** Entry helpers that keep previewing while typing even though they take more than one argument. */
-private val previewFunctions = setOf("log", "nthroot", "mixed")
+private val previewFunctions = setOf("log", "nthroot", "mixed", "mod", "divmod")
 
 fun requiresExplicitEvaluation(tree: Expr, userFunctions: Set<String> = emptySet()): Boolean =
     tree.nodes().any { node ->

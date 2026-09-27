@@ -8,7 +8,8 @@ data class CopyTarget(val text:String,val expression:Boolean,val expressionNext:
 
 /** The Copy button walks the cycle answer → expression → answer → ... */
 object CopyCycle {
-    fun next(answer:String?,source:String,copyExpression:Boolean):CopyTarget {
+    fun next(answer:String?,source:String,copyExpression:Boolean,selection:String?=null):CopyTarget {
+        if(!selection.isNullOrEmpty())return CopyTarget(selection,true,copyExpression)
         val result=answer?.takeIf{it.isNotBlank()}
         val expression=source.takeIf{it.isNotBlank()}
         return when {

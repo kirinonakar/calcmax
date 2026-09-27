@@ -1198,7 +1198,10 @@ def display_tree(x):
         if x.exp == s.Rational(1,2): return t("root",args=[display_tree(x.base)])
         if x.exp.is_negative: return t("fraction",args=[t("text","1"),display_tree(x.base**(-x.exp))])
         return t("power",args=[display_tree(x.base),display_tree(x.exp)])
-    if isinstance(x,s.Add): return t("sum",args=[t("unary","-",[display_tree(-a)]) if a.could_extract_minus_sign() else display_tree(a) for a in x.as_ordered_terms()])
+    if isinstance(x,s.Add):
+        terms=x.as_ordered_terms()
+        terms=[a for a in terms if not (a.is_Symbol and str(a)=="C")]+[a for a in terms if a.is_Symbol and str(a)=="C"]
+        return t("sum",args=[t("unary","-",[display_tree(-a)]) if a.could_extract_minus_sign() else display_tree(a) for a in terms])
     if isinstance(x,s.Mul):
         if x.could_extract_minus_sign(): return t("unary","-",[display_tree(-x)])
         num,den = s.fraction(x)
@@ -1221,6 +1224,11 @@ def readable(x):
     if isinstance(x,Quantity): return readable(x.base)+" "+x.unit_text()
     if isinstance(x,dict): return "\n".join(str(k)+": "+readable(v) for k,v in x.items())
     if isinstance(x,(list,tuple)): return "["+", ".join(readable(v) for v in x)+"]"
+    if isinstance(x,s.Add):
+        constants=[term for term in x.args if term.is_Symbol and str(term)=="C"]
+        if constants:
+            remainder=x-sum(constants)
+            if remainder!=0: return readable(remainder)+" + C"
     from sympy.printing.str import StrPrinter
     class CompactPrinter(StrPrinter):
         def _print_Float(self,expr):

@@ -194,11 +194,17 @@ private fun largeHistoryTree(root:JSONObject?,compactStructured:Boolean=true):Bo
         Text(if(m.committed)"=" else "MATH",fontSize=10.sp,color=c.muted,letterSpacing=1.sp)
         Spacer(Modifier.weight(1f))
         TextButton(onClick={m.undo()},enabled=m.canUndo,modifier=Modifier.height(36.dp).semantics{contentDescription="Undo last input"},contentPadding=PaddingValues(horizontal=8.dp)){Text("Undo",fontSize=11.sp)}
-        val copyTarget=CopyCycle.next(m.result?.optString(if(m.decimal)"decimal" else "exact"),m.editor.source,copyExpression)
+        val selection=m.editor.source.substring(minOf(m.editor.anchor,m.editor.cursor),maxOf(m.editor.anchor,m.editor.cursor))
+        val copyTarget=CopyCycle.next(m.result?.optString(if(m.decimal)"decimal" else "exact"),m.editor.source,copyExpression,selection)
+        TextButton(onClick={
+            val start=minOf(m.editor.anchor,m.editor.cursor)
+            clipboard.setText(AnnotatedString(selection))
+            m.edit(Editor(m.editor.source.removeRange(start,start+selection.length),start))
+        },enabled=selection.isNotEmpty()&&m.calcSession==null,modifier=Modifier.height(36.dp),contentPadding=PaddingValues(horizontal=8.dp)){Text("Cut",fontSize=11.sp)}
         TextButton(onClick={
             if(copyTarget.text.isNotBlank())clipboard.setText(AnnotatedString(copyTarget.text))
-            copyExpression=copyTarget.expressionNext
-        },modifier=Modifier.height(36.dp),contentPadding=PaddingValues(horizontal=8.dp)){Text(copyTarget.label,fontSize=11.sp)}
+            if(selection.isEmpty())copyExpression=copyTarget.expressionNext
+        },modifier=Modifier.height(36.dp),contentPadding=PaddingValues(horizontal=8.dp)){Text(if(selection.isNotEmpty())"Copy" else copyTarget.label,fontSize=11.sp)}
         TextButton(onClick={clipboard.getText()?.text?.let{if(m.calcSession!=null)m.insertCalcValue(it)else m.insert(it)}},modifier=Modifier.height(36.dp),contentPadding=PaddingValues(horizontal=8.dp)){Text("Paste",fontSize=11.sp)}
         if(m.calcSession==null)TextButton(onClick=onToggleTyping,modifier=Modifier.height(36.dp),contentPadding=PaddingValues(horizontal=8.dp)){Text(if(typing)"Math input" else "Keyboard",fontSize=11.sp)}
     }

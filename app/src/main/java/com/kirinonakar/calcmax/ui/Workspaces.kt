@@ -201,11 +201,13 @@ private fun treeSource(node:JSONObject?):String? {
     }
     return when(node.optString("kind")) {
         "list"->children()?.let{"[$it]"}
+        "tuple"->children()?.let{"($it${if(args?.length()==1) "," else ""})"}
         "set"->children()?.let{"{"+it+"}"}
         "number","float","snapshot_symbol"->node.optString("value").takeIf{it.isNotBlank()}
-        "constant"->when(node.optString("value")){"pi"->"pi";"E"->"e";"I"->"i";"oo"->"oo";"-oo"->"-oo";else->null}
-        "binary"->{val a=child(0) ?:return null;val b=child(1) ?:return null;"($a)${node.optString("value")}($b)"}
+        "constant"->when(node.optString("value")){"pi"->"pi";"E"->"e";"I"->"i";"oo"->"oo";"-oo"->"-oo";"True"->"true";"False"->"false";else->null}
+        "binary","relation"->{val a=child(0) ?:return null;val b=child(1) ?:return null;"($a)${node.optString("value")}($b)"}
         "unary"->{val a=child(0) ?:return null;"${node.optString("value","-")}($a)"}
+        "restricted"->child(0)
         "call","frozen_call"->{val name=node.optString("value");val inner=children() ?:return null;if(name.matches(Regex("[A-Za-z_][A-Za-z0-9_]*")))"$name($inner)" else null}
         else->null
     }
@@ -813,19 +815,38 @@ data class ConstantEntry(val symbol: String,val name: String,val value: String,v
 private fun String.historyPreview(): String =
     if(codePointCount(0,length)>50) substring(0,offsetByCodePoints(0,49))+"…" else this
 
+@Composable private fun StoredVariableRow(name:String,stored:JSONObject,selected:Boolean,fontSize:Float,onSelect:()->Unit) {
+    Row(Modifier.fillMaxWidth().clickable(onClick=onSelect).padding(vertical=4.dp),verticalAlignment=Alignment.CenterVertically) {
+        Text("$name = ",fontSize=12.sp,color=if(selected)LocalInstrument.current.accent else LocalInstrument.current.ink)
+        Box(Modifier.horizontalScroll(rememberScrollState())) { MathNode(stored,fontSize*.55f) }
+    }
+}
+
 @Composable fun VariablesDialog(m: CalculatorModel,operation: String,close: ()->Unit) {
     var name by rememberSaveable { mutableStateOf("A") }; var value by rememberSaveable { mutableStateOf(m.editor.source.ifBlank { "0" }) }; var parameters by rememberSaveable { mutableStateOf("x") }; var function by rememberSaveable { mutableStateOf(false) }
-    AlertDialog(onDismissRequest=close,title={Text("Variables & functions")},text={Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(6.dp)) {
-        Choices(listOf("A","B","C","D","E","F","X","Y","M"),name,{name=it})
-        if(operation=="RCL") {
-            Text("Stored values · tap to recall")
-            if(m.variables.length()==0)Text("No stored variables")
-            m.variables.keys().asSequence().toList().sorted().forEach{key->
-                Row(Modifier.fillMaxWidth().clickable{m.insert(key);close()}.padding(vertical=8.dp),verticalAlignment=Alignment.CenterVertically){
-                    Text("$key = ",fontSize=16.sp)
-                    Box(Modifier.horizontalScroll(rememberScrollState())){MathNode(m.variables.getJSONObject(key),m.outputFont*.75f)}
-                }
+    fun selectVariable(key:String) {
+        name=key
+        function=false
+        m.variables.optJSONObject(key)?.let {stored->value=treeSource(stored) ?: ""}
+    }
+    AlertDialog(onDismissRequest=close,title={Text("Variables & functions")},text={Column(verticalArrangement=Arrangement.spacedBy(6.dp)) {
+        Choices(listOf("A","B","C","D","E","F","x","y","z","t","M"),name,{selectVariable(it)})
+        Column(Modifier.fillMaxWidth().heightIn(max=400.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(6.dp)) {
+        Text("Stored values · tap to select",fontSize=12.sp,color=LocalInstrument.current.muted)
+        if(m.variables.length()==0&&m.functions.length()==0)Text("No stored variables")
+        m.variables.keys().asSequence().toList().sortedWith(compareBy<String> {it!="M"}.thenBy {it}).forEach{key->
+            m.variables.optJSONObject(key)?.let {stored->
+                StoredVariableRow(key,stored,name==key&&!function,m.outputFont){selectVariable(key)}
             }
+        }
+        m.functions.keys().asSequence().toList().sorted().forEach {key->
+            Text("$key(…) = ${m.functions.optJSONObject(key)?.optString("source").orEmpty()}",Modifier.fillMaxWidth().clickable {
+                name=key;function=true
+                m.functions.optJSONObject(key)?.let {definition->
+                    value=definition.optString("source")
+                    parameters=definition.optJSONArray("parameters")?.let {args->(0 until args.length()).joinToString(","){args.optString(it)}} ?: "x"
+                }
+            }.padding(vertical=4.dp),fontSize=12.sp,color=if(name==key&&function)LocalInstrument.current.accent else LocalInstrument.current.ink)
         }
         Field(name,"Name",Modifier.fillMaxWidth()) { name=it }
         Field(value,"Value / expression",Modifier.fillMaxWidth()) { value=it }
@@ -837,6 +858,7 @@ private fun String.historyPreview(): String =
         Choices(listOf("none","real","positive","integer","nonzero"),m.assumptions.optJSONArray(name)?.optString(0) ?: "none",{m.assume(name,it)})
         Text("Stored: "+m.variables.keys().asSequence().toList().joinToString()+"\nFunctions: "+m.functions.keys().asSequence().toList().joinToString(),fontSize=12.sp)
         if(m.error.isNotBlank()) Text(m.error,color=LocalInstrument.current.danger)
+        }
     }},confirmButton={TextButton(onClick=close) { Text("Done") }})
 }
 

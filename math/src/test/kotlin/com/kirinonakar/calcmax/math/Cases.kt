@@ -8,7 +8,7 @@ fun main(args: Array<String>) {
         "2°20′30″" to "281/120", "2°20′30″+0°39′30″" to "3",
         "0.1+0.2" to "3/10", "{1,2}" to "{1, 2}", "123456789012345678901234567890+1" to "123456789012345678901234567891",
         "diff(x^3,x)" to "3*x**2", "diff(sin(x^2),x)" to "2*x*cos(x**2)", "diff(exp(x),x,3)" to "exp(x)",
-        "integrate(x^2,x)" to "C + x**3/3", "integrate(x^2*sin(x),x)" to "C - x**2*cos(x) + 2*x*sin(x) + 2*cos(x)",
+        "integrate(x^2,x)" to "x**3/3 + C", "integrate(x^2*sin(x),x)" to "-x**2*cos(x) + 2*x*sin(x) + 2*cos(x) + C",
         "sinc(0)" to "1", "sinc(pi)" to "0", "sinc(pi/2)" to "2/pi",
         "integrate(x^2,x,0,1)" to "1/3", "limit(sin(x)/x,x,0)" to "1", "limit(1/x,x,oo)" to "0",
         "limit(1/x,x,0,left)" to "-oo", "limit(1/x,x,0,right)" to "oo",

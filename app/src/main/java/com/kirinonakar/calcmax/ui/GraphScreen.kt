@@ -165,8 +165,8 @@ import kotlin.math.*
                     surfaceZoom=(surfaceZoom*zoom).coerceIn(.4f,3f)
                 }
             })
-            val surfaceZMin=m.graphData?.optDouble("zMin",Double.NaN)?.takeIf { it.isFinite() }
-            val surfaceZMax=m.graphData?.optDouble("zMax",Double.NaN)?.takeIf { it.isFinite() }
+            val surfaceZMin=m.zMin ?: m.graphData?.optDouble("zMin",Double.NaN)?.takeIf { it.isFinite() }
+            val surfaceZMax=m.zMax ?: m.graphData?.optDouble("zMax",Double.NaN)?.takeIf { it.isFinite() }
             Column(Modifier.fillMaxWidth().onSizeChanged{surfaceExtra=with(density){it.height.toDp()}}) {
             Text("x: %.3g ~ %.3g   y: %.3g ~ %.3g".format(m.xMin,m.xMax,m.yMin,m.yMax)+(if(surfaceZMin!=null&&surfaceZMax!=null)"   z: %.3g ~ %.3g".format(surfaceZMin,surfaceZMax) else ""),Modifier.padding(horizontal=14.dp,vertical=2.dp),fontSize=11.sp,color=c.muted)
             Row(Modifier.fillMaxWidth().padding(horizontal=14.dp),verticalAlignment=Alignment.CenterVertically) {
@@ -176,7 +176,7 @@ import kotlin.math.*
                 Text("Tilt",fontSize=11.sp,color=c.muted);Slider(surfaceElevation,{surfaceElevation=it},Modifier.weight(1f),valueRange=5f..85f);Text("${surfaceElevation.toInt()}°",fontSize=11.sp,color=c.muted)
             }
             Row(Modifier.fillMaxWidth().padding(horizontal=14.dp),verticalAlignment=Alignment.CenterVertically) {
-                Text("Zoom",fontSize=11.sp,color=c.muted);Slider(surfaceZoom,{surfaceZoom=it},Modifier.weight(1f),valueRange=.4f..3f);Text("${(surfaceZoom*100).toInt()}%",fontSize=11.sp,color=c.muted);SmallAction("Reset"){m.xMin=-3.0;m.xMax=3.0;m.yMin=-3.0;m.yMax=3.0;surfaceRotation=35f;surfaceElevation=32f;surfaceZoom=1f;m.save();m.plot()}
+                Text("Zoom",fontSize=11.sp,color=c.muted);Slider(surfaceZoom,{surfaceZoom=it},Modifier.weight(1f),valueRange=.4f..3f);Text("${(surfaceZoom*100).toInt()}%",fontSize=11.sp,color=c.muted);SmallAction("Reset"){m.xMin=-3.0;m.xMax=3.0;m.yMin=-3.0;m.yMax=3.0;m.zMin=null;m.zMax=null;surfaceRotation=35f;surfaceElevation=32f;surfaceZoom=1f;m.save();m.plot()}
             }
             Text("Drag to rotate freely · Pinch to zoom",Modifier.padding(horizontal=14.dp,vertical=2.dp),fontSize=11.sp,color=c.muted)
             }
@@ -314,12 +314,28 @@ import kotlin.math.*
     if(rangeDialog) {
         var xmin by remember {mutableStateOf(m.xMin.toString())};var xmax by remember {mutableStateOf(m.xMax.toString())};var ymin by remember {mutableStateOf(m.yMin.toString())};var ymax by remember {mutableStateOf(m.yMax.toString())}
         var tmin by remember {mutableStateOf(m.parameterMin.toString())};var tmax by remember {mutableStateOf(m.parameterMax.toString())}
-        AlertDialog(onDismissRequest={rangeDialog=false},title={Text("Graph range")},text={Column(Modifier.verticalScroll(rememberScrollState())) { Field(xmin,if(m.graphKind=="sequence")"n minimum" else "x minimum") {xmin=it};Field(xmax,if(m.graphKind=="sequence")"n maximum" else "x maximum") {xmax=it};Field(ymin,if(m.graphKind=="surface")"y domain minimum" else "y minimum") {ymin=it};Field(ymax,if(m.graphKind=="surface")"y domain maximum" else "y maximum") {ymax=it};if(m.graphKind in listOf("parametric","polar","differential")){Field(tmin,"t minimum") {tmin=it};Field(tmax,"t maximum") {tmax=it}} }},confirmButton={TextButton(onClick={
+        val sampledMin=m.graphData?.optDouble("zMin",-1.0)?.takeIf(Double::isFinite) ?: -1.0
+        val sampledMax=m.graphData?.optDouble("zMax",1.0)?.takeIf(Double::isFinite) ?: 1.0
+        var zmin by remember {mutableStateOf((m.zMin ?: if(sampledMin<sampledMax)sampledMin else sampledMin-1.0).toString())}
+        var zmax by remember {mutableStateOf((m.zMax ?: if(sampledMin<sampledMax)sampledMax else sampledMax+1.0).toString())}
+        var autoZ by remember {mutableStateOf(m.zMin==null || m.zMax==null)}
+        AlertDialog(onDismissRequest={rangeDialog=false},title={Text("Graph range")},text={Column(Modifier.verticalScroll(rememberScrollState())) {
+            RangeAxisEditor(if(m.graphKind=="sequence")"n" else "x",xmin,xmax,m.xMin,m.xMax,{xmin=it},{xmax=it})
+            RangeAxisEditor("y",ymin,ymax,m.yMin,m.yMax,{ymin=it},{ymax=it})
+            if(m.graphKind=="surface") {
+                Row(verticalAlignment=Alignment.CenterVertically) {Checkbox(autoZ,{autoZ=it});Text("Automatic z range")}
+                if(!autoZ)RangeAxisEditor("z",zmin,zmax,zmin.toDoubleOrNull() ?: -1.0,zmax.toDoubleOrNull() ?: 1.0,{zmin=it},{zmax=it})
+            }
+            if(m.graphKind in listOf("parametric","polar","differential"))RangeAxisEditor("t",tmin,tmax,m.parameterMin,m.parameterMax,{tmin=it},{tmax=it})
+        }},confirmButton={TextButton(onClick={
             val values=listOf(xmin,xmax,ymin,ymax).map {it.toDoubleOrNull()}
             val ta=tmin.toDoubleOrNull();val tb=tmax.toDoubleOrNull()
+            val za=zmin.toDoubleOrNull();val zb=zmax.toDoubleOrNull()
             val usesT=m.graphKind in listOf("parametric","polar","differential")
-            if(values.any {it==null||!it.isFinite()} || values[0]!!>=values[1]!! || values[2]!!>=values[3]!! || (usesT&&(ta==null||tb==null||!ta.isFinite()||!tb.isFinite()||ta>=tb))) m.error="Enter finite increasing ranges" else {
+            val usesZ=m.graphKind=="surface"&&!autoZ
+            if(values.any {it==null||!it.isFinite()} || values[0]!!>=values[1]!! || values[2]!!>=values[3]!! || (usesT&&(ta==null||tb==null||!ta.isFinite()||!tb.isFinite()||ta>=tb)) || (usesZ&&(za==null||zb==null||!za.isFinite()||!zb.isFinite()||za>=zb))) m.error="Enter finite increasing ranges" else {
                 m.xMin=values[0]!!;m.xMax=values[1]!!;m.yMin=values[2]!!;m.yMax=values[3]!!
+                if(m.graphKind=="surface"){m.zMin=if(autoZ)null else za;m.zMax=if(autoZ)null else zb}
                 if(m.graphKind=="sequence"){m.parameterMin=values[0]!!;m.parameterMax=values[1]!!}
                 else if(usesT){m.parameterMin=ta!!;m.parameterMax=tb!!}
                 m.save();rangeDialog=false;m.plot()
@@ -331,13 +347,35 @@ import kotlin.math.*
         if(spec!=null) {
             var low by remember(name){mutableStateOf(spec.min.toString())}
             var high by remember(name){mutableStateOf(spec.max.toString())}
-            AlertDialog(onDismissRequest={rangeParameter=null},title={Text("$name slider range")},text={Column{Field(low,"minimum"){low=it};Field(high,"maximum"){high=it}}},confirmButton={TextButton(onClick={
+            AlertDialog(onDismissRequest={rangeParameter=null},title={Text("$name slider range")},text={Column{
+                RangeAxisEditor(name,low,high,spec.min,spec.max,{low=it},{high=it})
+            }},confirmButton={TextButton(onClick={
                 val start=low.toDoubleOrNull();val end=high.toDoubleOrNull()
                 if(start==null||end==null||!start.isFinite()||!end.isFinite()||start>=end||abs(start)>1e9||abs(end)>1e9)m.error="Enter finite values with minimum < maximum"
                 else {m.setGraphParameterRange(name,start,end);rangeParameter=null}
             }) {Text("Apply")}},dismissButton={TextButton(onClick={rangeParameter=null}) {Text("Cancel")} })
         }
     }
+}
+
+@Composable private fun RangeAxisEditor(axis:String,minimum:String,maximum:String,initialMin:Double,initialMax:Double,onMin:(String)->Unit,onMax:(String)->Unit) {
+    val bounds=remember(axis) {
+        val span=(initialMax-initialMin).takeIf {it.isFinite()&&it>0.0} ?: 2.0
+        val start=initialMin-2*span;val end=initialMax+2*span
+        if(start.isFinite()&&end.isFinite()&&(end-start).isFinite()&&end>start)start to end else -10.0 to 10.0
+    }
+    val range=bounds.second-bounds.first
+    Text("$axis range",fontSize=12.sp,color=LocalInstrument.current.muted)
+    Row(horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+        Field(minimum,"$axis minimum",Modifier.weight(1f)){onMin(it)}
+        Field(maximum,"$axis maximum",Modifier.weight(1f)){onMax(it)}
+    }
+    val low=(((minimum.toDoubleOrNull()?.takeIf(Double::isFinite) ?: bounds.first)-bounds.first)/range).coerceIn(0.0,1.0).toFloat()
+    val high=(((maximum.toDoubleOrNull()?.takeIf(Double::isFinite) ?: bounds.second)-bounds.first)/range).coerceIn(0.0,1.0).toFloat()
+    RangeSlider(value=low.coerceAtMost(high)..high.coerceAtLeast(low),onValueChange={selected->
+        onMin((bounds.first+selected.start*range).toString())
+        onMax((bounds.first+selected.endInclusive*range).toString())
+    },modifier=Modifier.fillMaxWidth())
 }
 
 @Composable private fun GraphValueTable(
@@ -379,12 +417,12 @@ import kotlin.math.*
             }
         }
     }
-    Canvas(modifier.background(c.display).semantics { contentDescription="Three dimensional surface. Drag to rotate freely, pinch to zoom, and adjust x and y ranges." }) {
+    Canvas(modifier.background(c.display).semantics { contentDescription="Three dimensional surface. Drag to rotate freely, pinch to zoom, and adjust x, y and z ranges." }) {
         if(mesh.isEmpty())return@Canvas
         val xmin=m.xMin;val xmax=m.xMax;val ymin=m.yMin;val ymax=m.yMax
-        val zmin=m.graphData?.optDouble("zMin",-1.0) ?: -1.0
-        val zmax=m.graphData?.optDouble("zMax",1.0) ?: 1.0
-        val zspan=(zmax-zmin).takeIf { it>1e-12 } ?: 1.0
+        val zmin=m.zMin ?: m.graphData?.optDouble("zMin",-1.0) ?: -1.0
+        val zmax=m.zMax ?: m.graphData?.optDouble("zMax",1.0) ?: 1.0
+        val zspan=(zmax-zmin).takeIf { it.isFinite() && it>0.0 } ?: 1.0
         val theta=Math.toRadians(rotation.toDouble());val elevation=Math.toRadians(elevationDeg.toDouble())
         val scale=min(size.width,size.height)*.34f*zoom
         fun project(point:DoubleArray):Offset {
@@ -403,17 +441,27 @@ import kotlin.math.*
         }
         val axisPaint=Paint(Paint.ANTI_ALIAS_FLAG).apply { color=c.muted.toArgb();textSize=11.sp.toPx() }
         val labelPaint=Paint(Paint.ANTI_ALIAS_FLAG).apply { color=c.ink.toArgb();textSize=12.sp.toPx();isFakeBoldText=true }
+        fun surfaceSegment(a:DoubleArray?,b:DoubleArray?,color:Color,width:Float) {
+            if(a==null||b==null)return
+            val dz=b[2]-a[2]
+            if(dz==0.0 && a[2] !in zmin..zmax)return
+            val start=if(dz==0.0)0.0 else minOf((zmin-a[2])/dz,(zmax-a[2])/dz).coerceIn(0.0,1.0)
+            val end=if(dz==0.0)1.0 else maxOf((zmin-a[2])/dz,(zmax-a[2])/dz).coerceIn(0.0,1.0)
+            if(start>=end || a[2]+dz*(start+end)/2 !in zmin..zmax)return
+            fun interpolate(fraction:Double)=doubleArrayOf(a[0]+(b[0]-a[0])*fraction,a[1]+(b[1]-a[1])*fraction,a[2]+dz*fraction)
+            drawLine(color,project(interpolate(start)),project(interpolate(end)),width)
+        }
         clipRect {
             mesh.forEachIndexed { ri,row->
                 for(ci in 0 until row.lastIndex) {
                     val a=row[ci];val b=row[ci+1]
-                    if(a!=null&&b!=null)drawLine(c.curves[ri%c.curves.size].copy(alpha=.78f),project(a),project(b),1.15.dp.toPx())
+                    surfaceSegment(a,b,c.curves[ri%c.curves.size].copy(alpha=.78f),1.15.dp.toPx())
                 }
             }
             if(mesh.isNotEmpty())for(ci in mesh.first().indices) {
                 for(ri in 0 until mesh.lastIndex) {
                     val a=mesh[ri].getOrNull(ci);val b=mesh[ri+1].getOrNull(ci)
-                    if(a!=null&&b!=null)drawLine(c.accent.copy(alpha=.62f),project(a),project(b),1.dp.toPx())
+                    surfaceSegment(a,b,c.accent.copy(alpha=.62f),1.dp.toPx())
                 }
             }
             val x0=doubleArrayOf(xmin,ymin,zmin)

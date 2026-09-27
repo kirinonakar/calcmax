@@ -18,6 +18,15 @@ def run(source, **options):
     return json.loads(core.dispatch(json.dumps({"tree": TREES[source], "angle": "RAD", **options})))
 
 class EngineTests(unittest.TestCase):
+    def test_indefinite_integral_places_constant_after_expression(self):
+        tree={"kind":"call","value":"integrate","args":[
+            {"kind":"symbol","value":"x"},{"kind":"symbol","value":"x"}]}
+        result=json.loads(core.dispatch(json.dumps({"tree":tree,"angle":"RAD"})))
+        self.assertTrue(result["ok"],result)
+        self.assertEqual(result["exact"],"x**2/2 + C")
+        self.assertEqual(result["tree"]["args"][-1]["value"],"C")
+        self.assertTrue(result["decimal"].endswith(" + C"))
+
     def test_prime_index_and_primality_are_distinct(self):
         def call(name, value):
             tree={"kind":"call","value":name,"args":[{"kind":"number","value":str(value)}]}
@@ -295,8 +304,8 @@ class EngineTests(unittest.TestCase):
         def node(kind,value="",*args): return {"kind":kind,"value":value,"args":list(args)}
         def sym(name): return node("symbol",name)
         def num(value): return node("number",str(value))
-        def call(name,*args): return node("call",name,list(args))
-        def binary(op,left,right): return node("binary",op,[left,right])
+        def call(name,*args): return node("call",name,*args)
+        def binary(op,left,right): return node("binary",op,left,right)
         def power(base,exponent): return binary("^",base,exponent)
         def dispatch(tree,**options): return json.loads(core.dispatch(json.dumps({"tree":tree,"angle":"RAD",**options})))
         x,y,t,w=map(sym,("x","y","t","w"))

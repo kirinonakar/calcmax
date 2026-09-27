@@ -182,7 +182,7 @@ private fun pressedShade(base:Color)=if(base.luminance()>.45f)Color.Black.copy(a
         Column(Modifier.fillMaxSize(),horizontalAlignment=Alignment.CenterHorizontally) {
             Row(Modifier.fillMaxWidth().height(labelHeight),horizontalArrangement=Arrangement.Center,verticalAlignment=Alignment.CenterVertically){
                 Text(if(key.type=="round")key.title else key.secondary,color=if(key.title=="ALPHA")c.alpha else c.shift,fontSize=smallFont,lineHeight=smallFont,maxLines=1)
-                if(key.alpha.isNotBlank())Text("  "+when(key.alpha){"x"->"X";"y"->"Y";else->key.alpha},color=c.alpha,fontSize=smallFont,lineHeight=smallFont,maxLines=1)
+                if(key.alpha.isNotBlank())Text("  "+key.alpha,color=c.alpha,fontSize=smallFont,lineHeight=smallFont,maxLines=1)
                 if(key.type=="round"&&key.secondary.isNotBlank())Text(" "+key.secondary,color=c.shift,fontSize=7.sp,lineHeight=7.sp)
             }
             val shape=if(key.type=="round")CircleShape else RoundedCornerShape(topStart=7.dp,topEnd=7.dp,bottomStart=4.dp,bottomEnd=4.dp)

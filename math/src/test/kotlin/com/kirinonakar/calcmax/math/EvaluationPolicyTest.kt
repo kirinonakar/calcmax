@@ -23,6 +23,8 @@ class EvaluationPolicyTest {
         assertFalse(requiresExplicitEvaluation(Parser("log(100,10)").parse()))
         assertFalse(requiresExplicitEvaluation(Parser("nthroot(8,3)").parse()))
         assertFalse(requiresExplicitEvaluation(Parser("mixed(1,1,2)").parse()))
+        assertFalse(requiresExplicitEvaluation(Parser("mod(17,5)").parse()))
+        assertFalse(requiresExplicitEvaluation(Parser("divmod(17,5)").parse()))
     }
 
     @Test fun distributionAndFinanceEntriesWaitForEquals() {

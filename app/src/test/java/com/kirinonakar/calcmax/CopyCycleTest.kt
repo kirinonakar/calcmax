@@ -34,4 +34,9 @@ class CopyCycleTest {
         assertEquals("",target.text)
         assertFalse(target.expressionNext)
     }
+    @Test fun selectionTakesPriorityWithoutAdvancingCopyCycle() {
+        val target=CopyCycle.next("42","12+30",false,"12")
+        assertEquals("12",target.text)
+        assertFalse(target.expressionNext)
+    }
 }
