@@ -464,7 +464,7 @@ class Engine:
             return distribution_value(self, name, a)
         if name in ("ttest", "ztest", "chi2test", "anova", "tinterval", "zinterval"):
             return statistical_test(self, name, a, nodes)
-        if name in ("tvmfv", "tvmpv", "tvmpmt", "tvmn", "tvmrate", "npv", "irr", "amort"):
+        if name in ("tvmfv", "tvmpv", "tvmpmt", "tvmn", "tvmrate", "npv", "irr", "amort", "cagr"):
             return finance_value(self, name, a, nodes)
         if name in self.functions:
             function = self.functions[name]

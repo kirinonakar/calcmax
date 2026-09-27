@@ -9,7 +9,7 @@ private val multiArgumentFunctions = setOf(
     "tpdf", "tcdf", "invt", "chi2pdf", "chi2cdf", "fpdf", "fcdf",
     "binompdf", "binomcdf", "poissonpdf", "poissoncdf", "geometpdf", "geometcdf",
     "ttest", "ztest", "chi2test", "anova", "tinterval", "zinterval",
-    "tvmfv", "tvmpv", "tvmpmt", "tvmn", "tvmrate", "npv", "irr", "amort"
+    "tvmfv", "tvmpv", "tvmpmt", "tvmn", "tvmrate", "npv", "irr", "amort", "cagr"
 )
 
 /** Entry helpers that keep previewing while typing even though they take more than one argument. */

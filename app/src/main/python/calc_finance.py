@@ -149,4 +149,12 @@ def finance_value(engine, name, a, nodes):
             return {"payment": _mp_result(payment, engine), "payments": s.Integer(k),
                     "balance": _mp_result(balance, engine), "principal paid": _mp_result(principal - balance, engine),
                     "interest paid": _mp_result(interest, engine)}
+    if name == "cagr":
+        require(len(args) == 3, "cagr takes a starting value, an ending value and a number of periods")
+        start, end, periods = args
+        for value in args: _real_value(value, "cagr requires numeric arguments")
+        require(start > 0, "The starting value must be positive")
+        require(end >= 0, "The ending value must not be negative")
+        require(periods > 0, "The number of periods must be positive")
+        return s.simplify((end/start)**(s.Integer(1)/periods) - 1)
     raise MathError("Unknown finance function: " + name)

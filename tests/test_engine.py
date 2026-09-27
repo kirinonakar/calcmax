@@ -483,6 +483,10 @@ class EngineTests(unittest.TestCase):
         start=payload(dispatch(call("amort",rate,num(250000),num(360),num(0))))
         self.assertEqual(start["balance"],"250000")
         self.assertEqual(start["interest paid"],"0")
+        growth=dispatch(call("cagr",num(1000),num(1331),num(3)))
+        self.assertEqual(growth["exact"],"1/10")
+        annual=dispatch(call("cagr",num(1000),num(2000),num(5)))
+        self.assertAlmostEqual(float(annual["decimal"]),2**0.2-1,9)
 
     def test_distribution_and_finance_errors(self):
         def node(kind,value="",*args): return {"kind":kind,"value":value,"args":list(args)}
@@ -493,8 +497,10 @@ class EngineTests(unittest.TestCase):
         for tree in [call("normcdf",num(1),num(2),num(3)),call("invnorm",num(0)),call("ttest",num(0),listing(num(1))),
                      call("irr",listing(num(1),num(2),num(3))),call("npv",num(-1),num(-1000),listing(num(300))),
                      call("tvmpmt",num(0),num("0.05"),num(100),num(0)),call("anova",listing(num(1),num(2))),
-                     call("amort",num("0.005"),num(200000),num(0)),call("binompdf",num(1000),num("1/2"))]:
+                     call("amort",num("0.005"),num(200000),num(0)),call("binompdf",num(1000),num("1/2")),
+                     call("cagr",num(0),num(100),num(5)),call("cagr",num(1000),num(2000),num(0))]:
             with self.subTest(tree=tree): self.assertFalse(dispatch(tree)["ok"])
         self.assertEqual(dispatch(call("tvmpmt",num(0),num("0.05"),num(100),num(0)))["error"],"The number of periods must be positive")
+        self.assertEqual(dispatch(call("cagr",num(0),num(100),num(5)))["error"],"The starting value must be positive")
 
     if __name__=="__main__": unittest.main(verbosity=2)

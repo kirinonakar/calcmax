@@ -39,7 +39,7 @@ MODE opens scientific/CAS, graphing, Python, equations, matrix, vector, statisti
 
 The catalog adds probability distributions (`normpdf`, `normcdf`, `invnorm`, `tpdf`, `tcdf`, `invt`, `chi2pdf`, `chi2cdf`, `fpdf`, `fcdf`, `binompdf`, `binomcdf`, `poissonpdf`, `poissoncdf`, `geometpdf`, `geometcdf`), one-sample tests with optional one-sided p values (`ttest`, `ztest`, `chi2test`, `anova`) and confidence intervals (`tinterval`, `zinterval`). Results stay exact where SymPy supplies a closed form (`normcdf(0)` is 1/2, `fcdf(3,2,4)` is 0.84) and the remaining cumulative probabilities and quantiles use mpmath at the internal precision.
 
-Finance functions follow the TVM cash-flow convention with the rate per payment period: `tvmfv`, `tvmpv`, `tvmpmt`, `tvmn`, `tvmrate`, `npv`, `irr` and `amort` return numeric results, and an optional final `begin` selects payments at the start of each period.
+Finance functions follow the TVM cash-flow convention with the rate per payment period: `tvmfv`, `tvmpv`, `tvmpmt`, `tvmn`, `tvmrate`, `npv`, `irr` and `amort` return numeric results, and an optional final `begin` selects payments at the start of each period. `cagr(start,end,n)` gives the compound growth rate per period from a starting value to an ending value.
 
 ## Examples
 
@@ -84,6 +84,7 @@ ttest(0,[1,2,3,4])
 tinterval(0.95,[1,2,3,4])
 npv(0.1,-1000,[300,400,500])
 tvmpmt(360,0.05/12,250000)
+cagr(1000,2000,5)
 ```
 
 ## Build

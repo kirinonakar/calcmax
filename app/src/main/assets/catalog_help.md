@@ -443,4 +443,6 @@ Example: irr([-1000,300,400,500])
 Example: irr(-1000,[500,500,500])
 `amort(i,pv,n)` — Payment and totals of a fully amortized loan; add k to stop after k payments.
 Example: amort(0.005,200000,360)
+`cagr(start,end,n)` — Compound annual growth rate from a starting value to an ending value over n periods.
+Example: cagr(1000,2000,5)
 - TVM values follow the cash-flow convention: money received is positive and money paid is negative. Add begin as the last argument for payments at the beginning of each period; the default is end. Rates are per payment period.

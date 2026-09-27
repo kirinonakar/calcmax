@@ -34,5 +34,6 @@ class EvaluationPolicyTest {
         assertTrue(requiresExplicitEvaluation(Parser("invt(0.9)").parse()))
         assertTrue(requiresExplicitEvaluation(Parser("npv(0.1)").parse()))
         assertTrue(requiresExplicitEvaluation(Parser("tvmpmt(360,0.05/12,250000)").parse()))
+        assertTrue(requiresExplicitEvaluation(Parser("cagr(1000)").parse()))
     }
 }

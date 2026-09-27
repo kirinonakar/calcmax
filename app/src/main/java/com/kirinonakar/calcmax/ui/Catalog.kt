@@ -25,7 +25,7 @@ private val Catalog=linkedMapOf(
     "Data & units" to listOf("stats([])","mean([])","median([])","variance([])","stdev([])","quartiles([])","sumdata([])","regression([],linear)","covariance([],[])","correlation([],[])","qty(,m)","convert(,m,cm)"),
     "Distributions" to listOf("normpdf(,0,1)","normcdf()","normcdf(,)","normcdf(,,0,1)","invnorm(,0,1)","tpdf(,10)","tcdf(,10)","tcdf(,,10)","invt(,10)","chi2pdf(,5)","chi2cdf(,5)","chi2cdf(,,5)","fpdf(,5,10)","fcdf(,5,10)","fcdf(,,5,10)","binompdf(,0.5,)","binomcdf(,0.5,)","poissonpdf(,)","poissoncdf(,)","geometpdf(,)","geometcdf(,)"),
     "Tests & intervals" to listOf("ttest(,[])","ttest(,,,)","ztest(,,[])","ztest(,,,)","chi2test([],[])","anova([],[])","tinterval(,[])","tinterval(,,,)","zinterval(,,[])","zinterval(,,,)"),
-    "Finance" to listOf("tvmfv(,,,)","tvmpv(,,,)","tvmpmt(,,,)","tvmn(,,,)","tvmrate(,,,)","npv(,[])","npv(,,[])","irr([])","irr(,[])","amort(,,)","amort(,,,)")
+    "Finance" to listOf("tvmfv(,,,)","tvmpv(,,,)","tvmpmt(,,,)","tvmn(,,,)","tvmrate(,,,)","npv(,[])","npv(,,[])","irr([])","irr(,[])","amort(,,)","amort(,,,)","cagr(,,)")
 )
 @Composable fun CatalogDialog(m: CalculatorModel,close: ()->Unit) {
     var category by remember {mutableStateOf("Scientific")};var search by remember {mutableStateOf("")};var showHelp by remember {mutableStateOf(false)}
