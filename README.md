@@ -105,7 +105,21 @@ app/.../ui/     Native Compose mathematical layouts, keypad and mode workspaces
 app/.../calculator/
                 ViewModel, local persistence, typed AST JSON process protocol
 app/src/main/python/calc_engine.py
-                Validated AST -> SymPy -> result tree + exact/decimal forms
+                Chaquopy entry point, request budgets and response assembly
+app/src/main/python/calc_evaluator.py
+                Validated AST -> SymPy expression evaluation
+app/src/main/python/calc_display.py
+                Result trees, formatting and reusable result ASTs
+app/src/main/python/calc_graph.py
+                Graph sampling, shading, parameters and analysis
+app/src/main/python/calc_statistics.py
+                Distributions, statistical tests and regression
+app/src/main/python/calc_finance.py
+                Time-value-of-money and cash-flow functions
+app/src/main/python/calc_programmer.py
+                Fixed-width integer operations
+app/src/main/python/calc_shared.py
+                Limits, units, constants and shared math helpers
 app/src/main/python/quantities.py
                 Dimension algebra independent of Android
 tests/          Desktop integration and randomized exact arithmetic tests
