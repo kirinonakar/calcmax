@@ -829,8 +829,11 @@ private fun String.historyPreview(): String =
     }
 }
 
+private fun storedVariableNames(variables:JSONObject):List<String> =
+    variables.keys().asSequence().toList().sortedWith(compareBy<String> {when(it){"Ans"->0;"M"->1;else->2}}.thenBy {it})
+
 @Composable fun RecallDialog(m: CalculatorModel,close: ()->Unit) {
-    val names=m.variables.keys().asSequence().toList().sortedWith(compareBy<String> {it!="M"}.thenBy {it})
+    val names=storedVariableNames(m.variables)
     AlertDialog(onDismissRequest=close,title={Text("Recall variable")},text={Column(Modifier.fillMaxWidth().heightIn(max=480.dp).verticalScroll(rememberScrollState())) {
         if(names.isEmpty())Text("No stored variables")
         names.forEach {name->
@@ -853,7 +856,7 @@ private fun String.historyPreview(): String =
         Column(Modifier.fillMaxWidth().heightIn(max=560.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(6.dp)) {
         Text("Stored values · tap to select",fontSize=12.sp,color=LocalInstrument.current.muted)
         if(m.variables.length()==0&&m.functions.length()==0)Text("No stored variables")
-        m.variables.keys().asSequence().toList().sortedWith(compareBy<String> {it!="M"}.thenBy {it}).forEach{key->
+        storedVariableNames(m.variables).forEach{key->
             m.variables.optJSONObject(key)?.let {stored->
                 StoredVariableRow(key,stored,name==key&&!function,m.outputFont){selectVariable(key)}
             }
