@@ -358,9 +358,10 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         var value=text
         if(committed) {
             rememberUndo(editor);recordInEdit=false
-            val last=result?.optJSONObject(if(decimal)"decimalTree" else "tree") ?: result?.optJSONObject("tree")
+            val assignment=result?.optBoolean("assignment")==true
+            val last=if(assignment)null else (result?.optJSONObject(if(decimal)"decimalTree" else "tree") ?: result?.optJSONObject("tree"))
             nextEntry();answerDisplay=last
-            if((text in listOf("+","-","−","*","×","/","÷","!","%","°","∠") || text.startsWith("^")) && variables.has("Ans")) {editor=Editor("Ans");inputAnswer=variables.getJSONObject("Ans")}
+            if(!assignment&&(text in listOf("+","-","−","*","×","/","÷","!","%","°","∠") || text.startsWith("^")) && variables.has("Ans")) {editor=Editor("Ans");inputAnswer=variables.getJSONObject("Ans")}
         }
         if(autoCloseBrackets&&!overwrite&&text.length==1&&editor.cursor==editor.anchor&&editor.exponent==null) {
             val typed=text[0]
@@ -435,8 +436,9 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         var recordInEdit=true
         if(committed) {
             rememberUndo(editor);recordInEdit=false
-            val previous=result?.optJSONObject("tree")
-            nextEntry();inputAnswer=variables.optJSONObject("Ans");answerDisplay=previous
+            val assignment=result?.optBoolean("assignment")==true
+            val previous=if(assignment)null else result?.optJSONObject("tree")
+            nextEntry();inputAnswer=if(assignment)null else variables.optJSONObject("Ans");answerDisplay=previous
             if(inputAnswer!=null)editor=Editor("Ans")
         }
         var target=editor
@@ -448,14 +450,6 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         val numerator=target.source.substring(a,b)
         val template="($numerator)/()"
         edit(target.insert(template,if(numerator.isEmpty())1 else template.length-1),recordUndo=recordInEdit)
-    }
-    fun angleSuffix(function:String) {
-        var recordInEdit=true
-        if(committed){rememberUndo(editor);recordInEdit=false;val display=result?.optJSONObject("tree");nextEntry();inputAnswer=variables.optJSONObject("Ans");answerDisplay=display;editor=Editor("Ans")}
-        var target=editor
-        if(target.cursor==target.anchor)target.tree()?.nodes()?.filter{it.end==target.cursor&&it.start<it.end}?.minByOrNull{it.end-it.start}?.let{target=target.select(it)}
-        val selected=target.source.substring(minOf(target.anchor,target.cursor),maxOf(target.anchor,target.cursor))
-        edit(target.insert("$function($selected)"),recordUndo=recordInEdit)
     }
     fun resetSetup(){angle="DEG";precision=30;displayDigits=10;decimal=false;resultDisplayMode=ResultDisplayMode.OFF;thousandsSeparator=false;mixedNumbers=false;overwrite=false;clear(recordUndo=false);save()}
     fun cycleResultDisplayMode(){resultDisplayMode=when(resultDisplayMode){ResultDisplayMode.OFF->ResultDisplayMode.ENGINEERING;ResultDisplayMode.ENGINEERING->ResultDisplayMode.SCIENTIFIC;ResultDisplayMode.SCIENTIFIC->ResultDisplayMode.OFF};save()}
@@ -601,8 +595,8 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         val tree = try { calculationTree(source) } catch(e: Exception) { error=e.message ?: "Syntax ERROR"; return }
         if(tree.value in listOf("=",":=") && tree.args.size==2 && mode!="Equations") {
             val left=tree.args[0];val right=tree.args[1]
-            if(left.kind=="symbol") {store(left.value,source.substring(right.start,right.end));return}
-            if(left.kind=="call" && left.args.all {it.kind=="symbol"}) {define(left.value,left.args.joinToString(","){it.value},source.substring(right.start,right.end));return}
+            if(left.kind=="symbol") {store(left.value,source.substring(right.start,right.end),finishInput=source==editor.source);return}
+            if(left.kind=="call" && left.args.all {it.kind=="symbol"}) {define(left.value,left.args.joinToString(","){it.value},source.substring(right.start,right.end),finishInput=source==editor.source);return}
         }
         if(mode in listOf("Scientific/CAS","Equations") && source==editor.source) {
             if(resultSource==source && resultVersion==inputVersion && result?.optBoolean("ok")==true) commit(source,result!!)
@@ -628,7 +622,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     }
     fun cancel() { inputVersion++;commitRequested=false;previewRunner?.cancel();job?.cancel(); graphJob?.cancel();animationJob?.cancel();graphAnimating=false;analysisJob?.cancel();regressionJob?.cancel();pythonJob?.cancel(); engine.cancel(); busy=false; graphBusy=false;regressionBusy=false;pythonBusy=false;pythonInputPrompt=null;pythonInputSubmit=null;previewBusy=false;error="Calculation cancelled" }
     fun transform(operation: String) { val source=editor.source.ifBlank { "Ans" }; edit(Editor("$operation($source)")); calculate() }
-    fun store(name: String, source: String = editor.source.ifBlank { "Ans" },showResult:Boolean=true) {
+    fun store(name: String, source: String = editor.source.ifBlank { "Ans" },showResult:Boolean=true,finishInput:Boolean=false) {
         try {
             require(name.matches(Regex("[A-Za-z][A-Za-z0-9_]*"))) { "Use a letter followed by letters, digits or underscores" }
             val tree=Parser(source).parse()
@@ -673,6 +667,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
                             dmsDisplay=false;dmsConversion=false
                         }
                     }
+                    if(finishInput){result?.put("assignment",true);committed=true}
                     inputVersion++;resultVersion=-1;error="";save()
                 } finally {busy=false}
             }
@@ -699,13 +694,15 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
             }finally{busy=false}
         }
     }
-    fun define(name: String, parameters: String, source: String, showResult:Boolean=true) {
+    fun define(name: String, parameters: String, source: String, showResult:Boolean=true,finishInput:Boolean=false) {
         try {
             val definition=FunctionTransfer.definition(name,parameters,source)
-            functions=JSONObject(functions.toString()).put(definition.name,definition.json()); save()
+            functions=JSONObject(functions.toString()).put(definition.name,definition.json())
             error=""
             val message="${definition.name}(${definition.parameters.joinToString()}) defined"
             if(showResult){result=JSONObject().put("exact",message).put("decimal",message).put("tree",JSONObject().put("kind","text").put("value",message));dmsDisplay=false;dmsConversion=false}
+            if(finishInput){result?.put("assignment",true);committed=true}
+            save()
         } catch(e: Exception) { error=e.message ?: "Invalid function" }
     }
     fun exportFunctions():String = FunctionTransfer.encode(functions)
@@ -1039,7 +1036,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         }
     }
     fun powerTemplate(suffix:String) {
-        if(editor.source.isBlank()||editor.source.lastOrNull() in listOf('+','-','−','×','*','÷','/','('))insert("()$suffix",1)
+        if(editor.source.isBlank()||committed&&result?.optBoolean("assignment")==true||editor.source.lastOrNull() in listOf('+','-','−','×','*','÷','/','('))insert("()$suffix",1)
         else insert(suffix,if(suffix=="^()")2 else suffix.length)
     }
     fun enterEngineering() { if(!poweredOn||result==null)return;engineeringConversion=true;engineeringShift=0 }

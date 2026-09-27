@@ -875,7 +875,7 @@ private fun storedVariableNames(variables:JSONObject):List<String> =
         m.variables.optJSONObject(key)?.let {stored->value=treeSource(stored) ?: ""}
     }
     AlertDialog(onDismissRequest=close,title={Text(tr("Variables & functions"))},text={Column(verticalArrangement=Arrangement.spacedBy(6.dp)) {
-        Choices(listOf("A","B","C","D","E","F","x","y","z","t","n","M"),name,{selectVariable(it)})
+        Choices(listOf("A","B","C","D","F","x","y","z","t","n","r","M"),name,{selectVariable(it)})
         Column(Modifier.fillMaxWidth().heightIn(max=560.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(6.dp)) {
         Text(tr("Stored values · tap to select"),fontSize=12.sp,color=LocalInstrument.current.muted)
         if(m.variables.length()==0&&m.functions.length()==0)Text(tr("No stored variables"))

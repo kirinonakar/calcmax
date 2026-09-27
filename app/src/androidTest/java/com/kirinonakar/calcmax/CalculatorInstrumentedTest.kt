@@ -267,6 +267,24 @@ class CalculatorInstrumentedTest {
         compose.onNodeWithText("Variables & functions").assertExists()
         compose.onNodeWithText("Done").performClick()
     }
+    @Test fun assignmentEqualsStartsFreshInputAfterStoredResult() {
+        compose.runOnIdle {model().mode="Scientific/CAS";model().poweredOn=true;model().secondKeys=false;model().clear();model().edit(Editor("A"))}
+        compose.onNodeWithContentDescription("2nd").performClick()
+        compose.onNodeWithContentDescription("SHIFT").performClick()
+        compose.onNodeWithContentDescription("Insert equals").performClick()
+        compose.runOnIdle {assertEquals("A=",model().editor.source)}
+        compose.onNodeWithContentDescription("5").performClick()
+        compose.onNodeWithContentDescription("=").performClick()
+        compose.waitUntil(30000){!model().busy&&model().committed&&model().variables.has("A")}
+        compose.runOnIdle {assertEquals("5",model().variables.getJSONObject("A").getString("value"));assertEquals("Stored in A",model().result?.optString("note"))}
+        compose.onNodeWithContentDescription("7").performClick()
+        compose.runOnIdle {assertEquals("7",model().editor.source)}
+        compose.runOnIdle {model().edit(Editor("B=6"))}
+        compose.onNodeWithContentDescription("=").performClick()
+        compose.waitUntil(30000){!model().busy&&model().committed&&model().variables.has("B")}
+        compose.onNodeWithContentDescription("+").performClick()
+        compose.runOnIdle {assertEquals("+",model().editor.source)}
+    }
     @Test fun storedPowerAlignsVariableNameWithBase() {
         compose.runOnIdle {model().mode="Scientific/CAS";model().poweredOn=true;model().secondKeys=false;model().clear();model().store("A","x^2")}
         compose.waitUntil(30000){!model().busy&&model().variables.has("A")}

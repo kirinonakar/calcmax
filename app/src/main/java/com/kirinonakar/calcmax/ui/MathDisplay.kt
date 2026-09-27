@@ -324,7 +324,7 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
             kind=="call"&&value=="mixed"->MathRow(3.dp){child(0);FractionLayout({child(1,.85f)},{child(2,.85f)})}
             kind=="call"&&value=="eng"->child(0)
             kind in listOf("number","symbol","text")-> {
-                val shown=when(value){"pi"->"π";"oo"->"∞";"I"->"i";"E"->"e";else->value}
+                val shown=when(value){"pi"->"π";"oo"->"∞";"i","I"->"𝑖";"e","E"->"𝑒";else->value}
                 if(select==null) MathText(shown,size)
                 else {
                     val at=if(end==start)0 else ((cursor-start)*shown.length/(end-start)).coerceIn(0,shown.length)
@@ -356,7 +356,7 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
             kind in listOf("call","function")&&value=="factorial"->MathRow{child(0);label("!")}
             kind in listOf("call","function")&&value in listOf("degree","rad","gradian","percent")->MathRow{child(0);label(when(value){"degree"->"°";"rad"->"ʳ";"gradian"->"ᵍ";else->"%"})}
             kind in listOf("call","function")&&value in listOf("abs","Abs")->MathRow{label("│");child(0);label("│")}
-            kind in listOf("call","function")&&value in listOf("exp","Exp")&&children.size==1->PowerLayout({label("e")},{child(0,.67f,true,compactExponentHole=true)})
+            kind in listOf("call","function")&&value in listOf("exp","Exp")&&children.size==1->PowerLayout({label("𝑒")},{child(0,.67f,true,compactExponentHole=true)})
             kind=="call"&&value=="log"&&children.size>1->MathRow{LogBaseLayout({label("log")},{MathNode(children[1],(size*.6f).coerceAtLeast(11f),select,selection,depth+1,compactLogBaseHole=true)});wrapped(0)}
             kind=="call"&&value in listOf("diff","nderivative")->MathRow(3.dp){
                 FractionLayout({if(value=="diff"&&children.size>2)PowerLayout({label("d",.8f)},{child(2,.5f)})else label("d",.8f)},

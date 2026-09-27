@@ -96,7 +96,6 @@ private val LocalCalculatorOverlay=staticCompositionLocalOf<(String)->Unit> { {}
         "RCL"->RecallDialog(m){overlay=""}
         "Variables","STO"->VariablesDialog(m){overlay=""}
         "Catalog"->CatalogDialog(m){overlay=""}
-        "Angle"->AlertDialog(onDismissRequest={overlay=""},title={Text(if(isKorean()) "DRG · 입력 각도 단위" else "DRG · input angle unit")},text={Column {listOf("Degrees °" to "degree","Radians ʳ" to "rad","Gradians ᵍ" to "gradian").forEach{(label,function)->TextButton(onClick={m.angleSuffix(function);overlay=""}){Text(label)}}}},confirmButton={TextButton(onClick={overlay=""}){Text(tr("Close"))}})
         "Clear"->AlertDialog(onDismissRequest={overlay=""},title={Text(tr("Clear"))},text={Column {
             TextButton(onClick={m.resetSetup();overlay=""}){Text("1 · Setup")}
             TextButton(onClick={m.clearMemory();overlay=""}){Text(if(isKorean()) "2 · 메모리" else "2 · Memory")}

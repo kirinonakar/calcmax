@@ -9,6 +9,7 @@ import kotlin.math.abs
 /** Formatting helpers used only for the answer view; the engine result remains lossless. */
 object ResultDisplayFormat {
     private const val MAX_DISPLAY_DIGITS = 40_000
+    private val scientificLiteral = Regex("([+-]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+))[eE]([+-]?[0-9]+)")
 
     data class NotationParts(val mantissa: String, val exponent: Int)
 
@@ -37,7 +38,6 @@ object ResultDisplayFormat {
     }.getOrNull()
 
     fun formatTree(tree: JSONObject, displayMode: ResultDisplayMode, grouping: Boolean, engineeringShift: Int = 0, showZeroExponent: Boolean = false, maxFractionDigits: Int = 30): JSONObject {
-        if (displayMode == ResultDisplayMode.OFF && !grouping) return tree
         return formatNode(tree, displayMode, grouping, engineeringShift, showZeroExponent, maxFractionDigits, allowNotation = true)
     }
 
@@ -50,6 +50,10 @@ object ResultDisplayFormat {
                     return "$mantissa×10^${parts.exponent}"
                 }
             }
+        }
+        scientificParts(text)?.let { parts ->
+            val mantissa = if (grouping) groupNumber(parts.mantissa) ?: parts.mantissa else parts.mantissa
+            return "$mantissa×10^${parts.exponent}"
         }
         return if (grouping) groupNumber(text) ?: text else text
     }
@@ -74,6 +78,10 @@ object ResultDisplayFormat {
                 }
             }
         }
+        if (allowNotation && numericLeaf) scientificParts(value)?.let { parts ->
+            val mantissa = if (grouping) groupNumber(parts.mantissa) ?: parts.mantissa else parts.mantissa
+            return notationNode(mantissa, parts.exponent)
+        }
 
         val copy = JSONObject(node.toString())
         if (grouping && numericLeaf) {
@@ -84,7 +92,7 @@ object ResultDisplayFormat {
             val formatted = JSONArray()
             for (index in 0 until args.length()) {
                 val child = args.opt(index)
-                val childNotation = displayMode != ResultDisplayMode.OFF && allowNotation && kind == "unary" && args.length() == 1
+                val childNotation = allowNotation && (displayMode == ResultDisplayMode.OFF || kind == "unary" && args.length() == 1)
                 formatted.put(if (child is JSONObject) formatNode(child, displayMode, grouping, engineeringShift, showZeroExponent, maxFractionDigits, childNotation) else child)
             }
             copy.put("args", formatted)
@@ -103,9 +111,16 @@ object ResultDisplayFormat {
                     .put(JSONObject().put("kind", "text").put("value", exponent.toString()))
             )
         return JSONObject()
-            .put("kind", "product")
-            .put("value", "")
+            .put("kind", "binary")
+            .put("value", "*")
             .put("args", JSONArray().put(JSONObject().put("kind", "number").put("value", mantissa)).put(power))
+    }
+
+    private fun scientificParts(value: String): NotationParts? {
+        val match = scientificLiteral.matchEntire(value.trim()) ?: return null
+        val exponent = match.groupValues[2].toIntOrNull() ?: return null
+        if (abs(exponent) > MAX_DISPLAY_DIGITS) return null
+        return NotationParts(match.groupValues[1], exponent)
     }
 
     private fun notationParts(value: String, displayMode: ResultDisplayMode, engineeringShift: Int, maxFractionDigits: Int): NotationParts? {
