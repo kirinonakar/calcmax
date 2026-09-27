@@ -22,6 +22,13 @@ data class CalcSession(val source:String,val names:List<String>,val index:Int=0,
     val name get()=names[index]
 }
 data class GraphParameter(val value:Double,val min:Double,val max:Double)
+data class DisplayShortcut(val label:String,val input:String,val source:String="keypad")
+val DefaultDisplayShortcuts=listOf(
+    DisplayShortcut("∫","integrate(,x)"),
+    DisplayShortcut("∫ₐᵇ","integrate(,x,,)"),
+    DisplayShortcut("d/dx","diff(,x)"),
+    DisplayShortcut("f′(a)","nderivative(,x,)")
+)
 
 internal fun HistoryEntry.toTapeEntry():TapeEntry {
     val input=runCatching {JSONObject(inputTree).takeIf {it.has("kind")}?.toString()}.getOrNull()
@@ -106,6 +113,8 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         }
     )
     var thousandsSeparator by mutableStateOf(prefs.getBoolean("thousandsSeparator",false))
+    var displayShortcuts by mutableStateOf(loadDisplayShortcuts())
+        private set
     var haptics by mutableStateOf(prefs.getBoolean("haptics",true))
     var sound by mutableStateOf(prefs.getBoolean("sound",false))
     var persistHistory by mutableStateOf(prefs.getBoolean("historyEnabled",true))
@@ -237,6 +246,32 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         val array=JSONArray(prefs.getString("regressionCurve","[]"))
         if(array.length()==0)null else (0 until array.length()).map {i->val pair=array.getJSONArray(i);pair.getDouble(0) to pair.getDouble(1)}
     }.getOrNull()
+    private fun loadDisplayShortcuts():List<DisplayShortcut> = runCatching {
+        if(!prefs.contains("displayShortcuts"))return@runCatching DefaultDisplayShortcuts
+        val array=JSONArray(prefs.getString("displayShortcuts","[]"))
+        (0 until array.length().coerceAtMost(6)).mapNotNull {index->
+            array.optJSONObject(index)?.let {item->
+                val label=item.optString("label")
+                val input=item.optString("input")
+                val source=item.optString("source")
+                if(label.isNotBlank()&&input.isNotBlank()&&source in setOf("keypad","catalog"))DisplayShortcut(label,input,source) else null
+            }
+        }
+    }.getOrDefault(DefaultDisplayShortcuts)
+    fun setDisplayShortcut(index:Int,shortcut:DisplayShortcut) {
+        if(index !in 0..displayShortcuts.size || index==6 || shortcut.label.isBlank() || shortcut.input.isBlank())return
+        displayShortcuts=displayShortcuts.toMutableList().apply {if(index==size)add(shortcut) else set(index,shortcut)}
+        save()
+    }
+    fun removeDisplayShortcut(index:Int) {
+        if(index !in displayShortcuts.indices)return
+        displayShortcuts=displayShortcuts.toMutableList().apply {removeAt(index)}
+        save()
+    }
+    fun resetDisplayShortcuts() {
+        displayShortcuts=DefaultDisplayShortcuts
+        save()
+    }
     fun save() {
         val parameterObject=JSONObject()
         graphParameters.forEach { (name,spec)->parameterObject.put(name,JSONObject().put("value",spec.value).put("min",spec.min).put("max",spec.max)) }
@@ -244,6 +279,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
             .putString("result",result?.toString() ?: "{}").putString("resultSource",resultSource).putBoolean("committed",committed)
             .putString("inputAnswer",inputAnswer?.toString() ?: "{}").putString("answerDisplay",answerDisplay?.toString() ?: "{}").putString("lastAnswerResult",lastAnswerResult?.toString() ?: "{}")
             .putString("resultDisplayMode",resultDisplayMode.name.lowercase()).putBoolean("thousandsSeparator",thousandsSeparator)
+            .putString("displayShortcuts",JSONArray(displayShortcuts.map {JSONObject().put("label",it.label).put("input",it.input).put("source",it.source)}).toString())
             .putInt("precision",precision).putInt("displayDigits",displayDigits).putBoolean("haptics",haptics).putBoolean("sound",sound).putBoolean("historyEnabled",persistHistory).putBoolean("autoCloseBrackets",autoCloseBrackets)
             .putFloat("inputFont",inputFont).putFloat("outputFont",outputFont)
             .putString("variables",variables.toString()).putString("functions",functions.toString()).putString("assumptions",assumptions.toString())

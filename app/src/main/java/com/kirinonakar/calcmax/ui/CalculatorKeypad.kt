@@ -22,6 +22,7 @@ import androidx.compose.ui.text.*
 import androidx.compose.ui.text.style.BaselineShift
 import androidx.compose.ui.unit.*
 import com.kirinonakar.calcmax.calculator.CalculatorModel
+import com.kirinonakar.calcmax.calculator.DisplayShortcut
 import com.kirinonakar.calcmax.math.Editor
 import com.kirinonakar.calcmax.ui.theme.LocalInstrument
 import kotlin.random.Random
@@ -44,6 +45,22 @@ private val NumericKeys=listOf(
     listOf(KeySpec("0",secondary="Rnd",alternate="rnd()"),KeySpec(".",secondary="Ran#",alternate="RANDOM",alpha="randInt(,)"),KeySpec("×10ˣ","*10^()","π","pi","e"),KeySpec("Ans",secondary="DRG▶",alternate="ANGLE"),KeySpec("=",secondary="GRAPH",alternate="Graph"))
 )
 
+internal val KeypadShortcutGroups:Map<String,List<DisplayShortcut>> by lazy {
+    fun choices(keys:List<KeySpec>):List<DisplayShortcut> = keys.flatMap {key->
+        buildList {
+            add(DisplayShortcut(key.title,key.input))
+            if(key.alternate.isNotBlank())add(DisplayShortcut(key.secondary.ifBlank { key.alternate },key.alternate))
+            if(key.alpha.isNotBlank())add(DisplayShortcut(key.alpha,if(key.title=="CALC")"RELATION" else key.alpha))
+        }
+    }
+    linkedMapOf(
+        "Main keys" to choices(listOf(KeySpec("SHIFT"),KeySpec("ALPHA"),KeySpec("MODE",alternate="Scientific/CAS"),KeySpec("2nd","SECOND"),KeySpec("CALC",secondary="SOLVE",alternate="SOLVE",alpha="="),KeySpec("∫","integrate(,x,,)","d/dx","nderivative(,x,)",":"),KeySpec("x⁻¹","^(-1)","x!","!"),KeySpec("logₐ□","log(,)","Σ","sum(,x,,)"),KeySpec("▲","UP"),KeySpec("◀","LEFT"),KeySpec("▶","RIGHT"),KeySpec("▼","DOWN"))+ScientificKeys.flatten()),
+        "2nd keys" to choices(listOf(KeySpec("d/dx","diff(,x)","∫","integrate(,x)"),KeySpec("lim","limit(,x,)"),KeySpec("sinc","sinc()"),KeySpec("Π","product(,x,,)"))+SecondKeys.flatten()),
+        "Number keys" to choices(NumericKeys.flatten()),
+        "ALPHA" to (('A'..'Z')+('a'..'z')).map {letter->DisplayShortcut(letter.toString(),letter.toString())}
+    )
+}
+
 private fun pressedShade(base:Color)=if(base.luminance()>.45f)Color.Black.copy(alpha=.18f) else Color.White.copy(alpha=.24f)
 
 private fun keypadOperandInput(value:String,editor:Editor,startingFresh:Boolean):String {
@@ -52,6 +69,65 @@ private fun keypadOperandInput(value:String,editor:Editor,startingFresh:Boolean)
     val first=value.firstOrNull()
     val startsFactor=first?.isLetter()==true||value=="10^()"||first?.isDigit()==true&&(before.isLetter()||before in ")]}")
     return if((before.isLetterOrDigit()||before in ")]}")&&startsFactor)"*$value" else value
+}
+
+internal fun performKeypadInput(m:CalculatorModel,requestedValue:String,open:(String)->Unit) {
+    if(!m.poweredOn && requestedValue!="SECOND")return
+    if(requestedValue=="SHIFT"){m.shift=!m.shift;m.alpha=false;return}
+    if(requestedValue=="ALPHA"){m.alpha=!m.alpha;m.shift=false;return}
+    if(requestedValue=="SECOND"){m.poweredOn=true;m.secondKeys=!m.secondKeys;m.shift=false;m.alpha=false;return}
+    var value=requestedValue
+    if(m.calcSession!=null) {
+        when(value) {
+            "AC","ON"->m.cancelCalc()
+            "=","CALC"->m.submitCalcValue()
+            "DEL"->m.editCalcValue(m.calcSession!!.input.delete())
+            "LEFT"->m.editCalcValue(m.calcSession!!.input.move(-1))
+            "RIGHT"->m.editCalcValue(m.calcSession!!.input.move(1))
+            "NEG"->m.insertCalcValue("-")
+            "RCL","STO","Clear","CLR ALL","MODE","SETUP","ENG","ENG−","S⇔D","MIXED","M+","M−","SOLVE","RELATION","Graph","Equations","Scientific/CAS","Python","TO_GRAPH"->Unit
+            else->{val input=keypadOperandInput(value,m.calcSession!!.input,false);val at=if(input.contains('('))input.indexOf('(')+1 else input.length;m.insertCalcValue(input,at)}
+        }
+        m.shift=false;m.alpha=false
+        return
+    }
+    if(m.hyperbolic && value in listOf("sin()","cos()","tan()","asin()","acos()","atan()"))value=value.substringBefore('(')+"h()"
+    if(m.engineeringConversion && value !in setOf("ENG","ENG−","LEFT","RIGHT","=","CALC","AC","ON","CLR ALL"))m.exitEngineering()
+    when(value) {
+        "ON"->{m.poweredOn=true;m.clear()}
+        "CLR ALL"->m.clearAllScreen()
+        "MODE"->open("Mode");"SETUP"->open("Settings")
+        "CALC"->if(m.engineeringConversion)m.exitEngineering()else m.startCalc()
+        "="->if(m.engineeringConversion)m.exitEngineering()else m.calculate()
+        "RELATION"->m.insert("=")
+        "()/()"->m.fraction()
+        "^2","^3","^()","^(-1)"->m.powerTemplate(value)
+        "SOLVE"->{m.edit(Editor("solve(${m.editor.source.ifBlank{"x"}},x)"));m.calculate()}
+        "LEFT"->if(m.engineeringConversion)m.shiftEngineering(1)else m.edit(m.editor.moveMatrix(0,-1) ?: m.editor.move(-1))
+        "RIGHT"->if(m.engineeringConversion)m.shiftEngineering(-1)else m.edit(m.editor.moveMatrix(0,1) ?: m.editor.move(1))
+        "UP"->m.edit(m.editor.moveMatrix(-1,0) ?: m.editor.parent());"DOWN"->m.edit(m.editor.moveMatrix(1,0) ?: m.editor.child())
+        "RCL","STO","Clear"->open(value)
+        "Constants","Units","Matrix","Vector","Statistics","Programmer","Graph","Equations","Scientific/CAS","Python"->{m.mode=value}
+        "Complex"->{m.mode="Scientific/CAS";open("Catalog")}
+        "HYP"->{m.hyperbolic=!m.hyperbolic}
+        "S⇔D"->m.decimal=!m.decimal
+        "MIXED"->{m.mixedNumbers=!m.mixedNumbers;m.decimal=false}
+        "AC"->m.ac();"DEL"->m.edit(m.editor.delete());"INS"->m.overwrite=!m.overwrite
+        "M+","M−"->m.memory(if(value=="M+")1 else -1)
+        "NEG"->{if(m.committed)m.fresh(Editor("-"))else m.insert("-")}
+        "ANGLE"->open("Angle")
+        "RANDOM"->m.insert("0."+Random.nextInt(1000).toString().padStart(3,'0'))
+        "ENG"->m.enterEngineering()
+        "ENG−"->{m.enterEngineering();m.shiftEngineering(3)}
+        "DMS_INPUT"->m.insertDmsSymbol()
+        "DMS"->m.toggleDms()
+        "TO_GRAPH"->m.sendExpressionToGraph()
+        "MATRIX_INPUT"->open("MatrixSize")
+        "*10^()"->{val text=if(m.editor.source.isBlank()||m.committed)"1$value" else value;m.insert(text,text.indexOf('(')+1)}
+        else->{val input=keypadOperandInput(value,m.editor,m.committed);val at=when {input=="()/()"->1;input.contains('(')->input.indexOf('(')+1;else->input.length};m.insert(input,at)}
+    }
+    if(value!="HYP")m.hyperbolic=false
+    m.shift=false;m.alpha=false
 }
 
 @Composable fun Keypad(m:CalculatorModel,modifier:Modifier,numericOnly:Boolean,numericRowHeight:Dp,open:(String)->Unit) {
@@ -69,62 +145,9 @@ private fun keypadOperandInput(value:String,editor:Editor,startingFresh:Boolean)
         if(!m.poweredOn && key.input!="SECOND")return
         if(m.haptics&&vibrator.hasVibrator())vibrator.vibrate(VibrationEffect.createOneShot(18,VibrationEffect.DEFAULT_AMPLITUDE))
         if(m.sound)tone.startTone(ToneGenerator.TONE_PROP_BEEP,35)
-        if(key.title=="SHIFT"){m.shift=!m.shift;m.alpha=false;return}
-        if(key.title=="ALPHA"){m.alpha=!m.alpha;m.shift=false;return}
-        if(key.input=="SECOND"){m.poweredOn=true;m.secondKeys=!m.secondKeys;m.shift=false;m.alpha=false;return}
         var value=if(m.alpha&&key.alpha.isNotEmpty())key.alpha else if(m.shift&&key.alternate.isNotEmpty())key.alternate else key.input
         if(key.title=="CALC"&&m.alpha)value="RELATION"
-        if(m.calcSession!=null) {
-            when(value) {
-                "AC","ON"->m.cancelCalc()
-                "=","CALC"->m.submitCalcValue()
-                "DEL"->m.editCalcValue(m.calcSession!!.input.delete())
-                "LEFT"->m.editCalcValue(m.calcSession!!.input.move(-1))
-                "RIGHT"->m.editCalcValue(m.calcSession!!.input.move(1))
-                "NEG"->m.insertCalcValue("-")
-                "RCL","STO","Clear","CLR ALL","MODE","SETUP","ENG","ENG−","S⇔D","MIXED","M+","M−","SOLVE","RELATION","Graph","Equations","Scientific/CAS","Python","TO_GRAPH"->Unit
-                else->{val input=keypadOperandInput(value,m.calcSession!!.input,false);val at=if(input.contains('('))input.indexOf('(')+1 else input.length;m.insertCalcValue(input,at)}
-            }
-            m.shift=false;m.alpha=false
-            return
-        }
-        if(m.hyperbolic && value in listOf("sin()","cos()","tan()","asin()","acos()","atan()"))value=value.substringBefore('(')+"h()"
-        if(m.engineeringConversion && value !in setOf("ENG","ENG−","LEFT","RIGHT","=","CALC","AC","ON","CLR ALL"))m.exitEngineering()
-        when(value) {
-            "ON"->{m.poweredOn=true;m.clear()}
-            "CLR ALL"->m.clearAllScreen()
-            "MODE"->open("Mode");"SETUP"->open("Settings")
-            "CALC"->if(m.engineeringConversion)m.exitEngineering()else m.startCalc()
-            "="->if(m.engineeringConversion)m.exitEngineering()else m.calculate()
-            "RELATION"->m.insert("=")
-            "()/()"->m.fraction()
-            "^2","^3","^()","^(-1)"->m.powerTemplate(value)
-            "SOLVE"->{m.edit(Editor("solve(${m.editor.source.ifBlank{"x"}},x)"));m.calculate()}
-            "LEFT"->if(m.engineeringConversion)m.shiftEngineering(1)else m.edit(m.editor.moveMatrix(0,-1) ?: m.editor.move(-1))
-            "RIGHT"->if(m.engineeringConversion)m.shiftEngineering(-1)else m.edit(m.editor.moveMatrix(0,1) ?: m.editor.move(1))
-            "UP"->m.edit(m.editor.moveMatrix(-1,0) ?: m.editor.parent());"DOWN"->m.edit(m.editor.moveMatrix(1,0) ?: m.editor.child())
-            "RCL","STO","Clear"->open(value)
-            "Constants","Units","Matrix","Vector","Statistics","Programmer","Graph","Equations","Scientific/CAS","Python"->{m.mode=value}
-            "Complex"->{m.mode="Scientific/CAS";open("Catalog")}
-            "HYP"->{m.hyperbolic=!m.hyperbolic}
-            "S⇔D"->m.decimal=!m.decimal
-            "MIXED"->{m.mixedNumbers=!m.mixedNumbers;m.decimal=false}
-            "AC"->m.ac();"DEL"->m.edit(m.editor.delete());"INS"->m.overwrite=!m.overwrite
-            "M+","M−"->m.memory(if(value=="M+")1 else -1)
-            "NEG"->{if(m.committed)m.fresh(Editor("-"))else m.insert("-")}
-            "ANGLE"->open("Angle")
-            "RANDOM"->m.insert("0."+Random.nextInt(1000).toString().padStart(3,'0'))
-            "ENG"->m.enterEngineering()
-            "ENG−"->{m.enterEngineering();m.shiftEngineering(3)}
-            "DMS_INPUT"->m.insertDmsSymbol()
-            "DMS"->m.toggleDms()
-            "TO_GRAPH"->m.sendExpressionToGraph()
-            "MATRIX_INPUT"->open("MatrixSize")
-            "*10^()"->{val text=if(m.editor.source.isBlank()||m.committed)"1$value" else value;m.insert(text,text.indexOf('(')+1)}
-            else->{val input=keypadOperandInput(value,m.editor,m.committed);val at=when {input=="()/()"->1;input.contains('(')->input.indexOf('(')+1;else->input.length};m.insert(input,at)}
-        }
-        if(value!="HYP")m.hyperbolic=false
-        m.shift=false;m.alpha=false
+        performKeypadInput(m,value,open)
     }
     fun pressLong(key:KeySpec) {
         if(key.title=="SHIFT"||key.title=="ALPHA"||key.input=="SECOND"){press(key);return}

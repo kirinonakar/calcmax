@@ -29,6 +29,7 @@ import com.kirinonakar.calcmax.math.Lexer
 import com.kirinonakar.calcmax.math.Expr
 
 val Modes=listOf("Scientific/CAS","Graph","Python","Equations","Matrix","Vector","Statistics","Programmer","Units","Constants","Tip","Currency","Functions")
+private val LocalCalculatorOverlay=staticCompositionLocalOf<(String)->Unit> { {} }
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable fun CalculatorApp(m:CalculatorModel) {
     val c=LocalInstrument.current
@@ -36,6 +37,7 @@ val Modes=listOf("Scientific/CAS","Graph","Python","Equations","Matrix","Vector"
     var screenExpanded by rememberSaveable {mutableStateOf(false)}
     val workspaces=rememberSaveableStateHolder()
     LaunchedEffect(m.mode){m.save()}
+    CompositionLocalProvider(LocalCalculatorOverlay provides {overlay=it}) {
     Column(Modifier.fillMaxSize().background(c.body).windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.displayCutout))) {
         Row(Modifier.fillMaxWidth().height(44.dp).padding(horizontal=14.dp),verticalAlignment=Alignment.CenterVertically) {
             Text("CalcMax",Modifier.weight(1f),fontWeight=FontWeight.ExtraBold,letterSpacing=2.sp,fontSize=18.sp,color=c.ink)
@@ -98,6 +100,7 @@ val Modes=listOf("Scientific/CAS","Graph","Python","Equations","Matrix","Vector"
             TextButton(onClick={m.clearMemory();overlay=""}){Text("2 · Memory")}
             TextButton(onClick={m.resetSetup();m.clearMemory();m.clearHistory();overlay=""}){Text("3 · All")}
         }},confirmButton={TextButton(onClick={overlay=""}){Text("Close")}})
+    }
     }
 }
 
@@ -338,17 +341,18 @@ private fun largeHistoryTree(root:JSONObject?,compactStructured:Boolean=true):Bo
 
 @Composable fun DisplayActions(m:CalculatorModel,screenExpanded:Boolean=false,onToggleScreen:(()->Unit)?=null) {
     val context=LocalContext.current
+    val open=LocalCalculatorOverlay.current
+    var showCustom by remember {mutableStateOf(false)}
     Row(Modifier.fillMaxWidth().height(36.dp).padding(horizontal=14.dp).horizontalScroll(rememberScrollState()),verticalAlignment=Alignment.CenterVertically){
         SmallAction(if(m.decimal)"≈ Decimal" else "Exact"){m.decimal=!m.decimal}
         SmallAction(if(m.resultDisplayMode==ResultDisplayMode.SCIENTIFIC)"SCI" else "ENG",active=m.resultDisplayMode!=ResultDisplayMode.OFF,description="Result notation"){m.cycleResultDisplayMode()}
         SmallAction(",",active=m.thousandsSeparator,description="Thousands separators"){m.thousandsSeparator=!m.thousandsSeparator;m.save()}
         if(onToggleScreen!=null)SmallAction("scr",active=screenExpanded,description=if(screenExpanded)"Restore full keypad" else "Expand calculation screen"){onToggleScreen()}
-        SmallAction("∫"){m.insert("integrate(,x)",10)}
-        SmallAction("∫ₐᵇ"){m.insert("integrate(,x,,)",10)}
-        SmallAction("d/dx"){m.insert("diff(,x)",5)}
-        SmallAction("f′(a)"){m.insert("nderivative(,x,)",12)}
+        m.displayShortcuts.forEach {shortcut->SmallAction(shortcut.label,description="${shortcut.label}: ${shortcut.input}"){runDisplayShortcut(m,shortcut,open)}}
         SmallAction("Share"){m.result?.let{context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,m.editor.source+" = "+it.optString("exact")),"Share calculation"))}}
+        SmallAction("custom",description="Customize display buttons"){showCustom=true}
     }
+    if(showCustom)DisplayShortcutsDialog(m){showCustom=false}
 }
 
 @Composable fun ResultMath(result:JSONObject,decimal:Boolean,size:Float,mixed:Boolean=false,displayMode:ResultDisplayMode=ResultDisplayMode.OFF,thousandsSeparator:Boolean=false,engineeringConversion:Boolean=false,engineeringShift:Int=0,dmsDisplay:Boolean=false,dmsConversion:Boolean=false,displayDigits:Int=10) {
