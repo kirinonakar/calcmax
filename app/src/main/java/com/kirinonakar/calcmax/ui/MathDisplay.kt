@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.*
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.*
 import com.kirinonakar.calcmax.ui.theme.LocalInstrument
 import org.json.JSONObject
@@ -35,11 +36,11 @@ val LocalPlaceCursor=staticCompositionLocalOf<((Int,Int,Int)->Unit)?>{null}
 val LocalTypedParens=staticCompositionLocalOf<List<IntRange>>{emptyList()}
 
 private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspecified)height/2 else it}
-@Composable internal fun MathText(text:String,size:Float,modifier:Modifier=Modifier,blink:Boolean=false,onLayout:(TextLayoutResult)->Unit={},hide:Boolean=false,tint:Color?=null) {
+@Composable internal fun MathText(text:String,size:Float,modifier:Modifier=Modifier,blink:Boolean=false,onLayout:(TextLayoutResult)->Unit={},hide:Boolean=false,tint:Color?=null,italic:Boolean=false) {
     val color=tint ?: LocalInstrument.current.ink
     val visible=!hide&&(!blink||LocalCaretVisible.current)
     val styled=buildAnnotatedString {append(text);if(!visible)text.forEachIndexed{i,ch->if(ch=='│')addStyle(SpanStyle(color=Color.Transparent),i,i+1)}}
-    Text(styled,fontFamily=FontFamily.Serif,fontSize=size.sp,lineHeight=(size*1.18f).sp,color=color,softWrap=false,onTextLayout=onLayout,
+    Text(styled,fontFamily=FontFamily.Serif,fontStyle=if(italic)FontStyle.Italic else FontStyle.Normal,fontSize=size.sp,lineHeight=(size*1.18f).sp,color=color,softWrap=false,onTextLayout=onLayout,
         modifier=modifier.layout {measurable,constraints->
             val p=measurable.measure(constraints);val baseline=p[FirstBaseline]
             val axis=if(baseline==AlignmentLine.Unspecified)p.height/2 else baseline-(size.sp.toPx()*.3f).toInt()
@@ -324,8 +325,9 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
             kind=="call"&&value=="mixed"->MathRow(3.dp){child(0);FractionLayout({child(1,.85f)},{child(2,.85f)})}
             kind=="call"&&value=="eng"->child(0)
             kind in listOf("number","symbol","text")-> {
-                val shown=when(value){"pi"->"π";"oo"->"∞";"i","I"->"𝑖";"e","E"->"𝑒";else->value}
-                if(select==null) MathText(shown,size)
+                val shown=when(value){"pi"->"π";"oo"->"∞";else->value}
+                val mathItalic=kind in listOf("symbol","text")&&value in listOf("x","y","z","e","E","i","I")
+                if(select==null) MathText(shown,size,italic=mathItalic)
                 else {
                     val at=if(end==start)0 else ((cursor-start)*shown.length/(end-start)).coerceIn(0,shown.length)
                     var textLayout by remember(shown){mutableStateOf<TextLayoutResult?>(null)}
@@ -341,7 +343,7 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
                     MathText(shown,size,cursorLine.pointerInput(shown,selected,active,place){detectTapGestures{offset->
                         if(selected||active){val index=(textLayout?.takeIf{it.layoutInput.text.text==shown}?.getOffsetForPosition(offset) ?: 0).coerceIn(0,shown.length);place?.invoke(start,end,start+(index.toFloat()/shown.length.coerceAtLeast(1)*(end-start)).toInt())}
                         else select(start,end)
-                    }},onLayout={textLayout=it})
+                    }},onLayout={textLayout=it},italic=mathItalic)
                 }
             }
             kind=="unary"->MathRow{
@@ -356,7 +358,7 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
             kind in listOf("call","function")&&value=="factorial"->MathRow{child(0);label("!")}
             kind in listOf("call","function")&&value in listOf("degree","rad","gradian","percent")->MathRow{child(0);label(when(value){"degree"->"°";"rad"->"ʳ";"gradian"->"ᵍ";else->"%"})}
             kind in listOf("call","function")&&value in listOf("abs","Abs")->MathRow{label("│");child(0);label("│")}
-            kind in listOf("call","function")&&value in listOf("exp","Exp")&&children.size==1->PowerLayout({label("𝑒")},{child(0,.67f,true,compactExponentHole=true)})
+            kind in listOf("call","function")&&value in listOf("exp","Exp")&&children.size==1->PowerLayout({MathText("e",size,italic=true)},{child(0,.67f,true,compactExponentHole=true)})
             kind=="call"&&value=="log"&&children.size>1->MathRow{LogBaseLayout({label("log")},{MathNode(children[1],(size*.6f).coerceAtLeast(11f),select,selection,depth+1,compactLogBaseHole=true)});wrapped(0)}
             kind=="call"&&value in listOf("diff","nderivative")->MathRow(3.dp){
                 FractionLayout({if(value=="diff"&&children.size>2)PowerLayout({label("d",.8f)},{child(2,.5f)})else label("d",.8f)},

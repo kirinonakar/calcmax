@@ -22,7 +22,7 @@ private val korean = mapOf(
     "Apply internal precision" to "내부 정밀도 적용", "Apply display digits" to "표시 자릿수 적용",
     "Input font" to "입력 글자", "Output font" to "결과 글자", "Key vibration" to "키 진동",
     "Key sound" to "키 소리", "Save history locally" to "기록을 기기에 저장", "Bracket auto-close" to "괄호 자동 닫기",
-    "Calculation history" to "계산 기록", "Search history" to "기록 검색", "All" to "전체", "Favorites" to "즐겨찾기",
+    "Calculation history" to "계산 기록", "Search history" to "기록 검색", "All" to "전체", "Recent" to "최근", "Favorites" to "즐겨찾기",
     "Reuse" to "다시 사용", "Delete" to "삭제", "Clear all" to "모두 지우기",
     "Function catalog" to "함수 카탈로그", "Function catalog - help" to "함수 카탈로그 도움말",
     "Help" to "도움말", "Find function" to "함수 찾기", "Search" to "검색",

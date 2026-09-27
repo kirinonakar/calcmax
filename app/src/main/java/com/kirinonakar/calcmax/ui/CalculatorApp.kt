@@ -23,6 +23,7 @@ import com.kirinonakar.calcmax.calculator.CalculatorModel
 import com.kirinonakar.calcmax.calculator.ResultDisplayMode
 import com.kirinonakar.calcmax.calculator.TapeEntry
 import com.kirinonakar.calcmax.math.Editor
+import com.kirinonakar.calcmax.math.LatexInput
 import com.kirinonakar.calcmax.math.BracketAutoClose
 import com.kirinonakar.calcmax.ui.theme.LocalInstrument
 import org.json.JSONObject
@@ -239,6 +240,13 @@ private fun largeHistoryTree(root:JSONObject?,compactStructured:Boolean=true):Bo
         else if(typing||compactInput) BasicTextField(
             value=TextFieldValue(m.editor.source,TextRange(m.editor.anchor.coerceIn(0,m.editor.source.length),m.editor.cursor.coerceIn(0,m.editor.source.length))),
             onValueChange={
+                val infinityDeleted=m.editor.atomicInfinityDeletion(it.text)
+                val latex=LatexInput.convert(it.text)
+                if(infinityDeleted!=null) {
+                    if(m.committed)m.fresh(infinityDeleted) else m.edit(infinityDeleted)
+                } else if(latex!=null) {
+                    if(m.committed)m.fresh(Editor(latex)) else m.edit(Editor(latex))
+                } else {
                 val auto=if(!m.committed&&m.autoCloseBrackets&&m.editor.cursor==m.editor.anchor&&it.selection.collapsed)
                     BracketAutoClose.typed(m.editor.source,m.editor.cursor,it.text,it.selection.end) else null
                 if(auto!=null){
@@ -252,6 +260,7 @@ private fun largeHistoryTree(root:JSONObject?,compactStructured:Boolean=true):Bo
                 }else{
                     m.edit(Editor(it.text,it.selection.end,it.selection.start))
                     m.markTypedParens(it.selection.end)
+                }
                 }
             },
             modifier=Modifier.fillMaxWidth().heightIn(min=60.dp).onPreviewKeyEvent{if(it.type==KeyEventType.KeyDown&&it.key==Key.Enter){m.calculate();true}else false}.semantics{contentDescription="Expression input"},
@@ -294,7 +303,7 @@ private fun largeHistoryTree(root:JSONObject?,compactStructured:Boolean=true):Bo
                 Text("${session.index+1}/${session.names.size}  ${session.name} = ",fontSize=20.sp,color=c.accent)
                 BasicTextField(
                     value=TextFieldValue(session.input.source,TextRange(session.input.anchor.coerceIn(0,session.input.source.length),session.input.cursor.coerceIn(0,session.input.source.length))),
-                    onValueChange={m.editCalcValue(Editor(it.text,it.selection.end,it.selection.start))},
+                    onValueChange={m.editCalcValue(session.input.atomicInfinityDeletion(it.text) ?: Editor(it.text,it.selection.end,it.selection.start))},
                     modifier=Modifier.weight(1f).onPreviewKeyEvent{if(it.type==KeyEventType.KeyDown&&it.key==Key.Enter){m.submitCalcValue();true}else false}.semantics{contentDescription="Value for ${session.name}"},
                     textStyle=TextStyle(color=c.ink,fontSize=22.sp,fontFamily=FontFamily.Monospace),
                     decorationBox={inner->Box(Modifier.fillMaxWidth()) {

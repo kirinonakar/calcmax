@@ -47,6 +47,16 @@ class ParserTest {
         assertTrue(pending.nodes().any{it.kind=="hole"})
     }
     @Test fun editor() { assertEquals("sqrt(8)",Editor().insert("sqrt()",5).insert("8").source); assertEquals("2+",Editor("2+3").delete().source); assertEquals("7",Editor("2+3",3,0).insert("7").source) }
+    @Test fun infinityDeletesAsOneSymbol() {
+        assertEquals("",Editor("oo").delete().source)
+        assertEquals("",Editor("oo",1).delete().source)
+        assertEquals("",Editor("oo",0).deleteForward().source)
+        assertEquals("",Editor("oo",1).deleteForward().source)
+        assertEquals("limit(1/x,x,)",Editor("limit(1/x,x,oo)",14).delete().source)
+        assertEquals("",Editor("oo").atomicInfinityDeletion("o")?.source)
+        assertEquals("limit(1/x,x,)",Editor("limit(1/x,x,oo)").atomicInfinityDeletion("limit(1/x,x,o)")?.source)
+        assertEquals("fo",Editor("foo").delete().source)
+    }
     @Test fun invalid() { for(s in listOf("", "1..2", "2+", "a.__class__", "f(1,)", "[1,2", "(x,,0)")) assertThrows(SyntaxException::class.java) { p(s) } }
     @Test fun complexity() { assertThrows(SyntaxException::class.java) { p("(".repeat(200)+"1"+")".repeat(200)) } }
     @Test fun editingHoles() {

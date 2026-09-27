@@ -37,13 +37,24 @@ internal fun catalogCategories(m:CalculatorModel):Map<String,List<String>> {
 @Composable fun CatalogDialog(m: CalculatorModel,close: ()->Unit) {
     var category by remember {mutableStateOf("Scientific")};var search by remember {mutableStateOf("")};var showHelp by remember {mutableStateOf(false)}
     val categories=catalogCategories(m)
-    AlertDialog(onDismissRequest=close,title={Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {Text(tr("Function catalog"),Modifier.weight(1f));SmallAction("Help",description=tr("Open the function catalog help")){showHelp=true}}},text={Column(Modifier.fillMaxWidth().heightIn(max=480.dp)) {
+    AlertDialog(onDismissRequest=close,title={Column(Modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {Text(tr("Function catalog"),Modifier.weight(1f));SmallAction("Help",description=tr("Open the function catalog help")){showHelp=true}}
         SearchField(search,"Find function") {search=it}
+        Choices(listOf("Recent","Favorites"),category,{category=it})
         Choices(categories.keys.toList(),category,{category=it},translate=false)
-        val entries=if(search.isBlank())categories[category].orEmpty() else categories.values.flatten().filter {it.contains(search,true)}
+    }},text={Column(Modifier.fillMaxWidth().heightIn(max=480.dp)) {
+        val entries=if(search.isBlank())when(category) {
+            "Recent"->m.catalogRecent
+            "Favorites"->m.catalogFavorites
+            else->categories[category].orEmpty()
+        } else (m.catalogRecent+m.catalogFavorites+categories.values.flatten()).distinct().filter {it.contains(search,true)}
         Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())) {
             if(category=="Custom"&&entries.isEmpty()&&search.isBlank())Text(tr("Save a function in Functions to see it here."),fontSize=12.sp)
-            entries.chunked(2).forEach { row->Row {row.forEach { source->TextButton(onClick={val list=source.indexOf("[]");val at=if(source=="rnd()")source.length else if(list>=0)list+1 else source.indexOf('(')+1;if(m.mode=="Python") {val edit=PythonEditorTools.insertCatalog(m.pythonSource,m.pythonSelectionStart,m.pythonSelectionEnd,source,at);m.editPython(edit.source,edit.cursor)} else m.insert(source,at);close()},modifier=Modifier.weight(1f)) {Text(source,fontSize=12.sp)} } } }
+            if(entries.isEmpty()&&search.isBlank()&&category in listOf("Recent","Favorites"))Text(if(isKorean())if(category=="Recent")"최근 사용한 함수가 없습니다." else "즐겨찾기한 함수가 없습니다." else if(category=="Recent")"No recent functions." else "No favorite functions.",fontSize=12.sp)
+            entries.forEach { source->Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+                TextButton(onClick={val list=source.indexOf("[]");val at=if(source=="rnd()")source.length else if(list>=0)list+1 else source.indexOf('(')+1;if(m.mode=="Python") {val edit=PythonEditorTools.insertCatalog(m.pythonSource,m.pythonSelectionStart,m.pythonSelectionEnd,source,at);m.editPython(edit.source,edit.cursor)} else m.insert(source,at);m.recordCatalogUse(source);close()},modifier=Modifier.weight(1f)) {Text(source,fontSize=12.sp)}
+                TextButton(onClick={m.toggleCatalogFavorite(source)}) {Text(if(source in m.catalogFavorites)"★" else "☆",fontSize=18.sp)}
+            } }
             val hint=when(category) {
                 "ODE & transforms" -> "ODE example: dsolve(diff(y(t),t)=y(t),y(t),t). Use t for time and s for Laplace frequency."
                 "Vector calculus" -> "Vector functions take a coordinate list, e.g. gradient(x^2+y^2,[x,y])."
@@ -86,8 +97,10 @@ private sealed interface HelpBlock {
         document=null
         document=withContext(Dispatchers.IO) {runCatching {context.assets.open(if(language=="ko")"catalog_help_ko.md" else "catalog_help.md").bufferedReader().use {it.readText()}}.getOrNull()}
     }
-    AlertDialog(onDismissRequest=close,title={Text(tr("Function catalog - help"))},text={Column(Modifier.fillMaxWidth()) {
+    AlertDialog(onDismissRequest=close,title={Column(Modifier.fillMaxWidth()) {
+        Text(tr("Function catalog - help"))
         SearchField(search,"Search"){search=it}
+    }},text={Column(Modifier.fillMaxWidth()) {
         val loaded=document
         if(loaded==null) Text(tr("Loading the catalog reference..."),fontSize=12.sp)
         else SelectionContainer {Column(Modifier.fillMaxWidth().heightIn(max=460.dp).verticalScroll(rememberScrollState())) {HelpDocument(loaded,search)}}

@@ -10,7 +10,7 @@ data class Editor(val source: String = "", val cursor: Int = source.length, val 
             if(slot!=null && nodes.any {node->node.kind=="binary" && node.value=="*" && node.displayOperator=="∘" && node.args.any {it.start==slot.start && it.end==slot.end}}==true)
                 return Editor(source.substring(0,slot.start)+text+source.substring(slot.end),slot.start+text.length)
         }
-        if(cursor==anchor && exponent==null && text.firstOrNull()?.let{it.isLetterOrDigit()||it=='.'||it=='('||it=='√'}==true &&
+        if(cursor==anchor && exponent==null && text.firstOrNull()?.let{it.isDigit()||it=='.'}==true &&
             tree()?.nodes()?.any {it.kind=="binary"&&it.value=="^"&&it.end==cursor&&it.args[1].kind !in setOf("hole","group")}==true)
             return Editor(source,cursor).insert("*$text",inside+1)
         if(cursor==anchor && source.getOrNull(cursor-1)==')' && text.firstOrNull()?.let{it.isDigit()||it=='.'}==true) {
@@ -128,6 +128,19 @@ data class Editor(val source: String = "", val cursor: Int = source.length, val 
         val end=if(index==0)node.args[1].start else node.end
         return Editor(source.removeRange(start,end),start)
     }
+    private fun infinityAt(position:Int,backward:Boolean):Token? = runCatching {
+        Lexer.scan(source).firstOrNull {token->
+            token.text=="oo" && (if(backward)position>token.start && position<=token.end else position>=token.start && position<token.end)
+        }
+    }.getOrNull()
+    /** The system text field reports a one-character deletion even for the displayed ∞ symbol. */
+    fun atomicInfinityDeletion(nextSource:String):Editor? {
+        if(source.length!=nextSource.length+1)return null
+        val removed=(0 until nextSource.length).firstOrNull {source[it]!=nextSource[it]} ?: nextSource.length
+        if(source.removeRange(removed,removed+1)!=nextSource)return null
+        val token=infinityAt(removed,false) ?: return null
+        return remove(token.start,token.end)
+    }
     fun delete(): Editor {
         if(cursor!=anchor) {
             val start=minOf(cursor,anchor);val end=maxOf(cursor,anchor)
@@ -147,6 +160,7 @@ data class Editor(val source: String = "", val cursor: Int = source.length, val 
         emptyDenominatorAt(cursor)?.let{return removeEmptyDenominator(it)}
         emptyMultiplicationOperandAt(cursor)?.let{return removeEmptyMultiplicationOperand(it.first,it.second)}
         powerAtExponentStart(cursor)?.let{return clearPowerBase(it)}
+        infinityAt(cursor,true)?.let{return remove(it.start,it.end)}
         return if(cursor<=0 || hiddenCallOpen(cursor-1) || hiddenFractionDelimiter(cursor-1) || emptyStructuredSlotDelimiter(cursor-1))this else remove(cursor-1,cursor)
     }
     fun deleteForward():Editor {
@@ -159,6 +173,7 @@ data class Editor(val source: String = "", val cursor: Int = source.length, val 
         emptyDenominatorAt(cursor)?.let{return removeEmptyDenominator(it)}
         emptyMultiplicationOperandAt(cursor)?.let{return removeEmptyMultiplicationOperand(it.first,it.second)}
         if(source.getOrNull(cursor)=='^')powerAtExponentStart(cursor+1)?.let{return clearPowerBase(it)}
+        infinityAt(cursor,false)?.let{return remove(it.start,it.end)}
         return if(cursor>=source.length || hiddenCallOpen(cursor) || hiddenFractionDelimiter(cursor) || emptyStructuredSlotDelimiter(cursor))this else remove(cursor,cursor+1)
     }
     private fun hiddenPowerBase(power:Expr):Expr? = power.args.getOrNull(0)?.takeIf {base->

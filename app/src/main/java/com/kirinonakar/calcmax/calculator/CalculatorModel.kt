@@ -116,6 +116,10 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     var thousandsSeparator by mutableStateOf(prefs.getBoolean("thousandsSeparator",false))
     var displayShortcuts by mutableStateOf(loadDisplayShortcuts())
         private set
+    var catalogRecent by mutableStateOf(loadCatalogList("catalogRecent").take(10))
+        private set
+    var catalogFavorites by mutableStateOf(loadCatalogList("catalogFavorites"))
+        private set
     var haptics by mutableStateOf(prefs.getBoolean("haptics",true))
     var sound by mutableStateOf(prefs.getBoolean("sound",false))
     var persistHistory by mutableStateOf(prefs.getBoolean("historyEnabled",true))
@@ -231,6 +235,18 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         }
     }.getOrDefault(emptyMap())
     private fun loadList(key:String,default:List<String>):List<String> = runCatching {val array=JSONArray(prefs.getString(key,"[]"));List(array.length()){array.getString(it)}}.getOrDefault(emptyList()).ifEmpty {default}
+    private fun loadCatalogList(key:String):List<String> = runCatching {
+        val array=JSONArray(prefs.getString(key,"[]"))
+        (0 until array.length().coerceAtMost(500)).mapNotNull {array.optString(it).takeIf(String::isNotBlank)}.distinct()
+    }.getOrDefault(emptyList())
+    fun recordCatalogUse(source:String) {
+        catalogRecent=(listOf(source)+catalogRecent.filterNot {it==source}).take(10)
+        save()
+    }
+    fun toggleCatalogFavorite(source:String) {
+        catalogFavorites=if(source in catalogFavorites)catalogFavorites.filterNot {it==source} else catalogFavorites+source
+        save()
+    }
     private fun loadHistory(): List<HistoryEntry> = runCatching {
         val array = JSONArray(prefs.getString("history","[]"))
         (0 until array.length()).map { i -> array.getJSONObject(i).let { HistoryEntry(it.getLong("id"),it.getString("source"),it.getString("exact"),it.getString("decimal"),it.getString("mode"),it.optBoolean("favorite"),it.optString("inputTree"),it.optString("response"),it.optString("answer")) } }
@@ -282,6 +298,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
             .putString("inputAnswer",inputAnswer?.toString() ?: "{}").putString("answerDisplay",answerDisplay?.toString() ?: "{}").putString("lastAnswerResult",lastAnswerResult?.toString() ?: "{}")
             .putString("resultDisplayMode",resultDisplayMode.name.lowercase()).putBoolean("thousandsSeparator",thousandsSeparator)
             .putString("displayShortcuts",JSONArray(displayShortcuts.map {JSONObject().put("label",it.label).put("input",it.input).put("source",it.source)}).toString())
+            .putString("catalogRecent",JSONArray(catalogRecent).toString()).putString("catalogFavorites",JSONArray(catalogFavorites).toString())
             .putInt("precision",precision).putInt("displayDigits",displayDigits).putBoolean("haptics",haptics).putBoolean("sound",sound).putBoolean("historyEnabled",persistHistory).putBoolean("autoCloseBrackets",autoCloseBrackets)
             .putString("language",language)
             .putFloat("inputFont",inputFont).putFloat("outputFont",outputFont)
@@ -356,7 +373,9 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     fun insert(text: String, inside: Int = text.length) {
         if(!poweredOn)return
         var recordInEdit=true
-        var value=text
+        val converted=LatexInput.convert(text)
+        var value=converted ?: text
+        val insertionCursor=if(converted!=null)converted.length else inside
         if(committed) {
             rememberUndo(editor);recordInEdit=false
             val assignment=result?.optBoolean("assignment")==true
@@ -378,13 +397,13 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
             val slot=editor.emptyProductSlot()
             if(slot!=null&&typedParens.none {it.first==slot.first&&it.last==slot.last}) {
                 // Filling an editor-created slot with a plain operand drops its parentheses.
-                edit(editor.replaceSlot(slot,value,inside),recordUndo=recordInEdit)
+                edit(editor.replaceSlot(slot,value,insertionCursor),recordUndo=recordInEdit)
                 if(value=="()")markTypedParens(editor.cursor)
                 return
             }
         }
         val target=if(overwrite&&editor.cursor==editor.anchor)editor.copy(anchor=(editor.cursor+text.length).coerceAtMost(editor.source.length)) else editor
-        edit(target.insert(value,inside),recordUndo=recordInEdit)
+        edit(target.insert(value,insertionCursor),recordUndo=recordInEdit)
         if(value=="()"||value==")"||value=="(")markTypedParens(editor.cursor)
     }
     fun markTypedParens(cursor:Int) {typedParens=TypedParens.mark(typedParens,editor.source,cursor)}

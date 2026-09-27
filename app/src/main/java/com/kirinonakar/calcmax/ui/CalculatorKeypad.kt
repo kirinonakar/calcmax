@@ -67,7 +67,7 @@ private fun keypadOperandInput(value:String,editor:Editor,startingFresh:Boolean)
     if(startingFresh||editor.cursor!=editor.anchor)return value
     val before=editor.source.getOrNull(editor.cursor-1) ?: return value
     val first=value.firstOrNull()
-    val startsFactor=first?.isLetter()==true||value=="10^()"||first?.isDigit()==true&&(before.isLetter()||before in ")]}")
+    val startsFactor=value=="10^()"||first?.isDigit()==true&&(before.isLetter()||before in ")]}")
     return if((before.isLetterOrDigit()||before in ")]}")&&startsFactor)"*$value" else value
 }
 
