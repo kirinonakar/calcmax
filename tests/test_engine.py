@@ -267,6 +267,11 @@ class EngineTests(unittest.TestCase):
         doubled=dispatch(action="graph",trees=[scaled],graphKind="cartesian",min=0,max=1,samples=100,parameters={"a":2})
         self.assertTrue(doubled["ok"],doubled)
         self.assertAlmostEqual(max(point[1] for point in doubled["curves"][0]),2*math.sin(1),4)
+        derived=dispatch(action="graph",trees=[scaled,call("diff",scaled,x)],graphKind="cartesian",
+                         min=0,max=1,samples=100,parameters={"a":2},derivativeCurveIndex=1)
+        self.assertTrue(derived["ok"],derived)
+        self.assertEqual(derived["derivativeExpression"],"a*cos(x)")
+        self.assertAlmostEqual(derived["curves"][1][0][1],2,6)
         # [shade] y < f(x) fills the half-plane down to the clamped viewport edge.
         below=dispatch(action="graph",trees=[x],graphKind="cartesian",min=-2,max=2,samples=200,yMin=-2,yMax=2,
                        shadings=[{"mode":"halfplane","side":"below","trees":[x]}])
@@ -299,12 +304,23 @@ class EngineTests(unittest.TestCase):
         self.assertAlmostEqual(tangent["line"][0][1],-5,9)
         self.assertAlmostEqual(tangent["line"][1][1],3,9)
         circle=node("list","",[call("cos",t),call("sin",t)])
+        plotted=dispatch(action="graph",trees=[circle],graphKind="parametric",variable="t",
+                         min=0,max=math.pi/2,samples=100)
+        self.assertTrue(plotted["ok"],plotted)
+        self.assertEqual(len(plotted["curveParameters"][0]),len(plotted["curves"][0]))
+        self.assertAlmostEqual(plotted["curveParameters"][0][-1],math.pi/2,9)
+        self.assertAlmostEqual(plotted["curves"][0][-1][0],0,9)
         parametric=analyze([circle],"arclength",0,2*math.pi,graphKind="parametric",variable="t")
         self.assertTrue(parametric["ok"],parametric)
         self.assertAlmostEqual(parametric["value"],2*math.pi,6)
         slope=analyze([circle],"derivative",math.pi/2,math.pi/2,graphKind="parametric",variable="t")
         self.assertTrue(slope["ok"],slope)
         self.assertAlmostEqual(slope["value"],0,6)
+        polar_plot=dispatch(action="graph",trees=[num(1)],graphKind="polar",variable="t",
+                            min=0,max=math.pi/2,samples=100)
+        self.assertTrue(polar_plot["ok"],polar_plot)
+        self.assertEqual(len(polar_plot["curveParameters"][0]),len(polar_plot["curves"][0]))
+        self.assertAlmostEqual(polar_plot["curveParameters"][0][-1],math.pi/2,9)
         polar=analyze([num(1)],"integral",0,2*math.pi,graphKind="polar",variable="t")
         self.assertTrue(polar["ok"],polar)
         self.assertAlmostEqual(polar["value"],math.pi,6)

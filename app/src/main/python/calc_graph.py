@@ -3,6 +3,7 @@ import math
 import sympy as s
 from sympy.core.function import AppliedUndef
 from calc_shared import MathError, require
+from calc_display import readable
 
 def regression_samples(engine, value, rows, request):
     xs = [point for point in (_finite_real(row[0]) for row in rows) if point is not None]
@@ -42,11 +43,17 @@ def graph(engine, request):
     sliders = resolved_parameters(engine, request, all_expressions, {str(var)})
     count = min(1600,max(100,int(request.get("samples",500))))
     curves=[]
+    curve_parameters=[]
     for expression in expressions:
         function=s.lambdify(var,substitute_parameters(expression,sliders),modules="math",cse=True,docstring_limit=0)
-        samples = adaptive_samples(function, start, end, count, kind)
+        samples, sample_parameters = adaptive_samples(function, start, end, count, kind)
         curves.append(samples)
+        if kind in ("parametric","polar"): curve_parameters.append(sample_parameters)
     result = {"curves":curves,"parameters":sorted(names)}
+    if curve_parameters: result["curveParameters"] = curve_parameters
+    derivative_index = request.get("derivativeCurveIndex")
+    if kind == "cartesian" and isinstance(derivative_index, int) and 0 <= derivative_index < len(expressions):
+        result["derivativeExpression"] = readable(expressions[derivative_index])
     if kind == "cartesian" and shade_items:
         result["shadings"] = graph_shading(engine, request, shade_items, shade_expressions, sliders, start, end)
     return result
@@ -191,7 +198,8 @@ def adaptive_samples(function, start, end, base_count, kind="cartesian"):
     coarse = sorted(values)
     for left, right in zip(coarse, coarse[1:]):
         refine(left, right, 0)
-    return [values[at] for at in sorted(values)]
+    positions = sorted(values)
+    return [values[at] for at in positions], positions
 
 def graph_sequence(engine, request, trees, start, end):
     require(start >= 0 and end <= 2000, "Sequence range must be between 0 and 2000")

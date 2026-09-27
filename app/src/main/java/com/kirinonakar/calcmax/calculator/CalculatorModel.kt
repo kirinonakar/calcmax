@@ -175,6 +175,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     var zMin by mutableStateOf(prefs.getString("zMin",null)?.toDoubleOrNull())
     var zMax by mutableStateOf(prefs.getString("zMax",null)?.toDoubleOrNull())
     var graphData by mutableStateOf<JSONObject?>(null)
+    var graphDerivativeSelected by mutableStateOf<Int?>(null)
     var graphAnalysis by mutableStateOf<JSONObject?>(null)
         private set
     var graphAnalysisBusy by mutableStateOf(false)
@@ -779,6 +780,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         graphJob?.cancel()
         val limit=if(graphKind in listOf("surface","differential")) 1 else 6
         val trees=mutableListOf<JSONObject>()
+        val curveSources=mutableListOf<String>()
         val shadings=JSONArray()
         try {
             graphSource.lines().filter { it.isNotBlank() }.take(if(graphKind in listOf("surface","differential")) 1 else 8).forEach { raw->
@@ -788,15 +790,24 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
                     if(shadings.length()<4)shadings.put(shadeEntry(line.removePrefix("[shade]").trim()))
                     return@forEach
                 }
-                if(trees.size<limit)trees+=JSONObject(Parser(line).parse().json())
+                if(trees.size<limit) {trees+=JSONObject(Parser(line).parse().json());curveSources+=line}
             }
         } catch(e:Exception) { error=e.message ?: "Syntax ERROR"; return }
         if(trees.isEmpty() && shadings.length()==0) { error="Enter a function"; return }
+        val derivativeSelected=graphDerivativeSelected?.takeIf {graphKind=="cartesian" && it in trees.indices}
+        if(derivativeSelected!=null) {
+            val source=curveSources.getOrNull(derivativeSelected)
+            if(source!=null) {
+                try {trees+=JSONObject(Parser("diff(($source),x)").parse().json())}
+                catch(e:Exception) {error=e.message ?: "Syntax ERROR";return}
+            }
+        }
         val source=graphSource;val kind=graphKind;val min=if(kind in listOf("cartesian","surface"))xMin else parameterMin;val max=if(kind in listOf("cartesian","surface"))xMax else parameterMax
         val request=request("graph").put("angle","RAD").put("trees",JSONArray(trees)).put("graphKind",kind)
             .put("variable",when(kind){"cartesian"->"x";"sequence"->"n";"surface"->"x";else->"t"})
             .put("min",min).put("max",max).put("samples",500).put("yMin",yMin).put("yMax",yMax)
             .put("parameters",parameterPayload())
+        if(derivativeSelected!=null)request.put("derivativeCurveIndex",trees.lastIndex)
         if(shadings.length()>0)request.put("shadings",shadings)
         if(kind=="surface")request.put("surfaceYMin",yMin).put("surfaceYMax",yMax)
         if(kind=="sequence") {
@@ -818,8 +829,11 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
             graphBusy=true; error=""
             try {
                 val response=engine.execute(request)
-                if(source==graphSource && kind==graphKind && min==(if(kind in listOf("cartesian","surface"))xMin else parameterMin) && max==(if(kind in listOf("cartesian","surface"))xMax else parameterMax)) {
-                    if(response.optBoolean("ok")) {graphData=response;syncGraphParameters(response.optJSONArray("parameters"))} else {graphData=null;error=response.optString("error")}
+                if(source==graphSource && kind==graphKind && derivativeSelected==graphDerivativeSelected && min==(if(kind in listOf("cartesian","surface"))xMin else parameterMin) && max==(if(kind in listOf("cartesian","surface"))xMax else parameterMax)) {
+                    if(response.optBoolean("ok")) {
+                        if(derivativeSelected!=null)response.put("derivativeSelected",derivativeSelected).put("derivativeCurveIndex",trees.lastIndex)
+                        graphData=response;syncGraphParameters(response.optJSONArray("parameters"))
+                    } else {graphData=null;error=response.optString("error")}
                 }
                 if(!graphAnimating)save()
             } finally { graphBusy=false }
@@ -949,8 +963,16 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     fun stopPython() {pythonJob?.cancel();engine.cancel();pythonBusy=false;pythonInputPrompt=null;pythonInputSubmit=null;pythonHasRun=true;pythonError="Execution stopped"}
     fun updateGraphSource(source:String) {
         graphSource=source
+        graphDerivativeSelected=null
         graphData=null;graphAnalysis=null;trace=null;shadedInterval=null
         save()
+    }
+    fun toggleGraphDerivative(selected:Int) {
+        if(graphKind!="cartesian")return
+        if(graphDerivativeSelected!=null) {graphDerivativeSelected=null;return}
+        val sources=graphSource.lines().filter(String::isNotBlank).take(8).map(String::trim).filter {!it.startsWith("[shade]")}.take(6)
+        if(selected !in sources.indices) {error="Select a function";return}
+        graphDerivativeSelected=selected
     }
     fun sendExpressionToGraph() {
         val source=editor.source.trim()
@@ -981,6 +1003,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         graphSources.put(graphKind,graphSource)
         graphKind=kind
         graphSource=graphSources.optString(kind,when(kind){"parametric"->"[cos(t),sin(t)]";"polar"->"2*cos(3*t)";"sequence"->"n\nu(n-1)+u(n-2)";"surface"->"sin(sqrt(x^2+y^2))";"differential"->"y-t";else->"sin(x)\ncos(x)"})
+        graphDerivativeSelected=null
         graphData=null;graphAnalysis=null;trace=null;shadedInterval=null
         animationJob?.cancel();graphAnimating=false
         if(kind=="sequence") {
@@ -999,7 +1022,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         val singled=action in listOf("derivative","tangent")
         val a=first.toDoubleOrNull();val b=if(singled)a else second.toDoubleOrNull()
         if(a==null || !a.isFinite() || b==null || !b.isFinite() || (!singled && a>=b)) {error="Enter finite values with a < b";return}
-        val sources=graphSource.lines().filter {it.isNotBlank()}.filter {graphKind!="cartesian" || !it.trim().startsWith("[shade]")}.take(6)
+        val sources=graphSource.lines().filter {it.isNotBlank()}.take(8).filter {graphKind!="cartesian" || !it.trim().startsWith("[shade]")}.take(6)
         if(sources.isEmpty() || selected !in sources.indices || action=="intersection" && (other !in sources.indices || other==selected)) {error="Select two different functions";return}
         val trees=try {JSONArray(sources.map {JSONObject(Parser(it).parse().json())})} catch(e:Exception) {error=e.message ?: "Syntax ERROR";return}
         analysisJob?.cancel()
