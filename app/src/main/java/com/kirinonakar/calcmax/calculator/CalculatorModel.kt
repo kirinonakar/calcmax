@@ -767,6 +767,14 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
             } finally {regressionBusy=false}
         }
     }
+    fun clearRegression() {
+        regressionJob?.cancel()
+        regressionCurve=emptyList()
+        regressionFit=""
+        regressionData=""
+        regressionBusy=false
+        save()
+    }
     fun plot() {
         graphJob?.cancel()
         val limit=if(graphKind in listOf("surface","differential")) 1 else 6

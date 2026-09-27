@@ -65,7 +65,7 @@ private val korean = mapOf(
     "Dataset name" to "데이터 이름", "Add row" to "행 추가", "One value per line" to "한 줄에 값 하나",
     "Quick summaries" to "빠른 요약", "Visualize" to "시각화", "Summarize y" to "y 요약",
     "Correlation coefficient (r)" to "상관계수 (r)",
-    "Fit regression" to "회귀 적합", "Graph fitted expression" to "적합식 그래프로 보기",
+    "Clear regression" to "회귀선 지우기", "Graph fitted expression" to "적합식 그래프로 보기",
     "Query" to "질의", "Degrees of freedom" to "자유도",
     "Trials n" to "시행 횟수 n", "Success probability p" to "성공 확률 p",
     "Mean λ" to "평균 λ", "Mean μ" to "평균 μ", "Standard deviation σ" to "표준편차 σ",

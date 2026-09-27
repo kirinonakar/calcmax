@@ -400,8 +400,12 @@ private fun treeSource(node:JSONObject?):String? {
             if(dataKind=="xy")Button(onClick={correlationCommand?.let {m.edit(Editor(it));m.calculate()}},enabled=correlationCommand!=null,modifier=Modifier.testTag("statistics-correlation")){Text(tr("Correlation coefficient (r)"))}
         }
         Text(tr("Visualize"),style=MaterialTheme.typography.titleMedium)
-        if(dataKind=="xy")Choices(listOf("linear","quadratic","logarithmic","exponential","power"),regression,{regression=it})
-        if(dataKind=="xy")SmallAction("Fit regression"){val table=parsedRows.filter {it.size>=2&&it[0].isNotBlank()&&it[1].isNotBlank()}.joinToString(",","[","]"){it.take(2).joinToString(",","[","]")};m.fitRegression("regression($table,$regression)",data)}
+        if(dataKind=="xy")Choices(listOf("linear","quadratic","logarithmic","exponential","power"),regression,{selectedMode->
+            regression=selectedMode;plotType="Scatter"
+            val table=parsedRows.filter {it.size>=2&&it[0].isNotBlank()&&it[1].isNotBlank()}.joinToString(",","[","]"){it.take(2).joinToString(",","[","]")}
+            m.fitRegression("regression($table,$selectedMode)",data)
+        })
+        if(dataKind=="xy")SmallAction("Clear regression"){m.clearRegression()}
         Choices(if(dataKind=="xy")listOf("Scatter","Histogram","Box plot") else listOf("Histogram","Box plot"),plotType,{plotType=it})
         val fitVisible=dataKind=="xy"&&plotType=="Scatter"&&m.regressionData==data
         StatisticsPlot(plotType,if(plotType=="Scatter")paired else xValues.mapIndexed {i,v->i.toDouble() to v},xValues,yValues,if(fitVisible)m.regressionCurve.orEmpty() else emptyList(),if(fitVisible)m.regressionFit else "")
