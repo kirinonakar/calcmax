@@ -388,6 +388,9 @@ class EngineTests(unittest.TestCase):
         covariance=dispatch(call("covariance",node("list","",num(1),num(2),num(3)),node("list","",num(2),num(4),num(6))))
         self.assertTrue(covariance["ok"],covariance)
         self.assertEqual(covariance["exact"],"4/3")
+        correlation=dispatch(call("correlation",node("list","",num(1),num(2),num(3)),node("list","",num(6),num(4),num(2))))
+        self.assertTrue(correlation["ok"],correlation)
+        self.assertEqual(correlation["exact"],"-1")
 
     def test_probability_distributions(self):
         def node(kind,value="",*args): return {"kind":kind,"value":value,"args":list(args)}

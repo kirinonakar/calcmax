@@ -1,5 +1,18 @@
 package com.kirinonakar.calcmax.ui
 
+/** Correlation uses complete x,y rows so missing cells cannot shift the pairing. */
+internal fun statisticsCorrelationCommand(rows: List<List<String>>, kind: String): String? {
+    if (kind != "xy") return null
+    val pairs = rows.mapNotNull { row ->
+        val x = row.getOrNull(0)?.trim()?.takeIf(String::isNotBlank)
+        val y = row.getOrNull(1)?.trim()?.takeIf(String::isNotBlank)
+        if (x != null && y != null) x to y else null
+    }
+    if (pairs.size < 2) return null
+    fun vector(values: List<String>) = values.joinToString(",", "[", "]")
+    return "correlation(${vector(pairs.map { it.first })},${vector(pairs.map { it.second })})"
+}
+
 /** Build a test from the visible data table, never from a second copy of its values. */
 internal fun statisticsTestCommand(
     procedure: String,

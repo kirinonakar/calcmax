@@ -64,6 +64,7 @@ private val korean = mapOf(
     "Enter values once, then summarize, test, or plot the current dataset." to "데이터를 입력한 뒤 요약, 검정 또는 그래프로 분석합니다.",
     "Dataset name" to "데이터 이름", "Add row" to "행 추가", "One value per line" to "한 줄에 값 하나",
     "Quick summaries" to "빠른 요약", "Visualize" to "시각화", "Summarize y" to "y 요약",
+    "Correlation coefficient (r)" to "상관계수 (r)",
     "Fit regression" to "회귀 적합", "Graph fitted expression" to "적합식 그래프로 보기",
     "Query" to "질의", "Degrees of freedom" to "자유도",
     "Trials n" to "시행 횟수 n", "Success probability p" to "성공 확률 p",

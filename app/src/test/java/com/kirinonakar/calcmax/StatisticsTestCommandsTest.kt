@@ -1,6 +1,7 @@
 package com.kirinonakar.calcmax
 
 import com.kirinonakar.calcmax.ui.statisticsTestCommand
+import com.kirinonakar.calcmax.ui.statisticsCorrelationCommand
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -8,6 +9,13 @@ import org.junit.Test
 class StatisticsTestCommandsTest {
     private fun command(procedure: String, rows: List<List<String>>, kind: String = "list", column: String = "x") =
         statisticsTestCommand(procedure, rows, kind, column, "Two-sided", "0", "2", "95")
+
+    @Test fun correlationUsesOnlyCompletePairs() {
+        val rows = listOf(listOf(" 1 ", "2"), listOf("", "100"), listOf("3", ""), listOf("4", " 8 "))
+        assertEquals("correlation([1,4],[2,8])", statisticsCorrelationCommand(rows, "xy"))
+        assertNull(statisticsCorrelationCommand(rows, "list"))
+        assertNull(statisticsCorrelationCommand(listOf(listOf("1", "2"), listOf("3", "")), "xy"))
+    }
 
     @Test fun testsUseTheCurrentTableValues() {
         assertEquals("ttest(0,[1,2,3])", command("t test", listOf(listOf("1"), listOf("2"), listOf("3"))))

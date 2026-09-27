@@ -396,6 +396,8 @@ private fun treeSource(node:JSONObject?):String? {
         Row(Modifier.horizontalScroll(rememberScrollState())) {
             Button(onClick={val values=vector(0);if(values!="[]"){m.edit(Editor("stats($values)"));m.calculate()}}){Text(if(dataKind=="xy")"Summarize x" else "Summarize list")}
             if(dataKind=="xy")SmallAction("Summarize y"){val values=vector(1);if(values!="[]"){m.edit(Editor("stats($values)"));m.calculate()}}
+            val correlationCommand=statisticsCorrelationCommand(parsedRows,dataKind)
+            if(dataKind=="xy")Button(onClick={correlationCommand?.let {m.edit(Editor(it));m.calculate()}},enabled=correlationCommand!=null,modifier=Modifier.testTag("statistics-correlation")){Text(tr("Correlation coefficient (r)"))}
         }
         Text(tr("Visualize"),style=MaterialTheme.typography.titleMedium)
         if(dataKind=="xy")Choices(listOf("linear","quadratic","logarithmic","exponential","power"),regression,{regression=it})
