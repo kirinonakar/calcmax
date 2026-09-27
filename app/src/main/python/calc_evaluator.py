@@ -158,7 +158,9 @@ class Engine:
         if self.allow_sequence_calls and (name == "u" or name in ("u1", "u2", "u3", "u4", "u5", "u6")):
             require(len(a) == 1, "Sequence references take one integer index")
             return s.Function(name)(a[0])
-        if name=="rnd":return s.N(a[0],self.display_digits)
+        if name=="rnd":
+            require(not a,"rnd expects no arguments")
+            return s.Float(str(random.random()),self.precision)
         if name=="eng":return a[0]
         if name=="pol":
             z=a[0]+s.I*a[1];angle=s.arg(z)*{"DEG":180/s.pi,"GRAD":200/s.pi}.get(self.angle,1)
@@ -198,6 +200,18 @@ class Engine:
         if name in ("asin", "acos", "atan"):
             result = getattr(s,name)(*a)
             return result * ({"DEG": 180/s.pi, "GRAD":200/s.pi}.get(self.angle, 1) if not result.free_symbols else 1)
+        if name=="round":
+            require(len(a) in (1,2),"round expects a number and optional decimal places")
+            require(a[0].is_number and a[0].is_real,"round requires a real number")
+            require(len(a)==1 or a[1].is_Integer,"round requires integer decimal places")
+            places=int(a[1]) if len(a)==2 else 0
+            require(abs(places)<=200,"round decimal places must be between -200 and 200")
+            # Scale an exact rational before rounding so the result does not inherit
+            # SymPy's low-precision Float from Number.round().
+            number=a[0] if isinstance(a[0],s.Rational) else s.Rational(str(s.N(a[0],max(self.precision,abs(places)+5))))
+            scale=s.Integer(10)**places
+            rounded=s.Rational(round(number*scale),1)/scale
+            return rounded if rounded.is_Integer else s.Float(rounded,max(self.precision,15,len(str(abs(rounded.p)))))
         basic = {"sqrt": s.sqrt, "cbrt": lambda x: s.real_root(x,3), "nthroot": s.root, "abs": s.Abs,
                  "floor": s.floor, "ceil": s.ceiling, "iPart": s.floor, "frac": s.frac,
                  "sign": s.sign, "gamma": s.gamma,
@@ -209,7 +223,7 @@ class Engine:
                  "diff": s.diff, "gcd": s.gcd, "lcm": s.lcm, "nCr": s.binomial,
                  "percent": lambda x: x/100, "degree": lambda x: x*s.pi/180,
                  "rad":lambda x:x,"gradian":lambda x:x*s.pi/200,
-                 "round": lambda x, n=0: x.round(int(n)), "quotient": lambda x,y: s.floor(x/y), "remainder": s.Mod,
+                 "quotient": lambda x,y: s.floor(x/y), "remainder": s.Mod,
                  "polar": lambda r,t: r*(s.cos(t)+s.I*s.sin(t)), "rectpolar": lambda z: [s.Abs(z),s.arg(z)]}
         if name in ("log","ln"): require(a[0]!=0,"Domain ERROR: logarithm of zero")
         if name=="log" and len(a)>1: require(a[1] not in (0,1),"Domain ERROR: invalid logarithm base")

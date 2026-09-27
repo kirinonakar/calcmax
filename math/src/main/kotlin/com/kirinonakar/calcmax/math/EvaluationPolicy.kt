@@ -4,7 +4,7 @@ private val multiArgumentFunctions = setOf(
     "round", "nCr", "nPr", "gcd", "lcm", "quotient", "remainder", "mod", "divmod",
     "collect", "subs", "diff", "integrate", "limit", "series", "sum", "product", "solve",
     "nsolve", "nintegrate", "nderivative", "minimum", "maximum", "piecewise",
-    "polar", "pol", "rec", "randInt", "eng", "dms",
+    "polar", "pol", "rec", "rnd", "randInt", "eng", "dms",
     "linsolve", "dot", "cross", "angle", "projection", "regression", "qty", "convert",
     "tpdf", "tcdf", "invt", "chi2pdf", "chi2cdf", "fpdf", "fcdf",
     "binompdf", "binomcdf", "poissonpdf", "poissoncdf", "geometpdf", "geometcdf",

@@ -5,6 +5,7 @@ import org.junit.Test
 
 class EvaluationPolicyTest {
     @Test fun multiArgumentCallsWaitForEquals() {
+        assertTrue(requiresExplicitEvaluation(Parser("rnd()",true).parse()))
         assertTrue(requiresExplicitEvaluation(Parser("integrate(e)").parse()))
         assertTrue(requiresExplicitEvaluation(Parser("integrate(,x)",true).parse()))
         assertTrue(requiresExplicitEvaluation(Parser("integrate(exp(-x^2)*cos(2x),(x,0,oo))").parse()))

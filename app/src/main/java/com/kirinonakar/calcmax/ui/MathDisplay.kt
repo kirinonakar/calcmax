@@ -394,7 +394,7 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
                 }
                 if(kind=="tuple"&&children.size==1)label(",")
                 if(wrap&&!openContainer)label(when(kind){"list"->"]";"set"->"}";else->")"})
-                if(children.isEmpty())label(value)
+                if(children.isEmpty()&&!wrap)label(value)
             }
         }
         if(caret&&!atomic&&cursor>start&&!(emptyContainer&&cursor==start+1))MathText("│",size,blink=true)

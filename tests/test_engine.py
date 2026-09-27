@@ -38,6 +38,20 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(call("isprime",-7)["exact"],"False")
         self.assertFalse(call("prime",0)["ok"])
         self.assertFalse(call("prime",100001)["ok"])
+    def test_round_decimal_places_and_rnd(self):
+        def number(value): return {"kind":"number","value":str(value)}
+        def call(name,*args):
+            return json.loads(core.dispatch(json.dumps({"tree":{"kind":"call","value":name,"args":list(args)}})))
+        self.assertEqual(call("round",number("3.1415"),number(2))["exact"],"3.14")
+        self.assertEqual(call("round",number("1.235"),number(2))["exact"],"1.24")
+        self.assertEqual(call("round",number("-1.225"),number(2))["exact"],"-1.22")
+        self.assertEqual(call("round",number("1234"),number(-2))["exact"],"1200")
+        self.assertEqual(call("round",number("2.5"))["exact"],"2")
+        self.assertFalse(call("round",number(1),number("1.5"))["ok"])
+        self.assertFalse(call("rnd",number(1))["ok"])
+        samples=[call("rnd") for _ in range(5)]
+        self.assertTrue(all(item["ok"] and 0<=float(item["exact"])<1 for item in samples),samples)
+        self.assertGreater(len({item["exact"] for item in samples}),1)
     def test_exact_rational_properties(self):
         rng=random.Random(991)
         def rational(a,b): return {"kind":"binary","value":"/","args":[{"kind":"number","value":str(a)},{"kind":"number","value":str(b)}]}

@@ -138,8 +138,9 @@ class Parser(private val source: String, private val allowHoles: Boolean = false
             first.text.firstOrNull()?.isLetter() == true -> {
                 if(token.text == "(") {
                     take(); val args = mutableListOf<Expr>()
-                    if(token.text==")" && !allowHoles) fail("Enter a function argument")
-                    if(token.text != ")" || allowHoles) { args += expression(0); while(token.text == ",") { take(); args += expression(0) } }
+                    val emptyCall=token.text==")" && first.text=="rnd"
+                    if(token.text==")" && !allowHoles && !emptyCall) fail("Enter a function argument")
+                    if(!emptyCall && (token.text != ")" || allowHoles)) { args += expression(0); while(token.text == ",") { take(); args += expression(0) } }
                     Expr("call", first.text, args, first.start, expect(")").end)
                 } else Expr("symbol", first.text, start = first.start, end = first.end)
             }
