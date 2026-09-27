@@ -325,8 +325,8 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
             kind=="call"&&value=="mixed"->MathRow(3.dp){child(0);FractionLayout({child(1,.85f)},{child(2,.85f)})}
             kind=="call"&&value=="eng"->child(0)
             kind in listOf("number","symbol","text")-> {
-                val shown=when(value){"pi"->"π";"oo"->"∞";else->value}
-                val mathItalic=kind in listOf("symbol","text")&&value in listOf("x","y","z","e","E","i","I")
+                val shown=when(value){"pi"->"π";"oo"->"∞";"E"->"e";"I"->"i";else->value}
+                val mathItalic=value in listOf("x","y","z","e","E","i","I")
                 if(select==null) MathText(shown,size,italic=mathItalic)
                 else {
                     val at=if(end==start)0 else ((cursor-start)*shown.length/(end-start)).coerceIn(0,shown.length)

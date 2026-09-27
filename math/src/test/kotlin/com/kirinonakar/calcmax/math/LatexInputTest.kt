@@ -28,6 +28,14 @@ class LatexInputTest {
         assertEquals("*",tree.args[0].value)
     }
 
+    @Test fun gaussianIntegralPasteWithImplicitProduct() {
+        val converted=LatexInput.convert("$$\\int_{0}^{\\infty} e^{-x^2} \\cos(2x) \\, dx$$")
+        val tree=Parser(converted!!).parse()
+        assertEquals("integrate",tree.value)
+        assertEquals("*",tree.args[0].value)
+        assertEquals("∘",tree.args[0].displayOperator)
+    }
+
     @Test fun functionAfterPowerIsImplicit() {
         val inserted=Editor("e^(-x^2)").insert("cos()",4)
         assertEquals("e^(-x^2)cos()",inserted.source)
