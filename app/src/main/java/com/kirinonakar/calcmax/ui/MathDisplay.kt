@@ -35,8 +35,8 @@ val LocalPlaceCursor=staticCompositionLocalOf<((Int,Int,Int)->Unit)?>{null}
 val LocalTypedParens=staticCompositionLocalOf<List<IntRange>>{emptyList()}
 
 private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspecified)height/2 else it}
-@Composable private fun MathText(text:String,size:Float,modifier:Modifier=Modifier,blink:Boolean=false,onLayout:(TextLayoutResult)->Unit={},hide:Boolean=false) {
-    val color=LocalInstrument.current.ink
+@Composable internal fun MathText(text:String,size:Float,modifier:Modifier=Modifier,blink:Boolean=false,onLayout:(TextLayoutResult)->Unit={},hide:Boolean=false,tint:Color?=null) {
+    val color=tint ?: LocalInstrument.current.ink
     val visible=!hide&&(!blink||LocalCaretVisible.current)
     val styled=buildAnnotatedString {append(text);if(!visible)text.forEachIndexed{i,ch->if(ch=='│')addStyle(SpanStyle(color=Color.Transparent),i,i+1)}}
     Text(styled,fontFamily=FontFamily.Serif,fontSize=size.sp,lineHeight=(size*1.18f).sp,color=color,softWrap=false,onTextLayout=onLayout,

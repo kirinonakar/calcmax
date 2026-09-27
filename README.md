@@ -16,7 +16,7 @@ You can download the latest release from the [Releases Page](https://github.com/
 * Long-press a key to apply its SHIFT function directly; long-press the mode indicator below the title bar to jump straight to the Scientific/CAS workspace.
 * `Keyboard` enables Android text entry; software keyboard input overlays the lower keys without resizing the instrument, and hardware keyboards also work in the natural display. `Paste` inserts clipboard text. `Copy` copies a selected expression when one is selected; otherwise it alternates between the answer and expression. `Cut` copies and removes a selected expression.
 * S⇔D switches exact and decimal results; SHIFT S⇔D switches improper/mixed fractions. The top `Catalog` button opens the searchable function catalog.
-* RCL lists stored values. Tap a stored variable to select it, then choose Store, Recall or Delete. The variable shortcuts stay visible while scrolling. SHIFT AC is CLR ALL and clears the visible tape and variables while preserving History, settings, assumptions and custom functions.
+* RCL lists stored variables; tap one to insert its name into the current expression. SHIFT RCL (STO) opens the variable editor for storing, recalling, and deleting values. Both menus offer Delete all for stored variables. Stored expressions remain visible as expressions and are evaluated when recalled. CALC on a recalled expression prompts for its input variables and shows the expression alongside their values. The variable shortcuts stay visible while scrolling. SHIFT AC is CLR ALL and clears the visible tape and variables while preserving History, settings, assumptions and custom functions.
 
 ### Numbers and precision
 

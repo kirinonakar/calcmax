@@ -203,8 +203,9 @@ private fun treeSource(node:JSONObject?):String? {
         "list"->children()?.let{"[$it]"}
         "tuple"->children()?.let{"($it${if(args?.length()==1) "," else ""})"}
         "set"->children()?.let{"{"+it+"}"}
-        "number","float","snapshot_symbol"->node.optString("value").takeIf{it.isNotBlank()}
+        "number","float","symbol","snapshot_symbol"->node.optString("value").takeIf{it.isNotBlank()}
         "constant"->when(node.optString("value")){"pi"->"pi";"E"->"e";"I"->"i";"oo"->"oo";"-oo"->"-oo";"True"->"true";"False"->"false";else->null}
+        "group"->child(0)?.let{"($it)"}
         "binary","relation"->{val a=child(0) ?:return null;val b=child(1) ?:return null;"($a)${node.optString("value")}($b)"}
         "unary"->{val a=child(0) ?:return null;"${node.optString("value","-")}($a)"}
         "restricted"->child(0)
@@ -820,13 +821,27 @@ private fun String.historyPreview(): String =
     if(codePointCount(0,length)>50) substring(0,offsetByCodePoints(0,49))+"…" else this
 
 @Composable private fun StoredVariableRow(name:String,stored:JSONObject,selected:Boolean,fontSize:Float,onSelect:()->Unit) {
-    Row(Modifier.fillMaxWidth().clickable(onClick=onSelect).padding(vertical=4.dp),verticalAlignment=Alignment.CenterVertically) {
-        Text("$name = ",fontSize=12.sp,color=if(selected)LocalInstrument.current.accent else LocalInstrument.current.ink)
-        Box(Modifier.horizontalScroll(rememberScrollState())) { MathNode(stored,fontSize*.55f) }
+    Row(Modifier.fillMaxWidth().clickable(onClick=onSelect).testTag("stored-variable-$name").padding(vertical=4.dp)) {
+        MathText("$name = ",12f,modifier=Modifier.alignBy(MathAxis),tint=if(selected)LocalInstrument.current.accent else LocalInstrument.current.ink)
+        Box(Modifier.alignBy(MathAxis).horizontalScroll(rememberScrollState())) {
+            MathNode(stored,fontSize*.55f)
+        }
     }
 }
 
-@Composable fun VariablesDialog(m: CalculatorModel,operation: String,close: ()->Unit) {
+@Composable fun RecallDialog(m: CalculatorModel,close: ()->Unit) {
+    val names=m.variables.keys().asSequence().toList().sortedWith(compareBy<String> {it!="M"}.thenBy {it})
+    AlertDialog(onDismissRequest=close,title={Text("Recall variable")},text={Column(Modifier.fillMaxWidth().heightIn(max=480.dp).verticalScroll(rememberScrollState())) {
+        if(names.isEmpty())Text("No stored variables")
+        names.forEach {name->
+            m.variables.optJSONObject(name)?.let {stored->
+                StoredVariableRow(name,stored,false,m.outputFont){m.insert(name);close()}
+            }
+        }
+    }},confirmButton={TextButton(onClick=close){Text("Close")}},dismissButton={if(names.isNotEmpty())TextButton(onClick={m.deleteAllVariables();close()}){Text("Delete all")}})
+}
+
+@Composable fun VariablesDialog(m: CalculatorModel,close: ()->Unit) {
     var name by rememberSaveable { mutableStateOf("A") }; var value by rememberSaveable { mutableStateOf(m.editor.source.ifBlank { "0" }) }; var parameters by rememberSaveable { mutableStateOf("x") }; var function by rememberSaveable { mutableStateOf(false) }
     fun selectVariable(key:String) {
         name=key
@@ -834,8 +849,8 @@ private fun String.historyPreview(): String =
         m.variables.optJSONObject(key)?.let {stored->value=treeSource(stored) ?: ""}
     }
     AlertDialog(onDismissRequest=close,title={Text("Variables & functions")},text={Column(verticalArrangement=Arrangement.spacedBy(6.dp)) {
-        Choices(listOf("A","B","C","D","E","F","x","y","z","t","M"),name,{selectVariable(it)})
-        Column(Modifier.fillMaxWidth().heightIn(max=400.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(6.dp)) {
+        Choices(listOf("A","B","C","D","E","F","x","y","z","t","n","M"),name,{selectVariable(it)})
+        Column(Modifier.fillMaxWidth().heightIn(max=560.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(6.dp)) {
         Text("Stored values · tap to select",fontSize=12.sp,color=LocalInstrument.current.muted)
         if(m.variables.length()==0&&m.functions.length()==0)Text("No stored variables")
         m.variables.keys().asSequence().toList().sortedWith(compareBy<String> {it!="M"}.thenBy {it}).forEach{key->
@@ -863,7 +878,7 @@ private fun String.historyPreview(): String =
         Text("Stored: "+m.variables.keys().asSequence().toList().joinToString()+"\nFunctions: "+m.functions.keys().asSequence().toList().joinToString(),fontSize=12.sp)
         if(m.error.isNotBlank()) Text(m.error,color=LocalInstrument.current.danger)
         }
-    }},confirmButton={TextButton(onClick=close) { Text("Done") }})
+    }},confirmButton={TextButton(onClick=close) { Text("Done") }},dismissButton={if(m.variables.length()>0)TextButton(onClick={m.deleteAllVariables()}){Text("Delete all")}})
 }
 
 @Composable fun MatrixSizeDialog(m:CalculatorModel,close:()->Unit) {

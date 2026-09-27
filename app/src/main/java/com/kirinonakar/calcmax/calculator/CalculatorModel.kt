@@ -485,15 +485,28 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         val tree=try {calculationTree(source)} catch(e:Exception) {error=e.message ?: "Syntax ERROR";return}
         val constants=setOf("pi","e","i","I","oo","true","false","Ans","c0","hP","hbar","G","qe","NA","kB0","me","mp0")
         val names=linkedSetOf<String>()
-        fun collect(node:Expr,bound:Set<String>) {
-            if(node.kind=="symbol" && node.value !in constants && node.value !in bound)names+=node.value
-            val binder=if(node.kind=="call" && node.value in setOf("integrate","diff","nderivative","limit","sum","product","solve","nsolve","nintegrate","series"))
-                node.args.getOrNull(1)?.takeIf {it.kind=="symbol"}?.value else null
-            node.args.forEachIndexed {index,arg->
-                if(index!=1 || binder==null)collect(arg,if(index==0 && binder!=null)bound+binder else bound)
+        fun collect(node:JSONObject,bound:Set<String>,expanding:Set<String>):Boolean {
+            val kind=node.optString("kind")
+            val value=node.optString("value")
+            if(kind=="symbol") {
+                if(value in constants || value in bound)return false
+                val definition=variables.optJSONObject(value)
+                if(definition?.has("start")==true && value !in expanding && collect(definition,bound,expanding+value))return true
+                names+=value
+                return true
             }
+            val args=node.optJSONArray("args") ?: return false
+            val binder=if(kind=="call" && value in setOf("integrate","diff","nderivative","limit","sum","product","solve","nsolve","nintegrate","series"))
+                args.optJSONObject(1)?.takeIf {it.optString("kind")=="symbol"}?.optString("value") else null
+            var found=false
+            for(index in 0 until args.length()) {
+                if(index==1 && binder!=null)continue
+                val child=args.optJSONObject(index) ?: continue
+                if(collect(child,if(index==0 && binder!=null)bound+binder else bound,expanding))found=true
+            }
+            return found
         }
-        collect(tree,emptySet())
+        collect(JSONObject(tree.json()),emptySet(),emptySet())
         if(names.isEmpty()){calculate();return}
         previewRunner?.cancel();previewRunner=null;inputVersion++;commitRequested=false;busy=false;committed=false
         result=null;resultSource="";resultVersion=-1;error=""
@@ -515,8 +528,9 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         job=viewModelScope.launch {
             busy=true;error=""
             try {
-                val value=if(tree==null)existing ?: JSONObject().put("kind","number").put("value","0") else {
-                    val response=engine.execute(request().put("tree",JSONObject(tree.json())))
+                val value=if(tree==null&&existing==null)JSONObject().put("kind","number").put("value","0") else {
+                    val valueTree=tree?.let {JSONObject(it.json())} ?: JSONObject().put("kind","symbol").put("value",session.name)
+                    val response=engine.execute(request().put("tree",valueTree))
                     if(!response.optBoolean("ok")){error=response.optString("error","Math ERROR");return@launch}
                     if(response.optBoolean("symbolic") || !response.has("resultAst")){error="Enter a numeric value";return@launch}
                     response.getJSONObject("resultAst")
@@ -582,17 +596,46 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
             val tree=Parser(source).parse()
             require(name !in listOf("pi","e","i","I","oo","Ans","c0","hP","hbar","G","qe","NA","kB0","me","mp0")) { "Reserved constant or answer name" }
             if(busy) return
+            val sourceTree=JSONObject(tree.json())
+            val selfReference=tree.nodes().any {it.kind=="symbol"&&it.value==name}
+            val answer=inputAnswer ?: variables.optJSONObject("Ans")
+            fun freezeAnswer(node:JSONObject):JSONObject {
+                if(node.optString("kind")=="symbol"&&node.optString("value")=="Ans"&&answer!=null)return JSONObject(answer.toString())
+                val copy=JSONObject(node.toString())
+                copy.optJSONArray("args")?.let {args->for(index in 0 until args.length())args.optJSONObject(index)?.let {args.put(index,freezeAnswer(it))}}
+                return copy
+            }
+            val snapshot=selfReference || tree.kind=="number" || tree.kind=="symbol"&&tree.value=="Ans"
             job=viewModelScope.launch {
                 busy=true
                 try {
-                    val response=engine.execute(request().put("tree",JSONObject(tree.json())))
-                    if(response.optBoolean("ok") && response.has("resultAst")) {
-                        val stored=response.getJSONObject("resultAst")
-                        variables=JSONObject(variables.toString()).put(name,stored)
-                        inputVersion++;resultVersion=-1
+                    if(snapshot) {
+                        val response=engine.execute(request().put("tree",sourceTree))
+                        if(!response.optBoolean("ok")||!response.has("resultAst")){error=response.optString("error","This result cannot be stored");return@launch}
+                        variables=JSONObject(variables.toString()).put(name,response.getJSONObject("resultAst"))
                         if(showResult){result=response.put("note","Stored in $name");dmsDisplay=false;dmsConversion=false}
-                        error="";save()
-                    } else error=response.optString("error","This result cannot be stored")
+                    } else {
+                        val stored=freezeAnswer(sourceTree)
+                        val next=JSONObject(variables.toString()).put(name,stored)
+                        fun cyclic(node:JSONObject,visited:Set<String>):Boolean {
+                            if(node.optString("kind")=="symbol") {
+                                val ref=node.optString("value")
+                                if(ref==name)return true
+                                if(ref !in visited)next.optJSONObject(ref)?.let {if(cyclic(it,visited+ref))return true}
+                            }
+                            val args=node.optJSONArray("args") ?: return false
+                            for(index in 0 until args.length())args.optJSONObject(index)?.let {if(cyclic(it,visited))return true}
+                            return false
+                        }
+                        if(cyclic(stored,emptySet())){error="Cyclic variable definition";return@launch}
+                        variables=next
+                        if(showResult){
+                            val message="Stored expression in $name"
+                            result=JSONObject().put("ok",true).put("exact",message).put("decimal",message).put("tree",JSONObject().put("kind","text").put("value",message)).put("note",message)
+                            dmsDisplay=false;dmsConversion=false
+                        }
+                    }
+                    inputVersion++;resultVersion=-1;error="";save()
                 } finally {busy=false}
             }
         } catch(e: Exception) { error=e.message ?: "Invalid variable" }
@@ -645,6 +688,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     }
     fun assume(name: String, assumption: String) { assumptions=JSONObject(assumptions.toString()).put(name,JSONArray(if(assumption=="none") emptyList<String>() else listOf(assumption))); save() }
     fun removeVariable(name: String) { variables=JSONObject(variables.toString()).apply { remove(name) }; functions=JSONObject(functions.toString()).apply { remove(name) }; save() }
+    fun deleteAllVariables() { variables=JSONObject();lastAnswerResult=null;inputAnswer=null;answerDisplay=null;save() }
     fun favorite(id: Long) { history=history.map { if(it.id==id) it.copy(favorite=!it.favorite) else it }; save() }
     fun deleteHistory(id: Long) { history=history.filter { it.id!=id }; save() }
     fun clearHistory() { history=history.filter { it.favorite };tape=emptyList();save() }

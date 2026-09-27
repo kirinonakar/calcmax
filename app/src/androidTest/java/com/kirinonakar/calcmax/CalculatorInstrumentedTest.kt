@@ -7,6 +7,7 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.kirinonakar.calcmax.calculator.*
@@ -235,12 +236,87 @@ class CalculatorInstrumentedTest {
         compose.onNodeWithContentDescription("RCL").performClick()
         compose.onNodeWithText("A = ").assertExists()
         capture("recall-values")
-        compose.onNodeWithText("Done").performClick()
+        compose.onNodeWithText("Close").performClick()
         var count=0
         compose.runOnIdle{count=model().history.size;model().precision=10;model().displayDigits=8;model().inputFont=27f;model().haptics=true;model().sound=true;model().save()}
         compose.onNodeWithContentDescription("SHIFT").performClick()
         compose.onNodeWithContentDescription("AC").performClick()
         compose.runOnIdle{assertEquals("",model().editor.source);assertEquals(0,model().variables.length());assertTrue(model().tape.isEmpty());assertEquals(count,model().history.size);assertEquals(10,model().precision);assertEquals(8,model().displayDigits);assertEquals(27f,model().inputFont);model().inputFont=25f;model().precision=30;model().displayDigits=10;model().sound=false;model().save()}
+    }
+    @Test fun recallTapInsertsVariableAndStoKeepsEditor() {
+        compose.runOnIdle {model().mode="Scientific/CAS";model().poweredOn=true;model().secondKeys=false;model().clear();model().store("A","42")}
+        compose.waitUntil(30000){!model().busy&&model().variables.has("A")}
+        compose.runOnIdle {model().edit(Editor("2+"))}
+        compose.onNodeWithContentDescription("RCL").performClick()
+        compose.onNodeWithText("Recall variable").assertExists()
+        compose.onNodeWithText("Value / expression").assertDoesNotExist()
+        compose.onNodeWithText("A = ").performClick()
+        compose.runOnIdle {assertEquals("2+A",model().editor.source)}
+        compose.onNodeWithText("Recall variable").assertDoesNotExist()
+        compose.onNodeWithContentDescription("SHIFT").performClick()
+        compose.onNodeWithContentDescription("STO").performClick()
+        compose.onNodeWithText("Variables & functions").assertExists()
+        compose.onNodeWithText("Value / expression").assertExists()
+        compose.onNodeWithText("n").assertExists()
+        compose.onNodeWithText("Delete all").performClick()
+        compose.runOnIdle {assertEquals(0,model().variables.length())}
+        compose.onNodeWithText("Variables & functions").assertExists()
+        compose.onNodeWithText("Done").performClick()
+    }
+    @Test fun storedPowerAlignsVariableNameWithBase() {
+        compose.runOnIdle {model().mode="Scientific/CAS";model().poweredOn=true;model().secondKeys=false;model().clear();model().store("A","x^2")}
+        compose.waitUntil(30000){!model().busy&&model().variables.has("A")}
+        compose.onNodeWithContentDescription("RCL").performClick()
+        val inRow=hasAnyAncestor(hasTestTag("stored-variable-A"))
+        val label=compose.onNode(hasText("A = ") and inRow,useUnmergedTree=true).fetchSemanticsNode().boundsInRoot
+        val base=compose.onNode(hasText("x") and inRow,useUnmergedTree=true).fetchSemanticsNode().boundsInRoot
+        assertEquals(label.center.y,base.center.y,with(compose.density){3.dp.toPx()})
+        compose.onNodeWithText("Close").performClick()
+    }
+    @Test fun storedFormulaUsesCurrentVariablesAndDeleteAllClearsList() {
+        compose.runOnIdle {model().mode="Scientific/CAS";model().poweredOn=true;model().secondKeys=false;model().clear();model().store("A","2")}
+        compose.waitUntil(30000){!model().busy&&model().variables.has("A")}
+        compose.runOnIdle {model().store("B","3")}
+        compose.waitUntil(30000){!model().busy&&model().variables.has("B")}
+        compose.runOnIdle {model().store("C","A+B")}
+        compose.waitUntil(30000){!model().busy&&model().variables.has("C")}
+        compose.runOnIdle {assertEquals("binary",model().variables.getJSONObject("C").getString("kind"));assertEquals("+",model().variables.getJSONObject("C").getString("value"));model().store("B","5")}
+        compose.waitUntil(30000){!model().busy&&model().variables.optJSONObject("B")?.optString("value")=="5"}
+        compose.runOnIdle {model().store("B","C+1")}
+        compose.waitUntil(30000){!model().busy&&model().error.contains("Cyclic variable definition")}
+        compose.runOnIdle {assertEquals("5",model().variables.optJSONObject("B")?.optString("value"))}
+        compose.runOnIdle {model().edit(Editor("C"));model().calculate()}
+        compose.waitUntil(30000){model().committed}
+        compose.runOnIdle {assertEquals("7",model().result?.optString("exact"))}
+        compose.onNodeWithContentDescription("RCL").performClick()
+        compose.onNodeWithText("C = ").assertExists()
+        val formulaRow=hasAnyAncestor(hasTestTag("stored-variable-C"))
+        compose.onNode(hasText("A") and formulaRow,useUnmergedTree=true).assertExists()
+        compose.onNode(hasText("B") and formulaRow,useUnmergedTree=true).assertExists()
+        compose.onNode(hasText("7") and formulaRow,useUnmergedTree=true).assertDoesNotExist()
+        compose.onNodeWithText("Delete all").performClick()
+        compose.runOnIdle {assertEquals(0,model().variables.length());assertEquals("C",model().editor.source)}
+    }
+    @Test fun calcExpandsRecalledFormulaIntoInputVariables() {
+        compose.runOnIdle {model().mode="Scientific/CAS";model().poweredOn=true;model().secondKeys=false;model().clear();model().store("A","2")}
+        compose.waitUntil(30000){!model().busy&&model().variables.has("A")}
+        compose.runOnIdle {model().store("B","3")}
+        compose.waitUntil(30000){!model().busy&&model().variables.has("B")}
+        compose.runOnIdle {model().store("C","A+B")}
+        compose.waitUntil(30000){!model().busy&&model().variables.has("C")}
+        compose.onNodeWithContentDescription("RCL").performClick()
+        compose.onNodeWithText("C = ").performClick()
+        compose.onNodeWithContentDescription("CALC").performClick()
+        compose.runOnIdle {assertEquals(listOf("A","B"),model().calcSession?.names);assertEquals("A",model().calcSession?.name)}
+        compose.onNodeWithText("C = ").assertExists()
+        compose.onNodeWithContentDescription("4").performClick()
+        compose.onNodeWithContentDescription("=").performClick()
+        compose.waitUntil(30000){!model().busy&&model().calcSession?.name=="B"}
+        compose.onNodeWithContentDescription("5").performClick()
+        compose.onNodeWithContentDescription("=").performClick()
+        compose.waitUntil(30000){!model().busy&&model().committed}
+        compose.runOnIdle {assertEquals("9",model().result?.optString("exact"));assertEquals("binary",model().variables.optJSONObject("C")?.optString("kind"))}
+        compose.onNodeWithText("C = ").assertExists()
     }
     @Test fun equationAndCustomFunctionWorkspaces() {
         compose.runOnIdle{model().clear();model().mode="Equations";model().equationKind="Quadratic";model().equationCoefficients=listOf("1","-5","6","0");model().equationSystem="x+y=3\nx-y=1";model().equationVariables="x,y"}

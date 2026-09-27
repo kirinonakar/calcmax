@@ -89,7 +89,8 @@ val Modes=listOf("Scientific/CAS","Graph","Python","Equations","Matrix","Vector"
         "Settings"->SettingsDialog(m){overlay=""}
         "MatrixSize"->MatrixSizeDialog(m){overlay=""}
         "History"->HistoryDialog(m){overlay=""}
-        "Variables","STO","RCL"->VariablesDialog(m,overlay){overlay=""}
+        "RCL"->RecallDialog(m){overlay=""}
+        "Variables","STO"->VariablesDialog(m){overlay=""}
         "Catalog"->CatalogDialog(m){overlay=""}
         "Angle"->AlertDialog(onDismissRequest={overlay=""},title={Text("DRG · input angle unit")},text={Column {listOf("Degrees °" to "degree","Radians ʳ" to "rad","Gradians ᵍ" to "gradian").forEach{(label,function)->TextButton(onClick={m.angleSuffix(function);overlay=""}){Text(label)}}}},confirmButton={TextButton(onClick={overlay=""}){Text("Close")}})
         "Clear"->AlertDialog(onDismissRequest={overlay=""},title={Text("Clear")},text={Column {
@@ -313,8 +314,15 @@ private fun largeHistoryTree(root:JSONObject?,compactStructured:Boolean=true):Bo
             } else Text(" ",fontSize=28.sp)
         }
         val shownCalcValues=m.calcSession?.accepted ?: if(m.committed&&m.lastCalcSource==m.editor.source)m.lastCalcValues else emptyMap()
-        if(shownCalcValues.isNotEmpty())Row(Modifier.fillMaxWidth().heightIn(min=24.dp).horizontalScroll(rememberScrollState()),verticalAlignment=Alignment.CenterVertically){
+        val shownCalcSource=m.calcSession?.source ?: if(m.committed&&m.lastCalcSource==m.editor.source)m.lastCalcSource else ""
+        val shownCalcFormula=m.variables.optJSONObject(shownCalcSource)?.takeIf {it.has("start")&&it.optString("kind")!="number"}
+        if(shownCalcValues.isNotEmpty()||shownCalcFormula!=null)Row(Modifier.fillMaxWidth().heightIn(min=24.dp).horizontalScroll(rememberScrollState()),verticalAlignment=Alignment.CenterVertically){
             Text("CALC  ",fontSize=11.sp,color=c.muted)
+            if(shownCalcFormula!=null){
+                Text("$shownCalcSource = ",fontSize=13.sp,color=c.accent)
+                MathNode(shownCalcFormula,14f)
+                Spacer(Modifier.width(14.dp))
+            }
             shownCalcValues.forEach {(name,value)->
                 Text("$name = ",fontSize=13.sp,color=c.accent)
                 MathNode(value,14f)
