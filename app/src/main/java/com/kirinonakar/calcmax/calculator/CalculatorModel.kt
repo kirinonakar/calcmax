@@ -189,7 +189,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         private set
     var radianAxis by mutableStateOf(prefs.getBoolean("radianAxis",false))
     var statisticsName by mutableStateOf(prefs.getString("statisticsName","D1") ?: "D1")
-    var statisticsData by mutableStateOf(prefs.getString("statisticsData","1\n2\n3\n4") ?: "1\n2\n3\n4")
+    var statisticsData by mutableStateOf(prefs.getString("statisticsData","") ?: "")
     var statisticsKind by mutableStateOf(prefs.getString("statisticsKind","list") ?: "list")
     var statisticsRegression by mutableStateOf(prefs.getString("statisticsRegression","linear") ?: "linear")
     var statisticsPlot by mutableStateOf(prefs.getString("statisticsPlot","Histogram") ?: "Histogram")

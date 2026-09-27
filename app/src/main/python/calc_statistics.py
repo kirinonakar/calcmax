@@ -1,4 +1,6 @@
 """Probability distributions, statistical tests, and regression."""
+import math
+from statistics import NormalDist
 import mpmath as mp
 import sympy as s
 from calc_shared import MathError, flatten, require
@@ -100,6 +102,15 @@ def _sample_statistics(data):
     require(sd > 0, "The sample needs some variation")
     return mean, sd, n
 
+def _sample_mean_variance(data):
+    values = flatten(data)
+    require(len(values) >= 2, "Enter at least two values in each sample")
+    for value in values: _real_value(value, "Sample values must be real numbers")
+    n = s.Integer(len(values))
+    mean = s.Add(*values)/n
+    variance = s.Add(*[(value - mean)**2 for value in values])/(n - 1)
+    return mean, variance, n
+
 def _data_center(samples):
     values = flatten(samples)
     require(values, "Enter at least one data value")
@@ -111,6 +122,69 @@ def _confidence_level(value):
     level = value/100 if value > 1 else value
     require(0 < level < 1, "The confidence level must be between 0 and 1, or between 1 and 100 percent")
     return level
+
+def _shapiro_wilk(data):
+    """Shapiro-Wilk W with Royston's AS R94 p-value approximation (3 <= n <= 5000)."""
+    values = flatten(data)
+    n = len(values)
+    require(3 <= n <= 5000, "Shapiro-Wilk needs 3 to 5000 values")
+    for value in values: _real_value(value, "Shapiro-Wilk values must be real numbers")
+    try:
+        ordered = sorted(float(value) for value in values)
+    except (ValueError, OverflowError, TypeError):
+        raise MathError("Shapiro-Wilk values must be finite numbers")
+    require(all(math.isfinite(value) for value in ordered), "Shapiro-Wilk values must be finite numbers")
+    spread = ordered[-1] - ordered[0]
+    require(math.isfinite(spread) and spread > 0, "Shapiro-Wilk needs a finite range with variation")
+    # Affine scaling keeps the centered sum of squares stable for small or large units.
+    scaled = [(value - ordered[0])/spread for value in ordered]
+    average = math.fsum(scaled)/n
+    denominator = math.fsum((value - average)**2 for value in scaled)
+    half = n//2
+    if n == 3:
+        coefficients = [math.sqrt(0.5)]
+    else:
+        normal = NormalDist()
+        scores = [normal.inv_cdf((i + 0.625)/(n + 0.25)) for i in range(half)]
+        norm = math.sqrt(2*math.fsum(score*score for score in scores))
+        inv_root_n = 1/math.sqrt(n)
+        def poly(coefficients, x):
+            result = coefficients[-1]
+            for coefficient in reversed(coefficients[:-1]): result = result*x + coefficient
+            return result
+        first = -scores[0]/norm + poly([0, .221157, -.147981, -2.07119, 4.434685, -2.706056], inv_root_n)
+        if n <= 5:
+            start = 1
+            factor = math.sqrt((2*math.fsum(score*score for score in scores[1:]))/(1 - 2*first*first))
+            coefficients = [first]
+        else:
+            second = -scores[1]/norm + poly([0, .042981, -.293762, -1.752461, 5.682633, -3.582633], inv_root_n)
+            start = 2
+            factor = math.sqrt((2*math.fsum(score*score for score in scores[2:]))/(1 - 2*first*first - 2*second*second))
+            coefficients = [first, second]
+        coefficients.extend(-score/factor for score in scores[start:])
+    numerator = math.fsum(coefficient*(scaled[n - 1 - i] - scaled[i]) for i, coefficient in enumerate(coefficients))
+    w = min(1.0, max(0.0, numerator*numerator/denominator))
+    if n == 3:
+        w = max(.75, w)
+        p = 1 - 6/math.pi*math.acos(math.sqrt(w))
+    else:
+        log_one_minus_w = math.log1p(-w) if w < 1 else -math.inf
+        if n <= 11:
+            gamma = -2.273 + .459*n
+            if log_one_minus_w >= gamma:
+                p = 1e-19
+            else:
+                transformed = -math.log(gamma - log_one_minus_w)
+                mean = poly([.544, -.39978, .025054, -.0006714], n)
+                scale = math.exp(poly([1.3822, -.77857, .062767, -.0020322], n))
+                p = math.erfc((transformed - mean)/(scale*math.sqrt(2)))/2
+        else:
+            log_n = math.log(n)
+            mean = poly([-1.5861, -.31082, -.083751, .0038915], log_n)
+            scale = math.exp(poly([-.4803, -.082676, .0030302], log_n))
+            p = math.erfc((log_one_minus_w - mean)/(scale*math.sqrt(2)))/2
+    return w, min(1.0, max(0.0, p)), n
 
 def _binom_term(n, p, k):
     return s.binomial(n, k)*p**k*(1 - p)**(n - k)
@@ -271,6 +345,11 @@ def statistical_test(engine, name, a, nodes):
     digits = engine.precision
     tail, args = _tail_argument(a, nodes)
     if tail != "both": engine.note = "One-tailed probability (" + tail + " tail)."
+    if name == "shapiro":
+        require(len(args) == 1 and isinstance(args[0], (list, tuple)), "shapiro takes one data list")
+        w, p, n = _shapiro_wilk(args[0])
+        precision = min(engine.precision, 15)
+        return {"W": s.Float(str(w), precision), "p value": s.Float(str(p), precision), "n": s.Integer(n)}
     if name == "ttest":
         require(len(args) in (2, 4), "ttest takes μ0 and data, or μ0, x̄, s and n")
         mu0 = _real_value(args[0], "ttest requires a numeric μ0")
@@ -287,6 +366,32 @@ def statistical_test(engine, name, a, nodes):
             probability = _tail_probability(lambda t: _t_sf(t, _mpf(n - 1, digits)), statistic, tail)
             return {"t": _mp_result(statistic, engine), "df": s.Integer(n - 1), "p value": _mp_result(probability, engine),
                     "sample mean": mean, "sample SD": sd, "n": s.Integer(n)}
+    if name in ("ttest2", "ttestpaired"):
+        require(len(args) == 3, name + " takes Δ0, x and y data lists")
+        delta = _real_value(args[0], "The hypothesized difference must be real")
+        require(isinstance(args[1], (list, tuple)) and isinstance(args[2], (list, tuple)), "x and y must be data lists")
+        if name == "ttestpaired":
+            xs, ys = flatten(args[1]), flatten(args[2])
+            require(len(xs) == len(ys) and len(xs) >= 2, "Paired t test needs at least two complete pairs")
+            mean, sd, n = _sample_statistics([x - y for x, y in zip(xs, ys)])
+            df = n - 1
+            standard_error = sd/s.sqrt(n)
+        else:
+            mean_x, variance_x, nx = _sample_mean_variance(args[1])
+            mean_y, variance_y, ny = _sample_mean_variance(args[2])
+            mean = mean_x - mean_y
+            standard_error_squared = variance_x/nx + variance_y/ny
+            require(standard_error_squared > 0, "The samples need some variation")
+            standard_error = s.sqrt(standard_error_squared)
+            df = standard_error_squared**2/((variance_x/nx)**2/(nx - 1) + (variance_y/ny)**2/(ny - 1))
+        with mp.workdps(digits + 10):
+            statistic = (_mpf(mean, digits) - _mpf(delta, digits))/_mpf(standard_error, digits)
+            probability = _tail_probability(lambda t: _t_sf(t, _mpf(df, digits)), statistic, tail)
+            result = {"t": _mp_result(statistic, engine), "df": df, "p value": _mp_result(probability, engine),
+                      "mean difference": mean}
+            if name == "ttestpaired": result["pairs"] = n
+            else: result.update({"n x": nx, "n y": ny})
+            return result
     if name == "ztest":
         require(len(args) in (3, 4), "ztest takes μ0, σ and data, or μ0, σ, x̄ and n")
         mu0 = _real_value(args[0], "ztest requires a numeric μ0")
@@ -303,6 +408,20 @@ def statistical_test(engine, name, a, nodes):
             probability = _tail_probability(_normal_sf, statistic, tail)
             return {"z": _mp_result(statistic, engine), "p value": _mp_result(probability, engine),
                     "sample mean": mean, "n": s.Integer(n)}
+    if name == "ztest2":
+        require(len(args) == 5, "ztest2 takes Δ0, σx, σy, x and y data lists")
+        delta = _real_value(args[0], "The hypothesized difference must be real")
+        sigma_x = _positive(args[1], "σx must be positive")
+        sigma_y = _positive(args[2], "σy must be positive")
+        require(isinstance(args[3], (list, tuple)) and isinstance(args[4], (list, tuple)), "x and y must be data lists")
+        mean_x, nx = _data_center(args[3])
+        mean_y, ny = _data_center(args[4])
+        with mp.workdps(digits + 10):
+            statistic = (_mpf(mean_x - mean_y - delta, digits)/
+                         mp.sqrt(_mpf(sigma_x**2/nx + sigma_y**2/ny, digits)))
+            probability = _tail_probability(_normal_sf, statistic, tail)
+            return {"z": _mp_result(statistic, engine), "p value": _mp_result(probability, engine),
+                    "mean difference": mean_x - mean_y, "n x": nx, "n y": ny}
     if name == "chi2test":
         require(len(args) == 2, "chi2test takes observed and expected counts")
         observed, expected = flatten(args[0]), flatten(args[1])
@@ -314,6 +433,50 @@ def statistical_test(engine, name, a, nodes):
         with mp.workdps(digits + 10):
             probability = _chisq_sf(_mpf(statistic, digits), _mpf(s.Integer(df), digits))
             return {"chi-square": statistic, "df": s.Integer(df), "p value": _mp_result(probability, engine)}
+    if name == "chi2independence":
+        require(len(args) == 2, "chi2independence takes x and y category lists")
+        xs, ys = flatten(args[0]), flatten(args[1])
+        require(len(xs) == len(ys) and len(xs) >= 2, "χ² independence needs at least two complete pairs")
+        for value in xs + ys: _real_value(value, "Categories must be real numbers")
+        x_categories, y_categories = sorted(set(xs)), sorted(set(ys))
+        require(len(x_categories) >= 2 and len(y_categories) >= 2, "Each category column needs at least two distinct values")
+        counts = [[s.Integer(sum(x == xc and y == yc for x, y in zip(xs, ys))) for yc in y_categories] for xc in x_categories]
+        row_totals = [sum(row) for row in counts]
+        column_totals = [sum(row[j] for row in counts) for j in range(len(y_categories))]
+        n = s.Integer(len(xs))
+        if any(row_total*column_total/n < 5 for row_total in row_totals for column_total in column_totals):
+            engine.note = "Some expected counts are below 5; the χ² approximation may be inaccurate."
+        statistic = s.Add(*[(counts[i][j] - row_totals[i]*column_totals[j]/n)**2/(row_totals[i]*column_totals[j]/n)
+                            for i in range(len(x_categories)) for j in range(len(y_categories))])
+        df = s.Integer((len(x_categories) - 1)*(len(y_categories) - 1))
+        with mp.workdps(digits + 10):
+            probability = _chisq_sf(_mpf(statistic, digits), _mpf(df, digits))
+            return {"chi-square": statistic, "df": df, "p value": _mp_result(probability, engine),
+                    "observed": counts, "n": n}
+    if name == "fisherexact":
+        require(len(args) == 2, "fisherexact takes x and y category lists")
+        require(isinstance(args[0], (list, tuple)) and isinstance(args[1], (list, tuple)), "x and y must be category lists")
+        xs, ys = flatten(args[0]), flatten(args[1])
+        require(len(xs) == len(ys) and len(xs) >= 2, "Fisher exact test needs at least two complete pairs")
+        for value in xs + ys: _real_value(value, "Categories must be real numbers")
+        x_categories, y_categories = sorted(set(xs)), sorted(set(ys))
+        require(len(x_categories) == 2 and len(y_categories) == 2, "Fisher exact test needs exactly two categories in each column")
+        a = sum(x == x_categories[0] and y == y_categories[0] for x, y in zip(xs, ys))
+        b = sum(x == x_categories[0] and y == y_categories[1] for x, y in zip(xs, ys))
+        c = sum(x == x_categories[1] and y == y_categories[0] for x, y in zip(xs, ys))
+        d = sum(x == x_categories[1] and y == y_categories[1] for x, y in zip(xs, ys))
+        row_first, column_first, total = a + b, a + c, len(xs)
+        denominator = math.comb(total, row_first)
+        def probability(top_left):
+            return s.Rational(math.comb(column_first, top_left)*math.comb(total - column_first, row_first - top_left), denominator)
+        observed_probability = probability(a)
+        support = range(max(0, row_first + column_first - total), min(row_first, column_first) + 1)
+        if tail == "left": selected = (value for value in support if value <= a)
+        elif tail == "right": selected = (value for value in support if value >= a)
+        else: selected = (value for value in support if probability(value) <= observed_probability)
+        p = sum((probability(value) for value in selected), s.Integer(0))
+        odds = s.oo if b*c == 0 else s.Rational(a*d, b*c)
+        return {"odds ratio": odds, "p value": p, "observed": [[a, b], [c, d]], "n": s.Integer(total)}
     if name == "anova":
         require(len(args) >= 2, "anova takes two or more data lists")
         groups = []

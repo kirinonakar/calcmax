@@ -462,7 +462,7 @@ class Engine:
         if name in ("normpdf", "normcdf", "invnorm", "tpdf", "tcdf", "invt", "chi2pdf", "chi2cdf", "fpdf", "fcdf",
                     "binompdf", "binomcdf", "poissonpdf", "poissoncdf", "geometpdf", "geometcdf"):
             return distribution_value(self, name, a)
-        if name in ("ttest", "ztest", "chi2test", "anova", "tinterval", "zinterval"):
+        if name in ("ttest", "ttest2", "ttestpaired", "ztest", "ztest2", "chi2test", "chi2independence", "fisherexact", "anova", "shapiro", "tinterval", "zinterval"):
             return statistical_test(self, name, a, nodes)
         if name in ("tvmfv", "tvmpv", "tvmpmt", "tvmn", "tvmrate", "npv", "irr", "amort", "cagr"):
             return finance_value(self, name, a, nodes)
