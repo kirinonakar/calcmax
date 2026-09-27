@@ -31,10 +31,10 @@ Example: abs(-3)
 Example: floor(2.7)
 `ceil(x)` — x 이상인 최소 정수.
 Example: ceil(2.1)
-`round(x,n)` — x를 소수점 아래 n자리로 반올림합니다. 기본값은 n=0입니다.
-Example: round(3.14159,2)
-`roundh(x,n)` — x를 소수점 아래 n자리로 반올림하며, 정확히 중간인 값은 0에서 멀어지는 방향으로 올립니다. 기본값은 n=0입니다.
-Example: roundh(1.225,2)
+`round(x,n)` — x를 소수점 아래 n자리로 은행가 반올림(정확히 중간이면 짝수 쪽)합니다. 기본값은 n=0입니다.
+Example: round(2.5) → 2 (banker's rounding)
+`roundh(x,n)` — x를 소수점 아래 n자리로 사사오입(정확히 중간이면 0에서 멀어지는 쪽)합니다. 기본값은 n=0입니다.
+Example: roundh(2.5) → 3 (round half up)
 `sign(x)` — x의 부호: −1, 0 또는 1.
 Example: sign(-5)
 `sqrt(x)` — 제곱근.

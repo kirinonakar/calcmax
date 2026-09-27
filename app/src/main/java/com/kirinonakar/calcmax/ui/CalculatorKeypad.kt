@@ -36,13 +36,13 @@ private val ScientificKeys=listOf(
 private val SecondKeys=listOf(
     listOf(KeySpec("simp","simplify()"),KeySpec("factor","factor()","factorint","factorint()"),KeySpec("expand","expand()"),KeySpec("x", "x", "^", "^()"),KeySpec("y",secondary="=",alternate="RELATION"),KeySpec("z")),
     listOf(KeySpec("⌊x⌋","floor()","mod","mod(,)"),KeySpec("⌈x⌉","ceil()","divmod","divmod(,)"),KeySpec("∞","oo","sign","sign()"),KeySpec(","),KeySpec("{",secondary="[",alternate="["),KeySpec("}",secondary="]",alternate="]")),
-    listOf(KeySpec("MATRIX","MATRIX_INPUT",secondary="n×m",type="action"),KeySpec("det","det()"),KeySpec("inv","inverse()"),KeySpec("T","transpose()"),KeySpec("‖v‖","norm()"),KeySpec("GRAPH","TO_GRAPH",secondary="MODE",alternate="Graph",type="action"))
+    listOf(KeySpec("MATRIX","MATRIX_INPUT",secondary="n×m",type="action"),KeySpec("det","det()",secondary="Pol",alternate="pol(,)"),KeySpec("inv","inverse()",secondary="Rec",alternate="rec(,)"),KeySpec("T","transpose()"),KeySpec("‖v‖","norm()"),KeySpec("GRAPH","TO_GRAPH",secondary="MODE",alternate="Graph",type="action"))
 )
 private val NumericKeys=listOf(
     listOf(KeySpec("7",secondary="CONST",alternate="Constants"),KeySpec("8",secondary="CONV",alternate="Units"),KeySpec("9",secondary="CLR",alternate="Clear"),KeySpec("DEL",secondary="INS",alternate="INS",type="danger"),KeySpec("AC",secondary="CLR ALL",alternate="CLR ALL",type="danger")),
     listOf(KeySpec("4",secondary="MATRIX",alternate="Matrix"),KeySpec("5",secondary="VECTOR",alternate="Vector"),KeySpec("6",secondary="EQN",alternate="Equations"),KeySpec("×",secondary="nPr",alternate="nPr(,)"),KeySpec("÷",secondary="nCr",alternate="nCr(,)")),
-    listOf(KeySpec("1",secondary="STAT",alternate="Statistics"),KeySpec("2",secondary="PY",alternate="Python"),KeySpec("3",secondary="BASE",alternate="Programmer"),KeySpec("+",secondary="Pol",alternate="pol(,)"),KeySpec("−",secondary="Rec",alternate="rec(,)")),
-    listOf(KeySpec("0",secondary="π",alternate="pi"),KeySpec(".",secondary="Ran#",alternate="RANDOM",alpha="randInt(,)"),KeySpec("×10ˣ","*10^()"),KeySpec("Ans",secondary="𝑒",alternate="e"),KeySpec("=",secondary="GRAPH",alternate="Graph"))
+    listOf(KeySpec("1",secondary="STAT",alternate="Statistics"),KeySpec("2",secondary="PY",alternate="Python"),KeySpec("3",secondary="BASE",alternate="Programmer"),KeySpec("+",secondary="π",alternate="pi"),KeySpec("−",secondary="𝑒",alternate="e")),
+    listOf(KeySpec("0",secondary="Ran#",alternate="RANDOM"),KeySpec(".",alpha="randInt(,)"),KeySpec("×10ˣ","*10^()"),KeySpec("Ans"),KeySpec("=",secondary="GRAPH",alternate="Graph"))
 )
 
 internal val KeypadShortcutGroups:Map<String,List<DisplayShortcut>> by lazy {

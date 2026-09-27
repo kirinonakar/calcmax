@@ -31,10 +31,10 @@ Example: abs(-3)
 Example: floor(2.7)
 `ceil(x)` — Least integer greater than or equal to x.
 Example: ceil(2.1)
-`round(x,n)` — Round x to n decimal places; n defaults to 0.
-Example: round(3.14159,2)
-`roundh(x,n)` — Round x to n decimal places, with halfway values rounded away from zero; n defaults to 0.
-Example: roundh(1.225,2)
+`round(x,n)` — Round x to n decimal places using banker's rounding (half to even); n defaults to 0.
+Example: round(2.5) → 2 (banker's rounding)
+`roundh(x,n)` — Round x to n decimal places using round half up (half away from zero); n defaults to 0.
+Example: roundh(2.5) → 3 (round half up)
 `sign(x)` — Sign of x: −1, 0 or 1.
 Example: sign(-5)
 `sqrt(x)` — Principal square root.
