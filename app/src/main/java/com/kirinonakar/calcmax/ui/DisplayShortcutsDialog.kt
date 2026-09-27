@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kirinonakar.calcmax.calculator.CalculatorModel
@@ -37,7 +39,8 @@ internal fun runDisplayShortcut(m:CalculatorModel,shortcut:DisplayShortcut,open:
                         TextButton(onClick={selected=index},modifier=Modifier.weight(1f)) {
                             Text("${index+1}. ${item.label}",fontSize=12.sp,maxLines=1,color=if(selected==index)LocalInstrument.current.accent else LocalInstrument.current.ink)
                         }
-                        TextButton(onClick={m.removeDisplayShortcut(index);selected=selected.coerceAtMost(m.displayShortcuts.size)},contentPadding=PaddingValues(horizontal=4.dp)) {Text(tr("Remove"),fontSize=11.sp)}
+                        IconButton(onClick={m.removeDisplayShortcut(index);selected=selected.coerceAtMost(m.displayShortcuts.size)},
+                            modifier=Modifier.semantics { contentDescription="Remove ${item.label}" }) {Text("\u2715",fontSize=15.sp)}
                     }
                 }
                 if(m.displayShortcuts.size<6)TextButton(onClick={selected=m.displayShortcuts.size}) {Text(tr("+ Add button"),fontSize=12.sp)}

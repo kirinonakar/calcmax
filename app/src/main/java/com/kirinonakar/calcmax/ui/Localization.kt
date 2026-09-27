@@ -86,7 +86,7 @@ private val korean = mapOf(
     "From (ISO code)" to "변환 전 (ISO 코드)", "To (ISO code)" to "변환 후 (ISO 코드)",
     "⇄ Swap currencies" to "⇄ 통화 맞바꾸기", "Drop decimals" to "소수점 버리기",
     "Update rates" to "환율 갱신", "Customize display buttons" to "표시 버튼 설정",
-    "Remove" to "제거", "+ Add button" to "+ 버튼 추가", "Find button or function" to "버튼 또는 함수 찾기",
+    "+ Add button" to "+ 버튼 추가", "Find button or function" to "버튼 또는 함수 찾기",
     "No matching buttons" to "일치하는 버튼이 없습니다", "Restore defaults" to "기본값 복원"
 )
 
