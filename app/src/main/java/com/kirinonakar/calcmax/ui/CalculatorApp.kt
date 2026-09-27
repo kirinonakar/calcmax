@@ -4,6 +4,8 @@ import android.content.Intent
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.*
@@ -350,7 +352,10 @@ private fun largeHistoryTree(root:JSONObject?,compactStructured:Boolean=true):Bo
         if(onToggleScreen!=null)SmallAction("scr",active=screenExpanded,description=if(screenExpanded)"Restore full keypad" else "Expand calculation screen",translate=false){onToggleScreen()}
         m.displayShortcuts.forEach {shortcut->SmallAction(shortcut.label,description="${shortcut.label}: ${shortcut.input}",translate=false){runDisplayShortcut(m,shortcut,open)}}
         SmallAction("Share",translate=false){m.result?.let{context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,m.editor.source+" = "+it.optString("exact")),"Share calculation"))}}
-        SmallAction("custom",description="Customize display buttons",translate=false){showCustom=true}
+        TextButton(onClick={showCustom=true},contentPadding=PaddingValues(horizontal=8.dp,vertical=0.dp),
+            modifier=Modifier.semantics {contentDescription="Customize display buttons"}) {
+            Icon(Icons.Default.Settings,contentDescription=null,modifier=Modifier.size(18.dp))
+        }
     }
     if(showCustom)DisplayShortcutsDialog(m){showCustom=false}
 }
