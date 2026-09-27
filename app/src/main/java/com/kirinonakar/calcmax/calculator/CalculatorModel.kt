@@ -1041,6 +1041,14 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
             } finally {graphAnalysisBusy=false}
         }
     }
+    fun clearGraphTangent() {
+        analysisJob?.cancel()
+        analysisJob=null
+        graphAnalysisBusy=false
+        graphAnalysis=null
+        trace=null
+        shadedInterval=null
+    }
     fun program(a: String,b: String,base: Int,width: Int,signed: Boolean,op: String) {
         if(busy) return
         job=viewModelScope.launch {

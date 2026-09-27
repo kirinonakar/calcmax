@@ -61,6 +61,7 @@ import kotlin.math.*
         val high=if(m.graphKind=="cartesian")m.xMax else m.parameterMax
         first=low.toString();second=high.toString();pointAt=((low+high)/2).toString()
     }
+    LaunchedEffect(m.graphSource) {tangentPositionOpen=false}
     LaunchedEffect(scrollToSection,analysis,showTable) {
         delay(100)
         when(scrollToSection) {
@@ -84,7 +85,7 @@ import kotlin.math.*
         Column(Modifier.fillMaxWidth().zIndex(1f).background(c.body)) {
             Row(Modifier.fillMaxWidth().zIndex(2f).padding(top=2.dp,bottom=1.dp).horizontalScroll(rememberScrollState()).semantics { contentDescription="Graph types" },horizontalArrangement=Arrangement.spacedBy(6.dp)) {
                 listOf("cartesian" to "Cartesian","parametric" to "Parametric","polar" to "Polar","sequence" to "Sequence","surface" to "3D surface","differential" to "Diff eq").forEach {(kind,label)->
-                    SmallAction(label,active=m.graphKind==kind,shaded=m.graphKind==kind) {m.changeGraphKind(kind)}
+                    SmallAction(label,active=if(m.graphKind==kind)true else null,shaded=m.graphKind==kind) {m.changeGraphKind(kind)}
                 }
             }
             if(m.graphKind=="sequence") Field(m.sequenceInitials,"Initial values at n=0 · comma separated",Modifier.fillMaxWidth()) {m.sequenceInitials=it;m.save()}
@@ -389,11 +390,19 @@ import kotlin.math.*
             }
             Row(Modifier.horizontalScroll(rememberScrollState())) {
                 val actions=if(m.graphKind=="cartesian")listOf("Root","Intersection","Minimum","Maximum","Inflection","Derivative","Tangent","Integral","Arc length") else listOf("Root","Minimum","Maximum","Inflection","Derivative","Tangent","Integral","Arc length")
-                actions.forEach { action->SmallAction(action) {
+                actions.forEach { action->
                     val key=action.lowercase().replace(" ","")
-                    tangentPositionOpen=key=="tangent"
-                    m.analyzeGraph(key,if(tangentPositionOpen)pointAt else first,second,selected,other)
-                } }
+                    val isTangent=key=="tangent"
+                    SmallAction(action,active=if(isTangent&&tangentPositionOpen)true else null,shaded=isTangent&&tangentPositionOpen) {
+                        if(isTangent&&tangentPositionOpen) {
+                            tangentPositionOpen=false
+                            m.clearGraphTangent()
+                        } else {
+                            tangentPositionOpen=isTangent
+                            m.analyzeGraph(key,if(isTangent)pointAt else first,second,selected,other)
+                        }
+                    }
+                }
             }
             if(tangentPositionOpen) {
                 Text(if(isKorean())"접선 위치 (${if(m.graphKind=="cartesian")"x" else "t"})" else "Tangent position (${if(m.graphKind=="cartesian")"x" else "t"})",fontSize=12.sp,color=c.muted)
@@ -405,7 +414,7 @@ import kotlin.math.*
                     })
                 }
             }
-            if(m.graphKind=="cartesian")SmallAction(if(isKorean())"도함수 그래프 f${(m.graphDerivativeSelected ?: selected)+1}′" else "Derivative curve f${(m.graphDerivativeSelected ?: selected)+1}′",active=m.graphDerivativeSelected!=null,shaded=m.graphDerivativeSelected!=null) {m.toggleGraphDerivative(selected)}
+            if(m.graphKind=="cartesian")SmallAction(if(isKorean())"도함수 그래프 f${(m.graphDerivativeSelected ?: selected)+1}′" else "Derivative curve f${(m.graphDerivativeSelected ?: selected)+1}′",active=if(m.graphDerivativeSelected!=null)true else null,shaded=m.graphDerivativeSelected!=null) {m.toggleGraphDerivative(selected)}
             if(m.graphAnalysisBusy)Text(if(isKorean())"분석 중…" else "Analyzing…",fontSize=12.sp,color=c.muted)
             m.graphAnalysis?.let {result->
                 val name=when(result.optString("analysis")){"arclength"->"Arc length";"inflection"->"Inflection";"tangent"->"Tangent slope";"intersection"->"Intersection";"minimum"->"Minimum";"maximum"->"Maximum";"integral"->"Integral";else->result.optString("analysis").replaceFirstChar {it.uppercase()}}
