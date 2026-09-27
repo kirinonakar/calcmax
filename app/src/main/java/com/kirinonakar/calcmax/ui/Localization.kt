@@ -63,6 +63,7 @@ private val korean = mapOf(
     "Stored values · tap to use as the second operand" to "저장된 값 · 누르면 두 번째 피연산자로 사용",
     "Enter values once, then summarize, test, or plot the current dataset." to "데이터를 입력한 뒤 요약, 검정 또는 그래프로 분석합니다.",
     "Dataset name" to "데이터 이름", "Add row" to "행 추가", "One value per line" to "한 줄에 값 하나",
+    "Direct input" to "직접 입력", "Table editor" to "표 편집",
     "Quick summaries" to "빠른 요약", "Visualize" to "시각화", "Summarize y" to "y 요약",
     "Correlation coefficient (r)" to "상관계수 (r)",
     "Clear regression" to "회귀선 지우기", "Graph fitted expression" to "적합식 그래프로 보기",

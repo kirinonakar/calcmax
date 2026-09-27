@@ -361,7 +361,7 @@ private fun treeSource(node:JSONObject?):String? {
             SmallAction("Import CSV"){importCsv.launch(arrayOf("text/csv","text/comma-separated-values","text/plain","application/vnd.ms-excel"))}
             SmallAction("Export CSV"){exportCsv.launch("${datasetName.ifBlank {"dataset"}}.csv")}
             SmallAction("Store as $datasetName"){if(datasetName.matches(Regex("[A-Za-z][A-Za-z0-9_]*")))m.store(datasetName,variableSource(),false)else m.error="Dataset name must be a valid variable name"}
-            SmallAction(if(csv)"Table editor" else "Paste CSV"){csv=!csv}
+            SmallAction(if(csv)"Table editor" else "Direct input"){csv=!csv}
             SmallAction("Add row"){if(parsedRows.size<999)data+=if(dataKind=="xy")"\n," else "\n"}
         }
         if(csv)OutlinedTextField(data,{data=it},Modifier.fillMaxWidth().height(180.dp),label={Text(if(dataKind=="xy") {if(isKorean())"x, y 값" else "x, y values"} else tr("One value per line"))},textStyle=MaterialTheme.typography.bodyLarge.copy(fontFamily=FontFamily.Monospace))
