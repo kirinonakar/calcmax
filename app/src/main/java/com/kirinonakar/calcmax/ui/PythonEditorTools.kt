@@ -1,7 +1,7 @@
 package com.kirinonakar.calcmax.ui
 
 data class PythonEdit(val source:String,val cursor:Int)
-data class PythonSnippet(val label:String,val code:String,val cursorOffset:Int=code.length)
+data class PythonSnippet(val label:String,val code:String,val cursorOffset:Int=code.length,val importLine:String?=null)
 
 object PythonEditorTools {
     val imports=listOf("import math","import statistics","import random","import itertools","from fractions import Fraction","import sympy as sp","import calcmax_catalog as calc")
@@ -10,7 +10,10 @@ object PythonEditorTools {
         PythonSnippet("Main","if __name__ == \"__main__\":\n    main()\n"),
         PythonSnippet("Class","class ClassName:\n    def __init__(self):\n        pass\n",6),
         PythonSnippet("For loop","for item in items:\n    print(item)\n",4),
-        PythonSnippet("Try / except","try:\n    pass\nexcept Exception as exc:\n    print(exc)\n",9)
+        PythonSnippet("Try / except","try:\n    pass\nexcept Exception as exc:\n    print(exc)\n",9),
+        PythonSnippet("input","input()",6),
+        PythonSnippet("print","print()",6),
+        PythonSnippet("sp.N","sp.N()",5,"import sympy as sp")
     )
     private val common=listOf("abs","all","any","bool","dict","enumerate","filter","float","int","len","list","map","max","min","open","print","range","round","set","sorted","str","sum","tuple","zip","False","None","True","and","as","class","def","elif","else","except","for","from","if","import","in","is","lambda","not","or","pass","return","try","while","with","yield","math","statistics","random","itertools","sympy","sp","calc","Fraction")
     private val members=mapOf(
@@ -23,6 +26,10 @@ object PythonEditorTools {
     fun replace(source:String,start:Int,end:Int,text:String,cursorOffset:Int=text.length):PythonEdit {
         val a=start.coerceIn(0,source.length);val b=end.coerceIn(a,source.length)
         return PythonEdit(source.substring(0,a)+text+source.substring(b),a+cursorOffset.coerceIn(0,text.length))
+    }
+    fun insertSnippet(source:String,start:Int,end:Int,snippet:PythonSnippet):PythonEdit {
+        val inserted=replace(source,start,end,snippet.code,snippet.cursorOffset)
+        return snippet.importLine?.let { insertImport(inserted.source,inserted.cursor,it) } ?: inserted
     }
     fun wordStart(source:String,cursor:Int):Int {
         var at=cursor.coerceIn(0,source.length)

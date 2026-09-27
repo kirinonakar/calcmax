@@ -56,13 +56,13 @@ import org.json.JSONObject
 
 @Composable fun Panel(title: String,subtitle: String,content: @Composable ColumnScope.()->Unit) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(14.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
-        Text(title,style=MaterialTheme.typography.titleLarge); if(subtitle.isNotBlank())Text(subtitle,color=LocalInstrument.current.muted,fontSize=12.sp); content()
+        Text(tr(title),style=MaterialTheme.typography.titleLarge); if(subtitle.isNotBlank())Text(tr(subtitle),color=LocalInstrument.current.muted,fontSize=12.sp); content()
     }
 }
-@Composable fun Choices(values: List<String>,selected: String,choose: (String)->Unit) {
-    Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)) { values.forEach { value->FilterChip(selected==value,onClick={choose(value)},label={Text(value,fontSize=12.sp)}) } }
+@Composable fun Choices(values: List<String>,selected: String,choose: (String)->Unit,translate:Boolean=true) {
+    Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)) { values.forEach { value->FilterChip(selected==value,onClick={choose(value)},label={Text(if(translate)tr(value) else value,fontSize=12.sp)}) } }
 }
-@Composable fun Field(value: String,label: String,modifier: Modifier=Modifier,enabled: Boolean=true,onValue: (String)->Unit) { OutlinedTextField(value,onValue,modifier=modifier,label={Text(label)},singleLine=true,enabled=enabled) }
+@Composable fun Field(value: String,label: String,modifier: Modifier=Modifier,enabled: Boolean=true,translate:Boolean=true,onValue: (String)->Unit) { OutlinedTextField(value,onValue,modifier=modifier,label={Text(if(translate)tr(label) else label)},singleLine=true,enabled=enabled) }
 @Composable private fun StatHeader(text:String,modifier:Modifier) { val c=LocalInstrument.current; Box(modifier.fillMaxHeight(),contentAlignment=Alignment.Center){Text(text,fontSize=11.sp,color=c.muted,fontWeight=FontWeight.SemiBold)} }
 /** Whole-cell activation for the statistics grid. The inner text field consumes pointer events and its own
  *  tap handling is cancelled once a scrolling parent claims the gesture, so watch the cell container instead:
@@ -260,23 +260,23 @@ private fun treeSource(node:JSONObject?):String? {
             if(vector)DimStepper("Components",rows,1..9){rows=it} else {DimStepper("Rows",rows,1..9){rows=it};DimStepper("Columns",columns,1..9){columns=it}}
         }
         MatrixGrid(rows,cols,cells,"matrix-grid") {row,column,text->cells=cells.toMutableList().also {it[row*9+column]=text}}
-        Text("Expression  "+source()+(if(other.isBlank())"" else ", "+resolved(other)),fontFamily=FontFamily.Monospace,fontSize=11.sp,color=c.muted)
+        Text((if(isKorean())"수식  " else "Expression  ")+source()+(if(other.isBlank())"" else ", "+resolved(other)),fontFamily=FontFamily.Monospace,fontSize=11.sp,color=c.muted)
         Choices(listOf("A","B","C"),name,{name=it})
         val storedTree=m.variables.optJSONObject(name)
         if(storedTree!=null) Row(verticalAlignment=Alignment.CenterVertically) {
             Text("$name = ",fontSize=15.sp,color=c.muted)
             Box(Modifier.horizontalScroll(rememberScrollState())){MathNode(storedTree,m.outputFont*.75f)}
-        } else Text("Nothing stored in $name",fontSize=11.sp,color=c.muted)
+        } else Text(if(isKorean())"${name}에 저장된 값이 없습니다" else "Nothing stored in $name",fontSize=11.sp,color=c.muted)
         Row(Modifier.horizontalScroll(rememberScrollState()),verticalAlignment=Alignment.CenterVertically) {
-            Button(onClick={m.store(name,source())}) {Text("Store as $name")}
+            Button(onClick={m.store(name,source())}) {Text(if(isKorean())"${name}에 저장" else "Store as $name")}
             SmallAction("Insert into calculator") {m.edit(Editor(source()));m.mode="Scientific/CAS"}
             SmallAction("Clear grid") {cells=List(81){"0"}}
         }
-        Text("Operations",fontSize=12.sp,fontWeight=FontWeight.SemiBold)
+        Text(tr("Operations"),fontSize=12.sp,fontWeight=FontWeight.SemiBold)
         OpChips(if(vector)listOf("norm","normalize") else listOf("det","inverse","transpose","rank","trace","ref","rref","lu","eigenvalues","eigenvectors")){applyOp(it)}
-        if(vector)Text("cross needs 3 components; dot, angle and projection need matching lengths.",fontSize=11.sp,color=c.muted)
-        else if(rows!=cols)Text("det, inverse, rank, trace, LU and eigenvalues need a square matrix.",fontSize=11.sp,color=c.muted)
-        Text("Operations with the second operand",fontSize=12.sp,fontWeight=FontWeight.SemiBold)
+        if(vector)Text(if(isKorean())"cross는 성분 3개가 필요합니다. dot, angle, projection은 두 벡터의 길이가 같아야 합니다." else "cross needs 3 components; dot, angle and projection need matching lengths.",fontSize=11.sp,color=c.muted)
+        else if(rows!=cols)Text(if(isKorean())"det, inverse, rank, trace, LU, eigenvalues에는 정사각행렬이 필요합니다." else "det, inverse, rank, trace, LU and eigenvalues need a square matrix.",fontSize=11.sp,color=c.muted)
+        Text(tr("Operations with the second operand"),fontSize=12.sp,fontWeight=FontWeight.SemiBold)
         Field(other,"Variable name or literal such as [[4,5,6]]") {other=it}
         val referenced=other.trim().trim('[',']').trim()
         val referencedTree=m.variables.optJSONObject(referenced)
@@ -287,7 +287,7 @@ private fun treeSource(node:JSONObject?):String? {
         OpChips(if(vector)listOf("dot","cross","angle","projection") else listOf("A+B","A−B","A×B","linsolve")){applyOp(it)}
         val stored=remember(m.variables) {m.variables.keys().asSequence().toList().sorted()}
         if(stored.isNotEmpty()) {
-            Text("Stored values · tap to use as the second operand",fontSize=11.sp,color=c.muted)
+            Text(tr("Stored values · tap to use as the second operand"),fontSize=11.sp,color=c.muted)
             Row(Modifier.horizontalScroll(rememberScrollState())) {stored.forEach {key->SmallAction(key){other=key}}}
         }
         // The workspace panel scrolls: an initial focus request would pull it down to the display.
@@ -364,7 +364,7 @@ private fun treeSource(node:JSONObject?):String? {
             SmallAction(if(csv)"Table editor" else "Paste CSV"){csv=!csv}
             SmallAction("Add row"){if(parsedRows.size<999)data+=if(dataKind=="xy")"\n," else "\n"}
         }
-        if(csv)OutlinedTextField(data,{data=it},Modifier.fillMaxWidth().height(180.dp),label={Text(if(dataKind=="xy")"x, y values" else "One value per line")},textStyle=MaterialTheme.typography.bodyLarge.copy(fontFamily=FontFamily.Monospace))
+        if(csv)OutlinedTextField(data,{data=it},Modifier.fillMaxWidth().height(180.dp),label={Text(if(dataKind=="xy") {if(isKorean())"x, y 값" else "x, y values"} else tr("One value per line"))},textStyle=MaterialTheme.typography.bodyLarge.copy(fontFamily=FontFamily.Monospace))
         else {
             val grid=LocalInstrument.current.grid
             val tableColumns=if(dataKind=="xy")listOf("x","y") else listOf("value")
@@ -392,18 +392,18 @@ private fun treeSource(node:JSONObject?):String? {
                 }
             }
         }
-        Text("Quick summaries",style=MaterialTheme.typography.titleMedium)
+        Text(tr("Quick summaries"),style=MaterialTheme.typography.titleMedium)
         Row(Modifier.horizontalScroll(rememberScrollState())) {
             Button(onClick={val values=vector(0);if(values!="[]"){m.edit(Editor("stats($values)"));m.calculate()}}){Text(if(dataKind=="xy")"Summarize x" else "Summarize list")}
             if(dataKind=="xy")SmallAction("Summarize y"){val values=vector(1);if(values!="[]"){m.edit(Editor("stats($values)"));m.calculate()}}
         }
-        Text("Visualize",style=MaterialTheme.typography.titleMedium)
+        Text(tr("Visualize"),style=MaterialTheme.typography.titleMedium)
         if(dataKind=="xy")Choices(listOf("linear","quadratic","logarithmic","exponential","power"),regression,{regression=it})
         if(dataKind=="xy")SmallAction("Fit regression"){val table=parsedRows.filter {it.size>=2&&it[0].isNotBlank()&&it[1].isNotBlank()}.joinToString(",","[","]"){it.take(2).joinToString(",","[","]")};m.fitRegression("regression($table,$regression)",data)}
         Choices(if(dataKind=="xy")listOf("Scatter","Histogram","Box plot") else listOf("Histogram","Box plot"),plotType,{plotType=it})
         val fitVisible=dataKind=="xy"&&plotType=="Scatter"&&m.regressionData==data
         StatisticsPlot(plotType,if(plotType=="Scatter")paired else xValues.mapIndexed {i,v->i.toDouble() to v},xValues,yValues,if(fitVisible)m.regressionCurve.orEmpty() else emptyList(),if(fitVisible)m.regressionFit else "")
-        if(m.regressionBusy)Text("Fitting regression…",fontSize=11.sp,color=LocalInstrument.current.muted)
+        if(m.regressionBusy)Text(if(isKorean())"회귀 적합 중…" else "Fitting regression…",fontSize=11.sp,color=LocalInstrument.current.muted)
         if(dataKind=="xy"&&m.regressionData==data&&m.regressionFit.isNotBlank())SmallAction("Graph fitted expression"){m.changeGraphKind("cartesian");m.updateGraphSource(m.regressionFit.replace("**","^"));m.mode="Graph";m.plot()}
         StatisticsAnalysis(m,parsedRows,dataKind)
         Display(m,requestInitialFocus=false)
@@ -583,11 +583,11 @@ private fun String.splitCsvRecord():List<String> {
         }
         return used.all {it.isNotBlank()}
     }
-    Text("Distribution",fontSize=12.sp,fontWeight=FontWeight.SemiBold)
+    Text(tr("Distribution"),fontSize=12.sp,fontWeight=FontWeight.SemiBold)
     Choices(listOf("Normal","Student t","χ²","F","Binomial","Poisson","Geometric"),family,{family=it})
-    Text("Query",fontSize=12.sp,fontWeight=FontWeight.SemiBold)
+    Text(tr("Query"),fontSize=12.sp,fontWeight=FontWeight.SemiBold)
     Choices(queries,active,{query=it})
-    Text("Parameters",fontSize=12.sp,fontWeight=FontWeight.SemiBold)
+    Text(tr("Parameters"),fontSize=12.sp,fontWeight=FontWeight.SemiBold)
     when(family) {
         "Student t","χ²" -> Field(df,"Degrees of freedom",Modifier.fillMaxWidth()){df=it}
         "F" -> Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
@@ -605,7 +605,7 @@ private fun String.splitCsvRecord():List<String> {
             Field(sigma,"Standard deviation σ",Modifier.weight(1f)){sigma=it}
         }
     }
-    Text("Input",fontSize=12.sp,fontWeight=FontWeight.SemiBold)
+    Text(tr("Input"),fontSize=12.sp,fontWeight=FontWeight.SemiBold)
     when(active) {
         "Interval P(a ≤ X ≤ b)" -> Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
             Field(low,"a (lower bound)",Modifier.weight(1f)){low=it}
@@ -613,16 +613,16 @@ private fun String.splitCsvRecord():List<String> {
         }
         "Quantile" -> Field(probability,"Probability p (0–1)",Modifier.fillMaxWidth()){probability=it}
         "P(X = k)","P(X ≤ k)" -> Field(k,"k",Modifier.fillMaxWidth()){k=it}
-        "List P(X = k)","List P(X ≤ k)" -> Text("No single input: every k from 0 to n is listed.",fontSize=11.sp,color=c.muted)
+        "List P(X = k)","List P(X ≤ k)" -> Text(if(isKorean())"단일 입력 없음: k=0부터 n까지의 값이 나열됩니다." else "No single input: every k from 0 to n is listed.",fontSize=11.sp,color=c.muted)
         else -> Field(x,"x",Modifier.fillMaxWidth()){x=it}
     }
-    Text("Expression  "+expression(),fontFamily=FontFamily.Monospace,fontSize=11.sp,color=c.muted)
+    Text((if(isKorean())"수식  " else "Expression  ")+expression(),fontFamily=FontFamily.Monospace,fontSize=11.sp,color=c.muted)
     Row(Modifier.horizontalScroll(rememberScrollState()),verticalAlignment=Alignment.CenterVertically) {
-        Button(onClick={m.edit(Editor(expression()));m.calculate()},enabled=ready()){Text("Compute")}
+        Button(onClick={m.edit(Editor(expression()));m.calculate()},enabled=ready()){Text(tr("Compute"))}
         SmallAction("Insert into calculator"){m.edit(Editor(expression()));m.mode="Scientific/CAS"}
     }
     Display(m,requestInitialFocus=false)
-    Text("Closed forms stay exact where the engine has one; other probabilities use the internal precision. Binomial list forms need n ≤ 100, and the normal cumulative uses -oo as its lower bound so μ and σ apply.",fontSize=11.sp,color=c.muted)
+    Text(if(isKorean())"닫힌 형태가 있으면 정확값으로 표시합니다. 나머지 확률은 내부 정밀도를 사용합니다. 이항분포 목록은 n ≤ 100이어야 하며, 정규 누적확률에서 μ와 σ를 적용하려면 하한으로 -oo를 사용합니다." else "Closed forms stay exact where the engine has one; other probabilities use the internal precision. Binomial list forms need n ≤ 100, and the normal cumulative uses -oo as its lower bound so μ and σ apply.",fontSize=11.sp,color=c.muted)
 }
 
 @Composable private fun StatisticsAnalysis(m: CalculatorModel,rows:List<List<String>>,kind:String) {
@@ -651,7 +651,7 @@ private fun String.splitCsvRecord():List<String> {
     val pairedTest=kind=="xy"&&activeColumn=="paired"&&test=="t test"
     val command=statisticsTestCommand(test,rows,kind,activeColumn,tail,mu0,sigma,level,sigmaY)
     HorizontalDivider()
-    Text("Analyze current data",style=MaterialTheme.typography.titleMedium)
+    Text(tr("Analyze current data"),style=MaterialTheme.typography.titleMedium)
     Text(if(kind=="xy")"Blank cells are omitted. Paired, χ², and Fisher tests use rows with both values; independent tests use each column separately. Fisher requires exactly two categories per column." else "Blank cells are omitted from tests. Choose x,y data for two-column tests.",fontSize=12.sp,color=c.muted)
     Choices(listOf("t test","z test","χ² test","Fisher exact","ANOVA","Shapiro–Wilk","t interval","z interval"),test,{test=it})
     if(kind=="xy"&&!twoColumnTest)Choices(columnOptions,activeColumn,{column=it})
@@ -667,12 +667,12 @@ private fun String.splitCsvRecord():List<String> {
             }
             if(test=="z test"&&twoSample)Field(sigmaY,"Known σy",Modifier.fillMaxWidth()){sigmaY=it}
             if(test=="t test"||test=="z test") {
-                Text("Alternative hypothesis",fontSize=12.sp,fontWeight=FontWeight.SemiBold)
+                Text(tr("Alternative hypothesis"),fontSize=12.sp,fontWeight=FontWeight.SemiBold)
                 Choices(listOf("Two-sided","Left","Right"),tail,{tail=it})
             }
     }
     if(test=="Fisher exact") {
-        Text("Alternative odds ratio (ordered categories)",fontSize=12.sp,fontWeight=FontWeight.SemiBold)
+        Text(tr("Alternative odds ratio (ordered categories)"),fontSize=12.sp,fontWeight=FontWeight.SemiBold)
         Choices(listOf("Two-sided","Left","Right"),tail,{tail=it})
     }
     val dataStatus=when {
@@ -691,7 +691,7 @@ private fun String.splitCsvRecord():List<String> {
         Button(onClick={command?.let {m.edit(Editor(it));m.calculate()}},enabled=command!=null,modifier=Modifier.testTag("statistics-run-test")){Text(if(test.endsWith("interval"))"Compute interval" else "Run test")}
         SmallAction("Insert expression"){command?.let {m.edit(Editor(it));m.mode="Scientific/CAS"}}
     }
-    Text("Tests use a two-sided alternative by default. Confidence levels accept 0.95 or 95.",fontSize=11.sp,color=c.muted)
+    Text(if(isKorean())"검정의 기본 대립가설은 양측입니다. 신뢰수준은 0.95 또는 95로 입력할 수 있습니다." else "Tests use a two-sided alternative by default. Confidence levels accept 0.95 or 95.",fontSize=11.sp,color=c.muted)
 }
 
 @Composable fun ProgrammerScreen(m: CalculatorModel) {
@@ -700,12 +700,12 @@ private fun String.splitCsvRecord():List<String> {
     Panel("Programmer","Fixed-width integers · two’s complement · exact bit operations") {
         Choices(listOf("2","8","10","16"),base.toString(),{base=it.toInt()})
         Choices(listOf("8","16","32","64"),width.toString(),{width=it.toInt()})
-        Row(verticalAlignment=Alignment.CenterVertically) { Switch(signed,{signed=it}); Text("  Signed interpretation") }
+        Row(verticalAlignment=Alignment.CenterVertically) { Switch(signed,{signed=it}); Text("  "+tr("Signed interpretation")) }
         Field(a,"A · base $base",Modifier.fillMaxWidth()) { a=it }
         Field(b,"B / shift count · base $base",Modifier.fillMaxWidth()) { b=it }
         listOf("","AND","OR","XOR","NOT","NAND","NOR","<<",">>").chunked(3).forEach { row->Row { row.forEach { op->SmallAction(op.ifBlank { "Convert" }) { m.program(a,b,base,width,signed,op) } } } }
         m.result?.optJSONObject("bases")?.let { bases -> listOf("BIN","OCT","DEC","HEX").forEach { key->Text(key,color=LocalInstrument.current.muted,fontSize=11.sp); Text(bases.optString(key),fontFamily=FontFamily.Monospace,fontSize=18.sp) } }
-        if(m.busy) Text("Computing…")
+        if(m.busy) Text(if(isKorean())"계산 중…" else "Computing…")
     }
 }
 
@@ -739,11 +739,11 @@ val UnitGroups=linkedMapOf(
 @Composable fun UnitsScreen(m: CalculatorModel) {
     var group by rememberSaveable { mutableStateOf("Length") }; var from by rememberSaveable { mutableStateOf("m") }; var to by rememberSaveable { mutableStateOf("ft") }; var value by rememberSaveable { mutableStateOf("1") }
     Panel("Unit conversion","") {
-        Choices(UnitGroups.keys.toList(),group,{group=it;from=UnitGroups[it]!![0];to=UnitGroups[it]!![1]})
+        Choices(UnitGroups.keys.toList(),group,{group=it;from=UnitGroups[it]!![0];to=UnitGroups[it]!![1]},translate=false)
         Field(value,"Value or expression",Modifier.fillMaxWidth()) { value=it }
-        Text("From"); Choices(UnitGroups[group]!!,from,{from=it})
-        Text("To"); Choices(UnitGroups[group]!!,to,{to=it})
-        Row { Button(onClick={m.edit(Editor("convert($value,$from,$to)"));m.calculate()}) { Text("Convert") }; SmallAction("Swap") { val temp=from;from=to;to=temp } }
+        Text("From"); Choices(UnitGroups[group]!!,from,{from=it},translate=false)
+        Text("To"); Choices(UnitGroups[group]!!,to,{to=it},translate=false)
+        Row { Button(onClick={m.edit(Editor("convert($value,$from,$to)"));m.calculate()}) { Text("Convert") }; SmallAction("Swap",translate=false) { val temp=from;from=to;to=temp } }
         Display(m)
         Text("Units in expressions: qty(2,m) + qty(30,cm). Convert a derived quantity with convert(qty(1,kg)*qty(2,mps2),N).",fontSize=11.sp)
     }
@@ -755,20 +755,20 @@ data class ConstantEntry(val symbol: String,val name: String,val value: String,v
     LaunchedEffect(Unit) {m.loadConstants()}
     val constants=remember(m.constants) {(0 until (m.constants?.length() ?: 0)).map {i->m.constants!!.getJSONObject(i).let {ConstantEntry(it.getString("symbol"),it.getString("name"),it.getString("value"),it.getString("unit"),it.getBoolean("exact"))}}}
     Column(Modifier.fillMaxSize().padding(14.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
-        Text("Scientific constants",style=MaterialTheme.typography.titleLarge)
-        Text("SI defining constants and CODATA 2022 reference values. Tap to insert.",color=LocalInstrument.current.muted,fontSize=12.sp)
-        OutlinedTextField(search,{search=it},modifier=Modifier.fillMaxWidth(),label={Text("Search")},singleLine=true,
+        Text(tr("Scientific constants"),style=MaterialTheme.typography.titleLarge)
+        Text(if(isKorean())"SI 정의 상수 및 CODATA 2022 참조값입니다. 누르면 수식에 넣습니다." else "SI defining constants and CODATA 2022 reference values. Tap to insert.",color=LocalInstrument.current.muted,fontSize=12.sp)
+        OutlinedTextField(search,{search=it},modifier=Modifier.fillMaxWidth(),label={Text(tr("Search"))},singleLine=true,
             trailingIcon={if(search.isNotEmpty())IconButton(onClick={search=""}){Text("\u2715",fontSize=15.sp)}})
         Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(10.dp)) {
-            if(m.constants==null) Text("Loading local constants…")
+            if(m.constants==null) Text(if(isKorean())"상수를 불러오는 중…" else "Loading local constants…")
             constants.filter { it.name.contains(search,true)||it.symbol.contains(search,true) }.forEach { item ->
                 Column(Modifier.fillMaxWidth().clickable { m.insert(item.symbol);m.mode="Scientific/CAS" }.padding(vertical=8.dp)) {
                     Text("${item.symbol}  ·  ${item.name}",style=MaterialTheme.typography.titleSmall)
                     Text("${item.value} ${item.unit}",fontSize=14.sp)
-                    Text(if(item.exact) "Exact definition" else "Measured · CODATA 2022",fontSize=11.sp,color=LocalInstrument.current.muted)
+                    Text(if(item.exact) {if(isKorean())"정확한 정의값" else "Exact definition"} else {if(isKorean())"측정값 · CODATA 2022" else "Measured · CODATA 2022"},fontSize=11.sp,color=LocalInstrument.current.muted)
                 }; HorizontalDivider()
             }
-            Text("Source: NIST physics.nist.gov/cuu/Constants · Measured values retain their published precision; they are not exact physical quantities.",fontSize=11.sp)
+            Text(if(isKorean())"출처: NIST physics.nist.gov/cuu/Constants · 측정값은 발표된 정밀도를 유지하며 정확한 물리량이 아닙니다." else "Source: NIST physics.nist.gov/cuu/Constants · Measured values retain their published precision; they are not exact physical quantities.",fontSize=11.sp)
         }
     }
 }
@@ -780,28 +780,28 @@ data class ConstantEntry(val symbol: String,val name: String,val value: String,v
     var customPrecisionVisible by rememberSaveable{mutableStateOf(m.precision.toString() !in precisionChoices)}
     var customDisplay by rememberSaveable{mutableStateOf(m.displayDigits.toString())}
     var customDisplayVisible by rememberSaveable{mutableStateOf(m.displayDigits.toString() !in displayChoices)}
-    AlertDialog(onDismissRequest=close,title={Text("Instrument setup")},text={Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(10.dp)) {
-        Text("Appearance"); Choices(listOf("System","Light","Dark"),m.theme,{m.theme=it;m.save()})
-        Text("Angle unit"); Choices(listOf("DEG","RAD","GRAD"),m.angle,{m.angle=it;m.recalculatePreview();m.save()})
-        Text("Internal precision · numeric algorithms"); Choices(precisionChoices+"Custom",if(customPrecisionVisible)"Custom" else m.precision.toString(),{if(it=="Custom")customPrecisionVisible=true else {customPrecisionVisible=false;m.precision=it.toInt();m.recalculatePreview();m.save()}})
-        if(customPrecisionVisible) {Field(customPrecision,"Custom internal precision · 3–200",Modifier.fillMaxWidth()){customPrecision=it};TextButton(onClick={m.precision=customPrecision.toInt();m.recalculatePreview();m.save()},enabled=customPrecision.toIntOrNull() in 3..200){Text("Apply internal precision")}}
-        Text("Display digits · result digits shown"); Choices(displayChoices+"Custom",if(customDisplayVisible)"Custom" else m.displayDigits.toString(),{if(it=="Custom")customDisplayVisible=true else {customDisplayVisible=false;m.displayDigits=it.toInt();m.recalculatePreview();m.save()}})
-        if(customDisplayVisible) {Field(customDisplay,"Custom display digits · 2–200",Modifier.fillMaxWidth()){customDisplay=it};TextButton(onClick={m.displayDigits=customDisplay.toInt();m.recalculatePreview();m.save()},enabled=customDisplay.toIntOrNull() in 2..200){Text("Apply display digits")}}
-        Text("Internal precision governs numeric algorithms such as integration and solving. Display digits limit the digits a result shows; they never exceed internal precision, and exact integers, fractions and symbolic forms are not rounded.",fontSize=11.sp,color=LocalInstrument.current.muted)
+    AlertDialog(onDismissRequest=close,title={Text(tr("Instrument setup"))},text={Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(10.dp)) {
+        Text(tr("Language")); Choices(listOf("English","한국어"),if(m.language=="ko")"한국어" else "English",{m.language=if(it=="한국어")"ko" else "en";m.save()})
+        Text(tr("Appearance")); Choices(listOf("System","Light","Dark"),m.theme,{m.theme=it;m.save()})
+        Text(tr("Angle unit")); Choices(listOf("DEG","RAD","GRAD"),m.angle,{m.angle=it;m.recalculatePreview();m.save()})
+        Text(tr("Internal precision · numeric algorithms")); Choices(precisionChoices+"Custom",if(customPrecisionVisible)"Custom" else m.precision.toString(),{if(it=="Custom")customPrecisionVisible=true else {customPrecisionVisible=false;m.precision=it.toInt();m.recalculatePreview();m.save()}})
+        if(customPrecisionVisible) {Field(customPrecision,"Custom internal precision · 3–200",Modifier.fillMaxWidth()){customPrecision=it};TextButton(onClick={m.precision=customPrecision.toInt();m.recalculatePreview();m.save()},enabled=customPrecision.toIntOrNull() in 3..200){Text(tr("Apply internal precision"))}}
+        Text(tr("Display digits · result digits shown")); Choices(displayChoices+"Custom",if(customDisplayVisible)"Custom" else m.displayDigits.toString(),{if(it=="Custom")customDisplayVisible=true else {customDisplayVisible=false;m.displayDigits=it.toInt();m.recalculatePreview();m.save()}})
+        if(customDisplayVisible) {Field(customDisplay,"Custom display digits · 2–200",Modifier.fillMaxWidth()){customDisplay=it};TextButton(onClick={m.displayDigits=customDisplay.toInt();m.recalculatePreview();m.save()},enabled=customDisplay.toIntOrNull() in 2..200){Text(tr("Apply display digits"))}}
+        Text(if(isKorean())"내부 정밀도는 적분과 방정식 풀이 같은 수치 계산에 적용됩니다. 표시 자릿수는 결과에 보이는 자릿수만 제한하며 내부 정밀도를 넘지 않습니다. 정확한 정수, 분수, 기호식은 반올림하지 않습니다." else "Internal precision governs numeric algorithms such as integration and solving. Display digits limit the digits a result shows; they never exceed internal precision, and exact integers, fractions and symbolic forms are not rounded.",fontSize=11.sp,color=LocalInstrument.current.muted)
         Column(verticalArrangement=Arrangement.spacedBy(2.dp)) {
-            Text("Input font · ${m.inputFont.toInt()} sp")
+            Text("${tr("Input font")} · ${m.inputFont.toInt()} sp")
             CompactSlider(m.inputFont,{m.inputFont=it},Modifier.fillMaxWidth(),valueRange=10f..42f,steps=31,onValueChangeFinished={m.save()})
         }
         Column(verticalArrangement=Arrangement.spacedBy(2.dp)) {
-            Text("Output font · ${m.outputFont.toInt()} sp")
+            Text("${tr("Output font")} · ${m.outputFont.toInt()} sp")
             CompactSlider(m.outputFont,{m.outputFont=it},Modifier.fillMaxWidth(),valueRange=10f..48f,steps=37,onValueChangeFinished={m.save()})
         }
-        Row(verticalAlignment=Alignment.CenterVertically) { Text("Key vibration",Modifier.weight(1f)); Switch(m.haptics,{m.haptics=it;m.save()}) }
-        Row(verticalAlignment=Alignment.CenterVertically) { Text("Key sound",Modifier.weight(1f)); Switch(m.sound,{m.sound=it;m.save()}) }
-        Row(verticalAlignment=Alignment.CenterVertically) { Text("Save history locally",Modifier.weight(1f)); Switch(m.persistHistory,{m.persistHistory=it;m.save()}) }
-        Row(verticalAlignment=Alignment.CenterVertically) { Text("Bracket auto-close",Modifier.weight(1f)); Switch(m.autoCloseBrackets,{m.autoCloseBrackets=it;m.save()}) }
-        Text("Bracket auto-close pairs ( { [ with the matching ) } ] and keeps the cursor between them.",fontSize=11.sp,color=LocalInstrument.current.muted)
-    }},confirmButton={TextButton(onClick=close) { Text("Done") }})
+        Row(verticalAlignment=Alignment.CenterVertically) { Text(tr("Key vibration"),Modifier.weight(1f)); Switch(m.haptics,{m.haptics=it;m.save()}) }
+        Row(verticalAlignment=Alignment.CenterVertically) { Text(tr("Key sound"),Modifier.weight(1f)); Switch(m.sound,{m.sound=it;m.save()}) }
+        Row(verticalAlignment=Alignment.CenterVertically) { Text(tr("Save history locally"),Modifier.weight(1f)); Switch(m.persistHistory,{m.persistHistory=it;m.save()}) }
+        Row(verticalAlignment=Alignment.CenterVertically) { Text(tr("Bracket auto-close"),Modifier.weight(1f)); Switch(m.autoCloseBrackets,{m.autoCloseBrackets=it;m.save()}) }
+    }},confirmButton={TextButton(onClick=close) { Text(tr("Done")) }})
 }
 
 @Composable fun HistoryDialog(m: CalculatorModel,close: ()->Unit) {
@@ -810,12 +810,12 @@ data class ConstantEntry(val symbol: String,val name: String,val value: String,v
     var search by remember { mutableStateOf("") }
     val needle=search.trim()
     val entries=m.history.filter { entry->(!favorites||entry.favorite)&&(needle.isBlank()||entry.source.contains(needle,true)||entry.exact.contains(needle,true)) }
-    AlertDialog(onDismissRequest=close,title={Text("Calculation history")},text={Column(Modifier.fillMaxWidth().heightIn(max=480.dp)) {
-        OutlinedTextField(search,{search=it},modifier=Modifier.fillMaxWidth(),label={Text("Search history")},singleLine=true,
+    AlertDialog(onDismissRequest=close,title={Text(tr("Calculation history"))},text={Column(Modifier.fillMaxWidth().heightIn(max=480.dp)) {
+        OutlinedTextField(search,{search=it},modifier=Modifier.fillMaxWidth(),label={Text(tr("Search history"))},singleLine=true,
             trailingIcon={if(search.isNotEmpty())IconButton(onClick={search=""}){Text("\u2715",fontSize=15.sp)}})
         Choices(listOf("All","Favorites"),if(favorites)"Favorites" else "All",{favorites=it=="Favorites"})
         LazyColumn(Modifier.fillMaxWidth().weight(1f,fill=false)) {
-            if(entries.isEmpty())item {Text(if(needle.isNotBlank())"No calculations match \"$needle\"." else if(favorites)"No favorites yet." else "Your calculations will appear here.")}
+            if(entries.isEmpty())item {Text(if(isKorean()) {if(needle.isNotBlank())"\"$needle\"에 맞는 계산이 없습니다." else if(favorites)"즐겨찾기가 없습니다." else "계산 기록이 여기에 표시됩니다."} else if(needle.isNotBlank())"No calculations match \"$needle\"." else if(favorites)"No favorites yet." else "Your calculations will appear here.")}
             items(entries) { entry ->
                 Column(Modifier.fillMaxWidth().padding(vertical=8.dp)) {
                     Text(entry.source.historyPreview(),fontFamily=FontFamily.Monospace,fontSize=13.sp)
@@ -826,7 +826,7 @@ data class ConstantEntry(val symbol: String,val name: String,val value: String,v
                 HorizontalDivider()
             }
         }
-    }},confirmButton={TextButton(onClick=close) { Text("Done") }},dismissButton={TextButton(onClick={m.clearHistory()}) { Text("Clear all") }})
+    }},confirmButton={TextButton(onClick=close) { Text(tr("Done")) }},dismissButton={TextButton(onClick={m.clearHistory()}) { Text(tr("Clear all")) }})
 }
 
 private fun String.historyPreview(): String =
@@ -857,14 +857,14 @@ private fun storedVariableNames(variables:JSONObject):List<String> =
 
 @Composable fun RecallDialog(m: CalculatorModel,close: ()->Unit) {
     val names=storedVariableNames(m.variables)
-    AlertDialog(onDismissRequest=close,title={Text("Recall variable")},text={Column(Modifier.fillMaxWidth().heightIn(max=480.dp).verticalScroll(rememberScrollState())) {
-        if(names.isEmpty())Text("No stored variables")
+    AlertDialog(onDismissRequest=close,title={Text(tr("Recall variable"))},text={Column(Modifier.fillMaxWidth().heightIn(max=480.dp).verticalScroll(rememberScrollState())) {
+        if(names.isEmpty())Text(tr("No stored variables"))
         names.forEach {name->
             m.variables.optJSONObject(name)?.let {stored->
                 StoredVariableRow(name,stored,false,16f,m.outputFont*.72f){m.insert(name);close()}
             }
         }
-    }},confirmButton={TextButton(onClick=close){Text("Close")}},dismissButton={if(names.isNotEmpty())TextButton(onClick={m.deleteAllVariables();close()}){Text("Delete all")}})
+    }},confirmButton={TextButton(onClick=close){Text(tr("Close"))}},dismissButton={if(names.isNotEmpty())TextButton(onClick={m.deleteAllVariables();close()}){Text(tr("Delete all"))}})
 }
 
 @Composable fun VariablesDialog(m: CalculatorModel,close: ()->Unit) {
@@ -874,11 +874,11 @@ private fun storedVariableNames(variables:JSONObject):List<String> =
         function=false
         m.variables.optJSONObject(key)?.let {stored->value=treeSource(stored) ?: ""}
     }
-    AlertDialog(onDismissRequest=close,title={Text("Variables & functions")},text={Column(verticalArrangement=Arrangement.spacedBy(6.dp)) {
+    AlertDialog(onDismissRequest=close,title={Text(tr("Variables & functions"))},text={Column(verticalArrangement=Arrangement.spacedBy(6.dp)) {
         Choices(listOf("A","B","C","D","E","F","x","y","z","t","n","M"),name,{selectVariable(it)})
         Column(Modifier.fillMaxWidth().heightIn(max=560.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(6.dp)) {
-        Text("Stored values · tap to select",fontSize=12.sp,color=LocalInstrument.current.muted)
-        if(m.variables.length()==0&&m.functions.length()==0)Text("No stored variables")
+        Text(tr("Stored values · tap to select"),fontSize=12.sp,color=LocalInstrument.current.muted)
+        if(m.variables.length()==0&&m.functions.length()==0)Text(tr("No stored variables"))
         storedVariableNames(m.variables).forEach{key->
             m.variables.optJSONObject(key)?.let {stored->
                 StoredVariableRow(key,stored,name==key&&!function,12f,m.outputFont*.55f){selectVariable(key)}
@@ -894,24 +894,24 @@ private fun storedVariableNames(variables:JSONObject):List<String> =
             }.padding(vertical=4.dp),fontSize=12.sp,color=if(name==key&&function)LocalInstrument.current.accent else LocalInstrument.current.ink)
         }
         Field(name,"Name",Modifier.fillMaxWidth()) { name=it }
-        OutlinedTextField(value,{value=it},modifier=Modifier.fillMaxWidth().testTag("stored-variable-value"),label={Text("Value / expression")},singleLine=true,
-            trailingIcon={TextButton(onClick={value=m.editor.source},enabled=m.editor.source.isNotBlank(),contentPadding=PaddingValues(horizontal=4.dp),modifier=Modifier.semantics{contentDescription="Paste current expression"}){Text("Paste",fontSize=11.sp)}})
-        Row(verticalAlignment=Alignment.CenterVertically) { Checkbox(function,{function=it});Text("User function") }
+        OutlinedTextField(value,{value=it},modifier=Modifier.fillMaxWidth().testTag("stored-variable-value"),label={Text(tr("Value / expression"))},singleLine=true,
+            trailingIcon={TextButton(onClick={value=m.editor.source},enabled=m.editor.source.isNotBlank(),contentPadding=PaddingValues(horizontal=4.dp),modifier=Modifier.semantics{contentDescription="Paste current expression"}){Text(tr("Paste"),fontSize=11.sp)}})
+        Row(verticalAlignment=Alignment.CenterVertically) { Checkbox(function,{function=it});Text(tr("User function")) }
         if(function) Field(parameters,"Parameters (comma separated)",Modifier.fillMaxWidth()) { parameters=it }
         Row { SmallAction("Store") { if(function)m.define(name,parameters,value) else m.store(name,value) }; SmallAction("Recall") { m.insert(if(function) "$name()" else name);close() }; SmallAction("Delete") { m.removeVariable(name) } }
-        Text("Assumption for $name",fontSize=12.sp)
+        Text(if(isKorean())"${name}에 대한 가정" else "Assumption for $name",fontSize=12.sp)
         Choices(listOf("none","real","positive","integer","nonzero"),m.assumptions.optJSONArray(name)?.optString(0) ?: "none",{m.assume(name,it)})
-        Text("Stored: "+m.variables.keys().asSequence().toList().joinToString()+"\nFunctions: "+m.functions.keys().asSequence().toList().joinToString(),fontSize=12.sp)
+        Text((if(isKorean())"저장값: " else "Stored: ")+m.variables.keys().asSequence().toList().joinToString()+(if(isKorean())"\n함수: " else "\nFunctions: ")+m.functions.keys().asSequence().toList().joinToString(),fontSize=12.sp)
         if(m.error.isNotBlank()) Text(m.error,color=LocalInstrument.current.danger)
         }
-    }},confirmButton={TextButton(onClick=close) { Text("Done") }},dismissButton={if(m.variables.length()>0)TextButton(onClick={m.deleteAllVariables()}){Text("Delete all")}})
+    }},confirmButton={TextButton(onClick=close) { Text(tr("Done")) }},dismissButton={if(m.variables.length()>0)TextButton(onClick={m.deleteAllVariables()}){Text(tr("Delete all"))}})
 }
 
 @Composable fun MatrixSizeDialog(m:CalculatorModel,close:()->Unit) {
     val c=LocalInstrument.current
     var rows by rememberSaveable {mutableIntStateOf(2)}
     var columns by rememberSaveable {mutableIntStateOf(2)}
-    AlertDialog(onDismissRequest=close,title={Text("Matrix size")},text={Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
+    AlertDialog(onDismissRequest=close,title={Text(tr("Matrix size"))},text={Column(verticalArrangement=Arrangement.spacedBy(8.dp)) {
         val density=LocalDensity.current
         val measurer=rememberTextMeasurer()
         val labelStyle=LocalTextStyle.current.copy(fontSize=11.sp)
@@ -919,6 +919,6 @@ private fun storedVariableNames(variables:JSONObject):List<String> =
         DimStepper("Rows",rows,1..9,labelWidth){rows=it}
         DimStepper("Columns",columns,1..9,labelWidth){columns=it}
         Text("$rows × $columns matrix",fontSize=11.sp,color=c.muted)
-    }},confirmButton={TextButton(onClick={m.insert(matrixTemplate(rows,columns),2);close()}){Text("Insert")}},dismissButton={TextButton(onClick=close){Text("Cancel")}})
+    }},confirmButton={TextButton(onClick={m.insert(matrixTemplate(rows,columns),2);close()}){Text(tr("Insert"))}},dismissButton={TextButton(onClick=close){Text(tr("Cancel"))}})
 }
 private fun matrixTemplate(rows:Int,columns:Int)=List(rows){"["+",".repeat(columns-1)+"]"}.joinToString(",","[","]")

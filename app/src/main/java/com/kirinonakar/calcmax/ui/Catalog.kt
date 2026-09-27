@@ -37,12 +37,12 @@ internal fun catalogCategories(m:CalculatorModel):Map<String,List<String>> {
 @Composable fun CatalogDialog(m: CalculatorModel,close: ()->Unit) {
     var category by remember {mutableStateOf("Scientific")};var search by remember {mutableStateOf("")};var showHelp by remember {mutableStateOf(false)}
     val categories=catalogCategories(m)
-    AlertDialog(onDismissRequest=close,title={Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {Text("Function catalog",Modifier.weight(1f));SmallAction("Help",description="Open the function catalog help"){showHelp=true}}},text={Column(Modifier.fillMaxWidth().heightIn(max=480.dp)) {
+    AlertDialog(onDismissRequest=close,title={Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {Text(tr("Function catalog"),Modifier.weight(1f));SmallAction("Help",description=tr("Open the function catalog help")){showHelp=true}}},text={Column(Modifier.fillMaxWidth().heightIn(max=480.dp)) {
         SearchField(search,"Find function") {search=it}
-        Choices(categories.keys.toList(),category,{category=it})
+        Choices(categories.keys.toList(),category,{category=it},translate=false)
         val entries=if(search.isBlank())categories[category].orEmpty() else categories.values.flatten().filter {it.contains(search,true)}
         Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())) {
-            if(category=="Custom"&&entries.isEmpty()&&search.isBlank())Text("Save a function in Functions to see it here.",fontSize=12.sp)
+            if(category=="Custom"&&entries.isEmpty()&&search.isBlank())Text(tr("Save a function in Functions to see it here."),fontSize=12.sp)
             entries.chunked(2).forEach { row->Row {row.forEach { source->TextButton(onClick={val list=source.indexOf("[]");val at=if(list>=0)list+1 else source.indexOf('(')+1;if(m.mode=="Python") {val edit=PythonEditorTools.insertCatalog(m.pythonSource,m.pythonSelectionStart,m.pythonSelectionEnd,source,at);m.editPython(edit.source,edit.cursor)} else m.insert(source,at);close()},modifier=Modifier.weight(1f)) {Text(source,fontSize=12.sp)} } } }
             val hint=when(category) {
                 "ODE & transforms" -> "ODE example: dsolve(diff(y(t),t)=y(t),y(t),t). Use t for time and s for Laplace frequency."
@@ -54,9 +54,18 @@ internal fun catalogCategories(m:CalculatorModel):Map<String,List<String>> {
                 "Finance" -> "Rates are per payment period (0.05/12 for 5% a year); add begin for payments at the start of each period."
                 else -> "Tap a template, then tap its empty slots to fill them. ↑ selects the enclosing expression; ↓ selects a child."
             }
-            Text(hint,fontSize=11.sp)
+            Text(if(isKorean()) when(category) {
+                "ODE & transforms" -> "ODE 예: dsolve(diff(y(t),t)=y(t),y(t),t). 시간 변수는 t, 라플라스 주파수는 s를 사용합니다."
+                "Vector calculus" -> "벡터 함수에는 gradient(x^2+y^2,[x,y])처럼 좌표 목록을 넣습니다."
+                "Matrix & vector" -> "행렬 명령에는 [[1,2],[3,4]]처럼 행렬을 직접 입력할 수 있습니다."
+                "Scientific" -> "수치 삼각함수는 선택한 각도 단위를 따릅니다. π 또는 °를 명시하면 해당 단위를 우선합니다."
+                "Distributions" -> "normcdf에는 경계 1개 또는 2개를 넣고 μ, σ를 추가할 수 있습니다. t, χ², F 함수에는 자유도를 넣습니다."
+                "Tests & intervals" -> "ttest2는 독립 표본, ttestpaired는 대응 표본, chi2independence와 fisherexact는 짝지은 범주, shapiro는 정규성 검정에 사용합니다. 단측 p값은 left 또는 right를 추가합니다."
+                "Finance" -> "이율은 지급 주기당 값입니다(연 5%의 월 이율은 0.05/12). 기초 지급에는 begin을 추가합니다."
+                else -> "템플릿을 누른 뒤 빈칸을 눌러 값을 입력하세요. ↑는 바깥 수식, ↓는 하위 수식을 선택합니다."
+            } else hint,fontSize=11.sp)
         }
-    }},confirmButton={TextButton(onClick=close) {Text("Done")}})
+    }},confirmButton={TextButton(onClick=close) {Text(tr("Done"))}})
     if(showHelp)CatalogHelpDialog{showHelp=false}
 }
 
@@ -70,23 +79,25 @@ private sealed interface HelpBlock {
 
 @Composable fun CatalogHelpDialog(close:()->Unit) {
     val context=LocalContext.current
+    val language=LocalLanguage.current
     var document by remember {mutableStateOf<String?>(null)}
     var search by remember {mutableStateOf("")}
-    LaunchedEffect(Unit) {
-        document=withContext(Dispatchers.IO) {runCatching {context.assets.open("catalog_help.md").bufferedReader().use {it.readText()}}.getOrNull()}
+    LaunchedEffect(language) {
+        document=null
+        document=withContext(Dispatchers.IO) {runCatching {context.assets.open(if(language=="ko")"catalog_help_ko.md" else "catalog_help.md").bufferedReader().use {it.readText()}}.getOrNull()}
     }
-    AlertDialog(onDismissRequest=close,title={Text("Function catalog - help")},text={Column(Modifier.fillMaxWidth()) {
+    AlertDialog(onDismissRequest=close,title={Text(tr("Function catalog - help"))},text={Column(Modifier.fillMaxWidth()) {
         SearchField(search,"Search"){search=it}
         val loaded=document
-        if(loaded==null) Text("Loading the catalog reference...",fontSize=12.sp)
+        if(loaded==null) Text(tr("Loading the catalog reference..."),fontSize=12.sp)
         else SelectionContainer {Column(Modifier.fillMaxWidth().heightIn(max=460.dp).verticalScroll(rememberScrollState())) {HelpDocument(loaded,search)}}
-    }},confirmButton={TextButton(onClick=close){Text("Close")}})
+    }},confirmButton={TextButton(onClick=close){Text(tr("Close"))}})
 }
 
 @Composable private fun HelpDocument(markdown:String,query:String) {
     val c=LocalInstrument.current
     val blocks=remember(markdown,query){parseHelp(markdown,query)}
-    if(blocks.isEmpty()) {Text("No entries match \"${query.trim()}\".",fontSize=12.sp,color=c.muted);return}
+    if(blocks.isEmpty()) {Text(if(isKorean())"\"${query.trim()}\"에 맞는 항목이 없습니다." else "No entries match \"${query.trim()}\".",fontSize=12.sp,color=c.muted);return}
     blocks.forEach {block->
         when(block) {
             is HelpBlock.Section -> Text(plainHelp(block.text),style=MaterialTheme.typography.titleMedium,modifier=Modifier.padding(top=4.dp,bottom=2.dp))
@@ -94,7 +105,7 @@ private sealed interface HelpBlock {
             is HelpBlock.Entry -> Column(Modifier.fillMaxWidth().padding(vertical=2.dp)) {
                 Text(block.signature,fontFamily=FontFamily.Monospace,fontSize=13.sp,color=c.ink)
                 Text(plainHelp(block.description),fontSize=12.sp,color=c.muted)
-                if(!block.example.isNullOrBlank()) Text("Example: "+plainHelp(block.example),fontFamily=FontFamily.Monospace,fontSize=12.sp,color=c.accent,modifier=Modifier.padding(top=1.dp))
+                if(!block.example.isNullOrBlank()) Text(tr("Example:")+" "+plainHelp(block.example),fontFamily=FontFamily.Monospace,fontSize=12.sp,color=c.accent,modifier=Modifier.padding(top=1.dp))
             }
             is HelpBlock.Bullet -> Text("- "+plainHelp(block.text),fontSize=12.sp,color=c.ink,modifier=Modifier.padding(vertical=1.dp))
             is HelpBlock.Body -> Text(plainHelp(block.text),fontSize=12.sp,color=c.ink,modifier=Modifier.padding(vertical=2.dp))

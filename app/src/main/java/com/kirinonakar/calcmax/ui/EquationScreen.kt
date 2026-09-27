@@ -49,19 +49,19 @@ import org.json.JSONObject
     }
     val expression=when(kind){"General"->equation;"System"->"["+equations.lines().filter{it.isNotBlank()}.joinToString(",")+"]";else->polynomial}
     Panel("Equation solver","") {
-        Choices(listOf("Linear","Quadratic","Cubic","System","General"),kind,{m.equationKind=it})
+        Choices(listOf("Linear","Quadratic","Cubic","System","General"),kind,{m.equationKind=it},translate=false)
         if(kind=="System") {
             OutlinedTextField(equations,{m.equationSystem=it},Modifier.fillMaxWidth(),label={Text("One equation per line")},minLines=2)
-            Field(variables,"Variables · comma separated",Modifier.fillMaxWidth()){m.equationVariables=it}
+            Field(variables,"Variables · comma separated",Modifier.fillMaxWidth(),translate=false){m.equationVariables=it}
         }else {
-            Field(variable,"Solve for",Modifier.fillMaxWidth()){m.equationVariable=it}
-            if(kind=="General")Field(equation,"Equation",Modifier.fillMaxWidth()){m.equationGeneral=it}
+            Field(variable,"Solve for",Modifier.fillMaxWidth(),translate=false){m.equationVariable=it}
+            if(kind=="General")Field(equation,"Equation",Modifier.fillMaxWidth(),translate=false){m.equationGeneral=it}
             else {
                 Text(when(degree){1->"a x + b = 0";2->"a x² + b x + c = 0";else->"a x³ + b x² + c x + d = 0"})
-                Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){(0..degree).forEach{i->Field(coefficients[i],('a'+i).toString(),Modifier.weight(1f)){v->m.equationCoefficients=coefficients.toMutableList().apply{set(i,v)}}}}
+                Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){(0..degree).forEach{i->Field(coefficients[i],('a'+i).toString(),Modifier.weight(1f),translate=false){v->m.equationCoefficients=coefficients.toMutableList().apply{set(i,v)}}}}
             }
-            Choices(listOf("Exact","Numeric"),if(numerical)"Numeric" else "Exact",{m.equationNumeric=it=="Numeric"})
-            if(numerical)Field(guess,"Initial guess",Modifier.fillMaxWidth()){m.equationGuess=it}
+            Choices(listOf("Exact","Numeric"),if(numerical)"Numeric" else "Exact",{m.equationNumeric=it=="Numeric"},translate=false)
+            if(numerical)Field(guess,"Initial guess",Modifier.fillMaxWidth(),translate=false){m.equationGuess=it}
         }
         val preview=runCatching{JSONObject(Parser(expression,true).parse().json())}.getOrNull()
         if(preview!=null)Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())){MathNode(preview,m.inputFont)}
@@ -72,7 +72,7 @@ import org.json.JSONObject
         },enabled=!m.busy){Text(if(m.busy)"Solving…" else "Solve")}
         if(m.error.isNotBlank())Text(m.error,color=MaterialTheme.colorScheme.error)
         if(m.result!=null) {HorizontalDivider();Text("Solution");Box(Modifier.horizontalScroll(rememberScrollState())){ResultMath(m.result!!,m.decimal,m.outputFont,
-            displayMode=m.resultDisplayMode,thousandsSeparator=m.thousandsSeparator,displayDigits=m.displayDigits)};SmallAction(if(m.decimal)"Show exact" else "Show decimal"){m.decimal=!m.decimal}}
+            displayMode=m.resultDisplayMode,thousandsSeparator=m.thousandsSeparator,displayDigits=m.displayDigits)};SmallAction(if(m.decimal)"Show exact" else "Show decimal",translate=false){m.decimal=!m.decimal}}
     }
 }
 
@@ -101,13 +101,13 @@ import org.json.JSONObject
         val scrollAll=maxHeight<480.dp
         val panel=if(scrollAll) Modifier.fillMaxSize().verticalScroll(rememberScrollState()) else Modifier.fillMaxSize()
         Column(panel.padding(14.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
-            Text("Custom functions",style=MaterialTheme.typography.titleLarge)
+            Text(tr("Custom functions"),style=MaterialTheme.typography.titleLarge)
             Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){Field(name,"Name",Modifier.weight(1f)){name=it;message=""};Field(parameters,"Parameters",Modifier.weight(2f)){parameters=it;message=""}}
             Field(body,"Formula",Modifier.fillMaxWidth()){body=it;message=""}
             val preview=runCatching{JSONObject(Parser(body,true).parse().json())}.getOrNull()
             if(preview!=null)Box(Modifier.horizontalScroll(rememberScrollState())){MathNode(preview,m.inputFont)}
             Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                Button(onClick={m.define(name.trim(),parameters,body,showResult=false);message=if(m.error.isEmpty())"Saved ${name.trim()}($parameters)" else ""}){Text("Save function")}
+                Button(onClick={m.define(name.trim(),parameters,body,showResult=false);message=if(m.error.isEmpty())"Saved ${name.trim()}($parameters)" else ""}){Text(tr("Save function"))}
                 SmallAction("Clear"){name="";parameters="";body="";message="";m.error=""}
                 SmallAction("Export"){if(m.functions.length()==0)message="No custom functions to export" else exportFile.launch("calcmax-functions.json")}
                 SmallAction("Import"){importFile.launch(arrayOf("application/json","text/plain","application/octet-stream"))}

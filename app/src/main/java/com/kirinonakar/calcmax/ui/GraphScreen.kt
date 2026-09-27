@@ -57,7 +57,7 @@ import kotlin.math.*
     val graphHeight=(availableHeight-topChrome+panelExtra-bottomChrome-surfaceExtraHeight).coerceAtLeast(200.dp)
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
     Column(Modifier.fillMaxWidth().zIndex(1f).onSizeChanged{topChrome=with(density){it.height.toDp()}}) {
-        OutlinedTextField(m.graphSource,{m.updateGraphSource(it)},Modifier.fillMaxWidth().padding(start=10.dp,end=10.dp,top=8.dp),label={Text(when(m.graphKind){"parametric"->"One [x(t),y(t)] pair per line";"polar"->"r(t) · radians · one curve per line";"sequence"->"u(n) · use u(n−1) for recurrences";"surface"->"z = f(x,y)";"differential"->"dy/dt = f(t,y)";else->"f(x) · one per line · [shade] y<f(x) or f, g"})},minLines=if(m.graphKind in listOf("surface","differential"))1 else 2,maxLines=4)
+        OutlinedTextField(m.graphSource,{m.updateGraphSource(it)},Modifier.fillMaxWidth().padding(start=10.dp,end=10.dp,top=8.dp),label={Text(tr(when(m.graphKind){"parametric"->"One [x(t),y(t)] pair per line";"polar"->"r(t) · radians · one curve per line";"sequence"->"u(n) · use u(n−1) for recurrences";"surface"->"z = f(x,y)";"differential"->"dy/dt = f(t,y)";else->"f(x) · one per line · [shade] y<f(x) or f, g"}))},minLines=if(m.graphKind in listOf("surface","differential"))1 else 2,maxLines=4)
         Column(Modifier.fillMaxWidth().zIndex(1f).background(c.body)) {
             Row(Modifier.fillMaxWidth().zIndex(2f).padding(vertical=8.dp).horizontalScroll(rememberScrollState()).semantics { contentDescription="Graph types" },horizontalArrangement=Arrangement.spacedBy(6.dp)) {
                 listOf("cartesian" to "Cartesian","parametric" to "Parametric","polar" to "Polar","sequence" to "Sequence","surface" to "3D surface","differential" to "Diff eq").forEach {(kind,label)->
@@ -173,21 +173,21 @@ import kotlin.math.*
             Column(Modifier.fillMaxWidth().onSizeChanged{surfaceExtra=with(density){it.height.toDp()}}) {
             Text("x: %.3g ~ %.3g   y: %.3g ~ %.3g".format(m.xMin,m.xMax,m.yMin,m.yMax)+(if(surfaceZMin!=null&&surfaceZMax!=null)"   z: %.3g ~ %.3g".format(surfaceZMin,surfaceZMax) else ""),Modifier.padding(horizontal=14.dp,vertical=2.dp),fontSize=11.sp,color=c.muted)
             Row(Modifier.fillMaxWidth().height(38.dp).padding(horizontal=14.dp),verticalAlignment=Alignment.CenterVertically) {
-                Text("Rotate",fontSize=11.sp,color=c.muted);CompactSlider(surfaceRotation,{surfaceRotation=it},Modifier.weight(1f),valueRange=0f..360f);Text("${surfaceRotation.toInt()}°",fontSize=11.sp,color=c.muted)
+                Text(tr("Rotate"),fontSize=11.sp,color=c.muted);CompactSlider(surfaceRotation,{surfaceRotation=it},Modifier.weight(1f),valueRange=0f..360f);Text("${surfaceRotation.toInt()}°",fontSize=11.sp,color=c.muted)
             }
             Row(Modifier.fillMaxWidth().height(38.dp).padding(horizontal=14.dp),verticalAlignment=Alignment.CenterVertically) {
-                Text("Tilt",fontSize=11.sp,color=c.muted);CompactSlider(surfaceElevation,{surfaceElevation=it},Modifier.weight(1f),valueRange=5f..85f);Text("${surfaceElevation.toInt()}°",fontSize=11.sp,color=c.muted)
+                Text(tr("Tilt"),fontSize=11.sp,color=c.muted);CompactSlider(surfaceElevation,{surfaceElevation=it},Modifier.weight(1f),valueRange=5f..85f);Text("${surfaceElevation.toInt()}°",fontSize=11.sp,color=c.muted)
             }
             Row(Modifier.fillMaxWidth().height(38.dp).padding(horizontal=14.dp),verticalAlignment=Alignment.CenterVertically) {
-                Text("Zoom",fontSize=11.sp,color=c.muted)
+                Text(tr("Zoom"),fontSize=11.sp,color=c.muted)
                 CompactSlider(surfaceZoom,{surfaceZoom=it},Modifier.weight(1f),valueRange=.4f..3f)
                 Text("${(surfaceZoom*100).toInt()}%",fontSize=11.sp,color=c.muted)
-                Text("Reset",Modifier.padding(start=4.dp).background(c.scientific,RoundedCornerShape(8.dp)).clickable {
+                Text(tr("Reset"),Modifier.padding(start=4.dp).background(c.scientific,RoundedCornerShape(8.dp)).clickable {
                     m.xMin=-3.0;m.xMax=3.0;m.yMin=-3.0;m.yMax=3.0;m.zMin=null;m.zMax=null
                     surfaceRotation=35f;surfaceElevation=32f;surfaceZoom=1f;m.save();m.plot()
                 }.padding(horizontal=8.dp,vertical=7.dp),fontSize=11.sp,color=c.accent)
             }
-            Text("Drag to rotate freely · Pinch to zoom",Modifier.padding(horizontal=14.dp,vertical=2.dp),fontSize=11.sp,color=c.muted)
+            Text(if(isKorean())"드래그하여 회전 · 손가락 두 개로 확대/축소" else "Drag to rotate freely · Pinch to zoom",Modifier.padding(horizontal=14.dp,vertical=2.dp),fontSize=11.sp,color=c.muted)
             }
         } else Canvas(Modifier.fillMaxWidth().height(graphHeight).clipToBounds().background(c.display).then(transform).pointerInput(m.graphKind,selected) { detectTapGestures { p ->
             val target=m.xMin+(m.xMax-m.xMin)*p.x/size.width
@@ -289,11 +289,11 @@ import kotlin.math.*
                 m.trace=null;m.save()
             }
         }
-        if(m.graphKind!="surface")Text(if(m.graphBusy&&!m.graphAnimating) "Sampling locally…" else m.trace?.let { "Trace ≈ x: %.7g   y: %.7g".format(it.first,it.second) } ?: if(m.graphKind=="differential")"Direction field · tap a solution to trace · drag/pinch to explore" else "Tap to trace · drag to pan · pinch to zoom",Modifier.padding(horizontal=14.dp,vertical=5.dp),fontSize=11.sp,color=c.muted)
+        if(m.graphKind!="surface")Text(if(m.graphBusy&&!m.graphAnimating) {if(isKorean())"그래프 계산 중…" else "Sampling locally…"} else m.trace?.let { "Trace ≈ x: %.7g   y: %.7g".format(it.first,it.second) } ?: if(isKorean()) {if(m.graphKind=="differential")"방향장 · 해를 눌러 추적 · 드래그/확대로 탐색" else "눌러 추적 · 드래그하여 이동 · 두 손가락으로 확대"} else if(m.graphKind=="differential")"Direction field · tap a solution to trace · drag/pinch to explore" else "Tap to trace · drag to pan · pinch to zoom",Modifier.padding(horizontal=14.dp,vertical=5.dp),fontSize=11.sp,color=c.muted)
         }
         if(showTable && m.graphKind!="surface") GraphValueTable(curves,selected,{m.trace=it},m.graphKind)
         if(analysis && m.graphKind in listOf("cartesian","parametric","polar")) Column(Modifier.heightIn(max=290.dp).verticalScroll(rememberScrollState()).padding(horizontal=10.dp)) {
-            Text("Analyze ${if(m.graphKind=="cartesian")"Cartesian curves" else "the selected curve"} · ${if(m.graphKind=="cartesian")"x" else "t"} interval",fontSize=12.sp,color=c.muted)
+            Text(if(isKorean())"${if(m.graphKind=="cartesian")"직교좌표 곡선" else "선택한 곡선"} 분석 · ${if(m.graphKind=="cartesian")"x" else "t"} 구간" else "Analyze ${if(m.graphKind=="cartesian")"Cartesian curves" else "the selected curve"} · ${if(m.graphKind=="cartesian")"x" else "t"} interval",fontSize=12.sp,color=c.muted)
             Row(horizontalArrangement=Arrangement.spacedBy(6.dp)) { Field(first,if(m.graphKind=="cartesian")"a / x" else "t a",Modifier.weight(1f)) {first=it};Field(second,"b",Modifier.weight(1f)) {second=it} }
             SmallAction("Use visible ${if(m.graphKind=="cartesian")"x" else "t"} range") {if(m.graphKind=="cartesian"){first=m.xMin.toString();second=m.xMax.toString()}else{first=m.parameterMin.toString();second=m.parameterMax.toString()}}
             if(m.graphKind=="cartesian"&&sources.size>1) {
@@ -304,7 +304,7 @@ import kotlin.math.*
                 val actions=if(m.graphKind=="cartesian")listOf("Root","Intersection","Minimum","Maximum","Inflection","Derivative","Tangent","Integral","Arc length") else listOf("Root","Minimum","Maximum","Inflection","Derivative","Tangent","Integral","Arc length")
                 actions.forEach { action->SmallAction(action) {m.analyzeGraph(action.lowercase().replace(" ",""),first,second,selected,other)} }
             }
-            if(m.graphAnalysisBusy)Text("Analyzing…",fontSize=12.sp,color=c.muted)
+            if(m.graphAnalysisBusy)Text(if(isKorean())"분석 중…" else "Analyzing…",fontSize=12.sp,color=c.muted)
             m.graphAnalysis?.let {result->
                 val name=when(result.optString("analysis")){"arclength"->"Arc length";"inflection"->"Inflection";"tangent"->"Tangent slope";"intersection"->"Intersection";"minimum"->"Minimum";"maximum"->"Maximum";"integral"->"Integral";else->result.optString("analysis").replaceFirstChar {it.uppercase()}}
                 if(result.has("value"))Text("$name = %.9g".format(result.optDouble("value")),fontSize=16.sp)
@@ -328,11 +328,11 @@ import kotlin.math.*
         var zmin by remember {mutableStateOf((m.zMin ?: if(sampledMin<sampledMax)sampledMin else sampledMin-1.0).toString())}
         var zmax by remember {mutableStateOf((m.zMax ?: if(sampledMin<sampledMax)sampledMax else sampledMax+1.0).toString())}
         var autoZ by remember {mutableStateOf(m.zMin==null || m.zMax==null)}
-        AlertDialog(onDismissRequest={rangeDialog=false},title={Text("Graph range")},text={Column(Modifier.verticalScroll(rememberScrollState())) {
+        AlertDialog(onDismissRequest={rangeDialog=false},title={Text(tr("Graph range"))},text={Column(Modifier.verticalScroll(rememberScrollState())) {
             RangeAxisEditor(if(m.graphKind=="sequence")"n" else "x",xmin,xmax,m.xMin,m.xMax,{xmin=it},{xmax=it})
             RangeAxisEditor("y",ymin,ymax,m.yMin,m.yMax,{ymin=it},{ymax=it})
             if(m.graphKind=="surface") {
-                Row(verticalAlignment=Alignment.CenterVertically) {Checkbox(autoZ,{autoZ=it});Text("Automatic z range")}
+                Row(verticalAlignment=Alignment.CenterVertically) {Checkbox(autoZ,{autoZ=it});Text(tr("Automatic z range"))}
                 if(!autoZ)RangeAxisEditor("z",zmin,zmax,zmin.toDoubleOrNull() ?: -1.0,zmax.toDoubleOrNull() ?: 1.0,{zmin=it},{zmax=it})
             }
             if(m.graphKind in listOf("parametric","polar","differential"))RangeAxisEditor("t",tmin,tmax,m.parameterMin,m.parameterMax,{tmin=it},{tmax=it})
@@ -349,20 +349,20 @@ import kotlin.math.*
                 else if(usesT){m.parameterMin=ta!!;m.parameterMax=tb!!}
                 m.save();rangeDialog=false;m.plot()
             }
-        }) {Text("Apply")} },dismissButton={TextButton(onClick={rangeDialog=false}) {Text("Cancel")} })
+        }) {Text(tr("Apply"))} },dismissButton={TextButton(onClick={rangeDialog=false}) {Text(tr("Cancel"))} })
     }
     rangeParameter?.let { name->
         val spec=m.graphParameters[name]
         if(spec!=null) {
             var low by remember(name){mutableStateOf(spec.min.toString())}
             var high by remember(name){mutableStateOf(spec.max.toString())}
-            AlertDialog(onDismissRequest={rangeParameter=null},title={Text("$name slider range")},text={Column{
+            AlertDialog(onDismissRequest={rangeParameter=null},title={Text(if(isKorean())"$name 슬라이더 범위" else "$name slider range")},text={Column{
                 RangeAxisEditor(name,low,high,spec.min,spec.max,{low=it},{high=it})
             }},confirmButton={TextButton(onClick={
                 val start=low.toDoubleOrNull();val end=high.toDoubleOrNull()
                 if(start==null||end==null||!start.isFinite()||!end.isFinite()||start>=end||abs(start)>1e9||abs(end)>1e9)m.error="Enter finite values with minimum < maximum"
                 else {m.setGraphParameterRange(name,start,end);rangeParameter=null}
-            }) {Text("Apply")}},dismissButton={TextButton(onClick={rangeParameter=null}) {Text("Cancel")} })
+            }) {Text(tr("Apply"))}},dismissButton={TextButton(onClick={rangeParameter=null}) {Text(tr("Cancel"))} })
         }
     }
 }

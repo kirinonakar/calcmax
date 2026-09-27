@@ -1,6 +1,7 @@
 package com.kirinonakar.calcmax
 
 import com.kirinonakar.calcmax.ui.PythonEditorTools
+import com.kirinonakar.calcmax.ui.PythonEdit
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -42,5 +43,18 @@ class PythonEditorToolsTest {
         val edit=PythonEditorTools.insertImport(source,7,"import calcmax_catalog as calc")
         assertEquals("import calcmax_catalog as calc\nprint(1)\n",edit.source)
         assertEquals("import calcmax_catalog as calc\nprint(1",edit.source.substring(0,edit.cursor))
+    }
+    @Test fun functionMenuInsertsBuiltinsAndImportsSympyOnce() {
+        val input=PythonEditorTools.snippets.single { it.label=="input" }
+        val print=PythonEditorTools.snippets.single { it.label=="print" }
+        val numeric=PythonEditorTools.snippets.single { it.label=="sp.N" }
+        assertEquals(PythonEdit("input()",6),PythonEditorTools.insertSnippet("",0,0,input))
+        assertEquals(PythonEdit("print()",6),PythonEditorTools.insertSnippet("",0,0,print))
+        val first=PythonEditorTools.insertSnippet("",0,0,numeric)
+        assertEquals("import sympy as sp\nsp.N()",first.source)
+        assertEquals(first.source.indexOf(')'),first.cursor)
+        val second=PythonEditorTools.insertSnippet(first.source,first.cursor,first.cursor,numeric)
+        assertEquals(1,second.source.lines().count {it=="import sympy as sp"})
+        assertEquals("import sympy as sp\nsp.N(sp.N())",second.source)
     }
 }

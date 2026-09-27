@@ -37,7 +37,7 @@ private val LocalCalculatorOverlay=staticCompositionLocalOf<(String)->Unit> { {}
     var screenExpanded by rememberSaveable {mutableStateOf(false)}
     val workspaces=rememberSaveableStateHolder()
     LaunchedEffect(m.mode){m.save()}
-    CompositionLocalProvider(LocalCalculatorOverlay provides {overlay=it}) {
+    CompositionLocalProvider(LocalCalculatorOverlay provides {overlay=it}, LocalLanguage provides m.language) {
     Column(Modifier.fillMaxSize().background(c.body).windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.displayCutout))) {
         Row(Modifier.fillMaxWidth().height(44.dp).padding(horizontal=14.dp),verticalAlignment=Alignment.CenterVertically) {
             Text("CalcMax",Modifier.weight(1f),fontWeight=FontWeight.ExtraBold,letterSpacing=2.sp,fontSize=18.sp,color=c.ink)
@@ -87,19 +87,19 @@ private val LocalCalculatorOverlay=staticCompositionLocalOf<(String)->Unit> { {}
         if(m.mode !in listOf("Scientific/CAS","Equations") && m.error.isNotBlank()) Text(m.error,Modifier.fillMaxWidth().padding(8.dp),fontSize=12.sp,color=c.danger)
     }
     when(overlay) {
-        "Mode"->AlertDialog(onDismissRequest={overlay=""},title={Text("Calculation mode")},text={Column(Modifier.verticalScroll(rememberScrollState())) {Modes.chunked(2).forEach {row->Row {row.forEach {name->TextButton(onClick={m.mode=name;overlay=""},modifier=Modifier.weight(1f)){Text(name)}}}}}},confirmButton={TextButton(onClick={overlay=""}){Text("Close")}})
+        "Mode"->AlertDialog(onDismissRequest={overlay=""},title={Text(tr("Calculation mode"))},text={Column(Modifier.verticalScroll(rememberScrollState())) {Modes.chunked(2).forEach {row->Row {row.forEach {name->TextButton(onClick={m.mode=name;overlay=""},modifier=Modifier.weight(1f)){Text(name)}}}}}},confirmButton={TextButton(onClick={overlay=""}){Text(tr("Close"))}})
         "Settings"->SettingsDialog(m){overlay=""}
         "MatrixSize"->MatrixSizeDialog(m){overlay=""}
         "History"->HistoryDialog(m){overlay=""}
         "RCL"->RecallDialog(m){overlay=""}
         "Variables","STO"->VariablesDialog(m){overlay=""}
         "Catalog"->CatalogDialog(m){overlay=""}
-        "Angle"->AlertDialog(onDismissRequest={overlay=""},title={Text("DRG · input angle unit")},text={Column {listOf("Degrees °" to "degree","Radians ʳ" to "rad","Gradians ᵍ" to "gradian").forEach{(label,function)->TextButton(onClick={m.angleSuffix(function);overlay=""}){Text(label)}}}},confirmButton={TextButton(onClick={overlay=""}){Text("Close")}})
-        "Clear"->AlertDialog(onDismissRequest={overlay=""},title={Text("Clear")},text={Column {
+        "Angle"->AlertDialog(onDismissRequest={overlay=""},title={Text(if(isKorean()) "DRG · 입력 각도 단위" else "DRG · input angle unit")},text={Column {listOf("Degrees °" to "degree","Radians ʳ" to "rad","Gradians ᵍ" to "gradian").forEach{(label,function)->TextButton(onClick={m.angleSuffix(function);overlay=""}){Text(label)}}}},confirmButton={TextButton(onClick={overlay=""}){Text(tr("Close"))}})
+        "Clear"->AlertDialog(onDismissRequest={overlay=""},title={Text(tr("Clear"))},text={Column {
             TextButton(onClick={m.resetSetup();overlay=""}){Text("1 · Setup")}
-            TextButton(onClick={m.clearMemory();overlay=""}){Text("2 · Memory")}
-            TextButton(onClick={m.resetSetup();m.clearMemory();m.clearHistory();overlay=""}){Text("3 · All")}
-        }},confirmButton={TextButton(onClick={overlay=""}){Text("Close")}})
+            TextButton(onClick={m.clearMemory();overlay=""}){Text(if(isKorean()) "2 · 메모리" else "2 · Memory")}
+            TextButton(onClick={m.resetSetup();m.clearMemory();m.clearHistory();overlay=""}){Text(if(isKorean()) "3 · 모두" else "3 · All")}
+        }},confirmButton={TextButton(onClick={overlay=""}){Text(tr("Close"))}})
     }
     }
 }
@@ -333,7 +333,7 @@ private fun largeHistoryTree(root:JSONObject?,compactStructured:Boolean=true):Bo
             }
         }
         Row(Modifier.fillMaxWidth().height(24.dp),verticalAlignment=Alignment.CenterVertically){
-            Text(when{m.engineeringConversion->"ENG mode · ←/→ shifts mantissa";m.error.isNotBlank()->m.error;calculating&&showCalculationStatus->if(m.busy)"Computing…" else "Calculating…";m.calcSession!=null->"CALC · enter a value, then press = · AC cancels";domainText(m.result).isNotBlank()->domainText(m.result);m.committed->"Next input starts a new calculation";else->m.result?.optString("note") ?: ""},Modifier.weight(1f),fontSize=10.sp,maxLines=1,color=if(m.error.isNotBlank())c.danger else if(m.engineeringConversion)c.accent else c.muted)
+            Text(when{m.engineeringConversion->if(isKorean())"ENG 모드 · ←/→로 가수 이동" else "ENG mode · ←/→ shifts mantissa";m.error.isNotBlank()->m.error;calculating&&showCalculationStatus->if(isKorean())"계산 중…" else if(m.busy)"Computing…" else "Calculating…";m.calcSession!=null->if(isKorean())"CALC · 값을 입력하고 = 누르기 · AC는 취소" else "CALC · enter a value, then press = · AC cancels";domainText(m.result).isNotBlank()->domainText(m.result);m.committed->if(isKorean())"다음 입력 시 새 계산 시작" else "Next input starts a new calculation";else->m.result?.optString("note") ?: ""},Modifier.weight(1f),fontSize=10.sp,maxLines=1,color=if(m.error.isNotBlank())c.danger else if(m.engineeringConversion)c.accent else c.muted)
             if(calculating&&showCalculationStatus)Text("Cancel",Modifier.clickable{m.cancel()}.padding(start=8.dp),fontSize=10.sp,color=c.accent)
         }
     }
@@ -344,13 +344,13 @@ private fun largeHistoryTree(root:JSONObject?,compactStructured:Boolean=true):Bo
     val open=LocalCalculatorOverlay.current
     var showCustom by remember {mutableStateOf(false)}
     Row(Modifier.fillMaxWidth().height(36.dp).padding(horizontal=14.dp).horizontalScroll(rememberScrollState()),verticalAlignment=Alignment.CenterVertically){
-        SmallAction(if(m.decimal)"≈ Decimal" else "Exact"){m.decimal=!m.decimal}
-        SmallAction(if(m.resultDisplayMode==ResultDisplayMode.SCIENTIFIC)"SCI" else "ENG",active=m.resultDisplayMode!=ResultDisplayMode.OFF,description="Result notation"){m.cycleResultDisplayMode()}
-        SmallAction(",",active=m.thousandsSeparator,description="Thousands separators"){m.thousandsSeparator=!m.thousandsSeparator;m.save()}
-        if(onToggleScreen!=null)SmallAction("scr",active=screenExpanded,description=if(screenExpanded)"Restore full keypad" else "Expand calculation screen"){onToggleScreen()}
-        m.displayShortcuts.forEach {shortcut->SmallAction(shortcut.label,description="${shortcut.label}: ${shortcut.input}"){runDisplayShortcut(m,shortcut,open)}}
-        SmallAction("Share"){m.result?.let{context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,m.editor.source+" = "+it.optString("exact")),"Share calculation"))}}
-        SmallAction("custom",description="Customize display buttons"){showCustom=true}
+        SmallAction(if(m.decimal)"≈ Decimal" else "Exact",translate=false){m.decimal=!m.decimal}
+        SmallAction(if(m.resultDisplayMode==ResultDisplayMode.SCIENTIFIC)"SCI" else "ENG",active=m.resultDisplayMode!=ResultDisplayMode.OFF,description="Result notation",translate=false){m.cycleResultDisplayMode()}
+        SmallAction(",",active=m.thousandsSeparator,description="Thousands separators",translate=false){m.thousandsSeparator=!m.thousandsSeparator;m.save()}
+        if(onToggleScreen!=null)SmallAction("scr",active=screenExpanded,description=if(screenExpanded)"Restore full keypad" else "Expand calculation screen",translate=false){onToggleScreen()}
+        m.displayShortcuts.forEach {shortcut->SmallAction(shortcut.label,description="${shortcut.label}: ${shortcut.input}",translate=false){runDisplayShortcut(m,shortcut,open)}}
+        SmallAction("Share",translate=false){m.result?.let{context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,m.editor.source+" = "+it.optString("exact")),"Share calculation"))}}
+        SmallAction("custom",description="Customize display buttons",translate=false){showCustom=true}
     }
     if(showCustom)DisplayShortcutsDialog(m){showCustom=false}
 }
@@ -385,13 +385,13 @@ private fun domainText(result:JSONObject?):String {
     val conditions=result?.optJSONArray("conditions") ?: return ""
     return if(conditions.length()==0)"" else "Domain: "+(0 until conditions.length()).joinToString{conditions.optString(it)}
 }
-@Composable fun SmallAction(text:String,active:Boolean?=null,description:String?=null,shaded:Boolean=false,fontSize:TextUnit=11.sp,action:()->Unit){
+@Composable fun SmallAction(text:String,active:Boolean?=null,description:String?=null,shaded:Boolean=false,fontSize:TextUnit=11.sp,translate:Boolean=true,action:()->Unit){
     val c=LocalInstrument.current
     val color=when(active){true->c.accent;false->c.muted.copy(alpha=.45f);null->MaterialTheme.colorScheme.onSurface}
     val modifier=description?.let{value->Modifier.semantics{contentDescription=value}} ?: Modifier
     TextButton(onClick=action,contentPadding=PaddingValues(horizontal=8.dp,vertical=0.dp),modifier=modifier,
         colors=ButtonDefaults.textButtonColors(containerColor=if(shaded)c.accent.copy(alpha=.22f) else androidx.compose.ui.graphics.Color.Transparent)){
-        Text(text,fontSize=fontSize,color=color,fontWeight=if(active==true)FontWeight.SemiBold else FontWeight.Normal)
+        Text(if(translate)tr(text) else text,fontSize=fontSize,color=color,fontWeight=if(active==true)FontWeight.SemiBold else FontWeight.Normal)
     }
 }
-@Composable fun Templates(m:CalculatorModel){Row(Modifier.horizontalScroll(rememberScrollState())){listOf("Factor" to "factor(x^4-1)","Solve" to "solve(x^2-5x+6=0,x)","Derivative" to "diff(sin(x^2),x)","Integral" to "integrate(x^2*exp(x),x)").forEach{(label,source)->SmallAction(label){m.edit(Editor(source))}}}}
+@Composable fun Templates(m:CalculatorModel){Row(Modifier.horizontalScroll(rememberScrollState())){listOf("Factor" to "factor(x^4-1)","Solve" to "solve(x^2-5x+6=0,x)","Derivative" to "diff(sin(x^2),x)","Integral" to "integrate(x^2*exp(x),x)").forEach{(label,source)->SmallAction(label,translate=false){m.edit(Editor(source))}}}}

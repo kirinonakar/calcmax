@@ -79,9 +79,9 @@ import com.kirinonakar.calcmax.ui.theme.LocalInstrument
         Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("PYTHON",style=MaterialTheme.typography.titleMedium,color=c.ink)
-                Text(m.pythonFileName+if(m.pythonDirty)"  • unsaved" else "",fontSize=11.sp,color=c.muted,maxLines=1)
+                Text(m.pythonFileName+if(m.pythonDirty) if(isKorean())"  • 저장 안 됨" else "  • unsaved" else "",fontSize=11.sp,color=c.muted,maxLines=1)
             }
-            Button(onClick={m.runPython()},enabled=!m.pythonBusy,contentPadding=PaddingValues(horizontal=16.dp)) {Text("▶ Run")}
+            Button(onClick={m.runPython()},enabled=!m.pythonBusy,contentPadding=PaddingValues(horizontal=16.dp)) {Text(if(isKorean())"▶ 실행" else "▶ Run")}
             if(m.pythonBusy)SmallAction("Stop") {m.stopPython()}
         }
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
@@ -89,21 +89,29 @@ import com.kirinonakar.calcmax.ui.theme.LocalInstrument
             SmallAction("Open .py") {if(m.pythonDirty)confirm="open" else open.launch(arrayOf("*/*"))}
             SmallAction("Save") {if(m.pythonUri.isBlank())create.launch(m.pythonFileName) else write(Uri.parse(m.pythonUri))}
             SmallAction("Save as") {create.launch(m.pythonFileName)}
+            val hasSelection=editor.selection.min<editor.selection.max
+            TextButton(onClick={
+                val a=editor.selection.min;val b=editor.selection.max
+                clipboard.setText(AnnotatedString(editor.text.substring(a,b)))
+                apply(PythonEditorTools.replace(editor.text,a,b,""))
+            },enabled=hasSelection,contentPadding=PaddingValues(horizontal=8.dp,vertical=0.dp)) {
+                Text(tr("Cut"),fontSize=11.sp)
+            }
             SmallAction("Copy") {
                 val a=editor.selection.min;val b=editor.selection.max
                 clipboard.setText(AnnotatedString(if(a==b)editor.text else editor.text.substring(a,b)))
             }
             SmallAction("Paste") {clipboard.getText()?.text?.let {apply(PythonEditorTools.replace(editor.text,editor.selection.min,editor.selection.max,it))}}
             Box {
-                SmallAction("Import ▾") {importsOpen=true}
+                SmallAction("Import ▾",translate=false) {importsOpen=true}
                 DropdownMenu(importsOpen,{importsOpen=false}) {PythonEditorTools.imports.forEach {line->DropdownMenuItem(text={Text(line)},onClick={apply(PythonEditorTools.insertImport(editor.text,editor.selection.start,line));importsOpen=false})}}
             }
             Box {
-                SmallAction("Function ▾") {templatesOpen=true}
-                DropdownMenu(templatesOpen,{templatesOpen=false}) {PythonEditorTools.snippets.forEach {snippet->DropdownMenuItem(text={Text(snippet.label)},onClick={apply(PythonEditorTools.replace(editor.text,editor.selection.min,editor.selection.max,snippet.code,snippet.cursorOffset));templatesOpen=false})}}
+                SmallAction("Function ▾",translate=false) {templatesOpen=true}
+                DropdownMenu(templatesOpen,{templatesOpen=false}) {PythonEditorTools.snippets.forEach {snippet->DropdownMenuItem(text={Text(snippet.label)},onClick={apply(PythonEditorTools.insertSnippet(editor.text,editor.selection.min,editor.selection.max,snippet));templatesOpen=false})}}
             }
         }
-        OutlinedTextField(editor,::typed,Modifier.fillMaxWidth().height(320.dp),textStyle=MaterialTheme.typography.bodyMedium.copy(fontFamily=FontFamily.Monospace),label={Text("Python code")},placeholder={Text("print('Hello, world!')")},singleLine=false)
+        OutlinedTextField(editor,::typed,Modifier.fillMaxWidth().height(320.dp),textStyle=MaterialTheme.typography.bodyMedium.copy(fontFamily=FontFamily.Monospace),label={Text(tr("Python code"))},placeholder={Text("print('Hello, world!')")},singleLine=false)
         if(suggestions.isNotEmpty())Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
             suggestions.forEach {candidate->SmallAction(candidate) {
                 val start=PythonEditorTools.wordStart(editor.text,position)
@@ -116,22 +124,22 @@ import com.kirinonakar.calcmax.ui.theme.LocalInstrument
             }}
         }
         HorizontalDivider()
-        Text(if(m.pythonBusy)"Running…" else "Output",fontSize=13.sp,color=c.muted)
+        Text(tr(if(m.pythonBusy)"Running…" else "Output"),fontSize=13.sp,color=c.muted)
         Box(Modifier.fillMaxWidth().heightIn(min=160.dp,max=320.dp).background(c.display).verticalScroll(rememberScrollState()).padding(10.dp)) {
             SelectionContainer {
                 Text(buildString {
                     append(m.pythonOutput)
                     if(m.pythonError.isNotBlank()) {if(isNotEmpty())append('\n');append(m.pythonError)}
-                    if(isEmpty()&&!m.pythonBusy)append(if(m.pythonHasRun)"Finished (no output)." else "Run a script to see its output here.")
+                    if(isEmpty()&&!m.pythonBusy)append(if(isKorean()) {if(m.pythonHasRun)"완료(출력 없음)." else "스크립트를 실행하면 출력이 여기에 표시됩니다."} else if(m.pythonHasRun)"Finished (no output)." else "Run a script to see its output here.")
                 },fontFamily=FontFamily.Monospace,fontSize=15.sp,lineHeight=22.sp,color=if(m.pythonError.isNotBlank())c.danger else c.ink)
             }
         }
         m.pythonInputPrompt?.let { prompt ->
             Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(inputText,{inputText=it},Modifier.weight(1f),label={Text(prompt.ifEmpty { "Input" })},singleLine=true)
-                Button(onClick={m.submitPythonInput(inputText);inputText=""}) {Text("Enter")}
+                OutlinedTextField(inputText,{inputText=it},Modifier.weight(1f),label={Text(prompt.ifEmpty { tr("Input") })},singleLine=true)
+                Button(onClick={m.submitPythonInput(inputText);inputText=""}) {Text(tr("Enter"))}
             }
         }
     }
-    if(confirm.isNotBlank())AlertDialog(onDismissRequest={confirm=""},title={Text("Unsaved changes")},text={Text("Discard changes to ${m.pythonFileName}?")},confirmButton={TextButton(onClick={val action=confirm;confirm="";if(action=="new"){m.newPythonFile();editor=TextFieldValue("")}else open.launch(arrayOf("*/*"))}){Text("Discard")}},dismissButton={TextButton(onClick={confirm=""}){Text("Cancel")}})
+    if(confirm.isNotBlank())AlertDialog(onDismissRequest={confirm=""},title={Text(tr("Unsaved changes"))},text={Text(if(isKorean())"${m.pythonFileName}의 변경 사항을 버릴까요?" else "Discard changes to ${m.pythonFileName}?")},confirmButton={TextButton(onClick={val action=confirm;confirm="";if(action=="new"){m.newPythonFile();editor=TextFieldValue("")}else open.launch(arrayOf("*/*"))}){Text(tr("Discard"))}},dismissButton={TextButton(onClick={confirm=""}){Text(tr("Cancel"))}})
 }

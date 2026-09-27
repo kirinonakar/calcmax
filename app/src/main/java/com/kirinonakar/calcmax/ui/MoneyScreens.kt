@@ -56,12 +56,12 @@ private fun displayAmount(value:BigDecimal)=value.setScale(6,RoundingMode.HALF_E
                 if(tipIsAmount)Money.impliedTipPercent(decimalInput(bill),r.tip)?.setScale(4,RoundingMode.HALF_UP)?.stripTrailingZeros()
                 else decimalInput(percent).stripTrailingZeros()
             }.getOrNull()
-            Text("Total  ${Money.format(r.total)}",style=MaterialTheme.typography.headlineMedium)
-            Text("Tip  ${Money.format(r.tip)}${if(implied!=null)"   ·   ${Money.format(implied)}%" else ""}   ·   Tax  ${Money.format(r.tax)}")
+            Text("${if(isKorean())"합계" else "Total"}  ${Money.format(r.total)}",style=MaterialTheme.typography.headlineMedium)
+            Text("${if(isKorean())"팁" else "Tip"}  ${Money.format(r.tip)}${if(implied!=null)"   ·   ${Money.format(implied)}%" else ""}   ·   ${if(isKorean())"세금" else "Tax"}  ${Money.format(r.tax)}")
             HorizontalDivider()
-            Text("Per person  ${Money.format(r.share)}",style=MaterialTheme.typography.titleLarge)
-            if(r.extraPeople>0)Text("${r.extraPeople} ${if(r.extraPeople==1)"person pays" else "people pay"} ${Money.format(r.extraShare)}; the others pay ${Money.format(r.share)}. This keeps the split equal to the total.",fontSize=12.sp)
-        } ?: Text("Enter valid non-negative amounts and a whole number of people.",color=LocalInstrument.current.danger)
+            Text("${if(isKorean())"1인당" else "Per person"}  ${Money.format(r.share)}",style=MaterialTheme.typography.titleLarge)
+            if(r.extraPeople>0)Text(if(isKorean())"${r.extraPeople}명은 ${Money.format(r.extraShare)}, 나머지는 ${Money.format(r.share)}씩 냅니다. 합계가 정확히 일치하도록 나눴습니다." else "${r.extraPeople} ${if(r.extraPeople==1)"person pays" else "people pay"} ${Money.format(r.extraShare)}; the others pay ${Money.format(r.share)}. This keeps the split equal to the total.",fontSize=12.sp)
+        } ?: Text(if(isKorean())"0 이상인 금액과 정수 인원수를 입력하세요." else "Enter valid non-negative amounts and a whole number of people.",color=LocalInstrument.current.danger)
     }
 }
 
@@ -101,25 +101,25 @@ private fun displayAmount(value:BigDecimal)=value.setScale(6,RoundingMode.HALF_E
                 val previous=from;from=to;to=previous
                 if(manual)manualRate=runCatching{Money.format(BigDecimal.ONE.divide(decimalInput(manualRate),MathContext.DECIMAL128))}.getOrDefault("")
             }
-            FilterChip(selected=dropDecimals,onClick={dropDecimals=!dropDecimals},label={Text("Drop decimals",fontSize=13.sp)})
+            FilterChip(selected=dropDecimals,onClick={dropDecimals=!dropDecimals},label={Text(tr("Drop decimals"),fontSize=13.sp)})
         }
         converted.getOrNull()?.let {value->
             val shown=if(dropDecimals)value.setScale(0,RoundingMode.DOWN) else displayAmount(value.round(MathContext(m.precision,RoundingMode.HALF_EVEN)))
             Text("≈ ${Money.format(shown)} $to",style=MaterialTheme.typography.headlineMedium)
             Text("1 $from = ${Money.format(displayAmount(rate.getOrThrow().round(MathContext(minOf(m.precision,12)))))} $to",fontSize=13.sp)
-        } ?: Text(if(manual)"Enter a positive conversion rate." else if(table==null)"A saved rate or manual rate is needed." else "Check the currency codes.",color=LocalInstrument.current.muted)
+        } ?: Text(if(isKorean()) {if(manual)"0보다 큰 환율을 입력하세요." else if(table==null)"저장된 환율 또는 직접 입력한 환율이 필요합니다." else "통화 코드를 확인하세요."} else if(manual)"Enter a positive conversion rate." else if(table==null)"A saved rate or manual rate is needed." else "Check the currency codes.",color=LocalInstrument.current.muted)
         if(manual)Field(manualRate,"1 $from = ? $to",Modifier.fillMaxWidth()){manualRate=it}
         HorizontalDivider()
-        if(manual)Text("Manual rate · not an online quote",fontSize=12.sp)
+        if(manual)Text(if(isKorean())"직접 입력한 환율 · 온라인 시세 아님" else "Manual rate · not an online quote",fontSize=12.sp)
         else {
-            Text(if(m.exchangeBusy)"Updating rates…" else m.exchangeStatus,fontSize=12.sp)
+            Text(if(m.exchangeBusy) {if(isKorean())"환율 갱신 중…" else "Updating rates…"} else m.exchangeStatus,fontSize=12.sp)
             table?.let {
                 val date=DateFormat.getDateTimeInstance(DateFormat.MEDIUM,DateFormat.SHORT)
-                Text("Rate reference time: ${date.format(Date(it.referenceMillis))} (${java.util.TimeZone.getDefault().id})",fontSize=12.sp)
-                Text("Saved on device: ${date.format(Date(it.fetchedMillis))}",fontSize=11.sp)
-                Text("Next update: ${date.format(Date(it.fetchedMillis+RateTable.TTL))}",fontSize=11.sp)
+                Text("${if(isKorean())"환율 기준 시각" else "Rate reference time"}: ${date.format(Date(it.referenceMillis))} (${java.util.TimeZone.getDefault().id})",fontSize=12.sp)
+                Text("${if(isKorean())"기기 저장 시각" else "Saved on device"}: ${date.format(Date(it.fetchedMillis))}",fontSize=11.sp)
+                Text("${if(isKorean())"다음 갱신" else "Next update"}: ${date.format(Date(it.fetchedMillis+RateTable.TTL))}",fontSize=11.sp)
             }
-            if(table==null||table.due(System.currentTimeMillis()))TextButton(onClick={m.loadExchangeRates()},enabled=!m.exchangeBusy){Text("Update rates")}
+            if(table==null||table.due(System.currentTimeMillis()))TextButton(onClick={m.loadExchangeRates()},enabled=!m.exchangeBusy){Text(tr("Update rates"))}
         }
         Text("Rates By Exchange Rate API",Modifier.clickable{uri.openUri(ExchangeRepository.SOURCE)},color=LocalInstrument.current.accent,fontSize=12.sp)
     }
