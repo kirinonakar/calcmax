@@ -42,6 +42,8 @@ internal fun HistoryEntry.toTapeEntry():TapeEntry {
 enum class ResultDisplayMode { OFF, ENGINEERING, SCIENTIFIC }
 class CalculatorModel(application: Application) : AndroidViewModel(application) {
     private val prefs = application.getSharedPreferences("calculator",0)
+    // Content URIs refer to grants on this device and must not follow a restored draft.
+    private val localPrefs = application.getSharedPreferences("calculator-local",0)
     private val engine = EngineClient(application)
     private val exchangeRepository by lazy{ExchangeRepository(application)}
     var exchangeRates by mutableStateOf<RateTable?>(null)
@@ -157,7 +159,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         private set
     var pythonFileName by mutableStateOf(prefs.getString("pythonFileName","untitled.py") ?: "untitled.py")
         private set
-    var pythonUri by mutableStateOf(prefs.getString("pythonUri","") ?: "")
+    var pythonUri by mutableStateOf(loadPythonUri())
         private set
     var pythonDirty by mutableStateOf(prefs.getBoolean("pythonDirty",false))
         private set
@@ -243,6 +245,16 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         catalogRecent=(listOf(source)+catalogRecent.filterNot {it==source}).take(10)
         save()
     }
+    private fun loadPythonUri():String {
+        val local=localPrefs.getString("pythonUri",null)
+        val legacy=prefs.getString("pythonUri",null) ?: return local ?: ""
+        // Move existing installs off the backed-up preference file.
+        if(local!=null || localPrefs.edit().putString("pythonUri",legacy).commit()) {
+            prefs.edit().remove("pythonUri").apply()
+            return local ?: legacy
+        }
+        return legacy
+    }
     fun toggleCatalogFavorite(source:String) {
         catalogFavorites=if(source in catalogFavorites)catalogFavorites.filterNot {it==source} else catalogFavorites+source
         save()
@@ -306,7 +318,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
             .putString("dataSets",dataSets.toString()).putString("sequenceInitials",sequenceInitials).putString("differentialInitials",differentialInitials).putString("differentialT0",differentialT0)
             .putString("graphSource",graphSource).putString("graphSources",graphSources.put(graphKind,graphSource).toString()).putString("graphKind",graphKind).putString("xMin",xMin.toString()).putString("xMax",xMax.toString()).putString("yMin",yMin.toString()).putString("yMax",yMax.toString())
             .putString("zMin",zMin?.toString()).putString("zMax",zMax?.toString())
-            .putString("pythonSource",pythonSource).putString("pythonFileName",pythonFileName).putString("pythonUri",pythonUri).putBoolean("pythonDirty",pythonDirty)
+            .putString("pythonSource",pythonSource).putString("pythonFileName",pythonFileName).putBoolean("pythonDirty",pythonDirty)
             .putString("parameterMin",parameterMin.toString()).putString("parameterMax",parameterMax.toString())
             .putString("equationKind",equationKind).putString("equationCoefficients",JSONArray(equationCoefficients).toString())
             .putString("equationSystem",equationSystem).putString("equationGeneral",equationGeneral).putString("equationVariables",equationVariables)
@@ -318,6 +330,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
             .putString("regressionFit",regressionFit).putString("regressionData",regressionData)
             .putString("regressionCurve",regressionCurve?.let {list->JSONArray(list.map {point->JSONArray().put(point.first).put(point.second)}).toString()} ?: "[]")
             .putString("history",if(persistHistory) JSONArray(history.map { JSONObject().put("id",it.id).put("source",it.source).put("exact",it.exact).put("decimal",it.decimal).put("mode",it.mode).put("favorite",it.favorite).put("inputTree",it.inputTree).put("response",it.response).put("answer",it.answer) }).toString() else "[]").apply()
+        localPrefs.edit().putString("pythonUri",pythonUri).apply()
     }
     fun inputTree(): JSONObject? {
         val tree=editor.tree() ?: return null
