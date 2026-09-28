@@ -54,8 +54,8 @@ import kotlin.math.max
 import org.json.JSONArray
 import org.json.JSONObject
 
-@Composable fun Panel(title: String,subtitle: String,content: @Composable ColumnScope.()->Unit) {
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(14.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
+@Composable fun Panel(title: String,subtitle: String,scrollState: ScrollState?=null,content: @Composable ColumnScope.()->Unit) {
+    Column(Modifier.fillMaxSize().verticalScroll(scrollState ?: rememberScrollState()).padding(14.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
         Text(tr(title),style=MaterialTheme.typography.titleLarge); if(subtitle.isNotBlank())Text(tr(subtitle),color=LocalInstrument.current.muted,fontSize=12.sp); content()
     }
 }
@@ -299,6 +299,11 @@ private fun treeSource(node:JSONObject?):String? {
 @Composable fun StatisticsScreen(m: CalculatorModel) {
     val context=LocalContext.current
     val scope=rememberCoroutineScope()
+    val panelScroll=rememberScrollState()
+    var summaryResultPending by remember {mutableStateOf(false)}
+    LaunchedEffect(m.result) {
+        if(summaryResultPending&&m.result!=null){panelScroll.animateScrollTo(panelScroll.maxValue);summaryResultPending=false}
+    }
     val names=remember(m.dataSets) {m.dataSets.keys().asSequence().toList().sorted()}
     var selected by rememberSaveable {mutableStateOf(m.statisticsSelected)}
     var isNew by rememberSaveable {mutableStateOf(m.statisticsIsNew)}
@@ -347,7 +352,7 @@ private fun treeSource(node:JSONObject?):String? {
     val yValues=if(dataKind=="xy")parsedRows.mapNotNull {it.getOrNull(1)?.toDoubleOrNull()?.takeIf {v->v.isFinite()}} else emptyList()
     val paired=parsedRows.mapNotNull {row->val x=row.getOrNull(0)?.toDoubleOrNull();val y=row.getOrNull(1)?.toDoubleOrNull();if(x!=null&&y!=null&&x.isFinite()&&y.isFinite())x to y else null}
     var section by rememberSaveable {mutableStateOf("Data")}
-    if(section=="Data") Panel("Data & statistics","Enter values once, then summarize, test, or plot the current dataset.") {
+    if(section=="Data") Panel("Data & statistics","Enter values once, then summarize, test, or plot the current dataset.",panelScroll) {
         Choices(listOf("Data & analysis","Distributions"),"Data & analysis",{section=if(it=="Data & analysis")"Data" else it})
         if(names.isNotEmpty())Choices(names,activeName,{name->selected=name;isNew=false;m.dataSets.optJSONObject(name)?.let {item->datasetName=name;data=item.optString("csv");dataKind=item.optString("kind","list");plotType=if(dataKind=="xy")"Scatter" else "Histogram"}})
         Row(horizontalArrangement=Arrangement.spacedBy(6.dp),verticalAlignment=Alignment.CenterVertically) {
@@ -394,10 +399,11 @@ private fun treeSource(node:JSONObject?):String? {
         }
         Text(tr("Quick summaries"),style=MaterialTheme.typography.titleMedium)
         Row(Modifier.horizontalScroll(rememberScrollState())) {
-            Button(onClick={val values=vector(0);if(values!="[]"){m.edit(Editor("stats($values)"));m.calculate()}}){Text(if(dataKind=="xy")"Summarize x" else "Summarize list")}
-            if(dataKind=="xy")SmallAction("Summarize y"){val values=vector(1);if(values!="[]"){m.edit(Editor("stats($values)"));m.calculate()}}
+            fun summarize(command:String) {summaryResultPending=true;m.edit(Editor(command));m.calculate();scope.launch {panelScroll.animateScrollTo(panelScroll.maxValue)}}
+            SmallAction(if(dataKind=="xy")"x" else "List",translate=false){val values=vector(0);if(values!="[]")summarize("stats($values)")}
+            if(dataKind=="xy")SmallAction("y",translate=false){val values=vector(1);if(values!="[]")summarize("stats($values)")}
             val correlationCommand=statisticsCorrelationCommand(parsedRows,dataKind)
-            if(dataKind=="xy")Button(onClick={correlationCommand?.let {m.edit(Editor(it));m.calculate()}},enabled=correlationCommand!=null,modifier=Modifier.testTag("statistics-correlation")){Text(tr("Correlation coefficient (r)"))}
+            if(dataKind=="xy")SmallAction("correlation",active=if(correlationCommand==null)false else null,translate=false,modifier=Modifier.testTag("statistics-correlation")){correlationCommand?.let {summarize(it)}}
         }
         Text(tr("Visualize"),style=MaterialTheme.typography.titleMedium)
         if(dataKind=="xy")Choices(listOf("linear","quadratic","logarithmic","exponential","power"),regression,{selectedMode->

@@ -220,7 +220,7 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
     }.padding(start=12.dp,end=if(close)12.dp else 4.dp,top=3.dp,bottom=3.dp)) {content()}
 }
 
-@Composable fun MathNode(node:JSONObject,size:Float=25f,select:((Int,Int)->Unit)?=null,selection:IntRange?=null,depth:Int=0,hideGroup:Boolean=false,compactRootIndexHole:Boolean=false,compactLogBaseHole:Boolean=false,compactExponentHole:Boolean=false,operandHole:Boolean=false) {
+@Composable fun MathNode(node:JSONObject,size:Float=25f,select:((Int,Int)->Unit)?=null,selection:IntRange?=null,depth:Int=0,hideGroup:Boolean=false,compactRootIndexHole:Boolean=false,compactLogBaseHole:Boolean=false,compactExponentHole:Boolean=false,operandHole:Boolean=false,selectionCoveredByAncestor:Boolean=false) {
     if(depth>36){MathText("…",size);return}
     val c=LocalInstrument.current
     val raw=node.optString("kind")
@@ -237,19 +237,20 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
     val cursor=selection?.first ?: -1
     val caret=select!=null&&selection?.last==cursor&&target==range
     val selected=select!=null&&selection==range&&start!=end
+    val highlighted=selected||select!=null&&!selectionCoveredByAncestor&&selection!=null&&selection.first<selection.last&&selection.first<=start&&end<=selection.last
     val activeHole=kind=="hole"&&caret
     val atomic=kind in listOf("number","symbol","text","hole")
     val emptyContainer=kind in listOf("list","set")&&children.isEmpty()&&end-start>=2
     val placeCursor=LocalPlaceCursor.current
     val typedParens=LocalTypedParens.current
     fun typedParen(node:JSONObject)=typedParens.any {it.first==node.optInt("start",-1)&&it.last==node.optInt("end",-1)}
-    val touch=Modifier.then(if(selected||(activeHole&&!operandHole))Modifier.background(c.accent.copy(alpha=.17f),RoundedCornerShape(2.dp))else Modifier)
+    val touch=Modifier.then(if(highlighted||(activeHole&&!operandHole))Modifier.background(c.accent.copy(alpha=.17f),RoundedCornerShape(2.dp))else Modifier)
         .then(if(emptyContainer&&select!=null)Modifier.semantics(mergeDescendants=true){contentDescription=if(kind=="list")"Empty list; tap to enter values" else "Empty set; tap to enter values"}else Modifier)
         .then(if(select!=null&&start>=0)Modifier.clickable{if(emptyContainer){if(placeCursor!=null)placeCursor(start,end,start+1)else select(start+1,start+1)}else select(start,end)}else Modifier)
-    @Composable fun child(i:Int,scale:Float=1f,hidden:Boolean=false,compactExponentHole:Boolean=false,operandHole:Boolean=false) {children.getOrNull(i)?.let{MathNode(it,(size*scale).coerceAtLeast(11f),select,selection,depth+1,hidden,compactExponentHole=compactExponentHole,operandHole=operandHole)}}
+    @Composable fun child(i:Int,scale:Float=1f,hidden:Boolean=false,compactExponentHole:Boolean=false,operandHole:Boolean=false) {children.getOrNull(i)?.let{MathNode(it,(size*scale).coerceAtLeast(11f),select,selection,depth+1,hidden,compactExponentHole=compactExponentHole,operandHole=operandHole,selectionCoveredByAncestor=selectionCoveredByAncestor||highlighted)}}
     @Composable fun integralPart(i:Int,scale:Float=1f) {
         if(i==0||integrationTuple==null)child(i,scale)
-        else integrationTuple.optJSONObject(i-1)?.let{MathNode(it,(size*scale).coerceAtLeast(11f),select,selection,depth+1)}
+        else integrationTuple.optJSONObject(i-1)?.let{MathNode(it,(size*scale).coerceAtLeast(11f),select,selection,depth+1,selectionCoveredByAncestor=selectionCoveredByAncestor||highlighted)}
     }
     @Composable fun label(text:String,scale:Float=1f){MathText(text,size*scale)}
     @Composable fun opLabel(index:Int,text:String,scale:Float=1f) {
@@ -258,7 +259,7 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
         val from=if(index>0)children.getOrNull(index-1)?.optInt("end",-1) ?: -1 else -1
         val to=children.getOrNull(index)?.optInt("start",-1) ?: -1
         if(pick!=null&&(kind=="binary"||kind=="relation")&&from>=0&&to>from) {
-            val on=selection!=null&&selection.first==from&&selection.last==to
+            val on=!selectionCoveredByAncestor&&!highlighted&&selection!=null&&selection.first<selection.last&&selection.first<=from&&to<=selection.last
             Box(Modifier.then(if(on)Modifier.background(c.accent.copy(alpha=.17f),RoundedCornerShape(2.dp))else Modifier).clickable{pick(from,to)}){label(text,scale)}
         } else label(text,scale)
     }
@@ -288,16 +289,16 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
                             }
                             if(numericIndex!=null){
                                 val superscript=numericIndex.optString("value").map {"⁰¹²³⁴⁵⁶⁷⁸⁹"[it-'0']}.joinToString("")
-                                MathNode(JSONObject(numericIndex.toString()).put("value",superscript),(size*.7f).coerceAtLeast(11f),select,selection,depth+1)
+                                MathNode(JSONObject(numericIndex.toString()).put("value",superscript),(size*.7f).coerceAtLeast(11f),select,selection,depth+1,selectionCoveredByAncestor=selectionCoveredByAncestor||highlighted)
                             } else if(children.getOrNull(1)?.optString("kind")=="hole") {
-                                MathNode(children[1],(size*.7f).coerceAtLeast(11f),select,selection,depth+1,compactRootIndexHole=true)
+                                MathNode(children[1],(size*.7f).coerceAtLeast(11f),select,selection,depth+1,compactRootIndexHole=true,selectionCoveredByAncestor=selectionCoveredByAncestor||highlighted)
                             } else child(1,.55f)
                         }
                     },
                     content={child(0,hidden=true)})
                 else RadicalSign{child(0,hidden=true)}
             kind=="matrix"||kind=="list"&&children.isNotEmpty()&&children.all{it.optString("kind")=="list"}->SquareBrackets(close=value!="open") {
-                Column(verticalArrangement=Arrangement.spacedBy(4.dp)){children.forEach{row->MathRow(10.dp){val cells=row.optJSONArray("args");for(i in 0 until(cells?.length() ?: 0))cells?.optJSONObject(i)?.let{MathNode(it,size*.85f,select,selection,depth+1)}}}}
+                Column(verticalArrangement=Arrangement.spacedBy(4.dp)){children.forEach{row->MathRow(10.dp){val cells=row.optJSONArray("args");for(i in 0 until(cells?.length() ?: 0))cells?.optJSONObject(i)?.let{MathNode(it,size*.85f,select,selection,depth+1,selectionCoveredByAncestor=selectionCoveredByAncestor||highlighted)}}}}
             }
             kind=="list"&&children.isNotEmpty()->SquareBrackets(close=value!="open") {MathRow(2.dp){children.indices.forEach {i->if(i>0)label(", ");child(i)}}}
             emptyContainer->MathRow {label(if(kind=="list")"[" else "{");if(caret&&cursor==start+1)MathText("│",size,blink=true);label(if(kind=="list")"]" else "}")}
@@ -359,7 +360,7 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
             kind in listOf("call","function")&&value in listOf("degree","rad","gradian","percent")->MathRow{child(0);label(when(value){"degree"->"°";"rad"->"ʳ";"gradian"->"ᵍ";else->"%"})}
             kind in listOf("call","function")&&value in listOf("abs","Abs")->MathRow{label("│");child(0);label("│")}
             kind in listOf("call","function")&&value in listOf("exp","Exp")&&children.size==1->PowerLayout({MathText("e",size,italic=true)},{child(0,.67f,true,compactExponentHole=true)})
-            kind=="call"&&value=="log"&&children.size>1->MathRow{LogBaseLayout({label("log")},{MathNode(children[1],(size*.6f).coerceAtLeast(11f),select,selection,depth+1,compactLogBaseHole=true)});wrapped(0)}
+            kind=="call"&&value=="log"&&children.size>1->MathRow{LogBaseLayout({label("log")},{MathNode(children[1],(size*.6f).coerceAtLeast(11f),select,selection,depth+1,compactLogBaseHole=true,selectionCoveredByAncestor=selectionCoveredByAncestor||highlighted)});wrapped(0)}
             kind=="call"&&value in listOf("diff","nderivative")->MathRow(3.dp){
                 FractionLayout({if(value=="diff"&&children.size>2)PowerLayout({label("d",.8f)},{child(2,.5f)})else label("d",.8f)},
                     {MathRow{label("d",.8f);if(value=="diff"&&children.size>2)PowerLayout({child(1,.8f)},{child(2,.5f)})else child(1,.8f)}})
@@ -385,7 +386,7 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
                 if(wrap)label(when(kind){"list"->"[";"set"->"{";else->"("})
                 children.forEachIndexed{i,n->
                     val negativePart=if(kind=="sum"&&n.optString("kind")=="unary"&&n.optString("value")=="-")n.optJSONArray("args")?.optJSONObject(0)else null
-                    if(negativePart!=null){label(if(i==0)"−" else " − ");MathNode(negativePart,size,select,selection,depth+1)}
+                    if(negativePart!=null){label(if(i==0)"−" else " − ");MathNode(negativePart,size,select,selection,depth+1,selectionCoveredByAncestor=selectionCoveredByAncestor||highlighted)}
                     else {
                         val adjacentCoefficient=kind=="product"&&i>0&&children[i-1].optString("kind")=="number"&&n.optString("kind")=="symbol"
                         if(i>0&&!coefficient&&!adjacentCoefficient)opLabel(i,when(kind){"sum"->" + ";"product"->" · ";"binary","relation"->when(value){"*"->if(node.optString("displayOperator")=="∘")"" else " × ";"/"->" ÷ ";"-"->" − ";"!="->" ≠ ";"<="->" ≤ ";">="->" ≥ ";else->" $value "};else->", "})

@@ -292,9 +292,33 @@ data class Editor(val source: String = "", val cursor: Int = source.length, val 
         return root.nodes().filter{cursor in it.start..it.end}.minByOrNull{it.end-it.start}?.let{it.start..it.end}
     }
     fun tree(): Expr? = runCatching { Parser(source,true).parse() }.getOrNull()
+    /** An opening delimiter in a call argument needs its close before the next argument separator. */
+    fun inCallArgument():Boolean = cursor==anchor && tree()?.nodes()?.any {node->
+        node.kind=="call" && node.args.any {cursor in it.start..it.end}
+    }==true
     fun parent(): Editor {
-        val node = tree()?.nodes()?.filter { it.start <= minOf(cursor,anchor) && it.end >= maxOf(cursor,anchor) && (it.start < minOf(cursor,anchor) || it.end > maxOf(cursor,anchor)) }?.minByOrNull { it.end-it.start }
-        return node?.let(::select) ?: this
+        val start=minOf(cursor,anchor)
+        val end=maxOf(cursor,anchor)
+        val nodes=tree()?.nodes() ?: return this
+        val parent=nodes.filter {it.start<=start && it.end>=end && (it.start<start || it.end>end)}
+            .minByOrNull {it.end-it.start}
+        // The visible suffix after an empty slot can cross AST precedence boundaries:
+        // sqrt()A+B and ()^2A+B contain an editable A+B range before the complete expression.
+        val suffix=nodes.asSequence().filter {it.kind=="binary" && it.value in listOf("+","-") && it.args.size==2}
+            .mapNotNull {sum->
+                val left=sum.args[0]
+                val right=sum.args[1]
+                val factor=left.args.getOrNull(1)
+                val inRight=start>=right.start && end<=right.end
+                val onOperator=start<end && start>=left.end && end<=right.start
+                if(left.kind=="binary" && left.value=="*" && left.displayOperator=="∘" &&
+                    left.args.firstOrNull()?.nodes()?.any {it.kind=="hole"}==true &&
+                    factor!=null && (inRight||onOperator))factor.start..sum.end else null
+            }.filter {it.first<=start && it.last>=end && (it.first<start || it.last>end)}
+            .minByOrNull {it.last-it.first}
+        return if(suffix!=null && (parent==null || suffix.last-suffix.first<parent.end-parent.start))
+            selectRange(suffix.first,suffix.last)
+        else parent?.let(::select) ?: this
     }
     fun child(): Editor = tree()?.nodes()?.firstOrNull { it.start == minOf(cursor,anchor) && it.end == maxOf(cursor,anchor) }?.args?.firstOrNull()?.let(::select) ?: this
     /** Arrow movement between the elements of a matrix literal such as [[1,2],[3,4]]: sideways steps

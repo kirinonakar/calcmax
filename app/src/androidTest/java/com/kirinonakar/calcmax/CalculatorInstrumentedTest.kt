@@ -243,6 +243,48 @@ class CalculatorInstrumentedTest {
         compose.onNodeWithContentDescription("AC").performClick()
         compose.runOnIdle{assertEquals("",model().editor.source);assertEquals(0,model().variables.length());assertTrue(model().tape.isEmpty());assertEquals(count,model().history.size);assertEquals(10,model().precision);assertEquals(8,model().displayDigits);assertEquals(27f,model().inputFont);model().inputFont=25f;model().precision=30;model().displayDigits=10;model().sound=false;model().save()}
     }
+    @Test fun integralStartsWithAnEmptyPowerBase() {
+        compose.runOnIdle {
+            val m=model()
+            m.mode="Scientific/CAS";m.clear()
+            val source="integrate(,x,,)"
+            for(suffix in listOf("^2","^()")) {
+                m.edit(Editor(source,source.indexOf('(')+1))
+                m.powerTemplate(suffix)
+                assertEquals("integrate(()$suffix,x,,)",m.editor.source)
+                assertEquals("integrate",m.editor.tree()?.value)
+            }
+            m.clear()
+        }
+    }
+    @Test fun openingDelimitersKeepFunctionTemplatesIntact() {
+        compose.runOnIdle {
+            val m=model()
+            val autoClose=m.autoCloseBrackets
+            m.mode="Scientific/CAS";m.clear();m.autoCloseBrackets=false
+            try {
+                for((source,cursor,name) in listOf(
+                    Triple("integrate(,x,,)",10,"integrate"),
+                    Triple("log(,)",4,"log"),
+                    Triple("log(,)",5,"log")
+                )) for((opening,closing) in listOf('(' to ')','[' to ']','{' to '}')) {
+                    val expected=source.substring(0,cursor)+opening+closing+source.substring(cursor)
+                    m.edit(Editor(source,cursor))
+                    m.insert(opening.toString())
+                    assertEquals(expected,m.editor.source)
+                    assertEquals(cursor+1,m.editor.cursor)
+                    assertEquals(name,m.editor.tree()?.value)
+                    m.insert("x")
+                    m.insert(closing.toString())
+                    assertEquals(source.substring(0,cursor)+opening+"x"+closing+source.substring(cursor),m.editor.source)
+                    assertEquals(name,m.editor.tree()?.value)
+                }
+            } finally {
+                m.autoCloseBrackets=autoClose
+                m.clear()
+            }
+        }
+    }
     @Test fun recallTapInsertsVariableAndStoKeepsEditor() {
         compose.runOnIdle {model().mode="Scientific/CAS";model().poweredOn=true;model().secondKeys=false;model().clear();model().store("A","42")}
         compose.waitUntil(30000){!model().busy&&model().variables.has("A")}

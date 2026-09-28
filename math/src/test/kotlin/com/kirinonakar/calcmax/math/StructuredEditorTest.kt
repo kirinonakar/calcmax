@@ -2,6 +2,29 @@ package com.kirinonakar.calcmax.math
 import org.junit.Assert.*
 import org.junit.Test
 class StructuredEditorTest {
+    @Test fun parentSelectsVisibleSumAfterEmptyPrefix() {
+        for(source in listOf("sqrt()A+B","()^2A+B")) {
+            val b=Editor(source,source.length).parent()
+            assertEquals("B",source.substring(b.anchor,b.cursor))
+            val sum=b.parent()
+            assertEquals("A+B",source.substring(sum.anchor,sum.cursor))
+            val plus=source.indexOf('+')
+            val fromOperator=Editor(source).selectRange(plus,plus+1).parent()
+            assertEquals("A+B",source.substring(fromOperator.anchor,fromOperator.cursor))
+            val complete=sum.parent()
+            assertEquals(source,source.substring(complete.anchor,complete.cursor))
+        }
+
+        val filled="sqrt(9)A+B"
+        val filledB=Editor(filled,filled.length).parent()
+        assertEquals(filled,filled.substring(filledB.parent().anchor,filledB.parent().cursor))
+    }
+    @Test fun functionArgumentPositionsRequireBalancedParentheses() {
+        assertTrue(Editor("integrate(,x,,)",10).inCallArgument())
+        assertTrue(Editor("log(,)",4).inCallArgument())
+        assertTrue(Editor("log(,)",5).inCallArgument())
+        assertFalse(Editor("log(,)",0).inCallArgument())
+    }
     @Test fun deletingMiddleProductTermKeepsABoxThenRemovesItsOperator() {
         val source="integrate(3*3*4,x,,)"
         val middle=Editor(source,source.indexOf("*3")+2).delete()

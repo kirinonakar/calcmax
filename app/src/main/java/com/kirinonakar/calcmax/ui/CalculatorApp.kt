@@ -157,7 +157,7 @@ private val LocalCalculatorOverlay=staticCompositionLocalOf<(String)->Unit> { {}
         Box(Modifier.fillMaxWidth().padding(top=6.dp).horizontalScroll(rememberScrollState()),contentAlignment=Alignment.CenterEnd) {
             if(!compact&&response!=null)ResultMath(response,m.decimal,m.outputFont*.82f,
                 displayMode=m.resultDisplayMode,thousandsSeparator=m.thousandsSeparator,dmsDisplay=response.optBoolean("dms"),displayDigits=m.displayDigits)
-            else Text(response?.optString(if(m.decimal)"decimal" else "exact").orEmpty().ifBlank {entry.result}.take(1200),
+            else Text(ResultDisplayFormat.formatText(response?.optString(if(m.decimal)"decimal" else "exact").orEmpty().ifBlank {entry.result},m.resultDisplayMode,m.thousandsSeparator).take(1200),
                 fontSize=(m.outputFont*.72f).sp,color=c.ink,maxLines=8,overflow=TextOverflow.Ellipsis)
         }
         if(response!=null&&domainText(response).isNotEmpty())Text(domainText(response),fontSize=10.sp,color=c.muted)
@@ -247,7 +247,8 @@ private fun largeHistoryTree(root:JSONObject?,compactStructured:Boolean=true):Bo
                 } else if(latex!=null) {
                     if(m.committed)m.fresh(Editor(latex)) else m.edit(Editor(latex))
                 } else {
-                val auto=if(!m.committed&&m.autoCloseBrackets&&m.editor.cursor==m.editor.anchor&&it.selection.collapsed)
+                val structuralBracket=m.editor.inCallArgument() && it.text.getOrNull(m.editor.cursor) in listOf('(',')','[',']','{','}')
+                val auto=if(!m.committed&&(m.autoCloseBrackets||structuralBracket)&&m.editor.cursor==m.editor.anchor&&it.selection.collapsed)
                     BracketAutoClose.typed(m.editor.source,m.editor.cursor,it.text,it.selection.end) else null
                 if(auto!=null){
                     val inserted=auto.source!=m.editor.source
@@ -321,7 +322,7 @@ private fun largeHistoryTree(root:JSONObject?,compactStructured:Boolean=true):Bo
                     currentResult.optString("exact").length>20_000||
                         largeHistoryTree(currentResult.optJSONObject(if(m.decimal)"decimalTree" else "tree"),compactStructured=false)
                 }
-                if(compactResult)Text(currentResult.optString(if(m.decimal)"decimal" else "exact").take(1200),fontSize=m.outputFont.sp,color=c.ink,maxLines=8,overflow=TextOverflow.Ellipsis)
+                if(compactResult)Text(ResultDisplayFormat.formatText(currentResult.optString(if(m.decimal)"decimal" else "exact"),if(m.engineeringConversion)ResultDisplayMode.ENGINEERING else m.resultDisplayMode,m.thousandsSeparator,if(m.engineeringConversion)m.engineeringShift else 0,m.engineeringConversion,m.displayDigits).take(1200),fontSize=m.outputFont.sp,color=c.ink,maxLines=8,overflow=TextOverflow.Ellipsis)
                 else ResultMath(currentResult,m.decimal,m.outputFont,m.mixedNumbers,
                     displayMode=m.resultDisplayMode,thousandsSeparator=m.thousandsSeparator,engineeringConversion=m.engineeringConversion,engineeringShift=m.engineeringShift,dmsDisplay=m.dmsDisplay,dmsConversion=m.dmsConversion,displayDigits=m.displayDigits)
             } else Text(" ",fontSize=28.sp)
@@ -398,11 +399,11 @@ private fun domainText(result:JSONObject?):String {
     val conditions=result?.optJSONArray("conditions") ?: return ""
     return if(conditions.length()==0)"" else "Domain: "+(0 until conditions.length()).joinToString{conditions.optString(it)}
 }
-@Composable fun SmallAction(text:String,active:Boolean?=null,description:String?=null,shaded:Boolean=false,fontSize:TextUnit=11.sp,translate:Boolean=true,action:()->Unit){
+@Composable fun SmallAction(text:String,active:Boolean?=null,description:String?=null,shaded:Boolean=false,fontSize:TextUnit=11.sp,translate:Boolean=true,modifier:Modifier=Modifier,action:()->Unit){
     val c=LocalInstrument.current
     val color=when(active){true->c.accent;false->c.muted.copy(alpha=.45f);null->MaterialTheme.colorScheme.onSurface}
-    val modifier=description?.let{value->Modifier.semantics{contentDescription=value}} ?: Modifier
-    TextButton(onClick=action,contentPadding=PaddingValues(horizontal=8.dp,vertical=0.dp),modifier=modifier,
+    val actionModifier=description?.let{value->modifier.semantics{contentDescription=value}} ?: modifier
+    TextButton(onClick=action,contentPadding=PaddingValues(horizontal=8.dp,vertical=0.dp),modifier=actionModifier,
         colors=ButtonDefaults.textButtonColors(containerColor=if(shaded)c.accent.copy(alpha=.22f) else androidx.compose.ui.graphics.Color.Transparent)){
         Text(if(translate)tr(text) else text,fontSize=fontSize,color=color,fontWeight=if(active==true)FontWeight.SemiBold else FontWeight.Normal)
     }

@@ -383,7 +383,8 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
             nextEntry();answerDisplay=last
             if(!assignment&&(text in listOf("+","-","−","*","×","/","÷","!","%","°","∠") || text.startsWith("^")) && variables.has("Ans")) {editor=Editor("Ans");inputAnswer=variables.getJSONObject("Ans")}
         }
-        if(autoCloseBrackets&&!overwrite&&text.length==1&&editor.cursor==editor.anchor&&editor.exponent==null) {
+        val inFunctionArgument=text.length==1 && text[0] in "([{)]}" && editor.inCallArgument()
+        if((autoCloseBrackets||inFunctionArgument)&&!overwrite&&text.length==1&&editor.cursor==editor.anchor&&editor.exponent==null) {
             val typed=text[0]
             val closer=when(typed){'('->')';'['->']';'{'->'}';else->null}
             if(closer!=null)value=text+closer
@@ -1094,7 +1095,9 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         }
     }
     fun powerTemplate(suffix:String) {
-        if(editor.source.isBlank()||committed&&result?.optBoolean("assignment")==true||editor.source.lastOrNull() in listOf('+','-','−','×','*','÷','/','('))insert("()$suffix",1)
+        val beforeCursor=editor.source.getOrNull(minOf(editor.cursor,editor.anchor)-1)
+        if(editor.source.isBlank()||committed&&result?.optBoolean("assignment")==true||
+            editor.cursor==editor.anchor && (beforeCursor==null||beforeCursor in listOf('+','-','−','×','*','÷','/','(', '[', ',', '=')))insert("()$suffix",1)
         else insert(suffix,if(suffix=="^()")2 else suffix.length)
     }
     fun enterEngineering() { if(!poweredOn||result==null)return;engineeringConversion=true;engineeringShift=0 }
