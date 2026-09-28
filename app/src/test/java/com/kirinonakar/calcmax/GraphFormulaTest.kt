@@ -34,4 +34,22 @@ class GraphFormulaTest {
         assertEquals("unary",range.first.getString("kind"))
         assertEquals("symbol",range.second.getString("kind"))
     }
+
+    @Test fun graphCaptionsRoundOnlyNumericFractions() {
+        val surface=graphEquationTree("surface","x/2+y/3",0)!!
+        val surfaceTerms=surface.getJSONArray("args").getJSONObject(1).getJSONArray("args")
+        assertEquals("0.500",surfaceTerms.getJSONObject(0).getJSONArray("args").getJSONObject(0).getString("value"))
+        assertEquals("0.333",surfaceTerms.getJSONObject(1).getJSONArray("args").getJSONObject(0).getString("value"))
+
+        val differential=graphEquationTree("differential","y/2",0)!!
+        val sides=differential.getJSONArray("args")
+        assertEquals("/",sides.getJSONObject(0).getString("value"))
+        assertEquals("0.500",sides.getJSONObject(1).getJSONArray("args").getJSONObject(0).getString("value"))
+
+        val shade=graphShadeFormula("[shade] y<x/2, 1/3..2/3")!!
+        assertEquals("0.500",shade.expressions[0].getJSONArray("args").getJSONObject(1).getJSONArray("args").getJSONObject(0).getString("value"))
+        val bounds=shade.range ?: error("Expected shade range")
+        assertEquals("0.333",bounds.first.getString("value"))
+        assertEquals("0.667",bounds.second.getString("value"))
+    }
 }

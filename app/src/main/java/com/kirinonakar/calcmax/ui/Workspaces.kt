@@ -42,7 +42,6 @@ import androidx.compose.ui.unit.*
 import com.kirinonakar.calcmax.calculator.CalculatorModel
 import com.kirinonakar.calcmax.calculator.toTapeEntry
 import com.kirinonakar.calcmax.math.Editor
-import com.kirinonakar.calcmax.math.Parser
 import com.kirinonakar.calcmax.ui.theme.LocalInstrument
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -453,9 +452,7 @@ private fun String.splitCsvRecord():List<String> {
 
 @Composable private fun StatisticsPlot(type:String,points:List<Pair<Double,Double>>,values:List<Double>,secondary:List<Double> = emptyList(),curve:List<Pair<Double,Double>> = emptyList(),fitLabel:String="",showCorrelation:Boolean=false,correlation:Double?=null) {
     val c=LocalInstrument.current
-    val fitEquation=remember(fitLabel) {
-        if(fitLabel.isBlank())null else runCatching {JSONObject(Parser(fitLabel).parse().json())}.getOrNull()
-    }
+    val fitEquation=remember(fitLabel) {if(fitLabel.isBlank())null else decimalFractionFormulaTree(fitLabel)}
     Canvas(Modifier.fillMaxWidth().height(220.dp).background(c.display)) {
         val left=38.dp.toPx();val right=12.dp.toPx();val top=14.dp.toPx();val bottom=28.dp.toPx()
         val width=size.width-left-right;val height=size.height-top-bottom
@@ -533,7 +530,7 @@ private fun String.splitCsvRecord():List<String> {
             Box(Modifier.alignBy(MathAxis)){MathNode(fitEquation,12f)}
             if(showCorrelation) {
                 MathText("    r = ",12f,Modifier.alignBy(MathAxis))
-                MathText(correlation?.let {"%.6g".format(it)} ?: "—",12f,Modifier.alignBy(MathAxis))
+                MathText(correlation?.let {"%.3f".format(java.util.Locale.US,it)} ?: "—",12f,Modifier.alignBy(MathAxis))
             }
         }
     }

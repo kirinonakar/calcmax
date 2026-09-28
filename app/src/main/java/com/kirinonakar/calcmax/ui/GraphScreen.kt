@@ -28,7 +28,6 @@ import androidx.compose.ui.unit.*
 import com.kirinonakar.calcmax.calculator.CalculatorModel
 import com.kirinonakar.calcmax.math.PiAxis
 import com.kirinonakar.calcmax.math.GraphZoom
-import com.kirinonakar.calcmax.math.Parser
 import com.kirinonakar.calcmax.ui.theme.LocalInstrument
 import kotlinx.coroutines.delay
 import org.json.JSONObject
@@ -484,7 +483,7 @@ internal fun graphEquationTree(kind:String,source:String,index:Int):JSONObject? 
         "differential"->"dy/dt"
         else->"f${index+1}(x)"
     }
-    return runCatching {JSONObject(Parser("$left=$source").parse().json())}.getOrNull()
+    return decimalFractionFormulaTree("$left=$source")
 }
 
 private fun splitGraphFormulaParts(source:String):List<String> {
@@ -511,8 +510,9 @@ internal fun graphShadeFormula(source:String):GraphShadeFormula? = runCatching {
     parts.forEach {part->
         val ends=part.split("..")
         if(ends.size==2 && range==null) {
-            range=JSONObject(Parser(ends[0].trim()).parse().json()) to JSONObject(Parser(ends[1].trim()).parse().json())
-        } else expressions+=JSONObject(Parser(part).parse().json())
+            range=(decimalFractionFormulaTree(ends[0].trim()) ?: error("Invalid shade range")) to
+                (decimalFractionFormulaTree(ends[1].trim()) ?: error("Invalid shade range"))
+        } else expressions+=decimalFractionFormulaTree(part) ?: error("Invalid shade expression")
     }
     GraphShadeFormula(expressions,range).takeIf {it.expressions.isNotEmpty()}
 }.getOrNull()
@@ -522,7 +522,7 @@ internal fun graphShadeFormula(source:String):GraphShadeFormula? = runCatching {
     val equations=remember(kind,sources) {sources.mapIndexed {index,source->graphEquationTree(kind,source,index)}}
     val derivative=remember(derivativeSelected,derivativeExpression) {
         if(derivativeSelected==null || derivativeExpression.isBlank())null
-        else runCatching {JSONObject(Parser("diff(f${derivativeSelected+1}(x),x)=$derivativeExpression").parse().json())}.getOrNull()
+        else decimalFractionFormulaTree("diff(f${derivativeSelected+1}(x),x)=$derivativeExpression")
     }
     val shades=remember(shadeSources) {shadeSources.mapNotNull(::graphShadeFormula)}
     if(equations.all {it==null} && derivative==null && shades.isEmpty())return
