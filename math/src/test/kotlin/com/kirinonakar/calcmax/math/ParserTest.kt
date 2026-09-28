@@ -77,6 +77,8 @@ class ParserTest {
             "taylor(exp(x),x,0,4)",
             "gradient(x^2+y^2,[x,y])",
             "dsolve(diff(y(t),t)=y(t),y(t),t)",
+            "dsolve(diff(y(t),t)=y(t),y(t),t,y(0)=1)",
+            "pdsolve(diff(u(x,y),x)+diff(u(x,y),y)=0,u(x,y))",
             "laplace(sin(t),t,s)",
             "charpoly([[1,2],[3,4]],x)",
             "convert(qty(1,V)/qty(1,ohm),A)"

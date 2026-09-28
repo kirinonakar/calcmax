@@ -449,6 +449,8 @@ class EngineTests(unittest.TestCase):
         solved=dispatch(call("dsolve",ode,fy,t,initial),budget=30)
         self.assertTrue(solved["ok"],solved)
         self.assertIn("exp(t)",solved["exact"])
+        single=dispatch(call("dsolve",ode,fy,t,initial["args"][0]),budget=30)
+        self.assertTrue(single["ok"],single)
 
         laplace=dispatch(call("laplace",call("sin",t),t,w),budget=30)
         self.assertTrue(laplace["ok"],laplace)

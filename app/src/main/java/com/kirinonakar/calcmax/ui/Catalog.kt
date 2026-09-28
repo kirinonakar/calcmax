@@ -1,7 +1,6 @@
 package com.kirinonakar.calcmax.ui
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -11,6 +10,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.*
 import com.kirinonakar.calcmax.calculator.CalculatorModel
+import com.kirinonakar.calcmax.math.Editor
 import com.kirinonakar.calcmax.ui.theme.LocalInstrument
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -77,7 +77,12 @@ internal fun catalogCategories(m:CalculatorModel):Map<String,List<String>> {
             } else hint,fontSize=11.sp)
         }
     }},confirmButton={TextButton(onClick=close) {Text(tr("Done"))}})
-    if(showHelp)CatalogHelpDialog{showHelp=false}
+    if(showHelp)CatalogHelpDialog(close={showHelp=false},onExample={example->
+        m.mode="Scientific/CAS"
+        m.fresh(Editor(example))
+        showHelp=false
+        close()
+    })
 }
 
 private sealed interface HelpBlock {
@@ -88,7 +93,7 @@ private sealed interface HelpBlock {
     data class Body(val text:String):HelpBlock
 }
 
-@Composable fun CatalogHelpDialog(close:()->Unit) {
+@Composable fun CatalogHelpDialog(close:()->Unit,onExample:(String)->Unit) {
     val context=LocalContext.current
     val language=LocalLanguage.current
     var document by remember {mutableStateOf<String?>(null)}
@@ -103,11 +108,11 @@ private sealed interface HelpBlock {
     }},text={Column(Modifier.fillMaxWidth()) {
         val loaded=document
         if(loaded==null) Text(tr("Loading the catalog reference..."),fontSize=12.sp)
-        else SelectionContainer {Column(Modifier.fillMaxWidth().heightIn(max=460.dp).verticalScroll(rememberScrollState())) {HelpDocument(loaded,search)}}
+        else Column(Modifier.fillMaxWidth().heightIn(max=460.dp).verticalScroll(rememberScrollState())) {HelpDocument(loaded,search,onExample)}
     }},confirmButton={TextButton(onClick=close){Text(tr("Close"))}})
 }
 
-@Composable private fun HelpDocument(markdown:String,query:String) {
+@Composable private fun HelpDocument(markdown:String,query:String,onExample:(String)->Unit) {
     val c=LocalInstrument.current
     val blocks=remember(markdown,query){parseHelp(markdown,query)}
     if(blocks.isEmpty()) {Text(if(isKorean())"\"${query.trim()}\"에 맞는 항목이 없습니다." else "No entries match \"${query.trim()}\".",fontSize=12.sp,color=c.muted);return}
@@ -118,7 +123,8 @@ private sealed interface HelpBlock {
             is HelpBlock.Entry -> Column(Modifier.fillMaxWidth().padding(vertical=2.dp)) {
                 Text(block.signature,fontFamily=FontFamily.Monospace,fontSize=13.sp,color=c.ink)
                 Text(plainHelp(block.description),fontSize=12.sp,color=c.muted)
-                if(!block.example.isNullOrBlank()) Text(tr("Example:")+" "+plainHelp(block.example),fontFamily=FontFamily.Monospace,fontSize=12.sp,color=c.accent,modifier=Modifier.padding(top=1.dp))
+                if(!block.example.isNullOrBlank()) Text(tr("Example:")+" "+plainHelp(block.example),fontFamily=FontFamily.Monospace,fontSize=12.sp,color=c.accent,
+                    modifier=Modifier.fillMaxWidth().clickable {onExample(helpExampleInput(block.example))}.padding(top=1.dp,bottom=5.dp))
             }
             is HelpBlock.Bullet -> Text("- "+plainHelp(block.text),fontSize=12.sp,color=c.ink,modifier=Modifier.padding(vertical=1.dp))
             is HelpBlock.Body -> Text(plainHelp(block.text),fontSize=12.sp,color=c.ink,modifier=Modifier.padding(vertical=2.dp))
@@ -127,6 +133,8 @@ private sealed interface HelpBlock {
 }
 
 private fun plainHelp(text:String)=text.replace("**","").replace("`","")
+
+internal fun helpExampleInput(example:String)=plainHelp(example.substringBefore('→')).trim()
 
 @Composable private fun SearchField(value:String,label:String,onValue:(String)->Unit) {
     OutlinedTextField(value,onValue,modifier=Modifier.fillMaxWidth(),label={Text(label)},singleLine=true,

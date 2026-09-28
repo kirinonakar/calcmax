@@ -4,6 +4,8 @@ The function catalog inserts ready-to-fill templates into the current editor. Ta
 
 Use the search box above to filter by function name, template, example or description. The search matches every category at once. Clear the box to see the full reference again.
 
+Tap an example to place its expression in the calculator input.
+
 ## Using the catalog
 - Numeric trigonometry follows the selected DEG/RAD/GRAD angle unit. An explicit `pi` or `°` inside the expression overrides it.
 - Symbolic calculus is always evaluated in radians.

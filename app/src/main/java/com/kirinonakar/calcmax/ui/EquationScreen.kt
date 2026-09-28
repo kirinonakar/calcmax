@@ -47,10 +47,26 @@ import org.json.JSONObject
         if(isEmpty())append("0")
         append("=0")
     }
-    val expression=when(kind){"General"->equation;"System"->"["+equations.lines().filter{it.isNotBlank()}.joinToString(",")+"]";else->polynomial}
+    val expression=when(kind){
+        "General"->equation
+        "System"->"["+equations.lines().filter{it.isNotBlank()}.joinToString(",")+"]"
+        "dsolve"->m.equationOde
+        "pdsolve"->m.equationPde
+        else->polynomial
+    }
     Panel("Equation solver","") {
-        Choices(listOf("Linear","Quadratic","Cubic","System","General"),kind,{m.equationKind=it},translate=false)
-        if(kind=="System") {
+        Choices(listOf("Linear","Quadratic","Cubic","System","General","dsolve","pdsolve"),kind,{m.equationKind=it;m.error=""},translate=false)
+        if(kind=="dsolve") {
+            Field(m.equationOde,"Differential equation",Modifier.fillMaxWidth()){m.equationOde=it}
+            Field(m.equationOdeFunction,"Dependent function",Modifier.fillMaxWidth()){m.equationOdeFunction=it}
+            Field(m.equationOdeVariable,"Independent variable",Modifier.fillMaxWidth()){m.equationOdeVariable=it}
+            Field(m.equationOdeInitial,"Initial conditions (optional)",Modifier.fillMaxWidth()){m.equationOdeInitial=it}
+            Text(tr("Example: y(0)=1 or [y(0)=1,y(1)=2]"),style=MaterialTheme.typography.bodySmall)
+        }else if(kind=="pdsolve") {
+            Field(m.equationPde,"Partial differential equation",Modifier.fillMaxWidth()){m.equationPde=it}
+            Field(m.equationPdeFunction,"Dependent function",Modifier.fillMaxWidth()){m.equationPdeFunction=it}
+            Field(m.equationPdeHint,"Hint (optional)",Modifier.fillMaxWidth()){m.equationPdeHint=it}
+        }else if(kind=="System") {
             OutlinedTextField(equations,{m.equationSystem=it},Modifier.fillMaxWidth(),label={Text("One equation per line")},minLines=2)
             Field(variables,"Variables · comma separated",Modifier.fillMaxWidth(),translate=false){m.equationVariables=it}
         }else {
@@ -66,9 +82,20 @@ import org.json.JSONObject
         val preview=runCatching{JSONObject(Parser(expression,true).parse().json())}.getOrNull()
         if(preview!=null)Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())){MathNode(preview,m.inputFont)}
         Button(onClick={
-            val names=if(kind=="System")variables.split(',').map{it.trim()}else listOf(variable.trim())
-            if(names.isEmpty()||names.any{!it.matches(Regex("[A-Za-z][A-Za-z0-9_]*"))})m.error="Enter valid variable names"
-            else {val command=if(kind=="System")"solve($expression,[${names.joinToString(",")}])" else if(numerical)"nsolve($expression,${names[0]},$guess)" else "solve($expression,${names[0]})";m.fresh(Editor(command));m.calculate()}
+            val command=when(kind) {
+                "dsolve"->if(expression.isBlank()||m.equationOdeFunction.isBlank()||!m.equationOdeVariable.trim().matches(Regex("[A-Za-z][A-Za-z0-9_]*"))) {
+                    m.error="Enter an equation, dependent function and valid independent variable";null
+                } else "dsolve(${expression.trim()},${m.equationOdeFunction.trim()},${m.equationOdeVariable.trim()}${m.equationOdeInitial.trim().let{if(it.isEmpty())"" else ",$it"}})"
+                "pdsolve"->if(expression.isBlank()||m.equationPdeFunction.isBlank()) {
+                    m.error="Enter an equation and dependent function";null
+                } else "pdsolve(${expression.trim()},${m.equationPdeFunction.trim()}${m.equationPdeHint.trim().let{if(it.isEmpty())"" else ",$it"}})"
+                else->{
+                    val names=if(kind=="System")variables.split(',').map{it.trim()}else listOf(variable.trim())
+                    if(names.isEmpty()||names.any{!it.matches(Regex("[A-Za-z][A-Za-z0-9_]*"))}) {m.error="Enter valid variable names";null}
+                    else if(kind=="System")"solve($expression,[${names.joinToString(",")}])" else if(numerical)"nsolve($expression,${names[0]},$guess)" else "solve($expression,${names[0]})"
+                }
+            }
+            if(command!=null){m.fresh(Editor(command));m.calculate()}
         },enabled=!m.busy){Text(if(m.busy)"Solving…" else "Solve")}
         if(m.error.isNotBlank())Text(m.error,color=MaterialTheme.colorScheme.error)
         if(m.result!=null) {HorizontalDivider();Text("Solution");Box(Modifier.horizontalScroll(rememberScrollState())){ResultMath(m.result!!,m.decimal,m.outputFont,
