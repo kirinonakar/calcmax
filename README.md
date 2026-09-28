@@ -116,7 +116,8 @@ Android Auto Backup includes only `calculator.xml`: settings, history (when enab
 math/           Pure Kotlin lexer, Pratt parser, immutable source-spanned AST, editor
 app/.../ui/     Native Compose mathematical layouts, keypad and mode workspaces
 app/.../calculator/
-                ViewModel, local persistence, typed AST JSON process protocol
+                ViewModel orchestration, graph/statistics/Python workspace state,
+                local persistence, typed AST JSON process protocol
 app/src/main/python/calc_engine.py
                 Chaquopy entry point, request budgets and response assembly
 app/src/main/python/calc_evaluator.py

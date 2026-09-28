@@ -9,7 +9,6 @@ import kotlinx.coroutines.*
 import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.math.PI
-import kotlin.math.abs
 import kotlin.math.sin
 
 private const val maxTapeEntries = 10
@@ -136,13 +135,24 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         private set
     var assumptions by mutableStateOf(loadObject("assumptions"))
         private set
-    private val graphSources=loadObject("graphSources")
-    var dataSets by mutableStateOf(loadObject("dataSets"))
-        private set
-    var sequenceInitials by mutableStateOf(prefs.getString("sequenceInitials", "0,1") ?: "0,1")
-    var differentialInitials by mutableStateOf(prefs.getString("differentialInitials", "1") ?: "1")
-    var differentialT0 by mutableStateOf(prefs.getString("differentialT0", "0") ?: "0")
-    var graphSource by mutableStateOf(graphSources.optString(prefs.getString("graphKind","cartesian"),prefs.getString("graphSource","sin(x)\ncos(x)") ?: "sin(x)\ncos(x)"))
+    private val graphState=GraphState(prefs)
+    private val statisticsState=StatisticsState(prefs)
+    private val pythonState=PythonState(prefs,localPrefs)
+    var dataSets
+        get()=statisticsState.dataSets
+        private set(value) {statisticsState.dataSets=value}
+    var sequenceInitials
+        get()=graphState.sequenceInitials
+        set(value) {graphState.sequenceInitials=value}
+    var differentialInitials
+        get()=graphState.differentialInitials
+        set(value) {graphState.differentialInitials=value}
+    var differentialT0
+        get()=graphState.differentialT0
+        set(value) {graphState.differentialT0=value}
+    var graphSource
+        get()=graphState.graphSource
+        set(value) {graphState.graphSource=value}
     var equationKind by mutableStateOf(prefs.getString("equationKind","Quadratic") ?: "Quadratic")
     var equationCoefficients by mutableStateOf((loadList("equationCoefficients",listOf("1","-5","6","0"))+List(4){"0"}).take(4))
     var equationSystem by mutableStateOf(prefs.getString("equationSystem","x+y=3\nx-y=1") ?: "x+y=3\nx-y=1")
@@ -151,68 +161,138 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     var equationVariable by mutableStateOf(prefs.getString("equationVariable","x") ?: "x")
     var equationGuess by mutableStateOf(prefs.getString("equationGuess","1") ?: "1")
     var equationNumeric by mutableStateOf(prefs.getBoolean("equationNumeric",false))
-    var pythonSource by mutableStateOf(prefs.getString("pythonSource","") ?: "")
-        private set
-    var pythonSelectionStart by mutableIntStateOf(pythonSource.length)
-        private set
-    var pythonSelectionEnd by mutableIntStateOf(pythonSource.length)
-        private set
-    var pythonFileName by mutableStateOf(prefs.getString("pythonFileName","untitled.py") ?: "untitled.py")
-        private set
-    var pythonUri by mutableStateOf(loadPythonUri())
-        private set
-    var pythonDirty by mutableStateOf(prefs.getBoolean("pythonDirty",false) || (pythonUri.isBlank() && pythonSource.isNotBlank()))
-        private set
-    var pythonOutput by mutableStateOf("")
-        private set
-    var pythonHasRun by mutableStateOf(false)
-        private set
-    var pythonError by mutableStateOf("")
-        private set
-    var pythonBusy by mutableStateOf(false)
-    var pythonInputPrompt by mutableStateOf<String?>(null)
-    private var pythonInputSubmit: ((String) -> Unit)? = null
-        private set
-    var graphKind by mutableStateOf(prefs.getString("graphKind","cartesian") ?: "cartesian")
-    var xMin by mutableDoubleStateOf(prefs.getString("xMin","-10")!!.toDouble())
-    var xMax by mutableDoubleStateOf(prefs.getString("xMax","10")!!.toDouble())
-    var yMin by mutableDoubleStateOf(prefs.getString("yMin","-5")!!.toDouble())
-    var yMax by mutableDoubleStateOf(prefs.getString("yMax","5")!!.toDouble())
-    var zMin by mutableStateOf(prefs.getString("zMin",null)?.toDoubleOrNull())
-    var zMax by mutableStateOf(prefs.getString("zMax",null)?.toDoubleOrNull())
-    var graphData by mutableStateOf<JSONObject?>(null)
-    var graphDerivativeSelected by mutableStateOf<Int?>(null)
-    var graphAnalysis by mutableStateOf<JSONObject?>(null)
-        private set
-    var graphAnalysisBusy by mutableStateOf(false)
-        private set
-    var graphBusy by mutableStateOf(false)
-    var trace by mutableStateOf<Pair<Double,Double>?>(null)
-    var parameterMin by mutableDoubleStateOf(prefs.getString("parameterMin","0")!!.toDouble())
-    var parameterMax by mutableDoubleStateOf(prefs.getString("parameterMax","6.283185307179586")!!.toDouble())
-    var shadedInterval by mutableStateOf<Pair<Double,Double>?>(null)
-    var graphParameters by mutableStateOf(loadGraphParameters())
-        private set
-    var graphAnimating by mutableStateOf(false)
-        private set
-    private var animationPhase=0.0
-    var regressionCurve by mutableStateOf(loadRegressionCurve())
-        private set
-    var regressionFit by mutableStateOf(prefs.getString("regressionFit","") ?: "")
-        private set
-    var regressionData by mutableStateOf(prefs.getString("regressionData","") ?: "")
-        private set
-    var regressionBusy by mutableStateOf(false)
-        private set
-    var radianAxis by mutableStateOf(prefs.getBoolean("radianAxis",false))
-    var statisticsName by mutableStateOf(prefs.getString("statisticsName","D1") ?: "D1")
-    var statisticsData by mutableStateOf(prefs.getString("statisticsData","") ?: "")
-    var statisticsKind by mutableStateOf(prefs.getString("statisticsKind","list") ?: "list")
-    var statisticsRegression by mutableStateOf(prefs.getString("statisticsRegression","linear") ?: "linear")
-    var statisticsPlot by mutableStateOf(prefs.getString("statisticsPlot","Histogram") ?: "Histogram")
-    var statisticsSelected by mutableStateOf(prefs.getString("statisticsSelected","") ?: "")
-    var statisticsIsNew by mutableStateOf(prefs.getBoolean("statisticsIsNew",false))
-    var statisticsCsv by mutableStateOf(prefs.getBoolean("statisticsCsv",false))
+    var pythonSource
+        get()=pythonState.pythonSource
+        private set(value) {pythonState.pythonSource=value}
+    var pythonSelectionStart
+        get()=pythonState.pythonSelectionStart
+        private set(value) {pythonState.pythonSelectionStart=value}
+    var pythonSelectionEnd
+        get()=pythonState.pythonSelectionEnd
+        private set(value) {pythonState.pythonSelectionEnd=value}
+    var pythonFileName
+        get()=pythonState.pythonFileName
+        private set(value) {pythonState.pythonFileName=value}
+    var pythonUri
+        get()=pythonState.pythonUri
+        private set(value) {pythonState.pythonUri=value}
+    var pythonDirty
+        get()=pythonState.pythonDirty
+        private set(value) {pythonState.pythonDirty=value}
+    var pythonOutput
+        get()=pythonState.pythonOutput
+        private set(value) {pythonState.pythonOutput=value}
+    var pythonHasRun
+        get()=pythonState.pythonHasRun
+        private set(value) {pythonState.pythonHasRun=value}
+    var pythonError
+        get()=pythonState.pythonError
+        private set(value) {pythonState.pythonError=value}
+    var pythonBusy
+        get()=pythonState.pythonBusy
+        set(value) {pythonState.pythonBusy=value}
+    var pythonInputPrompt
+        get()=pythonState.pythonInputPrompt
+        set(value) {pythonState.pythonInputPrompt=value}
+    private var pythonInputSubmit
+        get()=pythonState.pythonInputSubmit
+        set(value) {pythonState.pythonInputSubmit=value}
+    var graphKind
+        get()=graphState.graphKind
+        set(value) {graphState.graphKind=value}
+    var xMin
+        get()=graphState.xMin
+        set(value) {graphState.xMin=value}
+    var xMax
+        get()=graphState.xMax
+        set(value) {graphState.xMax=value}
+    var yMin
+        get()=graphState.yMin
+        set(value) {graphState.yMin=value}
+    var yMax
+        get()=graphState.yMax
+        set(value) {graphState.yMax=value}
+    var zMin
+        get()=graphState.zMin
+        set(value) {graphState.zMin=value}
+    var zMax
+        get()=graphState.zMax
+        set(value) {graphState.zMax=value}
+    var graphData
+        get()=graphState.graphData
+        set(value) {graphState.graphData=value}
+    var graphDerivativeSelected
+        get()=graphState.graphDerivativeSelected
+        set(value) {graphState.graphDerivativeSelected=value}
+    var graphAnalysis
+        get()=graphState.graphAnalysis
+        private set(value) {graphState.graphAnalysis=value}
+    var graphAnalysisBusy
+        get()=graphState.graphAnalysisBusy
+        private set(value) {graphState.graphAnalysisBusy=value}
+    var graphBusy
+        get()=graphState.graphBusy
+        set(value) {graphState.graphBusy=value}
+    var trace
+        get()=graphState.trace
+        set(value) {graphState.trace=value}
+    var parameterMin
+        get()=graphState.parameterMin
+        set(value) {graphState.parameterMin=value}
+    var parameterMax
+        get()=graphState.parameterMax
+        set(value) {graphState.parameterMax=value}
+    var shadedInterval
+        get()=graphState.shadedInterval
+        set(value) {graphState.shadedInterval=value}
+    var graphParameters
+        get()=graphState.graphParameters
+        private set(value) {graphState.graphParameters=value}
+    var graphAnimating
+        get()=graphState.graphAnimating
+        private set(value) {graphState.graphAnimating=value}
+    private var animationPhase
+        get()=graphState.animationPhase
+        set(value) {graphState.animationPhase=value}
+    var radianAxis
+        get()=graphState.radianAxis
+        set(value) {graphState.radianAxis=value}
+    var regressionCurve
+        get()=statisticsState.regressionCurve
+        private set(value) {statisticsState.regressionCurve=value}
+    var regressionFit
+        get()=statisticsState.regressionFit
+        private set(value) {statisticsState.regressionFit=value}
+    var regressionData
+        get()=statisticsState.regressionData
+        private set(value) {statisticsState.regressionData=value}
+    var regressionBusy
+        get()=statisticsState.regressionBusy
+        private set(value) {statisticsState.regressionBusy=value}
+    var statisticsName
+        get()=statisticsState.statisticsName
+        set(value) {statisticsState.statisticsName=value}
+    var statisticsData
+        get()=statisticsState.statisticsData
+        set(value) {statisticsState.statisticsData=value}
+    var statisticsKind
+        get()=statisticsState.statisticsKind
+        set(value) {statisticsState.statisticsKind=value}
+    var statisticsRegression
+        get()=statisticsState.statisticsRegression
+        set(value) {statisticsState.statisticsRegression=value}
+    var statisticsPlot
+        get()=statisticsState.statisticsPlot
+        set(value) {statisticsState.statisticsPlot=value}
+    var statisticsSelected
+        get()=statisticsState.statisticsSelected
+        set(value) {statisticsState.statisticsSelected=value}
+    var statisticsIsNew
+        get()=statisticsState.statisticsIsNew
+        set(value) {statisticsState.statisticsIsNew=value}
+    var statisticsCsv
+        get()=statisticsState.statisticsCsv
+        set(value) {statisticsState.statisticsCsv=value}
     var constants by mutableStateOf<JSONArray?>(null)
         private set
     private var job: Job? = null
@@ -226,16 +306,6 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         if(!committed&&editor.source.isNotBlank())schedulePreview()
     }
     private fun loadObject(key: String) = runCatching { JSONObject(prefs.getString(key,"{}")!!) }.getOrDefault(JSONObject())
-    private fun loadGraphParameters():Map<String,GraphParameter> = runCatching {
-        val stored=JSONObject(prefs.getString("graphParameters","{}")!!)
-        stored.keys().asSequence().associateWith { name->
-            val entry=stored.optJSONObject(name)
-            val low=entry?.optDouble("min",-5.0)?.takeIf {it.isFinite()} ?: -5.0
-            val high=entry?.optDouble("max",5.0)?.takeIf {it.isFinite()} ?: 5.0
-            val value=entry?.optDouble("value",1.0)?.takeIf {it.isFinite()} ?: 1.0
-            if(low<high)GraphParameter(value.coerceIn(low,high),low,high) else GraphParameter(1.0,-5.0,5.0)
-        }
-    }.getOrDefault(emptyMap())
     private fun loadList(key:String,default:List<String>):List<String> = runCatching {val array=JSONArray(prefs.getString(key,"[]"));List(array.length()){array.getString(it)}}.getOrDefault(emptyList()).ifEmpty {default}
     private fun loadCatalogList(key:String):List<String> = runCatching {
         val array=JSONArray(prefs.getString(key,"[]"))
@@ -244,16 +314,6 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     fun recordCatalogUse(source:String) {
         catalogRecent=(listOf(source)+catalogRecent.filterNot {it==source}).take(10)
         save()
-    }
-    private fun loadPythonUri():String {
-        val local=localPrefs.getString("pythonUri",null)
-        val legacy=prefs.getString("pythonUri",null) ?: return local ?: ""
-        // Move existing installs off the backed-up preference file.
-        if(local!=null || localPrefs.edit().putString("pythonUri",legacy).commit()) {
-            prefs.edit().remove("pythonUri").commit()
-            return local ?: legacy
-        }
-        return legacy
     }
     fun toggleCatalogFavorite(source:String) {
         catalogFavorites=if(source in catalogFavorites)catalogFavorites.filterNot {it==source} else catalogFavorites+source
@@ -272,10 +332,6 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         return all.filter { if(it.favorite) true else if(seen<nonFavoriteLimit) { seen++; true } else false }
     }
     private fun appendHistory(entry: HistoryEntry) { history=trimHistory(listOf(entry)+history) }
-    private fun loadRegressionCurve():List<Pair<Double,Double>>? = runCatching {
-        val array=JSONArray(prefs.getString("regressionCurve","[]"))
-        if(array.length()==0)null else (0 until array.length()).map {i->val pair=array.getJSONArray(i);pair.getDouble(0) to pair.getDouble(1)}
-    }.getOrNull()
     private fun loadDisplayShortcuts():List<DisplayShortcut> = runCatching {
         if(!prefs.contains("displayShortcuts"))return@runCatching DefaultDisplayShortcuts
         val array=JSONArray(prefs.getString("displayShortcuts","[]"))
@@ -303,9 +359,8 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         save()
     }
     fun save() {
-        val parameterObject=JSONObject()
-        graphParameters.forEach { (name,spec)->parameterObject.put(name,JSONObject().put("value",spec.value).put("min",spec.min).put("max",spec.max)) }
-        prefs.edit().putString("expression",editor.source).putInt("cursor",editor.cursor).putString("mode",mode).putString("angle",angle).putString("theme",theme)
+        val editor=prefs.edit()
+        editor.putString("expression",this.editor.source).putInt("cursor",this.editor.cursor).putString("mode",mode).putString("angle",angle).putString("theme",theme)
             .putString("result",result?.toString() ?: "{}").putString("resultSource",resultSource).putBoolean("committed",committed)
             .putString("inputAnswer",inputAnswer?.toString() ?: "{}").putString("answerDisplay",answerDisplay?.toString() ?: "{}").putString("lastAnswerResult",lastAnswerResult?.toString() ?: "{}")
             .putString("resultDisplayMode",resultDisplayMode.name.lowercase()).putBoolean("thousandsSeparator",thousandsSeparator)
@@ -315,22 +370,14 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
             .putString("language",language)
             .putFloat("inputFont",inputFont).putFloat("outputFont",outputFont)
             .putString("variables",variables.toString()).putString("functions",functions.toString()).putString("assumptions",assumptions.toString())
-            .putString("dataSets",dataSets.toString()).putString("sequenceInitials",sequenceInitials).putString("differentialInitials",differentialInitials).putString("differentialT0",differentialT0)
-            .putString("graphSource",graphSource).putString("graphSources",graphSources.put(graphKind,graphSource).toString()).putString("graphKind",graphKind).putString("xMin",xMin.toString()).putString("xMax",xMax.toString()).putString("yMin",yMin.toString()).putString("yMax",yMax.toString())
-            .putString("zMin",zMin?.toString()).putString("zMax",zMax?.toString())
-            .putString("pythonSource",pythonSource).putString("pythonFileName",pythonFileName).putBoolean("pythonDirty",pythonDirty)
-            .putString("parameterMin",parameterMin.toString()).putString("parameterMax",parameterMax.toString())
             .putString("equationKind",equationKind).putString("equationCoefficients",JSONArray(equationCoefficients).toString())
             .putString("equationSystem",equationSystem).putString("equationGeneral",equationGeneral).putString("equationVariables",equationVariables)
             .putString("equationVariable",equationVariable).putString("equationGuess",equationGuess).putBoolean("equationNumeric",equationNumeric)
-            .putBoolean("radianAxis",radianAxis).putString("graphParameters",parameterObject.toString())
-            .putString("statisticsName",statisticsName).putString("statisticsData",statisticsData).putString("statisticsKind",statisticsKind)
-            .putString("statisticsRegression",statisticsRegression).putString("statisticsPlot",statisticsPlot).putString("statisticsSelected",statisticsSelected)
-            .putBoolean("statisticsIsNew",statisticsIsNew).putBoolean("statisticsCsv",statisticsCsv)
-            .putString("regressionFit",regressionFit).putString("regressionData",regressionData)
-            .putString("regressionCurve",regressionCurve?.let {list->JSONArray(list.map {point->JSONArray().put(point.first).put(point.second)}).toString()} ?: "[]")
-            .putString("history",if(persistHistory) JSONArray(history.map { JSONObject().put("id",it.id).put("source",it.source).put("exact",it.exact).put("decimal",it.decimal).put("mode",it.mode).put("favorite",it.favorite).put("inputTree",it.inputTree).put("response",it.response).put("answer",it.answer) }).toString() else "[]").apply()
-        localPrefs.edit().putString("pythonUri",pythonUri).apply()
+            .putString("history",if(persistHistory) JSONArray(history.map { JSONObject().put("id",it.id).put("source",it.source).put("exact",it.exact).put("decimal",it.decimal).put("mode",it.mode).put("favorite",it.favorite).put("inputTree",it.inputTree).put("response",it.response).put("answer",it.answer) }).toString() else "[]")
+        graphState.writeTo(editor)
+        statisticsState.writeTo(editor)
+        pythonState.writeTo(editor)
+        editor.apply()
     }
     fun inputTree(): JSONObject? {
         val tree=editor.tree() ?: return null
@@ -763,22 +810,17 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     fun clearHistory() { history=history.filter { it.favorite };tape=emptyList();save() }
     fun saveDataSet(name:String,csv:String,kind:String) {
         try {
-            require(name.matches(Regex("[A-Za-z][A-Za-z0-9_]*"))) { "Use a letter followed by letters, digits or underscores for the dataset name" }
-            require(kind in listOf("list", "xy")) { "Unknown dataset type" }
-            dataSets=JSONObject(dataSets.toString()).put(name,JSONObject().put("csv",csv).put("kind",kind))
+            statisticsState.saveDataSet(name,csv,kind)
             error="";save()
         } catch(e:Exception) { error=e.message ?: "Could not save dataset" }
     }
     fun deleteDataSet(name:String) {
-        dataSets=JSONObject(dataSets.toString()).apply { remove(name) }
+        statisticsState.deleteDataSet(name)
         save()
     }
     fun saveStatistics(name:String,data:String,kind:String,regression:String,plot:String,csv:Boolean,selected:String,isNew:Boolean) {
-        statisticsName=name;statisticsData=data;statisticsKind=kind;statisticsRegression=regression
-        statisticsPlot=plot;statisticsCsv=csv;statisticsSelected=selected;statisticsIsNew=isNew
-        prefs.edit().putString("statisticsName",name).putString("statisticsData",data).putString("statisticsKind",kind)
-            .putString("statisticsRegression",regression).putString("statisticsPlot",plot).putBoolean("statisticsCsv",csv)
-            .putString("statisticsSelected",selected).putBoolean("statisticsIsNew",isNew).apply()
+        statisticsState.updateSelection(name,data,kind,regression,plot,csv,selected,isNew)
+        statisticsState.saveSelection()
     }
     fun fitRegression(source: String, data: String) {
         regressionJob?.cancel()
@@ -803,10 +845,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     }
     fun clearRegression() {
         regressionJob?.cancel()
-        regressionCurve=emptyList()
-        regressionFit=""
-        regressionData=""
-        regressionBusy=false
+        statisticsState.clearRegression()
         save()
     }
     fun plot() {
@@ -839,7 +878,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         val request=request("graph").put("angle","RAD").put("trees",JSONArray(trees)).put("graphKind",kind)
             .put("variable",when(kind){"cartesian"->"x";"sequence"->"n";"surface"->"x";else->"t"})
             .put("min",min).put("max",max).put("samples",500).put("yMin",yMin).put("yMax",yMax)
-            .put("parameters",parameterPayload())
+            .put("parameters",graphState.parameterPayload())
         if(derivativeSelected!=null)request.put("derivativeCurveIndex",trees.lastIndex)
         if(shadings.length()>0)request.put("shadings",shadings)
         if(kind=="surface")request.put("surfaceYMin",yMin).put("surfaceYMax",yMax)
@@ -865,33 +904,23 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
                 if(source==graphSource && kind==graphKind && derivativeSelected==graphDerivativeSelected && min==(if(kind in listOf("cartesian","surface"))xMin else parameterMin) && max==(if(kind in listOf("cartesian","surface"))xMax else parameterMax)) {
                     if(response.optBoolean("ok")) {
                         if(derivativeSelected!=null)response.put("derivativeSelected",derivativeSelected).put("derivativeCurveIndex",trees.lastIndex)
-                        graphData=response;syncGraphParameters(response.optJSONArray("parameters"))
+                        graphData=response;graphState.syncParameters(response.optJSONArray("parameters"))
                     } else {graphData=null;error=response.optString("error")}
                 }
                 if(!graphAnimating)save()
             } finally { graphBusy=false }
         }
     }
-    private fun parameterPayload():JSONObject { val payload=JSONObject();graphParameters.forEach { (name,spec)->payload.put(name,spec.value) };return payload }
-    private fun syncGraphParameters(names:JSONArray?) {
-        val next=(0 until (names?.length() ?: 0)).mapNotNull {names?.optString(it)}.filter(String::isNotBlank).distinct().sorted().associateWith {name->graphParameters[name] ?: GraphParameter(1.0,-5.0,5.0)}
-        if(next!=graphParameters)graphParameters=next
-    }
     fun setGraphParameter(name:String,value:Double) {
-        val spec=graphParameters[name] ?: return
-        if(!value.isFinite())return
-        val clamped=value.coerceIn(spec.min,spec.max)
-        if(clamped==spec.value)return
-        graphParameters=graphParameters+(name to spec.copy(value=clamped))
+        graphState.setParameter(name,value)
     }
     fun setGraphParameterRange(name:String,low:Double,high:Double) {
-        val spec=graphParameters[name] ?: return
-        if(!low.isFinite()||!high.isFinite()||low>=high||abs(low)>1e9||abs(high)>1e9) {error="Enter finite values with minimum < maximum";return}
-        graphParameters=graphParameters+(name to spec.copy(min=low,max=high,value=spec.value.coerceIn(low,high)))
+        if(name !in graphParameters)return
+        if(!graphState.setParameterRange(name,low,high)) {error="Enter finite values with minimum < maximum";return}
         error="";save()
     }
     fun resetGraphParameters() {
-        graphParameters=graphParameters.mapValues {(_,spec)->spec.copy(value=(if(spec.min<=1.0&&1.0<=spec.max)1.0 else (spec.min+spec.max)/2)) }
+        graphState.resetParameters()
         save()
     }
     fun toggleGraphAnimation() {
@@ -960,22 +989,14 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         return entry
     }
     fun editPython(source:String,start:Int=source.length,end:Int=start) {
-        val changed=source!=pythonSource
-        pythonSource=source
-        pythonSelectionStart=start.coerceIn(0,source.length)
-        pythonSelectionEnd=end.coerceIn(0,source.length)
-        if(changed) {pythonDirty=true;save()}
+        if(pythonState.editSource(source,start,end))save()
     }
     fun insertPython(snippet:String,inside:Int=snippet.length) {
-        val a=minOf(pythonSelectionStart,pythonSelectionEnd).coerceIn(0,pythonSource.length)
-        val b=maxOf(pythonSelectionStart,pythonSelectionEnd).coerceIn(a,pythonSource.length)
-        val source=pythonSource.substring(0,a)+snippet+pythonSource.substring(b)
-        val cursor=a+inside.coerceIn(0,snippet.length)
-        editPython(source,cursor,cursor)
+        if(pythonState.insert(snippet,inside))save()
     }
-    fun newPythonFile() {pythonSource="";pythonSelectionStart=0;pythonSelectionEnd=0;pythonFileName="untitled.py";pythonUri="";pythonDirty=false;pythonOutput="";pythonError="";pythonHasRun=false;pythonInputPrompt=null;pythonInputSubmit=null;save()}
-    fun openPythonFile(source:String,name:String,uri:String) {pythonSource=source;pythonSelectionStart=source.length;pythonSelectionEnd=source.length;pythonFileName=name;pythonUri=uri;pythonDirty=false;pythonOutput="";pythonError="";pythonHasRun=false;pythonInputPrompt=null;pythonInputSubmit=null;save()}
-    fun savedPythonFile(name:String,uri:String) {pythonFileName=name;pythonUri=uri;pythonDirty=false;save()}
+    fun newPythonFile() {pythonState.newFile();save()}
+    fun openPythonFile(source:String,name:String,uri:String) {pythonState.openFile(source,name,uri);save()}
+    fun savedPythonFile(name:String,uri:String) {pythonState.savedFile(name,uri);save()}
     fun pythonFileError(message:String) {pythonError=message}
     fun runPython() {
         if(pythonBusy)return
@@ -995,9 +1016,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     fun submitPythonInput(value:String) {pythonInputSubmit?.invoke(value);pythonInputSubmit=null;pythonInputPrompt=null}
     fun stopPython() {pythonJob?.cancel();engine.cancel();pythonBusy=false;pythonInputPrompt=null;pythonInputSubmit=null;pythonHasRun=true;pythonError="Execution stopped"}
     fun updateGraphSource(source:String) {
-        graphSource=source
-        graphDerivativeSelected=null
-        graphData=null;graphAnalysis=null;trace=null;shadedInterval=null
+        graphState.updateSource(source)
         save()
     }
     fun toggleGraphDerivative(selected:Int) {
@@ -1032,22 +1051,8 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         error="";mode="Graph"
     }
     fun changeGraphKind(kind:String) {
-        if(kind==graphKind)return
-        graphSources.put(graphKind,graphSource)
-        graphKind=kind
-        graphSource=graphSources.optString(kind,when(kind){"parametric"->"[cos(t),sin(t)]";"polar"->"2*cos(3*t)";"sequence"->"n\nu(n-1)+u(n-2)";"surface"->"sin(sqrt(x^2+y^2))";"differential"->"y-t";else->"sin(x)\ncos(x)"})
-        graphDerivativeSelected=null
-        graphData=null;graphAnalysis=null;trace=null;shadedInterval=null
-        animationJob?.cancel();graphAnimating=false
-        if(kind=="sequence") {
-            parameterMin=0.0;parameterMax=20.0;xMin=0.0;xMax=20.0;yMin=-2.0;yMax=20.0
-        } else if(kind=="differential") {
-            parameterMin=-5.0;parameterMax=5.0;xMin=-5.0;xMax=5.0;yMin=-3.0;yMax=5.0
-        } else if(kind=="surface") {
-            xMin=-3.0;xMax=3.0;yMin=-3.0;yMax=3.0
-        } else if(kind!="cartesian" && xMin == -10.0 && xMax == 10.0 && yMin == -5.0 && yMax == 5.0) {
-            xMin=-3.0;xMax=3.0;yMin=-3.0;yMax=3.0
-        }
+        if(!graphState.changeKind(kind))return
+        animationJob?.cancel()
         save()
     }
     fun analyzeGraph(action:String,first:String,second:String,selected:Int,other:Int) {
@@ -1063,7 +1068,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         analysisJob=viewModelScope.launch {
             graphAnalysisBusy=true;error="";graphAnalysis=null
             try {
-                val response=engine.execute(request("graphAnalysis").put("angle","RAD").put("trees",trees).put("graphKind",graphKind).put("analysis",action).put("a",a).put("b",b).put("selected",selected).put("other",other).put("variable",if(graphKind=="cartesian")"x" else "t").put("parameters",parameterPayload()).put("xMin",xMin).put("xMax",xMax).put("yMin",yMin).put("yMax",yMax))
+                val response=engine.execute(request("graphAnalysis").put("angle","RAD").put("trees",trees).put("graphKind",graphKind).put("analysis",action).put("a",a).put("b",b).put("selected",selected).put("other",other).put("variable",if(graphKind=="cartesian")"x" else "t").put("parameters",graphState.parameterPayload()).put("xMin",xMin).put("xMax",xMax).put("yMin",yMin).put("yMax",yMax))
                 if(source==graphSource && graphKind in listOf("cartesian","parametric","polar")) {
                     if(response.optBoolean("ok")) {
                         graphAnalysis=response

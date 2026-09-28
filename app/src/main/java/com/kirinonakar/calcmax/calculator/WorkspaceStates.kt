@@ -4,6 +4,7 @@ import android.content.SharedPreferences
 import androidx.compose.runtime.*
 import org.json.JSONArray
 import org.json.JSONObject
+import kotlin.math.abs
 
 private fun SharedPreferences.jsonObject(key:String):JSONObject =
     runCatching {JSONObject(getString(key,"{}") ?: "{}")}.getOrDefault(JSONObject())
@@ -16,20 +17,20 @@ internal class GraphState(private val prefs:SharedPreferences) {
     var differentialT0 by mutableStateOf(prefs.getString("differentialT0","0") ?: "0")
     var graphKind by mutableStateOf(prefs.getString("graphKind","cartesian") ?: "cartesian")
     var graphSource by mutableStateOf(sources.optString(graphKind,prefs.getString("graphSource","sin(x)\ncos(x)") ?: "sin(x)\ncos(x)"))
-    var xMin by mutableDoubleStateOf(prefs.getString("xMin","-10")?.toDoubleOrNull() ?: -10.0)
-    var xMax by mutableDoubleStateOf(prefs.getString("xMax","10")?.toDoubleOrNull() ?: 10.0)
-    var yMin by mutableDoubleStateOf(prefs.getString("yMin","-5")?.toDoubleOrNull() ?: -5.0)
-    var yMax by mutableDoubleStateOf(prefs.getString("yMax","5")?.toDoubleOrNull() ?: 5.0)
-    var zMin by mutableStateOf(prefs.getString("zMin",null)?.toDoubleOrNull())
-    var zMax by mutableStateOf(prefs.getString("zMax",null)?.toDoubleOrNull())
+    var xMin by mutableDoubleStateOf(prefs.getString("xMin","-10")?.toDoubleOrNull()?.takeIf(Double::isFinite) ?: -10.0)
+    var xMax by mutableDoubleStateOf(prefs.getString("xMax","10")?.toDoubleOrNull()?.takeIf(Double::isFinite) ?: 10.0)
+    var yMin by mutableDoubleStateOf(prefs.getString("yMin","-5")?.toDoubleOrNull()?.takeIf(Double::isFinite) ?: -5.0)
+    var yMax by mutableDoubleStateOf(prefs.getString("yMax","5")?.toDoubleOrNull()?.takeIf(Double::isFinite) ?: 5.0)
+    var zMin by mutableStateOf(prefs.getString("zMin",null)?.toDoubleOrNull()?.takeIf(Double::isFinite))
+    var zMax by mutableStateOf(prefs.getString("zMax",null)?.toDoubleOrNull()?.takeIf(Double::isFinite))
     var graphData by mutableStateOf<JSONObject?>(null)
     var graphDerivativeSelected by mutableStateOf<Int?>(null)
     var graphAnalysis by mutableStateOf<JSONObject?>(null)
     var graphAnalysisBusy by mutableStateOf(false)
     var graphBusy by mutableStateOf(false)
     var trace by mutableStateOf<Pair<Double,Double>?>(null)
-    var parameterMin by mutableDoubleStateOf(prefs.getString("parameterMin","0")?.toDoubleOrNull() ?: 0.0)
-    var parameterMax by mutableDoubleStateOf(prefs.getString("parameterMax","6.283185307179586")?.toDoubleOrNull() ?: 6.283185307179586)
+    var parameterMin by mutableDoubleStateOf(prefs.getString("parameterMin","0")?.toDoubleOrNull()?.takeIf(Double::isFinite) ?: 0.0)
+    var parameterMax by mutableDoubleStateOf(prefs.getString("parameterMax","6.283185307179586")?.toDoubleOrNull()?.takeIf(Double::isFinite) ?: 6.283185307179586)
     var shadedInterval by mutableStateOf<Pair<Double,Double>?>(null)
     var graphParameters by mutableStateOf(loadParameters())
     var graphAnimating by mutableStateOf(false)
@@ -46,6 +47,63 @@ internal class GraphState(private val prefs:SharedPreferences) {
             if(low<high)GraphParameter(value.coerceIn(low,high),low,high) else GraphParameter(1.0,-5.0,5.0)
         }
     }.getOrDefault(emptyMap())
+
+    fun updateSource(source:String) {
+        graphSource=source
+        clearAnalysis()
+    }
+
+    fun changeKind(kind:String):Boolean {
+        if(kind==graphKind)return false
+        sources.put(graphKind,graphSource)
+        graphKind=kind
+        graphSource=sources.optString(kind,when(kind){
+            "parametric"->"[cos(t),sin(t)]";"polar"->"2*cos(3*t)";"sequence"->"n\nu(n-1)+u(n-2)"
+            "surface"->"sin(sqrt(x^2+y^2))";"differential"->"y-t";else->"sin(x)\ncos(x)"
+        })
+        clearAnalysis()
+        graphAnimating=false
+        if(kind=="sequence") {
+            parameterMin=0.0;parameterMax=20.0;xMin=0.0;xMax=20.0;yMin=-2.0;yMax=20.0
+        } else if(kind=="differential") {
+            parameterMin=-5.0;parameterMax=5.0;xMin=-5.0;xMax=5.0;yMin=-3.0;yMax=5.0
+        } else if(kind=="surface") {
+            xMin=-3.0;xMax=3.0;yMin=-3.0;yMax=3.0
+        } else if(kind!="cartesian" && xMin == -10.0 && xMax == 10.0 && yMin == -5.0 && yMax == 5.0) {
+            xMin=-3.0;xMax=3.0;yMin=-3.0;yMax=3.0
+        }
+        return true
+    }
+
+    private fun clearAnalysis() {
+        graphDerivativeSelected=null;graphData=null;graphAnalysis=null;trace=null;shadedInterval=null
+    }
+
+    fun parameterPayload():JSONObject = JSONObject().also {payload->graphParameters.forEach {(name,spec)->payload.put(name,spec.value)}}
+
+    fun syncParameters(names:JSONArray?) {
+        val next=(0 until (names?.length() ?: 0)).mapNotNull {names?.optString(it)}.filter(String::isNotBlank).distinct().sorted()
+            .associateWith {name->graphParameters[name] ?: GraphParameter(1.0,-5.0,5.0)}
+        if(next!=graphParameters)graphParameters=next
+    }
+
+    fun setParameter(name:String,value:Double) {
+        val spec=graphParameters[name] ?: return
+        if(!value.isFinite())return
+        val clamped=value.coerceIn(spec.min,spec.max)
+        if(clamped!=spec.value)graphParameters=graphParameters+(name to spec.copy(value=clamped))
+    }
+
+    fun setParameterRange(name:String,low:Double,high:Double):Boolean {
+        val spec=graphParameters[name] ?: return false
+        if(!low.isFinite()||!high.isFinite()||low>=high||abs(low)>1e9||abs(high)>1e9)return false
+        graphParameters=graphParameters+(name to spec.copy(min=low,max=high,value=spec.value.coerceIn(low,high)))
+        return true
+    }
+
+    fun resetParameters() {
+        graphParameters=graphParameters.mapValues {(_,spec)->spec.copy(value=if(spec.min<=1.0&&1.0<=spec.max)1.0 else (spec.min+spec.max)/2)}
+    }
 
     fun writeTo(editor:SharedPreferences.Editor) {
         val parameters=JSONObject()
@@ -80,6 +138,27 @@ internal class StatisticsState(private val prefs:SharedPreferences) {
         if(array.length()==0)null else (0 until array.length()).map {index->array.getJSONArray(index).let {it.getDouble(0) to it.getDouble(1)}}
     }.getOrNull()
 
+    fun saveDataSet(name:String,csv:String,kind:String) {
+        require(name.matches(Regex("[A-Za-z][A-Za-z0-9_]*"))) {"Use a letter followed by letters, digits or underscores for the dataset name"}
+        require(kind in listOf("list","xy")) {"Unknown dataset type"}
+        dataSets=JSONObject(dataSets.toString()).put(name,JSONObject().put("csv",csv).put("kind",kind))
+    }
+
+    fun deleteDataSet(name:String) {dataSets=JSONObject(dataSets.toString()).apply {remove(name)}}
+
+    fun updateSelection(name:String,data:String,kind:String,regression:String,plot:String,csv:Boolean,selected:String,isNew:Boolean) {
+        statisticsName=name;statisticsData=data;statisticsKind=kind;statisticsRegression=regression
+        statisticsPlot=plot;statisticsCsv=csv;statisticsSelected=selected;statisticsIsNew=isNew
+    }
+
+    fun saveSelection() {
+        prefs.edit().putString("statisticsName",statisticsName).putString("statisticsData",statisticsData).putString("statisticsKind",statisticsKind)
+            .putString("statisticsRegression",statisticsRegression).putString("statisticsPlot",statisticsPlot).putBoolean("statisticsCsv",statisticsCsv)
+            .putString("statisticsSelected",statisticsSelected).putBoolean("statisticsIsNew",statisticsIsNew).apply()
+    }
+
+    fun clearRegression() {regressionCurve=emptyList();regressionFit="";regressionData="";regressionBusy=false}
+
     fun writeTo(editor:SharedPreferences.Editor) {
         editor.putString("dataSets",dataSets.toString())
             .putString("statisticsName",statisticsName).putString("statisticsData",statisticsData).putString("statisticsKind",statisticsKind)
@@ -104,6 +183,40 @@ internal class PythonState(private val prefs:SharedPreferences,private val local
     var pythonBusy by mutableStateOf(false)
     var pythonInputPrompt by mutableStateOf<String?>(null)
     var pythonInputSubmit:((String)->Unit)?=null
+
+    fun editSource(source:String,start:Int=source.length,end:Int=start):Boolean {
+        val changed=source!=pythonSource
+        pythonSource=source
+        pythonSelectionStart=start.coerceIn(0,source.length)
+        pythonSelectionEnd=end.coerceIn(0,source.length)
+        if(changed)pythonDirty=true
+        return changed
+    }
+
+    fun insert(snippet:String,inside:Int=snippet.length):Boolean {
+        val a=minOf(pythonSelectionStart,pythonSelectionEnd).coerceIn(0,pythonSource.length)
+        val b=maxOf(pythonSelectionStart,pythonSelectionEnd).coerceIn(a,pythonSource.length)
+        val source=pythonSource.substring(0,a)+snippet+pythonSource.substring(b)
+        val cursor=a+inside.coerceIn(0,snippet.length)
+        return editSource(source,cursor,cursor)
+    }
+
+    fun newFile() {
+        pythonSource="";pythonSelectionStart=0;pythonSelectionEnd=0;pythonFileName="untitled.py";pythonUri="";pythonDirty=false
+        clearRun()
+    }
+
+    fun openFile(source:String,name:String,uri:String) {
+        pythonSource=source;pythonSelectionStart=source.length;pythonSelectionEnd=source.length
+        pythonFileName=name;pythonUri=uri;pythonDirty=false
+        clearRun()
+    }
+
+    fun savedFile(name:String,uri:String) {pythonFileName=name;pythonUri=uri;pythonDirty=false}
+
+    private fun clearRun() {
+        pythonOutput="";pythonError="";pythonHasRun=false;pythonInputPrompt=null;pythonInputSubmit=null
+    }
 
     private fun loadUri():String {
         val local=localPrefs.getString("pythonUri",null)
