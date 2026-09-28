@@ -51,7 +51,7 @@ import kotlin.math.*
     var pointAt by rememberSaveable { mutableStateOf(((m.xMin+m.xMax)/2).toString()) }
     var tangentPositionOpen by rememberSaveable { mutableStateOf(false) }
     var scrollToSection by remember { mutableStateOf<String?>(null) }
-    val analysisRequester=remember {BringIntoViewRequester()}
+    val graphScrollState=rememberScrollState()
     val tableRequester=remember {BringIntoViewRequester()}
     var selected by rememberSaveable { mutableIntStateOf(0) }
     var other by rememberSaveable { mutableIntStateOf(1) }
@@ -65,7 +65,7 @@ import kotlin.math.*
     LaunchedEffect(scrollToSection,analysis,showTable) {
         delay(100)
         when(scrollToSection) {
-            "analysis" -> if(analysis)analysisRequester.bringIntoView()
+            "analysis" -> if(analysis)graphScrollState.animateScrollTo(graphScrollState.maxValue)
             "table" -> if(showTable)tableRequester.bringIntoView()
         }
         scrollToSection=null
@@ -79,7 +79,7 @@ import kotlin.math.*
     val surfaceExtraHeight=if(m.graphKind=="surface")surfaceExtra else 0.dp
     val graphHeight=(availableHeight-topChrome+panelExtra-bottomChrome-surfaceExtraHeight).coerceAtLeast(200.dp)
     val plotHeight=if(halfGraphHeight)graphHeight*0.5f else graphHeight
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+    Column(Modifier.fillMaxSize().verticalScroll(graphScrollState)) {
     Column(Modifier.fillMaxWidth().zIndex(1f).onSizeChanged{topChrome=with(density){it.height.toDp()}}) {
         OutlinedTextField(m.graphSource,{m.updateGraphSource(it)},Modifier.fillMaxWidth().padding(start=10.dp,end=10.dp,top=8.dp),label={Text(tr(when(m.graphKind){"parametric"->"One [x(t),y(t)] pair per line";"polar"->"r(t) · radians · one curve per line";"sequence"->"u(n) · use u(n−1) for recurrences";"surface"->"z = f(x,y)";"differential"->"dy/dt = f(t,y)";else->"f(x) · one per line · [shade] y<f(x) or f, g"}))},minLines=if(m.graphKind in listOf("surface","differential"))1 else 2,maxLines=4)
         Column(Modifier.fillMaxWidth().zIndex(1f).background(c.body)) {
@@ -376,7 +376,7 @@ import kotlin.math.*
                 CompactRangeSlider(low.coerceAtMost(high)..high.coerceAtLeast(low),{range->
                     first=(sliderMin+range.start*sliderSpan).toString()
                     second=(sliderMin+range.endInclusive*sliderSpan).toString()
-                },Modifier.fillMaxWidth().bringIntoViewRequester(analysisRequester))
+                },Modifier.fillMaxWidth())
             }
             SmallAction("Use visible ${if(m.graphKind=="cartesian")"x" else "t"} range") {if(m.graphKind=="cartesian"){first=m.xMin.toString();second=m.xMax.toString()}else{first=m.parameterMin.toString();second=m.parameterMax.toString()}}
             if(m.graphKind=="cartesian"&&sources.size>1) {
@@ -427,7 +427,6 @@ import kotlin.math.*
                     if(p.second !in m.yMin..m.yMax) {val half=(m.yMax-m.yMin)/2;m.yMin=p.second-half;m.yMax=p.second+half}
                 } }
             }
-            SmallAction("Trace x") {first.toDoubleOrNull()?.let {x->m.trace=curves.getOrNull(selected)?.filterNotNull()?.minByOrNull {abs(it.first-x)}}}
         }
     }
     }
