@@ -38,6 +38,19 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(call("isprime",-7)["exact"],"False")
         self.assertFalse(call("prime",0)["ok"])
         self.assertFalse(call("prime",100001)["ok"])
+    def test_factorint_displays_prime_powers_and_reuses_numeric_value(self):
+        def factor(value):
+            tree={"kind":"call","value":"factorint","args":[{"kind":"number","value":str(value)}]}
+            return json.loads(core.dispatch(json.dumps({"tree":tree})))
+        result=factor(360)
+        self.assertTrue(result["ok"],result)
+        self.assertEqual(result["exact"],"2**3*3**2*5")
+        self.assertEqual(result["decimal"],"360")
+        self.assertEqual(result["tree"]["kind"],"product")
+        self.assertEqual([item["kind"] for item in result["tree"]["args"]],["power","power","number"])
+        self.assertEqual(factor(1)["exact"],"1")
+        reused=json.loads(core.dispatch(json.dumps({"tree":result["resultAst"]})))
+        self.assertEqual(reused["exact"],"360")
     def test_round_decimal_places_and_rnd(self):
         def number(value): return {"kind":"number","value":str(value)}
         def call(name,*args):

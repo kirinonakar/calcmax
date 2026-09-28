@@ -15,6 +15,12 @@ class ParserTest {
         assertThrows(SyntaxException::class.java) { p("sin()") }
     }
     @Test fun structures() { assertEquals("list",p("det([[1,2],[3,4]])").args[0].kind); assertEquals("relation",p("solve(x^2=1,x)").args[0].kind); assertEquals("*",p("2x").value) }
+    @Test fun savedMatrixRowsParseAcrossNewlines() {
+        val matrix=p("[\n[1, 2],\n[3, 4]]")
+        assertEquals("list",matrix.kind)
+        assertEquals(2,matrix.args.size)
+        assertTrue(matrix.args.all {it.kind=="list"&&it.args.size==2})
+    }
     @Test fun adjacentListsMultiplyImplicitly() { assertEquals("*",p("[1,2][3,4]").value); assertEquals("binary",p("[[1,0],[0,1]][[4,5],[6,7]]").kind) }
     @Test fun operatorSlotBetweenOperandsParses() { assertEquals("*",Parser("2()3",true).parse().value); assertEquals("*",Parser("[[1,0],[0,1]]()[[4,5],[6,7]]",true).parse().value) }
     @Test fun directSecondPageStructures() {

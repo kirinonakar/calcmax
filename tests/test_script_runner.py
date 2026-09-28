@@ -53,7 +53,7 @@ class ScriptRunnerTests(unittest.TestCase):
                 "print(calc.convert(1, calc.m, calc.cm))")
         result=json.loads(script_runner.run(json.dumps({"source":source})))
         self.assertTrue(result["ok"],result)
-        self.assertEqual(result["output"],"2\n[[2, 2], [3, 1]]\n3*x**2\n100\n")
+        self.assertEqual(result["output"],"2\n2**2*3\n3*x**2\n100\n")
 
     def test_prime_functions_match_calculator(self):
         source="import calcmax_catalog as calc\nprint(calc.prime(1000))\nprint(calc.isprime(123457))"

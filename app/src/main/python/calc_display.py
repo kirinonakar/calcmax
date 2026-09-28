@@ -38,7 +38,7 @@ def display_tree(x):
             return t("product",args=[display_tree(a) for a in x.args])
         num,den = s.fraction(x)
         if den != 1: return t("fraction",args=[display_tree(num),display_tree(den)])
-        return t("product",args=[display_tree(a) for a in x.as_ordered_factors()])
+        return t("product",args=[display_tree(a) for a in x.args])
     if isinstance(x,s.FiniteSet): return t("set",args=[display_tree(a) for a in sorted(x,key=s.default_sort_key)])
     if isinstance(x,Relational): return t("relation",x.rel_op,[display_tree(x.lhs),display_tree(x.rhs)])
     if isinstance(x,s.Function):

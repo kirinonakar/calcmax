@@ -291,7 +291,10 @@ class Engine:
                 require(a[1].is_Integer and 0 <= a[1] <= a[0], "nPr requires 0 ≤ r ≤ n")
                 return s.factorial(a[0])/s.factorial(a[0]-a[1])
             require(a[0]>0,"Factorization and divisors require a positive integer")
-            if name == "factorint": return [[s.Integer(p), s.Integer(k)] for p,k in s.factorint(a[0]).items()]
+            if name == "factorint":
+                factors=[s.Pow(s.Integer(p),s.Integer(k),evaluate=False) if k>1 else s.Integer(p)
+                         for p,k in s.factorint(a[0]).items()]
+                return s.Mul(*factors,evaluate=False)
             return s.divisors(a[0])
         if name == "subs": return a[0].subs(a[1],a[2])
         if name in ("apart","partfrac"):

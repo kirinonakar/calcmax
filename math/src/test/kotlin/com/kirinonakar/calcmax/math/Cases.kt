@@ -22,7 +22,7 @@ fun main(args: Array<String>) {
         "convert(1,KiB,byte)" to "1024", "gcd(48,18)" to "6", "lcm(6,8)" to "24", "nCr(10,3)" to "120",
         "nPr(5,2)" to "20", "5!" to "120", "abs(3+4i)" to "5", "(1+i)^2" to "2*I", "conj(3+4i)" to "3 - 4*I",
         "sum(x^2,x,1,10)" to "385", "product(x,x,1,5)" to "120", "cbrt(-8)" to "-2", "log(8,2)" to "3",
-        "piecewise([x,x>0],[-x,true])" to "Piecewise((x, x > 0), (-x, True))", "prime(1000)" to "7919", "isprime(123457)" to "True", "factorint(360)" to "Matrix([\n[2, 3],\n[3, 2],\n[5, 1]])",
+        "piecewise([x,x>0],[-x,true])" to "Piecewise((x, x > 0), (-x, True))", "prime(1000)" to "7919", "isprime(123457)" to "True", "factorint(360)" to "2**3*3**2*5",
         "qty(2,m)+qty(30,cm)" to "23/10 m", "convert(qty(1,kg)*qty(2,mps2),N)" to "2",
         "qty(1,km)/qty(1,m)" to "1000", "convert(qty(32,degF),degC)" to "0",
         "normcdf(0)" to "1/2", "normcdf(-oo,oo)" to "1", "normcdf(-1.96,1.96)" to "erf(49*sqrt(2)/50)",

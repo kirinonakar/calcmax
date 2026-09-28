@@ -145,17 +145,18 @@ private val LocalCalculatorOverlay=staticCompositionLocalOf<(String)->Unit> { {}
     Column(Modifier.fillMaxWidth().padding(horizontal=14.dp,vertical=10.dp)) {
         val input=remember(entry.input){runCatching {JSONObject(entry.input)}.getOrNull()}
         val response=remember(entry.result){runCatching {JSONObject(entry.result)}.getOrNull()}
-        val compact=remember(entry.input,entry.result) {
-            input==null||response==null||entry.source.length>800||entry.result.length>20_000||response.optString("exact").contains('\n')||
-                largeHistoryTree(input)||largeHistoryTree(response.optJSONObject("tree"))||largeHistoryTree(response.optJSONObject("decimalTree"))
+        val compactInput=remember(entry.input) {input==null||entry.source.length>800||largeHistoryTree(input)}
+        val compactResult=remember(entry.result,m.decimal) {
+            response==null||entry.result.length>20_000||
+                largeHistoryTree(response.optJSONObject(if(m.decimal)"decimalTree" else "tree"))
         }
         Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).clickable {m.reuse(entry)}
             .semantics {contentDescription="Reuse calculation: ${entry.source.take(120)}"}) {
-            if(!compact&&input!=null)MathNode(input,m.inputFont*.84f)
+            if(!compactInput&&input!=null)MathNode(input,m.inputFont*.84f)
             else Text(entry.source.take(800),fontSize=(m.inputFont*.84f).sp,fontFamily=FontFamily.Monospace,color=c.ink,maxLines=4,overflow=TextOverflow.Ellipsis)
         }
         Box(Modifier.fillMaxWidth().padding(top=6.dp).horizontalScroll(rememberScrollState()),contentAlignment=Alignment.CenterEnd) {
-            if(!compact&&response!=null)ResultMath(response,m.decimal,m.outputFont*.82f,
+            if(!compactResult&&response!=null)ResultMath(response,m.decimal,m.outputFont*.82f,
                 displayMode=m.resultDisplayMode,thousandsSeparator=m.thousandsSeparator,dmsDisplay=response.optBoolean("dms"),displayDigits=m.displayDigits)
             else Text(ResultDisplayFormat.formatText(response?.optString(if(m.decimal)"decimal" else "exact").orEmpty().ifBlank {entry.result},m.resultDisplayMode,m.thousandsSeparator).take(1200),
                 fontSize=(m.outputFont*.72f).sp,color=c.ink,maxLines=8,overflow=TextOverflow.Ellipsis)
@@ -165,14 +166,14 @@ private val LocalCalculatorOverlay=staticCompositionLocalOf<(String)->Unit> { {}
     }
 }
 
-private fun largeHistoryTree(root:JSONObject?,compactStructured:Boolean=true):Boolean {
+internal fun largeHistoryTree(root:JSONObject?):Boolean {
     if(root==null)return false
     val pending=ArrayDeque<JSONObject>()
     pending.add(root)
     var count=0
     while(pending.isNotEmpty()) {
         val node=pending.removeLast()
-        if((compactStructured&&node.optString("kind") in setOf("matrix","rows"))||++count>120)return true
+        if(++count>120)return true
         val args=node.optJSONArray("args")
         for(index in 0 until (args?.length() ?: 0))args?.optJSONObject(index)?.let(pending::add)
     }
@@ -221,7 +222,7 @@ private fun largeHistoryTree(root:JSONObject?,compactStructured:Boolean=true):Bo
     val inputTree=remember(m.editor,m.answerDisplay,typing) {
         if(typing||m.editor.source.length>800)null else m.inputTree()
     }
-    val compactInput=m.editor.source.length>800||largeHistoryTree(inputTree,compactStructured=false)
+    val compactInput=m.editor.source.length>800||largeHistoryTree(inputTree)
     val focus=remember {FocusRequester()}
     val requestInputFocus:()->Boolean={try {focus.requestFocus()} catch (_:IllegalStateException) {false}}
     var caretVisible by remember{mutableStateOf(true)}
@@ -320,7 +321,7 @@ private fun largeHistoryTree(root:JSONObject?,compactStructured:Boolean=true):Bo
                 val currentResult=m.result!!
                 val compactResult=remember(currentResult,m.decimal) {
                     currentResult.optString("exact").length>20_000||
-                        largeHistoryTree(currentResult.optJSONObject(if(m.decimal)"decimalTree" else "tree"),compactStructured=false)
+                        largeHistoryTree(currentResult.optJSONObject(if(m.decimal)"decimalTree" else "tree"))
                 }
                 if(compactResult)Text(ResultDisplayFormat.formatText(currentResult.optString(if(m.decimal)"decimal" else "exact"),if(m.engineeringConversion)ResultDisplayMode.ENGINEERING else m.resultDisplayMode,m.thousandsSeparator,if(m.engineeringConversion)m.engineeringShift else 0,m.engineeringConversion,m.displayDigits).take(1200),fontSize=m.outputFont.sp,color=c.ink,maxLines=8,overflow=TextOverflow.Ellipsis)
                 else ResultMath(currentResult,m.decimal,m.outputFont,m.mixedNumbers,

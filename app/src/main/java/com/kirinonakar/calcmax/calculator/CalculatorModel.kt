@@ -33,9 +33,10 @@ internal fun HistoryEntry.toTapeEntry():TapeEntry {
     val input=runCatching {JSONObject(inputTree).takeIf {it.has("kind")}?.toString()}.getOrNull()
         ?: runCatching {Parser(source,true).parse().json()}.getOrNull()
         ?: JSONObject().put("kind","text").put("value",source).toString()
+    val legacyExpression=exact.trim().let {if(it.startsWith("Matrix(")&&it.endsWith(")"))it.substring(7,it.length-1) else it}
     val result=runCatching {JSONObject(response).takeIf {it.has("exact")||it.has("tree")}?.toString()}.getOrNull()
         ?: JSONObject().put("exact",exact).put("decimal",decimal)
-            .put("tree",runCatching {JSONObject(Parser(exact,true).parse().json())}.getOrElse {JSONObject().put("kind","text").put("value",exact)}).toString()
+            .put("tree",runCatching {JSONObject(Parser(legacyExpression,true).parse().json())}.getOrElse {JSONObject().put("kind","text").put("value",exact)}).toString()
     return TapeEntry(source,input,result,answer)
 }
 enum class ResultDisplayMode { OFF, ENGINEERING, SCIENTIFIC }
@@ -695,7 +696,8 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
                     val next=JSONObject(variables.toString())
                     if(response.has("resultAst")) next.put("Ans",response.getJSONObject("resultAst")) else next.remove("Ans")
                     variables=next
-                    appendHistory(HistoryEntry(System.currentTimeMillis(),source,exact,approx,mode))
+                    appendHistory(HistoryEntry(System.currentTimeMillis(),source,exact,approx,mode,
+                        inputTree=tree.json(),response=response.toString()))
                     save()
                 } else error=response.optString("error","Math ERROR")
             } finally { busy=false }
@@ -837,7 +839,8 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
                     val next=JSONObject(variables.toString())
                     if(response.has("resultAst")) next.put("Ans",response.getJSONObject("resultAst")) else next.remove("Ans")
                     variables=next
-                    appendHistory(HistoryEntry(System.currentTimeMillis(),source,response.optString("exact"),response.optString("decimal"),mode))
+                    appendHistory(HistoryEntry(System.currentTimeMillis(),source,response.optString("exact"),response.optString("decimal"),mode,
+                        inputTree=tree.json(),response=response.toString()))
                     save()
                 } else {regressionCurve=emptyList();regressionFit="";regressionData="";error=response.optString("error","Math ERROR")}
             } finally {regressionBusy=false}
