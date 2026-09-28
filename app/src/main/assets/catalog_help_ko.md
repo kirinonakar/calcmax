@@ -293,6 +293,16 @@ Example: ifourier(exp(-w^2/4),w,t)
 Example: fft([1,0,0,0])
 `ifft(list)` — 목록의 역 이산 고속 푸리에 변환.
 Example: ifft([1,1,1,1])
+`ztrans(f,n,z)` — 수열 f(n)의 단측 Z변환. n ≥ 0에 대한 f(n)/z^n의 합입니다.
+Example: ztrans(a^n,n,z)
+`invztrans(F,z,n)` — 유리함수 F(z)의 역 Z변환. 극점에서 복원합니다.
+Example: invztrans(z/(z-2),z,n)
+`mellin(f,x,s)` — Mellin 변환. 기본 수렴 띠를 결과와 함께 표시합니다.
+Example: mellin(exp(-x),x,s)
+`invmellin(F,s,x)` — 역 Mellin 변환. 수렴 띠를 두 인자로 직접 지정할 수 있습니다.
+Example: invmellin(gamma(s),s,x)
+`pdsolve(eq,u(x,y))` — 1계 편미분방정식을 풉니다.
+Example: pdsolve(diff(u(x,y),x)+diff(u(x,y),y)=0,u(x,y))
 `rsolve(eq,y(n))` — 수열 y(n)에 대한 점화식을 풉니다.
 Example: rsolve(y(n)=2*y(n-1),y(n))
 `rsolve(eq,y(n),conds)` — 초기조건을 방정식으로 함께 주는 경우입니다.

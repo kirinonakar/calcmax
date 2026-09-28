@@ -293,6 +293,16 @@ Example: ifourier(exp(-w^2/4),w,t)
 Example: fft([1,0,0,0])
 `ifft(list)` — Inverse discrete fast Fourier transform of a list.
 Example: ifft([1,1,1,1])
+`ztrans(f,n,z)` — Unilateral Z-transform of the sequence f(n): the sum of f(n)/z^n for n ≥ 0.
+Example: ztrans(a^n,n,z)
+`invztrans(F,z,n)` — Inverse Z-transform of a rational F(z), reconstructed from its poles.
+Example: invztrans(z/(z-2),z,n)
+`mellin(f,x,s)` — Mellin transform; its fundamental convergence strip is reported with the result.
+Example: mellin(exp(-x),x,s)
+`invmellin(F,s,x)` — Inverse Mellin transform; pass the convergence strip as two extra arguments to override the inferred one.
+Example: invmellin(gamma(s),s,x)
+`pdsolve(eq,u(x,y))` — Solve a first-order partial differential equation.
+Example: pdsolve(diff(u(x,y),x)+diff(u(x,y),y)=0,u(x,y))
 `rsolve(eq,y(n))` — Solve a recurrence relation for the sequence y(n).
 Example: rsolve(y(n)=2*y(n-1),y(n))
 `rsolve(eq,y(n),conds)` — The same with initial conditions, given as equations.

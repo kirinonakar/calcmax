@@ -151,6 +151,79 @@ def discrete_fourier(values, inverse=False):
     return [s.simplify(sum((values[index]*s.exp(sign*2*s.pi*s.I*s.Rational(output*index,count)) for index in range(count)), s.Integer(0))/divisor)
             for output in range(count)]
 
+
+def z_transform(expression, sequence, transform):
+    """Unilateral Z-transform sum f(n) z^-n over n = 0..oo.
+
+    SymPy has no closed-form Z-transform, so the unilateral definition is
+    evaluated directly as a summation and any convergence condition returned
+    with a Piecewise result is reported as a note.
+    """
+    try:
+        result = s.summation(expression/transform**sequence, (sequence, 0, s.oo))
+    except Exception:
+        raise MathError("No closed form was found for this Z-transform")
+    condition = s.true
+    if isinstance(result, s.Piecewise):
+        branch = result.args[0]
+        result, condition = branch[0], branch[1]
+    if result.has(s.Sum):
+        raise MathError("No closed form was found for this Z-transform")
+    result = s.simplify(result)
+    notes = []
+    if condition is not s.true and condition is not True and condition is not None:
+        notes.append("Convergence: " + str(condition))
+    return result, " · ".join(notes)
+
+
+def inverse_z_transform(expression, transform, sequence):
+    """Inverse unilateral Z-transform from the residues of F(z) z^(n-1).
+
+    This is the standard causal inverse for a rational Z-domain function: each
+    pole contributes its residue, so repeated poles are handled by SymPy's own
+    residue computation.
+    """
+    expression = s.cancel(expression)
+    denominator = s.fraction(expression)[1]
+    require(denominator.has(transform), "The inverse Z-transform needs a rational function of the transform variable")
+    try:
+        poles = s.roots(denominator, transform)
+    except Exception:
+        poles = {}
+    require(poles, "Could not factor the denominator of the Z-domain expression")
+    require(sum(poles.values()) <= 24, "Too many poles for the inverse Z-transform")
+    total = s.Integer(0)
+    for pole in poles:
+        total += s.residue(expression*transform**(sequence-1), transform, pole)
+    total = s.simplify(total)
+    require(not total.has(s.Sum, s.residue), "Inverse Z-transform did not reduce to a closed form")
+    return total
+
+
+def mellin_transform(expression, variable, transform):
+    """Mellin transform that reports its fundamental strip as a note."""
+    result = s.mellin_transform(expression, variable, transform)
+    value = result[0]
+    strip = result[1] if len(result) > 1 else None
+    condition = result[2] if len(result) > 2 else s.true
+    details = []
+    if strip is not None: details.append("Fundamental strip: " + str(strip))
+    if condition is not s.true and condition is not True and condition is not None:
+        details.append("Convergence: " + str(condition))
+    return value, " · ".join(details)
+
+
+def inverse_mellin_transform(expression, transform, variable, strip=None):
+    """Inverse Mellin transform; a conventional strip is inferred when omitted."""
+    if strip is not None:
+        return s.inverse_mellin_transform(expression, transform, variable, strip), strip
+    for candidate in ((0, s.oo), (0, 1), (-1, 0), (s.Rational(1, 2), s.oo), (-s.oo, 0)):
+        try:
+            return s.inverse_mellin_transform(expression, transform, variable, candidate), candidate
+        except Exception:
+            continue
+    raise MathError("Inverse Mellin transform failed. Pass the convergence strip as two extra arguments.")
+
 def ode_equation(value):
     if isinstance(value, Relational):
         require(isinstance(value, s.Equality), "Differential equations must use equality")

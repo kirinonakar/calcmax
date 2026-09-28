@@ -9,8 +9,9 @@ from sympy.calculus.util import continuous_domain, function_range
 from quantities import Quantity, quantity, convert_quantity
 from calc_shared import (CONSTANTS, UNITS, MathError, canonical_function_name,
                          coordinates, discrete_fourier, dms_parts, flatten,
-                         initial_conditions, matrix, numeric_derivative,
-                         ode_equation, require)
+                         initial_conditions, inverse_mellin_transform,
+                         inverse_z_transform, matrix, mellin_transform,
+                         numeric_derivative, ode_equation, require, z_transform)
 from calc_statistics import distribution_value, fit_regression, statistical_test
 from calc_finance import finance_value
 
@@ -167,18 +168,19 @@ class Engine:
             raise MathError("Unknown operator")
         require(kind == "call", "Unknown AST node")
         # Preserve bound variable identity even if the user stored x previously.
-        scoped = value in ("diff", "integrate", "limit", "series", "taylor", "sum", "product", "solve", "nsolve", "nintegrate", "nderivative", "minimum", "maximum", "collect", "subs", "domain", "range", "coeff", "quo", "rem", "resultant", "discriminant", "charpoly", "roots", "real_roots", "rsolve", "gradient", "divergence", "curl", "hessian", "jacobian", "laplacian", "dsolve", "desolve", "laplace", "ilaplace", "fourier", "ifourier") and len(args) > 1
+        scoped = value in ("diff", "integrate", "limit", "series", "taylor", "sum", "product", "solve", "nsolve", "nintegrate", "nderivative", "minimum", "maximum", "collect", "subs", "domain", "range", "coeff", "quo", "rem", "resultant", "discriminant", "charpoly", "roots", "real_roots", "rsolve", "gradient", "divergence", "curl", "hessian", "jacobian", "laplacian", "dsolve", "desolve", "laplace", "ilaplace", "fourier", "ifourier", "ztrans", "invztrans", "mellin", "invmellin", "pdsolve") and len(args) > 1
         old = self.bindings.copy()
         if value=="solve" and len(args)==1: self.bindings["x"]=self.symbol("x")
         if scoped:
-            if value in ("dsolve", "desolve", "laplace", "fourier", "ilaplace", "ifourier"):
+            if value in ("dsolve", "desolve", "laplace", "fourier", "ilaplace", "ifourier",
+                         "ztrans", "invztrans", "mellin", "invmellin"):
                 candidates = list(args[1:3])
             else:
                 varnode = args[1]
                 candidates = varnode.get("args", []) if varnode["kind"] == "list" else [varnode]
                 if varnode["kind"] == "tuple": candidates = varnode["args"][:1]
                 if varnode["kind"] == "relation": candidates = [varnode["args"][0]]
-                if value == "rsolve" and varnode["kind"] == "call": candidates = varnode.get("args", [])
+                if value in ("rsolve", "pdsolve") and varnode["kind"] == "call": candidates = varnode.get("args", [])
             for n in candidates:
                 if n["kind"] == "symbol": self.bindings[n["value"]] = self.symbol(n["value"])
         try:
@@ -290,6 +292,11 @@ class Engine:
                 return s.Integer(s.prime(int(a[0])))
             require(abs(a[0])<=10**15, "isprime input outside supported range")
             return s.true if s.isprime(a[0]) else s.false
+        if name == "factorial" and getattr(a[0], "is_Integer", None) is not True:
+            # A symbolic factorial (for example the Z-transform of 1/n!) stays unevaluated
+            # instead of being rejected, while non-integer numeric input remains an error.
+            require(getattr(a[0], "is_integer", False) is not False, "factorial requires an integer argument")
+            return s.factorial(a[0])
         if name in ("factorial", "nPr", "factorint", "divisors"):
             require(a[0].is_Integer and 0 <= a[0] <= (10000 if name in ("factorial", "nPr") else 10**15), "Number theory input outside supported range")
             if name == "factorial": return s.factorial(a[0])
@@ -397,6 +404,38 @@ class Engine:
         if name in ("fft","ifft"):
             require(len(a)==1, name+" expects a list of samples")
             return discrete_fourier(a[0], inverse=name=="ifft")
+        if name in ("ztrans","invztrans"):
+            require(len(a)==3, name+" expects an expression, its index and the transform variable")
+            require(isinstance(a[1],s.Symbol) and isinstance(a[2],s.Symbol), name+" variables must be symbols")
+            if name=="ztrans":
+                value,note=z_transform(a[0],a[1],a[2])
+                if note: self.note=note
+                return value
+            return inverse_z_transform(a[0],a[1],a[2])
+        if name in ("mellin","invmellin"):
+            require(len(a) in (3,5), name+" expects an expression, its variable and the transform variable, with an optional strip")
+            require(isinstance(a[1],s.Symbol) and isinstance(a[2],s.Symbol), name+" variables must be symbols")
+            if name=="mellin":
+                value,note=mellin_transform(a[0],a[1],a[2])
+                if note: self.note=note
+                return value
+            strip=(a[3],a[4]) if len(a)==5 else None
+            value,used=inverse_mellin_transform(a[0],a[1],a[2],strip)
+            self.note="Convergence strip: "+str(used)
+            return value
+        if name=="pdsolve":
+            require(len(a) in (2,3), "pdsolve expects an equation, a function such as u(x,y) and an optional hint")
+            require(isinstance(a[1],AppliedUndef), "pdsolve needs a function such as u(x,y)")
+            equation=ode_equation(a[0])
+            try:
+                result=s.pdsolve(equation,a[1],hint=str(a[2])) if len(a)==3 else s.pdsolve(equation,a[1])
+            except NotImplementedError:
+                raise MathError("This partial differential equation is outside the supported solver")
+            if isinstance(result,dict):
+                solutions=list(result.values())
+                require(solutions,"No solution was found for this partial differential equation")
+                return solutions[0] if len(solutions)==1 else solutions
+            return result
         if name == "limit":
             if isinstance(a[1],Relational): var,point = a[1].lhs,a[1].rhs; direction = str(a[2]) if len(a)>2 else "+-"
             else: var,point = a[1],a[2]; direction = str(a[3]) if len(a)>3 else "+-"

@@ -19,7 +19,7 @@ internal val Catalog=linkedMapOf(
 "Scientific" to listOf("sin()","cos()","tan()","asin()","acos()","atan()","abs()","floor()","ceil()","round(,0)","roundh(,0)","sign()","sqrt()","cbrt()","nthroot(,3)","atan2(,1)","frac()","iPart()","log(,10)","ln()","exp()","sinc()","sinh()","cosh()","tanh()","asinh()","acosh()","atanh()","gamma()","erf()","erfc()","Ei()","Si()","Ci()","zeta()","factorial()","nCr(,)","nPr(,)","gcd(,)","lcm(,)","prime()","isprime()","factorint()","divisors()","rnd()","eng()","pol(,)","rec(,)","randInt(,)","sexagesimal(,,)","dms()","mixed(,,)","quotient(,)","remainder(,)","mod(,)","divmod(,)","sumdata([])","percent()","degree()","rad()","gradian()","fibonacci()","lucas()","bernoulli()","harmonic()","subfactorial()","totient()","divisor_sigma()","primepi()","nextprime()","prevprime()","lambertw()","beta(,)","digamma()","polygamma(,)","besselj(,)","bessely(,)","besseli(,)","besselk(,)"),
     "Symbolic" to listOf("simplify()","expand()","factor()","collect(,x)","subs(,x,0)","diff(,x)","diff(,x,2)","integrate(,x)","integrate(,x,0,1)","limit(,x,0)","limit(,x,0,left)","limit(,x,0,right)","series(,x,0,6)","taylor(,x,0,4)","sum(,x,1,10)","product(,x,1,10)","solve(,x)","nsolve(,x,0,1)","nintegrate(,x,0,1)","nderivative(,x,0)","minimum(,x,0,1)","maximum(,x,0,1)","piecewise([,x>0],[0,true])","apart(,x)","partfrac(,x)","together()","cancel()","trigsimp()","trigexpand()","powsimp()","powdenest()","hyperexpand()","nsimplify()","comDenom()","numden()","coeff(,x)","quo(,,x)","rem(,,x)","resultant(,,x)","discriminant(,x)","domain(,x)","range(,x)","roots(,x)","real_roots(,x)","rsolve(,,)"),
     "Complex" to listOf("re()","im()","conj()","abs()","arg()","polar(,pi/2)","rectpolar()"),
-    "ODE & transforms" to listOf("dsolve(,,)","laplace(,t,s)","ilaplace(,s,t)","fourier(,t,w)","ifourier(,w,t)","fft([])","ifft([])"),
+    "ODE & transforms" to listOf("dsolve(,,)","laplace(,t,s)","ilaplace(,s,t)","fourier(,t,w)","ifourier(,w,t)","ztrans(,n,z)","invztrans(,z,n)","mellin(,x,s)","invmellin(,s,x)","pdsolve(,u(x,y))","fft([])","ifft([])"),
     "Vector calculus" to listOf("gradient(,[x,y])","divergence(,[x,y])","curl(,[x,y])","hessian(,[x,y])","jacobian(,[x,y])","laplacian(,[x,y])"),
     "Matrix & vector" to listOf("det()","inverse()","transpose()","rank()","trace()","ref()","rref()","lu()","linsolve(,)","eigenvalues()","eigenvectors()","dot(,)","cross(,)","norm()","normalize()","angle(,)","projection(,)","charpoly(,x)","identity(2)","diag([])","qr()","cholesky()","nullspace()","cofactor()","adjugate()","rowspace()","singularvalues()","frob()","jordan()","dim()","pinv()","ctranspose()","svd()"),
     "Data & units" to listOf("stats([])","mean([])","median([])","variance([])","stdev([])","quartiles([])","sumdata([])","regression([],linear)","regression([],quadratic)","regression([],logarithmic)","regression([],exponential)","regression([],power)","covariance([],[])","correlation([],[])","qty(,m)","convert(,m,cm)"),
@@ -56,7 +56,7 @@ internal fun catalogCategories(m:CalculatorModel):Map<String,List<String>> {
                 TextButton(onClick={m.toggleCatalogFavorite(source)}) {Text(if(source in m.catalogFavorites)"★" else "☆",fontSize=18.sp)}
             } }
             val hint=when(category) {
-                "ODE & transforms" -> "ODE example: dsolve(diff(y(t),t)=y(t),y(t),t). Use t for time and s for Laplace frequency."
+                "ODE & transforms" -> "ODE example: dsolve(diff(y(t),t)=y(t),y(t),t). Transforms name their own variable and target, e.g. ztrans(a^n,n,z) or mellin(exp(-x),x,s); pdsolve solves first-order PDEs."
                 "Vector calculus" -> "Vector functions take a coordinate list, e.g. gradient(x^2+y^2,[x,y])."
                 "Matrix & vector" -> "Matrix commands accept a matrix literal such as [[1,2],[3,4]]."
                 "Scientific" -> "Numeric trig follows the selected angle unit; explicit π and ° override it."
@@ -66,7 +66,7 @@ internal fun catalogCategories(m:CalculatorModel):Map<String,List<String>> {
                 else -> "Tap a template, then tap its empty slots to fill them. ↑ selects the enclosing expression; ↓ selects a child."
             }
             Text(if(isKorean()) when(category) {
-                "ODE & transforms" -> "ODE 예: dsolve(diff(y(t),t)=y(t),y(t),t). 시간 변수는 t, 라플라스 주파수는 s를 사용합니다."
+                "ODE & transforms" -> "ODE 예: dsolve(diff(y(t),t)=y(t),y(t),t). 변환은 변수와 대상 변수를 지정합니다(예: ztrans(a^n,n,z), mellin(exp(-x),x,s)). pdsolve는 1계 편미분방정식을 풉니다."
                 "Vector calculus" -> "벡터 함수에는 gradient(x^2+y^2,[x,y])처럼 좌표 목록을 넣습니다."
                 "Matrix & vector" -> "행렬 명령에는 [[1,2],[3,4]]처럼 행렬을 직접 입력할 수 있습니다."
                 "Scientific" -> "수치 삼각함수는 선택한 각도 단위를 따릅니다. π 또는 °를 명시하면 해당 단위를 우선합니다."

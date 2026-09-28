@@ -478,6 +478,56 @@ class EngineTests(unittest.TestCase):
         self.assertTrue(correlation["ok"],correlation)
         self.assertEqual(correlation["exact"],"-1")
 
+
+    def test_z_mellin_and_pde_tools(self):
+        def node(kind,value="",*args): return {"kind":kind,"value":value,"args":list(args)}
+        def sym(name): return node("symbol",name)
+        def num(value): return node("number",str(value))
+        def call(name,*args): return node("call",name,*args)
+        def binary(op,left,right): return node("binary",op,left,right)
+        def power(base,exponent): return binary("^",base,exponent)
+        def neg(value): return node("unary","-",value)
+        def dispatch(tree,**options): return json.loads(core.dispatch(json.dumps({"tree":tree,"angle":"RAD",**options})))
+        n,z,svar,x,y=map(sym,("n","z","s","x","y"))
+
+        geometric=dispatch(call("ztrans",power(sym("a"),n),n,z),budget=30)
+        self.assertTrue(geometric["ok"],geometric)
+        self.assertEqual(geometric["exact"],"z/(-a + z)")
+        self.assertIn("Convergence",geometric["note"])
+        ramp=dispatch(call("ztrans",n,n,z),budget=30)
+        self.assertTrue(ramp["ok"],ramp)
+        self.assertEqual(ramp["exact"],"z/(z - 1)**2")
+        factorial=dispatch(call("ztrans",binary("/",num(1),call("factorial",n)),n,z),budget=30)
+        self.assertTrue(factorial["ok"],factorial)
+        self.assertEqual(factorial["exact"],"exp(1/z)")
+        # A sequence with no closed form reports an error rather than an unevaluated sum.
+        self.assertFalse(dispatch(call("ztrans",call("sin",binary("*",sym("b"),n)),n,z),budget=30)["ok"])
+
+        inverse=dispatch(call("invztrans",binary("/",z,binary("-",z,num(2))),z,n),budget=30)
+        self.assertTrue(inverse["ok"],inverse)
+        self.assertEqual(inverse["exact"],"2**n")
+        repeated=dispatch(call("invztrans",binary("/",z,power(binary("-",z,num(1)),num(2))),z,n),budget=30)
+        self.assertTrue(repeated["ok"],repeated)
+        self.assertEqual(repeated["exact"],"n")
+
+        mellin=dispatch(call("mellin",call("exp",neg(x)),x,svar),budget=30)
+        self.assertTrue(mellin["ok"],mellin)
+        self.assertEqual(mellin["exact"],"gamma(s)")
+        self.assertIn("(0, oo)",mellin["note"])
+        inverse_mellin=dispatch(call("invmellin",call("gamma",svar),svar,x),budget=30)
+        self.assertTrue(inverse_mellin["ok"],inverse_mellin)
+        self.assertEqual(inverse_mellin["exact"],"exp(-x)")
+        explicit=dispatch(call("invmellin",call("gamma",svar),svar,x,num(0),sym("oo")),budget=30)
+        self.assertTrue(explicit["ok"],explicit)
+        self.assertEqual(explicit["exact"],"exp(-x)")
+
+        u=call("u",x,y)
+        pde=node("relation","=",binary("+",call("diff",u,x),call("diff",u,y)),num(0))
+        solved=dispatch(call("pdsolve",pde,u),budget=30)
+        self.assertTrue(solved["ok"],solved)
+        self.assertIn("u(x, y)",solved["exact"])
+        higher=node("relation","=",binary("+",call("diff",u,x,x),call("diff",u,y,y)),num(0))
+        self.assertFalse(dispatch(call("pdsolve",higher,u),budget=30)["ok"])
     def test_probability_distributions(self):
         def node(kind,value="",*args): return {"kind":kind,"value":value,"args":list(args)}
         def num(value): return node("number",str(value))

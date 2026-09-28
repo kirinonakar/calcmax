@@ -24,7 +24,7 @@ det inverse transpose rank trace ref rref lu linsolve eigenvalues eigenvectors d
 charpoly identity diag qr cholesky nullspace cofactor adjugate rowspace singularvalues frob jordan dim
 pinv ctranspose svd
 gradient divergence curl hessian jacobian laplacian
-dsolve desolve laplace ilaplace fourier ifourier fft ifft
+dsolve desolve laplace ilaplace fourier ifourier fft ifft ztrans invztrans mellin invmellin pdsolve
 stats mean median variance stdev quartiles regression covariance correlation qty convert
 normpdf normalcdf normcdf normalpdf invnorm tpdf tcdf invt chi2pdf chi2cdf fpdf fcdf binompdf binomcdf poissonpdf poissoncdf geometpdf geometcdf
 exppdf expcdf unifpdf unifcdf gammapdf gammacdf betapdf betacdf lognormpdf lognormcdf
