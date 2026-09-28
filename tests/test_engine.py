@@ -18,6 +18,24 @@ def run(source, **options):
     return json.loads(core.dispatch(json.dumps({"tree": TREES[source], "angle": "RAD", **options})))
 
 class EngineTests(unittest.TestCase):
+    def test_linear_regression_returns_pearson_correlation(self):
+        def num(value): return {"kind":"number","value":str(value)}
+        def regression(pairs,mode="linear"):
+            table={"kind":"list","args":[{"kind":"list","args":[num(x),num(y)]} for x,y in pairs]}
+            tree={"kind":"call","value":"regression","args":[table,{"kind":"symbol","value":mode}]}
+            return json.loads(core.dispatch(json.dumps({"tree":tree,"angle":"RAD"})))
+        rising=regression([(1,2),(2,4),(3,6)])
+        falling=regression([(1,6),(2,4),(3,2)])
+        uncorrelated=regression([(1,2),(2,1),(3,2)])
+        flat=regression([(1,2),(2,2),(3,2)])
+        quadratic=regression([(1,1),(2,4),(3,9)],"quadratic")
+        self.assertTrue(all(result["ok"] for result in (rising,falling,uncorrelated,flat,quadratic)))
+        self.assertEqual(1.0,rising["correlation"])
+        self.assertEqual(-1.0,falling["correlation"])
+        self.assertEqual(0.0,uncorrelated["correlation"])
+        self.assertIsNone(flat["correlation"])
+        self.assertNotIn("correlation",quadratic)
+
     def test_indefinite_integral_places_constant_after_expression(self):
         tree={"kind":"call","value":"integrate","args":[
             {"kind":"symbol","value":"x"},{"kind":"symbol","value":"x"}]}

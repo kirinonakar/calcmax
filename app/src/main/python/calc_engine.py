@@ -13,6 +13,7 @@ from calc_display import (approximate, display_rounded, display_tree, dms_tree,
 from calc_evaluator import Engine
 from calc_graph import graph, graph_analysis, regression_samples
 from calc_programmer import programmer
+from calc_statistics import pearson_correlation
 
 # Symbolic calls whose cold first evaluation is heavy enough that the generic step allowance used
 # to cut off legitimate work. Nested calls count too, so 1+fourier(exp(-t^2),t,w) is heavy as well.
@@ -97,8 +98,17 @@ def dispatch(payload):
                 result["tree"]=result["decimalTree"]={"kind":"product","args":[display_tree(mantissa),power]}
             if request["tree"].get("value")=="dms" and isinstance(value,list):result["tree"]=result["decimalTree"]={"kind":"dms","args":[display_tree(x) for x in display_value]}
             if request["tree"].get("kind")=="call" and request["tree"].get("value")=="regression":
-                try: result["curve"]=regression_samples(engine,value,engine.build(request["tree"]["args"][0]),request)
+                rows=None
+                try:
+                    rows=engine.build(request["tree"]["args"][0])
+                    result["curve"]=regression_samples(engine,value,rows,request)
                 except Exception: result["curve"]=[]
+                mode=request["tree"]["args"][1].get("value") if len(request["tree"]["args"])>1 else "linear"
+                if mode=="linear":
+                    try:
+                        xs,ys=zip(*rows)
+                        result["correlation"]=float(s.N(pearson_correlation(xs,ys),max(12,engine.display_digits)))
+                    except Exception: result["correlation"]=None
             try:
                 ast=result_ast(value)
                 if dms_result:

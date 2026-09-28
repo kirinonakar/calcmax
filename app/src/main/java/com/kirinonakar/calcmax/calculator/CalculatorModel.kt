@@ -274,6 +274,12 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     var regressionData
         get()=statisticsState.regressionData
         private set(value) {statisticsState.regressionData=value}
+    var regressionMode
+        get()=statisticsState.regressionMode
+        private set(value) {statisticsState.regressionMode=value}
+    var regressionCorrelation
+        get()=statisticsState.regressionCorrelation
+        private set(value) {statisticsState.regressionCorrelation=value}
     var regressionBusy
         get()=statisticsState.regressionBusy
         private set(value) {statisticsState.regressionBusy=value}
@@ -836,6 +842,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     fun fitRegression(source: String, data: String) {
         regressionJob?.cancel()
         val tree=try {Parser(source).parse()} catch(e:Exception) {error=e.message ?: "Syntax ERROR";return}
+        val fittedMode=tree.args.getOrNull(1)?.value ?: "linear"
         regressionJob=viewModelScope.launch {
             regressionBusy=true;error=""
             try {
@@ -844,14 +851,15 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
                     result=response;dmsDisplay=false;dmsConversion=false
                     val array=response.optJSONArray("curve")
                     regressionCurve=if(array==null)emptyList() else (0 until array.length()).mapNotNull {index->array.optJSONArray(index)?.let {pair->pair.optDouble(0) to pair.optDouble(1)}}
-                    regressionFit=response.optString("exact");regressionData=data
+                    regressionFit=response.optString("exact");regressionData=data;regressionMode=fittedMode
+                    regressionCorrelation=response.optDouble("correlation",Double.NaN).takeIf(Double::isFinite)
                     val next=JSONObject(variables.toString())
                     if(response.has("resultAst")) next.put("Ans",response.getJSONObject("resultAst")) else next.remove("Ans")
                     variables=next
                     appendHistory(HistoryEntry(System.currentTimeMillis(),source,response.optString("exact"),response.optString("decimal"),mode,
                         inputTree=tree.json(),response=response.toString()))
                     save()
-                } else {regressionCurve=emptyList();regressionFit="";regressionData="";error=response.optString("error","Math ERROR")}
+                } else {regressionCurve=emptyList();regressionFit="";regressionData="";regressionMode="";regressionCorrelation=null;error=response.optString("error","Math ERROR")}
             } finally {regressionBusy=false}
         }
     }

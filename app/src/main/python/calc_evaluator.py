@@ -12,7 +12,7 @@ from calc_shared import (CONSTANTS, UNITS, MathError, canonical_function_name,
                          initial_conditions, inverse_mellin_transform,
                          inverse_z_transform, matrix, mellin_transform,
                          numeric_derivative, ode_equation, require, z_transform)
-from calc_statistics import distribution_value, fit_regression, statistical_test
+from calc_statistics import distribution_value, fit_regression, pearson_correlation, statistical_test
 from calc_finance import finance_value
 
 MAX_EXACT_DIGITS = 100000
@@ -568,9 +568,7 @@ class Engine:
             mx=sum(xs)/n; my=sum(ys)/n
             covariance=sum((x-mx)*(y-my) for x,y in zip(xs,ys))/n
             if name=="covariance": return covariance
-            vx=sum((x-mx)**2 for x in xs)/n; vy=sum((y-my)**2 for y in ys)/n
-            require(vx*vy!=0,"Correlation requires variation in both data sets")
-            return s.simplify(covariance/s.sqrt(vx*vy))
+            return pearson_correlation(xs,ys)
         if name == "regression":
             rows = a[0]; mode = str(a[1]) if len(a)>1 else "linear"
             return fit_regression(self, rows, mode)

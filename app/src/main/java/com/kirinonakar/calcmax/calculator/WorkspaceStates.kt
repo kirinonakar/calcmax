@@ -123,6 +123,8 @@ internal class StatisticsState(private val prefs:SharedPreferences) {
     var regressionCurve by mutableStateOf(loadRegressionCurve())
     var regressionFit by mutableStateOf(prefs.getString("regressionFit","") ?: "")
     var regressionData by mutableStateOf(prefs.getString("regressionData","") ?: "")
+    var regressionMode by mutableStateOf(prefs.getString("regressionMode",prefs.getString("statisticsRegression","linear")) ?: "")
+    var regressionCorrelation by mutableStateOf(prefs.getString("regressionCorrelation",null)?.toDoubleOrNull()?.takeIf(Double::isFinite))
     var regressionBusy by mutableStateOf(false)
     var statisticsName by mutableStateOf(prefs.getString("statisticsName","D1") ?: "D1")
     var statisticsData by mutableStateOf(prefs.getString("statisticsData","") ?: "")
@@ -157,7 +159,7 @@ internal class StatisticsState(private val prefs:SharedPreferences) {
             .putString("statisticsSelected",statisticsSelected).putBoolean("statisticsIsNew",statisticsIsNew).apply()
     }
 
-    fun clearRegression() {regressionCurve=emptyList();regressionFit="";regressionData="";regressionBusy=false}
+    fun clearRegression() {regressionCurve=emptyList();regressionFit="";regressionData="";regressionMode="";regressionCorrelation=null;regressionBusy=false}
 
     fun writeTo(editor:SharedPreferences.Editor) {
         editor.putString("dataSets",dataSets.toString())
@@ -165,6 +167,7 @@ internal class StatisticsState(private val prefs:SharedPreferences) {
             .putString("statisticsRegression",statisticsRegression).putString("statisticsPlot",statisticsPlot).putString("statisticsSelected",statisticsSelected)
             .putBoolean("statisticsIsNew",statisticsIsNew).putBoolean("statisticsCsv",statisticsCsv)
             .putString("regressionFit",regressionFit).putString("regressionData",regressionData)
+            .putString("regressionMode",regressionMode).putString("regressionCorrelation",regressionCorrelation?.toString())
             .putString("regressionCurve",regressionCurve?.let {list->JSONArray(list.map {point->JSONArray().put(point.first).put(point.second)}).toString()} ?: "[]")
     }
 }

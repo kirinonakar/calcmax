@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.*
 import com.kirinonakar.calcmax.calculator.CalculatorModel
 import com.kirinonakar.calcmax.calculator.toTapeEntry
 import com.kirinonakar.calcmax.math.Editor
+import com.kirinonakar.calcmax.math.Parser
 import com.kirinonakar.calcmax.ui.theme.LocalInstrument
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -398,24 +399,31 @@ private fun treeSource(node:JSONObject?):String? {
                 }
             }
         }
-        Text(tr("Quick summaries"),style=MaterialTheme.typography.titleMedium)
-        Row(Modifier.horizontalScroll(rememberScrollState())) {
-            fun summarize(command:String) {summaryResultPending=true;m.edit(Editor(command));m.calculate();scope.launch {panelScroll.animateScrollTo(panelScroll.maxValue)}}
-            SmallAction(if(dataKind=="xy")"x" else "List",translate=false){val values=vector(0);if(values!="[]")summarize("stats($values)")}
-            if(dataKind=="xy")SmallAction("y",translate=false){val values=vector(1);if(values!="[]")summarize("stats($values)")}
-            val correlationCommand=statisticsCorrelationCommand(parsedRows,dataKind)
-            if(dataKind=="xy")SmallAction("correlation",active=if(correlationCommand==null)false else null,translate=false,modifier=Modifier.testTag("statistics-correlation")){correlationCommand?.let {summarize(it)}}
+        Column(verticalArrangement=Arrangement.spacedBy(2.dp)) {
+            Text(tr("Quick summaries"),style=MaterialTheme.typography.titleMedium)
+            Row(Modifier.horizontalScroll(rememberScrollState())) {
+                fun summarize(command:String) {summaryResultPending=true;m.edit(Editor(command));m.calculate();scope.launch {panelScroll.animateScrollTo(panelScroll.maxValue)}}
+                SmallAction(if(dataKind=="xy")"x" else "List",translate=false){val values=vector(0);if(values!="[]")summarize("stats($values)")}
+                if(dataKind=="xy")SmallAction("y",translate=false){val values=vector(1);if(values!="[]")summarize("stats($values)")}
+                val correlationCommand=statisticsCorrelationCommand(parsedRows,dataKind)
+                if(dataKind=="xy")SmallAction("correlation",active=if(correlationCommand==null)false else null,translate=false,modifier=Modifier.testTag("statistics-correlation")){correlationCommand?.let {summarize(it)}}
+            }
         }
-        Text(tr("Visualize"),style=MaterialTheme.typography.titleMedium)
-        if(dataKind=="xy")Choices(listOf("linear","quadratic","logarithmic","exponential","power"),regression,{selectedMode->
-            regression=selectedMode;plotType="Scatter"
-            val table=parsedRows.filter {it.size>=2&&it[0].isNotBlank()&&it[1].isNotBlank()}.joinToString(",","[","]"){it.take(2).joinToString(",","[","]")}
-            m.fitRegression("regression($table,$selectedMode)",data)
-        })
-        if(dataKind=="xy")SmallAction("Clear regression"){m.clearRegression()}
-        Choices(if(dataKind=="xy")listOf("Scatter","Histogram","Box plot") else listOf("Histogram","Box plot"),plotType,{plotType=it})
-        val fitVisible=dataKind=="xy"&&plotType=="Scatter"&&m.regressionData==data
-        StatisticsPlot(plotType,if(plotType=="Scatter")paired else xValues.mapIndexed {i,v->i.toDouble() to v},xValues,yValues,if(fitVisible)m.regressionCurve.orEmpty() else emptyList(),if(fitVisible)m.regressionFit else "")
+        Column(verticalArrangement=Arrangement.spacedBy(2.dp)) {
+            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+                Text(tr("Visualize"),Modifier.weight(1f),style=MaterialTheme.typography.titleMedium)
+                if(dataKind=="xy")SmallAction("Clear regression"){m.clearRegression()}
+            }
+            val activeRegression=if(m.regressionFit.isNotBlank()&&m.regressionData==data)m.regressionMode else ""
+            if(dataKind=="xy")Choices(listOf("linear","quadratic","logarithmic","exponential","power"),activeRegression,{selectedMode->
+                regression=selectedMode;plotType="Scatter"
+                val table=parsedRows.filter {it.size>=2&&it[0].isNotBlank()&&it[1].isNotBlank()}.joinToString(",","[","]"){it.take(2).joinToString(",","[","]")}
+                m.fitRegression("regression($table,$selectedMode)",data)
+            })
+            Choices(if(dataKind=="xy")listOf("Scatter","Histogram","Box plot") else listOf("Histogram","Box plot"),plotType,{plotType=it})
+        }
+        val fitVisible=dataKind=="xy"&&plotType=="Scatter"&&m.regressionData==data&&m.regressionFit.isNotBlank()
+        StatisticsPlot(plotType,if(plotType=="Scatter")paired else xValues.mapIndexed {i,v->i.toDouble() to v},xValues,yValues,if(fitVisible)m.regressionCurve.orEmpty() else emptyList(),if(fitVisible)m.regressionFit else "",fitVisible&&m.regressionMode=="linear",m.regressionCorrelation)
         if(m.regressionBusy)Text(if(isKorean())"회귀 적합 중…" else "Fitting regression…",fontSize=11.sp,color=LocalInstrument.current.muted)
         if(dataKind=="xy"&&m.regressionData==data&&m.regressionFit.isNotBlank())SmallAction("Graph fitted expression"){m.changeGraphKind("cartesian");m.updateGraphSource(m.regressionFit.replace("**","^"));m.mode="Graph";m.plot()}
         StatisticsAnalysis(m,parsedRows,dataKind)
@@ -443,8 +451,11 @@ private fun String.splitCsvRecord():List<String> {
     cells+=current.toString().trim();return cells
 }
 
-@Composable private fun StatisticsPlot(type:String,points:List<Pair<Double,Double>>,values:List<Double>,secondary:List<Double> = emptyList(),curve:List<Pair<Double,Double>> = emptyList(),fitLabel:String="") {
+@Composable private fun StatisticsPlot(type:String,points:List<Pair<Double,Double>>,values:List<Double>,secondary:List<Double> = emptyList(),curve:List<Pair<Double,Double>> = emptyList(),fitLabel:String="",showCorrelation:Boolean=false,correlation:Double?=null) {
     val c=LocalInstrument.current
+    val fitEquation=remember(fitLabel) {
+        if(fitLabel.isBlank())null else runCatching {JSONObject(Parser(fitLabel).parse().json())}.getOrNull()
+    }
     Canvas(Modifier.fillMaxWidth().height(220.dp).background(c.display)) {
         val left=38.dp.toPx();val right=12.dp.toPx();val top=14.dp.toPx();val bottom=28.dp.toPx()
         val width=size.width-left-right;val height=size.height-top-bottom
@@ -464,10 +475,6 @@ private fun String.splitCsvRecord():List<String> {
                 drawPath(path,c.danger,style=Stroke(2.dp.toPx()))
             }
             points.forEach {drawCircle(c.accent,4.dp.toPx(),Offset(px(it.first),py(it.second)))}
-            if(fitLabel.isNotBlank()) {
-                val fitText=Paint(Paint.ANTI_ALIAS_FLAG).apply {color=c.danger.toArgb();textSize=10.sp.toPx()}
-                drawContext.canvas.nativeCanvas.drawText("y ≈ "+fitLabel.take(54),left,top+11.dp.toPx(),fitText)
-            }
             drawContext.canvas.nativeCanvas.drawText("x",left+width-4,top+height+20.dp.toPx(),text)
             drawContext.canvas.nativeCanvas.drawText("y",5.dp.toPx(),top+12.dp.toPx(),text)
             drawContext.canvas.nativeCanvas.drawText("%.4g".format(x0),left,top+height+16.dp.toPx(),text)
@@ -516,6 +523,17 @@ private fun String.splitCsvRecord():List<String> {
                 val paint=if(entry.first.isEmpty())text else Paint(Paint.ANTI_ALIAS_FLAG).apply {color=entry.third.toArgb();textSize=10.sp.toPx()}
                 val summary="min %.4g   Q1 %.4g   median %.4g   Q3 %.4g   max %.4g".format(lo,q1,median,q3,hi)
                 drawContext.canvas.nativeCanvas.drawText(prefix+summary,left,top+(13+index*14).dp.toPx(),paint)
+            }
+        }
+    }
+    if(type=="Scatter" && fitEquation!=null)CompositionLocalProvider(LocalMathMinimumSize provides 8f) {
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal=10.dp,vertical=3.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(5.dp)) {
+            MathText("●",11f,Modifier.alignBy(MathAxis),tint=c.danger)
+            MathText("y ≈ ",12f,Modifier.alignBy(MathAxis))
+            Box(Modifier.alignBy(MathAxis)){MathNode(fitEquation,12f)}
+            if(showCorrelation) {
+                MathText("    r = ",12f,Modifier.alignBy(MathAxis))
+                MathText(correlation?.let {"%.6g".format(it)} ?: "—",12f,Modifier.alignBy(MathAxis))
             }
         }
     }
@@ -666,9 +684,11 @@ private fun String.splitCsvRecord():List<String> {
     HorizontalDivider()
     Text(tr("Analyze current data"),style=MaterialTheme.typography.titleMedium)
     Text(if(kind=="xy")"Blank cells are omitted. Paired, χ², and Fisher tests use rows with both values; independent tests use each column separately. Fisher requires exactly two categories per column." else "Blank cells are omitted from tests. Choose x,y data for two-column tests.",fontSize=12.sp,color=c.muted)
-    Choices(listOf("t test","z test","χ² test","Fisher exact","ANOVA","Shapiro–Wilk","t interval","z interval"),test,{test=it})
-    if(kind=="xy"&&!twoColumnTest)Choices(columnOptions,activeColumn,{column=it})
-    if(twoSample||pairedTest)Text(if(pairedTest)"Paired t test uses x−y for rows with both values." else "Independent samples compare the means of x and y.",fontSize=11.sp,color=c.muted)
+    Column(verticalArrangement=Arrangement.spacedBy(2.dp)) {
+        Choices(listOf("t test","z test","χ² test","Fisher exact","ANOVA","Shapiro–Wilk","t interval","z interval"),test,{test=it})
+        if(kind=="xy"&&!twoColumnTest)Choices(columnOptions,activeColumn,{column=it})
+        if(twoSample||pairedTest)Text(if(pairedTest)"Paired t test uses x−y for rows with both values." else "Independent samples compare the means of x and y.",fontSize=11.sp,color=c.muted)
+    }
     if(!twoColumnTest&&test!="Shapiro–Wilk") {
             Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                 if(test=="t test"||test=="z test") {
@@ -680,13 +700,17 @@ private fun String.splitCsvRecord():List<String> {
             }
             if(test=="z test"&&twoSample)Field(sigmaY,"Known σy",Modifier.fillMaxWidth()){sigmaY=it}
             if(test=="t test"||test=="z test") {
-                Text(tr("Alternative hypothesis"),fontSize=12.sp,fontWeight=FontWeight.SemiBold)
-                Choices(listOf("Two-sided","Left","Right"),tail,{tail=it})
+                Column(verticalArrangement=Arrangement.spacedBy(2.dp)) {
+                    Text(tr("Alternative hypothesis"),fontSize=12.sp,fontWeight=FontWeight.SemiBold)
+                    Choices(listOf("Two-sided","Left","Right"),tail,{tail=it})
+                }
             }
     }
     if(test=="Fisher exact") {
-        Text(tr("Alternative odds ratio (ordered categories)"),fontSize=12.sp,fontWeight=FontWeight.SemiBold)
-        Choices(listOf("Two-sided","Left","Right"),tail,{tail=it})
+        Column(verticalArrangement=Arrangement.spacedBy(2.dp)) {
+            Text(tr("Alternative odds ratio (ordered categories)"),fontSize=12.sp,fontWeight=FontWeight.SemiBold)
+            Choices(listOf("Two-sided","Left","Right"),tail,{tail=it})
+        }
     }
     val dataStatus=when {
         x.isEmpty()&&(y==null||y.isEmpty())->"Add values to the table to run this analysis."

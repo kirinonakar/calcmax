@@ -48,6 +48,22 @@ class WorkspaceStatesTest {
         assertEquals(10.0,graph.xMax,0.0)
     }
 
+    @Test fun clearingRegressionAlsoClearsItsSelectedModeAndCorrelation() {
+        val prefs=MemoryPreferences(mapOf("regressionFit" to "2*x+1", "regressionData" to "1,3\n2,5", "regressionMode" to "linear", "regressionCorrelation" to "1.0"))
+        val state=StatisticsState(prefs)
+        assertEquals("linear",state.regressionMode)
+        assertEquals(1.0,state.regressionCorrelation!!,0.0)
+        state.clearRegression()
+        assertEquals("",state.regressionFit)
+        assertEquals("",state.regressionMode)
+        assertNull(state.regressionCorrelation)
+        val editor=prefs.edit()
+        state.writeTo(editor);editor.apply()
+        val restored=StatisticsState(prefs)
+        assertEquals("",restored.regressionMode)
+        assertNull(restored.regressionCorrelation)
+    }
+
     @Test fun graphKindsKeepSeparateSourcesAndDiscardOldAnalysis() {
         val graph=GraphState(MemoryPreferences())
         graph.updateSource("x^2")

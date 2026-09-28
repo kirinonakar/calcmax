@@ -28,8 +28,10 @@ import androidx.compose.ui.unit.*
 import com.kirinonakar.calcmax.calculator.CalculatorModel
 import com.kirinonakar.calcmax.math.PiAxis
 import com.kirinonakar.calcmax.math.GraphZoom
+import com.kirinonakar.calcmax.math.Parser
 import com.kirinonakar.calcmax.ui.theme.LocalInstrument
 import kotlinx.coroutines.delay
+import org.json.JSONObject
 import kotlin.math.*
 
 @Composable fun GraphScreen(m: CalculatorModel) {
@@ -204,6 +206,7 @@ import kotlin.math.*
             val surfaceZMin=m.zMin ?: m.graphData?.optDouble("zMin",Double.NaN)?.takeIf { it.isFinite() }
             val surfaceZMax=m.zMax ?: m.graphData?.optDouble("zMax",Double.NaN)?.takeIf { it.isFinite() }
             Column(Modifier.fillMaxWidth().onSizeChanged{surfaceExtra=with(density){it.height.toDp()}}) {
+            GraphFormulas(m.graphKind,sources,0,null,"",shadeSources,null,{})
             Text("x: %.3g ~ %.3g   y: %.3g ~ %.3g".format(m.xMin,m.xMax,m.yMin,m.yMax)+(if(surfaceZMin!=null&&surfaceZMax!=null)"   z: %.3g ~ %.3g".format(surfaceZMin,surfaceZMax) else ""),Modifier.padding(horizontal=14.dp,vertical=2.dp),fontSize=11.sp,color=c.muted)
             Row(Modifier.fillMaxWidth().height(38.dp).padding(horizontal=14.dp),verticalAlignment=Alignment.CenterVertically) {
                 Text(tr("Rotate"),fontSize=11.sp,color=c.muted);CompactSlider(surfaceRotation,{surfaceRotation=it},Modifier.weight(1f),valueRange=0f..360f);Text("${surfaceRotation.toInt()}°",fontSize=11.sp,color=c.muted)
@@ -342,13 +345,8 @@ import kotlin.math.*
         GraphHeightToggle(halfGraphHeight,{halfGraphHeight=!halfGraphHeight},Modifier.align(Alignment.TopEnd))
         }
         Column(Modifier.fillMaxWidth().onSizeChanged{bottomChrome=with(density){it.height.toDp()}}) {
+        if(m.graphKind!="surface")GraphFormulas(m.graphKind,sources,selected,derivativeSelected,derivativeExpression,shadeSources,{i->selected=i;if(other==selected)other=(i+1)%sources.size},{m.toggleGraphDerivative(selected)})
         if(m.graphKind!="surface" && (curves.isNotEmpty()||shadeSources.isNotEmpty()))Row(Modifier.horizontalScroll(rememberScrollState()),verticalAlignment=Alignment.CenterVertically) {
-            curves.forEachIndexed { i,_->
-                val prefix=when(m.graphKind){"sequence"->"u";"differential"->"y";else->"f"}
-                SmallAction("${if(i==selected)"●" else "○"} $prefix${i+1}: ${sources.getOrElse(i){""}.take(14)}") {selected=i;if(other==selected)other=(i+1)%curves.size}
-            }
-            if(derivativeCurve!=null && derivativeSelected!=null && derivativeExpression.isNotBlank())SmallAction("● f${derivativeSelected+1}′: ${derivativeExpression.replace("**","^")}",active=true,shaded=true,translate=false) {m.toggleGraphDerivative(selected)}
-            shadeSources.forEach { Text("▨ ${it.removePrefix("[shade]").trim().take(16)}",Modifier.padding(horizontal=4.dp),fontSize=11.sp,color=c.muted) }
             SmallAction("−") { val cx=(m.xMin+m.xMax)/2;val cy=(m.yMin+m.yMax)/2;val halfX=(m.xMax-m.xMin);val halfY=(m.yMax-m.yMin);m.xMin=cx-halfX;m.xMax=cx+halfX;m.yMin=cy-halfY;m.yMax=cy+halfY }
             SmallAction("+") { val cx=(m.xMin+m.xMax)/2;val cy=(m.yMin+m.yMax)/2;val halfX=(m.xMax-m.xMin)/4;val halfY=(m.yMax-m.yMin)/4;m.xMin=cx-halfX;m.xMax=cx+halfX;m.yMin=cy-halfY;m.yMax=cy+halfY }
             SmallAction("Fit Y") {val ys=curves.flatMap {it.filterNotNull()}.filter {it.first in m.xMin..m.xMax && it.second.isFinite()}.map {it.second};if(ys.isNotEmpty()){val lo=ys.min();val hi=ys.max();val pad=max((hi-lo)*.12,if(hi==lo)1.0 else 1e-6);m.yMin=lo-pad;m.yMax=hi+pad;m.save()} }
@@ -474,6 +472,92 @@ import kotlin.math.*
                 else {m.setGraphParameterRange(name,start,end);rangeParameter=null}
             }) {Text(tr("Apply"))}},dismissButton={TextButton(onClick={rangeParameter=null}) {Text(tr("Cancel"))} })
         }
+    }
+}
+
+internal fun graphEquationTree(kind:String,source:String,index:Int):JSONObject? {
+    val left=when(kind) {
+        "parametric"->"[x(t),y(t)]"
+        "polar"->"r(t)"
+        "sequence"->"u(n)"
+        "surface"->"z"
+        "differential"->"dy/dt"
+        else->"f${index+1}(x)"
+    }
+    return runCatching {JSONObject(Parser("$left=$source").parse().json())}.getOrNull()
+}
+
+private fun splitGraphFormulaParts(source:String):List<String> {
+    val result=mutableListOf<String>()
+    var depth=0
+    var start=0
+    source.forEachIndexed {index,char->
+        when(char) {
+            '(','[','{'->depth++
+            ')',']','}'->depth--
+            ','->if(depth==0) {result+=source.substring(start,index).trim();start=index+1}
+        }
+    }
+    result+=source.substring(start).trim()
+    return result.filter(String::isNotEmpty)
+}
+
+internal data class GraphShadeFormula(val expressions:List<JSONObject>,val range:Pair<JSONObject,JSONObject>?)
+
+internal fun graphShadeFormula(source:String):GraphShadeFormula? = runCatching {
+    val parts=splitGraphFormulaParts(source.removePrefix("[shade]").trim())
+    val expressions=mutableListOf<JSONObject>()
+    var range:Pair<JSONObject,JSONObject>?=null
+    parts.forEach {part->
+        val ends=part.split("..")
+        if(ends.size==2 && range==null) {
+            range=JSONObject(Parser(ends[0].trim()).parse().json()) to JSONObject(Parser(ends[1].trim()).parse().json())
+        } else expressions+=JSONObject(Parser(part).parse().json())
+    }
+    GraphShadeFormula(expressions,range).takeIf {it.expressions.isNotEmpty()}
+}.getOrNull()
+
+@Composable private fun GraphFormulas(kind:String,sources:List<String>,selected:Int,derivativeSelected:Int?,derivativeExpression:String,shadeSources:List<String>,onSelect:((Int)->Unit)?,onDerivative:()->Unit) {
+    val c=LocalInstrument.current
+    val equations=remember(kind,sources) {sources.mapIndexed {index,source->graphEquationTree(kind,source,index)}}
+    val derivative=remember(derivativeSelected,derivativeExpression) {
+        if(derivativeSelected==null || derivativeExpression.isBlank())null
+        else runCatching {JSONObject(Parser("diff(f${derivativeSelected+1}(x),x)=$derivativeExpression").parse().json())}.getOrNull()
+    }
+    val shades=remember(shadeSources) {shadeSources.mapNotNull(::graphShadeFormula)}
+    if(equations.all {it==null} && derivative==null && shades.isEmpty())return
+    CompositionLocalProvider(LocalMathMinimumSize provides 8f) {
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal=10.dp,vertical=3.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+        equations.forEachIndexed {index,tree->
+            if(tree!=null)Row(Modifier.background(if(index==selected)c.accent.copy(alpha=.16f) else c.scientific,RoundedCornerShape(8.dp))
+                .then(if(onSelect==null)Modifier else Modifier.clickable {onSelect(index)}.semantics {contentDescription="Select curve ${index+1}"})
+                .padding(horizontal=7.dp,vertical=3.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(5.dp)) {
+                MathText(if(index==selected)"●" else "○",11f,Modifier.alignBy(MathAxis),tint=c.curves[index%c.curves.size])
+                Box(Modifier.alignBy(MathAxis)){MathNode(tree,12f)}
+            }
+        }
+        if(derivative!=null)Row(Modifier.background(c.accent.copy(alpha=.16f),RoundedCornerShape(8.dp)).clickable(onClick=onDerivative)
+            .padding(horizontal=7.dp,vertical=3.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(5.dp)) {
+            MathText("●",11f,Modifier.alignBy(MathAxis),tint=c.accent)
+            Box(Modifier.alignBy(MathAxis)){MathNode(derivative,12f)}
+        }
+        shades.forEach {shade->
+            Row(Modifier.background(c.scientific,RoundedCornerShape(8.dp)).padding(horizontal=7.dp,vertical=3.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(4.dp)) {
+                MathText("▨",11f,Modifier.alignBy(MathAxis),tint=c.muted)
+                shade.expressions.forEachIndexed {index,tree->
+                    if(index>0)MathText(",",12f,Modifier.alignBy(MathAxis))
+                    Box(Modifier.alignBy(MathAxis)){MathNode(tree,12f)}
+                }
+                shade.range?.let {(low,high)->
+                    MathText("  (",12f,Modifier.alignBy(MathAxis))
+                    Box(Modifier.alignBy(MathAxis)){MathNode(low,12f)}
+                    MathText(" ≤ x ≤ ",12f,Modifier.alignBy(MathAxis))
+                    Box(Modifier.alignBy(MathAxis)){MathNode(high,12f)}
+                    MathText(")",12f,Modifier.alignBy(MathAxis))
+                }
+            }
+        }
+    }
     }
 }
 

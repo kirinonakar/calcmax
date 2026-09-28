@@ -30,6 +30,7 @@ import kotlin.math.roundToInt
 val MathAxis=HorizontalAlignmentLine(::minOf)
 val LocalMathCursorTarget=staticCompositionLocalOf<IntRange?>{null}
 val LocalMathAfter=staticCompositionLocalOf<((Int,Int)->Unit)?>{null}
+val LocalMathMinimumSize=staticCompositionLocalOf{11f}
 val LocalCaretVisible=staticCompositionLocalOf{true}
 val LocalActiveToken=staticCompositionLocalOf<IntRange?>{null}
 val LocalPlaceCursor=staticCompositionLocalOf<((Int,Int,Int)->Unit)?>{null}
@@ -223,6 +224,7 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
 @Composable fun MathNode(node:JSONObject,size:Float=25f,select:((Int,Int)->Unit)?=null,selection:IntRange?=null,depth:Int=0,hideGroup:Boolean=false,compactRootIndexHole:Boolean=false,compactLogBaseHole:Boolean=false,compactExponentHole:Boolean=false,operandHole:Boolean=false,selectionCoveredByAncestor:Boolean=false) {
     if(depth>36){MathText("…",size);return}
     val c=LocalInstrument.current
+    val minimumSize=LocalMathMinimumSize.current
     val raw=node.optString("kind")
     val kind=when(raw){"snapshot_symbol"->"symbol";"constant","float"->"text";"frozen_call"->"function";else->raw}
     val value=node.optString("value")
@@ -247,10 +249,10 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
     val touch=Modifier.then(if(highlighted||(activeHole&&!operandHole))Modifier.background(c.accent.copy(alpha=.17f),RoundedCornerShape(2.dp))else Modifier)
         .then(if(emptyContainer&&select!=null)Modifier.semantics(mergeDescendants=true){contentDescription=if(kind=="list")"Empty list; tap to enter values" else "Empty set; tap to enter values"}else Modifier)
         .then(if(select!=null&&start>=0)Modifier.clickable{if(emptyContainer){if(placeCursor!=null)placeCursor(start,end,start+1)else select(start+1,start+1)}else select(start,end)}else Modifier)
-    @Composable fun child(i:Int,scale:Float=1f,hidden:Boolean=false,compactExponentHole:Boolean=false,operandHole:Boolean=false) {children.getOrNull(i)?.let{MathNode(it,(size*scale).coerceAtLeast(11f),select,selection,depth+1,hidden,compactExponentHole=compactExponentHole,operandHole=operandHole,selectionCoveredByAncestor=selectionCoveredByAncestor||highlighted)}}
+    @Composable fun child(i:Int,scale:Float=1f,hidden:Boolean=false,compactExponentHole:Boolean=false,operandHole:Boolean=false) {children.getOrNull(i)?.let{MathNode(it,(size*scale).coerceAtLeast(minimumSize),select,selection,depth+1,hidden,compactExponentHole=compactExponentHole,operandHole=operandHole,selectionCoveredByAncestor=selectionCoveredByAncestor||highlighted)}}
     @Composable fun integralPart(i:Int,scale:Float=1f) {
         if(i==0||integrationTuple==null)child(i,scale)
-        else integrationTuple.optJSONObject(i-1)?.let{MathNode(it,(size*scale).coerceAtLeast(11f),select,selection,depth+1,selectionCoveredByAncestor=selectionCoveredByAncestor||highlighted)}
+        else integrationTuple.optJSONObject(i-1)?.let{MathNode(it,(size*scale).coerceAtLeast(minimumSize),select,selection,depth+1,selectionCoveredByAncestor=selectionCoveredByAncestor||highlighted)}
     }
     @Composable fun label(text:String,scale:Float=1f){MathText(text,size*scale)}
     @Composable fun opLabel(index:Int,text:String,scale:Float=1f) {
@@ -289,9 +291,9 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
                             }
                             if(numericIndex!=null){
                                 val superscript=numericIndex.optString("value").map {"⁰¹²³⁴⁵⁶⁷⁸⁹"[it-'0']}.joinToString("")
-                                MathNode(JSONObject(numericIndex.toString()).put("value",superscript),(size*.7f).coerceAtLeast(11f),select,selection,depth+1,selectionCoveredByAncestor=selectionCoveredByAncestor||highlighted)
+                                MathNode(JSONObject(numericIndex.toString()).put("value",superscript),(size*.7f).coerceAtLeast(minimumSize),select,selection,depth+1,selectionCoveredByAncestor=selectionCoveredByAncestor||highlighted)
                             } else if(children.getOrNull(1)?.optString("kind")=="hole") {
-                                MathNode(children[1],(size*.7f).coerceAtLeast(11f),select,selection,depth+1,compactRootIndexHole=true,selectionCoveredByAncestor=selectionCoveredByAncestor||highlighted)
+                                MathNode(children[1],(size*.7f).coerceAtLeast(minimumSize),select,selection,depth+1,compactRootIndexHole=true,selectionCoveredByAncestor=selectionCoveredByAncestor||highlighted)
                             } else child(1,.55f)
                         }
                     },
@@ -360,7 +362,7 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
             kind in listOf("call","function")&&value in listOf("degree","rad","gradian","percent")->MathRow{child(0);label(when(value){"degree"->"°";"rad"->"ʳ";"gradian"->"ᵍ";else->"%"})}
             kind in listOf("call","function")&&value in listOf("abs","Abs")->MathRow{label("│");child(0);label("│")}
             kind in listOf("call","function")&&value in listOf("exp","Exp")&&children.size==1->PowerLayout({MathText("e",size,italic=true)},{child(0,.67f,true,compactExponentHole=true)})
-            kind=="call"&&value=="log"&&children.size>1->MathRow{LogBaseLayout({label("log")},{MathNode(children[1],(size*.6f).coerceAtLeast(11f),select,selection,depth+1,compactLogBaseHole=true,selectionCoveredByAncestor=selectionCoveredByAncestor||highlighted)});wrapped(0)}
+            kind=="call"&&value=="log"&&children.size>1->MathRow{LogBaseLayout({label("log")},{MathNode(children[1],(size*.6f).coerceAtLeast(minimumSize),select,selection,depth+1,compactLogBaseHole=true,selectionCoveredByAncestor=selectionCoveredByAncestor||highlighted)});wrapped(0)}
             kind=="call"&&value in listOf("diff","nderivative")->MathRow(3.dp){
                 FractionLayout({if(value=="diff"&&children.size>2)PowerLayout({label("d",.8f)},{child(2,.5f)})else label("d",.8f)},
                     {MathRow{label("d",.8f);if(value=="diff"&&children.size>2)PowerLayout({child(1,.8f)},{child(2,.5f)})else child(1,.8f)}})

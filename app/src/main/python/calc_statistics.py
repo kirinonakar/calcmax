@@ -591,6 +591,15 @@ def statistical_test(engine, name, a, nodes):
                     "sample mean": mean, "n": s.Integer(n)}
     raise MathError("Unknown statistical test: " + name)
 
+def pearson_correlation(xs, ys):
+    require(len(xs)==len(ys) and len(xs)>0,"Correlation requires paired data")
+    n=len(xs)
+    mx=sum(xs)/n; my=sum(ys)/n
+    dx=[x-mx for x in xs]; dy=[y-my for y in ys]
+    vx=sum(value**2 for value in dx); vy=sum(value**2 for value in dy)
+    require(vx*vy!=0,"Correlation requires variation in both data sets")
+    return s.simplify(sum(x*y for x,y in zip(dx,dy))/s.sqrt(vx*vy))
+
 def fit_regression(engine, rows, mode):
     require(len(rows)>=2 and all(len(row)==2 for row in rows),"Regression requires x,y pairs")
     xs,ys = zip(*rows)
