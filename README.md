@@ -108,7 +108,7 @@ APK: `app/build/outputs/apk/debug/app-debug.apk`. `:app:assembleRelease` builds 
 
 ### Backup policy
 
-Android Auto Backup and device transfer include only `calculator.xml`: settings, history (when enabled), variables, functions, graph and statistics work, and the current Python draft. This file can contain private calculations or code. Cloud backup requires client-side encryption on Android 9–11 and encryption capability on Android 12 and later. Android 8–8.1 does not back up this file. The downloaded exchange-rate cache and `calculator-local.xml` are excluded. The latter stores the Python document URI, whose file access grant belongs to the current device; after a restore, the draft remains available but saving it may require **Save as**.
+Android Auto Backup includes only `calculator.xml`: settings, history (when enabled), variables, functions, graph and statistics work, and the current Python draft. This file can contain private calculations or code. Cloud backup requires client-side encryption on Android 9–11 and encryption capability on Android 12 and later. Android 8–8.1 does not back up this file. Device transfer includes the same file on Android 12 and later. The downloaded exchange-rate cache and `calculator-local.xml` are excluded. The latter stores the Python document URI, whose file access grant belongs to the current device; after a restore, the draft remains available and saving it may require **Save as**.
 
 ## Architecture
 

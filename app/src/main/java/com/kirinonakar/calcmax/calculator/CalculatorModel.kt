@@ -161,7 +161,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         private set
     var pythonUri by mutableStateOf(loadPythonUri())
         private set
-    var pythonDirty by mutableStateOf(prefs.getBoolean("pythonDirty",false))
+    var pythonDirty by mutableStateOf(prefs.getBoolean("pythonDirty",false) || (pythonUri.isBlank() && pythonSource.isNotBlank()))
         private set
     var pythonOutput by mutableStateOf("")
         private set
@@ -250,7 +250,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         val legacy=prefs.getString("pythonUri",null) ?: return local ?: ""
         // Move existing installs off the backed-up preference file.
         if(local!=null || localPrefs.edit().putString("pythonUri",legacy).commit()) {
-            prefs.edit().remove("pythonUri").apply()
+            prefs.edit().remove("pythonUri").commit()
             return local ?: legacy
         }
         return legacy
