@@ -128,13 +128,70 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(root["tree"]["value"],"0.7390851332")
         self.assertGreaterEqual(len(json.loads(core.dispatch(json.dumps({"tree":TREES["nsolve(cos(x)-x,x,0,1)"],"precision":50})))["exact"]),30)
     def test_large_exact_integer_serialization(self):
-        # Results beyond CPython's default 4300-digit int->str cap must still serialize.
+        # Long exact results are abbreviated in the view but remain reusable at full precision.
         for n in (2000,10000):
             tree={"kind":"call","value":"factorial","args":[{"kind":"number","value":str(n)}]}
             with self.subTest(n=n):
                 result=json.loads(core.dispatch(json.dumps({"tree":tree})))
                 self.assertTrue(result["ok"],result)
-                self.assertEqual(result["exact"],str(core.s.factorial(n)))
+                expected=str(core.s.factorial(n))
+                if len(expected)<=10000: self.assertEqual(result["exact"],expected)
+                else:
+                    self.assertIn(f"{len(expected)} digits",result["exact"])
+                    self.assertLess(len(result["exact"]),200)
+                    self.assertEqual(result["resultAst"]["value"],expected)
+
+    def test_large_exponents_use_result_size_and_preserve_symbols(self):
+        num=lambda value:{"kind":"number","value":str(value)}
+        power=lambda base,exponent:{"kind":"binary","value":"^","args":[base,num(exponent)]}
+        evaluate=lambda tree:json.loads(core.dispatch(json.dumps({"tree":tree})))
+        exact=evaluate(power(num(2),100000))
+        self.assertTrue(exact["ok"],exact)
+        self.assertIn("30103 digits",exact["exact"])
+        self.assertEqual(exact["resultAst"]["value"],str(2**100000))
+        self.assertEqual(evaluate(exact["resultAst"])["resultAst"]["value"],str(2**100000))
+        large=evaluate(power(num(999999),100000))
+        self.assertTrue(large["ok"],large)
+        self.assertEqual(large["exact"],"999999**100000")
+        self.assertLess(len(json.dumps(large)),1000)
+        enormous=evaluate(power(num(10),10000000))
+        self.assertTrue(enormous["ok"],enormous)
+        self.assertEqual(enormous["exact"],"10**10000000")
+        self.assertLess(len(json.dumps(enormous)),1000)
+        self.assertEqual(evaluate(power(num(2),1000000000))["exact"],"2**1000000000")
+        symbolic=evaluate(power({"kind":"symbol","value":"x"},1000000000))
+        self.assertEqual(symbolic["exact"],"x**1000000000")
+        relaxed=evaluate(power(num(2),200000))
+        self.assertTrue(relaxed["ok"],relaxed)
+        self.assertIn("60206 digits",relaxed["exact"])
+        small=evaluate(power(num(2),1000))
+        self.assertEqual(small["exact"],str(2**1000))
+        reciprocal=evaluate(power(num(2),-100000))
+        self.assertTrue(reciprocal["ok"],reciprocal)
+        self.assertIn("30103 digits",reciprocal["exact"])
+        self.assertLess(len(reciprocal["exact"]),200)
+        scientific=evaluate(num("1.2e100000"))
+        self.assertTrue(scientific["ok"],scientific)
+        self.assertEqual(scientific["exact"],"(6/5)*10**100000")
+        self.assertLess(len(json.dumps(scientific["tree"])),1000)
+        self.assertEqual(evaluate(scientific["resultAst"])["exact"],scientific["exact"])
+
+    def test_tiny_power_inside_numeric_sum_stays_compact(self):
+        num=lambda value:{"kind":"number","value":str(value)}
+        binary=lambda op,a,b:{"kind":"binary","value":op,"args":[a,b]}
+        atan=lambda a:{"kind":"call","value":"atan","args":[a]}
+        tiny=binary("^",num(10),{"kind":"unary","value":"-","args":[num(100000)]})
+        angle=binary("-",binary("-",atan(binary("/",num(1),num(5))),atan(binary("/",num(1),num(239)))),binary("/",{"kind":"symbol","value":"pi"},num(4)))
+        expression=binary("/",num(1),binary("+",angle,tiny))
+        evaluate=lambda tree:json.loads(core.dispatch(json.dumps({"tree":tree,"angle":"RAD"})))
+        result=evaluate(expression)
+        self.assertTrue(result["ok"],result)
+        self.assertIn("10**(-100000)",result["exact"])
+        self.assertLess(len(json.dumps(result)),5000)
+        self.assertAlmostEqual(float(result["decimal"]),-1.688656693123357,places=12)
+        reused=evaluate(result["resultAst"])
+        self.assertTrue(reused["ok"],reused)
+        self.assertIn("10**(-100000)",reused["exact"])
     def test_exact_examples(self):
         for case in CASES:
             if "expected" in case:

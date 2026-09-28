@@ -26,7 +26,7 @@ def display_tree(x):
     if isinstance(x,s.Rational) and x.q != 1: return t("fraction",args=[t("text",str(x.p)),t("text",str(x.q))])
     if isinstance(x,s.Pow):
         if x.exp == s.Rational(1,2): return t("root",args=[display_tree(x.base)])
-        if x.exp.is_negative: return t("fraction",args=[t("text","1"),display_tree(x.base**(-x.exp))])
+        if x.exp.is_negative: return t("fraction",args=[t("text","1"),display_tree(s.Pow(x.base,-x.exp,evaluate=False))])
         return t("power",args=[display_tree(x.base),display_tree(x.exp)])
     if isinstance(x,s.Add):
         terms=x.as_ordered_terms()
@@ -34,6 +34,8 @@ def display_tree(x):
         return t("sum",args=[t("unary","-",[display_tree(-a)]) if a.could_extract_minus_sign() else display_tree(a) for a in terms])
     if isinstance(x,s.Mul):
         if x.could_extract_minus_sign(): return t("unary","-",[display_tree(-x)])
+        if any(isinstance(a,s.Pow) and a.is_number and a.exp.is_Integer and abs(a.exp)>10000 for a in x.args):
+            return t("product",args=[display_tree(a) for a in x.args])
         num,den = s.fraction(x)
         if den != 1: return t("fraction",args=[display_tree(num),display_tree(den)])
         return t("product",args=[display_tree(a) for a in x.as_ordered_factors()])

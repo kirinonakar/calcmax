@@ -17,6 +17,17 @@ from calc_programmer import programmer
 # Symbolic calls whose cold first evaluation is heavy enough that the generic step allowance used
 # to cut off legitimate work. Nested calls count too, so 1+fourier(exp(-t^2),t,w) is heavy as well.
 HEAVY_CALLS=("integrate","dsolve","desolve","laplace","ilaplace","fourier","ifourier","domain","range","invt","tinterval","tvmrate","irr")
+MAX_SHOWN_INTEGER_DIGITS=10000
+
+def shown_exact(rounded):
+    """Keep exact values reusable without sending a huge integer to the result view."""
+    if isinstance(rounded,s.Rational) and max(abs(rounded.p).bit_length(),rounded.q.bit_length()) > 33219:
+        full=readable(rounded)
+        if len(full) > MAX_SHOWN_INTEGER_DIGITS:
+            digits=max(len(str(abs(rounded.p))),len(str(rounded.q)))
+            label=full[:100]+"…"+full[-20:]+f" ({digits} digits; full value in Ans)"
+            return label,{"kind":"text","value":label}
+    return readable(rounded),display_tree(rounded)
 def contains_heavy_call(node):
     pending=[node]
     while pending:
@@ -62,12 +73,12 @@ def dispatch(payload):
             if getattr(value,"has",lambda *_:False)(s.zoo,s.nan): raise MathError("Undefined or division by zero")
             # The result view rounds floating-point values to the display digits; the numeric work keeps engine.precision.
             display_value=display_rounded(value,engine.display_digits)
-            exact=readable(display_value)
+            exact,exact_tree=shown_exact(display_value)
             require(len(exact)<=40000,"Result exceeds display size limit")
             decimal_value=approximate(value,engine.display_digits)
             dms_result=(is_dms_expression(request["tree"],request.get("variables",{}))
                         and getattr(value,"is_number",False) and not value.has(s.I))
-            result={"exact":exact,"decimal":readable(decimal_value),"tree":display_tree(display_value),"note":engine.note,
+            result={"exact":exact,"decimal":readable(decimal_value),"tree":exact_tree,"note":engine.note,
                     "conditions":[readable(c.lhs)+" ≠ "+readable(c.rhs) if isinstance(c,s.Unequality) else str(c) for c in dict.fromkeys(engine.conditions)],"symbolic":bool(getattr(value,"free_symbols",False))}
             result["approximate"]=bool(getattr(value,"has",lambda *_:False)(s.Float))
             result["decimalTree"]=display_tree(decimal_value)

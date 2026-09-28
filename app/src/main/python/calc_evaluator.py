@@ -1,6 +1,7 @@
 """Validated expression AST evaluation and calculator functions."""
 import random
 import statistics
+import math
 import sympy as s
 from sympy.core.relational import Relational
 from sympy.core.function import AppliedUndef
@@ -12,6 +13,24 @@ from calc_shared import (CONSTANTS, UNITS, MathError, canonical_function_name,
                          ode_equation, require)
 from calc_statistics import distribution_value, fit_regression, statistical_test
 from calc_finance import finance_value
+
+MAX_EXACT_DIGITS = 100000
+MAX_NUMERIC_EXPONENT = 100000
+
+def oversized_rational_power(base, exponent):
+    """Estimate the larger exact numerator/denominator before SymPy expands it."""
+    if not (base.is_Rational and exponent.is_Integer): return False
+    if base in (0, 1, -1): return False
+    magnitude = max(abs(int(base.p)), int(base.q))
+    log_magnitude=math.log10(magnitude)
+    power=abs(exponent)
+    if power > MAX_EXACT_DIGITS/log_magnitude: return True
+    return int(power)*log_magnitude + 1 > MAX_EXACT_DIGITS
+
+def has_oversized_power(value):
+    return isinstance(value,s.Basic) and any(
+        oversized_rational_power(power.base,power.exp)
+        for power in value.atoms(s.Pow) if power.base.is_Rational and power.exp.is_Integer)
 
 class Engine:
     def __init__(self, request):
@@ -53,10 +72,19 @@ class Engine:
         args = node.get("args", [])
         build = lambda a: self.build(a, depth + 1)
         if kind == "number":
-            require(len(value) <= 1000, "Number too large")
-            if "e" in value.lower(): require(abs(int(value.lower().split("e")[1])) <= 10000, "Decimal exponent limit: 10000")
+            require(len(value.lstrip("-")) <= MAX_EXACT_DIGITS, "Number too large")
+            if "e" in value.lower():
+                mantissa, exponent = value.lower().split("e", 1)
+                exponent = int(exponent)
+                if abs(exponent) > MAX_NUMERIC_EXPONENT:
+                    raise MathError("Decimal exponent limit: 100000")
+                coefficient = s.Rational(mantissa)
+                if oversized_rational_power(s.Integer(10), s.Integer(exponent)):
+                    power=s.Pow(10, exponent, evaluate=False)
+                    return power if coefficient == 1 else s.Mul(coefficient, power, evaluate=False)
             number = s.Rational(value)
-            require(abs(number.p).bit_length() < 100000 and number.q.bit_length() < 100000, "Number size limit")
+            max_bits=math.ceil(MAX_EXACT_DIGITS*math.log2(10))
+            require(abs(number.p).bit_length() <= max_bits and number.q.bit_length() <= max_bits, "Number size limit")
             return number
         if kind == "symbol":
             if value in self.bindings: return self.bindings[value]
@@ -109,17 +137,29 @@ class Engine:
             a, b = map(build, args)
             if isinstance(a, list): a = matrix(a)
             if isinstance(b, list): b = matrix(b)
-            if value == "+": return a+b
-            if value == "-": return a-b
-            if value == "*": return a*b
+            if value == "+":
+                if has_oversized_power(a) or has_oversized_power(b):
+                    return s.Add(a,b,evaluate=False)
+                return a+b
+            if value == "-":
+                if has_oversized_power(a) or has_oversized_power(b):
+                    return s.Add(a,s.Mul(-1,b,evaluate=False),evaluate=False)
+                return a-b
+            if value == "*":
+                if has_oversized_power(a) or has_oversized_power(b):
+                    return s.Mul(a,b,evaluate=False)
+                return a*b
             if value == "∠": return self.call("polar",[a,b],args)
             if value == "/":
                 require(b != 0, "Division by zero")
                 if getattr(b, "free_symbols", None): self.conditions.append(s.Ne(b, 0, evaluate=False))
                 return a/b
             if value == "^":
-                if getattr(b, "is_number", False): require(abs(b) <= 10000, "Exponent limit: 10000")
                 require(not (a == 0 and b == 0), "Undefined: 0^0")
+                if getattr(a, "is_Rational", False) and getattr(b, "is_Integer", False):
+                    if oversized_rational_power(a, b): return s.Pow(a, b, evaluate=False)
+                elif getattr(a, "is_number", False) and getattr(b, "is_number", False):
+                    require(abs(b) <= MAX_NUMERIC_EXPONENT, "Exponent limit: 100000")
                 return a**b
             if value == "mod": require(b != 0, "Division by zero"); return s.Mod(a,b)
             relations = {"=": s.Eq, "==": s.Eq, "!=": s.Ne, "<": s.Lt, ">": s.Gt, "<=": s.Le, ">=": s.Ge, "->": s.Eq}
