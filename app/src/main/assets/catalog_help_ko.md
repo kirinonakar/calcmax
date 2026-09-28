@@ -127,6 +127,50 @@ Example: mod(17,5)
 Example: divmod(17,5)
 `sumdata(values)` — 값 목록의 합계.
 Example: sumdata([1,2,3])
+`percent(x)` — x퍼센트 값, x/100.
+Example: percent(50)
+`degree(x)` — x도를 라디안으로 변환합니다.
+Example: degree(30)
+`rad(x)` — x를 그대로 반환하고 라디안 값으로 표시합니다.
+Example: rad(pi/2)
+`gradian(x)` — x그레이드를 라디안으로 변환합니다.
+Example: gradian(100)
+`fibonacci(n)` — n번째 피보나치 수.
+Example: fibonacci(10)
+`lucas(n)` — n번째 루카스 수.
+Example: lucas(10)
+`bernoulli(n)` — n번째 베르누이 수.
+Example: bernoulli(4)
+`harmonic(n,m)` — 일반화 조화수 H(n,m). m의 기본값은 1입니다.
+Example: harmonic(5)
+`subfactorial(n)` — n개를 완전히 뒤섞는 경우의 수(교란순열) !n.
+Example: subfactorial(5)
+`totient(n)` — 오일러 φ(n). n 이하에서 n과 서로소인 정수의 개수입니다.
+Example: totient(10)
+`divisor_sigma(n,k)` — n의 약수를 각각 k제곱해 더한 값. k의 기본값은 1입니다.
+Example: divisor_sigma(12)
+`primepi(x)` — x 이하의 소수 개수.
+Example: primepi(100)
+`nextprime(n)` — n보다 큰 가장 작은 소수.
+Example: nextprime(100)
+`prevprime(n)` — n보다 작은 가장 큰 소수.
+Example: prevprime(100)
+`lambertw(x)` — 램버트 W 함수. x·e^x의 역함수입니다.
+Example: lambertw(1)
+`beta(a,b)` — 베타 함수 B(a,b).
+Example: beta(2,3)
+`digamma(x)` — 감마 함수의 로그도함수.
+Example: digamma(1)
+`polygamma(n,x)` — n차 폴리감마 함수.
+Example: polygamma(1,1)
+`besselj(n,x)` — 제1종 베셀 함수.
+Example: besselj(0,1)
+`bessely(n,x)` — 제2종 베셀 함수.
+Example: bessely(0,1)
+`besseli(n,x)` — 제1종 변형 베셀 함수.
+Example: besseli(0,1)
+`besselk(n,x)` — 제2종 변형 베셀 함수.
+Example: besselk(0,1)
 
 ## Symbolic
 `simplify(expr)` — 수식을 간단히 정리합니다.
@@ -213,6 +257,10 @@ Example: discriminant(x^2-4x+3,x)
 Example: domain(1/(x-1),x)
 `range(expr,x)` — 정의역에서 수식의 치역을 구합니다.
 Example: range(x^2,x)
+`roots(poly,x)` — 다항식의 정확한 근과 중복도.
+Example: roots(x^2-1,x)
+`real_roots(poly,x)` — 다항식의 실근.
+Example: real_roots(x^3-1,x)
 
 ## Complex
 `re(z)` — 복소수의 실수부.
@@ -245,6 +293,10 @@ Example: ifourier(exp(-w^2/4),w,t)
 Example: fft([1,0,0,0])
 `ifft(list)` — 목록의 역 이산 고속 푸리에 변환.
 Example: ifft([1,1,1,1])
+`rsolve(eq,y(n))` — 수열 y(n)에 대한 점화식을 풉니다.
+Example: rsolve(y(n)=2*y(n-1),y(n))
+`rsolve(eq,y(n),conds)` — 초기조건을 방정식으로 함께 주는 경우입니다.
+Example: rsolve(y(n)=y(n-1)+1,y(n),[y(0)=0])
 
 ## Vector calculus
 `gradient(f,[x,y])` — 스칼라장의 기울기 벡터.
@@ -321,6 +373,12 @@ Example: frob([[1,2],[3,4]])
 Example: jordan([[2,1],[0,2]])
 `dim(v)` — 벡터의 차원 또는 목록의 길이.
 Example: dim([1,2,3])
+`pinv(A)` — 무어-펜로즈 유사역행렬.
+Example: pinv([[1,2],[3,4]])
+`ctranspose(A)` — 켤레 전치(에르미트 전치).
+Example: ctranspose([[1,2],[3,4]])
+`svd(A)` — 특이값 분해 [U, S, V]. 기호 결과가 매우 클 수 있습니다.
+Example: svd([[1,0],[0,2]])
 
 ## Data & units
 `stats(list)` — 목록의 요약 통계량.
@@ -398,6 +456,26 @@ Example: poissoncdf(2,3)
 Example: geometpdf(1/2,3)
 `geometcdf(p,k)` — 기하분포의 누적확률 P(X ≤ k) = 1 − (1−p)^k.
 Example: geometcdf(1/2,3)
+`exppdf(x,λ)` — 지수분포의 확률밀도(율 λ, 기본값 1).
+Example: exppdf(1)
+`expcdf(x,λ)` — 지수분포의 누적확률 P(X ≤ x).
+Example: expcdf(1)
+`unifpdf(x,a,b)` — [a,b] 구간 균일분포의 확률밀도(기본 구간 [0,1]).
+Example: unifpdf(0.5)
+`unifcdf(x,a,b)` — 균일분포의 누적확률 P(X ≤ x).
+Example: unifcdf(0.5)
+`gammapdf(x,k,θ)` — 모양 k, 척도 θ인 감마분포의 확률밀도(θ 기본값 1).
+Example: gammapdf(1,1)
+`gammacdf(x,k,θ)` — 감마분포의 누적확률 P(X ≤ x).
+Example: gammacdf(1,1)
+`betapdf(x,α,β)` — 0 ≤ x ≤ 1에서 정의된 베타분포의 확률밀도.
+Example: betapdf(0.5,2,3)
+`betacdf(x,α,β)` — 베타분포의 누적확률 P(X ≤ x).
+Example: betacdf(0.5,2,3)
+`lognormpdf(x,μ,σ)` — 로그정규분포의 확률밀도(μ, σ 기본값 0, 1).
+Example: lognormpdf(1)
+`lognormcdf(x,μ,σ)` — 로그정규분포의 누적확률 P(X ≤ x).
+Example: lognormcdf(1)
 
 ## Statistical tests
 
@@ -413,6 +491,18 @@ Example: ztest(0,2,2.5,4)
 Example: chi2test([10,20,30],[15,20,25])
 `anova([...],[...],...)` — 둘 이상의 데이터 목록에 대한 일원분산분석.
 Example: anova([1,2,3],[4,5,6])
+`ttest2(Δ0,x,y)` — 두 독립 표본의 t 검정(Welch).
+Example: ttest2(0,[1,2,3],[2,4,5])
+`ttestpaired(Δ0,x,y)` — 대응 표본 t 검정.
+Example: ttestpaired(0,[1,2,3],[2,3,5])
+`ztest2(Δ0,σx,σy,x,y)` — 표준편차를 아는 두 표본의 z 검정.
+Example: ztest2(0,1,1,[1,2,3],[2,4,5])
+`chi2independence(x,y)` — 두 범주 열의 χ² 독립성 검정.
+Example: chi2independence([1,1,2,2],[1,2,1,2])
+`fisherexact(x,y)` — 각 열이 두 범주일 때의 피셔 정확 검정.
+Example: fisherexact([1,1,1,1,1,1,2,2],[1,1,1,2,2,2,1,2])
+`shapiro(list)` — 섀피로-윌크 정규성 검정(값 3~5000개).
+Example: shapiro([1,2,3,4,5])
 `tinterval(level,[...])` — 평균의 t 신뢰구간. level은 소수(0.95) 또는 백분율(95)입니다.
 Example: tinterval(0.95,[1,2,3,4])
 `tinterval(level,x̄,s,n)` — 요약 통계량으로 구하는 같은 구간.

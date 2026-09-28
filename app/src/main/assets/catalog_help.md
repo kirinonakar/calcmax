@@ -127,6 +127,50 @@ Example: mod(17,5)
 Example: divmod(17,5)
 `sumdata(values)` — Sum of a list of values.
 Example: sumdata([1,2,3])
+`percent(x)` — x percent, x/100.
+Example: percent(50)
+`degree(x)` — An angle of x degrees converted to radians.
+Example: degree(30)
+`rad(x)` — Returns x unchanged and marks it as radians.
+Example: rad(pi/2)
+`gradian(x)` — An angle of x gradians converted to radians.
+Example: gradian(100)
+`fibonacci(n)` — n-th Fibonacci number.
+Example: fibonacci(10)
+`lucas(n)` — n-th Lucas number.
+Example: lucas(10)
+`bernoulli(n)` — n-th Bernoulli number.
+Example: bernoulli(4)
+`harmonic(n,m)` — Generalized harmonic number H(n,m); m defaults to 1.
+Example: harmonic(5)
+`subfactorial(n)` — Number of derangements of n items, !n.
+Example: subfactorial(5)
+`totient(n)` — Euler's totient φ(n).
+Example: totient(10)
+`divisor_sigma(n,k)` — Sum of the k-th powers of the divisors of n; k defaults to 1.
+Example: divisor_sigma(12)
+`primepi(x)` — Number of primes less than or equal to x.
+Example: primepi(100)
+`nextprime(n)` — Smallest prime greater than n.
+Example: nextprime(100)
+`prevprime(n)` — Largest prime less than n.
+Example: prevprime(100)
+`lambertw(x)` — Lambert W function, the inverse of x·e^x.
+Example: lambertw(1)
+`beta(a,b)` — Beta function B(a,b).
+Example: beta(2,3)
+`digamma(x)` — Logarithmic derivative of the gamma function.
+Example: digamma(1)
+`polygamma(n,x)` — n-th polygamma function.
+Example: polygamma(1,1)
+`besselj(n,x)` — Bessel function of the first kind.
+Example: besselj(0,1)
+`bessely(n,x)` — Bessel function of the second kind.
+Example: bessely(0,1)
+`besseli(n,x)` — Modified Bessel function of the first kind.
+Example: besseli(0,1)
+`besselk(n,x)` — Modified Bessel function of the second kind.
+Example: besselk(0,1)
 
 ## Symbolic
 `simplify(expr)` — Simplify an expression.
@@ -213,6 +257,10 @@ Example: discriminant(x^2-4x+3,x)
 Example: domain(1/(x-1),x)
 `range(expr,x)` — Range of the expression over its domain.
 Example: range(x^2,x)
+`roots(poly,x)` — Exact roots of a polynomial with their multiplicities.
+Example: roots(x^2-1,x)
+`real_roots(poly,x)` — Real roots of a polynomial.
+Example: real_roots(x^3-1,x)
 
 ## Complex
 `re(z)` — Real part of a complex number.
@@ -245,6 +293,10 @@ Example: ifourier(exp(-w^2/4),w,t)
 Example: fft([1,0,0,0])
 `ifft(list)` — Inverse discrete fast Fourier transform of a list.
 Example: ifft([1,1,1,1])
+`rsolve(eq,y(n))` — Solve a recurrence relation for the sequence y(n).
+Example: rsolve(y(n)=2*y(n-1),y(n))
+`rsolve(eq,y(n),conds)` — The same with initial conditions, given as equations.
+Example: rsolve(y(n)=y(n-1)+1,y(n),[y(0)=0])
 
 ## Vector calculus
 `gradient(f,[x,y])` — Gradient vector of a scalar field.
@@ -321,6 +373,12 @@ Example: frob([[1,2],[3,4]])
 Example: jordan([[2,1],[0,2]])
 `dim(v)` — Dimension of a vector or length of a list.
 Example: dim([1,2,3])
+`pinv(A)` — Moore-Penrose pseudoinverse.
+Example: pinv([[1,2],[3,4]])
+`ctranspose(A)` — Conjugate (Hermitian) transpose.
+Example: ctranspose([[1,2],[3,4]])
+`svd(A)` — Singular value decomposition as [U, S, V]; the symbolic result can be large.
+Example: svd([[1,0],[0,2]])
 
 ## Data & units
 `stats(list)` — Summary statistics of a list.
@@ -398,6 +456,26 @@ Example: poissoncdf(2,3)
 Example: geometpdf(1/2,3)
 `geometcdf(p,k)` — Geometric cumulative probability P(X ≤ k) = 1 − (1−p)^k.
 Example: geometcdf(1/2,3)
+`exppdf(x,λ)` — Exponential density with rate λ; λ defaults to 1.
+Example: exppdf(1)
+`expcdf(x,λ)` — Exponential cumulative probability P(X ≤ x).
+Example: expcdf(1)
+`unifpdf(x,a,b)` — Uniform density on [a,b]; the default interval is [0,1].
+Example: unifpdf(0.5)
+`unifcdf(x,a,b)` — Uniform cumulative probability P(X ≤ x).
+Example: unifcdf(0.5)
+`gammapdf(x,k,θ)` — Gamma density with shape k and scale θ; θ defaults to 1.
+Example: gammapdf(1,1)
+`gammacdf(x,k,θ)` — Gamma cumulative probability P(X ≤ x).
+Example: gammacdf(1,1)
+`betapdf(x,α,β)` — Beta density on 0 ≤ x ≤ 1.
+Example: betapdf(0.5,2,3)
+`betacdf(x,α,β)` — Beta cumulative probability P(X ≤ x).
+Example: betacdf(0.5,2,3)
+`lognormpdf(x,μ,σ)` — Log-normal density; μ and σ default to 0 and 1.
+Example: lognormpdf(1)
+`lognormcdf(x,μ,σ)` — Log-normal cumulative probability P(X ≤ x).
+Example: lognormcdf(1)
 
 ## Statistical tests
 
@@ -413,6 +491,18 @@ Example: ztest(0,2,2.5,4)
 Example: chi2test([10,20,30],[15,20,25])
 `anova([...],[...],...)` — One-way analysis of variance over two or more data lists.
 Example: anova([1,2,3],[4,5,6])
+`ttest2(Δ0,x,y)` — Two-sample t test of two independent samples (Welch).
+Example: ttest2(0,[1,2,3],[2,4,5])
+`ttestpaired(Δ0,x,y)` — Paired t test on matched rows.
+Example: ttestpaired(0,[1,2,3],[2,3,5])
+`ztest2(Δ0,σx,σy,x,y)` — Two-sample z test with the known standard deviations.
+Example: ztest2(0,1,1,[1,2,3],[2,4,5])
+`chi2independence(x,y)` — χ² test of independence for two category columns.
+Example: chi2independence([1,1,2,2],[1,2,1,2])
+`fisherexact(x,y)` — Fisher exact test for two categories in each column.
+Example: fisherexact([1,1,1,1,1,1,2,2],[1,1,1,2,2,2,1,2])
+`shapiro(list)` — Shapiro-Wilk normality test (3 to 5000 values).
+Example: shapiro([1,2,3,4,5])
 `tinterval(level,[...])` — t confidence interval for the mean; the level is a fraction (0.95) or a percentage (95).
 Example: tinterval(0.95,[1,2,3,4])
 `tinterval(level,x̄,s,n)` — The same interval from the summary statistics.

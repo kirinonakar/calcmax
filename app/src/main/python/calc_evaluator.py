@@ -167,7 +167,7 @@ class Engine:
             raise MathError("Unknown operator")
         require(kind == "call", "Unknown AST node")
         # Preserve bound variable identity even if the user stored x previously.
-        scoped = value in ("diff", "integrate", "limit", "series", "taylor", "sum", "product", "solve", "nsolve", "nintegrate", "nderivative", "minimum", "maximum", "collect", "subs", "domain", "range", "coeff", "quo", "rem", "resultant", "discriminant", "charpoly", "gradient", "divergence", "curl", "hessian", "jacobian", "laplacian", "dsolve", "desolve", "laplace", "ilaplace", "fourier", "ifourier") and len(args) > 1
+        scoped = value in ("diff", "integrate", "limit", "series", "taylor", "sum", "product", "solve", "nsolve", "nintegrate", "nderivative", "minimum", "maximum", "collect", "subs", "domain", "range", "coeff", "quo", "rem", "resultant", "discriminant", "charpoly", "roots", "real_roots", "rsolve", "gradient", "divergence", "curl", "hessian", "jacobian", "laplacian", "dsolve", "desolve", "laplace", "ilaplace", "fourier", "ifourier") and len(args) > 1
         old = self.bindings.copy()
         if value=="solve" and len(args)==1: self.bindings["x"]=self.symbol("x")
         if scoped:
@@ -178,6 +178,7 @@ class Engine:
                 candidates = varnode.get("args", []) if varnode["kind"] == "list" else [varnode]
                 if varnode["kind"] == "tuple": candidates = varnode["args"][:1]
                 if varnode["kind"] == "relation": candidates = [varnode["args"][0]]
+                if value == "rsolve" and varnode["kind"] == "call": candidates = varnode.get("args", [])
             for n in candidates:
                 if n["kind"] == "symbol": self.bindings[n["value"]] = self.symbol(n["value"])
         try:
@@ -259,6 +260,11 @@ class Engine:
                  "floor": s.floor, "ceil": s.ceiling, "iPart": s.floor, "frac": s.frac,
                  "sign": s.sign, "gamma": s.gamma,
                  "erf":s.erf,"erfc":s.erfc,"Ei":s.Ei,"Si":s.Si,"Ci":s.Ci,"zeta":s.zeta,
+                 "lambertw": s.LambertW, "beta": s.beta, "digamma": s.digamma, "polygamma": s.polygamma,
+                 "fibonacci": s.fibonacci, "lucas": s.lucas, "bernoulli": s.bernoulli, "harmonic": s.harmonic,
+                 "subfactorial": s.subfactorial, "totient": s.totient, "divisor_sigma": s.divisor_sigma,
+                 "primepi": s.primepi, "nextprime": s.nextprime, "prevprime": s.prevprime,
+                 "besselj": s.besselj, "bessely": s.bessely, "besseli": s.besseli, "besselk": s.besselk,
                  "ln": s.log, "log": lambda x, b=10: s.log(x,b), "exp": s.exp,
                  "sinc": s.sinc, "sinh": s.sinh, "cosh": s.cosh, "tanh": s.tanh, "asinh": s.asinh, "acosh": s.acosh, "atanh": s.atanh,
                  "conj": s.conjugate, "re": s.re, "im": s.im, "arg": s.arg,
@@ -334,6 +340,26 @@ class Engine:
         if name=="range":
             require(len(a)==2,"range expects an expression and variable")
             return function_range(a[0],a[1],s.S.Reals)
+        if name in ("roots","real_roots"):
+            require(len(a)==2,"roots expects a polynomial and a variable")
+            if name=="roots":
+                solutions=s.roots(a[0],a[1])
+                if not solutions: self.note="No rational roots were found."
+                return [[root,s.Integer(multiplicity)] for root,multiplicity in sorted(solutions.items(),key=lambda item:str(item[0]))]
+            return list(s.real_roots(a[0],a[1]))
+        if name=="rsolve":
+            require(len(a) in (2,3),"rsolve expects an equation, a sequence such as y(n), and optional initial conditions")
+            dependent=a[1]
+            require(isinstance(dependent,AppliedUndef),"rsolve needs a sequence term such as y(n)")
+            equation=ode_equation(a[0])
+            if len(a)==3:
+                items=a[2] if isinstance(a[2],(list,tuple)) else [a[2]]
+                initial={}
+                for item in items:
+                    require(isinstance(item,s.Equality),"Initial conditions must be equations")
+                    initial[item.lhs]=item.rhs
+                return s.rsolve(equation,dependent,initial)
+            return s.rsolve(equation,dependent)
         if name == "integrate":
             require(len(a) in (2,4), "integrate expects a variable or integration bounds")
             spec = a[1] if len(a)==2 else (a[1],a[2],a[3])
@@ -464,7 +490,9 @@ class Engine:
                       "cofactor": lambda m: m.cofactor_matrix(), "adjugate": lambda m: m.adjugate(),
                       "rowspace": lambda m: list(m.rowspace()), "singularvalues": lambda m: list(m.singular_values()),
                       "frob": lambda m: s.sqrt(sum(item*item for item in m)),
-                      "jordan": lambda m: list(m.jordan_form()), "dim": lambda m: [m.rows,m.cols]}
+                      "jordan": lambda m: list(m.jordan_form()), "dim": lambda m: [m.rows,m.cols],
+                      "pinv": lambda m: m.pinv(), "ctranspose": lambda m: m.H,
+                      "svd": lambda m: list(m.singular_value_decomposition())}
         if name in matrix_ops: return matrix_ops[name](matrix(a[0]))
         if name in ("dot", "cross", "angle", "projection", "linsolve"):
             u,v = matrix(a[0]),matrix(a[1])
@@ -520,7 +548,9 @@ class Engine:
             self.note = "Result in " + dst
             return s.simplify((base-o2)/f2)
         if name in ("normpdf", "normcdf", "invnorm", "tpdf", "tcdf", "invt", "chi2pdf", "chi2cdf", "fpdf", "fcdf",
-                    "binompdf", "binomcdf", "poissonpdf", "poissoncdf", "geometpdf", "geometcdf"):
+                    "binompdf", "binomcdf", "poissonpdf", "poissoncdf", "geometpdf", "geometcdf",
+                    "exppdf", "expcdf", "unifpdf", "unifcdf", "gammapdf", "gammacdf", "betapdf", "betacdf",
+                    "lognormpdf", "lognormcdf"):
             return distribution_value(self, name, a)
         if name in ("ttest", "ttest2", "ttestpaired", "ztest", "ztest2", "chi2test", "chi2independence", "fisherexact", "anova", "shapiro", "tinterval", "zinterval"):
             return statistical_test(self, name, a, nodes)

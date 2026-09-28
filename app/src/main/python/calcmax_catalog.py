@@ -11,17 +11,23 @@ m, cm = "m", "cm"
 _names = set("""
 abs floor ceil round roundh sign sqrt cbrt nthroot atan2 arctan2 frac iPart log ln exp sinc sinh cosh tanh asin acos atan arcsin arccos arctan sin cos tan
 asinh acosh atanh arcsinh arsinh arccosh arcosh arctanh artanh gamma erf erfc Ei Si Ci zeta factorial nCr nPr gcd lcm prime isprime factorint divisors
+fibonacci lucas bernoulli harmonic subfactorial totient divisor_sigma primepi nextprime prevprime
+lambertw beta digamma polygamma besselj bessely besseli besselk
 rnd eng pol rec randInt sexagesimal dms mixed quotient remainder mod divmod sumdata
+percent degree rad gradian
 simplify expand factor collect subs diff integrate limit series taylor sum product solve nsolve nintegrate
 nderivative minimum maximum piecewise apart partfrac together cancel trigsimp trigexpand powsimp powdenest hyperexpand
 nsimplify comDenom numden coeff quo rem resultant discriminant domain range
+roots real_roots rsolve
 re im conj arg polar rectpolar
 det inverse transpose rank trace ref rref lu linsolve eigenvalues eigenvectors dot cross norm normalize angle projection
 charpoly identity diag qr cholesky nullspace cofactor adjugate rowspace singularvalues frob jordan dim
+pinv ctranspose svd
 gradient divergence curl hessian jacobian laplacian
 dsolve desolve laplace ilaplace fourier ifourier fft ifft
 stats mean median variance stdev quartiles regression covariance correlation qty convert
 normpdf normalcdf normcdf normalpdf invnorm tpdf tcdf invt chi2pdf chi2cdf fpdf fcdf binompdf binomcdf poissonpdf poissoncdf geometpdf geometcdf
+exppdf expcdf unifpdf unifcdf gammapdf gammacdf betapdf betacdf lognormpdf lognormcdf
 ttest ttest2 ttestpaired ztest ztest2 chi2test chi2independence fisherexact anova shapiro tinterval zinterval
 tvmfv tvmpv tvmpmt tvmn tvmrate npv irr amort cagr
 """.split())

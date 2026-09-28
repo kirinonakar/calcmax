@@ -339,6 +339,64 @@ def distribution_value(engine, name, a):
         require(k.is_Integer and 1 <= k <= 10**6, "geomet k must be a positive integer")
         if name == "geometpdf": return (1 - p)**(int(k) - 1)*p
         return 1 - (1 - p)**int(k)
+    if name in ("exppdf", "expcdf"):
+        require(len(a) in (1, 2), name + " takes x, or x with the rate λ")
+        x, rate = (a[0], s.Integer(1)) if len(a) == 1 else a
+        _real_value(x, name + " requires a numeric argument")
+        _positive(rate, "The rate must be positive")
+        require(x >= 0, name + " is defined for x ≥ 0")
+        if name == "exppdf": return rate*s.exp(-rate*x)
+        if x == 0: return s.Integer(0)
+        return 1 - s.exp(-rate*x)
+    if name in ("unifpdf", "unifcdf"):
+        require(len(a) in (1, 3), name + " takes x, or x with the bounds a and b")
+        x = _real_value(a[0], name + " requires a numeric argument")
+        low, high = (s.Integer(0), s.Integer(1)) if len(a) == 1 else (a[1], a[2])
+        _real_value(low, name + " requires numeric bounds")
+        _real_value(high, name + " requires numeric bounds")
+        require(high > low, "The upper bound must be above the lower bound")
+        if name == "unifpdf": return 1/(high - low) if low <= x <= high else s.Integer(0)
+        if x <= low: return s.Integer(0)
+        if x >= high: return s.Integer(1)
+        return (x - low)/(high - low)
+    if name in ("gammapdf", "gammacdf"):
+        require(len(a) in (2, 3), name + " takes x and the shape k, with an optional scale θ")
+        x, shape = a[0], a[1]
+        scale = a[2] if len(a) == 3 else s.Integer(1)
+        _real_value(x, name + " requires numeric arguments")
+        _positive(shape, "The shape must be positive")
+        _positive(scale, "The scale must be positive")
+        require(x >= 0, name + " is defined for x ≥ 0")
+        if name == "gammapdf":
+            require(x > 0 or shape >= 1, name + " is not finite at x = 0 below shape 1")
+            return x**(shape - 1)*s.exp(-x/scale)/(s.gamma(shape)*scale**shape)
+        if x == 0: return s.Integer(0)
+        with mp.workdps(digits + 10):
+            return _mp_result(mp.gammainc(_mpf(shape, digits), 0, _mpf(x/scale, digits), regularized=True), engine)
+    if name in ("betapdf", "betacdf"):
+        require(len(a) == 3, name + " takes x and the two shape parameters α and β")
+        x, alpha, beta_shape = a
+        _real_value(x, name + " requires a numeric argument")
+        _positive(alpha, "The first shape must be positive")
+        _positive(beta_shape, "The second shape must be positive")
+        require(0 <= x <= 1, name + " is defined on 0 ≤ x ≤ 1")
+        if name == "betapdf":
+            require(0 < x < 1 or (alpha > 1 and beta_shape > 1), name + " is not finite at the endpoints")
+            return x**(alpha - 1)*(1 - x)**(beta_shape - 1)/s.beta(alpha, beta_shape)
+        if x == 0: return s.Integer(0)
+        if x == 1: return s.Integer(1)
+        with mp.workdps(digits + 10):
+            return _mp_result(mp.betainc(_mpf(alpha, digits), _mpf(beta_shape, digits), 0, _mpf(x, digits), regularized=True), engine)
+    if name in ("lognormpdf", "lognormcdf"):
+        require(len(a) in (1, 3), name + " takes x, or x with μ and σ")
+        x, mu, sigma = (a[0], s.Integer(0), s.Integer(1)) if len(a) == 1 else a
+        _real_value(x, name + " requires numeric arguments")
+        _real_value(mu, name + " requires a numeric μ")
+        _positive(sigma, "Standard deviation must be positive")
+        require(x > 0, name + " is defined for x > 0")
+        shift = (s.log(x) - mu)/sigma
+        if name == "lognormpdf": return s.exp(-shift**2/2)/(x*sigma*s.sqrt(2*s.pi))
+        return (s.erf(shift/s.sqrt(2)) + 1)/2
     raise MathError("Unknown distribution: " + name)
 
 def statistical_test(engine, name, a, nodes):
