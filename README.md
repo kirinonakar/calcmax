@@ -102,7 +102,7 @@ cagr(1000,2000,5)
 
 ## Build
 
-Requirements: JDK 21 (Android Studio's bundled runtime works), Android SDK 36.1, Python 3.14 on PATH, and an initial internet connection to download build dependencies. The installed application computes offline. Supported devices: Android 8/API 26 or later, arm64-v8a and x86_64.
+Requirements: JDK 21 (Android Studio's bundled runtime works), Android SDK 37, Python 3.14 on PATH, and an initial internet connection to download build dependencies. The installed application computes offline. Supported devices: Android 8/API 26 or later, arm64-v8a and x86_64.
 
 ```powershell
 $env:JAVA_HOME='C:\Program Files\Android\Android Studio\jbr'
