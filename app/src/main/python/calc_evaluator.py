@@ -315,7 +315,7 @@ class Engine:
             return s.apart(a[0],a[1])
         if name in ("together","cancel","trigsimp","trigexpand","powsimp","powdenest","hyperexpand"):
             transforms={"together":s.together,"cancel":s.cancel,"trigsimp":s.trigsimp,
-                        "trigexpand":s.trigexpand,"powsimp":s.powsimp,"powdenest":s.powdenest,
+                        "trigexpand":s.expand_trig,"powsimp":s.powsimp,"powdenest":s.powdenest,
                         "hyperexpand":s.hyperexpand}
             require(len(a)==1, name+" expects one expression")
             return transforms[name](a[0])
