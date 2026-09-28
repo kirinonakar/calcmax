@@ -15,7 +15,10 @@ You can download the latest release from the [Releases Page](https://github.com/
 * The first keypad page groups scientific and numeric operations. The second page groups symbolic tools.
 * Long-press a key to apply its SHIFT function directly; long-press the mode indicator below the title bar to jump straight to the Scientific/CAS workspace.
 * `Keyboard` enables Android text entry; software keyboard input overlays the lower keys without resizing the instrument, and hardware keyboards also work in the natural display. `Paste` inserts clipboard text. `Copy` copies a selected expression when one is selected; otherwise it alternates between the answer and expression. `Cut` copies and removes a selected expression.
-* S⇔D switches exact and decimal results; SHIFT S⇔D switches improper/mixed fractions. The top `Catalog` button opens the searchable function catalog. Swipe horizontally to browse its categories.
+* The button row below the input display scrolls horizontally. `Exact`/`≈ Decimal` switches how results are shown, `ENG`/`SCI` cycles through standard, engineering and scientific notation, `,` toggles thousands separators, and `scr` expands or restores the calculation screen. Use the settings icon at the end of the row to customize up to six shortcut buttons between `scr` and `Share`.
+* S⇔D switches exact and decimal results; SHIFT S⇔D switches improper/mixed fractions.
+* The top `History` button shows up to 500 past calculations, newest first. Search or reuse an entry, mark it with the star button, or switch to `Favorites` to see starred calculations.
+* The top `Catalog` button opens the searchable function catalog. Its `Recent` list shows recently used functions, and functions can be starred for its `Favorites` list. Swipe horizontally to browse categories.
 * RCL lists stored variables; tap one to insert its name into the current expression. SHIFT RCL (STO) opens the variable editor for storing, recalling, and deleting values. CALC on a recalled expression prompts for its input variables and shows the expression alongside their values. SHIFT AC is CLR ALL and clears the visible tape and variables while preserving History, settings, assumptions and custom functions.
 
 ### LaTeX paste
@@ -132,8 +135,6 @@ tests/          Desktop integration and randomized exact arithmetic tests
 Scientific, CAS, equation, graphing, matrix/vector and statistics operations consume the same AST. Graphing compiles already validated symbolic expressions to local numeric functions; it never parses a separate expression language. Tip and currency forms use exact decimal value objects from the independent math module. SymPy's `parse_expr` and unrestricted string `eval` are not used for user input. Result ASTs preserve Ans/STO values without reparsing printed mathematics. The engine adapter isolates the UI from SymPy.
 
 Computation runs in a bound service in a separate `:math` process. The calculator expression engine has recursion, AST size, numeric size, step and time limits. A 20-second IPC deadline can terminate and restart the worker process; cancellation therefore also works for operations that do not cooperate with coroutine cancellation. The expression engine's default budget is eight seconds; heavy symbolic calls such as integration and transforms keep a larger step allowance and may use up to sixteen seconds inside the IPC window. Python mode runs the user's script directly in the service process and is subject to the IPC deadline. Errors and unevaluated symbolic results are displayed rather than replaced by fabricated answers.
-
-History is capped at 500 entries and stored privately on the device. Turning persistence off deletes its saved copy. Variables/functions/preferences remain local. Android backup behavior follows the manifest backup configuration.
 
 ## Validation
 
