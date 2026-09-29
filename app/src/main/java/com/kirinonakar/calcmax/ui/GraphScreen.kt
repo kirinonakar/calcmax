@@ -72,7 +72,7 @@ import kotlin.math.*
         scrollToSection=null
     }
     val parameterSignature=m.graphParameters.entries.joinToString(","){"${it.key}=${it.value.value}"}
-    LaunchedEffect(m.graphSource,m.graphDerivativeSelected,m.xMin,m.xMax,m.yMin,m.yMax,m.graphKind,m.parameterMin,m.parameterMax,m.sequenceInitials,m.differentialInitials,m.differentialT0,parameterSignature) { delay(350);m.plot() }
+    LaunchedEffect(m.graphSource,m.graphDerivativeSelected,m.xMin,m.xMax,m.yMin,m.yMax,m.graphKind,m.parameterMin,m.parameterMax,m.sequenceInitials,m.differentialInitials,m.differentialT0,parameterSignature) { delay(350);m.plot(auto=true) }
     BoxWithConstraints(Modifier.fillMaxSize()) {
     val density=LocalDensity.current
     val availableHeight=if(maxHeight.value.isFinite())maxHeight else 720.dp

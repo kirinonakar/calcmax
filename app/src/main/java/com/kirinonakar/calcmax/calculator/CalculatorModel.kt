@@ -294,6 +294,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         private set
     internal var job: Job? = null
     internal var graphJob: Job? = null
+    internal var graphRequestSignature: String? = null
     internal var analysisJob: Job? = null
     internal var regressionJob: Job? = null
     internal var pythonJob: Job? = null
@@ -723,7 +724,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     fun fitRegression(source:String,data:String) = with(CalculatorStatisticsActions) { performFitRegression(source,data) }
     fun clearRegression() = with(CalculatorStatisticsActions) { performClearRegression() }
     fun cancelRegression() = with(CalculatorStatisticsActions) { performCancelRegression() }
-    fun plot() = with(CalculatorGraphActions) { performPlot() }
+    fun plot(auto: Boolean = false) = with(CalculatorGraphActions) { performPlot(auto) }
     fun setGraphParameter(name:String,value:Double) = with(CalculatorGraphActions) { performSetGraphParameter(name,value) }
     fun setGraphParameterRange(name:String,low:Double,high:Double) = with(CalculatorGraphActions) { performSetGraphParameterRange(name,low,high) }
     fun resetGraphParameters() = with(CalculatorGraphActions) { performResetGraphParameters() }

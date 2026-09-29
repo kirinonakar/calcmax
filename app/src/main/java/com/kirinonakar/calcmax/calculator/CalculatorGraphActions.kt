@@ -9,8 +9,7 @@ import kotlin.math.PI
 import kotlin.math.sin
 
 internal object CalculatorGraphActions {
-    fun CalculatorModel.performPlot() {
-        graphJob?.cancel()
+    fun CalculatorModel.performPlot(auto: Boolean = false) {
         val limit=if(graphKind in listOf("surface","differential")) 1 else 6
         val trees=mutableListOf<JSONObject>()
         val curveSources=mutableListOf<String>()
@@ -58,6 +57,12 @@ internal object CalculatorGraphActions {
             }
             request.put("t0",t0).put("initialValues",JSONArray(initials))
         }
+        val signature=request.toString()
+        // The screen's delayed auto-plot can repeat a transfer or explicit Plot request.
+        // Cancelling an active engine call restarts its process, so reuse that request.
+        if(graphRequestSignature==signature && (graphJob?.isActive==true || auto && graphData!=null)) return
+        graphJob?.cancel()
+        graphRequestSignature=signature
         graphJob=viewModelScope.launch {
             graphBusy=true; error=""
             try {
@@ -69,7 +74,7 @@ internal object CalculatorGraphActions {
                     } else {graphData=null;error=response.optString("error")}
                 }
                 if(!graphState.graphAnimating)save()
-            } finally { graphBusy=false }
+            } finally { if(graphRequestSignature==signature) graphBusy=false }
         }
     }
     fun CalculatorModel.performSetGraphParameter(name:String,value:Double) {
