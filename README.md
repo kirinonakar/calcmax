@@ -3,7 +3,7 @@
   <img src="app/src/main/ic_launcher-playstore.png" alt="CalcMax" width="100" height="100" />
 </p>
 
-A native Android scientific, graphing, programming and Computer Algebra System (CAS) calculator. A bundled SymPy engine provide exact offline mathematics.
+A native Android scientific, graphing, programming and Computer Algebra System (CAS) calculator. A bundled SymPy engine provides exact offline mathematics.
 
 <img src="screenshot.png" alt="screenshot" width="50%">
 
