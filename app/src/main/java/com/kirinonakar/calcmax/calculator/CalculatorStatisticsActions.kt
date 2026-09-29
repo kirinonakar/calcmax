@@ -2,6 +2,7 @@ package com.kirinonakar.calcmax.calculator
 
 import androidx.lifecycle.viewModelScope
 import com.kirinonakar.calcmax.math.Parser
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
@@ -25,6 +26,7 @@ internal object CalculatorStatisticsActions {
         val tree=try {Parser(source).parse()} catch(e:Exception) {error=e.message ?: "Syntax ERROR";return}
         val fittedMode=tree.args.getOrNull(1)?.value ?: "linear"
         regressionJob=viewModelScope.launch {
+            val currentJob=coroutineContext[Job]
             statisticsState.regressionBusy=true;error=""
             try {
                 val response=engine.execute(request().put("tree",JSONObject(tree.json())))
@@ -45,12 +47,19 @@ internal object CalculatorStatisticsActions {
                         inputTree=tree.json(),response=response.toString()))
                     save()
                 } else {statisticsState.regressionCurve=emptyList();statisticsState.regressionFit="";statisticsState.regressionData="";statisticsState.regressionMode="";statisticsState.regressionCorrelation=null;statisticsState.regressionParameters=emptyList();error=response.optString("error","Math ERROR")}
-            } finally {statisticsState.regressionBusy=false}
+            } finally {if(regressionJob===currentJob){statisticsState.regressionBusy=false;regressionJob=null}}
         }
     }
     fun CalculatorModel.performClearRegression() {
         regressionJob?.cancel()
         statisticsState.clearRegression()
         save()
+    }
+    fun CalculatorModel.performCancelRegression() {
+        if(!statisticsState.regressionBusy)return
+        regressionJob?.cancel()
+        engine.cancel()
+        regressionJob=null
+        statisticsState.regressionBusy=false
     }
 }

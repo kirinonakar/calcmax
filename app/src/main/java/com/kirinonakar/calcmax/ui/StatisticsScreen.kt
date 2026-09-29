@@ -64,19 +64,26 @@ import kotlin.math.max
     var customInitials by rememberSaveable {mutableStateOf(m.statisticsCustomInitials)}
     var plotType by rememberSaveable {mutableStateOf(m.statisticsPlot)}
     var csv by rememberSaveable {mutableStateOf(m.statisticsCsv)}
+    var importPreview by remember {mutableStateOf<StatisticsCsvImport?>(null)}
     LaunchedEffect(data,datasetName,dataKind,regression,plotType,csv,selected,isNew,customFormula,customVariable,customInitials) {m.saveStatistics(datasetName,data,dataKind,regression,plotType,csv,selected,isNew,customFormula,customVariable,customInitials)}
     val importCsv=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {uri->
         if(uri!=null)scope.launch {
             val content=withContext(Dispatchers.IO) {runCatching {context.contentResolver.openInputStream(uri)?.bufferedReader()?.use {it.readText()}}.getOrNull()}
             if(content!=null) {
-                data=content.trimEnd('\r','\n')
-                val first=data.lineSequence().firstOrNull {it.isNotBlank()}.orEmpty().splitCsvRecord()
-                dataKind=when {first.size>=3->"xyz";first.size>=2->"xy";else->"list"}
-                datasetName=datasetName.ifBlank {activeName.ifBlank {"D1"}}
-                m.saveDataSet(datasetName,data,dataKind);selected=datasetName;isNew=false
+                val preview=previewStatisticsCsv(content)
+                if(preview.columnCount==0)m.error="The selected CSV file is empty"
+                else importPreview=preview
             } else m.error="Could not read the selected CSV file"
         }
     }
+    importPreview?.let {preview->StatisticsCsvImportDialog(preview,onDismiss={importPreview=null}) {columns,skipHeader->
+        data=importStatisticsCsv(preview,columns,skipHeader)
+        dataKind=when(columns.size){3->"xyz";2->"xy";else->"list"}
+        plotType=if(dataKind=="xy")"Scatter" else "Histogram"
+        datasetName=datasetName.ifBlank {activeName.ifBlank {"D1"}}
+        m.saveDataSet(datasetName,data,dataKind);selected=datasetName;isNew=false
+        importPreview=null
+    }}
     val exportCsv=rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) {uri->
         if(uri!=null)scope.launch {
             val success=withContext(Dispatchers.IO) {runCatching {val stream=context.contentResolver.openOutputStream(uri)?:error("No output stream");stream.bufferedWriter().use {it.write(data)};true}.getOrDefault(false)}
@@ -84,17 +91,19 @@ import kotlin.math.max
         }
     }
     fun rows():List<List<String>> = statisticsRows(data)
-    fun vector(column:Int)=rows().mapNotNull {it.getOrNull(column)?.takeIf(String::isNotBlank)}.joinToString(",","[","]")
     fun variableSource():String=statisticsDataSource(data,dataKind)
     fun startNew() {
         var index=1;val existing=names.toSet();while("D$index" in existing)index++
         datasetName="D$index";data=when(dataKind){"xy"->",";"xyz"->",,";else->""};isNew=true;selected=""
     }
     val parsedRows=rows()
-    val xValues=parsedRows.mapNotNull {it.getOrNull(0)?.toDoubleOrNull()?.takeIf {v->v.isFinite()}}
-    val yValues=if(dataKind!="list")parsedRows.mapNotNull {it.getOrNull(1)?.toDoubleOrNull()?.takeIf {v->v.isFinite()}} else emptyList()
-    val zValues=if(dataKind=="xyz")parsedRows.mapNotNull {it.getOrNull(2)?.toDoubleOrNull()?.takeIf {v->v.isFinite()}} else emptyList()
-    val paired=parsedRows.mapNotNull {row->val x=row.getOrNull(0)?.toDoubleOrNull();val y=row.getOrNull(1)?.toDoubleOrNull();if(x!=null&&y!=null&&x.isFinite()&&y.isFinite())x to y else null}
+    val dateAxis=if(dataKind=="xy"||dataKind=="xyz")statisticsDateAxis(parsedRows) else null
+    val numericRows=statisticsNumericRows(parsedRows,dateAxis)
+    fun vector(column:Int)=numericRows.mapNotNull {it.getOrNull(column)?.takeIf(String::isNotBlank)}.joinToString(",","[","]")
+    val xValues=numericRows.mapNotNull {it.getOrNull(0)?.toDoubleOrNull()?.takeIf {v->v.isFinite()}}
+    val yValues=if(dataKind!="list")numericRows.mapNotNull {it.getOrNull(1)?.toDoubleOrNull()?.takeIf {v->v.isFinite()}} else emptyList()
+    val zValues=if(dataKind=="xyz")numericRows.mapNotNull {it.getOrNull(2)?.toDoubleOrNull()?.takeIf {v->v.isFinite()}} else emptyList()
+    val paired=numericRows.mapNotNull {row->val x=row.getOrNull(0)?.toDoubleOrNull();val y=row.getOrNull(1)?.toDoubleOrNull();if(x!=null&&y!=null&&x.isFinite()&&y.isFinite())x to y else null}
     var section by rememberSaveable {mutableStateOf("Data")}
     if(section=="Data") Panel("Data & statistics","Enter values once, then summarize, test, or plot the current dataset.",panelScroll) {
         Choices(listOf("Data & analysis","Distributions"),"Data & analysis",{section=if(it=="Data & analysis")"Data" else it})
@@ -131,16 +140,17 @@ import kotlin.math.max
                         VerticalDivider(color=grid,thickness=1.dp)
                         repeat(tableColumns.size) {column->
                             StatCell(row.getOrElse(column){""},Modifier.weight(1f),cellFocus[column],"statistics-cell-$index-$column") {text->
-                                val next=parsedRows.map {it.toMutableList().apply {while(size<tableColumns.size)add("")}}.toMutableList();next[index][column]=text;data=next.joinToString("\n"){it.joinToString(",")}
+                                val next=parsedRows.map {it.toMutableList().apply {while(size<tableColumns.size)add("")}}.toMutableList();next[index][column]=text;data=next.joinToString("\n",transform=::statisticsCsvLine)
                             }
                             VerticalDivider(color=grid,thickness=1.dp)
                         }
-                        Box(Modifier.width(48.dp).fillMaxHeight(),contentAlignment=Alignment.Center){SmallAction("−"){data=parsedRows.filterIndexed {i,_->i!=index}.joinToString("\n"){it.joinToString(",")}}}
+                        Box(Modifier.width(48.dp).fillMaxHeight(),contentAlignment=Alignment.Center){SmallAction("−"){data=parsedRows.filterIndexed {i,_->i!=index}.joinToString("\n",transform=::statisticsCsvLine)}}
                     }
                     if(index<parsedRows.lastIndex)HorizontalDivider(color=grid,thickness=1.dp)
                 }
             }
         }
+        if(dataKind!="list")Text(if(isKorean())"x 날짜 형식: YYYY-MM-DD, YYYY/MM/DD, YYYY.MM.DD" else "x date formats: YYYY-MM-DD, YYYY/MM/DD, YYYY.MM.DD",fontSize=11.sp,color=LocalInstrument.current.muted)
         Column(verticalArrangement=Arrangement.spacedBy(2.dp)) {
             Text(tr("Quick summaries"),style=MaterialTheme.typography.titleMedium)
             Row(Modifier.horizontalScroll(rememberScrollState())) {
@@ -148,7 +158,7 @@ import kotlin.math.max
                 SmallAction(if(dataKind=="list")"List" else "x",translate=false){val values=vector(0);if(values!="[]")summarize("stats($values)")}
                 if(dataKind!="list")SmallAction("y",translate=false){val values=vector(1);if(values!="[]")summarize("stats($values)")}
                 if(dataKind=="xyz")SmallAction("z",translate=false){val values=vector(2);if(values!="[]")summarize("stats($values)")}
-                val correlationCommand=statisticsCorrelationCommand(parsedRows,dataKind)
+                val correlationCommand=statisticsCorrelationCommand(numericRows,dataKind)
                 if(dataKind=="xy")SmallAction("correlation",active=if(correlationCommand==null)false else null,translate=false,modifier=Modifier.testTag("statistics-correlation")){correlationCommand?.let {summarize(it)}}
             }
         }
@@ -162,7 +172,7 @@ import kotlin.math.max
                 regression=selectedMode;plotType="Scatter"
                 if(selectedMode=="custom")m.clearRegression()
                 if(selectedMode!="custom") {
-                    val table=parsedRows.filter {it.size>=2&&it[0].isNotBlank()&&it[1].isNotBlank()}.joinToString(",","[","]"){it.take(2).joinToString(",","[","]")}
+                    val table=numericRows.filter {it.size>=2&&it[0].isNotBlank()&&it[1].isNotBlank()}.joinToString(",","[","]"){it.take(2).joinToString(",","[","]")}
                     m.fitRegression("regression($table,$selectedMode)",data)
                 }
             })
@@ -178,7 +188,7 @@ import kotlin.math.max
                 Text(if(isKorean())"형식: [[매개변수1, 시작값, 하한, 상한], [매개변수2, 시작값, 하한, 상한]]; 상한은 생략할 수 있습니다."
                     else "Format: [[parameter1, initial, lower, upper], [parameter2, initial, lower, upper]]; upper bound can be omitted.",fontSize=11.sp,color=LocalInstrument.current.muted)
                 Button(onClick={
-                    val table=parsedRows.filter {it.size>=2&&it[0].isNotBlank()&&it[1].isNotBlank()}.joinToString(",","[","]"){it.take(2).joinToString(",","[","]")}
+                    val table=numericRows.filter {it.size>=2&&it[0].isNotBlank()&&it[1].isNotBlank()}.joinToString(",","[","]"){it.take(2).joinToString(",","[","]")}
                     val guesses=customInitials.trim().takeIf(String::isNotEmpty)?.let {",$it"}.orEmpty()
                     m.fitRegression("regression($table,custom,$customFormula,$customVariable$guesses)",data)
                 },enabled=customFormula.isNotBlank()&&customVariable.matches(Regex("[A-Za-z][A-Za-z0-9_]*"))&&paired.size>=2&&!m.regressionBusy){Text(tr("Fit custom model"))}
@@ -186,8 +196,12 @@ import kotlin.math.max
             Choices(if(dataKind=="xy")listOf("Scatter","Histogram","Box plot") else listOf("Histogram","Box plot"),plotType,{plotType=it})
         }
         val fitVisible=dataKind=="xy"&&plotType=="Scatter"&&m.regressionData==data&&m.regressionFit.isNotBlank()
-        StatisticsPlot(plotType,if(plotType=="Scatter")paired else xValues.mapIndexed {i,v->i.toDouble() to v},xValues,yValues,if(fitVisible)m.regressionCurve.orEmpty() else emptyList(),if(fitVisible)m.regressionFit else "",m.displayDigits,fitVisible&&m.regressionMode=="linear",m.regressionCorrelation,tertiary=zValues)
-        if(m.regressionBusy)Text(if(isKorean())"회귀 적합 중…" else "Fitting regression…",fontSize=11.sp,color=LocalInstrument.current.muted)
+        StatisticsPlot(plotType,if(plotType=="Scatter")paired else xValues.mapIndexed {i,v->i.toDouble() to v},xValues,yValues,if(fitVisible)m.regressionCurve.orEmpty() else emptyList(),if(fitVisible)m.regressionFit else "",m.displayDigits,fitVisible&&m.regressionMode=="linear",m.regressionCorrelation,tertiary=zValues,xDateOrigin=dateAxis?.origin)
+        if(dateAxis!=null&&plotType=="Scatter")Text((if(isKorean())"회귀식의 x: ${dateAxis.origin.plusDays(1)} = 1일째" else "Regression x: ${dateAxis.origin.plusDays(1)} = day 1"),fontSize=11.sp,color=LocalInstrument.current.muted)
+        if(m.regressionBusy)Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+            Text(if(isKorean())"회귀 적합 중…" else "Fitting regression…",Modifier.weight(1f),fontSize=11.sp,color=LocalInstrument.current.muted)
+            SmallAction("Cancel"){m.cancelRegression()}
+        }
         if(dataKind=="xy"&&m.regressionData==data&&m.regressionFit.isNotBlank()) {
             Column(verticalArrangement=Arrangement.spacedBy(0.dp)) {
                 if(m.regressionParameters.isNotEmpty()) {
@@ -215,7 +229,7 @@ import kotlin.math.max
                 }
             }
         }
-        StatisticsAnalysis(m,parsedRows,dataKind)
+        StatisticsAnalysis(m,numericRows,dataKind)
         Display(m,requestInitialFocus=false)
     } else {
         Panel(section,"") {
@@ -223,4 +237,50 @@ import kotlin.math.max
             DistributionSection(m)
         }
     }
+}
+
+@Composable private fun StatisticsCsvImportDialog(preview:StatisticsCsvImport,onDismiss:()->Unit,onImport:(List<Int>,Boolean)->Unit) {
+    var skipHeader by remember(preview) {mutableStateOf(preview.hasHeader)}
+    var columnCount by remember(preview) {mutableIntStateOf(minOf(3,preview.columnCount))}
+    var columns by remember(preview) {mutableStateOf((0 until minOf(3,preview.columnCount)).toList())}
+    val names=listOf("x","y","z")
+    AlertDialog(onDismissRequest=onDismiss,title={Text(tr("Import CSV"))},text={
+        Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment=Alignment.CenterVertically) {
+                Checkbox(skipHeader,{skipHeader=it})
+                Text(tr("First row is a header"))
+            }
+            Text(if(preview.hasHeader)tr("Header detected automatically") else tr("No header detected"),style=MaterialTheme.typography.bodySmall)
+            Text(tr("Import as"),style=MaterialTheme.typography.titleSmall)
+            Choices((1..minOf(3,preview.columnCount)).map {names.take(it).joinToString(",")},names.take(columnCount).joinToString(","),{selected->
+                columnCount=selected.split(',').size
+            },translate=false)
+            Text(tr("Choose a CSV column for each variable"),style=MaterialTheme.typography.bodySmall)
+            Column(verticalArrangement=Arrangement.spacedBy(2.dp)) {
+                repeat(columnCount) {index->
+                    var expanded by remember(preview,index) {mutableStateOf(false)}
+                    Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                        Text(names[index],Modifier.width(20.dp),fontWeight=FontWeight.SemiBold)
+                        Box {
+                            OutlinedButton(onClick={expanded=true}) {Text(preview.labels[columns[index]])}
+                            DropdownMenu(expanded=expanded,onDismissRequest={expanded=false}) {
+                                preview.labels.forEachIndexed {source,label->
+                                    DropdownMenuItem(text={Text(label)},onClick={
+                                        val next=columns.toMutableList()
+                                        val duplicate=next.indexOf(source)
+                                        if(duplicate>=0&&duplicate!=index)next[duplicate]=next[index]
+                                        next[index]=source;columns=next;expanded=false
+                                    })
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Text(tr("Preview"),style=MaterialTheme.typography.titleSmall)
+            preview.rows.drop(if(skipHeader)1 else 0).take(3).forEach {row->
+                Text(columns.take(columnCount).joinToString("  |  ") {row.getOrNull(it).orEmpty()},fontFamily=FontFamily.Monospace,style=MaterialTheme.typography.bodySmall)
+            }
+        }
+    },confirmButton={TextButton(onClick={onImport(columns.take(columnCount),skipHeader)},enabled=preview.rows.size>(if(skipHeader)1 else 0)){Text(tr("Import"))}},dismissButton={TextButton(onClick=onDismiss){Text(tr("Cancel"))}})
 }

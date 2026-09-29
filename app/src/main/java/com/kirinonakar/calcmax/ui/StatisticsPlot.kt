@@ -12,12 +12,14 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.*
 import com.kirinonakar.calcmax.ui.theme.LocalInstrument
+import java.time.LocalDate
 import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.ln
 import kotlin.math.max
+import kotlin.math.roundToLong
 
-@Composable internal fun StatisticsPlot(type:String,points:List<Pair<Double,Double>>,values:List<Double>,secondary:List<Double> = emptyList(),curve:List<Pair<Double,Double>> = emptyList(),fitLabel:String="",displayDigits:Int=10,showCorrelation:Boolean=false,correlation:Double?=null,tertiary:List<Double> = emptyList()) {
+@Composable internal fun StatisticsPlot(type:String,points:List<Pair<Double,Double>>,values:List<Double>,secondary:List<Double> = emptyList(),curve:List<Pair<Double,Double>> = emptyList(),fitLabel:String="",displayDigits:Int=10,showCorrelation:Boolean=false,correlation:Double?=null,tertiary:List<Double> = emptyList(),xDateOrigin:LocalDate?=null) {
     val c=LocalInstrument.current
     val fitEquation=remember(fitLabel,displayDigits) {if(fitLabel.isBlank())null else regressionFormulaDisplayTree(fitLabel,displayDigits)}
     Canvas(Modifier.fillMaxWidth().height(220.dp).background(c.display)) {
@@ -39,10 +41,12 @@ import kotlin.math.max
                 drawPath(path,c.danger,style=Stroke(2.dp.toPx()))
             }
             points.forEach {drawCircle(c.accent,4.dp.toPx(),Offset(px(it.first),py(it.second)))}
-            drawContext.canvas.nativeCanvas.drawText("x",left+width-4,top+height+20.dp.toPx(),text)
+            if(xDateOrigin==null)drawContext.canvas.nativeCanvas.drawText("x",left+width-4,top+height+20.dp.toPx(),text)
             drawContext.canvas.nativeCanvas.drawText("y",5.dp.toPx(),top+12.dp.toPx(),text)
-            drawContext.canvas.nativeCanvas.drawText("%.4g".format(x0),left,top+height+16.dp.toPx(),text)
-            drawContext.canvas.nativeCanvas.drawText("%.4g".format(x1),left+width-34.dp.toPx(),top+height+16.dp.toPx(),text)
+            val firstTick=xDateOrigin?.let {origin->runCatching {origin.plusDays(x0.roundToLong()).toString()}.getOrNull()} ?: "%.4g".format(x0)
+            val lastTick=xDateOrigin?.let {origin->runCatching {origin.plusDays(x1.roundToLong()).toString()}.getOrNull()} ?: "%.4g".format(x1)
+            drawContext.canvas.nativeCanvas.drawText(firstTick,left,top+height+16.dp.toPx(),text)
+            drawContext.canvas.nativeCanvas.drawText(lastTick,left+width-text.measureText(lastTick),top+height+16.dp.toPx(),text)
         } else if(values.isEmpty()&&secondary.isEmpty()&&tertiary.isEmpty()) {
             drawContext.canvas.nativeCanvas.drawText("Add finite numeric observations to plot",left,top+20.dp.toPx(),text)
         } else if(type=="Histogram") {

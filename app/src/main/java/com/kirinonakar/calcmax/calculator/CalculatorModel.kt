@@ -722,6 +722,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         with(CalculatorStatisticsActions) { performSaveStatistics(name,data,kind,regression,plot,csv,selected,isNew,customFormula,customVariable,customInitials) }
     fun fitRegression(source:String,data:String) = with(CalculatorStatisticsActions) { performFitRegression(source,data) }
     fun clearRegression() = with(CalculatorStatisticsActions) { performClearRegression() }
+    fun cancelRegression() = with(CalculatorStatisticsActions) { performCancelRegression() }
     fun plot() = with(CalculatorGraphActions) { performPlot() }
     fun setGraphParameter(name:String,value:Double) = with(CalculatorGraphActions) { performSetGraphParameter(name,value) }
     fun setGraphParameterRange(name:String,low:Double,high:Double) = with(CalculatorGraphActions) { performSetGraphParameterRange(name,low,high) }
