@@ -3,6 +3,7 @@ package com.kirinonakar.calcmax.ui
 import com.kirinonakar.calcmax.math.Expr
 import com.kirinonakar.calcmax.math.Parser
 import com.kirinonakar.calcmax.calculator.ResultDisplayMode
+import com.kirinonakar.calcmax.calculator.FunctionTransfer
 import java.math.BigDecimal
 import java.math.RoundingMode
 import org.json.JSONObject
@@ -16,6 +17,26 @@ internal fun regressionFormulaDisplayTree(source:String, displayDigits:Int):JSON
     decimalFractionFormulaTree(source,displayDigits)?.let {
         ResultDisplayFormat.formatTree(it,ResultDisplayMode.OFF,false,maxFractionDigits=displayDigits)
     }
+
+/** Make a parseable graph expression whose coefficients match the displayed fit. */
+internal fun regressionFormulaGraphSource(source:String, displayDigits:Int):String? = runCatching {
+    val parsed=Parser(source.replace("**","^")).parse()
+    val decimalized=decimalizeRegressionFractions(parsed,displayDigits)
+    fun rounded(node:Expr):Expr {
+        val children=node.args.map(::rounded)
+        if(node.kind!="number")return node.copy(args=children)
+        val token=node.value
+        val exponentAt=token.indexOfAny(charArrayOf('e','E'))
+        val significand=if(exponentAt<0)token else token.substring(0,exponentAt)
+        if(!significand.contains('.'))return node.copy(args=children)
+        val value=significand.toBigDecimal().setScale(displayDigits.coerceIn(0,200),RoundingMode.HALF_UP)
+            .stripTrailingZeros().toPlainString()
+        return node.copy(value=value+if(exponentAt<0)"" else token.substring(exponentAt),args=children)
+    }
+    val graphSource=FunctionTransfer.editableSource(JSONObject(rounded(decimalized).json()))
+    Parser(graphSource).parse()
+    graphSource
+}.getOrNull()
 
 private fun decimalizeRegressionFractions(expression:Expr, fractionDigits:Int):Expr {
     val children=expression.args.map {decimalizeRegressionFractions(it,fractionDigits)}

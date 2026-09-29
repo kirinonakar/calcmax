@@ -467,7 +467,9 @@ private fun treeSource(node:JSONObject?):String? {
         }
         if(dataKind=="xy"&&m.regressionData==data&&m.regressionFit.isNotBlank())SmallAction("Graph fitted expression"){
             val fit=if(m.regressionMode=="custom")m.regressionFit.replace(Regex("(?<![A-Za-z0-9_])${Regex.escape(customVariable)}(?![A-Za-z0-9_])"),"x") else m.regressionFit
-            m.changeGraphKind("cartesian");m.updateGraphSource(fit.replace("**","^"));m.mode="Graph";m.plot()
+            val graphSource=regressionFormulaGraphSource(fit,m.displayDigits)
+            if(graphSource==null)m.error="Could not format fitted expression"
+            else {m.changeGraphKind("cartesian");m.updateGraphSource(graphSource);m.mode="Graph";m.plot()}
         }
         StatisticsAnalysis(m,parsedRows,dataKind)
         Display(m,requestInitialFocus=false)

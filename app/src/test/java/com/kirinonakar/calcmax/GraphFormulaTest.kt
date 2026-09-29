@@ -2,8 +2,11 @@ package com.kirinonakar.calcmax
 
 import com.kirinonakar.calcmax.ui.graphEquationTree
 import com.kirinonakar.calcmax.ui.graphShadeFormula
+import com.kirinonakar.calcmax.ui.regressionFormulaGraphSource
+import com.kirinonakar.calcmax.math.Parser
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class GraphFormulaTest {
@@ -51,5 +54,19 @@ class GraphFormulaTest {
         val bounds=shade.range ?: error("Expected shade range")
         assertEquals("0.333",bounds.first.getString("value"))
         assertEquals("0.667",bounds.second.getString("value"))
+    }
+
+    @Test fun transferredRegressionAndGraphCaptionUseDisplayDigits() {
+        val source="0.123456789*x + x/7"
+        val sent=regressionFormulaGraphSource(source,5)!!
+        Parser(sent).parse()
+        assertTrue(sent.contains("0.12346"))
+        assertTrue(sent.contains("0.14286"))
+        val caption=graphEquationTree("cartesian",sent,0,5)!!.toString()
+        assertTrue(caption.contains("0.12346"))
+        assertTrue(caption.contains("0.14286"))
+        val finer=graphEquationTree("cartesian","0.123456789*x + x/7",0,8)!!.toString()
+        assertTrue(finer.contains("0.12345679"))
+        assertTrue(finer.contains("0.14285714"))
     }
 }

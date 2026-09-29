@@ -205,7 +205,7 @@ import kotlin.math.*
             val surfaceZMin=m.zMin ?: m.graphData?.optDouble("zMin",Double.NaN)?.takeIf { it.isFinite() }
             val surfaceZMax=m.zMax ?: m.graphData?.optDouble("zMax",Double.NaN)?.takeIf { it.isFinite() }
             Column(Modifier.fillMaxWidth().onSizeChanged{surfaceExtra=with(density){it.height.toDp()}}) {
-            GraphFormulas(m.graphKind,sources,0,null,"",shadeSources,null,{})
+            GraphFormulas(m.graphKind,sources,0,null,"",shadeSources,null,{},m.displayDigits)
             Text("x: %.3g ~ %.3g   y: %.3g ~ %.3g".format(m.xMin,m.xMax,m.yMin,m.yMax)+(if(surfaceZMin!=null&&surfaceZMax!=null)"   z: %.3g ~ %.3g".format(surfaceZMin,surfaceZMax) else ""),Modifier.padding(horizontal=14.dp,vertical=2.dp),fontSize=11.sp,color=c.muted)
             Row(Modifier.fillMaxWidth().height(38.dp).padding(horizontal=14.dp),verticalAlignment=Alignment.CenterVertically) {
                 Text(tr("Rotate"),fontSize=11.sp,color=c.muted);CompactSlider(surfaceRotation,{surfaceRotation=it},Modifier.weight(1f),valueRange=0f..360f);Text("${surfaceRotation.toInt()}°",fontSize=11.sp,color=c.muted)
@@ -344,7 +344,7 @@ import kotlin.math.*
         GraphHeightToggle(halfGraphHeight,{halfGraphHeight=!halfGraphHeight},Modifier.align(Alignment.TopEnd))
         }
         Column(Modifier.fillMaxWidth().onSizeChanged{bottomChrome=with(density){it.height.toDp()}}) {
-        if(m.graphKind!="surface")GraphFormulas(m.graphKind,sources,selected,derivativeSelected,derivativeExpression,shadeSources,{i->selected=i;if(other==selected)other=(i+1)%sources.size},{m.toggleGraphDerivative(selected)})
+        if(m.graphKind!="surface")GraphFormulas(m.graphKind,sources,selected,derivativeSelected,derivativeExpression,shadeSources,{i->selected=i;if(other==selected)other=(i+1)%sources.size},{m.toggleGraphDerivative(selected)},m.displayDigits)
         if(m.graphKind!="surface" && (curves.isNotEmpty()||shadeSources.isNotEmpty()))Row(Modifier.horizontalScroll(rememberScrollState()),verticalAlignment=Alignment.CenterVertically) {
             SmallAction("−") { val cx=(m.xMin+m.xMax)/2;val cy=(m.yMin+m.yMax)/2;val halfX=(m.xMax-m.xMin);val halfY=(m.yMax-m.yMin);m.xMin=cx-halfX;m.xMax=cx+halfX;m.yMin=cy-halfY;m.yMax=cy+halfY }
             SmallAction("+") { val cx=(m.xMin+m.xMax)/2;val cy=(m.yMin+m.yMax)/2;val halfX=(m.xMax-m.xMin)/4;val halfY=(m.yMax-m.yMin)/4;m.xMin=cx-halfX;m.xMax=cx+halfX;m.yMin=cy-halfY;m.yMax=cy+halfY }
@@ -474,7 +474,7 @@ import kotlin.math.*
     }
 }
 
-internal fun graphEquationTree(kind:String,source:String,index:Int):JSONObject? {
+internal fun graphEquationTree(kind:String,source:String,index:Int,displayDigits:Int?=null):JSONObject? {
     val left=when(kind) {
         "parametric"->"[x(t),y(t)]"
         "polar"->"r(t)"
@@ -483,7 +483,8 @@ internal fun graphEquationTree(kind:String,source:String,index:Int):JSONObject? 
         "differential"->"dy/dt"
         else->"f${index+1}(x)"
     }
-    return decimalFractionFormulaTree("$left=$source")
+    val equation="$left=$source"
+    return if(displayDigits==null)decimalFractionFormulaTree(equation) else regressionFormulaDisplayTree(equation,displayDigits)
 }
 
 private fun splitGraphFormulaParts(source:String):List<String> {
@@ -503,28 +504,28 @@ private fun splitGraphFormulaParts(source:String):List<String> {
 
 internal data class GraphShadeFormula(val expressions:List<JSONObject>,val range:Pair<JSONObject,JSONObject>?)
 
-internal fun graphShadeFormula(source:String):GraphShadeFormula? = runCatching {
+internal fun graphShadeFormula(source:String,displayDigits:Int?=null):GraphShadeFormula? = runCatching {
     val parts=splitGraphFormulaParts(source.removePrefix("[shade]").trim())
     val expressions=mutableListOf<JSONObject>()
     var range:Pair<JSONObject,JSONObject>?=null
     parts.forEach {part->
         val ends=part.split("..")
         if(ends.size==2 && range==null) {
-            range=(decimalFractionFormulaTree(ends[0].trim()) ?: error("Invalid shade range")) to
-                (decimalFractionFormulaTree(ends[1].trim()) ?: error("Invalid shade range"))
-        } else expressions+=decimalFractionFormulaTree(part) ?: error("Invalid shade expression")
+            range=((if(displayDigits==null)decimalFractionFormulaTree(ends[0].trim()) else regressionFormulaDisplayTree(ends[0].trim(),displayDigits)) ?: error("Invalid shade range")) to
+                ((if(displayDigits==null)decimalFractionFormulaTree(ends[1].trim()) else regressionFormulaDisplayTree(ends[1].trim(),displayDigits)) ?: error("Invalid shade range"))
+        } else expressions+=(if(displayDigits==null)decimalFractionFormulaTree(part) else regressionFormulaDisplayTree(part,displayDigits)) ?: error("Invalid shade expression")
     }
     GraphShadeFormula(expressions,range).takeIf {it.expressions.isNotEmpty()}
 }.getOrNull()
 
-@Composable private fun GraphFormulas(kind:String,sources:List<String>,selected:Int,derivativeSelected:Int?,derivativeExpression:String,shadeSources:List<String>,onSelect:((Int)->Unit)?,onDerivative:()->Unit) {
+@Composable private fun GraphFormulas(kind:String,sources:List<String>,selected:Int,derivativeSelected:Int?,derivativeExpression:String,shadeSources:List<String>,onSelect:((Int)->Unit)?,onDerivative:()->Unit,displayDigits:Int) {
     val c=LocalInstrument.current
-    val equations=remember(kind,sources) {sources.mapIndexed {index,source->graphEquationTree(kind,source,index)}}
-    val derivative=remember(derivativeSelected,derivativeExpression) {
+    val equations=remember(kind,sources,displayDigits) {sources.mapIndexed {index,source->graphEquationTree(kind,source,index,displayDigits)}}
+    val derivative=remember(derivativeSelected,derivativeExpression,displayDigits) {
         if(derivativeSelected==null || derivativeExpression.isBlank())null
-        else decimalFractionFormulaTree("diff(f${derivativeSelected+1}(x),x)=$derivativeExpression")
+        else regressionFormulaDisplayTree("diff(f${derivativeSelected+1}(x),x)=$derivativeExpression",displayDigits)
     }
-    val shades=remember(shadeSources) {shadeSources.mapNotNull(::graphShadeFormula)}
+    val shades=remember(shadeSources,displayDigits) {shadeSources.mapNotNull {graphShadeFormula(it,displayDigits)}}
     if(equations.all {it==null} && derivative==null && shades.isEmpty())return
     CompositionLocalProvider(LocalMathMinimumSize provides 8f) {
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal=10.dp,vertical=3.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
