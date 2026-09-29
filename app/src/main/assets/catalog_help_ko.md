@@ -407,8 +407,10 @@ Example: stdev([1,2,3,4])
 Example: quartiles([1,2,3,4,5])
 `sumdata(list)` — 데이터 값의 합계.
 Example: sumdata([1,2,3,4])
-`regression(data,model)` — 회귀 적합. model은 linear, quadratic, logarithmic, exponential, power 중 하나입니다.
+`regression(data,model)` — 회귀 적합. model은 linear, quadratic, logarithmic, exponential, power 중 하나입니다. 사용자 수식은 `regression(data,custom,수식,독립변수[,시작값])` 형태로 입력합니다. 수식은 y의 우변이며 독립변수를 제외한 기호가 매개변수입니다. 형식: [[매개변수1, 시작값, 하한, 상한], [매개변수2, 시작값, 하한, 상한]]; 상한은 생략할 수 있습니다.
 Example: regression([[1,2],[2,4],[3,6]],linear)
+Example (y = S(b)/S₀): regression([[0,1],[100,0.9],[200,0.81]],custom,exp(-b*ADC),b)
+Example (지수 감쇠): regression([[0,4],[1,2.8],[2,2.1],[3,1.6]],custom,A*exp(-k*x)+C,x)
 `covariance(x,y)` — 짝을 이룬 두 목록의 공분산.
 Example: covariance([1,2,3],[2,4,6])
 `correlation(x,y)` — 짝을 이룬 두 목록의 상관계수.

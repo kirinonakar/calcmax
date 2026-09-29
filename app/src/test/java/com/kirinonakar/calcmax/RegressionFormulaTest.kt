@@ -1,10 +1,19 @@
 package com.kirinonakar.calcmax
 
 import com.kirinonakar.calcmax.ui.decimalFractionFormulaTree
+import com.kirinonakar.calcmax.math.Parser
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class RegressionFormulaTest {
+    @Test fun customRegressionExampleParsesWithIndependentVariableAndBounds() {
+        val tree=Parser("regression([[0,1],[10,0.9],[20,0.8]],custom,(1-f)*exp(-b*D)+f*exp(-b*Dstar),b,[[f,0.2,0,1],[D,0.001,0]])").parse()
+        assertEquals("regression",tree.value)
+        assertEquals(5,tree.args.size)
+        assertEquals("custom",tree.args[1].value)
+        assertEquals("b",tree.args[3].value)
+    }
+
     @Test fun fractionalCoefficientsBecomeThreePlaceDecimals() {
         val sum=decimalFractionFormulaTree("x/2 + 1/3")!!
         val terms=sum.getJSONArray("args")

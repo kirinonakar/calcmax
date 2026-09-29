@@ -280,6 +280,9 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     var regressionCorrelation
         get()=statisticsState.regressionCorrelation
         private set(value) {statisticsState.regressionCorrelation=value}
+    var regressionParameters
+        get()=statisticsState.regressionParameters
+        private set(value) {statisticsState.regressionParameters=value}
     var regressionBusy
         get()=statisticsState.regressionBusy
         private set(value) {statisticsState.regressionBusy=value}
@@ -295,6 +298,15 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     var statisticsRegression
         get()=statisticsState.statisticsRegression
         set(value) {statisticsState.statisticsRegression=value}
+    var statisticsCustomFormula
+        get()=statisticsState.statisticsCustomFormula
+        set(value) {statisticsState.statisticsCustomFormula=value}
+    var statisticsCustomVariable
+        get()=statisticsState.statisticsCustomVariable
+        set(value) {statisticsState.statisticsCustomVariable=value}
+    var statisticsCustomInitials
+        get()=statisticsState.statisticsCustomInitials
+        set(value) {statisticsState.statisticsCustomInitials=value}
     var statisticsPlot
         get()=statisticsState.statisticsPlot
         set(value) {statisticsState.statisticsPlot=value}
@@ -835,8 +847,8 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         statisticsState.deleteDataSet(name)
         save()
     }
-    fun saveStatistics(name:String,data:String,kind:String,regression:String,plot:String,csv:Boolean,selected:String,isNew:Boolean) {
-        statisticsState.updateSelection(name,data,kind,regression,plot,csv,selected,isNew)
+    fun saveStatistics(name:String,data:String,kind:String,regression:String,plot:String,csv:Boolean,selected:String,isNew:Boolean,customFormula:String,customVariable:String,customInitials:String) {
+        statisticsState.updateSelection(name,data,kind,regression,plot,csv,selected,isNew,customFormula,customVariable,customInitials)
         statisticsState.saveSelection()
     }
     fun fitRegression(source: String, data: String) {
@@ -853,13 +865,17 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
                     regressionCurve=if(array==null)emptyList() else (0 until array.length()).mapNotNull {index->array.optJSONArray(index)?.let {pair->pair.optDouble(0) to pair.optDouble(1)}}
                     regressionFit=response.optString("exact");regressionData=data;regressionMode=fittedMode
                     regressionCorrelation=response.optDouble("correlation",Double.NaN).takeIf(Double::isFinite)
+                    val parameters=response.optJSONArray("parameters")
+                    regressionParameters=if(parameters==null)emptyList() else (0 until parameters.length()).mapNotNull {index->
+                        parameters.optJSONArray(index)?.let {pair->pair.optString(0) to pair.optString(1)}
+                    }
                     val next=JSONObject(variables.toString())
                     if(response.has("resultAst")) next.put("Ans",response.getJSONObject("resultAst")) else next.remove("Ans")
                     variables=next
                     appendHistory(HistoryEntry(System.currentTimeMillis(),source,response.optString("exact"),response.optString("decimal"),mode,
                         inputTree=tree.json(),response=response.toString()))
                     save()
-                } else {regressionCurve=emptyList();regressionFit="";regressionData="";regressionMode="";regressionCorrelation=null;error=response.optString("error","Math ERROR")}
+                } else {regressionCurve=emptyList();regressionFit="";regressionData="";regressionMode="";regressionCorrelation=null;regressionParameters=emptyList();error=response.optString("error","Math ERROR")}
             } finally {regressionBusy=false}
         }
     }

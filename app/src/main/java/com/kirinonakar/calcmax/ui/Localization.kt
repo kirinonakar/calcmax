@@ -71,6 +71,8 @@ private val korean = mapOf(
     "Quick summaries" to "빠른 요약", "Visualize" to "시각화", "Summarize y" to "y 요약",
     "Correlation coefficient (r)" to "상관계수 (r)",
     "Clear regression" to "회귀선 지우기", "Graph fitted expression" to "적합식 그래프로 보기",
+    "Independent variable" to "독립변수", "Initial values and bounds (optional)" to "시작값과 범위 (선택)",
+    "Fit custom model" to "사용자 수식 피팅", "ADC example" to "ADC 예제", "IVIM example" to "IVIM 예제", "Exponential decay example" to "지수 감쇠 예제", "Model y =" to "모델 y =", "Fitted parameters" to "피팅 매개변수",
     "Query" to "질의", "Degrees of freedom" to "자유도",
     "Trials n" to "시행 횟수 n", "Success probability p" to "성공 확률 p",
     "Mean λ" to "평균 λ", "Mean μ" to "평균 μ", "Standard deviation σ" to "표준편차 σ",

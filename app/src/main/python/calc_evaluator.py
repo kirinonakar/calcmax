@@ -12,11 +12,15 @@ from calc_shared import (CONSTANTS, UNITS, MathError, canonical_function_name,
                          initial_conditions, inverse_mellin_transform,
                          inverse_z_transform, matrix, mellin_transform,
                          numeric_derivative, ode_equation, require, z_transform)
-from calc_statistics import distribution_value, fit_regression, pearson_correlation, statistical_test
+from calc_statistics import distribution_value, fit_custom_regression, fit_regression, pearson_correlation, statistical_test
 from calc_finance import finance_value
 
 MAX_EXACT_DIGITS = 100000
 MAX_NUMERIC_EXPONENT = 100000
+
+def _ast_symbols(node):
+    if node.get("kind") == "symbol": yield node
+    for child in node.get("args", []): yield from _ast_symbols(child)
 
 def oversized_rational_power(base, exponent):
     """Estimate the larger exact numerator/denominator before SymPy expands it."""
@@ -48,6 +52,7 @@ class Engine:
         self.note = ""
         self.conditions = []
         self.bindings = {}
+        self.regression_parameters = []
         self.allow_sequence_calls = False
         self.assumptions = request.get("assumptions", {})
     def symbol(self, name):
@@ -184,6 +189,16 @@ class Engine:
             for n in candidates:
                 if n["kind"] == "symbol": self.bindings[n["value"]] = self.symbol(n["value"])
         try:
+            if value == "regression" and len(args) > 1 and args[1].get("kind") == "symbol" and args[1].get("value") == "custom":
+                require(len(args) in (4, 5), "Use regression(data,custom,model,x,initials)")
+                require(args[3].get("kind") == "symbol", "Choose an independent variable")
+                rows = build(args[0])
+                independent = self.symbol(args[3]["value"])
+                names = {n["value"] for root in (args[2], *args[4:]) for n in _ast_symbols(root)}
+                for name in names: self.bindings[name] = self.symbol(name)
+                expression = build(args[2])
+                options = build(args[4]) if len(args) == 5 else None
+                return fit_custom_regression(self, rows, expression, independent, options)
             condition_start=len(self.conditions)
             values = [build(a) for a in args]
             if value=="subs" and len(values)==3:

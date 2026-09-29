@@ -36,6 +36,55 @@ class EngineTests(unittest.TestCase):
         self.assertIsNone(flat["correlation"])
         self.assertNotIn("correlation",quadratic)
 
+    def test_custom_nonlinear_regression_adc_ivim_and_decay(self):
+        import sympy as s
+        def symbol(name): return {"kind":"symbol","value":name}
+        def number(value): return {"kind":"number","value":str(value)}
+        def binary(op, left, right): return {"kind":"binary","value":op,"args":[left,right]}
+        def exp(arg): return {"kind":"call","value":"exp","args":[arg]}
+        def fit(pairs, formula, initials=None, independent="b"):
+            table={"kind":"list","args":[{"kind":"list","args":[number(x),number(y)]} for x,y in pairs]}
+            args=[table,symbol("custom"),formula,symbol(independent)]
+            if initials is not None:
+                args.append({"kind":"list","args":[{"kind":"list","args":[symbol(name),*[number(v) for v in values]]} for name,values in initials]})
+            return json.loads(core.dispatch(json.dumps({"tree":{"kind":"call","value":"regression","args":args},"angle":"RAD"})))
+        b=symbol("b")
+        adc=exp(binary("*",number(-1),binary("*",b,symbol("ADC"))))
+        adc_pairs=[(x,math.exp(-x*0.0012)) for x in range(0,1100,100)]
+        adc_result=fit(adc_pairs,adc)
+        self.assertTrue(adc_result["ok"],adc_result)
+        fitted=s.sympify(adc_result["exact"])
+        self.assertAlmostEqual(float(fitted.subs("b",500)),math.exp(-0.6),places=5)
+        self.assertEqual(["ADC"],[name for name,_ in adc_result["parameters"]])
+        self.assertAlmostEqual(0.0012,float(adc_result["parameters"][0][1]),places=8)
+        self.assertGreater(len(adc_result["curve"]),100)
+
+        slow=binary("*",binary("-",number(1),symbol("f")),exp(binary("*",number(-1),binary("*",b,symbol("D")))))
+        fast=binary("*",symbol("f"),exp(binary("*",number(-1),binary("*",b,symbol("Dstar")))))
+        ivim=binary("+",slow,fast)
+        ivim_pairs=[(x,0.82*math.exp(-x*0.0008)+0.18*math.exp(-x*0.012)) for x in (0,10,20,40,80,120,200,400,600,800)]
+        ivim_result=fit(ivim_pairs,ivim,[("f",[0.2,0,1]),("D",[0.001,0]),("Dstar",[0.01,0])])
+        self.assertTrue(ivim_result["ok"],ivim_result)
+        fitted=s.sympify(ivim_result["exact"])
+        self.assertAlmostEqual(float(fitted.subs("b",80)),ivim_pairs[4][1],places=5)
+        self.assertEqual({"D","Dstar","f"},{name for name,_ in ivim_result["parameters"]})
+        values=dict(ivim_result["parameters"])
+        self.assertAlmostEqual(0.18,float(values["f"]),places=4)
+        self.assertAlmostEqual(0.0008,float(values["D"]),places=6)
+        self.assertAlmostEqual(0.012,float(values["Dstar"]),places=4)
+        self.assertNotIn("correlation",ivim_result)
+        self.assertFalse(fit(ivim_pairs[:3],ivim)["ok"])
+
+        x=symbol("x")
+        decay=binary("+",binary("*",symbol("A"),exp(binary("*",number(-1),binary("*",symbol("k"),x)))),symbol("C"))
+        decay_pairs=[(point,3*math.exp(-0.4*point)+0.6) for point in range(11)]
+        decay_result=fit(decay_pairs,decay,independent="x")
+        self.assertTrue(decay_result["ok"],decay_result)
+        values=dict(decay_result["parameters"])
+        self.assertAlmostEqual(3,float(values["A"]),places=5)
+        self.assertAlmostEqual(0.4,float(values["k"]),places=5)
+        self.assertAlmostEqual(0.6,float(values["C"]),places=5)
+
     def test_indefinite_integral_places_constant_after_expression(self):
         tree={"kind":"call","value":"integrate","args":[
             {"kind":"symbol","value":"x"},{"kind":"symbol","value":"x"}]}

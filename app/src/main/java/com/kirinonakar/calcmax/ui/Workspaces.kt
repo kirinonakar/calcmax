@@ -299,6 +299,7 @@ private fun treeSource(node:JSONObject?):String? {
 
 @Composable fun StatisticsScreen(m: CalculatorModel) {
     val context=LocalContext.current
+    val clipboard=LocalClipboardManager.current
     val scope=rememberCoroutineScope()
     val panelScroll=rememberScrollState()
     var summaryResultPending by remember {mutableStateOf(false)}
@@ -313,9 +314,12 @@ private fun treeSource(node:JSONObject?):String? {
     var data by rememberSaveable {mutableStateOf(m.statisticsData)}
     var dataKind by rememberSaveable {mutableStateOf(m.statisticsKind)}
     var regression by rememberSaveable {mutableStateOf(m.statisticsRegression)}
+    var customFormula by rememberSaveable {mutableStateOf(m.statisticsCustomFormula)}
+    var customVariable by rememberSaveable {mutableStateOf(m.statisticsCustomVariable)}
+    var customInitials by rememberSaveable {mutableStateOf(m.statisticsCustomInitials)}
     var plotType by rememberSaveable {mutableStateOf(m.statisticsPlot)}
     var csv by rememberSaveable {mutableStateOf(m.statisticsCsv)}
-    LaunchedEffect(data,datasetName,dataKind,regression,plotType,csv,selected,isNew) {m.saveStatistics(datasetName,data,dataKind,regression,plotType,csv,selected,isNew)}
+    LaunchedEffect(data,datasetName,dataKind,regression,plotType,csv,selected,isNew,customFormula,customVariable,customInitials) {m.saveStatistics(datasetName,data,dataKind,regression,plotType,csv,selected,isNew,customFormula,customVariable,customInitials)}
     val importCsv=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {uri->
         if(uri!=null)scope.launch {
             val content=withContext(Dispatchers.IO) {runCatching {context.contentResolver.openInputStream(uri)?.bufferedReader()?.use {it.readText()}}.getOrNull()}
@@ -414,17 +418,56 @@ private fun treeSource(node:JSONObject?):String? {
                 if(dataKind=="xy")SmallAction("Clear regression"){m.clearRegression()}
             }
             val activeRegression=if(m.regressionFit.isNotBlank()&&m.regressionData==data)m.regressionMode else ""
-            if(dataKind=="xy")Choices(listOf("linear","quadratic","logarithmic","exponential","power"),activeRegression,{selectedMode->
+            if(dataKind=="xy")Choices(listOf("linear","quadratic","logarithmic","exponential","power","custom"),if(regression=="custom")"custom" else activeRegression,{selectedMode->
                 regression=selectedMode;plotType="Scatter"
-                val table=parsedRows.filter {it.size>=2&&it[0].isNotBlank()&&it[1].isNotBlank()}.joinToString(",","[","]"){it.take(2).joinToString(",","[","]")}
-                m.fitRegression("regression($table,$selectedMode)",data)
+                if(selectedMode=="custom")m.clearRegression()
+                if(selectedMode!="custom") {
+                    val table=parsedRows.filter {it.size>=2&&it[0].isNotBlank()&&it[1].isNotBlank()}.joinToString(",","[","]"){it.take(2).joinToString(",","[","]")}
+                    m.fitRegression("regression($table,$selectedMode)",data)
+                }
             })
+            if(dataKind=="xy"&&regression=="custom") {
+                Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+                    SmallAction("ADC example"){m.clearRegression();customFormula="exp(-b*ADC)";customVariable="b";customInitials=""}
+                    SmallAction("IVIM example"){m.clearRegression();customFormula="(1-f)*exp(-b*D)+f*exp(-b*Dstar)";customVariable="b";customInitials="[[f,0.2,0,1],[D,0.001,0],[Dstar,0.01,0]]"}
+                    SmallAction("Exponential decay example"){m.clearRegression();customFormula="A*exp(-k*x)+C";customVariable="x";customInitials=""}
+                }
+                Field(customFormula,"Model y =",Modifier.fillMaxWidth()){m.clearRegression();customFormula=it}
+                Field(customVariable,"Independent variable",Modifier.fillMaxWidth()){m.clearRegression();customVariable=it}
+                Field(customInitials,"Initial values and bounds (optional)",Modifier.fillMaxWidth()){m.clearRegression();customInitials=it}
+                Text(if(isKorean())"형식: [[매개변수1, 시작값, 하한, 상한], [매개변수2, 시작값, 하한, 상한]]; 상한은 생략할 수 있습니다."
+                    else "Format: [[parameter1, initial, lower, upper], [parameter2, initial, lower, upper]]; upper bound can be omitted.",fontSize=11.sp,color=LocalInstrument.current.muted)
+                Button(onClick={
+                    val table=parsedRows.filter {it.size>=2&&it[0].isNotBlank()&&it[1].isNotBlank()}.joinToString(",","[","]"){it.take(2).joinToString(",","[","]")}
+                    val guesses=customInitials.trim().takeIf(String::isNotEmpty)?.let {",$it"}.orEmpty()
+                    m.fitRegression("regression($table,custom,$customFormula,$customVariable$guesses)",data)
+                },enabled=customFormula.isNotBlank()&&customVariable.matches(Regex("[A-Za-z][A-Za-z0-9_]*"))&&paired.size>=2&&!m.regressionBusy){Text(tr("Fit custom model"))}
+            }
             Choices(if(dataKind=="xy")listOf("Scatter","Histogram","Box plot") else listOf("Histogram","Box plot"),plotType,{plotType=it})
         }
         val fitVisible=dataKind=="xy"&&plotType=="Scatter"&&m.regressionData==data&&m.regressionFit.isNotBlank()
         StatisticsPlot(plotType,if(plotType=="Scatter")paired else xValues.mapIndexed {i,v->i.toDouble() to v},xValues,yValues,if(fitVisible)m.regressionCurve.orEmpty() else emptyList(),if(fitVisible)m.regressionFit else "",fitVisible&&m.regressionMode=="linear",m.regressionCorrelation)
         if(m.regressionBusy)Text(if(isKorean())"회귀 적합 중…" else "Fitting regression…",fontSize=11.sp,color=LocalInstrument.current.muted)
-        if(dataKind=="xy"&&m.regressionData==data&&m.regressionFit.isNotBlank())SmallAction("Graph fitted expression"){m.changeGraphKind("cartesian");m.updateGraphSource(m.regressionFit.replace("**","^"));m.mode="Graph";m.plot()}
+        if(dataKind=="xy"&&m.regressionData==data&&m.regressionFit.isNotBlank()&&m.regressionParameters.isNotEmpty()) {
+            Text(tr("Fitted parameters"),fontSize=12.sp,fontWeight=FontWeight.SemiBold)
+            Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(16.dp)) {
+                m.regressionParameters.sortedWith(compareBy({listOf("f","ADC","D","Dstar").indexOf(it.first).let {index->if(index<0)Int.MAX_VALUE else index}},{it.first})).forEach {(name,value)->
+                    val label=if(name=="Dstar")"D*" else name
+                    val korean=isKorean()
+                    TextButton(onClick={
+                        clipboard.setText(AnnotatedString(value))
+                        android.widget.Toast.makeText(context,if(korean)"$label 값 복사됨" else "$label copied",android.widget.Toast.LENGTH_SHORT).show()
+                    },contentPadding=PaddingValues(horizontal=8.dp,vertical=0.dp),
+                        modifier=Modifier.semantics {contentDescription=if(korean)"$label 값 복사" else "Copy $label value"}) {
+                        Text("$label = $value  ⧉",fontSize=11.sp,fontFamily=FontFamily.Monospace)
+                    }
+                }
+            }
+        }
+        if(dataKind=="xy"&&m.regressionData==data&&m.regressionFit.isNotBlank())SmallAction("Graph fitted expression"){
+            val fit=if(m.regressionMode=="custom")m.regressionFit.replace(Regex("(?<![A-Za-z0-9_])${Regex.escape(customVariable)}(?![A-Za-z0-9_])"),"x") else m.regressionFit
+            m.changeGraphKind("cartesian");m.updateGraphSource(fit.replace("**","^"));m.mode="Graph";m.plot()
+        }
         StatisticsAnalysis(m,parsedRows,dataKind)
         Display(m,requestInitialFocus=false)
     } else {

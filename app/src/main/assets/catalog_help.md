@@ -407,8 +407,10 @@ Example: stdev([1,2,3,4])
 Example: quartiles([1,2,3,4,5])
 `sumdata(list)` — Sum of the data values.
 Example: sumdata([1,2,3,4])
-`regression(data,model)` — Regression fit; model is linear, quadratic, logarithmic, exponential or power.
+`regression(data,model)` — Regression fit; model is linear, quadratic, logarithmic, exponential or power. For a custom nonlinear model, use `regression(data,custom,expression,variable[,initials])`, where `expression` is the right-hand side of y. Parameters are all symbols other than the independent variable. Format: [[parameter1, initial, lower, upper], [parameter2, initial, lower, upper]]; upper bound can be omitted.
 Example: regression([[1,2],[2,4],[3,6]],linear)
+Example (y = S(b)/S₀): regression([[0,1],[100,0.9],[200,0.81]],custom,exp(-b*ADC),b)
+Example (exponential decay): regression([[0,4],[1,2.8],[2,2.1],[3,1.6]],custom,A*exp(-k*x)+C,x)
 `covariance(x,y)` — Covariance of two paired lists.
 Example: covariance([1,2,3],[2,4,6])
 `correlation(x,y)` — Correlation coefficient of two paired lists.

@@ -3,6 +3,7 @@ import math
 from statistics import NormalDist
 import mpmath as mp
 import sympy as s
+from sympy.core.relational import Relational
 from calc_shared import MathError, flatten, require
 
 def _real_value(value, message):
@@ -615,3 +616,111 @@ def fit_regression(engine, rows, mode):
     if mode == "exponential": result = s.exp(result)
     if mode == "power": result = s.exp(coef[0])*x**coef[1]
     return result
+
+def fit_custom_regression(engine, rows, expression, independent, options=None):
+    """Fit an arbitrary real y(x) with damped nonlinear least squares.
+
+    options is a list of [parameter, initial, lower?, upper?] rows. Omitted
+    initials use scale-aware defaults; omitted bounds are unbounded.
+    """
+    require(isinstance(independent, s.Symbol), "Choose an independent variable")
+    require(isinstance(expression, s.Expr) and not isinstance(expression, Relational),
+            "Custom model must be an expression for y")
+    require(len(rows) >= 2 and all(len(row) == 2 for row in rows), "Regression requires x,y pairs")
+    require(not expression.has(s.I, s.oo, s.zoo, s.nan), "Custom model must be real and finite")
+    parameters = sorted(expression.free_symbols - {independent}, key=str)
+    require(parameters, "Custom model needs at least one parameter")
+    require(len(parameters) <= 8, "Custom model supports up to 8 parameters")
+    require(len(rows) >= len(parameters) + 1, "Add more data points than fit parameters")
+    try:
+        xs = [float(row[0]) for row in rows]
+        ys = [float(row[1]) for row in rows]
+        require(all(math.isfinite(v) for v in xs + ys), "Regression data must be finite")
+    except (TypeError, ValueError, OverflowError):
+        raise MathError("Regression data must be real numbers")
+    span = max(xs) - min(xs)
+    require(span > 0 and len(set(xs)) >= len(parameters) + 1, "Use more distinct x values")
+    scale = max(abs(v) for v in ys) or 1.0
+    start = []
+    limits = []
+    for parameter in parameters:
+        name = str(parameter).lower()
+        if name in ("s0", "a", "amplitude"): guess = ys[xs.index(min(xs))]
+        elif name == "f": guess = 0.2
+        elif name in ("dstar", "d_fast", "dslow"): guess = 5.0/span
+        elif name in ("d", "adc", "rate", "k"): guess = 1.0/span
+        else: guess = scale if expression.subs(parameter, 0) == 0 else 1.0
+        start.append(float(guess))
+        limits.append((-math.inf, math.inf))
+    if options is not None:
+        require(isinstance(options, (list, tuple)), "Initial values must be parameter rows")
+        seen = set()
+        for option in options:
+            require(isinstance(option, (list, tuple)) and 2 <= len(option) <= 4,
+                    "Use [parameter, initial, lower?, upper?]")
+            parameter = option[0]
+            require(parameter in parameters and parameter not in seen, "Unknown or repeated fit parameter")
+            seen.add(parameter)
+            index = parameters.index(parameter)
+            try:
+                values = [float(v) for v in option[1:]]
+            except (TypeError, ValueError, OverflowError):
+                raise MathError("Initial values and bounds must be real numbers")
+            require(all(math.isfinite(v) for v in values), "Initial values and bounds must be finite")
+            start[index] = values[0]
+            lower = values[1] if len(values) > 1 else -math.inf
+            upper = values[2] if len(values) > 2 else math.inf
+            require(lower < upper and lower <= start[index] <= upper, "Initial value must lie within bounds")
+            limits[index] = (lower, upper)
+    try:
+        model = s.lambdify([independent] + parameters, expression, modules="math", cse=True, docstring_limit=0)
+        derivatives = [s.lambdify([independent] + parameters, s.diff(expression, p), modules="math", cse=True, docstring_limit=0) for p in parameters]
+    except Exception:
+        raise MathError("Custom model contains an unsupported function")
+
+    def evaluate(values, with_jacobian=False):
+        try:
+            predicted = [float(model(x, *values)) for x in xs]
+            if not all(math.isfinite(v) for v in predicted): return None
+            residual = [y - predicted[i] for i, y in enumerate(ys)]
+            cost = sum(v*v for v in residual)
+            if not math.isfinite(cost): return None
+            if not with_jacobian: return cost
+            jacobian = [[float(derivative(x, *values)) for derivative in derivatives] for x in xs]
+            if not all(math.isfinite(v) for row in jacobian for v in row): return None
+            return cost, residual, jacobian
+        except (ArithmeticError, TypeError, ValueError, OverflowError):
+            return None
+
+    values = start[:]
+    current = evaluate(values, True)
+    require(current is not None, "Initial values are outside the model domain")
+    def fitted_expression():
+        engine.regression_parameters = [[str(parameter), format(value, ".12g")]
+                                        for parameter, value in zip(parameters, values)]
+        return expression.subs(dict(zip(parameters, [s.Float(value, 12) for value in values])))
+    damping = 1e-3
+    for _ in range(100):
+        cost, residual, jacobian = current
+        if cost <= 1e-24 * max(1.0, sum(y*y for y in ys)): break
+        normal = [[sum(row[i]*row[j] for row in jacobian) for j in range(len(parameters))] for i in range(len(parameters))]
+        gradient = [sum(row[i]*r for row, r in zip(jacobian, residual)) for i in range(len(parameters))]
+        diagonal = [max(normal[i][i], 1e-12) for i in range(len(parameters))]
+        improved = False
+        for _ in range(12):
+            matrix = s.Matrix([[normal[i][j] + (damping*diagonal[i] if i == j else 0) for j in range(len(parameters))] for i in range(len(parameters))])
+            try: step = [float(v) for v in matrix.LUsolve(s.Matrix(gradient))]
+            except Exception: break
+            trial = [min(max(value + delta, limits[i][0]), limits[i][1]) for i, (value, delta) in enumerate(zip(values, step))]
+            candidate = evaluate(trial, True)
+            if candidate is not None and candidate[0] < cost:
+                change = max(abs(a-b) for a, b in zip(trial, values))
+                values, current = trial, candidate
+                damping = max(damping/3, 1e-12)
+                improved = True
+                if change < 1e-12 * max(1.0, max(abs(v) for v in values)): return fitted_expression()
+                break
+            damping *= 10
+        if not improved: break
+    require(math.isfinite(current[0]), "Numerical fitting failed")
+    return fitted_expression()

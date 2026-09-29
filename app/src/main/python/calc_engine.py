@@ -35,6 +35,8 @@ def contains_heavy_call(node):
         current=pending.pop()
         if not isinstance(current, dict): continue
         if current.get("kind")=="call" and current.get("value") in HEAVY_CALLS: return True
+        if (current.get("kind")=="call" and current.get("value")=="regression"
+                and len(current.get("args") or []) > 1 and current["args"][1].get("value")=="custom"): return True
         pending.extend(current.get("args") or [])
     return False
 
@@ -104,6 +106,7 @@ def dispatch(payload):
                     result["curve"]=regression_samples(engine,value,rows,request)
                 except Exception: result["curve"]=[]
                 mode=request["tree"]["args"][1].get("value") if len(request["tree"]["args"])>1 else "linear"
+                if mode=="custom": result["parameters"]=engine.regression_parameters
                 if mode=="linear":
                     try:
                         xs,ys=zip(*rows)
