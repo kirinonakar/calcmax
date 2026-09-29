@@ -8,43 +8,14 @@ import com.kirinonakar.calcmax.math.*
 import kotlinx.coroutines.*
 import org.json.JSONArray
 import org.json.JSONObject
-import kotlin.math.PI
-import kotlin.math.sin
 
 private const val maxTapeEntries = 10
 private const val maxHistoryEntries = 500
-private var tapeEntrySequence = 0L
-private fun nextTapeEntryId():Long = ++tapeEntrySequence
-data class HistoryEntry(val id: Long, val source: String, val exact: String, val decimal: String, val mode: String, val favorite: Boolean = false,val inputTree:String="",val response:String="",val answer:String="")
-data class TapeEntry(val source: String,val input: String,val result: String,val answer:String="",val id:Long=nextTapeEntryId())
-data class CalcSession(val source:String,val names:List<String>,val index:Int=0,val input:Editor=Editor(),val accepted:Map<String,JSONObject> = emptyMap()) {
-    val name get()=names[index]
-}
-data class GraphParameter(val value:Double,val min:Double,val max:Double)
-data class DisplayShortcut(val label:String,val input:String,val source:String="keypad")
-val DefaultDisplayShortcuts=listOf(
-    DisplayShortcut("∫","integrate(,x)"),
-    DisplayShortcut("∫ₐᵇ","integrate(,x,,)"),
-    DisplayShortcut("d/dx","diff(,x)"),
-    DisplayShortcut("f′(a)","nderivative(,x,)")
-)
-
-internal fun HistoryEntry.toTapeEntry():TapeEntry {
-    val input=runCatching {JSONObject(inputTree).takeIf {it.has("kind")}?.toString()}.getOrNull()
-        ?: runCatching {Parser(source,true).parse().json()}.getOrNull()
-        ?: JSONObject().put("kind","text").put("value",source).toString()
-    val legacyExpression=exact.trim().let {if(it.startsWith("Matrix(")&&it.endsWith(")"))it.substring(7,it.length-1) else it}
-    val result=runCatching {JSONObject(response).takeIf {it.has("exact")||it.has("tree")}?.toString()}.getOrNull()
-        ?: JSONObject().put("exact",exact).put("decimal",decimal)
-            .put("tree",runCatching {JSONObject(Parser(legacyExpression,true).parse().json())}.getOrElse {JSONObject().put("kind","text").put("value",exact)}).toString()
-    return TapeEntry(source,input,result,answer)
-}
-enum class ResultDisplayMode { OFF, ENGINEERING, SCIENTIFIC }
 class CalculatorModel(application: Application) : AndroidViewModel(application) {
     private val prefs = application.getSharedPreferences("calculator",0)
     // Content URIs refer to grants on this device and must not follow a restored draft.
     private val localPrefs = application.getSharedPreferences("calculator-local",0)
-    private val engine = EngineClient(application)
+    internal val engine = EngineClient(application)
     private val exchangeRepository by lazy{ExchangeRepository(application)}
     var exchangeRates by mutableStateOf<RateTable?>(null)
         private set
@@ -55,21 +26,21 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     var editor by mutableStateOf(Editor(prefs.getString("expression","") ?: "",prefs.getInt("cursor",0)))
         private set
     var result by mutableStateOf<JSONObject?>(loadObject("result").takeIf{it.has("exact")})
-        private set
+        internal set
     var dmsDisplay by mutableStateOf(result?.optBoolean("dms") == true)
-        private set
+        internal set
     var dmsConversion by mutableStateOf(false)
-        private set
+        internal set
     var tape by mutableStateOf<List<TapeEntry>>(emptyList())
         private set
     var committed by mutableStateOf(prefs.getBoolean("committed",false))
-        private set
+        internal set
     var answerDisplay by mutableStateOf<JSONObject?>(loadObject("answerDisplay").takeIf{it.has("kind")})
-        private set
+        internal set
     var previewBusy by mutableStateOf(false)
         private set
     var inputVersion by mutableIntStateOf(0)
-        private set
+        internal set
     var poweredOn by mutableStateOf(true)
     var hyperbolic by mutableStateOf(false)
     var overwrite by mutableStateOf(false)
@@ -81,10 +52,10 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         private set
     private var previewRunner: Job?=null
     private var commitRequested=false
-    private var resultSource=prefs.getString("resultSource","") ?: ""
-    private var resultVersion=if(resultSource==editor.source&&result!=null)0 else -1
-    private var inputAnswer:JSONObject?=loadObject("inputAnswer").takeIf{it.has("kind")}
-    private var lastAnswerResult:JSONObject?=loadObject("lastAnswerResult").takeIf{it.has("exact")}
+    internal var resultSource=prefs.getString("resultSource","") ?: ""
+    internal var resultVersion=if(resultSource==editor.source&&result!=null)0 else -1
+    internal var inputAnswer:JSONObject?=loadObject("inputAnswer").takeIf{it.has("kind")}
+    internal var lastAnswerResult:JSONObject?=loadObject("lastAnswerResult").takeIf{it.has("exact")}
     var error by mutableStateOf("")
     private var undoHistory by mutableStateOf<List<Editor>>(emptyList())
     private var calcUndoHistory by mutableStateOf<List<Editor>>(emptyList())
@@ -96,7 +67,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     var lastCalcSource by mutableStateOf("")
         private set
     var busy by mutableStateOf(false)
-        private set
+        internal set
     var shift by mutableStateOf(false)
     var alpha by mutableStateOf(false)
     var mode by mutableStateOf(prefs.getString("mode","Scientific/CAS")?.let{if(it=="Scientific"||it=="CAS")"Scientific/CAS" else it} ?: "Scientific/CAS")
@@ -131,14 +102,14 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     var history by mutableStateOf(loadHistory())
         private set
     var variables by mutableStateOf(loadObject("variables"))
-        private set
+        internal set
     var functions by mutableStateOf(loadObject("functions"))
-        private set
+        internal set
     var assumptions by mutableStateOf(loadObject("assumptions"))
-        private set
-    private val graphState=GraphState(prefs)
-    private val statisticsState=StatisticsState(prefs)
-    private val pythonState=PythonState(prefs,localPrefs)
+        internal set
+    internal val graphState=GraphState(prefs)
+    internal val statisticsState=StatisticsState(prefs)
+    internal val pythonState=PythonState(prefs,localPrefs)
     var dataSets
         get()=statisticsState.dataSets
         private set(value) {statisticsState.dataSets=value}
@@ -202,7 +173,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     var pythonInputPrompt
         get()=pythonState.pythonInputPrompt
         set(value) {pythonState.pythonInputPrompt=value}
-    private var pythonInputSubmit
+    internal var pythonInputSubmit
         get()=pythonState.pythonInputSubmit
         set(value) {pythonState.pythonInputSubmit=value}
     var graphKind
@@ -259,7 +230,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     var graphAnimating
         get()=graphState.graphAnimating
         private set(value) {graphState.graphAnimating=value}
-    private var animationPhase
+    internal var animationPhase
         get()=graphState.animationPhase
         set(value) {graphState.animationPhase=value}
     var radianAxis
@@ -321,12 +292,12 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         set(value) {statisticsState.statisticsCsv=value}
     var constants by mutableStateOf<JSONArray?>(null)
         private set
-    private var job: Job? = null
-    private var graphJob: Job? = null
-    private var analysisJob: Job? = null
-    private var regressionJob: Job? = null
-    private var pythonJob: Job? = null
-    private var animationJob: Job? = null
+    internal var job: Job? = null
+    internal var graphJob: Job? = null
+    internal var analysisJob: Job? = null
+    internal var regressionJob: Job? = null
+    internal var pythonJob: Job? = null
+    internal var animationJob: Job? = null
     init {
         tape=history.filterIndexed{index,entry->entry.id>prefs.getLong("screenClearedAt",0)&&(index!=0||!committed||entry.source!=editor.source)}.take(maxTapeEntries).asReversed().map(HistoryEntry::toTapeEntry)
         if(!committed&&editor.source.isNotBlank())schedulePreview()
@@ -357,7 +328,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         var seen=0
         return all.filter { if(it.favorite) true else if(seen<nonFavoriteLimit) { seen++; true } else false }
     }
-    private fun appendHistory(entry: HistoryEntry) { history=trimHistory(listOf(entry)+history) }
+    internal fun appendHistory(entry: HistoryEntry) { history=trimHistory(listOf(entry)+history) }
     private fun loadDisplayShortcuts():List<DisplayShortcut> = runCatching {
         if(!prefs.contains("displayShortcuts"))return@runCatching DefaultDisplayShortcuts
         val array=JSONArray(prefs.getString("displayShortcuts","[]"))
@@ -603,7 +574,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
             } finally {previewBusy=false}
         }
     }
-    private fun commit(source:String,response:JSONObject) {
+    internal fun commit(source:String,response:JSONObject) {
         if(committed)return
         exitEngineering()
         result=response;dmsDisplay=response.optBoolean("dms");dmsConversion=false;resultSource=source;committed=true;commitRequested=false;busy=false
@@ -615,7 +586,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         save()
     }
     fun request(action: String = "evaluate") = JSONObject().put("action",action).put("precision",precision).put("displayDigits",displayDigits).put("angle",angle).put("variables",JSONObject(variables.toString()).apply{inputAnswer?.let{put("Ans",it)}}).put("functions",functions).put("assumptions",assumptions)
-    private fun calculationTree(source:String):Expr {
+    internal fun calculationTree(source:String):Expr {
         val tree=Parser(source,true).parse()
         if(tree.nodes().any {it.kind=="hole"})throw SyntaxException("Complete the empty expression slots",source.length)
         return tree
@@ -732,397 +703,46 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     }
     fun cancel() { inputVersion++;commitRequested=false;previewRunner?.cancel();job?.cancel(); graphJob?.cancel();animationJob?.cancel();graphAnimating=false;analysisJob?.cancel();regressionJob?.cancel();pythonJob?.cancel(); engine.cancel(); busy=false; graphBusy=false;regressionBusy=false;pythonBusy=false;pythonInputPrompt=null;pythonInputSubmit=null;previewBusy=false;error="Calculation cancelled" }
     fun transform(operation: String) { val source=editor.source.ifBlank { "Ans" }; edit(Editor("$operation($source)")); calculate() }
-    fun store(name: String, source: String = editor.source.ifBlank { "Ans" },showResult:Boolean=true,finishInput:Boolean=false) {
-        try {
-            require(name.matches(Regex("[A-Za-z][A-Za-z0-9_]*"))) { "Use a letter followed by letters, digits or underscores" }
-            val tree=Parser(source).parse()
-            require(name !in listOf("pi","e","i","I","oo","Ans","c0","hP","hbar","G","qe","NA","kB0","me","mp0")) { "Reserved constant or answer name" }
-            if(busy) return
-            val sourceTree=JSONObject(tree.json())
-            val selfReference=tree.nodes().any {it.kind=="symbol"&&it.value==name}
-            val answer=inputAnswer ?: variables.optJSONObject("Ans")
-            fun freezeAnswer(node:JSONObject):JSONObject {
-                if(node.optString("kind")=="symbol"&&node.optString("value")=="Ans"&&answer!=null)return JSONObject(answer.toString())
-                val copy=JSONObject(node.toString())
-                copy.optJSONArray("args")?.let {args->for(index in 0 until args.length())args.optJSONObject(index)?.let {args.put(index,freezeAnswer(it))}}
-                return copy
-            }
-            val snapshot=selfReference || tree.kind=="number" || tree.kind=="symbol"&&tree.value=="Ans"
-            job=viewModelScope.launch {
-                busy=true
-                try {
-                    if(snapshot) {
-                        val response=engine.execute(request().put("tree",sourceTree))
-                        if(!response.optBoolean("ok")||!response.has("resultAst")){error=response.optString("error","This result cannot be stored");return@launch}
-                        variables=JSONObject(variables.toString()).put(name,response.getJSONObject("resultAst"))
-                        if(showResult){result=response.put("note","Stored in $name");dmsDisplay=false;dmsConversion=false}
-                    } else {
-                        val stored=freezeAnswer(sourceTree)
-                        val next=JSONObject(variables.toString()).put(name,stored)
-                        fun cyclic(node:JSONObject,visited:Set<String>):Boolean {
-                            if(node.optString("kind")=="symbol") {
-                                val ref=node.optString("value")
-                                if(ref==name)return true
-                                if(ref !in visited)next.optJSONObject(ref)?.let {if(cyclic(it,visited+ref))return true}
-                            }
-                            val args=node.optJSONArray("args") ?: return false
-                            for(index in 0 until args.length())args.optJSONObject(index)?.let {if(cyclic(it,visited))return true}
-                            return false
-                        }
-                        if(cyclic(stored,emptySet())){error="Cyclic variable definition";return@launch}
-                        variables=next
-                        if(showResult){
-                            val message="Stored expression in $name"
-                            result=JSONObject().put("ok",true).put("exact",message).put("decimal",message).put("tree",JSONObject().put("kind","text").put("value",message)).put("note",message)
-                            dmsDisplay=false;dmsConversion=false
-                        }
-                    }
-                    if(finishInput){result?.put("assignment",true);committed=true}
-                    inputVersion++;resultVersion=-1;error="";save()
-                } finally {busy=false}
-            }
-        } catch(e: Exception) { error=e.message ?: "Invalid variable" }
-    }
-    fun memory(direction:Int,source:String=editor.source) {
-        if(busy)return
-        val expression=source.ifBlank{"0"}
-        val tree=try{calculationTree(expression)}catch(e:Exception){error=e.message ?: "Complete the expression";return}
-        val revision=inputVersion
-        val operandRequest=request().put("tree",JSONObject(tree.json()))
-        val cached=result?.takeIf{resultSource==expression&&resultVersion==revision&&it.optBoolean("ok")}
-        job=viewModelScope.launch {
-            busy=true
-            try {
-                val operand=cached ?: engine.execute(operandRequest)
-                if(!operand.optBoolean("ok")||!operand.has("resultAst")){error=operand.optString("error","This result cannot be stored in memory");return@launch}
-                if(revision==inputVersion&&source==editor.source){if(!committed)commit(source,operand);busy=true}
-                val previous=variables.optJSONObject("M") ?: JSONObject().put("kind","number").put("value","0")
-                val addition=JSONObject().put("kind","binary").put("value",if(direction>0)"+" else "-").put("args",JSONArray().put(previous).put(operand.getJSONObject("resultAst")))
-                val updated=engine.execute(request().put("tree",addition))
-                if(updated.optBoolean("ok")&&updated.has("resultAst")){variables=JSONObject(variables.toString()).put("M",updated.getJSONObject("resultAst"));save()}
-                else error=updated.optString("error","Memory update failed")
-            }finally{busy=false}
-        }
-    }
-    fun define(name: String, parameters: String, source: String, showResult:Boolean=true,finishInput:Boolean=false) {
-        try {
-            val definition=FunctionTransfer.definition(name,parameters,source)
-            functions=JSONObject(functions.toString()).put(definition.name,definition.json())
-            error=""
-            val message="${definition.name}(${definition.parameters.joinToString()}) defined"
-            if(showResult){result=JSONObject().put("exact",message).put("decimal",message).put("tree",JSONObject().put("kind","text").put("value",message));dmsDisplay=false;dmsConversion=false}
-            if(finishInput){result?.put("assignment",true);committed=true}
-            save()
-        } catch(e: Exception) { error=e.message ?: "Invalid function" }
-    }
-    fun exportFunctions():String = FunctionTransfer.encode(functions)
-    fun importFunctions(text:String):String {
-        val imported=try {FunctionTransfer.decode(text)} catch(e:Exception) {error=e.message ?: "Could not import functions";return ""}
-        val updated=JSONObject(functions.toString())
-        var added=0;var replaced=0
-        imported.definitions.forEach {definition->
-            if(updated.has(definition.name))replaced++ else added++
-            updated.put(definition.name,definition.json())
-        }
-        functions=updated;error="";save()
-        val details=mutableListOf<String>()
-        if(added>0)details.add("$added new")
-        if(replaced>0)details.add("$replaced replaced")
-        if(imported.skipped>0)details.add("${imported.skipped} skipped")
-        return "Imported ${imported.definitions.size} function${if(imported.definitions.size==1)"" else "s"}: ${details.joinToString(", ")}"
-    }
-    fun assume(name: String, assumption: String) { assumptions=JSONObject(assumptions.toString()).put(name,JSONArray(if(assumption=="none") emptyList<String>() else listOf(assumption))); save() }
-    fun removeVariable(name: String) { variables=JSONObject(variables.toString()).apply { remove(name) }; functions=JSONObject(functions.toString()).apply { remove(name) }; save() }
-    fun deleteAllVariables() { variables=JSONObject();lastAnswerResult=null;inputAnswer=null;answerDisplay=null;save() }
+    fun store(name:String,source:String=editor.source.ifBlank { "Ans" },showResult:Boolean=true,finishInput:Boolean=false) =
+        with(CalculatorVariableActions) { performStore(name,source,showResult,finishInput) }
+    fun memory(direction:Int,source:String=editor.source) = with(CalculatorVariableActions) { performMemory(direction,source) }
+    fun define(name:String,parameters:String,source:String,showResult:Boolean=true,finishInput:Boolean=false) =
+        with(CalculatorVariableActions) { performDefine(name,parameters,source,showResult,finishInput) }
+    fun exportFunctions():String = with(CalculatorVariableActions) { performExportFunctions() }
+    fun importFunctions(text:String):String = with(CalculatorVariableActions) { performImportFunctions(text) }
+    fun assume(name:String,assumption:String) = with(CalculatorVariableActions) { performAssume(name,assumption) }
+    fun removeVariable(name:String) = with(CalculatorVariableActions) { performRemoveVariable(name) }
+    fun deleteAllVariables() = with(CalculatorVariableActions) { performDeleteAllVariables() }
     fun favorite(id: Long) { history=history.map { if(it.id==id) it.copy(favorite=!it.favorite) else it }; save() }
     fun deleteHistory(id: Long) { history=history.filter { it.id!=id }; save() }
     fun clearHistory() { history=history.filter { it.favorite };tape=emptyList();save() }
-    fun saveDataSet(name:String,csv:String,kind:String) {
-        try {
-            statisticsState.saveDataSet(name,csv,kind)
-            error="";save()
-        } catch(e:Exception) { error=e.message ?: "Could not save dataset" }
-    }
-    fun deleteDataSet(name:String) {
-        statisticsState.deleteDataSet(name)
-        save()
-    }
-    fun saveStatistics(name:String,data:String,kind:String,regression:String,plot:String,csv:Boolean,selected:String,isNew:Boolean,customFormula:String,customVariable:String,customInitials:String) {
-        statisticsState.updateSelection(name,data,kind,regression,plot,csv,selected,isNew,customFormula,customVariable,customInitials)
-        statisticsState.saveSelection()
-    }
-    fun fitRegression(source: String, data: String) {
-        regressionJob?.cancel()
-        val tree=try {Parser(source).parse()} catch(e:Exception) {error=e.message ?: "Syntax ERROR";return}
-        val fittedMode=tree.args.getOrNull(1)?.value ?: "linear"
-        regressionJob=viewModelScope.launch {
-            regressionBusy=true;error=""
-            try {
-                val response=engine.execute(request().put("tree",JSONObject(tree.json())))
-                if(response.optBoolean("ok")) {
-                    result=response;dmsDisplay=false;dmsConversion=false
-                    val array=response.optJSONArray("curve")
-                    regressionCurve=if(array==null)emptyList() else (0 until array.length()).mapNotNull {index->array.optJSONArray(index)?.let {pair->pair.optDouble(0) to pair.optDouble(1)}}
-                    regressionFit=response.optString("exact");regressionData=data;regressionMode=fittedMode
-                    regressionCorrelation=response.optDouble("correlation",Double.NaN).takeIf(Double::isFinite)
-                    val parameters=response.optJSONArray("parameters")
-                    regressionParameters=if(parameters==null)emptyList() else (0 until parameters.length()).mapNotNull {index->
-                        parameters.optJSONArray(index)?.let {pair->pair.optString(0) to pair.optString(1)}
-                    }
-                    val next=JSONObject(variables.toString())
-                    if(response.has("resultAst")) next.put("Ans",response.getJSONObject("resultAst")) else next.remove("Ans")
-                    variables=next
-                    appendHistory(HistoryEntry(System.currentTimeMillis(),source,response.optString("exact"),response.optString("decimal"),mode,
-                        inputTree=tree.json(),response=response.toString()))
-                    save()
-                } else {regressionCurve=emptyList();regressionFit="";regressionData="";regressionMode="";regressionCorrelation=null;regressionParameters=emptyList();error=response.optString("error","Math ERROR")}
-            } finally {regressionBusy=false}
-        }
-    }
-    fun clearRegression() {
-        regressionJob?.cancel()
-        statisticsState.clearRegression()
-        save()
-    }
-    fun plot() {
-        graphJob?.cancel()
-        val limit=if(graphKind in listOf("surface","differential")) 1 else 6
-        val trees=mutableListOf<JSONObject>()
-        val curveSources=mutableListOf<String>()
-        val shadings=JSONArray()
-        try {
-            graphSource.lines().filter { it.isNotBlank() }.take(if(graphKind in listOf("surface","differential")) 1 else 8).forEach { raw->
-                val line=raw.trim()
-                if(line.startsWith("[shade]")) {
-                    if(graphKind!="cartesian")throw SyntaxException("Shading is available on Cartesian graphs",0)
-                    if(shadings.length()<4)shadings.put(shadeEntry(line.removePrefix("[shade]").trim()))
-                    return@forEach
-                }
-                if(trees.size<limit) {trees+=JSONObject(Parser(line).parse().json());curveSources+=line}
-            }
-        } catch(e:Exception) { error=e.message ?: "Syntax ERROR"; return }
-        if(trees.isEmpty() && shadings.length()==0) { error="Enter a function"; return }
-        val derivativeSelected=graphDerivativeSelected?.takeIf {graphKind=="cartesian" && it in trees.indices}
-        if(derivativeSelected!=null) {
-            val source=curveSources.getOrNull(derivativeSelected)
-            if(source!=null) {
-                try {trees+=JSONObject(Parser("diff(($source),x)").parse().json())}
-                catch(e:Exception) {error=e.message ?: "Syntax ERROR";return}
-            }
-        }
-        val source=graphSource;val kind=graphKind;val min=if(kind in listOf("cartesian","surface"))xMin else parameterMin;val max=if(kind in listOf("cartesian","surface"))xMax else parameterMax
-        val request=request("graph").put("angle","RAD").put("trees",JSONArray(trees)).put("graphKind",kind)
-            .put("variable",when(kind){"cartesian"->"x";"sequence"->"n";"surface"->"x";else->"t"})
-            .put("min",min).put("max",max).put("samples",500).put("yMin",yMin).put("yMax",yMax)
-            .put("parameters",graphState.parameterPayload())
-        if(derivativeSelected!=null)request.put("derivativeCurveIndex",trees.lastIndex)
-        if(shadings.length()>0)request.put("shadings",shadings)
-        if(kind=="surface")request.put("surfaceYMin",yMin).put("surfaceYMax",yMax)
-        if(kind=="sequence") {
-            try {
-                val seeds=sequenceInitials.split(',').map(String::trim).filter(String::isNotEmpty).map { JSONObject(Parser(it).parse().json()) }
-                require(seeds.isNotEmpty()) { "Enter at least one initial sequence value" }
-                request.put("initialTrees",JSONArray(seeds))
-            } catch(e:Exception) { error=e.message ?: "Invalid initial sequence values";return }
-        }
-        if(kind=="differential") {
-            val t0=differentialT0.trim().toDoubleOrNull()
-            val initials=differentialInitials.split(',').map(String::trim).filter(String::isNotEmpty).mapNotNull(String::toDoubleOrNull)
-            if(t0==null || !t0.isFinite() || initials.isEmpty() || initials.size>6 || differentialInitials.split(',').map(String::trim).filter(String::isNotEmpty).size!=initials.size) {
-                error="Enter t₀ and one to six finite initial y values";return
-            }
-            request.put("t0",t0).put("initialValues",JSONArray(initials))
-        }
-        graphJob=viewModelScope.launch {
-            graphBusy=true; error=""
-            try {
-                val response=engine.execute(request)
-                if(source==graphSource && kind==graphKind && derivativeSelected==graphDerivativeSelected && min==(if(kind in listOf("cartesian","surface"))xMin else parameterMin) && max==(if(kind in listOf("cartesian","surface"))xMax else parameterMax)) {
-                    if(response.optBoolean("ok")) {
-                        if(derivativeSelected!=null)response.put("derivativeSelected",derivativeSelected).put("derivativeCurveIndex",trees.lastIndex)
-                        graphData=response;graphState.syncParameters(response.optJSONArray("parameters"))
-                    } else {graphData=null;error=response.optString("error")}
-                }
-                if(!graphAnimating)save()
-            } finally { graphBusy=false }
-        }
-    }
-    fun setGraphParameter(name:String,value:Double) {
-        graphState.setParameter(name,value)
-    }
-    fun setGraphParameterRange(name:String,low:Double,high:Double) {
-        if(name !in graphParameters)return
-        if(!graphState.setParameterRange(name,low,high)) {error="Enter finite values with minimum < maximum";return}
-        error="";save()
-    }
-    fun resetGraphParameters() {
-        graphState.resetParameters()
-        save()
-    }
-    fun toggleGraphAnimation() {
-        if(graphAnimating) {
-            graphAnimating=false
-            animationJob?.cancel()
-            animationJob=null
-            save()
-            return
-        }
-        if(graphParameters.isEmpty())return
-        animationJob?.cancel()
-        graphAnimating=true
-        animationPhase=0.0
-        var ticks=0
-        animationJob=viewModelScope.launch {
-            while(isActive&&graphAnimating) {
-                delay(50)
-                animationPhase+=0.05
-                if(animationPhase>2*PI)animationPhase-=2*PI
-                val swing=(sin(animationPhase)+1.0)/2.0
-                graphParameters=graphParameters.mapValues {(_,spec)->spec.copy(value=spec.min+(spec.max-spec.min)*swing) }
-                if(++ticks>=4) {ticks=0;plot()}
-            }
-        }
-    }
-    private fun splitTopLevel(text:String):List<String> {
-        val parts=mutableListOf<String>();var depth=0;var start=0
-        text.forEachIndexed { index,ch->
-            when(ch) {
-                '(', '[', '{'->depth++
-                ')', ']', '}'->if(depth>0)depth--
-                ','->if(depth==0) {parts+=text.substring(start,index);start=index+1}
-            }
-        }
-        parts+=text.substring(start)
-        return parts.map(String::trim).filter(String::isNotEmpty)
-    }
-    /** [shade] y<f(x) shades a region; [shade] f or [shade] f, g shades the area to the axis or between the curves, with an optional a..b interval. */
-    private fun shadeEntry(body:String):JSONObject {
-        val items=splitTopLevel(body)
-        if(items.isEmpty())throw SyntaxException("[shade] needs an inequality or one or two functions",0)
-        var range:Pair<String,String>?=null
-        val expressions=mutableListOf<String>()
-        items.forEach { item->
-            val pieces=item.split("..")
-            if(pieces.size==2&&pieces[0].isNotBlank()&&pieces[1].isNotBlank()&&range==null)range=pieces[0].trim() to pieces[1].trim()
-            else expressions+=item
-        }
-        if(expressions.isEmpty()||expressions.size>2)throw SyntaxException("[shade] takes one or two functions",0)
-        val entry=JSONObject()
-        range?.let {entry.put("a",JSONObject(Parser(it.first).parse().json())).put("b",JSONObject(Parser(it.second).parse().json()))}
-        val parsed=expressions.map {Parser(it).parse()}
-        if(parsed.size==1&&parsed[0].kind=="relation") {
-            val tree=parsed[0]
-            val left=tree.args.getOrNull(0);val right=tree.args.getOrNull(1)
-            if(left==null||right==null||tree.value !in listOf("<","<=",">",">="))throw SyntaxException("[shade] needs y < f(x) or y > f(x)",tree.start)
-            val boundary=when {
-                left.kind=="symbol"&&left.value=="y"->right
-                right.kind=="symbol"&&right.value=="y"->left
-                else->throw SyntaxException("[shade] needs y < f(x) or y > f(x)",tree.start)
-            }
-            val below=if(left.kind=="symbol"&&left.value=="y")tree.value.startsWith("<") else tree.value.startsWith(">")
-            entry.put("mode","halfplane").put("side",if(below)"below" else "above").put("trees",JSONArray(listOf(JSONObject(boundary.json()))))
-        } else entry.put("mode","band").put("trees",JSONArray(parsed.map {JSONObject(it.json())}))
-        return entry
-    }
-    fun editPython(source:String,start:Int=source.length,end:Int=start) {
-        if(pythonState.editSource(source,start,end))save()
-    }
-    fun insertPython(snippet:String,inside:Int=snippet.length) {
-        if(pythonState.insert(snippet,inside))save()
-    }
-    fun newPythonFile() {pythonState.newFile();save()}
-    fun openPythonFile(source:String,name:String,uri:String) {pythonState.openFile(source,name,uri);save()}
-    fun savedPythonFile(name:String,uri:String) {pythonState.savedFile(name,uri);save()}
-    fun pythonFileError(message:String) {pythonError=message}
-    fun runPython() {
-        if(pythonBusy)return
-        val source=pythonSource;val filename=pythonFileName
-        pythonJob=viewModelScope.launch {
-            pythonBusy=true;pythonOutput="";pythonError="";pythonHasRun=false;pythonInputPrompt=null;pythonInputSubmit=null
-            try {
-                val response=engine.execute(JSONObject().put("action","python").put("source",source).put("filename",filename).put("functions",functions).put("variables",variables).put("assumptions",assumptions)) { prompt, output, submit ->
-                    pythonOutput=output;pythonInputPrompt=prompt;pythonInputSubmit=submit
-                }
-                pythonOutput=response.optString("output","")
-                pythonError=if(response.optBoolean("ok"))"" else response.optString("error","Python execution failed")
-                pythonHasRun=true
-            } finally {pythonBusy=false;pythonInputPrompt=null;pythonInputSubmit=null}
-        }
-    }
-    fun submitPythonInput(value:String) {pythonInputSubmit?.invoke(value);pythonInputSubmit=null;pythonInputPrompt=null}
-    fun stopPython() {pythonJob?.cancel();engine.cancel();pythonBusy=false;pythonInputPrompt=null;pythonInputSubmit=null;pythonHasRun=true;pythonError="Execution stopped"}
-    fun updateGraphSource(source:String) {
-        graphState.updateSource(source)
-        save()
-    }
-    fun toggleGraphDerivative(selected:Int) {
-        if(graphKind!="cartesian")return
-        if(graphDerivativeSelected!=null) {graphDerivativeSelected=null;return}
-        val sources=graphSource.lines().filter(String::isNotBlank).take(8).map(String::trim).filter {!it.startsWith("[shade]")}.take(6)
-        if(selected !in sources.indices) {error="Select a function";return}
-        graphDerivativeSelected=selected
-    }
-    fun sendExpressionToGraph() {
-        val source=editor.source.trim()
-        if(source.isEmpty()) {error="Enter an expression to graph";return}
-        val tree=try {Parser(source).parse()} catch(e:Exception) {error=e.message ?: "Syntax ERROR";return}
-        var lhsVar:String?=null
-        var rhsTree=tree
-        var rhsSource=source
-        if(tree.kind=="relation" && tree.value=="=" && tree.args.size==2 && tree.args[0].kind=="symbol" && tree.args[0].value in listOf("y","z")) {
-            lhsVar=tree.args[0].value
-            rhsTree=tree.args[1]
-            rhsSource=source.substring(rhsTree.start,rhsTree.end)
-        } else if(tree.kind=="relation") {error="Graph an expression, y = f(x), or z = f(x,y)";return}
-        val symbols=rhsTree.nodes().filter {it.kind=="symbol"}.map {it.value}.toSet()
-        val wantSurface=(lhsVar=="z")||("x" in symbols && "y" in symbols)
-        if(wantSurface) {
-            try {Parser(rhsSource).parse()} catch(e:Exception) {error=e.message ?: "Syntax ERROR";return}
-            changeGraphKind("surface")
-            updateGraphSource(rhsSource)
-        } else {
-            changeGraphKind("cartesian")
-            updateGraphSource(rhsSource)
-        }
-        error="";mode="Graph"
-    }
-    fun changeGraphKind(kind:String) {
-        if(!graphState.changeKind(kind))return
-        animationJob?.cancel()
-        save()
-    }
-    fun analyzeGraph(action:String,first:String,second:String,selected:Int,other:Int) {
-        if(graphKind !in listOf("cartesian","parametric","polar")) {error="Analysis requires a Cartesian, parametric or polar graph";return}
-        val singled=action in listOf("derivative","tangent")
-        val a=first.toDoubleOrNull();val b=if(singled)a else second.toDoubleOrNull()
-        if(a==null || !a.isFinite() || b==null || !b.isFinite() || (!singled && a>=b)) {error="Enter finite values with a < b";return}
-        val sources=graphSource.lines().filter {it.isNotBlank()}.take(8).filter {graphKind!="cartesian" || !it.trim().startsWith("[shade]")}.take(6)
-        if(sources.isEmpty() || selected !in sources.indices || action=="intersection" && (other !in sources.indices || other==selected)) {error="Select two different functions";return}
-        val trees=try {JSONArray(sources.map {JSONObject(Parser(it).parse().json())})} catch(e:Exception) {error=e.message ?: "Syntax ERROR";return}
-        analysisJob?.cancel()
-        val source=graphSource
-        analysisJob=viewModelScope.launch {
-            graphAnalysisBusy=true;error="";graphAnalysis=null
-            try {
-                val response=engine.execute(request("graphAnalysis").put("angle","RAD").put("trees",trees).put("graphKind",graphKind).put("analysis",action).put("a",a).put("b",b).put("selected",selected).put("other",other).put("variable",if(graphKind=="cartesian")"x" else "t").put("parameters",graphState.parameterPayload()).put("xMin",xMin).put("xMax",xMax).put("yMin",yMin).put("yMax",yMax))
-                if(source==graphSource && graphKind in listOf("cartesian","parametric","polar")) {
-                    if(response.optBoolean("ok")) {
-                        graphAnalysis=response
-                        shadedInterval=if(action=="integral" && graphKind=="cartesian")a to b else null
-                        response.optJSONArray("points")?.optJSONArray(0)?.let {trace=it.getDouble(0) to it.getDouble(1)}
-                    } else error=response.optString("error","Analysis failed")
-                }
-            } finally {graphAnalysisBusy=false}
-        }
-    }
-    fun clearGraphTangent() {
-        analysisJob?.cancel()
-        analysisJob=null
-        graphAnalysisBusy=false
-        graphAnalysis=null
-        trace=null
-        shadedInterval=null
-    }
+    fun saveDataSet(name:String,csv:String,kind:String) = with(CalculatorStatisticsActions) { performSaveDataSet(name,csv,kind) }
+    fun deleteDataSet(name:String) = with(CalculatorStatisticsActions) { performDeleteDataSet(name) }
+    fun saveStatistics(name:String,data:String,kind:String,regression:String,plot:String,csv:Boolean,selected:String,isNew:Boolean,customFormula:String,customVariable:String,customInitials:String) =
+        with(CalculatorStatisticsActions) { performSaveStatistics(name,data,kind,regression,plot,csv,selected,isNew,customFormula,customVariable,customInitials) }
+    fun fitRegression(source:String,data:String) = with(CalculatorStatisticsActions) { performFitRegression(source,data) }
+    fun clearRegression() = with(CalculatorStatisticsActions) { performClearRegression() }
+    fun plot() = with(CalculatorGraphActions) { performPlot() }
+    fun setGraphParameter(name:String,value:Double) = with(CalculatorGraphActions) { performSetGraphParameter(name,value) }
+    fun setGraphParameterRange(name:String,low:Double,high:Double) = with(CalculatorGraphActions) { performSetGraphParameterRange(name,low,high) }
+    fun resetGraphParameters() = with(CalculatorGraphActions) { performResetGraphParameters() }
+    fun toggleGraphAnimation() = with(CalculatorGraphActions) { performToggleGraphAnimation() }
+    fun editPython(source:String,start:Int=source.length,end:Int=start) = with(CalculatorPythonActions) { performEditPython(source,start,end) }
+    fun insertPython(snippet:String,inside:Int=snippet.length) = with(CalculatorPythonActions) { performInsertPython(snippet,inside) }
+    fun newPythonFile() = with(CalculatorPythonActions) { performNewPythonFile() }
+    fun openPythonFile(source:String,name:String,uri:String) = with(CalculatorPythonActions) { performOpenPythonFile(source,name,uri) }
+    fun savedPythonFile(name:String,uri:String) = with(CalculatorPythonActions) { performSavedPythonFile(name,uri) }
+    fun pythonFileError(message:String) = with(CalculatorPythonActions) { performPythonFileError(message) }
+    fun runPython() = with(CalculatorPythonActions) { performRunPython() }
+    fun submitPythonInput(value:String) = with(CalculatorPythonActions) { performSubmitPythonInput(value) }
+    fun stopPython() = with(CalculatorPythonActions) { performStopPython() }
+    fun updateGraphSource(source:String) = with(CalculatorGraphActions) { performUpdateGraphSource(source) }
+    fun toggleGraphDerivative(selected:Int) = with(CalculatorGraphActions) { performToggleGraphDerivative(selected) }
+    fun sendExpressionToGraph() = with(CalculatorGraphActions) { performSendExpressionToGraph() }
+    fun changeGraphKind(kind:String) = with(CalculatorGraphActions) { performChangeGraphKind(kind) }
+    fun analyzeGraph(action:String,first:String,second:String,selected:Int,other:Int) =
+        with(CalculatorGraphActions) { performAnalyzeGraph(action,first,second,selected,other) }
+    fun clearGraphTangent() = with(CalculatorGraphActions) { performClearGraphTangent() }
     fun program(a: String,b: String,base: Int,width: Int,signed: Boolean,op: String) {
         if(busy) return
         job=viewModelScope.launch {
