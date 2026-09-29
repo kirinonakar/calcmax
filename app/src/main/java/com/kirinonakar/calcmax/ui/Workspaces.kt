@@ -446,20 +446,21 @@ private fun treeSource(node:JSONObject?):String? {
             Choices(if(dataKind=="xy")listOf("Scatter","Histogram","Box plot") else listOf("Histogram","Box plot"),plotType,{plotType=it})
         }
         val fitVisible=dataKind=="xy"&&plotType=="Scatter"&&m.regressionData==data&&m.regressionFit.isNotBlank()
-        StatisticsPlot(plotType,if(plotType=="Scatter")paired else xValues.mapIndexed {i,v->i.toDouble() to v},xValues,yValues,if(fitVisible)m.regressionCurve.orEmpty() else emptyList(),if(fitVisible)m.regressionFit else "",fitVisible&&m.regressionMode=="linear",m.regressionCorrelation)
+        StatisticsPlot(plotType,if(plotType=="Scatter")paired else xValues.mapIndexed {i,v->i.toDouble() to v},xValues,yValues,if(fitVisible)m.regressionCurve.orEmpty() else emptyList(),if(fitVisible)m.regressionFit else "",m.displayDigits,fitVisible&&m.regressionMode=="linear",m.regressionCorrelation)
         if(m.regressionBusy)Text(if(isKorean())"회귀 적합 중…" else "Fitting regression…",fontSize=11.sp,color=LocalInstrument.current.muted)
         if(dataKind=="xy"&&m.regressionData==data&&m.regressionFit.isNotBlank()&&m.regressionParameters.isNotEmpty()) {
             Text(tr("Fitted parameters"),fontSize=12.sp,fontWeight=FontWeight.SemiBold)
             Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(16.dp)) {
                 m.regressionParameters.sortedWith(compareBy({listOf("f","ADC","D","Dstar").indexOf(it.first).let {index->if(index<0)Int.MAX_VALUE else index}},{it.first})).forEach {(name,value)->
                     val label=if(name=="Dstar")"D*" else name
+                    val displayedValue=ResultDisplayFormat.formatText(value,m.resultDisplayMode,m.thousandsSeparator,maxFractionDigits=m.displayDigits)
                     val korean=isKorean()
                     TextButton(onClick={
                         clipboard.setText(AnnotatedString(value))
                         android.widget.Toast.makeText(context,if(korean)"$label 값 복사됨" else "$label copied",android.widget.Toast.LENGTH_SHORT).show()
                     },contentPadding=PaddingValues(horizontal=8.dp,vertical=0.dp),
                         modifier=Modifier.semantics {contentDescription=if(korean)"$label 값 복사" else "Copy $label value"}) {
-                        Text("$label = $value  ⧉",fontSize=11.sp,fontFamily=FontFamily.Monospace)
+                        Text("$label = $displayedValue  ⧉",fontSize=11.sp,fontFamily=FontFamily.Monospace)
                     }
                 }
             }
@@ -493,9 +494,9 @@ private fun String.splitCsvRecord():List<String> {
     cells+=current.toString().trim();return cells
 }
 
-@Composable private fun StatisticsPlot(type:String,points:List<Pair<Double,Double>>,values:List<Double>,secondary:List<Double> = emptyList(),curve:List<Pair<Double,Double>> = emptyList(),fitLabel:String="",showCorrelation:Boolean=false,correlation:Double?=null) {
+@Composable private fun StatisticsPlot(type:String,points:List<Pair<Double,Double>>,values:List<Double>,secondary:List<Double> = emptyList(),curve:List<Pair<Double,Double>> = emptyList(),fitLabel:String="",displayDigits:Int=10,showCorrelation:Boolean=false,correlation:Double?=null) {
     val c=LocalInstrument.current
-    val fitEquation=remember(fitLabel) {if(fitLabel.isBlank())null else decimalFractionFormulaTree(fitLabel)}
+    val fitEquation=remember(fitLabel,displayDigits) {if(fitLabel.isBlank())null else regressionFormulaDisplayTree(fitLabel,displayDigits)}
     Canvas(Modifier.fillMaxWidth().height(220.dp).background(c.display)) {
         val left=38.dp.toPx();val right=12.dp.toPx();val top=14.dp.toPx();val bottom=28.dp.toPx()
         val width=size.width-left-right;val height=size.height-top-bottom
@@ -863,7 +864,7 @@ data class ConstantEntry(val symbol: String,val name: String,val value: String,v
         Text(tr("Angle unit")); Choices(listOf("DEG","RAD","GRAD"),m.angle,{m.angle=it;m.recalculatePreview();m.save()})
         Text(tr("Internal precision · numeric algorithms")); Choices(precisionChoices+"Custom",if(customPrecisionVisible)"Custom" else m.precision.toString(),{if(it=="Custom")customPrecisionVisible=true else {customPrecisionVisible=false;m.precision=it.toInt();m.recalculatePreview();m.save()}})
         if(customPrecisionVisible) {Field(customPrecision,"Custom internal precision · 3–200",Modifier.fillMaxWidth()){customPrecision=it};TextButton(onClick={m.precision=customPrecision.toInt();m.recalculatePreview();m.save()},enabled=customPrecision.toIntOrNull() in 3..200){Text(tr("Apply internal precision"))}}
-        Text(tr("Display digits · result digits shown")); Choices(displayChoices+"Custom",if(customDisplayVisible)"Custom" else m.displayDigits.toString(),{if(it=="Custom")customDisplayVisible=true else {customDisplayVisible=false;m.displayDigits=it.toInt();m.recalculatePreview();m.save()}})
+        Text(tr("Display digits · decimal places shown")); Choices(displayChoices+"Custom",if(customDisplayVisible)"Custom" else m.displayDigits.toString(),{if(it=="Custom")customDisplayVisible=true else {customDisplayVisible=false;m.displayDigits=it.toInt();m.recalculatePreview();m.save()}})
         if(customDisplayVisible) {Field(customDisplay,"Custom display digits · 2–200",Modifier.fillMaxWidth()){customDisplay=it};TextButton(onClick={m.displayDigits=customDisplay.toInt();m.recalculatePreview();m.save()},enabled=customDisplay.toIntOrNull() in 2..200){Text(tr("Apply display digits"))}}
         Text(if(isKorean())"내부 정밀도는 적분과 방정식 풀이 같은 수치 계산에 적용됩니다. 표시 자릿수는 결과에 보이는 자릿수만 제한하며 내부 정밀도를 넘지 않습니다. 정확한 정수, 분수, 기호식은 반올림하지 않습니다." else "Internal precision governs numeric algorithms such as integration and solving. Display digits limit the digits a result shows; they never exceed internal precision, and exact integers, fractions and symbolic forms are not rounded.",fontSize=11.sp,color=LocalInstrument.current.muted)
         Column(verticalArrangement=Arrangement.spacedBy(2.dp)) {

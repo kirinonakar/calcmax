@@ -643,6 +643,7 @@ def fit_custom_regression(engine, rows, expression, independent, options=None):
     scale = max(abs(v) for v in ys) or 1.0
     start = []
     limits = []
+    precise_limits = []
     for parameter in parameters:
         name = str(parameter).lower()
         if name in ("s0", "a", "amplitude"): guess = ys[xs.index(min(xs))]
@@ -652,6 +653,7 @@ def fit_custom_regression(engine, rows, expression, independent, options=None):
         else: guess = scale if expression.subs(parameter, 0) == 0 else 1.0
         start.append(float(guess))
         limits.append((-math.inf, math.inf))
+        precise_limits.append((-s.oo, s.oo))
     if options is not None:
         require(isinstance(options, (list, tuple)), "Initial values must be parameter rows")
         seen = set()
@@ -672,6 +674,8 @@ def fit_custom_regression(engine, rows, expression, independent, options=None):
             upper = values[2] if len(values) > 2 else math.inf
             require(lower < upper and lower <= start[index] <= upper, "Initial value must lie within bounds")
             limits[index] = (lower, upper)
+            precise_limits[index] = (option[2] if len(option) > 2 else -s.oo,
+                                     option[3] if len(option) > 3 else s.oo)
     try:
         model = s.lambdify([independent] + parameters, expression, modules="math", cse=True, docstring_limit=0)
         derivatives = [s.lambdify([independent] + parameters, s.diff(expression, p), modules="math", cse=True, docstring_limit=0) for p in parameters]
@@ -696,9 +700,67 @@ def fit_custom_regression(engine, rows, expression, independent, options=None):
     current = evaluate(values, True)
     require(current is not None, "Initial values are outside the model domain")
     def fitted_expression():
-        engine.regression_parameters = [[str(parameter), format(value, ".12g")]
-                                        for parameter, value in zip(parameters, values)]
-        return expression.subs(dict(zip(parameters, [s.Float(value, 12) for value in values])))
+        # The float fit finds a basin quickly. Refine against the original data so
+        # parameter values and the fitted expression use internal precision.
+        with mp.workdps(engine.precision + 12):
+            mp_xs = [_mpf(row[0], engine.precision) for row in rows]
+            mp_ys = [_mpf(row[1], engine.precision) for row in rows]
+            mp_limits = [(None if lower == -s.oo else _mpf(lower, engine.precision),
+                          None if upper == s.oo else _mpf(upper, engine.precision))
+                         for lower, upper in precise_limits]
+            mp_model = s.lambdify([independent] + parameters, expression, modules="mpmath", cse=True, docstring_limit=0)
+            mp_derivatives = [s.lambdify([independent] + parameters, s.diff(expression, p),
+                                        modules="mpmath", cse=True, docstring_limit=0) for p in parameters]
+            refined = [mp.mpf(repr(value)) for value in values]
+
+            def evaluate_precise(coefficients):
+                try:
+                    predicted = [mp.mpf(mp_model(x, *coefficients)) for x in mp_xs]
+                    residual = [y - p for y, p in zip(mp_ys, predicted)]
+                    jacobian = [[mp.mpf(derivative(x, *coefficients)) for derivative in mp_derivatives]
+                                for x in mp_xs]
+                    if not all(mp.isfinite(v) for v in predicted + residual + [v for row in jacobian for v in row]):
+                        return None
+                    return mp.fsum(r*r for r in residual), residual, jacobian
+                except (ArithmeticError, TypeError, ValueError, OverflowError):
+                    return None
+
+            current_precise = evaluate_precise(refined)
+            require(current_precise is not None, "Numerical fitting failed")
+            damping_precise = mp.mpf("0.001")
+            tolerance = mp.power(10, -engine.precision - 2)
+            for _ in range(max(30, engine.precision // 3)):
+                cost, residual, jacobian = current_precise
+                if cost == 0: break
+                normal = mp.matrix([[mp.fsum(row[i]*row[j] for row in jacobian)
+                                     for j in range(len(parameters))] for i in range(len(parameters))])
+                gradient = mp.matrix([mp.fsum(row[i]*r for row, r in zip(jacobian, residual))
+                                      for i in range(len(parameters))])
+                improved = False
+                for _ in range(12):
+                    matrix = normal.copy()
+                    for i in range(len(parameters)):
+                        matrix[i, i] += damping_precise * max(normal[i, i], tolerance)
+                    try: step = mp.lu_solve(matrix, gradient)
+                    except (ValueError, ZeroDivisionError): break
+                    trial = [refined[i] + step[i] for i in range(len(parameters))]
+                    trial = [max(lower, value) if lower is not None else value
+                             for value, (lower, _) in zip(trial, mp_limits)]
+                    trial = [min(upper, value) if upper is not None else value
+                             for value, (_, upper) in zip(trial, mp_limits)]
+                    candidate = evaluate_precise(trial)
+                    if candidate is not None and candidate[0] < cost:
+                        change = max(abs(a-b) for a, b in zip(trial, refined))
+                        refined, current_precise = trial, candidate
+                        damping_precise = max(damping_precise/3, tolerance)
+                        improved = True
+                        break
+                    damping_precise *= 10
+                if not improved or change < tolerance * max(1, *(abs(v) for v in refined)): break
+            fitted = [s.Float(str(value), engine.precision) for value in refined]
+        engine.regression_parameters = [[str(parameter), str(value)]
+                                        for parameter, value in zip(parameters, fitted)]
+        return expression.subs(dict(zip(parameters, fitted)))
     damping = 1e-3
     for _ in range(100):
         cost, residual, jacobian = current

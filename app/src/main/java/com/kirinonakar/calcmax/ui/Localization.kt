@@ -16,7 +16,7 @@ private val korean = mapOf(
     "Expression input" to "수식 입력", "Undo last input" to "마지막 입력 취소",
     "Instrument setup" to "계산기 설정", "Language" to "언어", "Appearance" to "화면 모양",
     "System" to "시스템", "Light" to "밝게", "Dark" to "어둡게", "Angle unit" to "각도 단위",
-    "Internal precision · numeric algorithms" to "내부 정밀도 · 수치 계산", "Display digits · result digits shown" to "표시 자릿수 · 결과에 보이는 자릿수",
+    "Internal precision · numeric algorithms" to "내부 정밀도 · 수치 계산", "Display digits · decimal places shown" to "표시 자릿수 · 소수점 아래 자릿수",
     "Custom" to "사용자 지정", "Custom internal precision · 3–200" to "내부 정밀도 직접 입력 · 3–200",
     "Custom display digits · 2–200" to "표시 자릿수 직접 입력 · 2–200",
     "Apply internal precision" to "내부 정밀도 적용", "Apply display digits" to "표시 자릿수 적용",

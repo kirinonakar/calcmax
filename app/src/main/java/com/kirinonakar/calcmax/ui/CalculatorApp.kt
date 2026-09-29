@@ -55,7 +55,7 @@ private val LocalCalculatorOverlay=staticCompositionLocalOf<(String)->Unit> { {}
             if(m.mixedNumbers)Text("mix  ",fontSize=10.sp,color=c.accent,modifier=Modifier.semantics{contentDescription="Mixed numbers"})
             Text(if(m.shift)"SHIFT  " else if(m.alpha)"ALPHA  " else if(m.hyperbolic)"HYP  " else if(m.secondKeys)"2ND  " else "",fontSize=10.sp,color=if(m.alpha)c.alpha else c.shift)
             Text(m.angle,Modifier.clickable {m.angle=when(m.angle){"DEG"->"RAD";"RAD"->"GRAD";else->"DEG"};m.recalculatePreview();m.save()}.padding(horizontal=12.dp),fontSize=11.sp,color=c.accent)
-            Text("≤ ${m.displayDigits} digits",fontSize=10.sp,color=c.muted)
+            Text("≤${m.displayDigits} decimals",fontSize=10.sp,color=c.muted)
         }
         Box(Modifier.weight(1f)) {workspaces.SaveableStateProvider(m.mode) {
             when(m.mode) {
@@ -158,7 +158,7 @@ private val LocalCalculatorOverlay=staticCompositionLocalOf<(String)->Unit> { {}
         Box(Modifier.fillMaxWidth().padding(top=6.dp).horizontalScroll(rememberScrollState()),contentAlignment=Alignment.CenterEnd) {
             if(!compactResult&&response!=null)ResultMath(response,m.decimal,m.outputFont*.82f,
                 displayMode=m.resultDisplayMode,thousandsSeparator=m.thousandsSeparator,dmsDisplay=response.optBoolean("dms"),displayDigits=m.displayDigits)
-            else Text(ResultDisplayFormat.formatText(response?.optString(if(m.decimal)"decimal" else "exact").orEmpty().ifBlank {entry.result},m.resultDisplayMode,m.thousandsSeparator).take(1200),
+            else Text(ResultDisplayFormat.formatText(response?.optString(if(m.decimal)"decimal" else "exact").orEmpty().ifBlank {entry.result},m.resultDisplayMode,m.thousandsSeparator,maxFractionDigits=m.displayDigits).take(1200),
                 fontSize=(m.outputFont*.72f).sp,color=c.ink,maxLines=8,overflow=TextOverflow.Ellipsis)
         }
         if(response!=null&&domainText(response).isNotEmpty())Text(domainText(response),fontSize=10.sp,color=c.muted)

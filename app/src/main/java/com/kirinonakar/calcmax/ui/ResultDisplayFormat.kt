@@ -52,10 +52,12 @@ object ResultDisplayFormat {
             }
         }
         scientificParts(text)?.let { parts ->
-            val mantissa = if (grouping) groupNumber(parts.mantissa) ?: parts.mantissa else parts.mantissa
+            val rounded = roundFraction(parts.mantissa, maxFractionDigits)
+            val mantissa = if (grouping) groupNumber(rounded) ?: rounded else rounded
             return "$mantissa×10^${parts.exponent}"
         }
-        return if (grouping) groupNumber(text) ?: text else text
+        val rounded = roundFraction(text, maxFractionDigits)
+        return if (grouping) groupNumber(rounded) ?: rounded else rounded
     }
 
     private fun formatNode(
@@ -79,13 +81,15 @@ object ResultDisplayFormat {
             }
         }
         if (allowNotation && numericLeaf) scientificParts(value)?.let { parts ->
-            val mantissa = if (grouping) groupNumber(parts.mantissa) ?: parts.mantissa else parts.mantissa
+            val rounded = roundFraction(parts.mantissa, maxFractionDigits)
+            val mantissa = if (grouping) groupNumber(rounded) ?: rounded else rounded
             return notationNode(mantissa, parts.exponent)
         }
 
         val copy = JSONObject(node.toString())
+        if (numericLeaf) copy.put("value", roundFraction(value, maxFractionDigits))
         if (grouping && numericLeaf) {
-            groupNumber(value)?.let { copy.put("value", it) }
+            groupNumber(copy.optString("value"))?.let { copy.put("value", it) }
         }
         val args = copy.optJSONArray("args")
         if (args != null) {
@@ -121,6 +125,17 @@ object ResultDisplayFormat {
         val exponent = match.groupValues[2].toIntOrNull() ?: return null
         if (abs(exponent) > MAX_DISPLAY_DIGITS) return null
         return NotationParts(match.groupValues[1], exponent)
+    }
+
+    /** Display digits count places after the decimal point, without padding zeros. */
+    private fun roundFraction(value: String, digits: Int): String {
+        if (!value.contains('.') || value.length > MAX_DISPLAY_DIGITS || value.contains('e', ignoreCase = true)) return value
+        val number = value.trim().toBigDecimalOrNull() ?: return value
+        return runCatching {
+            val rounded = number.setScale(digits.coerceIn(0, MAX_DISPLAY_DIGITS), RoundingMode.HALF_UP)
+                .stripTrailingZeros().toPlainString()
+            if (rounded.length > MAX_DISPLAY_DIGITS) value else rounded
+        }.getOrDefault(value)
     }
 
     private fun notationParts(value: String, displayMode: ResultDisplayMode, engineeringShift: Int, maxFractionDigits: Int): NotationParts? {

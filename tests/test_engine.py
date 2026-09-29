@@ -85,6 +85,29 @@ class EngineTests(unittest.TestCase):
         self.assertAlmostEqual(0.4,float(values["k"]),places=5)
         self.assertAlmostEqual(0.6,float(values["C"]),places=5)
 
+    def test_custom_regression_parameters_follow_internal_precision(self):
+        def number(value): return {"kind":"number","value":str(value)}
+        x={"kind":"symbol","value":"x"}
+        a={"kind":"symbol","value":"A"}
+        rows={"kind":"list","args":[{"kind":"list","args":[number(i*7),number(i)]} for i in (1,2,3)]}
+        tree={"kind":"call","value":"regression","args":[rows,{"kind":"symbol","value":"custom"},
+              {"kind":"binary","value":"*","args":[a,x]},x]}
+        def fit(precision, display_digits):
+            return json.loads(core.dispatch(json.dumps({"tree":tree,"precision":precision,"displayDigits":display_digits})))
+        narrow=fit(12,5)
+        wide=fit(50,5)
+        self.assertTrue(narrow["ok"],narrow)
+        self.assertTrue(wide["ok"],wide)
+        narrow_value=dict(narrow["parameters"])["A"]
+        wide_value=dict(wide["parameters"])["A"]
+        self.assertTrue(wide_value.startswith("0.142857142857142857142857"),wide_value)
+        self.assertGreater(len(wide_value),len(narrow_value)+30)
+        self.assertIn(wide_value,wide["exact"])
+        self.assertEqual(wide["parameters"],fit(50,30)["parameters"])
+        maximum=fit(200,5)
+        self.assertTrue(maximum["ok"],maximum)
+        self.assertGreaterEqual(len(dict(maximum["parameters"])["A"]),201)
+
     def test_indefinite_integral_places_constant_after_expression(self):
         tree={"kind":"call","value":"integrate","args":[
             {"kind":"symbol","value":"x"},{"kind":"symbol","value":"x"}]}
@@ -192,20 +215,23 @@ class EngineTests(unittest.TestCase):
         huge={"kind":"number","value":"1e100000000"}
         self.assertFalse(json.loads(core.dispatch(json.dumps({"tree":huge})))["ok"])
         self.assertFalse(run("integrate(x^2*sin(x),x)",budget=-1)["ok"])
-    def test_internal_precision_and_display_digits_are_separate(self):
+    def test_display_trees_keep_internal_precision_for_decimal_place_formatting(self):
         third={"kind":"binary","value":"/","args":[{"kind":"number","value":"1"},{"kind":"number","value":"3"}]}
         wide=json.loads(core.dispatch(json.dumps({"tree":third,"precision":100,"displayDigits":10})))
         self.assertEqual(wide["exact"],"1/3")
-        self.assertEqual(wide["decimal"],"0.3333333333")
-        # Display digits never exceed internal precision.
+        self.assertGreaterEqual(len(wide["decimal"]),100)
+        self.assertEqual(wide["decimalTree"]["value"],wide["decimal"])
+        large=json.loads(core.dispatch(json.dumps({"tree":{"kind":"number","value":"12342456656.123456789"},"precision":30,"displayDigits":5})))
+        self.assertTrue(large["decimalTree"]["value"].startswith("12342456656.123456789"))
+        # The engine only supplies digits supported by internal precision.
         self.assertEqual(json.loads(core.dispatch(json.dumps({"tree":third,"precision":10,"displayDigits":40})))["decimal"],"0.3333333333")
         # The display cap must not shorten the value Ans and STO reuse.
         reused=json.loads(core.dispatch(json.dumps({"tree":{"kind":"binary","value":"*","args":[wide["resultAst"],{"kind":"number","value":"3"}]},"precision":100,"displayDigits":10})))
         self.assertEqual(reused["exact"],"1")
         # Floating-point results follow the same split.
         root=json.loads(core.dispatch(json.dumps({"tree":TREES["nsolve(cos(x)-x,x,0,1)"],"precision":50,"displayDigits":10})))
-        self.assertEqual(root["exact"],"0.7390851332")
-        self.assertEqual(root["tree"]["value"],"0.7390851332")
+        self.assertGreaterEqual(len(root["exact"]),50)
+        self.assertEqual(root["tree"]["value"],root["exact"])
         self.assertGreaterEqual(len(json.loads(core.dispatch(json.dumps({"tree":TREES["nsolve(cos(x)-x,x,0,1)"],"precision":50})))["exact"]),30)
     def test_large_exact_integer_serialization(self):
         # Long exact results are abbreviated in the view but remain reusable at full precision.

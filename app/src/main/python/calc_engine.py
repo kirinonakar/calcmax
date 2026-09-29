@@ -74,11 +74,12 @@ def dispatch(payload):
             if getattr(value,"is_number",False) and value.has(s.I): value=s.expand_complex(value)
             if isinstance(value,list) and value and all(isinstance(row,list) for row in value): value=matrix(value)
             if getattr(value,"has",lambda *_:False)(s.zoo,s.nan): raise MathError("Undefined or division by zero")
-            # The result view rounds floating-point values to the display digits; the numeric work keeps engine.precision.
-            display_value=display_rounded(value,engine.display_digits)
+            # Keep the available precision in display trees. The Android result view
+            # applies displayDigits as fractional places after choosing a notation.
+            display_value=display_rounded(value,engine.precision)
             exact,exact_tree=shown_exact(display_value)
             require(len(exact)<=40000,"Result exceeds display size limit")
-            decimal_value=approximate(value,engine.display_digits)
+            decimal_value=approximate(value,engine.precision)
             dms_result=(is_dms_expression(request["tree"],request.get("variables",{}))
                         and getattr(value,"is_number",False) and not value.has(s.I))
             result={"exact":exact,"decimal":readable(decimal_value),"tree":exact_tree,"note":engine.note,
@@ -95,7 +96,7 @@ def dispatch(payload):
                 offset=engine.build(request["tree"]["args"][1]) if len(request["tree"]["args"])>1 else 0
                 require(-300<=offset<=300,"Engineering exponent limit")
                 exponent=(int(s.floor(s.log(s.Abs(value),10)/3))*3 if value!=0 else 0)+int(offset)
-                mantissa=s.N(value/s.Integer(10)**exponent,engine.display_digits)
+                mantissa=s.N(value/s.Integer(10)**exponent,engine.precision)
                 power={"kind":"power","args":[{"kind":"text","value":"10"},{"kind":"text","value":str(exponent)}]}
                 result["tree"]=result["decimalTree"]={"kind":"product","args":[display_tree(mantissa),power]}
             if request["tree"].get("value")=="dms" and isinstance(value,list):result["tree"]=result["decimalTree"]={"kind":"dms","args":[display_tree(x) for x in display_value]}

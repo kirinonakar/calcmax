@@ -1,8 +1,10 @@
 package com.kirinonakar.calcmax
 
 import com.kirinonakar.calcmax.ui.decimalFractionFormulaTree
+import com.kirinonakar.calcmax.ui.regressionFormulaDisplayTree
 import com.kirinonakar.calcmax.math.Parser
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class RegressionFormulaTest {
@@ -33,5 +35,15 @@ class RegressionFormulaTest {
         assertEquals("0.333",sum.getJSONArray("args").getJSONObject(0).getJSONArray("args").getJSONObject(0).getString("value"))
         assertEquals("0.500",sum.getJSONArray("args").getJSONObject(1).getString("value"))
         assertEquals("/",decimalFractionFormulaTree("1/x")!!.getString("value"))
+    }
+
+    @Test fun fittedFormulaUsesConfiguredFractionalPlaces() {
+        val source="0.123456789*x + 1/7"
+        val five=regressionFormulaDisplayTree(source,5)!!.toString()
+        val ten=regressionFormulaDisplayTree(source,10)!!.toString()
+        assertTrue(five.contains("0.12346"))
+        assertTrue(five.contains("0.14286"))
+        assertTrue(ten.contains("0.123456789"))
+        assertTrue(ten.contains("0.1428571429"))
     }
 }
