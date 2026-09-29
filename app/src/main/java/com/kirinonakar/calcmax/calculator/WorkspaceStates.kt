@@ -151,7 +151,7 @@ internal class StatisticsState(private val prefs:SharedPreferences) {
 
     fun saveDataSet(name:String,csv:String,kind:String) {
         require(name.matches(Regex("[A-Za-z][A-Za-z0-9_]*"))) {"Use a letter followed by letters, digits or underscores for the dataset name"}
-        require(kind in listOf("list","xy")) {"Unknown dataset type"}
+        require(kind in listOf("list","xy","xyz")) {"Unknown dataset type"}
         dataSets=JSONObject(dataSets.toString()).put(name,JSONObject().put("csv",csv).put("kind",kind))
     }
 

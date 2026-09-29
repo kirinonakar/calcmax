@@ -17,7 +17,7 @@ import kotlin.math.floor
 import kotlin.math.ln
 import kotlin.math.max
 
-@Composable internal fun StatisticsPlot(type:String,points:List<Pair<Double,Double>>,values:List<Double>,secondary:List<Double> = emptyList(),curve:List<Pair<Double,Double>> = emptyList(),fitLabel:String="",displayDigits:Int=10,showCorrelation:Boolean=false,correlation:Double?=null) {
+@Composable internal fun StatisticsPlot(type:String,points:List<Pair<Double,Double>>,values:List<Double>,secondary:List<Double> = emptyList(),curve:List<Pair<Double,Double>> = emptyList(),fitLabel:String="",displayDigits:Int=10,showCorrelation:Boolean=false,correlation:Double?=null,tertiary:List<Double> = emptyList()) {
     val c=LocalInstrument.current
     val fitEquation=remember(fitLabel,displayDigits) {if(fitLabel.isBlank())null else regressionFormulaDisplayTree(fitLabel,displayDigits)}
     Canvas(Modifier.fillMaxWidth().height(220.dp).background(c.display)) {
@@ -43,10 +43,10 @@ import kotlin.math.max
             drawContext.canvas.nativeCanvas.drawText("y",5.dp.toPx(),top+12.dp.toPx(),text)
             drawContext.canvas.nativeCanvas.drawText("%.4g".format(x0),left,top+height+16.dp.toPx(),text)
             drawContext.canvas.nativeCanvas.drawText("%.4g".format(x1),left+width-34.dp.toPx(),top+height+16.dp.toPx(),text)
-        } else if(values.isEmpty()&&secondary.isEmpty()) {
+        } else if(values.isEmpty()&&secondary.isEmpty()&&tertiary.isEmpty()) {
             drawContext.canvas.nativeCanvas.drawText("Add finite numeric observations to plot",left,top+20.dp.toPx(),text)
         } else if(type=="Histogram") {
-            val series=if(secondary.isEmpty())listOf(Triple("",values,c.accent)) else listOf(Triple("x",values,c.accent),Triple("y",secondary,c.danger)).filter {it.second.isNotEmpty()}
+            val series=if(secondary.isEmpty()&&tertiary.isEmpty())listOf(Triple("",values,c.accent)) else listOf(Triple("x",values,c.accent),Triple("y",secondary,c.danger),Triple("z",tertiary,c.curves[2])).filter {it.second.isNotEmpty()}
             val all=series.flatMap {it.second}
             var lo=all.min();var hi=all.max();if(lo==hi){lo-=.5;hi+=.5}
             val bins=ceil(1+ln(all.size.coerceAtLeast(2).toDouble())/ln(2.0)).toInt().coerceIn(3,14)
@@ -66,7 +66,7 @@ import kotlin.math.max
             drawContext.canvas.nativeCanvas.drawText("%.4g".format(lo),left,top+height+16.dp.toPx(),text)
             drawContext.canvas.nativeCanvas.drawText("%.4g".format(hi),left+width-34.dp.toPx(),top+height+16.dp.toPx(),text)
         } else {
-            val series=if(secondary.isEmpty())listOf(Triple("",values,c.accent)) else listOf(Triple("x",values,c.accent),Triple("y",secondary,c.danger)).filter {it.second.isNotEmpty()}
+            val series=if(secondary.isEmpty()&&tertiary.isEmpty())listOf(Triple("",values,c.accent)) else listOf(Triple("x",values,c.accent),Triple("y",secondary,c.danger),Triple("z",tertiary,c.curves[2])).filter {it.second.isNotEmpty()}
             fun quantile(data:List<Double>,p:Double):Double {val position=(data.size-1)*p;val low=floor(position).toInt();val high=ceil(position).toInt();return data[low]+(data[high]-data[low])*(position-low)}
             val all=series.flatMap {it.second}
             var minValue=all.min();var maxValue=all.max();if(minValue==maxValue){minValue-=.5;maxValue+=.5}

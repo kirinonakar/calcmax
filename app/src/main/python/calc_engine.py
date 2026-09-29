@@ -17,7 +17,7 @@ from calc_statistics import pearson_correlation
 
 # Symbolic calls whose cold first evaluation is heavy enough that the generic step allowance used
 # to cut off legitimate work. Nested calls count too, so 1+fourier(exp(-t^2),t,w) is heavy as well.
-HEAVY_CALLS=("integrate","dsolve","desolve","laplace","ilaplace","fourier","ifourier","mellin","invmellin","ztrans","invztrans","pdsolve","domain","range","real_roots","rsolve","invt","tinterval","tvmrate","irr")
+HEAVY_CALLS=("integrate","dsolve","desolve","laplace","ilaplace","fourier","ifourier","mellin","invmellin","ztrans","invztrans","pdsolve","domain","range","real_roots","rsolve","invt","tinterval","tukey","tvmrate","irr")
 MAX_SHOWN_INTEGER_DIGITS=10000
 
 def shown_exact(rounded):

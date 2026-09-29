@@ -32,12 +32,14 @@ class WorkspaceStatesTest {
 
         graph.graphSource="3*sin(t)"
         statistics.saveDataSet("D2","3,4","list")
+        statistics.saveDataSet("D3","x,y,z\n1,2,3","xyz")
         python.editSource("print(43)")
         val editor=prefs.edit()
         graph.writeTo(editor);statistics.writeTo(editor);python.writeTo(editor);editor.apply()
 
         assertEquals("3*sin(t)",GraphState(prefs).graphSource)
         assertTrue(StatisticsState(prefs).dataSets.has("D2"))
+        assertEquals("xyz",StatisticsState(prefs).dataSets.getJSONObject("D3").getString("kind"))
         assertEquals("print(43)",PythonState(prefs,local).pythonSource)
         assertFalse(prefs.contains("pythonUri"))
     }

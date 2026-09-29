@@ -604,7 +604,7 @@ class Engine:
                     "exppdf", "expcdf", "unifpdf", "unifcdf", "gammapdf", "gammacdf", "betapdf", "betacdf",
                     "lognormpdf", "lognormcdf"):
             return distribution_value(self, name, a)
-        if name in ("ttest", "ttest2", "ttestpaired", "ztest", "ztest2", "chi2test", "chi2independence", "fisherexact", "anova", "shapiro", "tinterval", "zinterval"):
+        if name in ("ttest", "ttest2", "ttestpaired", "ztest", "ztest2", "chi2test", "chi2independence", "fisherexact", "anova", "tukey", "shapiro", "tinterval", "zinterval"):
             return statistical_test(self, name, a, nodes)
         if name in ("tvmfv", "tvmpv", "tvmpmt", "tvmn", "tvmrate", "npv", "irr", "amort", "cagr"):
             return finance_value(self, name, a, nodes)

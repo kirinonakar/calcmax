@@ -8,7 +8,7 @@ private val multiArgumentFunctions = setOf(
     "linsolve", "dot", "cross", "angle", "projection", "regression", "qty", "convert",
     "tpdf", "tcdf", "invt", "chi2pdf", "chi2cdf", "fpdf", "fcdf",
     "binompdf", "binomcdf", "poissonpdf", "poissoncdf", "geometpdf", "geometcdf",
-    "ttest", "ztest", "chi2test", "anova", "tinterval", "zinterval",
+    "ttest", "ztest", "chi2test", "anova", "tukey", "tinterval", "zinterval",
     "tvmfv", "tvmpv", "tvmpmt", "tvmn", "tvmrate", "npv", "irr", "amort", "cagr"
 )
 

@@ -2,6 +2,7 @@ package com.kirinonakar.calcmax
 
 import com.kirinonakar.calcmax.ui.statisticsTestCommand
 import com.kirinonakar.calcmax.ui.statisticsCorrelationCommand
+import com.kirinonakar.calcmax.ui.statisticsGroupedValues
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -56,5 +57,32 @@ class StatisticsTestCommandsTest {
         assertNull(command("Fisher exact", listOf(listOf("0", "1"), listOf("1", "")), "xy"))
         assertNull(statisticsTestCommand("t interval", listOf(listOf("1"), listOf("2")), "list", "x", "Two-sided", "0", "2", "100"))
         assertEquals("ttest(0,[1,2],right)", statisticsTestCommand("t test", listOf(listOf("1"), listOf("2")), "list", "x", "Right", "0", "2", "95"))
+    }
+
+    @Test fun threeColumnsSupplyAnovaTukeyAndSingleColumnTests() {
+        val rows=listOf(listOf("1","4","7"),listOf("2","5","8"),listOf("3","6","9"))
+        assertEquals("anova([1,2,3],[4,5,6],[7,8,9])",command("ANOVA",rows,"xyz"))
+        assertEquals("tukey([1,2,3],[4,5,6],[7,8,9])",command("Tukey HSD",rows,"xyz"))
+        assertEquals("ttest(0,[7,8,9])",command("t test",rows,"xyz","z"))
+        assertNull(command("ANOVA",rows.dropLast(2),"xyz"))
+    }
+
+    @Test fun groupValueLayoutUsesYObservationsAndPairedCategories() {
+        val rows=listOf(listOf("control","1"),listOf("treated","4"),listOf("control","2"),listOf("treated","5"),listOf("control","3"),listOf("treated","6"))
+        assertEquals(listOf("control" to listOf("1","2","3"),"treated" to listOf("4","5","6")),statisticsGroupedValues(rows))
+        fun grouped(test:String,first:String="control",second:String="treated")=
+            statisticsTestCommand(test,rows,"xy","x","Two-sided","0","2","95","3","group-value",first,second)
+        assertEquals("anova([1,2,3],[4,5,6])",grouped("ANOVA"))
+        assertEquals("tukey([1,2,3],[4,5,6])",grouped("Tukey HSD"))
+        assertEquals("ttest2(0,[1,2,3],[4,5,6])",grouped("t test"))
+        assertEquals("ztest2(0,2,3,[1,2,3],[4,5,6])",grouped("z test"))
+        assertEquals("shapiro([1,2,3])",grouped("Shapiro–Wilk"))
+        assertEquals("tinterval(95,[4,5,6])",grouped("t interval",first="treated"))
+        assertNull(grouped("t test",second="control"))
+        val categories=listOf(listOf("control","yes"),listOf("treated","no"),listOf("control","no"),listOf("treated","yes"))
+        fun groupedCategories(test:String)=statisticsTestCommand(test,categories,"xy","x","Two-sided","0","2","95",grouping="group-value")
+        assertEquals("chi2independence([1,2,1,2],[1,2,2,1])",groupedCategories("χ² test"))
+        assertEquals("fisherexact([1,2,1,2],[1,2,2,1])",groupedCategories("Fisher exact"))
+        assertNull(grouped("Fisher exact"))
     }
 }

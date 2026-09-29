@@ -71,7 +71,7 @@ import kotlin.math.max
             if(content!=null) {
                 data=content.trimEnd('\r','\n')
                 val first=data.lineSequence().firstOrNull {it.isNotBlank()}.orEmpty().splitCsvRecord()
-                dataKind=if(first.size>=2)"xy" else "list"
+                dataKind=when {first.size>=3->"xyz";first.size>=2->"xy";else->"list"}
                 datasetName=datasetName.ifBlank {activeName.ifBlank {"D1"}}
                 m.saveDataSet(datasetName,data,dataKind);selected=datasetName;isNew=false
             } else m.error="Could not read the selected CSV file"
@@ -83,23 +83,17 @@ import kotlin.math.max
             if(!success)m.error="Could not write the CSV file"
         }
     }
-    fun rows():List<List<String>> {
-        val normalized=data.replace("\r\n","\n").replace('\r','\n')
-        val lines=mutableListOf<String>();var start=0
-        normalized.forEachIndexed {index,char->if(char=='\n'){lines+=normalized.substring(start,index);start=index+1}}
-        lines+=normalized.substring(start)
-        return lines.map {it.splitCsvRecord().map(String::trim)}
-            .filterIndexed {index,row->!(index==0&&row.firstOrNull()?.lowercase() in listOf("x","n","value","y"))}
-    }
+    fun rows():List<List<String>> = statisticsRows(data)
     fun vector(column:Int)=rows().mapNotNull {it.getOrNull(column)?.takeIf(String::isNotBlank)}.joinToString(",","[","]")
-    fun variableSource():String=if(dataKind=="list")vector(0) else rows().filter {row->row.getOrNull(0).orEmpty().isNotBlank()&&row.getOrNull(1).orEmpty().isNotBlank()}.joinToString(",","[","]") {row->"[${row[0]},${row[1]}]"}
+    fun variableSource():String=statisticsDataSource(data,dataKind)
     fun startNew() {
         var index=1;val existing=names.toSet();while("D$index" in existing)index++
-        datasetName="D$index";data=if(dataKind=="xy")"," else "";isNew=true;selected=""
+        datasetName="D$index";data=when(dataKind){"xy"->",";"xyz"->",,";else->""};isNew=true;selected=""
     }
     val parsedRows=rows()
     val xValues=parsedRows.mapNotNull {it.getOrNull(0)?.toDoubleOrNull()?.takeIf {v->v.isFinite()}}
-    val yValues=if(dataKind=="xy")parsedRows.mapNotNull {it.getOrNull(1)?.toDoubleOrNull()?.takeIf {v->v.isFinite()}} else emptyList()
+    val yValues=if(dataKind!="list")parsedRows.mapNotNull {it.getOrNull(1)?.toDoubleOrNull()?.takeIf {v->v.isFinite()}} else emptyList()
+    val zValues=if(dataKind=="xyz")parsedRows.mapNotNull {it.getOrNull(2)?.toDoubleOrNull()?.takeIf {v->v.isFinite()}} else emptyList()
     val paired=parsedRows.mapNotNull {row->val x=row.getOrNull(0)?.toDoubleOrNull();val y=row.getOrNull(1)?.toDoubleOrNull();if(x!=null&&y!=null&&x.isFinite()&&y.isFinite())x to y else null}
     var section by rememberSaveable {mutableStateOf("Data")}
     if(section=="Data") Panel("Data & statistics","Enter values once, then summarize, test, or plot the current dataset.",panelScroll) {
@@ -111,18 +105,18 @@ import kotlin.math.max
             SmallAction("Save"){m.saveDataSet(datasetName,data,dataKind);selected=datasetName;isNew=false}
             SmallAction("Delete"){if(activeName.isNotBlank()){m.deleteDataSet(activeName);selected="";isNew=true;startNew()}}
         }
-        Choices(listOf("List","x,y data"),if(dataKind=="xy")"x,y data" else "List",{dataKind=if(it=="x,y data")"xy" else "list";plotType=if(dataKind=="xy")"Scatter" else "Histogram"})
+        Choices(listOf("List","x,y data","x,y,z data"),when(dataKind){"xy"->"x,y data";"xyz"->"x,y,z data";else->"List"},{dataKind=when(it){"x,y data"->"xy";"x,y,z data"->"xyz";else->"list"};plotType=if(dataKind=="xy")"Scatter" else "Histogram"})
         Row(Modifier.horizontalScroll(rememberScrollState())) {
             SmallAction("Import CSV"){importCsv.launch(arrayOf("text/csv","text/comma-separated-values","text/plain","application/vnd.ms-excel"))}
             SmallAction("Export CSV"){exportCsv.launch("${datasetName.ifBlank {"dataset"}}.csv")}
             SmallAction("Store as $datasetName"){if(datasetName.matches(Regex("[A-Za-z][A-Za-z0-9_]*")))m.store(datasetName,variableSource(),false)else m.error="Dataset name must be a valid variable name"}
             SmallAction(if(csv)"Table editor" else "Direct input"){csv=!csv}
-            SmallAction("Add row"){if(parsedRows.size<999)data+=if(dataKind=="xy")"\n," else "\n"}
+            SmallAction("Add row"){if(parsedRows.size<999)data+=when(dataKind){"xy"->"\n,";"xyz"->"\n,,";else->"\n"}}
         }
-        if(csv)OutlinedTextField(data,{data=it},Modifier.fillMaxWidth().height(180.dp),label={Text(if(dataKind=="xy") {if(isKorean())"x, y 값" else "x, y values"} else tr("One value per line"))},textStyle=MaterialTheme.typography.bodyLarge.copy(fontFamily=FontFamily.Monospace))
+        if(csv)OutlinedTextField(data,{data=it},Modifier.fillMaxWidth().height(180.dp),label={Text(when(dataKind){"xy"->if(isKorean())"x, y 값" else "x, y values";"xyz"->if(isKorean())"x, y, z 값" else "x, y, z values";else->tr("One value per line")})},textStyle=MaterialTheme.typography.bodyLarge.copy(fontFamily=FontFamily.Monospace))
         else {
             val grid=LocalInstrument.current.grid
-            val tableColumns=if(dataKind=="xy")listOf("x","y") else listOf("value")
+            val tableColumns=when(dataKind){"xy"->listOf("x","y");"xyz"->listOf("x","y","z");else->listOf("value")}
             Column(Modifier.fillMaxWidth().border(1.dp,grid).heightIn(max=300.dp).verticalScroll(rememberScrollState()).testTag("statistics-table")) {
                 Row(Modifier.fillMaxWidth().height(30.dp).background(LocalInstrument.current.scientific)) {
                     StatHeader("#",Modifier.width(30.dp)); VerticalDivider(color=grid,thickness=1.dp)
@@ -151,8 +145,9 @@ import kotlin.math.max
             Text(tr("Quick summaries"),style=MaterialTheme.typography.titleMedium)
             Row(Modifier.horizontalScroll(rememberScrollState())) {
                 fun summarize(command:String) {summaryResultPending=true;m.edit(Editor(command));m.calculate();scope.launch {panelScroll.animateScrollTo(panelScroll.maxValue)}}
-                SmallAction(if(dataKind=="xy")"x" else "List",translate=false){val values=vector(0);if(values!="[]")summarize("stats($values)")}
-                if(dataKind=="xy")SmallAction("y",translate=false){val values=vector(1);if(values!="[]")summarize("stats($values)")}
+                SmallAction(if(dataKind=="list")"List" else "x",translate=false){val values=vector(0);if(values!="[]")summarize("stats($values)")}
+                if(dataKind!="list")SmallAction("y",translate=false){val values=vector(1);if(values!="[]")summarize("stats($values)")}
+                if(dataKind=="xyz")SmallAction("z",translate=false){val values=vector(2);if(values!="[]")summarize("stats($values)")}
                 val correlationCommand=statisticsCorrelationCommand(parsedRows,dataKind)
                 if(dataKind=="xy")SmallAction("correlation",active=if(correlationCommand==null)false else null,translate=false,modifier=Modifier.testTag("statistics-correlation")){correlationCommand?.let {summarize(it)}}
             }
@@ -191,7 +186,7 @@ import kotlin.math.max
             Choices(if(dataKind=="xy")listOf("Scatter","Histogram","Box plot") else listOf("Histogram","Box plot"),plotType,{plotType=it})
         }
         val fitVisible=dataKind=="xy"&&plotType=="Scatter"&&m.regressionData==data&&m.regressionFit.isNotBlank()
-        StatisticsPlot(plotType,if(plotType=="Scatter")paired else xValues.mapIndexed {i,v->i.toDouble() to v},xValues,yValues,if(fitVisible)m.regressionCurve.orEmpty() else emptyList(),if(fitVisible)m.regressionFit else "",m.displayDigits,fitVisible&&m.regressionMode=="linear",m.regressionCorrelation)
+        StatisticsPlot(plotType,if(plotType=="Scatter")paired else xValues.mapIndexed {i,v->i.toDouble() to v},xValues,yValues,if(fitVisible)m.regressionCurve.orEmpty() else emptyList(),if(fitVisible)m.regressionFit else "",m.displayDigits,fitVisible&&m.regressionMode=="linear",m.regressionCorrelation,tertiary=zValues)
         if(m.regressionBusy)Text(if(isKorean())"회귀 적합 중…" else "Fitting regression…",fontSize=11.sp,color=LocalInstrument.current.muted)
         if(dataKind=="xy"&&m.regressionData==data&&m.regressionFit.isNotBlank()) {
             Column(verticalArrangement=Arrangement.spacedBy(0.dp)) {
@@ -228,19 +223,4 @@ import kotlin.math.max
             DistributionSection(m)
         }
     }
-}
-
-private fun String.splitCsvRecord():List<String> {
-    val cells=mutableListOf<String>();val current=StringBuilder();var quoted=false;var i=0
-    while(i<length) {
-        val ch=this[i]
-        when {
-            ch=='"'&&quoted&&i+1<length&&this[i+1]=='"'->{current.append('"');i++}
-            ch=='"'->quoted=!quoted
-            ch==','&&!quoted->{cells+=current.toString().trim();current.setLength(0)}
-            else->current.append(ch)
-        }
-        i++
-    }
-    cells+=current.toString().trim();return cells
 }

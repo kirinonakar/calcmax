@@ -58,6 +58,35 @@ def _f_sf(x, d1, d2):
     if x <= 0: return mp.mpf(1)
     return mp.betainc(d2/2, d1/2, 0, d2/(d2 + d1*x), regularized=True)
 
+def _studentized_range_sf(q, groups, df):
+    """Studentized-range survival probability by deterministic normal/chi-square quadrature."""
+    if q <= 0: return 1.0
+    normal_steps = 120
+    normal_step = 16.0/normal_steps
+    normal_grid = []
+    for index in range(normal_steps + 1):
+        z = -8.0 + index*normal_step
+        weight = (1 if index in (0, normal_steps) else 4 if index % 2 else 2)*normal_step/3
+        normal_grid.append((z, weight*math.exp(-z*z/2)/math.sqrt(2*math.pi), (1+math.erf(z/math.sqrt(2)))/2))
+    spread = math.sqrt(2.0/df)
+    low, high = max(0.0, 1.0-9*spread), 1.0+9*spread
+    variance_steps = 256
+    variance_step = (high-low)/variance_steps
+    log_scale = math.log(2) + df/2*math.log(df/2) - math.lgamma(df/2)
+    total = normalization = 0.0
+    for index in range(variance_steps + 1):
+        scale = low + index*variance_step
+        if scale == 0: continue
+        weight = (1 if index in (0, variance_steps) else 4 if index % 2 else 2)*variance_step/3
+        density = math.exp(log_scale + (df-1)*math.log(scale) - df*scale*scale/2)
+        if density == 0: continue
+        interval = q*scale
+        cdf = groups*sum(normal_weight*max(0.0, (1+math.erf((z+interval)/math.sqrt(2)))/2 - normal_cdf)**(groups-1)
+                         for z, normal_weight, normal_cdf in normal_grid)
+        total += weight*density*max(0.0, 1.0-cdf)
+        normalization += weight*density
+    return min(1.0, max(0.0, total/normalization))
+
 def _bound_survival(sf, bound, digits):
     if bound == s.oo: return mp.mpf(0)
     if bound == -s.oo: return mp.mpf(1)
@@ -536,13 +565,13 @@ def statistical_test(engine, name, a, nodes):
         p = sum((probability(value) for value in selected), s.Integer(0))
         odds = s.oo if b*c == 0 else s.Rational(a*d, b*c)
         return {"odds ratio": odds, "p value": p, "observed": [[a, b], [c, d]], "n": s.Integer(total)}
-    if name == "anova":
-        require(len(args) >= 2, "anova takes two or more data lists")
+    if name in ("anova", "tukey"):
+        require(len(args) >= 2, name + " takes two or more data lists")
         groups = []
         for group in args:
-            require(isinstance(group, (list, tuple)), "anova arguments must be data lists")
+            require(isinstance(group, (list, tuple)), name + " arguments must be data lists")
             values = flatten(group)
-            require(len(values) >= 2, "Each anova group needs at least two values")
+            require(len(values) >= 2, "Each " + name + " group needs at least two values")
             for value in values: _real_value(value, "Sample values must be real numbers")
             groups.append(values)
         total = sum(len(group) for group in groups)
@@ -550,8 +579,24 @@ def statistical_test(engine, name, a, nodes):
         grand = s.Add(*[value for group in groups for value in group])/s.Integer(total)
         between = s.Add(*[s.Integer(len(group))*(mean - grand)**2 for group, mean in zip(groups, means)])
         within = s.Add(*[s.Add(*[(value - mean)**2 for value in group]) for group, mean in zip(groups, means)])
-        require(within != 0, "anova needs variation inside the groups")
+        require(within != 0, name + " needs variation inside the groups")
         count = len(groups)
+        if name == "tukey":
+            degrees = total-count
+            mse = within/degrees
+            result = {}
+            labels = ["x", "y", "z"] + ["group " + str(index+1) for index in range(3, count)]
+            for left in range(count):
+                for right in range(left+1, count):
+                    difference = means[left]-means[right]
+                    standard_error = s.sqrt(mse*(s.Rational(1, len(groups[left]))+s.Rational(1, len(groups[right])))/2)
+                    q = abs(float(s.N(difference/standard_error, min(digits+4, 30))))
+                    require(math.isfinite(q), "Tukey statistic is outside the numeric range")
+                    key = labels[left] + "-" + labels[right]
+                    result[key + " mean difference"] = difference
+                    result[key + " adjusted p value"] = s.Float(format(_studentized_range_sf(q, count, degrees), ".8g"), digits)
+            engine.note = "Tukey-Kramer pairwise comparisons using pooled variance. Adjusted p values account for all groups."
+            return result
         statistic = (between/(count - 1))/(within/(total - count))
         with mp.workdps(digits + 10):
             probability = _f_sf(_mpf(statistic, digits), _mpf(s.Integer(count - 1), digits), _mpf(s.Integer(total - count), digits))

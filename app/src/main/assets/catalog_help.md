@@ -505,6 +505,8 @@ Example: ztest(0,2,2.5,4)
 Example: chi2test([10,20,30],[15,20,25])
 `anova([...],[...],...)` — One-way analysis of variance over two or more data lists.
 Example: anova([1,2,3],[4,5,6])
+`tukey([...],[...],...)` — Tukey–Kramer pairwise mean comparisons with adjusted p values; supports unequal group sizes.
+Example: tukey([1,2,3],[4,5,6],[7,8,9])
 `ttest2(Δ0,x,y)` — Two-sample t test of two independent samples (Welch).
 Example: ttest2(0,[1,2,3],[2,4,5])
 `ttestpaired(Δ0,x,y)` — Paired t test on matched rows.

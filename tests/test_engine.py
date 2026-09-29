@@ -36,6 +36,21 @@ class EngineTests(unittest.TestCase):
         self.assertIsNone(flat["correlation"])
         self.assertNotIn("correlation",quadratic)
 
+    def test_tukey_pairwise_adjusted_probabilities(self):
+        from calc_statistics import _studentized_range_sf, _t_sf
+        def listing(values):
+            return {"kind":"list","args":[{"kind":"number","value":str(value)} for value in values]}
+        groups=[[24.5,23.5,26.4,27.1,29.9],[28.4,34.2,29.5,32.2,30.1],[26.1,28.3,24.3,26.2,27.8]]
+        tree={"kind":"call","value":"tukey","args":[listing(group) for group in groups]}
+        result=json.loads(core.dispatch(json.dumps({"tree":tree,"angle":"RAD"})))
+        self.assertTrue(result["ok"],result)
+        values=dict(line.split(": ",1) for line in result["exact"].splitlines())
+        # Published SciPy example: all three adjusted probabilities round to these values.
+        self.assertAlmostEqual(0.014,float(values["x-y adjusted p value"]),places=3)
+        self.assertAlmostEqual(0.980,float(values["x-z adjusted p value"]),places=3)
+        self.assertAlmostEqual(0.020,float(values["y-z adjusted p value"]),places=3)
+        self.assertAlmostEqual(_studentized_range_sf(3,2,9),float(2*_t_sf(3/math.sqrt(2),9)),places=5)
+
     def test_custom_nonlinear_regression_adc_ivim_and_decay(self):
         import sympy as s
         def symbol(name): return {"kind":"symbol","value":name}
