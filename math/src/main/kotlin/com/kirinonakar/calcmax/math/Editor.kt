@@ -1,8 +1,21 @@
 package com.kirinonakar.calcmax.math
 
+private val inputConstants=setOf("Ans","pi","e","i","I","oo","c0","hP","hbar","G","qe","NA","kB0","me","mp0","epsilon0","mu0","Z0","sigmaSB")
+
 /** Source is the serialization; cursor and selection can address whole AST subtrees. */
 data class Editor(val source: String = "", val cursor: Int = source.length, val anchor: Int = cursor,
                   val exponent: IntRange? = null, val outside: IntRange? = null, val activeToken: IntRange? = null) {
+    fun insertOperand(text:String,inside:Int=text.length):Editor =
+        if(text in inputConstants)insertConstant(text) else insert(text,inside)
+    /** Keypad constants are complete operands, even beside another identifier or number. */
+    fun insertConstant(text: String): Editor {
+        val a=minOf(cursor,anchor).coerceIn(0,source.length)
+        val b=maxOf(cursor,anchor).coerceIn(a,source.length)
+        fun identifier(c:Char?)=c?.let {it.isLetterOrDigit()||it=='_'}==true
+        val prefix=if(identifier(source.getOrNull(a-1)))"*" else ""
+        val suffix=if(identifier(source.getOrNull(b)))"*" else ""
+        return insert(prefix+text+suffix,prefix.length+text.length)
+    }
     fun insert(text: String, inside: Int = text.length): Editor {
         if(cursor==anchor && text in listOf("+","-","−","×","*","·","÷","/","^","∠","=")) {
             val nodes=tree()?.nodes()

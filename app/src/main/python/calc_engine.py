@@ -3,7 +3,7 @@
 The public Engine, Quantity, and dispatch names stay at this import path.
 """
 import json
-import sys
+from calc_runtime import ExecutionStopped
 import sympy as s
 from sympy.core.relational import Relational
 from quantities import Quantity
@@ -40,15 +40,21 @@ def contains_heavy_call(node):
         pending.extend(current.get("args") or [])
     return False
 
-def dispatch(payload):
+def dispatch(payload, control=None):
+    # Monitoring a backward jump may raise at the edge of a local exception
+    # table on CPython. Keep the public error boundary in a separate caller frame.
+    try:
+        return _dispatch(payload, control)
+    except ExecutionStopped as exc:
+        return json.dumps({"ok":False,"error":str(exc)},ensure_ascii=False)
+
+
+def _dispatch(payload, control=None):
     request=json.loads(payload)
     tree=request.get("tree",{})
     heavy=contains_heavy_call(tree)
-    # The first evaluation of an expression also fills SymPy's caches, so a cold computation can
-    # need several times the steps of a warm repeat. 1.5M and 6M steps both cut off legitimate
-    # first evaluations: fourier(exp(-t^2),t,w) spends about 7.5M traced steps cold although the
-    # real work takes a fraction of a second. Heavy calls keep a step ceiling above what the time
-    # budget reaches on typical hardware, so the time limit stays the binding guard.
+    # Cold CAS work also fills SymPy caches. Heavy calls keep a generous step ceiling
+    # so the time limit remains the binding guard.
     seconds=float(request.get("budget",20 if heavy else 8))
     if heavy:
         steps=100000000
@@ -57,9 +63,9 @@ def dispatch(payload):
         if seconds>=8: seconds=max(seconds,16)
     else:
         steps=3000000
-    budget=Budget(seconds,steps=steps)
+    budget=Budget(seconds,steps=steps,control=control)
     try:
-        sys.settrace(budget.trace)
+        budget.__enter__()
         engine=Engine(request)
         action=request.get("action","evaluate")
         if action=="constants":
@@ -121,12 +127,14 @@ def dispatch(payload):
                 guards=[c for c in dict.fromkeys(engine.conditions) if c.free_symbols & symbols]
                 result["resultAst"]={"kind":"restricted","args":[ast]+[result_ast(c) for c in guards]} if guards else ast
             except (MathError,TypeError,AttributeError): result["reusable"]=False
-        return json.dumps({"ok":True,**result},ensure_ascii=False,allow_nan=False)
-    except Exception as exc:
+        response=json.dumps({"ok":True,**result},ensure_ascii=False,allow_nan=False)
+        budget.check()
+        return response
+    except (Exception, ExecutionStopped) as exc:
         message=str(exc) or type(exc).__name__
         if "NonInvertible" in type(exc).__name__: message="Singular matrix"
         elif "Shape" in type(exc).__name__: message="Matrix dimension mismatch"
         elif "Could not find root" in message: message="Numerical convergence failed. Try a different bracket or initial guess."
         return json.dumps({"ok":False,"error":message[:600]},ensure_ascii=False)
     finally:
-        sys.settrace(None)
+        budget.stop()

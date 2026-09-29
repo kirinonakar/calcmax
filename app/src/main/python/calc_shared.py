@@ -1,6 +1,6 @@
 """Validation, limits, units, constants, and shared math helpers."""
 import sys
-import time
+from calc_runtime import Budget
 import sympy as s
 from sympy.core.relational import Relational
 from sympy.core.function import AppliedUndef
@@ -13,16 +13,6 @@ if hasattr(sys, "set_int_max_str_digits"):
 
 class MathError(ValueError):
     pass
-
-class Budget:
-    def __init__(self, seconds=8, steps=3000000):
-        self.deadline = time.monotonic() + seconds
-        self.steps = steps
-    def trace(self, frame, event, arg):
-        self.steps -= 1
-        if self.steps % 1024 == 0 and (self.steps <= 0 or time.monotonic() > self.deadline):
-            raise MathError("Computation limit reached. Reduce expression complexity.")
-        return self.trace
 
 # Dimension order: length, mass, time, temperature, data, angle, current, amount.
 UNITS = {}

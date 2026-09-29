@@ -464,7 +464,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
             }
         }
         val target=if(overwrite&&editor.cursor==editor.anchor)editor.copy(anchor=(editor.cursor+text.length).coerceAtMost(editor.source.length)) else editor
-        edit(target.insert(value,insertionCursor),recordUndo=recordInEdit)
+        edit(target.insertOperand(value,insertionCursor),recordUndo=recordInEdit)
         if(value=="()"||value==")"||value=="(")markTypedParens(editor.cursor)
     }
     fun markTypedParens(cursor:Int) {typedParens=TypedParens.mark(typedParens,editor.source,cursor)}
@@ -629,7 +629,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     fun editCalcValue(value:Editor) {if(busy)return;calcSession?.let{session->if(value.source!=session.input.source)calcUndoHistory=(calcUndoHistory+session.input).takeLast(100);calcSession=session.copy(input=value)};error=""}
     fun insertCalcValue(text:String,inside:Int=text.length) {
         val session=calcSession ?: return
-        editCalcValue(session.input.insert(text,inside))
+        editCalcValue(session.input.insertOperand(text,inside))
     }
     fun cancelCalc() {job?.cancel();busy=false;calcSession=null;calcUndoHistory=emptyList();error="";schedulePreview()}
     fun submitCalcValue() {
