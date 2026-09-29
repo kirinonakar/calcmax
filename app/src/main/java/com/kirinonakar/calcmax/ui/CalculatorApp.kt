@@ -43,7 +43,8 @@ private val LocalCalculatorOverlay=staticCompositionLocalOf<(String)->Unit> { {}
     CompositionLocalProvider(LocalCalculatorOverlay provides {overlay=it}, LocalLanguage provides m.language) {
     Column(Modifier.fillMaxSize().background(c.body).windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.displayCutout))) {
         Row(Modifier.fillMaxWidth().height(44.dp).padding(horizontal=14.dp),verticalAlignment=Alignment.CenterVertically) {
-            Text("CalcMax",Modifier.weight(1f),fontWeight=FontWeight.ExtraBold,letterSpacing=2.sp,fontSize=18.sp,color=c.ink)
+            Text("CalcMax",Modifier.clickable {overlay="About"}.semantics {contentDescription="About CalcMax"},fontWeight=FontWeight.ExtraBold,letterSpacing=2.sp,fontSize=18.sp,color=c.ink)
+            Spacer(Modifier.weight(1f))
             SmallAction("History"){overlay="History"};SmallAction("Catalog"){overlay="Catalog"};SmallAction("Setup"){overlay="Settings"}
         }
         Row(Modifier.fillMaxWidth().height(48.dp).zIndex(2f).background(c.scientific).padding(horizontal=8.dp),verticalAlignment=Alignment.CenterVertically) {
@@ -90,6 +91,7 @@ private val LocalCalculatorOverlay=staticCompositionLocalOf<(String)->Unit> { {}
         if(m.mode !in listOf("Scientific/CAS","Equations") && m.error.isNotBlank()) Text(m.error,Modifier.fillMaxWidth().padding(8.dp),fontSize=12.sp,color=c.danger)
     }
     when(overlay) {
+        "About"->AboutDialog {overlay=""}
         "Mode"->AlertDialog(onDismissRequest={overlay=""},title={Text(tr("Calculation mode"))},text={Column(Modifier.verticalScroll(rememberScrollState())) {Modes.chunked(2).forEach {row->Row {row.forEach {name->TextButton(onClick={m.mode=name;overlay=""},modifier=Modifier.weight(1f)){Text(name)}}}}}},confirmButton={TextButton(onClick={overlay=""}){Text(tr("Close"))}})
         "Settings"->SettingsDialog(m){overlay=""}
         "MatrixSize"->MatrixSizeDialog(m){overlay=""}
