@@ -193,28 +193,32 @@ import kotlin.math.max
         val fitVisible=dataKind=="xy"&&plotType=="Scatter"&&m.regressionData==data&&m.regressionFit.isNotBlank()
         StatisticsPlot(plotType,if(plotType=="Scatter")paired else xValues.mapIndexed {i,v->i.toDouble() to v},xValues,yValues,if(fitVisible)m.regressionCurve.orEmpty() else emptyList(),if(fitVisible)m.regressionFit else "",m.displayDigits,fitVisible&&m.regressionMode=="linear",m.regressionCorrelation)
         if(m.regressionBusy)Text(if(isKorean())"회귀 적합 중…" else "Fitting regression…",fontSize=11.sp,color=LocalInstrument.current.muted)
-        if(dataKind=="xy"&&m.regressionData==data&&m.regressionFit.isNotBlank()&&m.regressionParameters.isNotEmpty()) {
-            Text(tr("Fitted parameters"),fontSize=12.sp,fontWeight=FontWeight.SemiBold)
-            Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(16.dp)) {
-                m.regressionParameters.sortedWith(compareBy({listOf("f","ADC","D","Dstar").indexOf(it.first).let {index->if(index<0)Int.MAX_VALUE else index}},{it.first})).forEach {(name,value)->
-                    val label=if(name=="Dstar")"D*" else name
-                    val displayedValue=ResultDisplayFormat.formatText(value,m.resultDisplayMode,m.thousandsSeparator,maxFractionDigits=m.displayDigits)
-                    val korean=isKorean()
-                    TextButton(onClick={
-                        clipboard.setText(AnnotatedString(value))
-                        android.widget.Toast.makeText(context,if(korean)"$label 값 복사됨" else "$label copied",android.widget.Toast.LENGTH_SHORT).show()
-                    },contentPadding=PaddingValues(horizontal=8.dp,vertical=0.dp),
-                        modifier=Modifier.semantics {contentDescription=if(korean)"$label 값 복사" else "Copy $label value"}) {
-                        Text("$label = $displayedValue  ⧉",fontSize=11.sp,fontFamily=FontFamily.Monospace)
+        if(dataKind=="xy"&&m.regressionData==data&&m.regressionFit.isNotBlank()) {
+            Column(verticalArrangement=Arrangement.spacedBy(0.dp)) {
+                if(m.regressionParameters.isNotEmpty()) {
+                    Text(tr("Fitted parameters"),fontSize=12.sp,fontWeight=FontWeight.SemiBold)
+                    Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(16.dp)) {
+                        m.regressionParameters.sortedWith(compareBy({listOf("f","ADC","D","Dstar").indexOf(it.first).let {index->if(index<0)Int.MAX_VALUE else index}},{it.first})).forEach {(name,value)->
+                            val label=if(name=="Dstar")"D*" else name
+                            val displayedValue=ResultDisplayFormat.formatText(value,m.resultDisplayMode,m.thousandsSeparator,maxFractionDigits=m.displayDigits)
+                            val korean=isKorean()
+                            TextButton(onClick={
+                                clipboard.setText(AnnotatedString(value))
+                                android.widget.Toast.makeText(context,if(korean)"$label 값 복사됨" else "$label copied",android.widget.Toast.LENGTH_SHORT).show()
+                            },contentPadding=PaddingValues(horizontal=8.dp,vertical=0.dp),
+                                modifier=Modifier.semantics {contentDescription=if(korean)"$label 값 복사" else "Copy $label value"}) {
+                                Text("$label = $displayedValue  ⧉",fontSize=11.sp,fontFamily=FontFamily.Monospace)
+                            }
+                        }
                     }
                 }
+                SmallAction("Graph fitted expression"){
+                    val fit=if(m.regressionMode=="custom")m.regressionFit.replace(Regex("(?<![A-Za-z0-9_])${Regex.escape(customVariable)}(?![A-Za-z0-9_])"),"x") else m.regressionFit
+                    val graphSource=regressionFormulaGraphSource(fit,m.displayDigits)
+                    if(graphSource==null)m.error="Could not format fitted expression"
+                    else {m.changeGraphKind("cartesian");m.updateGraphSource(graphSource);m.mode="Graph";m.plot()}
+                }
             }
-        }
-        if(dataKind=="xy"&&m.regressionData==data&&m.regressionFit.isNotBlank())SmallAction("Graph fitted expression"){
-            val fit=if(m.regressionMode=="custom")m.regressionFit.replace(Regex("(?<![A-Za-z0-9_])${Regex.escape(customVariable)}(?![A-Za-z0-9_])"),"x") else m.regressionFit
-            val graphSource=regressionFormulaGraphSource(fit,m.displayDigits)
-            if(graphSource==null)m.error="Could not format fitted expression"
-            else {m.changeGraphKind("cartesian");m.updateGraphSource(graphSource);m.mode="Graph";m.plot()}
         }
         StatisticsAnalysis(m,parsedRows,dataKind)
         Display(m,requestInitialFocus=false)
