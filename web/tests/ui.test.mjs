@@ -74,6 +74,9 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
   change('theme','dark');assert.equal(document.documentElement.dataset.theme,'dark');
   change('theme','light');assert.equal(document.documentElement.dataset.theme,'light');
   $('expression').value='1/3+1/6';document.querySelector('.key[data-evaluate]').click();
+  assert.equal(document.documentElement.dataset.busy,'true');
+  assert.equal(window.getComputedStyle(document.querySelector('.runtime-bar')).display,'none','ready status must stay hidden while calculating');
+  assert.equal($('stop').closest('.answer-toolbar')!==null,true,'stop remains available without reopening the top status row');
   await waitFor(()=>$('answer').textContent==='12','exact fraction');
   assert.equal(area('main'),'main','calculation busy/idle transitions keep the same main track');
   assert.equal($('answer').querySelector('mfrac')?.children.length,2);
@@ -89,10 +92,19 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
   change('mode','units');document.querySelector('[data-run="units"]').click();await waitFor(()=>$('answer').textContent==='0','temperature conversion');
   change('mode','tip');document.querySelector('[data-run="tip"]').click();await waitFor(()=>$('answer').querySelector('mfrac'),'tip exact result');assert.equal($('answer').textContent,'1152');
   change('mode','functions');$('function-save').click();change('mode','scientific');$('expression').value='f(3)';document.querySelector('.key[data-evaluate]').click();await waitFor(()=>$('answer').textContent==='10','saved function');
+  const edit=source=>{$('expression').value=source;$('expression').dispatchEvent(new window.Event('input'));};
+  edit('x^2+y');key('CALC').click();assert.equal(document.documentElement.dataset.calcActive,'true');assert.equal($('commit-indicator').textContent,'x?');
+  assert.equal(JSON.parse(localStorage.getItem('calcmax-web-v1')).fields.expression,'x^2+y','backup preserves the formula while entering CALC values');
+  edit('z');key('CALC').click();await waitFor(()=>$('answer').textContent==='Enter a numeric value','CALC rejects symbolic values');assert.equal($('commit-indicator').textContent,'x?');
+  edit('3');key('=').click();assert.equal(window.getComputedStyle(document.querySelector('.runtime-bar')).display,'none');await waitFor(()=>$('commit-indicator').textContent==='y?','CALC advances to the next variable');assert.equal($('answer').querySelector('.error'),null,'accepted CALC values clear the preceding validation error');
+  edit('1/2');key('CALC').click();await waitFor(()=>!document.documentElement.dataset.calcActive&&$('answer').textContent==='192','CALC substitutes variables with exact values');assert.equal($('expression').value,'x^2+y');assert.match($('note').textContent,/x = 3, y = 1\/2/);
+  key('CALC').click();key('=').click();await waitFor(()=>$('commit-indicator').textContent==='y?','blank CALC entry recalls stored x');key('=').click();await waitFor(()=>!document.documentElement.dataset.calcActive&&$('answer').textContent==='192','blank CALC entry recalls stored y');
+  edit('x+1');key('CALC').click();key('4').click();key('AC').click();assert.equal($('expression').value,'x+1');assert.equal(document.documentElement.dataset.calcActive,undefined,'AC cancels CALC without losing the formula');
+  edit('integrate(x^2,x,0,1)');key('CALC').click();assert.equal(document.documentElement.dataset.calcActive,undefined,'integration variable is not a CALC input');await waitFor(()=>$('answer').textContent==='13','CALC evaluates expressions with no free inputs');
   $('history-button').click();assert.ok($('dialog').open);assert.ok($('dialog-body').textContent.includes('f(3)'));$('dialog-close').click();
   $('catalog-button').click();assert.ok($('dialog-body').textContent.includes('sin()'));$('dialog-close').click();
   // Non-cooperative Python cannot freeze the page; hard cancellation restores WASM.
-  change('mode','python');$('python-source').value='while True: pass';document.querySelector('[data-run="python"]').click();await waitFor(()=>!$('stop').disabled,'script running');$('stop').click();await waitFor(()=>$('python-output').textContent.includes('cancelled'),'hard cancellation');await waitFor(()=>!document.querySelector('[data-run="python"]').disabled,'engine recovery');
+  change('mode','python');assert.ok($('stop').closest('.runtime-bar'),'Python stop stays at the top of the workspace');$('python-source').value='while True: pass';document.querySelector('[data-run="python"]').click();await waitFor(()=>!$('stop').disabled,'script running');$('stop').click();await waitFor(()=>$('python-output').textContent.includes('cancelled'),'hard cancellation');await waitFor(()=>!document.querySelector('[data-run="python"]').disabled,'engine recovery');
   $('python-source').value='print(42)';document.querySelector('[data-run="python"]').click();await waitFor(()=>$('python-output').textContent==='42\n','post-cancellation script');
   const persisted=JSON.parse(localStorage.getItem('calcmax-web-v1'));assert.equal(persisted.language,'en');assert.equal(persisted.theme,'light');assert.ok(persisted.history.length>=8);assert.ok(persisted.functions.f);
 });

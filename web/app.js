@@ -6,6 +6,7 @@ import {readState,writeState,downloadFile} from './storage.js';
 import {t,setLanguage,getLanguage,initialLanguage,translateDOM,applyTheme,setText} from './i18n.js';
 import {renderKeypad as buildKeypad} from './keypad.js';
 import {expressionDisplay} from './expression-display.js';
+import {calcVariables} from './calc-session.js';
 
 const $=id=>document.getElementById(id);
 const value=id=>$(id).value;
@@ -23,7 +24,9 @@ $('theme').onchange=()=>{state.theme=value('theme');applyTheme(state.theme,syste
 $('language').onchange=()=>{state.language=value('language');state.languageChosen=true;setLanguage(state.language);translateDOM();if(['matrix','vector'].includes(value('mode')))renderMatrix();persist();if($('dialog').open)$('dialog').close();};
 state.secondKeys=!!saved.secondKeys;
 let lastResult=null,decimal=false,shift=false,alpha=false,hyperbolic=false,typing=false,overwrite=false,committed=false,screenExpanded=false,engineering=false,grouping=false,mixed=false,busy=false,catalog={},graphParameters={},lastGraph=null,lastGraphBounds=null,storageWarning=false;
+let calcSession=null;
 const expressionUndo=[];
+const undoStack=()=>calcSession?.undo||expressionUndo;
 for(const [id,setting] of Object.entries(state.fields)) {
   const field=$(id);
   if(!field || field.closest('dialog')) continue;
@@ -34,6 +37,7 @@ function restoreSelect(id) { if(state.fields[id]!==undefined && Array.from($(id)
 document.querySelectorAll('select').forEach(field=>restoreSelect(field.id));
 function persist() {
   for(const field of document.querySelectorAll('main input[id],main textarea[id],main select[id],.mode-bar select[id]')) state.fields[field.id]=field.type==='checkbox'?field.checked:field.value;
+  if(calcSession)state.fields.expression=calcSession.source;
   if(!writeState(state) && !storageWarning) { storageWarning=true; toast('브라우저 저장 공간을 사용할 수 없어 이번 세션에서만 보관합니다.'); }
 }
 function toast(message) { setText($('toast'),message); $('toast').hidden=false; clearTimeout(toast.timer); toast.timer=setTimeout(()=>$('toast').hidden=true,3500); }
@@ -45,7 +49,7 @@ $('dialog-close').onclick=()=>$('dialog').close();
 $('dialog').addEventListener('click',event=>{if(event.target===$('dialog')){const r=$('dialog').getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)$('dialog').close();}});
 function requestOptions() { return {angle:value('angle'),precision:state.precision,displayDigits:state.digits,variables:state.variables,functions:state.functions}; }
 const engine=new EngineClient();
-function updateButtons() { document.querySelectorAll('[data-run],.key[data-evaluate]').forEach(button=>button.disabled=!engine.ready||busy);$('stop').disabled=!busy;$('retry').hidden=engine.ready||busy; }
+function updateButtons() { document.querySelectorAll('[data-run],.key[data-evaluate]').forEach(button=>button.disabled=!engine.ready||busy);$('stop').disabled=!busy;$('stop').hidden=!busy;$('expression').readOnly=!typing||!!calcSession&&busy;$('retry').hidden=engine.ready||busy; }
 document.documentElement.dataset.busy='false';document.documentElement.dataset.engine='loading';document.documentElement.dataset.typing='false';
 engine.addEventListener('status',event=>{setText($('status'),event.detail);document.documentElement.dataset.engine=engine.ready?'ready':'loading';updateButtons();});
 engine.addEventListener('ready',()=>{document.documentElement.dataset.engine='ready';updateButtons();});
@@ -71,18 +75,26 @@ function renderResult() {
   const text=(decimal ? lastResult.decimal : lastResult.exact)||'';
   if(tree && text.length<10000 && !text.includes('\n')) $('answer').append(mathDisplay(tree,state.digits,decimal||lastResult.approximate||engineering,{engineering,grouping}));
   else $('answer').textContent=text;
-  const notes=[lastResult.note,...(lastResult.conditions||[])].filter(Boolean).join('\n');
+  const notes=[lastResult.note,...(lastResult.conditions||[]),lastResult.calcValues?Object.entries(lastResult.calcValues).map(([name,n])=>`${name} = ${n}`).join(', '):''].filter(Boolean).join('\n');
   if(notes)$('note').textContent=notes;else setText($('note'),'Next input starts a new calculation');
   $('answer-insert').disabled=!lastResult.resultAst;
 }
 async function evaluate(source=value('expression')) {
+  if(calcSession){await submitCalcValue();return;}
   try {const converted=latexInput(source);if(source===value('expression')&&converted!==source){$('expression').value=converted;preview();}const result=await engine.execute({...requestOptions(),tree:parse(converted)});showResult(result,converted);}
   catch(exc){error(exc.message);}
 }
-function preview() {const source=value('expression');$('expression-preview').replaceChildren();if(source)try{$('expression-preview').append(expressionDisplay(source));}catch{$('expression-preview').textContent=source;}persist();}
+function preview() {
+  const source=value('expression'),display=$('expression-preview');display.replaceChildren();
+  let target=display;
+  if(calcSession){display.append(element('div',calcSession.source,'calc-source'));target=element('div','','calc-value');target.append(element('span',`${calcSession.names[calcSession.index]} = `));display.append(target);}
+  if(source)try{target.append(expressionDisplay(source));}catch{target.append(document.createTextNode(source));}
+  persist();
+}
 $('expression-preview').onclick=event=>{const target=event.target.closest('[data-source-start]');if(target){const field=$('expression');field.setSelectionRange(Number(target.getAttribute('data-source-start')),Number(target.getAttribute('data-source-end')));$('expression-preview').querySelectorAll('.selected').forEach(el=>el.classList.remove('selected'));target.classList.add('selected');}else{$('expression').setSelectionRange(value('expression').length,value('expression').length);}};
 function insert(text,cursor=null) {
-  const field=$('expression');expressionUndo.push(field.value);if(expressionUndo.length>100)expressionUndo.shift();
+  if(calcSession&&busy)return;
+  const field=$('expression'),undo=undoStack();undo.push(field.value);if(undo.length>100)undo.shift();
   if(committed){field.value=/^[+\-*/÷^%!∠]/.test(text)?'Ans':'';field.setSelectionRange(field.value.length,field.value.length);committed=false;$('commit-indicator').textContent='';}
   const start=field.selectionStart,end=overwrite&&field.selectionEnd===start?Math.min(field.value.length,start+text.length):field.selectionEnd;
   field.setRangeText(text,start,end,'end');
@@ -92,20 +104,22 @@ function insert(text,cursor=null) {
 function mode(mode) {
   $('mode').value=mode;
   document.documentElement.dataset.workspace=mode;
+  if(mode==='scientific')$('exact-toggle').parentElement.insertBefore($('stop'),$('engineering-toggle'));
+  else document.querySelector('.runtime-bar').append($('stop'));
   document.querySelectorAll('[data-mode]').forEach(section=>section.hidden=!section.dataset.mode.split(' ').includes(mode));
   if(['matrix','vector'].includes(mode))renderMatrix();
   persist();
 }
 $('mode').onchange=()=>mode(value('mode'));
 $('angle').onchange=persist;
-$('expression').oninput=()=>{committed=false;$('commit-indicator').textContent='';preview();};
+$('expression').oninput=()=>{committed=false;if(!calcSession)$('commit-indicator').textContent='';preview();};
 $('expression').addEventListener('paste',event=>{const text=event.clipboardData?.getData('text');if(!text)return;try{const converted=latexInput(text);if(converted!==text){event.preventDefault();insert(converted);}}catch(exc){event.preventDefault();toast(exc.message);}});
-$('expression').addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();evaluate();}if(event.key==='Escape'){event.preventDefault();if(busy)engine.cancel();else{$('expression').value='';preview();}}});
-$('clear').onclick=()=>{expressionUndo.push(value('expression'));$('expression').value='';committed=false;lastResult=null;$('answer').replaceChildren();$('note').textContent='';$('commit-indicator').textContent='';preview();};
-$('undo').onclick=()=>{if(expressionUndo.length){$('expression').value=expressionUndo.pop();preview();}};
+$('expression').addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();evaluate();}if(event.key==='Escape'){event.preventDefault();if(calcSession)cancelCalc();else if(busy)engine.cancel();else{$('expression').value='';preview();}}});
+$('clear').onclick=()=>{if(calcSession){cancelCalc();return;}expressionUndo.push(value('expression'));$('expression').value='';committed=false;lastResult=null;$('answer').replaceChildren();$('note').textContent='';$('commit-indicator').textContent='';preview();};
+$('undo').onclick=()=>{const undo=undoStack();if(undo.length){$('expression').value=undo.pop();preview();}};
 async function clipboard(text) { try{await navigator.clipboard.writeText(text);toast('복사했습니다.');}catch{const field=element('textarea');field.value=text;openDialog('복사할 텍스트',field);field.select();} }
 $('copy').onclick=()=>{const f=$('expression');clipboard(f.value.slice(f.selectionStart,f.selectionEnd)||f.value);};
-$('cut').onclick=()=>{const field=$('expression'),start=field.selectionStart,end=field.selectionEnd;if(start!==end){clipboard(field.value.slice(start,end));expressionUndo.push(field.value);field.setRangeText('',start,end,'end');committed=false;preview();}};
+$('cut').onclick=()=>{const field=$('expression'),start=field.selectionStart,end=field.selectionEnd;if(start!==end){clipboard(field.value.slice(start,end));undoStack().push(field.value);field.setRangeText('',start,end,'end');committed=false;preview();}};
 $('typing-toggle').onclick=()=>{typing=!typing;document.documentElement.dataset.typing=String(typing);$('expression').readOnly=!typing;setText($('typing-toggle'),typing?'Math input':'Keyboard');if(typing)$('expression').focus({preventScroll:true});};
 $('insert-mode').onclick=()=>{overwrite=!overwrite;$('insert-mode').textContent=overwrite?'OVR':'INS';};
 $('paste').onclick=async()=>{try{insert(latexInput(await navigator.clipboard.readText()));}catch{toast('붙여넣기를 허용하거나 Ctrl+V를 사용해 주세요.');}};
@@ -118,14 +132,60 @@ $('grouping-toggle').onclick=()=>{grouping=!grouping;$('grouping-toggle').classL
 document.querySelectorAll('[data-shortcut]').forEach(button=>button.onclick=()=>{mode('scientific');insert(button.dataset.shortcut,button.dataset.shortcut.indexOf('(')+1);});
 function modeDialog(){const choices=element('div','','mode-choices');for(const option of $('mode').options)choices.append(control(option.textContent,()=>{mode(option.value);$('dialog').close();}));openDialog('Workspace',choices);}
 function matrixInsertDialog(){const content=element('div'),rows=element('input'),cols=element('input');for(const [input,name] of [[rows,'Rows / components'],[cols,'Column']]){input.type='number';input.min='1';input.max='9';input.value='2';const label=element('label',name);label.append(input);content.append(label);}content.append(control('Insert',()=>{const r=Number(rows.value),c=Number(cols.value);if(!Number.isInteger(r)||!Number.isInteger(c)||r<1||c<1||r>9||c>9)return;mode('scientific');insert(`[${Array.from({length:r},()=>`[${Array(c).fill('0').join(',')}]`).join(',')}]`);$('dialog').close();}));openDialog('Matrix',content);}
+function calcPrompt(){
+  $('answer').replaceChildren();
+  $('commit-indicator').textContent=`${calcSession.names[calcSession.index]}?`;
+  setText($('note'),'CALC · enter a value, then press = · AC cancels');preview();
+  if(typing)$('expression').focus({preventScroll:true});
+}
+async function startCalc(){
+  if(busy)return;
+  if(calcSession){await submitCalcValue();return;}
+  try{
+    const source=latexInput(value('expression')),tree=parse(source),names=calcVariables(tree,state.variables);
+    if(!names.length){await evaluate(source);return;}
+    calcSession={source,tree,names,index:0,undo:[],values:{},previousResult:lastResult,previousCommitted:committed};
+    document.documentElement.dataset.calcActive='true';lastResult=null;committed=false;$('answer').replaceChildren();$('expression').value='';calcPrompt();
+  }catch(exc){error(exc.message);}
+}
+function cancelCalc(){
+  const session=calcSession;if(!session)return;calcSession=null;delete document.documentElement.dataset.calcActive;
+  if(busy)engine.cancel();
+  $('expression').value=session.source;lastResult=session.previousResult;committed=session.previousCommitted;
+  $('commit-indicator').textContent=committed?'=':'';$('note').textContent='';if(lastResult)renderResult();else $('answer').replaceChildren();preview();
+}
+async function submitCalcValue(){
+  const session=calcSession;if(!session||busy)return;
+  const fail=message=>{error(message);setText($('note'),'CALC · enter a value, then press = · AC cancels');};
+  try{
+    const name=session.names[session.index],source=value('expression').trim();
+    const tree=source?parse(latexInput(source)):Object.hasOwn(state.variables,name)?{kind:'symbol',value:name}:parse('0');
+    const numeric=await engine.execute({...requestOptions(),tree});if(calcSession!==session)return;
+    if(!numeric.ok){fail(numeric.error);return;}
+    if(numeric.symbolic||!numeric.resultAst){fail('Enter a numeric value');return;}
+    state.variables[name]=numeric.resultAst;session.values[name]=numeric.exact;persist();
+    if(session.index<session.names.length-1){session.index++;session.undo=[];$('expression').value='';calcPrompt();return;}
+    const result=await engine.execute({...requestOptions(),tree:session.tree});if(calcSession!==session)return;
+    if(!result.ok){fail(result.error);return;}
+    calcSession=null;delete document.documentElement.dataset.calcActive;$('expression').value=session.source;preview();
+    showResult({...result,calcValues:session.values},session.source);
+  }catch(exc){if(calcSession===session)fail(exc.message);}
+}
 async function performKey(input){
+  if(calcSession&&busy&&input!=='AC')return;
   const jumps={'Scientific/CAS':'scientific',Graph:'graph',Python:'python',Matrix:'matrix',Vector:'vector',Statistics:'statistics',Programmer:'programmer',Units:'units',Constants:'constants',Equations:'equation'};
   if(input==='SHIFT'){shift=!shift;alpha=false;renderKeypad();return;}
   if(input==='ALPHA'){alpha=!alpha;shift=false;renderKeypad();return;}
   if(input==='SECOND'){state.secondKeys=!state.secondKeys;shift=false;alpha=false;persist();renderKeypad();return;}
+  if(calcSession){
+    if(input==='AC'){cancelCalc();return;}
+    if(input==='='||input==='CALC'){await submitCalcValue();return;}
+    if(['MODE','STO','RCL','Clear','CLR ALL','SOLVE','RELATION','ENG','ENG−','S⇔D','MIXED','M+','M−','INS','MATRIX_INPUT','TO_GRAPH',...Object.keys(jumps)].includes(input)){shift=false;alpha=false;renderKeypad();return;}
+  }
   if(input==='HYP'){hyperbolic=!hyperbolic;shift=false;alpha=false;renderKeypad();return;}
   if(hyperbolic&&/^(?:a?sin|a?cos|a?tan)\(\)$/.test(input))input=input.replace('()','h()');
-  if(input==='='||input==='CALC')evaluate();
+  if(input==='CALC')startCalc();
+  else if(input==='=')evaluate();
   else if(input==='SOLVE')evaluate(`solve(${value('expression')||'x'},x)`);
   else if(input==='MODE')modeDialog();
   else if(input==='RCL'||input==='STO'||input==='Clear')variablesDialog();
@@ -135,7 +195,7 @@ async function performKey(input){
   else if(input==='MIXED'){mixed=!mixed;decimal=false;$('exact-toggle').textContent='Exact';renderResult();}
   else if(input==='INS')$('insert-mode').click();
   else if(input==='NEG'){if(committed){$('expression').value='';committed=false;}insert('-');}
-  else if(input==='DEL'){const f=$('expression'),start=f.selectionStart,end=f.selectionEnd;expressionUndo.push(f.value);f.setRangeText('',start===end?Math.max(0,start-1):start,end,'end');committed=false;preview();}
+  else if(input==='DEL'){const f=$('expression'),start=f.selectionStart,end=f.selectionEnd;undoStack().push(f.value);f.setRangeText('',start===end?Math.max(0,start-1):start,end,'end');committed=false;preview();}
   else if(['LEFT','RIGHT','UP','DOWN'].includes(input)){
     const f=$('expression');let start=f.selectionStart,end=f.selectionEnd;
     if(input==='LEFT'||input==='RIGHT')start=end=Math.max(0,Math.min(f.value.length,(input==='LEFT'?start:end)+(input==='LEFT'?-1:1)));

@@ -17,6 +17,7 @@ const english={
 };
 const korean={History:'기록',Catalog:'함수 목록',Setup:'설정',Undo:'실행 취소',Copy:'복사',Paste:'붙여넣기',New:'새 파일','Open .py':'.py 열기','Save .py':'.py 저장',Recent:'최근',Favorites:'즐겨찾기',Custom:'사용자 함수',Scientific:'과학',Symbolic:'기호','Complex':'복소수','ODE & transforms':'미분방정식 & 변환','Vector calculus':'벡터 미적분','Matrix & vector':'행렬 & 벡터','Data & units':'데이터 & 단위',Distributions:'확률 분포','Tests & intervals':'검정 & 구간',Finance:'금융',Signed:'부호 있음','SCIENTIFIC / CAS':'과학 / CAS',
   Cut:'잘라내기',Keyboard:'키보드','Math input':'수학 입력','Next input starts a new calculation':'다음 입력 시 새 계산 시작','Cursor controls':'방향 키','Cursor up':'상위 수식 선택','Cursor down':'하위 수식 선택','Cursor left':'커서 왼쪽','Cursor right':'커서 오른쪽','Insert mode':'삽입 모드',
+  'CALC · enter a value, then press = · AC cancels':'CALC · 값을 입력하고 = 누르기 · AC는 취소','Enter a numeric value':'숫자 값을 입력하세요.',
   'Undefined or division by zero':'정의되지 않거나 0으로 나누는 계산입니다.','Singular matrix':'역행렬을 구할 수 없는 행렬입니다.','Matrix dimension mismatch':'행렬 크기가 맞지 않습니다.','Calculation cancelled':'계산이 중지되었습니다.','Computation limit reached. Reduce expression complexity.':'계산 한도를 초과했습니다. 수식을 단순하게 바꿔 주세요.',
   'Engine archive is missing. Run python web/build.py.':'engine.zip이 없습니다. python web/build.py를 실행해 주세요.',
   'Not enough input values. Enter one value per line in Python inputs.':'입력값이 부족합니다. Python 입력란에 한 줄씩 입력해 주세요.'

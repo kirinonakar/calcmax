@@ -1,7 +1,8 @@
-self.CALCMAX_CACHE = 'calcmax-static-12205c478eb21924';
+self.CALCMAX_CACHE = 'calcmax-static-959c866060744bfb';
 self.CALCMAX_ASSETS = [
   "./",
   "./app.js",
+  "./calc-session.js",
   "./calculator.css",
   "./catalog.json",
   "./catalog_help.md",
