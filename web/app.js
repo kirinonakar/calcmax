@@ -84,7 +84,7 @@ function clearableCatalogSearch(input){
 function openDialog(title,content) { $('dialog').classList.toggle('catalog-dialog',content.classList.contains('catalog-content'));setText($('dialog-title'),title);$('dialog-body').replaceChildren(content);translateDOM($('dialog'));if(!$('dialog').open)$('dialog').showModal(); }
 $('about-button').onclick=()=>{
   const content=element('div','','about-content'),icon=element('img'),version=element('p',`v${appVersion}`,'hint'),link=element('a','https://github.com/kirinonakar/calcmax');
-  icon.src='app-icon.webp';icon.alt='CalcMax';icon.width=64;icon.height=64;
+  icon.src='app-icon.png';icon.alt='CalcMax';icon.width=64;icon.height=64;
   link.href='https://github.com/kirinonakar/calcmax';link.target='_blank';link.rel='noopener noreferrer';
   content.append(icon,version,link,control('Close',()=>$('dialog').close()));openDialog('CalcMax',content);
 };

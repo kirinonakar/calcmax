@@ -30,7 +30,6 @@ def download(name, url=None):
 
 def build(skip_download=False, output=None):
     shutil.copyfile(PROJECT / "LICENSE", ROOT / "LICENSE")
-    shutil.copyfile(PROJECT / "app/src/main/res/mipmap-xxxhdpi/ic_launcher.webp", ROOT / "app-icon.webp")
     app_version = re.search(r'versionName\s*=\s*"([^"]+)"', (PROJECT / "app/build.gradle.kts").read_text(encoding="utf-8")).group(1)
     (ROOT / "app-version.js").write_text("export const appVersion = " + json.dumps(app_version) + ";\n", encoding="utf-8")
     ui_source = PROJECT / "app/src/main/java/com/kirinonakar/calcmax/ui"
@@ -95,7 +94,7 @@ def build(skip_download=False, output=None):
 
 
 def assets_manifest():
-    files = sorted(path for path in ROOT.iterdir() if (path.suffix in (".html", ".css", ".js", ".json", ".zip", ".md", ".webp") or path.name == "LICENSE") and path.name not in ("assets.js", "package.json", "package-lock.json", "design-qa.md"))
+    files = sorted(path for path in ROOT.iterdir() if (path.suffix in (".html", ".css", ".js", ".json", ".zip", ".md", ".webp", ".png") or path.name == "LICENSE") and path.name not in ("assets.js", "package.json", "package-lock.json", "design-qa.md"))
     files += sorted(path for path in (ROOT / "vendor").rglob("*") if path.is_file() and not path.name.endswith(".tmp"))
     files += sorted(path for path in (ROOT / "fonts").rglob("*") if path.is_file())
     digest = hashlib.sha256()

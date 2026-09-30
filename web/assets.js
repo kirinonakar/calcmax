@@ -1,7 +1,7 @@
-self.CALCMAX_CACHE = 'calcmax-static-d079cc4db213e61d';
+self.CALCMAX_CACHE = 'calcmax-static-c7707b30d2157f90';
 self.CALCMAX_ASSETS = [
   "./",
-  "./app-icon.webp",
+  "./app-icon.png",
   "./app-version.js",
   "./app.js",
   "./ast-source.js",
