@@ -69,7 +69,7 @@ private fun pressedShade(base:Color)=if(base.luminance()>.45f)Color.Black.copy(a
 private val backspaceShape by lazy {
     PathParser().parsePathString("M6.1 1.4H20.2C21.2 1.4 22 2.2 22 3.2V14.8C22 15.8 21.2 16.6 20.2 16.6H6.1C5.5 16.6 5.1 16.4 4.8 15.9L1.8 9.8C1.5 9.3 1.5 8.7 1.8 8.2L4.8 2.1C5.1 1.6 5.5 1.4 6.1 1.4Z").toPath()
 }
-private val backspaceCross by lazy {PathParser().parsePathString("M10.9 5.8L17.3 12.2M17.3 5.8L10.9 12.2").toPath()}
+private val backspaceCross by lazy {PathParser().parsePathString("M9.9 5.8L16.3 12.2M16.3 5.8L9.9 12.2").toPath()}
 
 private fun keypadOperandInput(value:String,editor:Editor,startingFresh:Boolean):String {
     if(startingFresh||editor.cursor!=editor.anchor)return value

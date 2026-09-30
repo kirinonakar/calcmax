@@ -59,7 +59,7 @@ export function renderKeypad(container,{second=false,shift=false,alpha=false,hyp
       const ns='http://www.w3.org/2000/svg',icon=document.createElementNS(ns,'svg'),shape=document.createElementNS(ns,'path'),cross=document.createElementNS(ns,'path');
       icon.setAttribute('viewBox','0 0 24 18');icon.setAttribute('aria-hidden','true');icon.setAttribute('focusable','false');icon.classList.add('key-backspace');
       icon.setAttribute('fill','none');icon.setAttribute('stroke','currentColor');icon.setAttribute('stroke-width','1.8');icon.setAttribute('stroke-linecap','round');icon.setAttribute('stroke-linejoin','round');
-      shape.setAttribute('d','M6.1 1.4H20.2C21.2 1.4 22 2.2 22 3.2V14.8C22 15.8 21.2 16.6 20.2 16.6H6.1C5.5 16.6 5.1 16.4 4.8 15.9L1.8 9.8C1.5 9.3 1.5 8.7 1.8 8.2L4.8 2.1C5.1 1.6 5.5 1.4 6.1 1.4Z');cross.setAttribute('d','M10.9 5.8L17.3 12.2M17.3 5.8L10.9 12.2');cross.setAttribute('stroke-width','2.2');icon.append(shape,cross);face.append(icon);
+      shape.setAttribute('d','M6.1 1.4H20.2C21.2 1.4 22 2.2 22 3.2V14.8C22 15.8 21.2 16.6 20.2 16.6H6.1C5.5 16.6 5.1 16.4 4.8 15.9L1.8 9.8C1.5 9.3 1.5 8.7 1.8 8.2L4.8 2.1C5.1 1.6 5.5 1.4 6.1 1.4Z');cross.setAttribute('d','M9.9 5.8L16.3 12.2M16.3 5.8L9.9 12.2');cross.setAttribute('stroke-width','2.2');icon.append(shape,cross);face.append(icon);
     }else face.textContent=k.title;
     button.append(legends,face);bindKeyPress(button,()=>press(k),()=>longPress(k));return button;
   };

@@ -1,4 +1,4 @@
-self.CALCMAX_CACHE = 'calcmax-static-f644e8232ea8f575';
+self.CALCMAX_CACHE = 'calcmax-static-011e007e9bbe692c';
 self.CALCMAX_ASSETS = [
   "./",
   "./app-icon.png",
