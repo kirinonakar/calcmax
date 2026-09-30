@@ -4,7 +4,7 @@ export function markInputCursor(math,source,start,end=start){
   const nodes=[...math.querySelectorAll('[data-source-start]')];
   for(const node of nodes)node.classList.toggle('selected',end>start&&Number(node.getAttribute('data-source-start'))>=start&&Number(node.getAttribute('data-source-end'))<=end);
   if(end>start)return;
-  const marker=document.createElementNS(NS,'mspace');marker.classList.add('input-caret');marker.setAttribute('width','2px');marker.setAttribute('height','.85em');marker.setAttribute('depth','.15em');marker.setAttribute('data-source-start',String(start));marker.setAttribute('data-source-end',String(start));
+  const marker=document.createElementNS(NS,'mpadded'),ink=document.createElementNS(NS,'mspace');marker.classList.add('input-caret');marker.setAttribute('height','0');marker.setAttribute('depth','0');ink.setAttribute('width','2px');ink.setAttribute('height','.85em');ink.setAttribute('depth','.15em');marker.append(ink);marker.setAttribute('data-source-start',String(start));marker.setAttribute('data-source-end',String(start));
   const candidates=nodes.filter(node=>Number(node.getAttribute('data-source-start'))<=start&&Number(node.getAttribute('data-source-end'))>=start).sort((a,b)=>(Number(a.getAttribute('data-source-end'))-Number(a.getAttribute('data-source-start')))-(Number(b.getAttribute('data-source-end'))-Number(b.getAttribute('data-source-start'))));
   const leaf=candidates.find(node=>['mi','mn','mtext'].includes(node.localName));
   if(leaf){

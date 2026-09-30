@@ -6,11 +6,13 @@ export function calcVariables(tree,variables={}) {
   const names=new Set();let visited=0;
   function collect(node,bound=new Set(),expanding=new Set(),depth=0){
     if(!node||depth>96||++visited>12000)throw new Error('Expression complexity limit');
-    if(node.kind==='symbol'){
+    if(node.kind==='symbol'||node.kind==='snapshot_symbol'){
       const name=node.value;
       if(constants.has(name)||bound.has(name))return false;
       const definition=Object.hasOwn(variables,name)?variables[name]:null;
-      if(definition&&Object.hasOwn(definition,'start')&&!expanding.has(name)&&collect(definition,bound,new Set([...expanding,name]),depth+1))return true;
+      if(definition&&!expanding.has(name)&&collect(definition,bound,new Set([...expanding,name]),depth+1))return true;
+      // A definition with no free symbols is a numeric value. Prompt for the
+      // variable itself so stored numbers remain editable in CALC.
       names.add(name);return true;
     }
     const args=node.args||[];
@@ -24,4 +26,14 @@ export function calcVariables(tree,variables={}) {
     return found;
   }
   collect(tree);return [...names];
+}
+// Result ASTs freeze symbolic names for ordinary Ans/STO reuse. During CALC,
+// those names are explicit inputs and must resolve to the accepted values.
+export function calcBindings(variables) {
+  let visited=0;
+  function editable(node,depth=0){
+    if(!node||depth>96||++visited>12000)throw new Error('Expression complexity limit');
+    return {...node,...(node.kind==='snapshot_symbol'?{kind:'symbol'}:{}),...(node.args?{args:node.args.map(child=>editable(child,depth+1))}:{})};
+  }
+  return Object.fromEntries(Object.entries(variables).map(([name,tree])=>[name,name==='Ans'?tree:editable(tree)]));
 }

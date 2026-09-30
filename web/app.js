@@ -6,7 +6,7 @@ import {readState,writeState,downloadFile} from './storage.js';
 import {t,setLanguage,getLanguage,initialLanguage,translateDOM,applyTheme,setText} from './i18n.js';
 import {renderKeypad as buildKeypad,updateKeypadState,scientificRows,secondRows,numericRows,topKeys,topFunctions} from './keypad.js';
 import {expressionDisplay} from './expression-display.js';
-import {calcVariables} from './calc-session.js';
+import {calcVariables,calcBindings} from './calc-session.js';
 import {previousCalculations,renderPreviousCalculations,followTape} from './calculation-tape.js';
 import {createGraphWorkspace} from './graph-workspace.js';
 import {renderFormulas} from './formula-preview.js';
@@ -150,10 +150,12 @@ async function evaluate(source=value('expression')) {
     if(source===value('expression')&&converted!==source){$('expression').value=converted;preview();}
     const assignment=converted.match(/^\s*([A-Za-z][A-Za-z0-9_]*)\s*=(?!=)([\s\S]+)$/);
     if(assignment&&['pi','e','i','I','oo','Ans','c0','hP','hbar','G','qe','NA','kB0','me','mp0'].includes(assignment[1]))throw new Error('Reserved constant or answer name');
-    const result=await engine.execute({...requestOptions(),tree:evaluationTree(assignment?assignment[2]:converted)});
+    const tree=evaluationTree(assignment?assignment[2]:converted);
+    const result=await engine.execute({...requestOptions(),tree});
     if(assignment&&result.ok){
       if(!result.resultAst)throw new Error('No reusable result to store.');
-      state.variables[assignment[1]]=result.resultAst;result.assignment=true;result.note=`${t('Stored in')} ${assignment[1]}`;
+      const inputs=calcVariables(tree),selfReference=inputs.includes(assignment[1])||calcVariables(tree,state.variables).includes(assignment[1]);
+      state.variables[assignment[1]]=inputs.length&&!selfReference?tree:result.resultAst;result.assignment=true;result.note=`${t('Stored in')} ${assignment[1]}`;
     }
     showResult(result,converted);
   }
@@ -269,7 +271,7 @@ async function submitCalcValue(){
     if(numeric.symbolic||!numeric.resultAst){fail('Enter a numeric value');return;}
     state.variables[name]=numeric.resultAst;session.values[name]=numeric.exact;persist();
     if(session.index<session.names.length-1){session.index++;session.undo=[];$('expression').value='';calcPrompt();return;}
-    const result=await engine.execute({...requestOptions(),tree:session.tree});if(calcSession!==session)return;
+    const result=await engine.execute({...requestOptions(),variables:calcBindings(state.variables),tree:session.tree});if(calcSession!==session)return;
     if(!result.ok){fail(result.error);return;}
     calcSession=null;delete document.documentElement.dataset.calcActive;$('expression').value=session.source;preview();
     showResult({...result,calcValues:session.values},session.source);
@@ -341,7 +343,7 @@ function historyDialog() {
   const content=element('div'),search=element('input');search.placeholder='수식 또는 결과 검색';search.setAttribute('aria-label','기록 검색');const list=element('div');let favorites=false;
   const filter=control('즐겨찾기만',()=>{favorites=!favorites;setText(filter,favorites?'전체 기록':'즐겨찾기만');render();});
   function render(){list.replaceChildren();for(const item of state.history.filter(h=>(!favorites||h.star)&&`${h.source} ${h.exact}`.toLowerCase().includes(search.value.toLowerCase()))){const row=element('div','','list-row');const text=element('div','','content');text.append(element('code',item.source),element('div',`= ${item.exact}`));row.append(text,control(item.star?'★':'☆',()=>{item.star=!item.star;persist();render();}),control('사용',()=>{mode('scientific');$('expression').value=item.source;preview();$('dialog').close();}));list.append(row);}if(!list.childElementCount)list.append(element('p','기록이 없습니다.','hint'));}
-  search.oninput=render;content.append(search,filter,control('기록 삭제',()=>{state.history=[];activeHistoryEntry=null;renderTape();persist();render();}),list);render();openDialog('History',content);
+  search.oninput=render;content.append(search,filter,control('기록 삭제',()=>{state.history=state.history.filter(item=>item.star);activeHistoryEntry=null;renderTape();persist();render();}),list);render();openDialog('History',content);
 }
 function catalogDialog() {
   const content=element('div','','catalog-content'),search=element('input'),tabs=element('div','','catalog-tabs'),list=element('div','','catalog-scroll');search.placeholder='함수 검색';search.setAttribute('aria-label','함수 검색');let category='Scientific';

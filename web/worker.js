@@ -2,6 +2,7 @@
  * boundary and works without SharedArrayBuffer or COOP/COEP headers. */
 import {loadPyodide} from './vendor/pyodide.mjs';
 import {fetchEngineAsset} from './engine-fetch.js';
+import {installEngine} from './engine-bootstrap.js';
 
 let pyodide;
 const ready = (async () => {
@@ -13,13 +14,7 @@ const ready = (async () => {
   const runtimeURL=new URL('./vendor/',import.meta.url);
   pyodide = await loadPyodide({...(runtimeURL.protocol!=='file:'?{indexURL:runtimeURL.href}:{}),stdout:message=>console.log(message),stderr:message=>console.error(message)});
   postMessage({type:'status',message:'SymPy 계산 엔진 로딩…'});
-  const packageErrors=[];
-  await pyodide.loadPackage('sympy',{errorCallback:message=>packageErrors.push(message)});
-  if(packageErrors.length)throw new Error(packageErrors.join('\n'));
-  const response = await fetch('./engine.zip');
-  if (!response.ok) throw new Error('Engine archive is missing. Run python web/build.py.');
-  pyodide.unpackArchive(await response.arrayBuffer(),'zip',{extractDir:'/calcmax'});
-  pyodide.runPython("import sys\nsys.path.insert(0, '/calcmax')\nsys.set_int_max_str_digits(0)\nimport calc_engine, script_runner\n");
+  await installEngine(pyodide,{runtimeURL,engineURL:new URL('./engine.zip',import.meta.url)});
   postMessage({type:'ready',version:pyodide.version});
   } finally {self.fetch=originalFetch;}
 })();

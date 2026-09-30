@@ -1,4 +1,4 @@
-self.CALCMAX_CACHE = 'calcmax-static-7fc3a4e58d99098e';
+self.CALCMAX_CACHE = 'calcmax-static-c4cd03d16b88b1a4';
 self.CALCMAX_ASSETS = [
   "./",
   "./app-icon.webp",
@@ -13,6 +13,7 @@ self.CALCMAX_ASSETS = [
   "./catalog_help.md",
   "./catalog_help_ko.md",
   "./display-format.js",
+  "./engine-bootstrap.js",
   "./engine-client.js",
   "./engine-fetch.js",
   "./engine.zip",

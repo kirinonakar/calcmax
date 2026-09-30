@@ -3,15 +3,14 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {loadPyodide} from '../vendor/pyodide.mjs';
+import {installEngine} from '../engine-bootstrap.js';
 import {parse} from '../parser.js';
 import {tipCommand,moneyResult} from '../money.js';
 import {statisticsCommand,distributionCommand} from '../workspace-commands.js';
 
 test('actual CPython WASM reuses the Android engine across workspaces',async()=>{
   const py=await loadPyodide({indexURL:fileURLToPath(new URL('../vendor/',import.meta.url))});
-  await py.loadPackage('sympy');
-  py.unpackArchive(new Uint8Array(readFileSync(new URL('../engine.zip',import.meta.url))),'zip',{extractDir:'/calcmax'});
-  py.runPython("import sys\nsys.path.insert(0,'/calcmax')\nimport calc_engine, script_runner");
+  await installEngine(py,{runtimeURL:new URL('../vendor/',import.meta.url),engineURL:new URL('../engine.zip',import.meta.url),fetcher:async url=>new Response(readFileSync(url))});
   function run(request) {
     py.globals.set('payload',JSON.stringify({angle:'RAD',...request}));
     return JSON.parse(py.runPython('calc_engine.dispatch(payload)'));

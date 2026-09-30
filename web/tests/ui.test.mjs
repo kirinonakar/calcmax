@@ -185,6 +185,25 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
   key('CALC').click();key('=').click();await waitFor(()=>$('commit-indicator').textContent==='y?','blank CALC entry recalls stored x');key('=').click();await waitFor(()=>!document.documentElement.dataset.calcActive&&$('answer').textContent==='192','blank CALC entry recalls stored y');
   edit('x+1');key('CALC').click();key('4').click();key('AC').click();assert.equal($('expression').value,'x+1');assert.equal(document.documentElement.dataset.calcActive,undefined,'AC cancels CALC without losing the formula');
   edit('integrate(x^2,x,0,1)');key('CALC').click();assert.equal(document.documentElement.dataset.calcActive,undefined,'integration variable is not a CALC input');await waitFor(()=>$('answer').textContent==='13','CALC evaluates expressions with no free inputs');
+  await t.test('stored C=A+B prompts A and B even when they already have numeric values',async()=>{
+    for(const assignment of ['A=2','B=3','C=A+B']){
+      edit(assignment);key('=').click();await waitFor(()=>document.documentElement.dataset.busy==='false'&&$('note').textContent.includes('Stored in'),'assignment stored');
+    }
+    edit('C');key('CALC').click();assert.equal($('commit-indicator').textContent,'A?');
+    edit('4');key('=').click();await waitFor(()=>$('commit-indicator').textContent==='B?','stored formula second input');
+    edit('6');key('CALC').click();await waitFor(()=>!document.documentElement.dataset.calcActive&&$('answer').textContent==='10','stored formula substitution');
+    assert.equal($('expression').value,'C');assert.match($('note').textContent,/A = 4, B = 6/);
+    key('CALC').click();assert.equal($('commit-indicator').textContent,'A?','the formula survives CALC');key('AC').click();
+    key('RCL').click();const fields=$('dialog-body').querySelectorAll('input');fields[0].value='D';fields[1].value='A+B';
+    Array.from($('dialog-body').querySelectorAll('button')).find(button=>button.textContent==='Store expression').click();$('dialog').close();
+    edit('D');key('CALC').click();assert.equal($('commit-indicator').textContent,'A?');key('AC').click();
+    edit('P+Q');key('=').click();await waitFor(()=>document.documentElement.dataset.busy==='false'&&$('answer').textContent==='P+Q','symbolic result for STO');
+    key('RCL').click();$('dialog-body').querySelector('input').value='E';
+    Array.from($('dialog-body').querySelectorAll('button')).find(button=>button.textContent==='STO current result').click();$('dialog').close();
+    edit('E');key('CALC').click();assert.equal($('commit-indicator').textContent,'P?');edit('4');key('=').click();await waitFor(()=>$('commit-indicator').textContent==='Q?','result AST input');
+    edit('5');key('=').click();await waitFor(()=>!document.documentElement.dataset.calcActive&&$('answer').textContent==='9','result AST CALC');
+    assert.equal(JSON.parse(localStorage.getItem('calcmax-web-v1')).variables.E.args[0].kind,'snapshot_symbol','CALC leaves the saved STO result intact');
+  });
   await t.test('math input pastes, closes missing parentheses, and shows root cursor movement',async()=>{
     key('AC').click();const event=new window.Event('paste',{bubbles:true,cancelable:true});Object.defineProperty(event,'clipboardData',{value:{getData:()=> '4+sqrt(5'}});$('expression-preview').dispatchEvent(event);
     assert.equal(event.defaultPrevented,true);assert.equal($('expression').value,'4+sqrt(5');assert.ok($('expression-preview').querySelector('.input-caret'));
@@ -269,5 +288,16 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
   change('mode','python');assert.ok($('stop').closest('.runtime-bar'),'Python stop stays at the top of the workspace');$('python-source').value='while True: pass';document.querySelector('[data-run="python"]').click();await waitFor(()=>!$('stop').disabled,'script running');$('stop').click();await waitFor(()=>$('python-output').textContent.includes('cancelled'),'hard cancellation');await waitFor(()=>!document.querySelector('[data-run="python"]').disabled,'engine recovery');
   $('python-source').value='print(42)';document.querySelector('[data-run="python"]').click();await waitFor(()=>$('python-output').textContent==='42\n','post-cancellation script');
   assert.equal(offlineRegistrations,1,'engine recovery does not register the service worker again');
-  const persisted=JSON.parse(localStorage.getItem('calcmax-web-v1'));assert.equal(persisted.language,'en');assert.equal(persisted.theme,'light');assert.ok(persisted.history.length>=8);assert.ok(persisted.functions.f);
+  await t.test('clearing history preserves starred entries and persisted favorites',async()=>{
+    change('mode','scientific');$('history-button').click();
+    const rows=$('dialog-body').querySelectorAll('.list-row');assert.ok(rows.length>1);
+    const favoriteSource=rows[0].querySelector('code').textContent;
+    Array.from(rows[0].querySelectorAll('button')).find(button=>button.textContent==='☆').click();
+    Array.from($('dialog-body').querySelectorAll('button')).find(button=>button.textContent==='Clear history').click();
+    assert.equal($('dialog-body').querySelectorAll('.list-row').length,1);
+    assert.equal($('dialog-body').querySelector('code').textContent,favoriteSource);
+    const retained=JSON.parse(localStorage.getItem('calcmax-web-v1')).history;assert.equal(retained.length,1);assert.equal(retained[0].star,true);
+    $('dialog').close();$('history-button').click();assert.equal($('dialog-body').querySelectorAll('.list-row').length,1);$('dialog').close();
+  });
+  const persisted=JSON.parse(localStorage.getItem('calcmax-web-v1'));assert.equal(persisted.language,'en');assert.equal(persisted.theme,'light');assert.equal(persisted.history.length,1);assert.ok(persisted.functions.f);
 });

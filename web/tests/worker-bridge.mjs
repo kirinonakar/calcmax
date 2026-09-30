@@ -6,6 +6,6 @@ globalThis.self=globalThis;
 globalThis.postMessage=message=>parentPort.postMessage(message);
 globalThis.onmessage=null;
 globalThis.importScripts=()=>{throw new Error('Classic web workers are not supported');};
-globalThis.fetch=async path=>{if(path!=='./engine.zip')throw new Error(`Unexpected request: ${path}`);return new Response(readFileSync(new URL('../engine.zip',import.meta.url)));};
+globalThis.fetch=async path=>{const url=new URL(path, new URL('../worker.js',import.meta.url));if(url.protocol!=='file:'||!url.href.startsWith(new URL('../',import.meta.url).href))throw new Error(`Unexpected request: ${path}`);return new Response(readFileSync(url));};
 await import('../worker.js');
 parentPort.on('message',data=>globalThis.onmessage({data}));

@@ -5,6 +5,20 @@ import {mathDisplay} from '../math-display.js';
 import {expressionDisplay} from '../expression-display.js';
 import {markInputCursor} from '../input-cursor.js';
 
+test('each root has one native radical and input cursors do not increase radicand height',()=>{
+  const dom=new JSDOM();globalThis.document=dom.window.document;
+  for(const source of ['sqrt()','sqrt(2)','nthroot(81,4)','sqrt(1/2)','sqrt(sqrt(2))','sqrt(2)^2']){
+    for(let at=0;at<=source.length;at++){
+      const math=expressionDisplay(source);markInputCursor(math,source,at);
+      assert.equal(math.querySelectorAll('msqrt,mroot').length,source.match(/sqrt\(|nthroot\(/g).length,source);
+      assert.equal(math.querySelectorAll('svg,.math-radical,.radical-stroke').length,0,'no duplicate or unbounded SVG radical');
+      if(source==='sqrt()')assert.ok(math.querySelector('msqrt .input-slot'),'the empty input remains under the native roof');
+      const caret=math.querySelector('.input-caret');assert.equal(caret.getAttribute('height'),'0');assert.equal(caret.getAttribute('depth'),'0');
+    }
+  }
+  dom.window.close();
+});
+
 test('cursor insertion preserves root and superscript operand counts at every source position',()=>{
   const dom=new JSDOM();globalThis.document=dom.window.document;
   for(const source of ['nthroot(81,4)','sqrt(x^2+1)','sqrt(2)^2','nthroot(2,3)^2','x^(2+3)','x^(y^2)','1/nthroot(x+1,3)']){
