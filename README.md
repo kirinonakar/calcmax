@@ -102,6 +102,21 @@ cagr(1000,2000,5)
 
 ## Build
 
+### Static WebAssembly version
+
+The `web/` folder contains a static browser port using the same Python/SymPy engine through WebAssembly, with Korean/English UI and light/dark/system themes. It needs no calculation backend.
+
+For GitHub hosting, select **Settings → Pages → Source → GitHub Actions** once. The included **Deploy CalcMax Web** workflow builds and publishes the static `index.html` site on pushes to `main`. Once deployment succeeds, open [CalcMax Web](https://kirinonakar.github.io/calcmax/).
+
+```powershell
+python web/build.py
+python web/serve.py
+```
+
+Open `http://localhost:8080`. Upload the complete built `web/` folder (including the generated runtime) to a static host. See [web/README.md](web/README.md) for deployment, features, offline caching and validation.
+
+### Android
+
 Requirements: JDK 21 (Android Studio's bundled runtime works), Android SDK 37, Python 3.14 on PATH, and an initial internet connection to download build dependencies. The installed application computes offline. Supported devices: Android 8/API 26 or later, arm64-v8a and x86_64.
 
 ```powershell

@@ -1,0 +1,75 @@
+<!DOCTYPE html><html lang="en" data-workspace="scientific" data-engine="loading" data-busy="false" data-typing="false"><head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#e9eeea">
+  <meta name="description" content="CalcMax WebAssembly scientific, CAS, graphing, and Python calculator">
+  <title>CalcMax</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="calculator.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+<div class="instrument">
+  <header><h1>CalcMax</h1><div class="header-actions"><button id="history-button">History</button><button id="catalog-button">Catalog</button><button id="settings-button">Setup</button></div></header>
+  <div class="mode-bar"><label class="sr-only" for="mode">Workspace</label><select id="mode">
+    <option value="scientific">SCIENTIFIC / CAS</option><option value="graph">Graph</option><option value="python">Python</option><option value="equation">Equations</option><option value="matrix">Matrix</option><option value="vector">Vector</option><option value="statistics">Data &amp; Statistics</option><option value="programmer">Programmer</option><option value="units">Units</option><option value="constants">Constants</option><option value="tip">Tip</option><option value="currency">Currency</option><option value="functions">Functions</option>
+  </select><button id="insert-mode" aria-label="Insert mode" data-i18narialabel="Insert mode">INS</button><span id="key-modifier"></span><label class="sr-only" for="angle">Angle unit</label><select id="angle"><option>DEG</option><option>RAD</option><option>GRAD</option></select><span id="digits-indicator">≤ 10 digits</span></div>
+  <div class="runtime-bar"><span id="status" role="status">Loading WebAssembly runtime…</span><button id="retry" hidden="">Reload engine</button><button id="stop" disabled="">Stop</button></div>
+  <main>
+    <section class="workspace" data-mode="scientific">
+      <div class="edit-actions"><span id="commit-indicator"></span><button id="undo">Undo</button><button id="cut">Cut</button><button id="copy">Copy</button><button id="paste">Paste</button><button id="typing-toggle">Keyboard</button><button id="clear" hidden="">AC</button></div>
+      <label class="sr-only" for="expression">Expression</label><textarea id="expression" rows="2" spellcheck="false" placeholder="Enter an expression · 1/3 + 1/6" autocomplete="off" data-i18nplaceholder="수식을 입력하세요 · 1/3 + 1/6"></textarea>
+      <div class="expression-preview" id="expression-preview" aria-hidden="true"></div>
+    </section>
+    <section class="workspace" data-mode="graph" hidden="">
+      <div class="form-row"><label>Type<select id="graph-kind"><option value="cartesian">y = f(x)</option><option value="parametric">Parametric (x(t), y(t))</option><option value="polar">Polar r = f(t)</option><option value="sequence">Sequence u(n)</option><option value="surface">3D z = f(x,y)</option><option value="differential">Differential equation dy/dt</option></select></label><button data-run="graph">Plot</button></div>
+      <label>Expressions · one per line<textarea id="graph-source" rows="3" spellcheck="false">sin(x)
+cos(x)</textarea></label>
+      <div class="form-row ranges"><label>x / t / n minimum<input id="graph-min" type="number" value="-10" step="any"></label><label>Maximum<input id="graph-max" type="number" value="10" step="any"></label><label>y minimum<input id="graph-ymin" type="number" value="-5" step="any"></label><label>Maximum<input id="graph-ymax" type="number" value="5" step="any"></label></div>
+      <div class="form-row"><label>Sequence seeds / differential y₀<input id="graph-initial" value="1" placeholder="1, 1"></label><label>t₀<input id="graph-t0" type="number" value="0" step="any"></label></div>
+      <p class="hint">Parametric: (cos(t),sin(t)) · Polar: 1+cos(t) · Sequence: u(n-1)+1 · 3D: sin(x)*cos(y)<br>Use [shade] y &lt; x^2 or [shade] sin(x),cos(x) ; 0..pi to shade a region.</p>
+      <div id="graph-parameters" class="form-row"></div><div id="graph-plot" class="plot" aria-label="Calculated function graph" data-i18narialabel="계산된 함수 그래프"></div><details><summary>Coordinate table</summary><div id="graph-table" class="scroll-table"></div></details>
+    </section>
+    <section class="workspace" data-mode="python" hidden="">
+      <div class="form-row"><button id="python-new">New</button><button id="python-open">Open .py</button><button id="python-save">Save .py</button><button data-run="python">Run</button></div>
+      <label>Python code<textarea id="python-source" class="code" rows="12" spellcheck="false">import calcmax_catalog as calc
+from calcmax_catalog import x, pi
+
+print(calc.factor(x**4 - 1))
+print(calc.integrate(x**2, x, 0, 1))</textarea></label>
+      <label>input() values · one per line<textarea id="python-input" rows="2" placeholder="Enter values in the order the script will request them" data-i18nplaceholder="스크립트가 요청할 순서대로 입력"></textarea></label><p class="hint">Use the CPython standard library, sympy, mpmath, and calcmax_catalog. Execution is limited to 20 seconds.</p><pre id="python-output" aria-live="polite"></pre>
+    </section>
+    <section class="workspace" data-mode="equation" hidden="">
+      <div class="form-row"><label>Method<select id="equation-kind"><option value="solve">Exact solutions / systems</option><option value="nsolve">Numerical solution</option><option value="dsolve">Ordinary differential equation</option><option value="pdsolve">Partial differential equation</option></select></label><button data-run="equation">Solve</button></div>
+      <label>Equations · one per line for systems<textarea id="equation-source" rows="3">x^2-5x+6=0</textarea></label><div class="form-row"><label>Variables / unknown function<input id="equation-variable" value="x" placeholder="x,y or y(t)" data-i18nplaceholder="x,y 또는 y(t)"></label><label>Initial bracket / differentiation variable<input id="equation-extra" value="0,1" placeholder="0,1 or t" data-i18nplaceholder="0,1 또는 t"></label></div>
+    </section>
+    <section class="workspace" data-mode="matrix vector" hidden="">
+      <div class="form-row"><label>Rows / components<select id="matrix-rows"></select></label><label id="matrix-cols-label">Column<select id="matrix-cols"></select></label><label>Operation<select id="matrix-op"></select></label><button data-run="matrix">Calculate</button></div><div id="matrix-grid" class="matrix-grid"></div><label id="vector-other-label" hidden="">Second vector<input id="vector-other" value="[4,5,6]"></label><p class="hint">Enter fractions, symbols, or expressions in each cell. More matrix operations are available in Catalog.</p>
+    </section>
+    <section class="workspace" data-mode="statistics" hidden="">
+      <div class="form-row"><label>Saved datasets<select id="dataset-list"><option value="">New dataset</option></select></label><input id="dataset-name" placeholder="Dataset name" aria-label="Dataset name" data-i18nplaceholder="데이터 이름" data-i18narialabel="데이터 이름"><button id="dataset-save">Save</button><button id="dataset-delete">Delete</button><button id="csv-open">Import CSV</button><button id="csv-save">Export CSV</button></div>
+      <label>Data · one observation per row, comma-separated columns<textarea id="statistics-data" class="code" rows="6">1,2
+2,4
+3,6
+4,8</textarea></label><div class="form-row"><label>Analyze<select id="statistics-op"><option value="stats">Summary statistics</option><option value="mean">Mean</option><option value="median">Median</option><option value="stdev">Standard deviation</option><option value="regression">Regression</option><option value="correlation">Correlation</option><option value="ttest">One-sample t test</option><option value="ttest2">Independent t test</option><option value="ttestpaired">Paired t test</option><option value="tinterval">t confidence interval</option><option value="anova">One-way ANOVA</option><option value="tukey">Tukey comparisons</option><option value="shapiro">Normality test</option></select></label><label>Column<select id="statistics-column"><option value="0">1</option><option value="1">2</option><option value="2">3</option></select></label><label>Regression model<select id="regression-kind"><option>linear</option><option>quadratic</option><option>logarithmic</option><option>exponential</option><option>power</option></select></label><label>Null mean / confidence level<input id="statistics-extra" value="0"></label><button data-run="statistics">Analyze</button></div><div id="statistics-plot" class="plot" hidden=""></div>
+    </section>
+    <section class="workspace" data-mode="programmer" hidden="">
+      <div class="form-row"><label>Base<select id="programmer-base"><option value="10">DEC</option><option value="16">HEX</option><option value="2">BIN</option><option value="8">OCT</option></select></label><label>Bits<select id="programmer-width"><option>8</option><option>16</option><option selected="">32</option><option>64</option></select></label><label class="check"><input id="programmer-signed" type="checkbox">Signed</label></div><div class="form-row"><label>A<input id="programmer-a" value="255"></label><label>Operation<select id="programmer-op"><option value="">Convert</option><option>AND</option><option>OR</option><option>XOR</option><option>NOT</option><option>NAND</option><option>NOR</option><option>&lt;&lt;</option><option>&gt;&gt;</option></select></label><label>B / shift count<input id="programmer-b" value="1"></label><button data-run="programmer">Calculate</button></div><pre id="programmer-output"></pre>
+    </section>
+    <section class="workspace" data-mode="units" hidden=""><div class="form-row"><label>Value<input id="unit-value" value="32"></label><label>From unit<select id="unit-from"></select></label><label>To unit<select id="unit-to"></select></label><button data-run="units">Convert</button></div><p class="hint">Compound units are supported: convert(qty(1,V)/qty(1,ohm),A)</p></section>
+    <section class="workspace" data-mode="constants" hidden=""><button data-run="constants">Load constants</button><div id="constants-list"></div></section>
+    <section class="workspace" data-mode="tip" hidden=""><div class="form-row"><label>Amount<input id="tip-amount" value="100"></label><label>Tip %<input id="tip-percent" value="15"></label><label>People<input id="tip-people" type="number" min="1" value="2"></label><button data-run="tip">Per person</button></div></section>
+    <section class="workspace" data-mode="currency" hidden=""><div class="form-row"><label>Amount<input id="currency-amount" value="100"></label><label>From currency<input id="currency-from" value="USD" maxlength="3"></label><label>To currency<input id="currency-to" value="KRW" maxlength="3"></label><label>Manual rate<input id="currency-rate" value="1300"></label><button data-run="currency">Convert</button><button id="currency-fetch">Get daily rates</button></div><p id="currency-status" class="hint">Using a manual rate. Click Get daily rates to fetch online rates.</p></section>
+    <section class="workspace" data-mode="functions" hidden=""><label>Function name<input id="function-name" value="f"></label><label>Parameters · comma-separated<input id="function-parameters" value="x"></label><label>Expression<input id="function-body" value="x^2+1"></label><div class="form-row"><button id="function-save">Save</button><button id="function-export">Export JSON</button><button id="function-import">Import JSON</button></div><div id="functions-list"></div></section>
+    <section class="answer-panel" aria-label="Calculation result" data-i18narialabel="계산 결과"><div id="answer" aria-live="polite"><span class="empty">Your result will appear here.</span></div><p id="note" class="hint"></p><div class="answer-toolbar"><button id="exact-toggle">Exact</button><button id="engineering-toggle">ENG</button><button id="grouping-toggle">,</button><button id="screen-toggle">scr</button><button data-shortcut="integrate(,x)">∫</button><button data-shortcut="integrate(,x,0,1)">∫ₐᵇ</button><button data-shortcut="diff(,x)">d/dx</button><button id="answer-copy">Copy result</button><button id="answer-insert">Insert Ans</button></div></section>
+    <section class="workspace keypad-workspace" data-mode="scientific"><div id="keypad" class="keypad"></div></section>
+  </main>
+  <footer>CalcMax · MIT · <a href="README.md">Web guide</a> · <a href="THIRD_PARTY.md">Open-source licenses</a><span id="offline-status"></span></footer>
+</div>
+<dialog id="dialog"><div class="dialog-heading"><h2 id="dialog-title"></h2><button id="dialog-close" aria-label="Close" data-i18narialabel="닫기">✕</button></div><div id="dialog-body"></div></dialog>
+<dialog id="settings-dialog"><div class="dialog-heading"><h2>Setup</h2><button id="settings-close" aria-label="Close" data-i18narialabel="닫기">✕</button></div><div class="preferences"><label for="language">Language<select id="language"><option value="en">English</option><option value="ko">한국어</option></select></label><label for="theme">Theme<select id="theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></label></div><button id="variables-button">RCL / STO</button><div id="settings-body"></div></dialog>
+<input id="file-input" type="file" hidden="">
+<div id="toast" role="status" hidden=""></div>
+
+
+</body></html>

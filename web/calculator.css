@@ -1,0 +1,87 @@
+/* Android InstrumentColors and keypad geometry. The calculator owns one viewport;
+   long expressions/results scroll inside their displays, never below the keypad. */
+:root{--bg:#e9ede9;--panel:#f3f6ee;--bar:#d8e0da;--ink:#162a26;--muted:#53635d;--line:#b3c0b8;--accent:#006d5b;--key:#d8e0da;--number:#fafbf8;--lime:#acca4a;--gold:#785600;--alpha:#754584;--operator:#c6d9d2}
+:root[data-theme="dark"]{--bg:#111916;--panel:#09120f;--bar:#202d27;--ink:#e6f0e7;--muted:#9eb3a6;--line:#3c5246;--accent:#79dbb7;--key:#202d27;--number:#2b3731;--lime:#acca4a;--gold:#e7c36e;--alpha:#d6ace9;--operator:#29443a}
+.mode-choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.preferences{width:100%;padding:0;margin-bottom:18px;border:0;gap:16px}.preferences label{flex:1}.preferences select{width:100%;font-size:14px;padding:10px 24px 10px 12px}#digits-indicator{white-space:nowrap;font-size:10px;color:var(--muted)}#key-modifier{font-size:10px;color:var(--gold)}#key-modifier.alpha{color:var(--alpha)}#insert-mode{color:var(--muted);font-weight:400;font-size:10px;padding:4px}.mode-bar #mode{max-width:none;min-width:0;flex:1}.mode-bar #angle{width:70px;flex-shrink:0}.edit-actions #commit-indicator{margin-right:auto;color:var(--muted)}.answer-toolbar{overflow-x:auto;white-space:nowrap}.answer-toolbar button{flex-shrink:0}.answer-toolbar #exact-toggle{margin-right:0}.answer-toolbar button.active{color:var(--accent);background:var(--bar)}
+:root[data-workspace="scientific"] body{height:100dvh;min-height:0;padding:0;overflow:hidden}
+:root[data-workspace="scientific"] .instrument{height:100dvh;min-height:0;max-height:100dvh;border-radius:0;display:grid;grid-template-areas:"header" "mode" "runtime" "main";grid-template-rows:44px 48px auto minmax(0,1fr);padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
+:root[data-workspace="scientific"] header{grid-area:header}
+:root[data-workspace="scientific"] .mode-bar{grid-area:mode}
+:root[data-workspace="scientific"] .runtime-bar{grid-area:runtime}
+:root[data-workspace="scientific"] main{grid-area:main}
+:root[data-workspace="scientific"] header{height:44px;padding:0 14px;flex-wrap:nowrap;gap:8px}
+:root[data-workspace="scientific"] h1{font-size:18px;letter-spacing:2px}
+:root[data-workspace="scientific"] .header-actions{gap:0}
+:root[data-workspace="scientific"] .header-actions button{font-size:11px;padding:6px 8px;white-space:nowrap}
+:root[data-workspace="scientific"] .mode-bar{height:48px;padding:0 8px;gap:6px}
+:root[data-workspace="scientific"] .mode-bar #mode{font-size:12px;font-weight:400;padding-left:8px;letter-spacing:0}
+:root[data-workspace="scientific"] .mode-bar #angle{font-size:11px;width:62px;padding-right:12px}
+:root[data-workspace="scientific"] .runtime-bar{min-width:0;padding:2px 14px;font-size:10px}
+:root[data-workspace="scientific"] #status{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+:root[data-workspace="scientific"][data-engine="ready"][data-busy="false"] .runtime-bar{display:none}
+:root[data-workspace="scientific"] main{min-height:0;overflow:hidden;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) minmax(0,1fr) minmax(0,min(68%,520px))}
+:root[data-workspace="scientific"] .workspace[data-mode="scientific"]:not(.keypad-workspace){grid-row:1;min-height:0;overflow:hidden;padding:0 14px;display:grid;grid-template-rows:28px minmax(0,1fr)}
+:root[data-workspace="scientific"] .edit-actions{height:28px;min-width:0;margin:0;padding:0;align-items:center;gap:1px;overflow-x:auto;white-space:nowrap}
+:root[data-workspace="scientific"] .edit-actions button{min-width:0;flex-shrink:0;font-size:11px;padding:5px 8px}
+:root[data-workspace="scientific"] #expression{display:none;resize:none;height:100%;min-height:0;padding:4px 0;font-size:clamp(16px,3vw,28px);line-height:1.35;overflow:auto}
+:root[data-workspace="scientific"] .expression-preview{display:flex;align-items:center;min-width:0;min-height:0;overflow:auto;padding:4px 0;font-family:"Cambria Math",Cambria,serif;font-size:clamp(20px,4vw,32px);white-space:pre-wrap;overflow-wrap:anywhere;cursor:text}
+:root[data-workspace="scientific"] .expression-preview math{margin:0;flex-shrink:0}
+.expression-preview .selected{background:var(--operator)}.expression-preview .input-slot{color:var(--muted);border:1px dashed var(--line)}
+:root[data-workspace="scientific"][data-typing="true"] #expression{display:block}
+:root[data-workspace="scientific"][data-typing="true"] .expression-preview{display:none}
+:root[data-workspace="scientific"] .answer-panel{grid-row:2;min-height:0;min-width:0;overflow:hidden;border:0;padding:0 14px;display:grid;grid-template-rows:minmax(0,1fr) auto 30px}
+:root[data-workspace="scientific"] #answer{min-height:0;min-width:0;margin:0;padding:2px 0;overflow:auto;align-items:safe center;font-size:clamp(22px,4vw,34px);line-height:1.2}
+:root[data-workspace="scientific"] #note{max-height:16px;overflow:auto;white-space:nowrap;font-size:10px;line-height:16px;margin:0}
+:root[data-workspace="scientific"] .answer-toolbar{height:30px;min-width:0;gap:6px;align-items:center;scrollbar-width:none}
+:root[data-workspace="scientific"] .answer-toolbar button{font-size:11px;padding:5px 9px}
+:root[data-workspace="scientific"] .keypad-workspace{grid-row:3;min-height:0;min-width:0;overflow:hidden;padding:4px 8px;background:var(--bg);container-type:size}
+:root[data-workspace="scientific"] footer{display:none}
+.keypad{height:100%;min-height:0;display:flex;flex-direction:column;gap:4px}
+.keypad-top{flex:2;min-height:0;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));column-gap:4px;row-gap:4px}
+.keypad-row{flex:1;min-height:0;display:grid;gap:5px;grid-template-columns:repeat(6,minmax(0,1fr))}
+.keypad-row.numeric-row{grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
+.keypad .key{background:transparent;border:0;border-radius:0;padding:0;min-height:0;min-width:0;display:flex;flex-direction:column;align-items:stretch;gap:0;color:var(--ink);touch-action:manipulation;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.keypad .key:hover{background:transparent;filter:none}
+.keypad .key:active .key-face{filter:brightness(.86)}
+.keypad .key-hints{flex:0 0 25%;max-height:15px;min-height:0;overflow:hidden;white-space:nowrap;text-align:center;font-size:clamp(6px,1.8cqh,10px);line-height:1.5;color:var(--gold);font-weight:400}
+.keypad .alpha-legend{color:var(--alpha)}
+.keypad .key-face{display:flex;flex:1;min-height:0;min-width:0;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:7px 7px 4px 4px;background:var(--key);font-size:clamp(10px,3.5cqh,24px);line-height:1;font-weight:600;overflow:hidden;white-space:nowrap}
+.keypad .numeric .key-face{background:var(--number);font-size:clamp(12px,4.8cqh,24px)}
+.keypad .danger .key-face{background:var(--lime);color:#18210e;font-size:clamp(12px,4.8cqh,24px)}
+.keypad .action .key-face{background:var(--operator);font-size:clamp(9px,2.6cqh,18px)}
+.keypad .utility{padding:3px 0}
+.keypad .utility .key-hints{display:none}
+.keypad .utility .key-face{border-radius:8px;font-size:clamp(10px,2.7cqh,16px);font-weight:700;background:var(--operator)}
+.keypad .utility[data-input="SHIFT"] .key-face{background:var(--gold);color:white}
+.keypad .utility[data-input="ALPHA"] .key-face{background:var(--alpha);color:white}
+.keypad .utility[data-input="MODE"] .key-face{background:var(--accent);color:white}
+.keypad .active .key-face{outline:2px solid var(--ink);outline-offset:-2px}
+[data-theme="dark"] .keypad .utility:not([data-input="SECOND"]) .key-face{color:var(--panel)}
+.direction-pad{grid-column:3 / span 2;grid-row:1 / span 2;position:relative;min-height:0;min-width:0}
+.direction-pad::before{content:"";position:absolute;inset:6%;border:1px solid var(--line);border-radius:50%;background:var(--key)}
+.direction-key{position:absolute;padding:0;border:1px solid var(--line);border-radius:35%;background:linear-gradient(var(--number),var(--key));color:var(--ink);touch-action:manipulation;user-select:none}
+.direction-key .key-hints{display:none}.direction-key .key-face{font-size:12px}
+.direction-key.up,.direction-key.down{left:35%;width:30%;height:34%}
+.direction-key.up{top:0}.direction-key.down{bottom:0}
+.direction-key.left,.direction-key.right{top:34%;width:36%;height:32%}
+.direction-key.left{left:0}.direction-key.right{right:0}
+:root[data-workspace="scientific"][data-screen-expanded="true"] main{grid-template-rows:minmax(0,1fr) minmax(0,1fr) minmax(0,calc((min(68%,520px) - 36px) * 4 / 9 + 20px))}
+:root[data-screen-expanded="true"] .keypad-top,:root[data-screen-expanded="true"] .scientific-row{display:none}
+@media(min-width:651px) and (max-height:592px){
+  :root[data-workspace="scientific"] main{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:repeat(2,minmax(0,1fr))}
+  :root[data-workspace="scientific"] .workspace[data-mode="scientific"]:not(.keypad-workspace){grid-column:1;grid-row:1}
+  :root[data-workspace="scientific"] .answer-panel{grid-column:1;grid-row:2}
+  :root[data-workspace="scientific"] .keypad-workspace{grid-column:2;grid-row:1 / span 2}
+  :root[data-workspace="scientific"][data-screen-expanded="true"] main{grid-template-rows:repeat(2,minmax(0,1fr));grid-template-columns:minmax(0,1fr) minmax(0,.7fr)}
+  :root[data-workspace="scientific"][data-screen-expanded="true"] .keypad-workspace{align-self:end;height:calc((100% - 36px) * 4 / 9 + 20px)}
+}
+@media(max-height:480px) and (max-width:650px){
+  :root[data-workspace="scientific"] .instrument{grid-template-rows:34px 34px auto minmax(0,1fr)}
+  :root[data-workspace="scientific"] header,:root[data-workspace="scientific"] .mode-bar{height:34px}
+  :root[data-workspace="scientific"] .edit-actions{height:22px}
+  :root[data-workspace="scientific"] .workspace[data-mode="scientific"]:not(.keypad-workspace){grid-template-rows:22px minmax(0,1fr)}
+  :root[data-workspace="scientific"] .answer-panel{grid-template-rows:minmax(0,1fr) auto 22px}
+  :root[data-workspace="scientific"] .answer-toolbar{height:22px}
+  :root[data-workspace="scientific"] .keypad-workspace{padding:2px 6px}
+  .keypad,.keypad-row,.keypad-top{gap:2px}
+}
