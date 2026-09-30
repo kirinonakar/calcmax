@@ -66,7 +66,7 @@ math{font-family:"CalcMax Math","Cambria Math",math;font-weight:400;font-synthes
 :root[data-workspace="scientific"] #note{max-height:16px;overflow:auto;white-space:nowrap;font-size:10px;line-height:16px;margin:0}
 :root[data-workspace="scientific"] .answer-toolbar{height:30px;min-width:0;gap:6px;align-items:center;scrollbar-width:none}
 :root[data-workspace="scientific"] .answer-toolbar button{font-size:11px;padding:5px 9px}
-.answer-toolbar #engineering-toggle:not(.active){color:var(--muted);opacity:.45}
+.answer-toolbar #engineering-toggle:not(.active),.answer-toolbar #screen-toggle:not(.active),.answer-toolbar #grouping-toggle:not(.active){color:var(--muted);opacity:.45}
 :root[data-workspace="scientific"] .keypad-workspace{grid-row:3;min-height:0;min-width:0;overflow:hidden;padding:4px 8px;background:var(--bg);container-type:size}
 :root[data-workspace="scientific"] .calculation-display{grid-column:1;grid-row:1 / span 2;min-height:0;min-width:0;overflow:hidden;display:grid;grid-template-rows:28px minmax(0,1fr) 30px;padding:0 14px}
 .calculation-tape{min-height:0;min-width:0;overflow:auto;overscroll-behavior-y:contain;display:flex;flex-direction:column;scrollbar-width:thin;scrollbar-gutter:stable;padding-right:8px;overflow-anchor:none}
@@ -96,20 +96,20 @@ math{font-family:"CalcMax Math","Cambria Math",math;font-weight:400;font-synthes
 #graph-formulas .formula-line{border-left:3px solid var(--accent);padding-left:8px}.analysis-point{display:inline-block;margin:4px;background:var(--bar)}
 #graph-parameters label{min-width:200px}#graph-analysis{padding:12px 0}#graph-table tr[tabindex]{cursor:pointer}#graph-table tr[tabindex]:hover{background:var(--bar)}
 :root[data-workspace="scientific"] footer{display:none}
-.keypad{height:100%;min-height:0;display:flex;flex-direction:column;gap:4px}
+.keypad{--keypad-font-height:100cqh;height:100%;min-height:0;display:flex;flex-direction:column;gap:4px}
 .keypad-top{flex:2;min-height:0;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));column-gap:4px;row-gap:4px}
 .keypad-row{flex:1;min-height:0;display:grid;gap:5px;grid-template-columns:repeat(6,minmax(0,1fr))}
 .keypad-row.numeric-row{grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
 .keypad .key{background:transparent;border:0;border-radius:0;padding:0;min-height:0;min-width:0;display:flex;flex-direction:column;align-items:stretch;gap:0;color:var(--ink);touch-action:manipulation;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 .keypad .key:hover{background:transparent;filter:none}
 .keypad .key:active .key-face{filter:brightness(.86)}
-.keypad .key-hints{flex:0 0 25%;max-height:15px;min-height:0;overflow:hidden;white-space:nowrap;text-align:center;font-size:clamp(6px,1.8cqh,10px);line-height:1.5;color:var(--gold);font-weight:400}
+.keypad .key-hints{flex:0 0 25%;max-height:15px;min-height:0;overflow:hidden;white-space:nowrap;text-align:center;font-size:clamp(6px,calc(var(--keypad-font-height) * .018),10px);line-height:1.5;color:var(--gold);font-weight:400}
 .keypad .alpha-legend{color:var(--alpha)}
 .keypad .key .key-face{display:flex;flex:1;min-height:0;min-width:0;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:7px 7px 4px 4px;background:var(--key);font-size:clamp(10px,3.5cqh,24px);line-height:1;font-weight:600;overflow:hidden;white-space:nowrap}
 .key-fraction{display:inline-flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;font-size:.5em;line-height:1}
 .key-fraction-bar{width:1.6em;min-width:10px;border-top:1px solid currentColor}
-.keypad .numeric .key-face{background:var(--number);font-size:clamp(12px,4.8cqh,24px)}
-.keypad .danger .key-face{background:var(--lime);color:#18210e;font-size:clamp(12px,4.8cqh,24px)}
+.keypad .numeric .key-face{background:var(--number);font-size:clamp(12px,calc(var(--keypad-font-height) * .048),24px)}
+.keypad .danger .key-face{background:var(--lime);color:#18210e;font-size:clamp(12px,calc(var(--keypad-font-height) * .048),24px)}
 .keypad .action .key-face{background:var(--operator);font-size:clamp(9px,2.6cqh,18px)}
 .keypad .utility{padding:3px 0}
 .keypad .utility .key-hints{display:none}
@@ -129,6 +129,10 @@ math{font-family:"CalcMax Math","Cambria Math",math;font-weight:400;font-synthes
 .direction-key.left,.direction-key.right{top:34%;width:36%;height:32%}
 .direction-key.left{left:0}.direction-key.right{right:0}
 :root[data-workspace="scientific"][data-screen-expanded="true"] main{grid-template-rows:minmax(0,1fr) minmax(0,1fr) minmax(0,calc((min(68%,520px) - 36px) * 4 / 9 + 20px))}
+/* Undo the numeric-only track's 4/9 height reduction for font sizing.
+   With 8px workspace padding, the full content height is 9/4 of the
+   reduced content height plus 1px, in both portrait and landscape. */
+:root[data-workspace="scientific"][data-screen-expanded="true"] .keypad{--keypad-font-height:calc(225cqh + 1px)}
 :root[data-screen-expanded="true"] .keypad-top,:root[data-screen-expanded="true"] .scientific-row{display:none}
 @media(min-width:651px) and (max-height:592px){
   :root[data-workspace="scientific"] main{grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-rows:repeat(2,minmax(0,1fr))}
@@ -147,5 +151,7 @@ math{font-family:"CalcMax Math","Cambria Math",math;font-weight:400;font-synthes
   :root[data-workspace="scientific"] .answer-toolbar{height:22px}
   :root[data-workspace="scientific"] .calculation-display{grid-template-rows:22px minmax(0,1fr) 22px}
   :root[data-workspace="scientific"] .keypad-workspace{padding:2px 6px}
+  /* The compact layout has 4px workspace padding instead of 8px. */
+  :root[data-workspace="scientific"][data-screen-expanded="true"] .keypad{--keypad-font-height:calc(225cqh - 4px)}
   .keypad,.keypad-row,.keypad-top{gap:2px}
 }
