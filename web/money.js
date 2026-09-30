@@ -4,8 +4,8 @@ export function tipCommand({bill,percent='15',fixed='15',tax='0',people='2',meth
   const clean=text=>{text=String(text).replace(/,/g,'');if(text.length>128||!/^\+?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(text))throw new Error('Enter non-negative amounts and percentages');return text;};
   bill=clean(bill);percent=method==='amount'?'0':clean(percent);fixed=method==='amount'?clean(fixed):'0';tax=clean(tax);
   if(!Number.isInteger(Number(people))||Number(people)<1||Number(people)>999)throw new Error('People must be between 1 and 999');
-  const cents=value=>`floor((${value})*100+1/2)/100`,originalTip=cents(method==='amount'?fixed:`(${bill})*(${percent})/100`),taxAmount=cents(`(${bill})*(${tax})/100`),originalTotal=`(${cents(bill)}+${originalTip}+${taxAmount})`,total=whole&&Number(people)>1?`(ceil(${originalTotal}/${people})*${people})`:originalTotal,tip=whole&&Number(people)>1?`(${originalTip}+${total}-${originalTotal})`:originalTip,share=`floor(${total}*100/${people})/100`,extras=`mod(${total}*100,${people})`;
-  const tipPercent=method==='amount'||whole&&Number(people)>1?(Number(bill)===0?'0':`(${tip})/(${bill})*100`):percent;
+  const cents=value=>`floor((${value})*100+1/2)/100`,originalTip=cents(method==='amount'?fixed:`(${bill})*(${percent})/100`),taxAmount=cents(`(${bill})*(${tax})/100`),originalTotal=`(${cents(bill)}+${originalTip}+${taxAmount})`,total=whole?`(ceil(${originalTotal}/${people})*${people})`:originalTotal,tip=whole?`(${originalTip}+${total}-${originalTotal})`:originalTip,share=`floor(${total}*100/${people})/100`,extras=`mod(${total}*100,${people})`;
+  const tipPercent=method==='amount'||whole?(Number(bill)===0?'0':`(${tip})/(${bill})*100`):percent;
   return `[${tip},${taxAmount},${total},${share},${share}+1/100,${extras},${tipPercent}]`;
 }
 export function moneyResult(result,people=2){

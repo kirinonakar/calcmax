@@ -58,7 +58,7 @@ private fun displayAmount(value:BigDecimal)=value.setScale(6,RoundingMode.HALF_E
         }
         result.getOrNull()?.let {r->
             val implied=runCatching{
-                if(tipIsAmount||whole&&people.toInt()>1)Money.impliedTipPercent(decimalInput(bill),r.tip)?.setScale(2,RoundingMode.HALF_UP)?.stripTrailingZeros()
+                if(tipIsAmount||whole)Money.impliedTipPercent(decimalInput(bill),r.tip)?.setScale(2,RoundingMode.HALF_UP)?.stripTrailingZeros()
                 else decimalInput(percent).stripTrailingZeros()
             }.getOrNull()
             Text("${if(isKorean())"합계" else "Total"}  ${Money.format(r.total)}",style=MaterialTheme.typography.headlineMedium)

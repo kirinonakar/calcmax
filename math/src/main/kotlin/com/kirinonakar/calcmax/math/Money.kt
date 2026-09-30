@@ -20,7 +20,7 @@ object Money {
         val originalTip=tipAmount.setScale(places,RoundingMode.HALF_UP)
         val tax=bill.multiply(taxPercent).divide(BigDecimal(100)).setScale(places,RoundingMode.HALF_UP)
         val originalTotal=bill.setScale(places,RoundingMode.HALF_UP)+originalTip+tax
-        val total=if(whole&&people>1)originalTotal.divide(BigDecimal(people),0,RoundingMode.CEILING).multiply(BigDecimal(people)).setScale(places)else originalTotal
+        val total=if(whole)originalTotal.divide(BigDecimal(people),0,RoundingMode.CEILING).multiply(BigDecimal(people)).setScale(places)else originalTotal
         val tip=originalTip+total-originalTotal
         val minor=total.movePointRight(places).toBigIntegerExact()
         val division=minor.divideAndRemainder(people.toBigInteger())

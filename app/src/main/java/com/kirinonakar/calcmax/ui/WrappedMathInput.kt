@@ -53,7 +53,8 @@ internal fun inputMathParts(tree:JSONObject?,source:String):List<JSONObject> {
                     // The unwrapped row already lives inside the input's horizontal scroller.
                     val viewport=if(viewportWidth==androidx.compose.ui.unit.Dp.Infinity)Modifier else Modifier.widthIn(max=viewportWidth).horizontalScroll(rememberScrollState())
                     Box(viewport.alignBy(MathAxis).testTag("input-math-part-$index")) {
-                        MathNode(part,size,select=select,selection=selection)
+                        // Outer empty input and pending infix operands show only the caret.
+                        MathNode(part,size,select=select,selection=selection,operandHole=true)
                     }
                 }
             }

@@ -44,17 +44,26 @@ test('actual CPython WASM reuses the Android engine across workspaces',async()=>
   const zeroBill=moneyResult(evaluate(tipCommand({bill:'0',fixed:'1',method:'amount',people:'1'})),1);
   assert.equal(Number(zeroBill.tree.args.at(-1).args[0].args[0].value),0,'zero bill does not divide by zero');
   for(const [percent,expected] of [['15','15.00'],['15.126','15.13'],['2.675','2.68'],['99.999','100.00']]){
-    const result=moneyResult(evaluate(tipCommand({bill:'100',percent,people:'1'}),{precision:3}));
+    const result=moneyResult(evaluate(tipCommand({bill:'100',percent,people:'1',whole:false}),{precision:3}));
     assert.equal(result.tree.args.at(-1).args[0].args[0].value,expected,'percentage rounds exact values to two places');
   }
   for(const [options,expected] of [
     [{bill:'100',people:'2'},'16.00'],[{bill:'100',people:'3'},'17.00'],
     [{bill:'100',people:'3',whole:false},'15.00'],[{bill:'100',people:'1'},'15.00'],
     [{bill:'100',people:'2',tax:'10'},'16.00'],[{bill:'99',people:'3'},'15.15'],
-    [{bill:'0',people:'3'},'0.00']
+    [{bill:'0',people:'3'},'0.00'],[{bill:'19.99',people:'1',tax:'8'},'17.06']
   ]){
     const result=moneyResult(evaluate(tipCommand(options)),Number(options.people));
     assert.equal(result.tree.args.at(-1).args[0].args[0].value,expected,'Tip % uses the adjusted tip, excluding tax');
+  }
+  for(const method of ['percent','amount'])for(const whole of [true,false]){
+    const result=moneyResult(evaluate(tipCommand({bill:'19.99',percent:'15',fixed:'2.50',tax:'8',people:'1',method,whole})),1),rows=result.tree.args;
+    const total=whole?25:method==='amount'?24.09:24.59,tip=whole?3.41:method==='amount'?2.50:3;
+    assert.equal(Number(rows[0].args[0].value),tip,'single-person rounding adjusts the tip');
+    assert.equal(Number(rows[1].args[0].value),1.60,'single-person rounding preserves tax');
+    assert.equal(Number(rows[2].args[0].value),total);
+    assert.equal(Number(rows[3].args[0].value),total,'one person pays the full total');
+    if(whole)assert.equal(rows.at(-1).args[0].args[0].value,'17.06','one person sees the adjusted tip percentage');
   }
   const previous=evaluate('1/7');
   assert.equal(evaluate('Ans*7',{variables:{Ans:previous.resultAst}}).exact,'1');

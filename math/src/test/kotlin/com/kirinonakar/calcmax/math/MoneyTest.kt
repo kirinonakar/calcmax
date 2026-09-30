@@ -28,7 +28,7 @@ class MoneyTest {
         assertEquals("123.45",Money.format(BigDecimal("123.4500")))
     }
     @Test fun invalidAmountsAreRejected(){assertThrows(IllegalArgumentException::class.java){Money.tip(BigDecimal.TEN,BigDecimal.TEN,BigDecimal.ZERO,0)}}
-    @Test fun halfCentRoundsUp(){assertEquals(BigDecimal("0.11"),Money.tip(BigDecimal("1.05"),BigDecimal.TEN,BigDecimal.ZERO,1).tip)}
+    @Test fun halfCentRoundsUp(){assertEquals(BigDecimal("0.11"),Money.tip(BigDecimal("1.05"),BigDecimal.TEN,BigDecimal.ZERO,1,whole=false).tip)}
     @Test fun wholeSharesIncreaseOnlyTheTip() {
         val r=Money.tip(BigDecimal("100"),BigDecimal("15"),BigDecimal.ZERO,2)
         assertEquals(BigDecimal("16.00"),r.tip)
@@ -37,7 +37,7 @@ class MoneyTest {
         assertEquals(0,r.extraPeople)
         assertEquals(BigDecimal("16"),Money.impliedTipPercent(BigDecimal("100"),r.tip))
     }
-    @Test fun wholeFixedTipsPreserveTaxAndSinglePersonAmounts() {
+    @Test fun wholeFixedTipsPreserveTax() {
         val r=Money.tipFromAmount(BigDecimal("19.99"),BigDecimal("2.50"),BigDecimal("8"),3)
         assertEquals(BigDecimal("1.60"),r.tax)
         assertEquals(BigDecimal("5.41"),r.tip)
@@ -45,11 +45,30 @@ class MoneyTest {
         assertEquals(BigDecimal("9.00"),r.share)
         assertEquals(0,r.extraPeople)
         val single=Money.tipFromAmount(BigDecimal("19.99"),BigDecimal("2.50"),BigDecimal("8"),1)
-        assertEquals(BigDecimal("24.09"),single.total)
-        assertEquals(BigDecimal("2.50"),single.tip)
+        assertEquals(BigDecimal("25.00"),single.total)
+        assertEquals(BigDecimal("25.00"),single.share)
+        assertEquals(BigDecimal("3.41"),single.tip)
+        assertEquals(BigDecimal("1.60"),single.tax)
+        assertEquals(0,single.extraPeople)
         val exact=Money.tip(BigDecimal("100"),BigDecimal("20"),BigDecimal.ZERO,3)
         assertEquals(BigDecimal("20.00"),exact.tip)
         val zero=Money.tip(BigDecimal.ZERO,BigDecimal.ZERO,BigDecimal.ZERO,999)
         assertEquals(BigDecimal("0.00"),zero.share)
+    }
+    @Test fun singlePersonWholeAmountsApplyToBothTipMethods() {
+        for(whole in listOf(true,false)) {
+            val percent=Money.tip(BigDecimal("19.99"),BigDecimal("15"),BigDecimal("8"),1,whole=whole)
+            val fixed=Money.tipFromAmount(BigDecimal("19.99"),BigDecimal("2.50"),BigDecimal("8"),1,whole=whole)
+            assertEquals(BigDecimal(if(whole)"25.00" else "24.59"),percent.total)
+            assertEquals(BigDecimal(if(whole)"3.41" else "3.00"),percent.tip)
+            assertEquals(BigDecimal(if(whole)"25.00" else "24.09"),fixed.total)
+            assertEquals(BigDecimal(if(whole)"3.41" else "2.50"),fixed.tip)
+            for(result in listOf(percent,fixed)) {
+                assertEquals(result.total,result.share)
+                assertEquals(BigDecimal("1.60"),result.tax)
+                assertEquals(0,result.extraPeople)
+                assertEquals(result.total,BigDecimal("19.99")+result.tip+result.tax)
+            }
+        }
     }
 }
