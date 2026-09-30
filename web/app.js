@@ -22,13 +22,14 @@ setLanguage(state.language);$('language').value=state.language;$('theme').value=
 translateDOM();
 systemTheme.addEventListener('change',()=>applyTheme(state.theme,systemTheme.matches));
 $('theme').onchange=()=>{state.theme=value('theme');applyTheme(state.theme,systemTheme.matches);persist();};
-$('language').onchange=()=>{state.language=value('language');state.languageChosen=true;setLanguage(state.language);translateDOM();renderTape();if(['matrix','vector'].includes(value('mode')))renderMatrix();persist();if($('dialog').open)$('dialog').close();};
+$('language').onchange=()=>{state.language=value('language');state.languageChosen=true;setLanguage(state.language);translateDOM();renderNotation();renderTape();if(['matrix','vector'].includes(value('mode')))renderMatrix();persist();if($('dialog').open)$('dialog').close();};
 state.secondKeys=!!saved.secondKeys;
 state.tapeClearedAt=Number(saved.tapeClearedAt)||0;
-let lastResult=null,decimal=false,shift=false,alpha=false,hyperbolic=false,typing=false,overwrite=false,committed=false,screenExpanded=false,engineering=false,grouping=false,mixed=false,busy=false,catalog={},graphParameters={},lastGraph=null,lastGraphBounds=null,storageWarning=false;
+state.resultDisplayMode=['eng','sci'].includes(saved.resultDisplayMode)?saved.resultDisplayMode:'off';
+let lastResult=null,decimal=false,shift=false,alpha=false,hyperbolic=false,typing=false,overwrite=false,committed=false,screenExpanded=false,grouping=false,mixed=false,busy=false,catalog={},graphParameters={},lastGraph=null,lastGraphBounds=null,storageWarning=false;
 let calcSession=null;
 let activeHistoryEntry=null,inputAnswer=null;
-const tapeFollow=followTape($('calculation-tape'));
+const tapeFollow=followTape($('calculation-tape'),$('tape-active'));
 const expressionUndo=[];
 const undoStack=()=>calcSession?.undo||expressionUndo;
 for(const [id,setting] of Object.entries(state.fields)) {
@@ -53,7 +54,7 @@ $('dialog-close').onclick=()=>$('dialog').close();
 $('dialog').addEventListener('click',event=>{if(event.target===$('dialog')){const r=$('dialog').getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)$('dialog').close();}});
 function requestOptions() { return {angle:value('angle'),precision:state.precision,displayDigits:state.digits,variables:state.variables,functions:state.functions}; }
 const engine=new EngineClient();
-function updateButtons() { document.querySelectorAll('[data-run],.key[data-evaluate]').forEach(button=>button.disabled=!engine.ready||busy);document.querySelectorAll('.tape-expression').forEach(button=>button.disabled=busy||!!calcSession);$('stop').disabled=!busy;$('stop').hidden=!busy;$('expression').readOnly=!typing||!!calcSession&&busy;$('retry').hidden=engine.ready||busy; }
+function updateButtons() { document.querySelectorAll('[data-run],.key[data-evaluate]').forEach(button=>button.disabled=!engine.ready||busy);document.querySelectorAll('.tape-expression').forEach(button=>button.disabled=busy||!!calcSession);$('stop').disabled=!busy;const scientific=value('mode')==='scientific';$('stop').hidden=!scientific&&!busy;$('stop').style.visibility=scientific&&!busy?'hidden':'';$('expression').readOnly=!typing||!!calcSession&&busy;$('retry').hidden=engine.ready||busy; }
 document.documentElement.dataset.busy='false';document.documentElement.dataset.engine='loading';document.documentElement.dataset.typing='false';
 engine.addEventListener('status',event=>{setText($('status'),event.detail);document.documentElement.dataset.engine=engine.ready?'ready':'loading';updateButtons();});
 engine.addEventListener('ready',()=>{document.documentElement.dataset.engine='ready';updateButtons();});
@@ -71,7 +72,7 @@ function showResult(result,source='') {
   renderTape();tapeFollow.latest();
   persist();
 }
-function renderTape(){renderPreviousCalculations($('tape-history'),previousCalculations(state.history,activeHistoryEntry,state.tapeClearedAt),{decimal,digits:state.digits,engineering,grouping,reuseDisabled:busy||!!calcSession,reuse:reuseCalculation});}
+function renderTape(){renderPreviousCalculations($('tape-history'),previousCalculations(state.history,activeHistoryEntry,state.tapeClearedAt),{decimal,digits:state.digits,notation:state.resultDisplayMode,grouping,reuseDisabled:busy||!!calcSession,reuse:reuseCalculation});}
 function reuseCalculation(entry){
   if(busy||calcSession)return;
   expressionUndo.push(value('expression'));committed=false;lastResult=null;activeHistoryEntry=null;inputAnswer=entry.inputAns||null;
@@ -84,13 +85,13 @@ function evaluationTree(source){
 }
 function renderResult() {
   if(!lastResult){renderTape();return;}
-  let tree=decimal||engineering ? lastResult.decimalTree||lastResult.tree : lastResult.tree;
+  let tree=decimal ? lastResult.decimalTree||lastResult.tree : lastResult.tree;
   if(mixed&&!decimal&&tree?.kind==='fraction'){
     try{const numerator=BigInt(tree.args[0].value),denominator=BigInt(tree.args[1].value),whole=numerator/denominator,remainder=(numerator<0n?-numerator:numerator)%denominator;if(whole)tree={kind:'mixed',args:[{kind:'number',value:whole.toString()},{kind:'fraction',args:[{kind:'number',value:remainder.toString()},{kind:'number',value:denominator.toString()}]}]};}catch{}
   }
   $('answer').replaceChildren();
   const text=(decimal ? lastResult.decimal : lastResult.exact)||'';
-  if(tree && text.length<10000 && !text.includes('\n')) $('answer').append(mathDisplay(tree,state.digits,decimal||lastResult.approximate||engineering,{engineering,grouping}));
+  if(tree && text.length<10000 && !text.includes('\n')) $('answer').append(mathDisplay(tree,state.digits,decimal||lastResult.approximate,{notation:state.resultDisplayMode,grouping}));
   else $('answer').textContent=text;
   const notes=[lastResult.note,...(lastResult.conditions||[]),lastResult.calcValues?Object.entries(lastResult.calcValues).map(([name,n])=>`${name} = ${n}`).join(', '):''].filter(Boolean).join('\n');
   if(notes)$('note').textContent=notes;else setText($('note'),'Next input starts a new calculation');
@@ -111,13 +112,20 @@ function preview() {
   persist();
 }
 $('expression-preview').onclick=event=>{const target=event.target.closest('[data-source-start]');if(target){const field=$('expression');field.setSelectionRange(Number(target.getAttribute('data-source-start')),Number(target.getAttribute('data-source-end')));$('expression-preview').querySelectorAll('.selected').forEach(el=>el.classList.remove('selected'));target.classList.add('selected');}else{$('expression').setSelectionRange(value('expression').length,value('expression').length);}};
-function insert(text,cursor=null) {
+function insert(text,cursor=null,{factor=false}={}) {
   if(calcSession&&busy)return;
   const field=$('expression'),undo=undoStack();undo.push(field.value);if(undo.length>100)undo.shift();
   if(committed){inputAnswer=null;field.value=/^[+\-*/÷^%!∠]/.test(text)?'Ans':'';field.setSelectionRange(field.value.length,field.value.length);committed=false;$('commit-indicator').textContent='';}
   const start=field.selectionStart,end=overwrite&&field.selectionEnd===start?Math.min(field.value.length,start+text.length):field.selectionEnd;
-  field.setRangeText(text,start,end,'end');
-  if(cursor!==null)field.setSelectionRange(start+cursor,start+cursor);
+  let prefix='',suffix='';
+  // Keypad operands are separate factors; typed/pasted names remain intact.
+  if(factor&&(start===end||/^[\p{L}_][\p{L}\p{N}_]*$/u.test(text))){
+    const before=field.value[start-1]||'',after=field.value[end]||'';
+    if(/[\p{L}\p{N}_.)\]}!%]/u.test(before)&&(/^[\p{L}_(]/u.test(text)||/^[0-9.]/.test(text)&&/[\p{L}_)\]}!%]/u.test(before)))prefix='*';
+    if(/[\p{L}_]/u.test(after)&&/[\p{L}\p{N}_)\]}!%]$/u.test(text)||/[0-9]/.test(after)&&/[\p{L}_)\]}!%]$/u.test(text))suffix='*';
+  }
+  field.setRangeText(prefix+text+suffix,start,end,'end');
+  const position=start+prefix.length+(cursor??text.length);field.setSelectionRange(position,position);
   if(typing)field.focus({preventScroll:true});preview();
 }
 function mode(mode) {
@@ -126,8 +134,9 @@ function mode(mode) {
   const panel=$('answer').closest('.answer-panel'),actions=$('exact-toggle').parentElement;
   if(mode==='scientific'){$('tape-active').append(panel);$('calculator-display').append(actions);}
   else{panel.append(actions);document.querySelector('main').insertBefore(panel,document.querySelector('.keypad-workspace'));}
-  if(mode==='scientific')$('exact-toggle').parentElement.insertBefore($('stop'),$('engineering-toggle'));
+  if(mode==='scientific'){const edits=$('calculator-display').querySelector('.edit-actions');if($('stop').parentElement!==edits)edits.insertBefore($('stop'),edits.firstChild);}
   else document.querySelector('.runtime-bar').append($('stop'));
+  updateButtons();
   document.querySelectorAll('[data-mode]').forEach(section=>section.hidden=!section.dataset.mode.split(' ').includes(mode));
   if(['matrix','vector'].includes(mode))renderMatrix();
   if(mode==='scientific'){renderTape();tapeFollow.latest();}
@@ -147,10 +156,12 @@ $('typing-toggle').onclick=()=>{typing=!typing;document.documentElement.dataset.
 $('insert-mode').onclick=()=>{overwrite=!overwrite;$('insert-mode').textContent=overwrite?'OVR':'INS';};
 $('paste').onclick=async()=>{try{insert(latexInput(await navigator.clipboard.readText()));}catch{toast('붙여넣기를 허용하거나 Ctrl+V를 사용해 주세요.');}};
 $('answer-copy').onclick=()=>lastResult&&clipboard(decimal?lastResult.decimal:lastResult.exact);
-$('answer-insert').onclick=()=>{if(state.variables.Ans){mode('scientific');insert('Ans');}else toast('먼저 재사용 가능한 결과를 계산해 주세요.');};
+$('answer-insert').onclick=()=>{if(state.variables.Ans){mode('scientific');insert('Ans',null,{factor:true});}else toast('먼저 재사용 가능한 결과를 계산해 주세요.');};
 $('exact-toggle').onclick=()=>{decimal=!decimal;$('exact-toggle').textContent=decimal?'≈ Decimal':'Exact';renderResult();};
 $('screen-toggle').onclick=()=>{screenExpanded=!screenExpanded;document.documentElement.dataset.screenExpanded=String(screenExpanded);$('screen-toggle').classList.toggle('active',screenExpanded);};
-$('engineering-toggle').onclick=()=>{engineering=!engineering;$('engineering-toggle').classList.toggle('active',engineering);renderResult();};
+function renderNotation(){const mode=state.resultDisplayMode,button=$('engineering-toggle');button.textContent=mode==='sci'?'SCI':'ENG';button.classList.toggle('active',mode!=='off');button.dataset.notation=mode;button.setAttribute('aria-label',`${t('Result notation')}: ${mode.toUpperCase()}`);}
+$('engineering-toggle').onclick=()=>{state.resultDisplayMode={off:'eng',eng:'sci',sci:'off'}[state.resultDisplayMode];renderNotation();renderResult();persist();};
+renderNotation();
 $('grouping-toggle').onclick=()=>{grouping=!grouping;$('grouping-toggle').classList.toggle('active',grouping);renderResult();};
 document.querySelectorAll('[data-shortcut]').forEach(button=>button.onclick=()=>{mode('scientific');insert(button.dataset.shortcut,button.dataset.shortcut.indexOf('(')+1);});
 function modeDialog(){const choices=element('div','','mode-choices');for(const option of $('mode').options)choices.append(control(option.textContent,()=>{mode(option.value);$('dialog').close();}));openDialog('Workspace',choices);}
@@ -240,7 +251,7 @@ async function performKey(input){
   else {
     // Parenthesis templates place the cursor in their first empty argument.
     if(/^\^/.test(input)&&value('expression')&&!committed){$('expression').setSelectionRange(value('expression').length,value('expression').length);}
-    insert(input,input.includes('(')?input.indexOf('(')+1:null);
+    insert(input,input.includes('(')?input.indexOf('(')+1:null,{factor:true});
   }
   shift=false;alpha=false;hyperbolic=false;renderKeypad();
 }

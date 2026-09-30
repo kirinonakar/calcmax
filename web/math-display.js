@@ -9,10 +9,10 @@ const operator = value => el('mo',[],value);
 const row = children => el('mrow',children);
 const join = (nodes,separator) => nodes.flatMap((n,i) => i ? [operator(separator),n] : [n]);
 function fenced(children,open='(',close=')') { return row([operator(open),...children,operator(close)]); }
-export function mathDisplay(tree,digits=10,decimal=false,{engineering=false,grouping=false}={}) {
-  function draw(t) {
+export function mathDisplay(tree,digits=10,decimal=false,{notation='off',grouping=false}={}) {
+  function draw(t,allowNotation) {
     if (!t) return el('mtext');
-    const args = (t.args || []).map(render), value = t.value || '';
+    const args = (t.args || []).map(child=>render(child,allowNotation&&t.kind==='unary')), value = t.value || '';
     switch(t.kind) {
       case 'fraction': return el('mfrac',args);
       case 'root': return el('msqrt',args);
@@ -30,7 +30,7 @@ export function mathDisplay(tree,digits=10,decimal=false,{engineering=false,grou
       case 'unary': return row([operator(value),...args]);
       case 'relation': return row([args[0],operator(value),args[1]]);
       case 'function': return row([el('mi',[],value),fenced(join(args,','))]);
-      case 'matrix': return fenced([el('mtable',(t.args || []).map(r => el('mtr',(r.args || []).map(c => el('mtd',[render(c)])))))],'[',']');
+      case 'matrix': return fenced([el('mtable',(t.args || []).map(r => el('mtr',(r.args || []).map(c => el('mtd',[render(c,false)])))))],'[',']');
       case 'rows': return el('mtable',args.map(a => el('mtr',[el('mtd',[a])])));
       case 'row': return row([el('mtext',[],`${value}: `),...args]);
       case 'list': case 'set': case 'tuple': return fenced(join(args,','),t.kind === 'set' ? '{' : t.kind==='tuple'?'(':'[',t.kind === 'set' ? '}' : t.kind==='tuple'?')':']');
@@ -39,10 +39,10 @@ export function mathDisplay(tree,digits=10,decimal=false,{engineering=false,grou
       case 'symbol': return el('mi',[],value);
       case 'number': case 'text': {
         let shown = value;
-        if(engineering && /^-?\d+(?:\.\d+)?(?:e[+-]?\d+)?$/i.test(value)&&/[1-9]/.test(value.split(/e/i)[0])) {
-          const [mantissa,exponent='0']=value.replace(/^-/,'').split(/e/i),[whole,fraction='']=mantissa.split('.'),combined=whole+fraction,first=combined.search(/[1-9]/),power=whole.length-first-1+Number(exponent),engPower=Math.floor(power/3)*3,places=power-engPower+1,normalized=combined.slice(first).padEnd(places,'0');
+        if(allowNotation&&notation!=='off'&&/^-?\d+(?:\.\d+)?(?:e[+-]?\d+)?$/i.test(value)&&/[1-9]/.test(value.split(/e/i)[0])) {
+          const [mantissa,exponent='0']=value.replace(/^-/,'').split(/e/i),[whole,fraction='']=mantissa.split('.'),combined=whole+fraction,first=combined.search(/[1-9]/),power=whole.length-first-1+Number(exponent),engPower=notation==='eng'?Math.floor(power/3)*3:power,places=power-engPower+1,normalized=combined.slice(first).padEnd(places,'0');
           const mantissaText=(value.startsWith('-')?'-':'')+normalized.slice(0,places)+(normalized.length>places?'.'+normalized.slice(places):'');
-          const rendered=mathDisplay({kind:'number',value:mantissaText},digits,true).firstChild;
+          const rendered=mathDisplay({kind:'number',value:mantissaText},digits,true,{grouping}).firstChild;
           return engPower?row([rendered,operator('×'),el('msup',[el('mn',[],'10'),el('mn',[],String(engPower))])]):rendered;
         }
         if (decimal && /^-?\d+\.\d+(?:e[+-]?\d+)?$/i.test(value)) {
@@ -66,7 +66,7 @@ export function mathDisplay(tree,digits=10,decimal=false,{engineering=false,grou
       default: return el('mtext',[],value);
     }
   }
-  function render(t){const result=draw(t);if(t?.start!==undefined){result.setAttribute('data-source-start',String(t.start));result.setAttribute('data-source-end',String(t.end));}return result;}
+  function render(t,allowNotation=true){const result=draw(t,allowNotation);if(t?.start!==undefined){result.setAttribute('data-source-start',String(t.start));result.setAttribute('data-source-end',String(t.end));}return result;}
   const math = el('math',[render(tree)]);
   math.setAttribute('display','block');
   return math;

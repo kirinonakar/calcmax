@@ -23,6 +23,7 @@
 :root[data-workspace="scientific"] .workspace[data-mode="scientific"]:not(.keypad-workspace){grid-row:1;min-height:0;overflow:hidden;padding:0 14px;display:grid;grid-template-rows:28px minmax(0,1fr)}
 :root[data-workspace="scientific"] .edit-actions{height:28px;min-width:0;margin:0;padding:0;align-items:center;gap:1px;overflow-x:auto;white-space:nowrap}
 :root[data-workspace="scientific"] .edit-actions button{min-width:0;flex-shrink:0;font-size:11px;padding:5px 8px}
+:root[data-workspace="scientific"] .edit-actions #stop{flex:0 0 44px}
 :root[data-workspace="scientific"] #expression{display:none;resize:none;height:100%;min-height:0;padding:4px 0;font-size:clamp(16px,3vw,28px);line-height:1.35;overflow:auto}
 :root[data-workspace="scientific"] .expression-preview{display:flex;align-items:center;min-width:0;min-height:0;overflow:auto;padding:4px 0;font-family:"Cambria Math",Cambria,serif;font-size:clamp(20px,4vw,32px);white-space:pre-wrap;overflow-wrap:anywhere;cursor:text}
 :root[data-workspace="scientific"] .expression-preview math{margin:0;flex-shrink:0}
@@ -37,11 +38,12 @@
 :root[data-workspace="scientific"] #note{max-height:16px;overflow:auto;white-space:nowrap;font-size:10px;line-height:16px;margin:0}
 :root[data-workspace="scientific"] .answer-toolbar{height:30px;min-width:0;gap:6px;align-items:center;scrollbar-width:none}
 :root[data-workspace="scientific"] .answer-toolbar button{font-size:11px;padding:5px 9px}
+.answer-toolbar #engineering-toggle:not(.active){color:var(--muted);opacity:.45}
 :root[data-workspace="scientific"] .keypad-workspace{grid-row:3;min-height:0;min-width:0;overflow:hidden;padding:4px 8px;background:var(--bg);container-type:size}
 :root[data-workspace="scientific"] .calculation-display{grid-column:1;grid-row:1 / span 2;min-height:0;min-width:0;overflow:hidden;display:grid;grid-template-rows:28px minmax(0,1fr) 30px;padding:0 14px}
 .calculation-tape{min-height:0;min-width:0;overflow:auto;overscroll-behavior-y:contain;display:flex;flex-direction:column;scrollbar-width:thin;overflow-anchor:none}
 .tape-history{flex:none;min-width:0}
-.tape-active{flex:none;min-width:0;min-height:100%;display:flex;flex-direction:column;justify-content:flex-end}
+.tape-active{flex:none;min-width:0;min-height:100%;display:flex;flex-direction:column;justify-content:flex-start}
 :root[data-workspace="scientific"] .calculation-display .workspace[data-mode="scientific"]:not(.keypad-workspace){display:block;grid-row:auto;overflow:visible;padding:0;flex:none}
 :root[data-workspace="scientific"] .calculation-display .expression-preview{min-height:60px;overflow-x:auto;align-items:center}
 :root[data-workspace="scientific"] .calculation-display #expression{height:64px;min-height:64px}
@@ -64,7 +66,7 @@
 .keypad .key:active .key-face{filter:brightness(.86)}
 .keypad .key-hints{flex:0 0 25%;max-height:15px;min-height:0;overflow:hidden;white-space:nowrap;text-align:center;font-size:clamp(6px,1.8cqh,10px);line-height:1.5;color:var(--gold);font-weight:400}
 .keypad .alpha-legend{color:var(--alpha)}
-.keypad .key-face{display:flex;flex:1;min-height:0;min-width:0;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:7px 7px 4px 4px;background:var(--key);font-size:clamp(10px,3.5cqh,24px);line-height:1;font-weight:600;overflow:hidden;white-space:nowrap}
+.keypad .key .key-face{display:flex;flex:1;min-height:0;min-width:0;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:7px 7px 4px 4px;background:var(--key);font-size:clamp(10px,3.5cqh,24px);line-height:1;font-weight:600;overflow:hidden;white-space:nowrap}
 .keypad .numeric .key-face{background:var(--number);font-size:clamp(12px,4.8cqh,24px)}
 .keypad .danger .key-face{background:var(--lime);color:#18210e;font-size:clamp(12px,4.8cqh,24px)}
 .keypad .action .key-face{background:var(--operator);font-size:clamp(9px,2.6cqh,18px)}
@@ -78,8 +80,9 @@
 [data-theme="dark"] .keypad .utility:not([data-input="SECOND"]) .key-face{color:var(--panel)}
 .direction-pad{grid-column:3 / span 2;grid-row:1 / span 2;position:relative;min-height:0;min-width:0}
 .direction-pad::before{content:"";position:absolute;inset:6%;border:1px solid var(--line);border-radius:50%;background:var(--key)}
-.direction-key{position:absolute;padding:0;border:1px solid var(--line);border-radius:35%;background:linear-gradient(var(--number),var(--key));color:var(--ink);touch-action:manipulation;user-select:none}
-.direction-key .key-hints{display:none}.direction-key .key-face{font-size:12px}
+.direction-key,.direction-key:hover{position:absolute;display:flex;align-items:center;justify-content:center;padding:0;border:1px solid var(--line);border-radius:35%;background:linear-gradient(var(--number),var(--key));color:var(--ink);overflow:hidden;touch-action:manipulation;user-select:none}
+.direction-key:hover{filter:brightness(.97)}.direction-key:active{filter:brightness(.86)}
+.direction-key .key-hints{display:none}.direction-key .key-face{font-size:12px;line-height:1}
 .direction-key.up,.direction-key.down{left:35%;width:30%;height:34%}
 .direction-key.up{top:0}.direction-key.down{bottom:0}
 .direction-key.left,.direction-key.right{top:34%;width:36%;height:32%}

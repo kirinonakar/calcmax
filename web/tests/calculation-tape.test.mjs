@@ -18,12 +18,15 @@ test('history displays exact math and reusable original formulas; old saved rows
   renderPreviousCalculations(container,entries,{decimal:true,reuse:()=>{}});assert.equal(container.querySelector('.tape-result').textContent,'0.5');
   dom.window.close();
 });
-test('newest-line scrolling waits for a touch gesture to finish and leaves normal browsing alone',()=>{
-  const dom=new JSDOM('<div></div>'),scroll=dom.window.document.querySelector('div');Object.defineProperty(scroll,'scrollHeight',{value:500});
-  let time=0,callback=null;const follow=followTape(scroll,{now:()=>time,schedule:fn=>{callback=fn;return 1;},cancel:()=>{callback=null;}});
-  follow.latest();assert.equal(scroll.scrollTop,500);
+test('current input stays at the top even with a tall result; history browsing waits for gestures',()=>{
+  const dom=new JSDOM('<div><section></section></div>'),scroll=dom.window.document.querySelector('div'),active=scroll.firstElementChild;
+  Object.defineProperty(scroll,'scrollHeight',{value:900});Object.defineProperty(scroll,'clientTop',{value:1});
+  let activeTop=0;scroll.getBoundingClientRect=()=>({top:20});active.getBoundingClientRect=()=>({top:21+activeTop-scroll.scrollTop});
+  let time=0,callback=null;const follow=followTape(scroll,active,{now:()=>time,schedule:fn=>{callback=fn;return 1;},cancel:()=>{callback=null;}});
+  follow.latest();assert.equal(scroll.scrollTop,0,'empty history starts at the very top');
+  activeTop=300;follow.latest();assert.equal(scroll.scrollTop,300,'history is above the current input, regardless of result height');
   scroll.scrollTop=100;scroll.dispatchEvent(new dom.window.Event('pointerdown'));follow.latest();assert.equal(scroll.scrollTop,100);
-  scroll.dispatchEvent(new dom.window.Event('pointerup'));time=160;callback();assert.equal(scroll.scrollTop,500);
+  scroll.dispatchEvent(new dom.window.Event('pointerup'));time=160;callback();assert.equal(scroll.scrollTop,300);
   scroll.scrollTop=80;scroll.dispatchEvent(new dom.window.Event('scroll'));assert.equal(scroll.scrollTop,80);
   follow.dispose();dom.window.close();
 });

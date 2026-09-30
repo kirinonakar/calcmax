@@ -55,6 +55,18 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
   assert.ok(Array.from($('keypad').querySelectorAll('.scientific-row')).every(row=>row.children.length===6));
   assert.equal($('keypad').querySelectorAll('button').length,50);
   assert.equal(window.getComputedStyle(document.body).overflow,'hidden');
+  assert.equal(window.getComputedStyle($('tape-active')).justifyContent,'flex-start','current input is aligned to the top');
+  const checkArrowFaces=()=>{
+    for(const button of $('keypad').querySelectorAll('.direction-key')){
+      const face=window.getComputedStyle(button.querySelector('.key-face'));
+      assert.equal(face.backgroundColor,'rgba(0, 0, 0, 0)','arrows have no inner horizontal background strip');
+      assert.ok(['','none'].includes(face.borderTopStyle),'arrows have no nested key-face border');
+      assert.equal(face.borderRadius,'','arrows do not inherit the rectangular key face');
+      assert.equal(window.getComputedStyle(button).justifyContent,'center');
+    }
+    assert.equal(window.getComputedStyle($('keypad').querySelector('.numeric .key-face')).borderRadius,'7px 7px 4px 4px','normal key faces retain their shape');
+  };
+  checkArrowFaces();
   const key=input=>$('keypad').querySelector(`[data-input="${input}"]`);
   key('SECOND').click();assert.equal($('keypad').dataset.page,'2');assert.ok(key('factor()'));assert.equal(key('SECOND').textContent,'1st');
   key('factor()').click();assert.equal($('expression').value,'factor()');assert.ok($('expression-preview').querySelector('.input-slot'));
@@ -72,14 +84,24 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
   while(walker.nextNode()){const node=walker.currentNode;if(!node.parentElement.closest('textarea,code,pre,#language')&&/[가-힣]/.test(node.textContent))untranslated.push(node.textContent);}
   assert.deepEqual(untranslated,[],'all static UI text is translated to English');
   change('theme','dark');assert.equal(document.documentElement.dataset.theme,'dark');
+  checkArrowFaces();
   change('theme','light');assert.equal(document.documentElement.dataset.theme,'light');
+  checkArrowFaces();
+  const toolbar=$('exact-toggle').parentElement,toolbarMarkup=toolbar.innerHTML,toolbarChildren=Array.from(toolbar.children);
+  toolbar.scrollLeft=25;
   $('expression').value='1/3+1/6';document.querySelector('.key[data-evaluate]').click();
   assert.equal(document.documentElement.dataset.busy,'true');
   assert.equal(window.getComputedStyle(document.querySelector('.runtime-bar')).display,'none','ready status must stay hidden while calculating');
-  assert.equal($('stop').closest('.answer-toolbar')!==null,true,'stop remains available without reopening the top status row');
+  assert.equal($('stop').closest('.edit-actions')!==null,true,'stop stays in a reserved editing-row slot');
+  assert.equal($('stop').hidden,false);assert.equal($('stop').style.visibility,'');
+  assert.equal(toolbar.innerHTML,toolbarMarkup,'busy state leaves the Exact toolbar unchanged');
   await waitFor(()=>$('answer').textContent==='12','exact fraction');
   assert.equal(area('main'),'main','calculation busy/idle transitions keep the same main track');
   assert.equal($('answer').querySelector('mfrac')?.children.length,2);
+  assert.equal(toolbar.innerHTML,toolbarMarkup,'completion leaves the Exact toolbar unchanged');
+  assert.deepEqual(Array.from(toolbar.children),toolbarChildren,'buttons retain their DOM identity');
+  assert.equal(toolbar.scrollLeft,25,'toolbar scrolling is preserved');
+  assert.equal($('stop').hidden,false);assert.equal($('stop').style.visibility,'hidden','idle stop keeps its space without shifting controls');
   $('exact-toggle').click();assert.match($('answer').textContent,/0.5/);$('exact-toggle').click();
   key('-').click();key('1').click();assert.equal($('expression').value,'Ans-1');key('=').click();await waitFor(()=>$('answer').textContent==='-12','subtraction continues the previous answer');
   change('mode','equation');document.querySelector('[data-run="equation"]').click();await waitFor(()=>$('answer').textContent.includes('2,3'),'equation solutions');
@@ -93,6 +115,28 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
   change('mode','tip');document.querySelector('[data-run="tip"]').click();await waitFor(()=>$('answer').querySelector('mfrac'),'tip exact result');assert.equal($('answer').textContent,'1152');
   change('mode','functions');$('function-save').click();change('mode','scientific');$('expression').value='f(3)';document.querySelector('.key[data-evaluate]').click();await waitFor(()=>$('answer').textContent==='10','saved function');
   const edit=source=>{$('expression').value=source;$('expression').dispatchEvent(new window.Event('input'));};
+  const shifted=input=>{key('SHIFT').click();key(input).click();};
+  key('AC').click();shifted('+');shifted('-');assert.equal($('expression').value,'pi*e');
+  key('=').click();await waitFor(()=>/(?:π|pi)/.test($('answer').textContent)&&!$('answer').querySelector('.error'),'pi times Euler constant');
+  edit('2');key('=').click();await waitFor(()=>$('answer').textContent==='2','Ans multiplication seed');
+  key('AC').click();key('Ans').click();shifted('+');assert.equal($('expression').value,'Ans*pi');
+  key('=').click();await waitFor(()=>$('answer').textContent.includes('2')&&/(?:π|pi)/.test($('answer').textContent),'Ans times pi uses the saved answer');
+  key('AC').click();shifted('-');shifted('+');assert.equal($('expression').value,'e*pi','reverse constant order also stays separate');
+  key('AC').click();shifted('+');key('2').click();assert.equal($('expression').value,'pi*2','digits cannot become part of a constant name');
+  key('AC').click();key('1').click();key('2').click();assert.equal($('expression').value,'12','numeric entry remains contiguous');
+  edit('pie');assert.equal($('expression-preview').querySelectorAll('mi').length,1,'typed variable names are preserved');
+  edit('pi');$('expression').setSelectionRange(0,0);key('Ans').click();assert.equal($('expression').value,'Ans*pi','insertion before a constant separates both operands');
+  assert.equal($('expression').selectionStart,3,'cursor stays after the inserted operand');
+  edit('pi');$('expression').setSelectionRange(0,2);shifted('-');assert.equal($('expression').value,'e','selected constant is replaced without an extra operator');
+  edit('12345');key('=').click();await waitFor(()=>$('answer').textContent==='12345','notation seed');
+  const notation=$('engineering-toggle');assert.equal(notation.dataset.notation,'off');
+  notation.click();assert.equal(notation.dataset.notation,'eng');assert.equal(notation.textContent,'ENG');assert.ok(notation.classList.contains('active'));assert.equal($('answer').textContent,'12.345×103');
+  notation.click();assert.equal(notation.dataset.notation,'sci');assert.equal(notation.textContent,'SCI');assert.equal($('answer').textContent,'1.2345×104');
+  assert.equal(JSON.parse(localStorage.getItem('calcmax-web-v1')).resultDisplayMode,'sci','notation preference is saved');
+  assert.match($('tape-history').lastElementChild.querySelector('.tape-result').textContent,/2.*(?:π|pi)/,'notation must not alter older exact symbolic expressions');
+  edit('1/3');key('=').click();await waitFor(()=>$('answer').querySelector('mfrac'),'SCI preserves the Exact fraction');
+  assert.equal($('tape-history').lastElementChild.querySelector('.tape-result').textContent,'1.2345×104','history uses the same notation');
+  notation.click();assert.equal(notation.dataset.notation,'off');assert.equal(notation.textContent,'ENG');assert.equal(notation.classList.contains('active'),false);assert.ok($('answer').querySelector('mfrac'));assert.equal($('tape-history').lastElementChild.querySelector('.tape-result').textContent,'12345');
   edit('x^2+y');key('CALC').click();assert.equal(document.documentElement.dataset.calcActive,'true');assert.equal($('commit-indicator').textContent,'x?');
   assert.equal(JSON.parse(localStorage.getItem('calcmax-web-v1')).fields.expression,'x^2+y','backup preserves the formula while entering CALC values');
   edit('z');key('CALC').click();await waitFor(()=>$('answer').textContent==='Enter a numeric value','CALC rejects symbolic values');assert.equal($('commit-indicator').textContent,'x?');
