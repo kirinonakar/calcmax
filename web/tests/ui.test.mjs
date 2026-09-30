@@ -103,6 +103,19 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
   edit('integrate(x^2,x,0,1)');key('CALC').click();assert.equal(document.documentElement.dataset.calcActive,undefined,'integration variable is not a CALC input');await waitFor(()=>$('answer').textContent==='13','CALC evaluates expressions with no free inputs');
   $('history-button').click();assert.ok($('dialog').open);assert.ok($('dialog-body').textContent.includes('f(3)'));$('dialog-close').click();
   $('catalog-button').click();assert.ok($('dialog-body').textContent.includes('sin()'));$('dialog-close').click();
+  for(let i=1;i<=12;i++){edit(`${i}+100`);key('=').click();await waitFor(()=>$('answer').textContent===String(i+100),`tape calculation ${i}`);}
+  const recent=Array.from($('tape-history').querySelectorAll('.tape-expression'));
+  assert.equal(recent.length,10,'only ten earlier calculations are on the inline tape');
+  assert.deepEqual(recent.map(button=>button.dataset.source),Array.from({length:10},(_,i)=>`${i+2}+100`));
+  assert.equal($('answer').closest('#tape-active')!==null,true);assert.equal($('keypad').closest('.keypad-workspace').parentElement.tagName,'MAIN','keypad is outside the scrolling display');
+  assert.equal(window.getComputedStyle($('calculation-tape')).overflow,'auto');
+  recent[0].click();assert.equal($('expression').value,'2+100');key('=').click();await waitFor(()=>$('answer').textContent==='102','reuse from the scrolling tape');
+  edit('10');key('=').click();await waitFor(()=>$('answer').textContent==='10','historical Ans seed');
+  edit('Ans+1');key('=').click();await waitFor(()=>$('answer').textContent==='11','historical Ans expression');
+  edit('1000');key('=').click();await waitFor(()=>$('answer').textContent==='1000','later Ans change');
+  Array.from($('tape-history').querySelectorAll('.tape-expression')).find(button=>button.dataset.source==='Ans+1').click();key('=').click();await waitFor(()=>$('answer').textContent==='11','reused Ans uses the original full-precision snapshot');
+  key('+').click();key('1').click();key('=').click();await waitFor(()=>$('answer').textContent==='12','new calculation resumes the current Ans');
+  edit('1/3');key('=').click();await waitFor(()=>$('answer').textContent==='13','fraction on tape');key('AC').click();$('exact-toggle').click();assert.equal($('tape-history').lastElementChild.querySelector('.tape-result').textContent,'0.3333333333','decimal toggle formats earlier entries even with an empty current answer');$('exact-toggle').click();
   // Non-cooperative Python cannot freeze the page; hard cancellation restores WASM.
   change('mode','python');assert.ok($('stop').closest('.runtime-bar'),'Python stop stays at the top of the workspace');$('python-source').value='while True: pass';document.querySelector('[data-run="python"]').click();await waitFor(()=>!$('stop').disabled,'script running');$('stop').click();await waitFor(()=>$('python-output').textContent.includes('cancelled'),'hard cancellation');await waitFor(()=>!document.querySelector('[data-run="python"]').disabled,'engine recovery');
   $('python-source').value='print(42)';document.querySelector('[data-run="python"]').click();await waitFor(()=>$('python-output').textContent==='42\n','post-cancellation script');

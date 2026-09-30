@@ -7,6 +7,7 @@ import {t,setLanguage,getLanguage,initialLanguage,translateDOM,applyTheme,setTex
 import {renderKeypad as buildKeypad} from './keypad.js';
 import {expressionDisplay} from './expression-display.js';
 import {calcVariables} from './calc-session.js';
+import {previousCalculations,renderPreviousCalculations,followTape} from './calculation-tape.js';
 
 const $=id=>document.getElementById(id);
 const value=id=>$(id).value;
@@ -21,10 +22,13 @@ setLanguage(state.language);$('language').value=state.language;$('theme').value=
 translateDOM();
 systemTheme.addEventListener('change',()=>applyTheme(state.theme,systemTheme.matches));
 $('theme').onchange=()=>{state.theme=value('theme');applyTheme(state.theme,systemTheme.matches);persist();};
-$('language').onchange=()=>{state.language=value('language');state.languageChosen=true;setLanguage(state.language);translateDOM();if(['matrix','vector'].includes(value('mode')))renderMatrix();persist();if($('dialog').open)$('dialog').close();};
+$('language').onchange=()=>{state.language=value('language');state.languageChosen=true;setLanguage(state.language);translateDOM();renderTape();if(['matrix','vector'].includes(value('mode')))renderMatrix();persist();if($('dialog').open)$('dialog').close();};
 state.secondKeys=!!saved.secondKeys;
+state.tapeClearedAt=Number(saved.tapeClearedAt)||0;
 let lastResult=null,decimal=false,shift=false,alpha=false,hyperbolic=false,typing=false,overwrite=false,committed=false,screenExpanded=false,engineering=false,grouping=false,mixed=false,busy=false,catalog={},graphParameters={},lastGraph=null,lastGraphBounds=null,storageWarning=false;
 let calcSession=null;
+let activeHistoryEntry=null,inputAnswer=null;
+const tapeFollow=followTape($('calculation-tape'));
 const expressionUndo=[];
 const undoStack=()=>calcSession?.undo||expressionUndo;
 for(const [id,setting] of Object.entries(state.fields)) {
@@ -49,7 +53,7 @@ $('dialog-close').onclick=()=>$('dialog').close();
 $('dialog').addEventListener('click',event=>{if(event.target===$('dialog')){const r=$('dialog').getBoundingClientRect();if(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)$('dialog').close();}});
 function requestOptions() { return {angle:value('angle'),precision:state.precision,displayDigits:state.digits,variables:state.variables,functions:state.functions}; }
 const engine=new EngineClient();
-function updateButtons() { document.querySelectorAll('[data-run],.key[data-evaluate]').forEach(button=>button.disabled=!engine.ready||busy);$('stop').disabled=!busy;$('stop').hidden=!busy;$('expression').readOnly=!typing||!!calcSession&&busy;$('retry').hidden=engine.ready||busy; }
+function updateButtons() { document.querySelectorAll('[data-run],.key[data-evaluate]').forEach(button=>button.disabled=!engine.ready||busy);document.querySelectorAll('.tape-expression').forEach(button=>button.disabled=busy||!!calcSession);$('stop').disabled=!busy;$('stop').hidden=!busy;$('expression').readOnly=!typing||!!calcSession&&busy;$('retry').hidden=engine.ready||busy; }
 document.documentElement.dataset.busy='false';document.documentElement.dataset.engine='loading';document.documentElement.dataset.typing='false';
 engine.addEventListener('status',event=>{setText($('status'),event.detail);document.documentElement.dataset.engine=engine.ready?'ready':'loading';updateButtons();});
 engine.addEventListener('ready',()=>{document.documentElement.dataset.engine='ready';updateButtons();});
@@ -58,15 +62,28 @@ $('stop').onclick=()=>engine.cancel();
 $('retry').onclick=()=>engine.cancel('계산 엔진을 재시작합니다.');
 function showResult(result,source='') {
   if(!result.ok){error(result.error||'계산 오류');return;}
+  const previousAnswer=value('mode')==='scientific'?(inputAnswer||state.variables.Ans):state.variables.Ans;
   lastResult=result;
   committed=true;$('commit-indicator').textContent='=';
   if(result.resultAst) state.variables.Ans=result.resultAst;
   renderResult();
-  if(source){state.history.unshift({source,exact:result.exact||'',decimal:result.decimal||'',resultAst:result.resultAst,time:Date.now(),star:false});state.history=state.history.slice(0,500);}
+  if(source){activeHistoryEntry={source,exact:result.exact||'',decimal:result.decimal||'',resultAst:result.resultAst,inputAns:previousAnswer,calcValues:result.calcValues,display:{tree:result.tree,decimalTree:result.decimalTree,approximate:result.approximate},time:Date.now(),star:false};state.history.unshift(activeHistoryEntry);state.history=state.history.slice(0,500);for(const entry of state.history.slice(11))delete entry.display;}
+  renderTape();tapeFollow.latest();
   persist();
 }
+function renderTape(){renderPreviousCalculations($('tape-history'),previousCalculations(state.history,activeHistoryEntry,state.tapeClearedAt),{decimal,digits:state.digits,engineering,grouping,reuseDisabled:busy||!!calcSession,reuse:reuseCalculation});}
+function reuseCalculation(entry){
+  if(busy||calcSession)return;
+  expressionUndo.push(value('expression'));committed=false;lastResult=null;activeHistoryEntry=null;inputAnswer=entry.inputAns||null;
+  mode('scientific');$('expression').value=entry.source;$('expression').setSelectionRange(entry.source.length,entry.source.length);$('commit-indicator').textContent='';$('answer').replaceChildren();$('note').textContent='';preview();
+}
+function evaluationTree(source){
+  const tree=parse(source);
+  function freeze(node){if(inputAnswer&&node.kind==='symbol'&&node.value==='Ans')return inputAnswer;return {...node,args:(node.args||[]).map(freeze)};}
+  return inputAnswer?freeze(tree):tree;
+}
 function renderResult() {
-  if(!lastResult) return;
+  if(!lastResult){renderTape();return;}
   let tree=decimal||engineering ? lastResult.decimalTree||lastResult.tree : lastResult.tree;
   if(mixed&&!decimal&&tree?.kind==='fraction'){
     try{const numerator=BigInt(tree.args[0].value),denominator=BigInt(tree.args[1].value),whole=numerator/denominator,remainder=(numerator<0n?-numerator:numerator)%denominator;if(whole)tree={kind:'mixed',args:[{kind:'number',value:whole.toString()},{kind:'fraction',args:[{kind:'number',value:remainder.toString()},{kind:'number',value:denominator.toString()}]}]};}catch{}
@@ -78,10 +95,11 @@ function renderResult() {
   const notes=[lastResult.note,...(lastResult.conditions||[]),lastResult.calcValues?Object.entries(lastResult.calcValues).map(([name,n])=>`${name} = ${n}`).join(', '):''].filter(Boolean).join('\n');
   if(notes)$('note').textContent=notes;else setText($('note'),'Next input starts a new calculation');
   $('answer-insert').disabled=!lastResult.resultAst;
+  renderTape();
 }
 async function evaluate(source=value('expression')) {
   if(calcSession){await submitCalcValue();return;}
-  try {const converted=latexInput(source);if(source===value('expression')&&converted!==source){$('expression').value=converted;preview();}const result=await engine.execute({...requestOptions(),tree:parse(converted)});showResult(result,converted);}
+  try {const converted=latexInput(source);if(source===value('expression')&&converted!==source){$('expression').value=converted;preview();}const result=await engine.execute({...requestOptions(),tree:evaluationTree(converted)});showResult(result,converted);}
   catch(exc){error(exc.message);}
 }
 function preview() {
@@ -89,13 +107,14 @@ function preview() {
   let target=display;
   if(calcSession){display.append(element('div',calcSession.source,'calc-source'));target=element('div','','calc-value');target.append(element('span',`${calcSession.names[calcSession.index]} = `));display.append(target);}
   if(source)try{target.append(expressionDisplay(source));}catch{target.append(document.createTextNode(source));}
+  renderTape();tapeFollow.latest();
   persist();
 }
 $('expression-preview').onclick=event=>{const target=event.target.closest('[data-source-start]');if(target){const field=$('expression');field.setSelectionRange(Number(target.getAttribute('data-source-start')),Number(target.getAttribute('data-source-end')));$('expression-preview').querySelectorAll('.selected').forEach(el=>el.classList.remove('selected'));target.classList.add('selected');}else{$('expression').setSelectionRange(value('expression').length,value('expression').length);}};
 function insert(text,cursor=null) {
   if(calcSession&&busy)return;
   const field=$('expression'),undo=undoStack();undo.push(field.value);if(undo.length>100)undo.shift();
-  if(committed){field.value=/^[+\-*/÷^%!∠]/.test(text)?'Ans':'';field.setSelectionRange(field.value.length,field.value.length);committed=false;$('commit-indicator').textContent='';}
+  if(committed){inputAnswer=null;field.value=/^[+\-*/÷^%!∠]/.test(text)?'Ans':'';field.setSelectionRange(field.value.length,field.value.length);committed=false;$('commit-indicator').textContent='';}
   const start=field.selectionStart,end=overwrite&&field.selectionEnd===start?Math.min(field.value.length,start+text.length):field.selectionEnd;
   field.setRangeText(text,start,end,'end');
   if(cursor!==null)field.setSelectionRange(start+cursor,start+cursor);
@@ -104,18 +123,22 @@ function insert(text,cursor=null) {
 function mode(mode) {
   $('mode').value=mode;
   document.documentElement.dataset.workspace=mode;
+  const panel=$('answer').closest('.answer-panel'),actions=$('exact-toggle').parentElement;
+  if(mode==='scientific'){$('tape-active').append(panel);$('calculator-display').append(actions);}
+  else{panel.append(actions);document.querySelector('main').insertBefore(panel,document.querySelector('.keypad-workspace'));}
   if(mode==='scientific')$('exact-toggle').parentElement.insertBefore($('stop'),$('engineering-toggle'));
   else document.querySelector('.runtime-bar').append($('stop'));
   document.querySelectorAll('[data-mode]').forEach(section=>section.hidden=!section.dataset.mode.split(' ').includes(mode));
   if(['matrix','vector'].includes(mode))renderMatrix();
+  if(mode==='scientific'){renderTape();tapeFollow.latest();}
   persist();
 }
 $('mode').onchange=()=>mode(value('mode'));
 $('angle').onchange=persist;
-$('expression').oninput=()=>{committed=false;if(!calcSession)$('commit-indicator').textContent='';preview();};
+$('expression').oninput=()=>{if(committed)inputAnswer=null;committed=false;if(!calcSession)$('commit-indicator').textContent='';preview();};
 $('expression').addEventListener('paste',event=>{const text=event.clipboardData?.getData('text');if(!text)return;try{const converted=latexInput(text);if(converted!==text){event.preventDefault();insert(converted);}}catch(exc){event.preventDefault();toast(exc.message);}});
 $('expression').addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();evaluate();}if(event.key==='Escape'){event.preventDefault();if(calcSession)cancelCalc();else if(busy)engine.cancel();else{$('expression').value='';preview();}}});
-$('clear').onclick=()=>{if(calcSession){cancelCalc();return;}expressionUndo.push(value('expression'));$('expression').value='';committed=false;lastResult=null;$('answer').replaceChildren();$('note').textContent='';$('commit-indicator').textContent='';preview();};
+$('clear').onclick=()=>{if(calcSession){cancelCalc();return;}expressionUndo.push(value('expression'));$('expression').value='';committed=false;lastResult=null;activeHistoryEntry=null;inputAnswer=null;$('answer').replaceChildren();$('note').textContent='';$('commit-indicator').textContent='';preview();};
 $('undo').onclick=()=>{const undo=undoStack();if(undo.length){$('expression').value=undo.pop();preview();}};
 async function clipboard(text) { try{await navigator.clipboard.writeText(text);toast('복사했습니다.');}catch{const field=element('textarea');field.value=text;openDialog('복사할 텍스트',field);field.select();} }
 $('copy').onclick=()=>{const f=$('expression');clipboard(f.value.slice(f.selectionStart,f.selectionEnd)||f.value);};
@@ -142,7 +165,7 @@ async function startCalc(){
   if(busy)return;
   if(calcSession){await submitCalcValue();return;}
   try{
-    const source=latexInput(value('expression')),tree=parse(source),names=calcVariables(tree,state.variables);
+    const source=latexInput(value('expression')),tree=evaluationTree(source),names=calcVariables(tree,state.variables);
     if(!names.length){await evaluate(source);return;}
     calcSession={source,tree,names,index:0,undo:[],values:{},previousResult:lastResult,previousCommitted:committed};
     document.documentElement.dataset.calcActive='true';lastResult=null;committed=false;$('answer').replaceChildren();$('expression').value='';calcPrompt();
@@ -190,7 +213,7 @@ async function performKey(input){
   else if(input==='MODE')modeDialog();
   else if(input==='RCL'||input==='STO'||input==='Clear')variablesDialog();
   else if(input==='AC')$('clear').click();
-  else if(input==='CLR ALL'){state.variables={};$('clear').click();persist();}
+  else if(input==='CLR ALL'){state.variables={};state.tapeClearedAt=Date.now();$('clear').click();persist();}
   else if(input==='S⇔D')$('exact-toggle').click();
   else if(input==='MIXED'){mixed=!mixed;decimal=false;$('exact-toggle').textContent='Exact';renderResult();}
   else if(input==='INS')$('insert-mode').click();
@@ -232,7 +255,7 @@ function historyDialog() {
   const content=element('div'),search=element('input');search.placeholder='수식 또는 결과 검색';search.setAttribute('aria-label','기록 검색');const list=element('div');let favorites=false;
   const filter=control('즐겨찾기만',()=>{favorites=!favorites;setText(filter,favorites?'전체 기록':'즐겨찾기만');render();});
   function render(){list.replaceChildren();for(const item of state.history.filter(h=>(!favorites||h.star)&&`${h.source} ${h.exact}`.toLowerCase().includes(search.value.toLowerCase()))){const row=element('div','','list-row');const text=element('div','','content');text.append(element('code',item.source),element('div',`= ${item.exact}`));row.append(text,control(item.star?'★':'☆',()=>{item.star=!item.star;persist();render();}),control('사용',()=>{mode('scientific');$('expression').value=item.source;preview();$('dialog').close();}));list.append(row);}if(!list.childElementCount)list.append(element('p','기록이 없습니다.','hint'));}
-  search.oninput=render;content.append(search,filter,control('기록 삭제',()=>{state.history=[];persist();render();}),list);render();openDialog('History',content);
+  search.oninput=render;content.append(search,filter,control('기록 삭제',()=>{state.history=[];activeHistoryEntry=null;renderTape();persist();render();}),list);render();openDialog('History',content);
 }
 function catalogDialog() {
   const content=element('div'),search=element('input'),tabs=element('div','','catalog-tabs'),list=element('div');search.placeholder='함수 검색';search.setAttribute('aria-label','함수 검색');let category='Scientific';
@@ -404,7 +427,7 @@ document.addEventListener('keydown',event=>{
   else if(event.key.length===1&&/[0-9A-Za-z.,+\-*/÷×^%!()[\]{}=<>°∞π_]/.test(event.key)){event.preventDefault();insert(event.key);}
 });
 document.querySelectorAll('main input,main select,main textarea').forEach(field=>field.addEventListener('change',persist));
-window.addEventListener('pagehide',()=>{persist();clearTimeout(toast.timer);});
+window.addEventListener('pagehide',()=>{persist();clearTimeout(toast.timer);tapeFollow.dispose();});
 window.addEventListener('resize',()=>{if(lastGraph&&value('mode')==='graph')plot($('graph-plot'),lastGraph,lastGraphBounds);});
 async function initialize() {
   try{const response=await fetch('./catalog.json');if(!response.ok)throw new Error('Catalog load failed');catalog=await response.json();}catch(exc){toast('Catalog가 없습니다. 빌드 스크립트를 실행해 주세요.');}

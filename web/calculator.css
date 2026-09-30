@@ -38,6 +38,22 @@
 :root[data-workspace="scientific"] .answer-toolbar{height:30px;min-width:0;gap:6px;align-items:center;scrollbar-width:none}
 :root[data-workspace="scientific"] .answer-toolbar button{font-size:11px;padding:5px 9px}
 :root[data-workspace="scientific"] .keypad-workspace{grid-row:3;min-height:0;min-width:0;overflow:hidden;padding:4px 8px;background:var(--bg);container-type:size}
+:root[data-workspace="scientific"] .calculation-display{grid-column:1;grid-row:1 / span 2;min-height:0;min-width:0;overflow:hidden;display:grid;grid-template-rows:28px minmax(0,1fr) 30px;padding:0 14px}
+.calculation-tape{min-height:0;min-width:0;overflow:auto;overscroll-behavior-y:contain;display:flex;flex-direction:column;scrollbar-width:thin;overflow-anchor:none}
+.tape-history{flex:none;min-width:0}
+.tape-active{flex:none;min-width:0;min-height:100%;display:flex;flex-direction:column;justify-content:flex-end}
+:root[data-workspace="scientific"] .calculation-display .workspace[data-mode="scientific"]:not(.keypad-workspace){display:block;grid-row:auto;overflow:visible;padding:0;flex:none}
+:root[data-workspace="scientific"] .calculation-display .expression-preview{min-height:60px;overflow-x:auto;align-items:center}
+:root[data-workspace="scientific"] .calculation-display #expression{height:64px;min-height:64px}
+:root[data-workspace="scientific"] .calculation-display .answer-panel{display:block;grid-row:auto;padding:0;flex:none;overflow:visible}
+:root[data-workspace="scientific"] .calculation-display #answer{min-height:56px}
+.tape-entry{padding:10px 0;border-bottom:1px solid var(--line);min-width:0}
+.tape-expression{display:block;width:100%;min-width:0;padding:0;border:0;border-radius:0;color:var(--ink);font-family:"Cambria Math",Cambria,serif;font-size:clamp(16px,3.4vw,27px);font-weight:400;line-height:1.5;text-align:left;white-space:pre-wrap;overflow-wrap:anywhere;overflow-x:auto}
+.tape-expression:hover{background:var(--operator)}.tape-expression:disabled{opacity:1}
+.tape-result{display:flex;justify-content:flex-end;min-width:0;padding-top:6px;font-family:"Cambria Math",Cambria,serif;font-size:clamp(18px,3.3vw,28px);line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere;overflow-x:auto}
+.tape-expression math,.tape-result math{margin:0;flex-shrink:0}
+.tape-expression math{display:inline-block}
+.tape-note{font-size:10px;line-height:1.5;color:var(--muted);overflow-wrap:anywhere}
 :root[data-workspace="scientific"] footer{display:none}
 .keypad{height:100%;min-height:0;display:flex;flex-direction:column;gap:4px}
 .keypad-top{flex:2;min-height:0;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));column-gap:4px;row-gap:4px}
@@ -85,6 +101,7 @@
   :root[data-workspace="scientific"] .workspace[data-mode="scientific"]:not(.keypad-workspace){grid-template-rows:22px minmax(0,1fr)}
   :root[data-workspace="scientific"] .answer-panel{grid-template-rows:minmax(0,1fr) auto 22px}
   :root[data-workspace="scientific"] .answer-toolbar{height:22px}
+  :root[data-workspace="scientific"] .calculation-display{grid-template-rows:22px minmax(0,1fr) 22px}
   :root[data-workspace="scientific"] .keypad-workspace{padding:2px 6px}
   .keypad,.keypad-row,.keypad-top{gap:2px}
 }
