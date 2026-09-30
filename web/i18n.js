@@ -26,6 +26,13 @@ const korean={History:'기록',Catalog:'함수 목록',Setup:'설정',Undo:'실�
   'Not enough input values. Enter one value per line in Python inputs.':'입력값이 부족합니다. Python 입력란에 한 줄씩 입력해 주세요.'
 };
 Object.assign(korean,nativeKorean,{
+  "Help": "도움말",
+  "Clear search": "검색어 지우기",
+  "Stored in": "저장한 변수:",
+  "Reserved constant or answer name": "상수 또는 Ans 이름에는 저장할 수 없습니다.",
+  "No matching entries": "일치하는 항목이 없습니다.",
+  "Could not load function help": "함수 도움말을 불러올 수 없습니다.",
+  "Retry": "다시 시도",
   "Equation type": "방정식 유형",
   "General / system": "일반식 / 연립방정식",
   "Linear": "일차",

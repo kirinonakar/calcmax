@@ -2,6 +2,39 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {JSDOM} from 'jsdom';
 import {mathDisplay} from '../math-display.js';
+import {expressionDisplay} from '../expression-display.js';
+import {markInputCursor} from '../input-cursor.js';
+
+test('cursor insertion preserves root and superscript operand counts at every source position',()=>{
+  const dom=new JSDOM();globalThis.document=dom.window.document;
+  for(const source of ['nthroot(81,4)','sqrt(x^2+1)','sqrt(2)^2','nthroot(2,3)^2','x^(2+3)','x^(y^2)','1/nthroot(x+1,3)']){
+    for(let at=0;at<=source.length;at++){
+      const math=expressionDisplay(source);markInputCursor(math,source,at);
+      for(const node of math.querySelectorAll('mroot,msup,mfrac'))assert.equal(node.children.length,2,`${source} at ${at}: ${node.outerHTML}`);
+      assert.equal(math.querySelectorAll('.input-caret').length,1);
+    }
+  }
+  dom.window.close();
+});
+
+test('powers lower exponent ink and retain MathML scripts, source positions, and derivative orders',()=>{
+  const dom=new JSDOM();globalThis.document=dom.window.document;
+  for(const source of ['sqrt(2)^2','nthroot(2,3)^2','(sqrt(2)+1)^2']){
+    const math=expressionDisplay(source),power=math.querySelector('msup');
+    assert.equal(power.children.length,2);assert.equal(power.lastElementChild.localName,'mpadded');
+    assert.equal(power.lastElementChild.getAttribute('voffset'),'-0.3em');
+    assert.equal(power.lastElementChild.firstElementChild.textContent,'2');
+    markInputCursor(math,source,source.length);
+    assert.ok(power.lastElementChild.querySelector('.input-caret'),'exponent cursor stays in the shifted script');
+  }
+  assert.equal(expressionDisplay('x^2').querySelector('.math-exponent').getAttribute('voffset'),'-0.12em');
+  const derivative=expressionDisplay('diff(x^3,x,2)');
+  const fraction=derivative.querySelector('mfrac');
+  assert.equal(fraction.children[0].localName,'msup');
+  assert.equal(fraction.children[0].textContent,'d2');
+  assert.equal(fraction.children[1].querySelector('msup').textContent,'x2');
+  dom.window.close();
+});
 
 test('ENG and SCI normalize numeric results without losing high precision or changing exact structures',()=>{
   const dom=new JSDOM();globalThis.document=dom.window.document;

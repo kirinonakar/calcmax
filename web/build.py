@@ -97,6 +97,7 @@ def build(skip_download=False, output=None):
 def assets_manifest():
     files = sorted(path for path in ROOT.iterdir() if (path.suffix in (".html", ".css", ".js", ".json", ".zip", ".md", ".webp") or path.name == "LICENSE") and path.name not in ("assets.js", "package.json", "package-lock.json", "design-qa.md"))
     files += sorted(path for path in (ROOT / "vendor").rglob("*") if path.is_file() and not path.name.endswith(".tmp"))
+    files += sorted(path for path in (ROOT / "fonts").rglob("*") if path.is_file())
     digest = hashlib.sha256()
     for path in files:
         digest.update(path.relative_to(ROOT).as_posix().encode())

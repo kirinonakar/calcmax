@@ -50,7 +50,12 @@ export function renderKeypad(container,{second=false,shift=false,alpha=false,hyp
     if(['SHIFT','ALPHA','SECOND','HYP'].includes(k.input)){const active=k.input==='SHIFT'?shift:k.input==='ALPHA'?alpha:k.input==='SECOND'?second:hyperbolic;button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));}
     const legends=document.createElement('small');legends.className='key-hints';legends.append(document.createTextNode(k.secondary));
     if(k.alpha){const letter=document.createElement('span');letter.className='alpha-legend';letter.textContent=k.alpha;legends.append(document.createTextNode('  '),letter);}
-    const face=document.createElement('span');face.className='key-face';face.textContent=k.title;
+    const face=document.createElement('span');face.className='key-face';
+    if(k.input==='()/()'){
+      const fraction=document.createElement('span');fraction.className='key-fraction';fraction.setAttribute('aria-hidden','true');
+      for(const [text,className] of [['□',''],['','key-fraction-bar'],['□','']]){const part=document.createElement('span');part.textContent=text;part.className=className;fraction.append(part);}
+      face.append(fraction);
+    }else face.textContent=k.title;
     button.append(legends,face);bindKeyPress(button,()=>press(k),()=>longPress(k));return button;
   };
   const top=document.createElement('div');top.className='keypad-top';

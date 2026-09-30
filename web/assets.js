@@ -1,4 +1,4 @@
-self.CALCMAX_CACHE = 'calcmax-static-1db3988fb7ff5334';
+self.CALCMAX_CACHE = 'calcmax-static-7fc3a4e58d99098e';
 self.CALCMAX_ASSETS = [
   "./",
   "./app-icon.webp",
@@ -8,11 +8,13 @@ self.CALCMAX_ASSETS = [
   "./calc-session.js",
   "./calculation-tape.js",
   "./calculator.css",
+  "./catalog-help.js",
   "./catalog.json",
   "./catalog_help.md",
   "./catalog_help_ko.md",
   "./display-format.js",
   "./engine-client.js",
+  "./engine-fetch.js",
   "./engine.zip",
   "./expression-display.js",
   "./expression-tree.js",
@@ -52,5 +54,7 @@ self.CALCMAX_ASSETS = [
   "./vendor/pyodide.js",
   "./vendor/pyodide.mjs",
   "./vendor/python_stdlib.zip",
-  "./vendor/sympy-1.14.0-py3-none-any.whl"
+  "./vendor/sympy-1.14.0-py3-none-any.whl",
+  "./fonts/OFL.txt",
+  "./fonts/STIXTwoMath-Regular.woff2"
 ];

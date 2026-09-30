@@ -39,7 +39,7 @@ export function plot(container,result,bounds,{dots=false,digits=10,analysis=null
       d+=(pen?'L':'M')+xx.toFixed(2)+','+yy.toFixed(2); pen=true;
       if(dots) group.append(svgElement('circle',{cx:xx,cy:yy,r:3,fill:color}));
     }
-    group.append(svgElement('path',{d,fill:'none',stroke:color,'stroke-width':2,'data-curve':index}));
+    group.append(svgElement('path',{d,fill:'none',stroke:color,'stroke-width':!result.surface&&index===selected?4:2,'data-curve':index,'data-selected':!result.surface&&index===selected,'stroke-linejoin':'round','stroke-linecap':'round'}));
   }
   for(const shade of result.shadings || []) for(const points of shade.fill || []) {
     group.append(svgElement('polygon',{points:points.map(p=>`${x(p[0])},${y(p[1])}`).join(' '),fill:colors[0],opacity:.16}));
@@ -58,7 +58,10 @@ export function plot(container,result,bounds,{dots=false,digits=10,analysis=null
     };
     for(const row of result.surface) path(row,colors[0],0,project);
     for(let i=0;i<result.surface[0].length;i++) path(result.surface.map(row=>row[i]),colors[2],1,project);
-  } else (result.curves || []).forEach((curve,i)=>path(curve,colors[i%colors.length],i));
+  } else {
+    (result.curves || []).forEach((curve,i)=>{if(i!==selected)path(curve,colors[i%colors.length],i);});
+    if(result.curves?.[selected])path(result.curves[selected],colors[selected%colors.length],selected);
+  }
   if(!result.surface){
     if(integral){let segment=[];const flush=()=>{if(segment.length>1)group.append(svgElement('polygon',{points:[[segment[0][0],0],...segment,[segment.at(-1)[0],0]].map(p=>`${x(p[0])},${y(p[1])}`).join(' '),fill:colors[selected%colors.length],opacity:.18,'data-integral':'true'}));segment=[];};for(const point of result.curves?.[selected]||[]){if(point&&point[0]>=integral[0]&&point[0]<=integral[1])segment.push(point);else flush();}flush();}
     if(analysis?.line?.length===2){const line=analysis.line;group.append(svgElement('line',{x1:x(line[0][0]),y1:y(line[0][1]),x2:x(line[1][0]),y2:y(line[1][1]),stroke:'var(--accent)','stroke-width':2,'stroke-dasharray':'6 4','data-tangent':'true'}));}

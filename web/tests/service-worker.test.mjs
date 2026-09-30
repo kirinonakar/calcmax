@@ -22,6 +22,7 @@ test('cache upgrade replaces old bootstrap and reloads only CalcMax after activa
 test('updated shell comes from network; offline execution still uses cached assets',async()=>{
   const r=runtime(),shell={method:'GET',url:'https://example.test/calcmax/worker.js',mode:'cors'};
   assert.equal((await r.dispatch('fetch',shell)).source,'network');
+  assert.equal((await r.dispatch('fetch',{...shell,url:'https://example.test/calcmax/vendor/sympy.whl',cache:'reload'})).source,'network','startup retries bypass a stale package cache');
   r.context.fetch=async()=>{throw new Error('offline');};
   assert.equal((await r.dispatch('fetch',shell)).source,'cached');
   assert.equal((await r.dispatch('fetch',{...shell,url:'https://example.test/calcmax/vendor/pyodide.asm.wasm'})).source,'cached');

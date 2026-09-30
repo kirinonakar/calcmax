@@ -40,6 +40,23 @@ test('actual CPython WASM reuses the Android engine across workspaces',async()=>
     else assert.equal(rows[3].args[0].args.reduce((sum,node)=>sum+Math.round(Number(node.value)*100),0),Math.round(Number(total)*100));
   }
   assert.equal(evaluate('f(3)',{functions:{f:{parameters:['x'],body:parse('x^2+1')}}}).exact,'10');
+  const fixedTip=moneyResult(evaluate(tipCommand({bill:'100',fixed:'20',method:'amount',people:'3'})),3);
+  assert.equal(Number(fixedTip.tree.args.at(-1).args[0].args[0].value),20,'fixed tip shows the implied percentage');
+  const zeroBill=moneyResult(evaluate(tipCommand({bill:'0',fixed:'1',method:'amount',people:'1'})),1);
+  assert.equal(Number(zeroBill.tree.args.at(-1).args[0].args[0].value),0,'zero bill does not divide by zero');
+  for(const [percent,expected] of [['15','15.00'],['15.126','15.13'],['2.675','2.68'],['99.999','100.00']]){
+    const result=moneyResult(evaluate(tipCommand({bill:'100',percent,people:'1'}),{precision:3}));
+    assert.equal(result.tree.args.at(-1).args[0].args[0].value,expected,'percentage rounds exact values to two places');
+  }
+  for(const [options,expected] of [
+    [{bill:'100',people:'2'},'16.00'],[{bill:'100',people:'3'},'17.00'],
+    [{bill:'100',people:'3',whole:false},'15.00'],[{bill:'100',people:'1'},'15.00'],
+    [{bill:'100',people:'2',tax:'10'},'16.00'],[{bill:'99',people:'3'},'15.15'],
+    [{bill:'0',people:'3'},'0.00']
+  ]){
+    const result=moneyResult(evaluate(tipCommand(options)),Number(options.people));
+    assert.equal(result.tree.args.at(-1).args[0].args[0].value,expected,'Tip % uses the adjusted tip, excluding tax');
+  }
   const previous=evaluate('1/7');
   assert.equal(evaluate('Ans*7',{variables:{Ans:previous.resultAst}}).exact,'1');
   assert.equal(run({tree:parse('1/0')}).ok,false);

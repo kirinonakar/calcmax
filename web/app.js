@@ -21,6 +21,7 @@ import {bindPythonEditor} from './python-tools.js';
 import {defineFunction,encodeFunctions,decodeFunctions} from './function-transfer.js';
 import {moveMathCursor} from './input-navigation.js';
 import {appVersion} from './app-version.js';
+import {parseCatalogHelp,helpExampleInput} from './catalog-help.js';
 
 const $=id=>document.getElementById(id);
 const value=id=>$(id).value;
@@ -71,7 +72,15 @@ function toast(message) { setText($('toast'),message); $('toast').hidden=false; 
 function error(message) { $('answer').replaceChildren(); const el=document.createElement('span');el.className='error';setText(el,message);$('answer').append(el);$('note').textContent='';if(value('mode')==='equation'){try{renderFormulas($('result-source'),equationSource().split(/\r?\n/),{digits:state.digits});}catch{}}else if(value('mode')==='programmer')setText($('programmer-output'),message);else if(value('mode')==='constants')setText($('constants-list'),message); }
 function control(label,action,className='') { const button=document.createElement('button');button.type='button';setText(button,label);button.className=className;button.addEventListener('click',action);return button; }
 function element(tag,text='',className='') { const el=document.createElement(tag);setText(el,text);el.className=className;return el; }
-function openDialog(title,content) { setText($('dialog-title'),title);$('dialog-body').replaceChildren(content);translateDOM($('dialog'));if(!$('dialog').open)$('dialog').showModal(); }
+function clearableCatalogSearch(input){
+  const holder=element('div','','catalog-search'),clear=control('✕',()=>{
+    input.value='';input.dispatchEvent(new input.ownerDocument.defaultView.Event('input',{bubbles:true}));input.focus();
+  },'catalog-search-clear');
+  clear.setAttribute('aria-label',t('Clear search'));clear.title=t('Clear search');
+  const update=()=>{clear.hidden=!input.value;};input.addEventListener('input',update);update();
+  holder.append(input,clear);return holder;
+}
+function openDialog(title,content) { $('dialog').classList.toggle('catalog-dialog',content.classList.contains('catalog-content'));setText($('dialog-title'),title);$('dialog-body').replaceChildren(content);translateDOM($('dialog'));if(!$('dialog').open)$('dialog').showModal(); }
 $('about-button').onclick=()=>{
   const content=element('div','','about-content'),icon=element('img'),version=element('p',`v${appVersion}`,'hint'),link=element('a','https://github.com/kirinonakar/calcmax');
   icon.src='app-icon.webp';icon.alt='CalcMax';icon.width=64;icon.height=64;
@@ -83,7 +92,7 @@ $('dialog').addEventListener('click',event=>{if(event.target===$('dialog')){cons
 function requestOptions() { return {angle:value('angle'),precision:state.precision,displayDigits:state.digits,variables:state.variables,functions:state.functions,assumptions:state.assumptions}; }
 const engine=new EngineClient();
 const graphs=createGraphWorkspace({execute:request=>engine.execute(request),options:requestOptions,onError:error,persist,isBusy:()=>busy,isReady:()=>engine.ready,saved:saved.graph});
-function updateButtons() { document.querySelectorAll('[data-run],.key[data-evaluate]').forEach(button=>button.disabled=!engine.ready||busy);document.querySelectorAll('.tape-expression').forEach(button=>button.disabled=busy||!!calcSession);$('stop').disabled=!busy;$('stop').hidden=false;$('stop').style.visibility=busy?'':'hidden';$('expression').readOnly=!typing||!!calcSession&&busy;$('retry').hidden=engine.ready||busy;graphs.updateButtons();graphs.flush(); }
+function updateButtons() { document.querySelectorAll('[data-run],.key[data-evaluate]').forEach(button=>button.disabled=!engine.ready||busy);document.querySelectorAll('.tape-expression').forEach(button=>button.disabled=busy||!!calcSession);$('stop').disabled=!busy;$('stop').hidden=false;$('stop').style.visibility=busy?'':'hidden';$('expression').readOnly=!typing||busy;$('retry').hidden=engine.ready||busy;graphs.updateButtons();graphs.flush(); }
 document.documentElement.dataset.busy='false';document.documentElement.dataset.engine='loading';document.documentElement.dataset.typing='false';
 engine.addEventListener('status',event=>{setText($('status'),event.detail);document.documentElement.dataset.engine=engine.ready?'ready':'loading';updateButtons();});
 engine.addEventListener('ready',()=>{document.documentElement.dataset.engine='ready';updateButtons();});
@@ -98,7 +107,7 @@ function showResult(result,source='',displaySource=source) {
   const previousAnswer=value('mode')==='scientific'?(inputAnswer||state.variables.Ans):state.variables.Ans;
   lastResult=result;lastResultSource=displaySource;
   committed=true;$('commit-indicator').textContent='=';
-  if(result.resultAst) state.variables.Ans=result.resultAst;
+  if(result.resultAst&&!result.assignment) state.variables.Ans=result.resultAst;
   renderResult();
   if(source){activeHistoryEntry={source,exact:result.exact||'',decimal:result.decimal||'',resultAst:result.resultAst,inputAns:previousAnswer,calcValues:result.calcValues,display:{tree:result.tree,decimalTree:result.decimalTree,approximate:result.approximate},time:Date.now(),star:false};state.history.unshift(activeHistoryEntry);state.history=state.history.slice(0,500);for(const entry of state.history.slice(11))delete entry.display;}
   renderTape();tapeFollow.latest();
@@ -133,8 +142,21 @@ function renderResult() {
   renderTape();
 }
 async function evaluate(source=value('expression')) {
+  if(busy)return;
+  if(!engine.ready){error('계산 엔진이 로딩 중입니다.');return;}
   if(calcSession){await submitCalcValue();return;}
-  try {const converted=latexInput(state.autoCloseBrackets?closeInputBrackets(source):source);if(source===value('expression')&&converted!==source){$('expression').value=converted;preview();}const result=await engine.execute({...requestOptions(),tree:evaluationTree(converted)});showResult(result,converted);}
+  try {
+    const converted=latexInput(state.autoCloseBrackets?closeInputBrackets(source):source);
+    if(source===value('expression')&&converted!==source){$('expression').value=converted;preview();}
+    const assignment=converted.match(/^\s*([A-Za-z][A-Za-z0-9_]*)\s*=(?!=)([\s\S]+)$/);
+    if(assignment&&['pi','e','i','I','oo','Ans','c0','hP','hbar','G','qe','NA','kB0','me','mp0'].includes(assignment[1]))throw new Error('Reserved constant or answer name');
+    const result=await engine.execute({...requestOptions(),tree:evaluationTree(assignment?assignment[2]:converted)});
+    if(assignment&&result.ok){
+      if(!result.resultAst)throw new Error('No reusable result to store.');
+      state.variables[assignment[1]]=result.resultAst;result.assignment=true;result.note=`${t('Stored in')} ${assignment[1]}`;
+    }
+    showResult(result,converted);
+  }
   catch(exc){error(exc.message);}
 }
 function preview() {
@@ -149,9 +171,9 @@ function preview() {
 function renderInputCursor(){const field=$('expression'),display=$('expression-preview'),math=display.querySelector('math');if(math)markInputCursor(math,field.value,field.selectionStart,field.selectionEnd);else if(!field.value){const cursor=element('span','│','text-caret');display.append(cursor);}}
 $('expression-preview').onclick=event=>{const target=event.target.closest('[data-source-start]');if(target){const field=$('expression');field.setSelectionRange(Number(target.getAttribute('data-source-start')),Number(target.getAttribute('data-source-end')));}else{$('expression').setSelectionRange(value('expression').length,value('expression').length);}preview();};
 function insert(text,cursor=null,{factor=false}={}) {
-  if(calcSession&&busy)return;
+  if(busy)return;
   const field=$('expression'),undo=undoStack();undo.push(field.value);if(undo.length>100)undo.shift();
-  if(committed){inputAnswer=null;field.value=/^[+\-*/÷^%!∠]/.test(text)?'Ans':'';field.setSelectionRange(field.value.length,field.value.length);committed=false;$('commit-indicator').textContent='';}
+  if(committed){inputAnswer=null;field.value=!lastResult?.assignment&&/^[+\-*/÷^%!∠]/.test(text)?'Ans':'';field.setSelectionRange(field.value.length,field.value.length);committed=false;$('commit-indicator').textContent='';}
   if(state.autoCloseBrackets&&text.length===1&&field.selectionStart===field.selectionEnd&&!overwrite){const pairs={'(' : ')','[':']','{':'}'};if(pairs[text]){text+=pairs[text];cursor=1;}else if(')]}'.includes(text)&&field.value[field.selectionStart]===text){field.setSelectionRange(field.selectionStart+1,field.selectionStart+1);preview();return;}}
   const start=field.selectionStart,end=overwrite&&field.selectionEnd===start?Math.min(field.value.length,start+text.length):field.selectionEnd;
   let prefix='',suffix='';
@@ -186,7 +208,7 @@ $('angle').onchange=persist;
 $('expression').oninput=()=>{if(committed)inputAnswer=null;committed=false;if(!calcSession)$('commit-indicator').textContent='';preview();};
 $('expression').addEventListener('beforeinput',event=>{if(typing&&state.autoCloseBrackets&&event.inputType==='insertText'&&event.data?.length===1&&'()[]{}'.includes(event.data)){event.preventDefault();insert(event.data);}});
 $('expression').addEventListener('paste',event=>{const text=event.clipboardData?.getData('text');if(!text)return;try{const converted=latexInput(text);if(converted!==text){event.preventDefault();insert(converted);}}catch(exc){event.preventDefault();toast(exc.message);}});
-$('expression').addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();evaluate();}if(event.key==='Escape'){event.preventDefault();if(calcSession)cancelCalc();else if(busy)engine.cancel();else{$('expression').value='';preview();}}});
+$('expression').addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();event.stopPropagation();if(!event.repeat)evaluate();}if(event.key==='Escape'){event.preventDefault();if(calcSession)cancelCalc();else if(busy)engine.cancel();else{$('expression').value='';preview();}}});
 $('clear').onclick=()=>{if(calcSession){cancelCalc();return;}expressionUndo.push(value('expression'));$('expression').value='';committed=false;lastResult=null;activeHistoryEntry=null;inputAnswer=null;$('answer').replaceChildren();$('note').textContent='';$('commit-indicator').textContent='';preview();};
 $('undo').onclick=()=>{const undo=undoStack();if(undo.length){$('expression').value=undo.pop();preview();}};
 async function clipboard(text) { try{await navigator.clipboard.writeText(text);toast('복사했습니다.');}catch{const field=element('textarea');field.value=text;openDialog('복사할 텍스트',field);field.select();} }
@@ -302,7 +324,6 @@ async function performKey(input){
   else if(input==='*10^()'){const source=value('expression');insert(source&&!committed?input:'1'+input,(source&&!committed?input:'1'+input).indexOf('(')+1);}
   else {
     // Parenthesis templates place the cursor in their first empty argument.
-    if(/^\^/.test(input)&&value('expression')&&!committed){$('expression').setSelectionRange(value('expression').length,value('expression').length);}
     insert(input,input.includes('(')?input.indexOf('(')+1:null,{factor:true});
   }
   shift=false;alpha=false;hyperbolic=false;renderKeypad();
@@ -323,7 +344,7 @@ function historyDialog() {
   search.oninput=render;content.append(search,filter,control('기록 삭제',()=>{state.history=[];activeHistoryEntry=null;renderTape();persist();render();}),list);render();openDialog('History',content);
 }
 function catalogDialog() {
-  const content=element('div'),search=element('input'),tabs=element('div','','catalog-tabs'),list=element('div');search.placeholder='함수 검색';search.setAttribute('aria-label','함수 검색');let category='Scientific';
+  const content=element('div','','catalog-content'),search=element('input'),tabs=element('div','','catalog-tabs'),list=element('div','','catalog-scroll');search.placeholder='함수 검색';search.setAttribute('aria-label','함수 검색');let category='Scientific';
   function entries(){if(search.value)return [...new Set([...Object.values(catalog).flat(),...custom()])].filter(s=>s.toLowerCase().includes(search.value.toLowerCase()));if(category==='Recent')return state.recent;if(category==='Favorites')return state.favorites;if(category==='Custom')return custom();return catalog[category]||[];}
   function custom(){return Object.entries(state.functions).map(([name,f])=>`${name}(${','.repeat(Math.max(0,f.parameters.length-1))})`);}
   function render(){list.replaceChildren();tabs.querySelectorAll('button').forEach(b=>b.classList.toggle('active',b.dataset.category===category));for(const source of entries()){
@@ -339,8 +360,31 @@ function catalogDialog() {
     }),control(state.favorites.includes(source)?'★':'☆',()=>{state.favorites=state.favorites.includes(source)?state.favorites.filter(s=>s!==source):[...state.favorites,source];persist();render();}));list.append(row);
   }}
   for(const name of ['Recent','Favorites','Custom',...Object.keys(catalog)]){const tab=control(name,()=>{category=name;render();});tab.dataset.category=name;tabs.append(tab);}
-  search.oninput=render;content.append(search,tabs,list,element('p','빈 인수에 값을 입력하세요. 예: diff(sin(x^2),x), normcdf(-1.96,1.96)','hint'),element('a','함수 도움말'));
-  content.lastChild.href=getLanguage()==='ko'?'catalog_help_ko.md':'catalog_help.md';content.lastChild.target='_blank';render();openDialog('Catalog',content);
+  const tools=element('div','','catalog-tools');tools.append(clearableCatalogSearch(search),control('Help',catalogHelpDialog));
+  search.oninput=()=>{list.scrollTop=0;render();};content.append(tools,tabs,list,element('p','빈 인수에 값을 입력하세요. 예: diff(sin(x^2),x), normcdf(-1.96,1.96)','hint'));
+  render();openDialog('Catalog',content);
+}
+const helpDocuments={};
+async function catalogHelpDialog(){
+  const language=getLanguage(),content=element('div','','catalog-content'),search=element('input'),tools=element('div','','catalog-tools'),list=element('div','','catalog-scroll');
+  search.placeholder=t('Search');search.setAttribute('aria-label',t('Search'));tools.append(clearableCatalogSearch(search),control('Catalog',catalogDialog));content.append(tools,list);list.append(element('p','Loading the catalog reference...','hint'));openDialog('Function catalog - help',content);
+  try{
+    if(!helpDocuments[language]){const response=await fetch(language==='ko'?'./catalog_help_ko.md':'./catalog_help.md');if(!response.ok)throw new Error('Could not load function help');helpDocuments[language]=await response.text();}
+    if(!content.isConnected)return;
+    function render(){
+      list.replaceChildren();
+      for(const block of parseCatalogHelp(helpDocuments[language],search.value)){
+        const row=element('div','','catalog-help-block');
+        if(block.kind==='entry'){
+          row.append(element('code',block.signature),element('p',block.text,'hint'));
+          if(block.example)row.append(control(`${t('Example:')} ${block.example}`,()=>{mode('scientific');$('clear').click();insert(helpExampleInput(block.example));$('dialog').close();},'catalog-example'));
+        }else row.append(element(block.kind==='heading'?'h2':block.kind==='category'?'h3':'p',block.text));
+        list.append(row);
+      }
+      if(!list.childElementCount)list.append(element('p','No matching entries','hint'));
+    }
+    search.oninput=()=>{list.scrollTop=0;render();};render();
+  }catch(exc){if(content.isConnected){list.replaceChildren(element('p',exc.message,'error'),control('Retry',catalogHelpDialog));}}
 }
 function variablesDialog() {
   const content=element('div'),name=element('input');name.placeholder='변수 이름 · A, b, M';name.setAttribute('aria-label','변수 이름');const expression=element('input');expression.placeholder='값 또는 수식';expression.setAttribute('aria-label','변수 수식');const list=element('div');
@@ -396,10 +440,12 @@ $('dataset-delete').onclick=()=>{delete state.datasets[value('dataset-list')];da
 $('csv-open').onclick=()=>pickFile('.csv,.tsv,text/csv',async file=>{const rows=csvRows((await file.text()).replace(/^\uFEFF/,''),{maxColumns:100,skipHeader:false}),content=element('div'),columns=[],header=element('input');header.type='checkbox';header.checked=rows[0].every(cell=>cell!==''&&!Number.isFinite(Number(cell)))&&rows.slice(1).some(row=>row.some(cell=>cell!==''&&Number.isFinite(Number(cell))));const headerLabel=element('label','Skip header row','check');headerLabel.append(header);content.append(headerLabel);for(let index=0;index<rows[0].length;index++){const input=element('input');input.type='checkbox';input.checked=index<3;columns.push(input);const label=element('label',`${t('Column')} ${index+1}: ${rows[0][index]}`,'check');label.append(input);content.append(label);}content.append(control('Import CSV',()=>{const selected=columns.map((input,i)=>input.checked?i:null).filter(i=>i!==null);if(!selected.length||selected.length>3){toast('Select one to three columns');return;}$('statistics-data').value=rows.slice(header.checked?1:0).map(row=>selected.map(i=>row[i].includes(',')?'"'+row[i].replace(/"/g,'""')+'"':row[i]).join(',')).join('\n');$('dataset-name').value=file.name.replace(/\.(csv|tsv)$/i,'');refreshWorkspaceMath();persist();$('dialog').close();}));openDialog('Import CSV',content);});
 $('csv-save').onclick=()=>downloadFile(`${value('dataset-name')||'calcmax-data'}.csv`,value('statistics-data'),'text/csv');
 function dataRows(){return csvRows(value('statistics-data'));}
-function statisticsExpression(){return statisticsCommand(value('statistics-data'),{op:value('statistics-op'),column:Number(value('statistics-column')),extra:value('statistics-extra')||'0',tail:value('statistics-tail'),sigma:value('statistics-sigma'),sigmaY:value('statistics-sigma-y'),regression:value('regression-kind'),formula:value('regression-formula'),variable:value('regression-variable'),initials:value('regression-initials'),grouping:value('statistics-grouping'),firstGroup:value('statistics-first-group'),secondGroup:value('statistics-second-group')});}
+function statisticsExpression(op=value('statistics-op')){return statisticsCommand(value('statistics-data'),{op,column:Number(value('statistics-column')),extra:value('statistics-extra')||'0',tail:value('statistics-tail'),sigma:value('statistics-sigma'),sigmaY:value('statistics-sigma-y'),regression:value('regression-kind'),formula:value('regression-formula'),variable:value('regression-variable'),initials:value('regression-initials'),grouping:value('statistics-grouping'),firstGroup:value('statistics-first-group'),secondGroup:value('statistics-second-group')});}
 function distributionExpression(){return distributionCommand(Object.fromEntries(['family','query','x','a','b','p','mean','sigma','df','df2','trials','success','lambda','k'].map(name=>[name,value('distribution-'+name)])));}
 function equationSource(){return value('equation-form')==='general'?value('equation-source'):polynomialEquation(['equation-a','equation-b','equation-c','equation-d'].slice(0,Number(value('equation-form'))+1).map(value),value('equation-variable'));}
 function tipExpression(){return tipCommand({bill:value('tip-amount'),percent:value('tip-percent'),fixed:value('tip-fixed'),tax:value('tip-tax'),people:value('tip-people'),method:value('tip-method'),whole:$('tip-whole').checked});}
+function tipMethodControls(){const fixed=value('tip-method')==='amount';$('tip-percent').disabled=fixed;$('tip-fixed').disabled=!fixed;}
+$('tip-method').onchange=tipMethodControls;tipMethodControls();
 
 function refreshWorkspaceMath(){
   const targets=[['equation-source',()=>equationSource().split(/\r?\n/)],['function-body',()=>[`${value('function-name')}(${value('function-parameters')})=${value('function-body')}`]],['distribution-math',()=>[distributionExpression()]],['matrix-grid',()=>[matrixExpression()]],['vector-other',()=>[value('vector-other')]],['unit-value',()=>[`convert(${value('unit-value')},${value('unit-from')},${value('unit-to')})`]]];
@@ -417,9 +463,17 @@ function distributionControls(){const family=value('distribution-family'),discre
 $('distribution-family').onchange=distributionControls;$('distribution-query').onchange=distributionControls;
 $('distribution-insert').onclick=()=>{mode('scientific');$('expression').value=distributionExpression();committed=false;preview();};
 $('regression-kind').onchange=()=>{$('regression-custom').hidden=value('regression-kind')!=='custom';refreshWorkspaceMath();};
+$('regression-custom').hidden=value('regression-kind')!=='custom';
+$('regression-clear').onclick=()=>{statisticsGraph=null;$('regression-caption').replaceChildren();$('regression-transfer').hidden=true;if(!$('statistics-plot').hidden)$('statistics-plot-run').click();};
 $('statistics-op').onchange=()=>{if(['tinterval','zinterval'].includes(value('statistics-op'))&&value('statistics-extra')==='0')$('statistics-extra').value='95';refreshWorkspaceMath();};
 function statisticsGrid(){const rows=value('statistics-data').trim()?dataRows():[],table=element('table');for(const [index,row] of rows.entries()){const tr=element('tr');for(const [column,cell] of row.entries()){const td=element('td'),input=element('input');input.value=cell;input.setAttribute('aria-label',`${index+1}, ${column+1}`);input.oninput=()=>{rows[index][column]=input.value;$('statistics-data').value=rows.map(r=>r.map(s=>s.includes(',')?'"'+s.replace(/"/g,'""')+'"':s).join(',')).join('\n');refreshWorkspaceMath();persist();};td.append(input);tr.append(td);}tr.append(control('−',()=>{rows.splice(index,1);$('statistics-data').value=rows.map(r=>r.map(s=>s.includes(',')?'"'+s.replace(/"/g,'""')+'"':s).join(',')).join('\n');statisticsGrid();refreshWorkspaceMath();persist();}));table.append(tr);}$('statistics-grid').replaceChildren(table);}
-$('statistics-table-toggle').onclick=()=>{const grid=$('statistics-grid');grid.hidden=!grid.hidden;$('statistics-data').closest('label').hidden=!grid.hidden;if(!grid.hidden)try{statisticsGrid();}catch(exc){error(exc.message);}};
+$('statistics-table-toggle').onclick=()=>{
+  const grid=$('statistics-grid'),tableMode=grid.hidden;
+  if(tableMode)try{statisticsGrid();}catch(exc){error(exc.message);return;}
+  grid.hidden=!tableMode;$('statistics-data').closest('label').hidden=tableMode;
+  setText($('statistics-table-toggle'),tableMode?'Direct input':'Table editor');
+  $('statistics-table-toggle').setAttribute('aria-pressed',String(tableMode));
+};
 $('statistics-add-row').onclick=()=>{const columns=value('statistics-data').split(/\r?\n/).find(s=>s.trim())?.split(',').length||1;$('statistics-data').value+='\n'+Array(columns).fill('0').join(',');if(!$('statistics-grid').hidden)statisticsGrid();refreshWorkspaceMath();persist();};
 $('statistics-store').onclick=async()=>{const name=value('dataset-name').trim();if(!/^[A-Za-z][A-Za-z0-9_]*$/.test(name)){error('Dataset name must be a valid variable name');return;}await storeWorkspaceExpression(name,`[${dataRows().map(row=>row.length===1?row[0]:'['+row.join(',')+']').join(',')}]`);};
 $('statistics-plot-run').onclick=()=>{try{statisticsGraph={rows:numericStatisticsRows(dataRows()),curve:statisticsGraph?.curve||[]};$('statistics-plot').hidden=false;statisticsPlot($('statistics-plot'),statisticsGraph.rows,{type:value('statistics-plot-type'),digits:state.digits,curve:statisticsGraph.curve});}catch(exc){error(exc.message);}};
@@ -476,13 +530,13 @@ async function run(workspace) {
     if(workspace==='equation'){source=equationCommand({kind:value('equation-kind'),source:equationSource(),variable:value('equation-variable').trim(),extra:value('equation-extra'),initial:value('equation-initial'),hint:value('equation-hint')});
     }else if(workspace==='matrix'){
       const op=value('matrix-op');source=['add','subtract','multiply'].includes(op)?`(${matrixExpression()})${{add:'+',subtract:'-',multiply:'*'}[op]}(${value('vector-other')})`:`${op}(${matrixExpression()}${['dot','cross','angle','projection','linsolve'].includes(op)?','+value('vector-other'):op==='charpoly'?',x':''})`;
-    }else if(workspace==='statistics')source=statisticsExpression();
+    }else if(workspace==='statistics'||workspace==='regression')source=statisticsExpression(workspace==='regression'?'regression':value('statistics-op'));
     else if(workspace==='distribution')source=distributionExpression();
     else if(workspace==='units')source=`convert(${value('unit-value')},${value('unit-from')},${value('unit-to')})`;
     else if(workspace==='tip')source=tipExpression();
     else if(workspace==='currency'){source=`(${value('currency-amount')})*(${value('currency-rate')})`;}
     let result=await engine.execute({...requestOptions(),tree:parse(latexInput(source))});if(workspace==='tip'&&result.ok)result=moneyResult(result,Number(value('tip-people')));showResult(result,source,workspace==='equation'?equationSource():source);
-    if(workspace==='statistics'&&result.ok&&value('statistics-op')==='regression'){
+    if(workspace==='regression'&&result.ok){
       statisticsGraph={rows:numericStatisticsRows(dataRows()),curve:result.curve||[],fit:result.exact};$('statistics-plot').hidden=false;statisticsPlot($('statistics-plot'),statisticsGraph.rows,{type:value('statistics-plot-type'),digits:state.digits,curve:statisticsGraph.curve});
       renderFormulas($('regression-caption'),[`y=${result.exact}`,...(result.correlation!==null&&result.correlation!==undefined?[`r=${result.correlation}`]:[]),...(result.parameters||[]).map(([name,n])=>`${name}=${n}`)],{digits:state.digits});$('regression-transfer').hidden=false;
     }
@@ -490,6 +544,12 @@ async function run(workspace) {
 }
 document.querySelectorAll('[data-run]').forEach(button=>button.onclick=()=>run(button.dataset.run));
 document.addEventListener('keydown',event=>{
+  if(value('mode')==='scientific'&&!$('dialog').open&&!$('settings-dialog').open&&event.key==='Enter'&&!event.shiftKey&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&!event.isComposing&&event.target.closest('.keypad')){
+    event.preventDefault();event.stopPropagation();if(!event.repeat)evaluate();
+  }
+},true);
+document.addEventListener('keydown',event=>{
+  if(event.defaultPrevented||event.isComposing)return;
   if(value('mode')!=='scientific'||typing||$('dialog').open||$('settings-dialog').open||event.ctrlKey||event.metaKey||event.altKey||event.target.closest('input,select,textarea'))return;
   if(event.target.closest('button')&&['Enter',' '].includes(event.key))return;
   const action={Enter:'=',Backspace:'DEL',Delete:'DEL',ArrowLeft:'LEFT',ArrowRight:'RIGHT',ArrowUp:'UP',ArrowDown:'DOWN',Escape:'AC'}[event.key];

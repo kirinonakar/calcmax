@@ -20,6 +20,10 @@ export function markInputCursor(math,source,start,end=start){
   const next=children.find(node=>Number(node.getAttribute('data-source-start'))>=start&&node.hasAttribute('data-source-start'));
   if(start<=Number(target.getAttribute('data-source-start'))){
     if(['mfrac','msup','msqrt','mroot'].includes(target.localName))adjacent(false);else target.prepend(marker);
-  }else if(next)target.insertBefore(marker,next);
+  }else if(next){
+    if(['mfrac','msup','mroot','munder','mover','munderover','msubsup'].includes(target.localName)){
+      const group=document.createElementNS(NS,'mrow');next.replaceWith(group);group.append(marker,next);
+    }else target.insertBefore(marker,next);
+  }
   else if(['mfrac','msup','msqrt','mroot'].includes(target.localName))adjacent(true);else target.append(marker);
 }

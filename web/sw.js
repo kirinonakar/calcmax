@@ -21,7 +21,7 @@ self.addEventListener('fetch',event=>{
   if(event.request.method!=='GET'||new URL(event.request.url).origin!==self.location.origin)return;
   const url=new URL(event.request.url),shell=event.request.mode==='navigate'||/\.(?:html|css|js)$/.test(url.pathname)&&!url.pathname.includes('/vendor/');
   event.respondWith(caches.open(CACHE).then(async cache=>{
-    if(shell)try{const response=await fetch(event.request);if(response.ok)return response;}catch{}
+    if(shell||event.request.cache==='reload')try{const response=await fetch(event.request);if(response.ok)return response;}catch{}
     return (await cache.match(event.request))||fetch(event.request);
   }));
 });

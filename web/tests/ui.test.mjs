@@ -38,7 +38,7 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
   Object.defineProperty(globalThis,'navigator',{value:window.navigator,configurable:true});
   localStorage.setItem('calcmax-web-v1',JSON.stringify({language:'ko',fields:{}}));
   globalThis.Worker=BrowserWorker;
-  globalThis.fetch=async path=>({ok:true,json:async()=>JSON.parse(readFileSync(new URL(path.replace('./','../'),import.meta.url),'utf8'))});
+  globalThis.fetch=async path=>new Response(readFileSync(new URL(path.replace('./','../'),import.meta.url),'utf8'));
   const $=id=>window.document.getElementById(id);
   const change=(id,v)=>{$(id).value=v;$(id).dispatchEvent(new window.Event('change'));};
   t.after(async()=>{window.dispatchEvent(new window.Event('pagehide'));await Promise.all(workers.map(w=>w.terminate()));window.close();});
@@ -126,8 +126,35 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
   change('mode','programmer');document.querySelector('[data-run="programmer"]').click();await waitFor(()=>$('programmer-output').textContent.includes('HEX  000000FF'),'programmer bases');
   change('mode','units');document.querySelector('[data-run="units"]').click();await waitFor(()=>$('answer').textContent==='0','temperature conversion');
   change('mode','tip');document.querySelector('[data-run="tip"]').click();await waitFor(()=>$('answer').textContent.includes('Per person: 58'),'whole amount tip split');assert.match($('answer').textContent,/Total: 116/);assert.match($('answer').textContent,/Tip: 16/);
+  assert.match($('answer').textContent,/Tip %: 16\.00%/);
+  assert.equal($('tip-percent').disabled,false);assert.equal($('tip-fixed').disabled,true);
+  change('tip-method','amount');assert.equal($('tip-percent').disabled,true);assert.equal($('tip-fixed').disabled,false);
+  $('tip-percent').value='invalid inactive value';$('tip-fixed').value='20';document.querySelector('[data-run="tip"]').click();await waitFor(()=>$('answer').textContent.includes('Tip %: 20.00%'),'fixed tip ignores disabled percent input');
+  $('tip-percent').value='15';change('tip-method','percent');assert.equal($('tip-percent').disabled,false);assert.equal($('tip-fixed').disabled,true);
+  $('tip-fixed').value='';document.querySelector('[data-run="tip"]').click();await waitFor(()=>$('answer').textContent.includes('Tip %: 16.00%'),'percent tip ignores disabled amount input and reports adjusted rate');$('tip-fixed').value='15';
   change('mode','functions');$('function-save').click();change('mode','scientific');$('expression').value='f(3)';document.querySelector('.key[data-evaluate]').click();await waitFor(()=>$('answer').textContent==='10','saved function');
   const edit=source=>{$('expression').value=source;$('expression').dispatchEvent(new window.Event('input'));};
+  key('AC').click();key('8').click();key('*').click();key('sqrt()').click();key('2').click();key('^2').click();
+  assert.equal($('expression').value,'8*sqrt(2^2)','power key stays inside the radical at the current cursor');
+  assert.ok($('expression-preview').querySelector('msqrt msup'),'root roof contains the complete power');key('=').click();await waitFor(()=>$('answer').textContent==='16','root with an internal exponent computes correctly');
+  edit('sqrt(2)');$('expression').setSelectionRange(7,7);key('^2').click();assert.equal($('expression').value,'sqrt(2)^2','placing the cursor after the root still squares the whole root');
+  edit('sqrt(2)');$('expression').setSelectionRange(6,6);key('^()').click();assert.equal($('expression').value,'sqrt(2^())');assert.ok($('expression-preview').querySelector('msqrt msup .input-slot'),'editable exponent stays under the root roof');
+  assert.ok($('mode').closest('.mode-picker'),'mode dropdown has an explicit arrow container');
+  edit('7+8');key('8').focus();
+  const enter=new window.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true});key('8').dispatchEvent(enter);
+  assert.equal(enter.defaultPrevented,true);await waitFor(()=>$('answer').textContent==='15','Enter evaluates with focus on a numeric key');assert.equal($('expression').value,'7+8');
+  edit('B=5');$('expression').dispatchEvent(new window.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));await waitFor(()=>$('note').textContent.includes('Stored in B'),'inline STO');
+  assert.equal(JSON.parse(localStorage.getItem('calcmax-web-v1')).variables.B.value,'5');
+  edit('B+2');key('=').click();await waitFor(()=>$('answer').textContent==='7','recall inline STO');
+  edit('B=B+1');key('=').click();await waitFor(()=>$('note').textContent.includes('Stored in B'),'self-referential STO');
+  edit('B');key('=').click();await waitFor(()=>$('answer').textContent==='6','STO freezes its previous value');
+  change('mode','graph');await waitFor(()=>!document.documentElement.dataset.busy.includes('true'),'graph idle');
+  change('graph-selected','1');assert.equal($('graph-plot').querySelector('path[data-curve="1"]').getAttribute('stroke-width'),'4');assert.equal($('graph-plot').querySelector('path[data-curve="0"]').getAttribute('stroke-width'),'2');
+  $('graph-formulas').children[0].click();assert.equal($('graph-selected').value,'0');assert.equal($('graph-plot').querySelector('path[data-curve="0"]').getAttribute('stroke-width'),'4');
+  change('mode','statistics');assert.equal($('statistics-op').querySelector('[value="regression"]'),null);assert.ok($('regression-kind').closest('#regression-section'));
+  document.querySelector('[data-run="regression"]').click();await waitFor(()=>$('regression-caption').textContent.includes('y='),'independent regression action');assert.equal($('statistics-op').value,'mean');assert.equal($('regression-transfer').hidden,false);
+  $('regression-clear').click();assert.equal($('regression-caption').textContent,'');assert.equal($('regression-transfer').hidden,true);
+  change('mode','scientific');
   const shifted=input=>{key('SHIFT').click();key(input).click();};
   key('AC').click();shifted('+');shifted('-');assert.equal($('expression').value,'pi*e');
   key('=').click();await waitFor(()=>/(?:π|pi)/.test($('answer').textContent)&&!$('answer').querySelector('.error'),'pi times Euler constant');
@@ -179,7 +206,7 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
     change('mode','statistics');assert.equal($('statistics-op-math'),null,'no expression sits beside the Analyze dropdown');$('statistics-data').value='1\n2\n4';change('statistics-op','stats');document.querySelector('[data-run="statistics"]').click();await waitFor(()=>$('answer').querySelector('mtable'),'MathML statistics rows');
     $('exact-toggle').click();for(const number of $('answer').querySelectorAll('mn')){const match=/\.([0-9]+)(?:e|$)/i.exec(number.textContent);if(match)assert.ok(match[1].length<=3,number.textContent);}
     $('exact-toggle').click();change('distribution-family','normal');change('distribution-query','pdf');$('distribution-x').value='1';document.querySelector('[data-run="distribution"]').click();await waitFor(()=>$('answer').querySelector('mfrac')&&!document.querySelector('[data-run="distribution"]').disabled,'exact normal density');$('exact-toggle').click();assert.equal($('answer').textContent,'0.242');$('exact-toggle').click();assert.ok($('distribution-math').querySelector('math'));
-    change('mode','matrix');$('matrix-name').value='B';$('matrix-store').click();await waitFor(()=>JSON.parse(localStorage.getItem('calcmax-web-v1')).variables.B,'matrix storage');$('matrix-clear').click();$('matrix-load').click();assert.equal($('matrix-grid').querySelector('input').value,'1');
+    change('mode','matrix');$('matrix-name').value='B';$('matrix-store').click();await waitFor(()=>JSON.parse(localStorage.getItem('calcmax-web-v1')).variables.B?.kind==='list','matrix storage replaces the numeric variable');$('matrix-clear').click();$('matrix-load').click();assert.equal($('matrix-grid').querySelector('input').value,'1');
   });
   await t.test('graph controls connect all Android analysis operations and ranges/sliders stay below the plot',async()=>{
     change('mode','graph');$('graph-source').value='x^2-1\nx';$('graph-source').dispatchEvent(new window.Event('input'));for(const [id,number] of [['graph-min','-2'],['graph-max','2'],['graph-ymin','-2'],['graph-ymax','4']]){$(id).value=number;$(id).dispatchEvent(new window.Event('change'));}
@@ -203,12 +230,21 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
   });
   await t.test('tip has answers only, no extra rows, and the allocated amounts add up to Total',async()=>{
     change('mode','tip');$('tip-people').value='3';document.querySelector('[data-run="tip"]').click();await waitFor(()=>$('answer').textContent.includes('Per person: 39'),'whole amounts for three people');assert.match($('answer').textContent,/Tip: 17/);assert.match($('answer').textContent,/Total: 117/);assert.equal($('tip-amount-math'),null);assert.equal($('result-source').hidden,true);assert.doesNotMatch($('answer').textContent,/Extra/);
-    $('tip-whole').checked=false;document.querySelector('[data-run="tip"]').click();await waitFor(()=>$('answer').textContent.includes('38.34,38.33,38.33'),'cent remainder allocation');$('tip-whole').checked=true;
+    assert.match($('answer').textContent,/Tip %: 17\.00%/);
+    $('tip-whole').checked=false;document.querySelector('[data-run="tip"]').click();await waitFor(()=>$('answer').textContent.includes('38.34,38.33,38.33'),'cent remainder allocation');assert.match($('answer').textContent,/Tip %: 15\.00%/);$('tip-whole').checked=true;
     assert.equal(3834+3833+3833,11500);change('mode','currency');assert.equal($('currency-amount-math'),null,'no expression sits next to the currency amount');
     $('settings-button').click();const digits=document.querySelector('[data-setting="digits"]');digits.value='10';digits.dispatchEvent(new window.Event('change'));$('settings-close').click();change('mode','scientific');
   });
   $('history-button').click();assert.ok($('dialog').open);assert.ok($('dialog-body').textContent.includes('f(3)'));$('dialog-close').click();
-  $('catalog-button').click();assert.ok($('dialog-body').textContent.includes('sin()'));$('dialog-close').click();
+  $('catalog-button').click();assert.ok($('dialog-body').textContent.includes('sin()'));assert.ok($('dialog').classList.contains('catalog-dialog'));assert.ok($('dialog-body').querySelector('.catalog-scroll'));
+  const catalogSearch=$('dialog-body').querySelector('input'),catalogClear=$('dialog-body').querySelector('.catalog-search-clear');
+  assert.equal(catalogClear.hidden,true);catalogSearch.value='cos';catalogSearch.dispatchEvent(new window.Event('input'));assert.equal(catalogClear.hidden,false);assert.equal($('dialog-body').querySelector('.catalog-scroll').textContent.includes('sin()'),false);
+  catalogClear.click();assert.equal(catalogSearch.value,'');assert.equal(catalogClear.hidden,true);assert.ok($('dialog-body').querySelector('.catalog-scroll').textContent.includes('sin()'));assert.equal(document.activeElement,catalogSearch);
+  [...$('dialog-body').querySelectorAll('button')].find(button=>button.textContent==='Help').click();await waitFor(()=>$('dialog-body').querySelector('.catalog-example'),'inline catalog help');
+  const helpSearch=$('dialog-body').querySelector('input');helpSearch.value='banker';helpSearch.dispatchEvent(new window.Event('input'));assert.ok($('dialog-body').textContent.includes('round(x,n)'));assert.equal($('dialog-body').textContent.includes('Sine of x'),false);
+  const helpClear=$('dialog-body').querySelector('.catalog-search-clear');assert.equal(helpClear.hidden,false);assert.equal(helpClear.getAttribute('aria-label'),'Clear search');helpClear.click();assert.equal(helpSearch.value,'');assert.equal(helpClear.hidden,true);assert.ok($('dialog-body').textContent.includes('Sine of x'));assert.equal(document.activeElement,helpSearch);
+  helpSearch.value='banker';helpSearch.dispatchEvent(new window.Event('input'));
+  $('dialog-body').querySelector('.catalog-example').click();assert.equal($('expression').value,'round(2.5)');assert.equal($('dialog').open,false);
   $('about-button').click();assert.equal($('dialog-body').querySelector('button').textContent,'Close');$('dialog-close').click();
   for(let i=1;i<=12;i++){edit(`${i}+100`);key('=').click();await waitFor(()=>$('answer').textContent===String(i+100),`tape calculation ${i}`);}
   const recent=Array.from($('tape-history').querySelectorAll('.tape-expression'));

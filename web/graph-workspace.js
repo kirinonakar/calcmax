@@ -73,6 +73,11 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
     if(derivative!==null&&kind()==='cartesian'&&expressions()[derivative])labels.push(`diff((${expressions()[derivative]}),x)`);
     for(const line of graphSources(value('graph-source'),kind()).filter(s=>s.startsWith('[shade]')))labels.push(line.slice(7).split(';')[0].trim());
     renderFormulas($('graph-formulas'),labels,{digits:options().displayDigits});
+    [...$('graph-formulas').children].slice(0,expressions().length).forEach((line,i)=>{
+      line.classList.toggle('selected-curve',i===selected());line.tabIndex=0;line.setAttribute('role','button');line.setAttribute('aria-pressed',String(i===selected()));
+      const pick=()=>{$('graph-selected').value=String(i);$('graph-selected').onchange();};
+      line.onclick=pick;line.onkeydown=event=>{if(['Enter',' '].includes(event.key)){event.preventDefault();pick();}};
+    });
   }
   function render(){
     formulas();renderRangeNumbers();for(const caption of $('graph-parameters').querySelectorAll('[data-parameter]'))caption.textContent=`${caption.dataset.parameter} = ${displayNumber(parameters[caption.dataset.parameter],options().displayDigits)}`;if(!result||!bounds)return;
@@ -136,7 +141,7 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
   $('graph-fit').onclick=()=>{const view=bounds||currentBounds(),curves=derivative!==null?(result?.curves||[]).slice(0,expressions().length):result?.curves||[],ys=curves.flat().filter(p=>p&&p.every(Number.isFinite)&&p[0]>=view.xmin&&p[0]<=view.xmax).map(p=>p[1]);if(ys.length){const low=Math.min(...ys),high=Math.max(...ys),padding=Math.max((high-low)*.12,high===low?1:1e-6);changeView({...view,ymin:low-padding,ymax:high+padding});}};
   $('graph-reset').onclick=()=>{analysis=null;trace=null;integral=null;surface.rotation=35;surface.elevation=32;surface.zoom=1;$('graph-rotation').value='35';$('graph-elevation').value='32';$('graph-surface-zoom').value='1';if(kind()==='sequence'){showNumber('graph-min',0);showNumber('graph-max',20);changeView({xmin:0,xmax:20,ymin:-2,ymax:20});queue();}else if(kind()==='differential'){showNumber('graph-min',-5);showNumber('graph-max',5);changeView({xmin:-5,xmax:5,ymin:-3,ymax:5});}else if(kind()==='surface'){$('graph-zmin').value='';$('graph-zmax').value='';changeView({xmin:-3,xmax:3,ymin:-3,ymax:3});}else changeView({xmin:-10,xmax:10,ymin:-5,ymax:5});};
   $('graph-axis').onclick=()=>{radianAxis=!radianAxis;setText($('graph-axis'),radianAxis?'x: π rad':'x: decimal');render();};
-  $('graph-selected').onchange=()=>{analysis=null;trace=null;if($('graph-derivative').checked){derivative=selected();queue();}render();};
+  $('graph-selected').onchange=()=>{analysisRevision++;analysis=null;trace=null;integral=null;if($('graph-derivative').checked){derivative=selected();queue();}render();persist();};
   $('graph-derivative').onchange=()=>{derivative=$('graph-derivative').checked?selected():null;queue();formulas();};
   $('graph-analysis-run').onclick=()=>analyze();$('graph-analysis-clear').onclick=()=>{analysisRevision++;analysis=null;trace=null;integral=null;render();};
   function analysisControls(){const action=value('graph-analysis-action');$('graph-other').closest('label').hidden=action!=='intersection';$('graph-analysis-b').closest('label').hidden=['derivative','tangent'].includes(action);$('graph-tangent-position').hidden=action!=='tangent';$('graph-analysis-a-slider').hidden=action==='tangent';$('graph-analysis-a-value').hidden=action==='tangent';$('graph-tangent-slider').min=String(numeric('graph-min'));$('graph-tangent-slider').max=String(numeric('graph-max'));}

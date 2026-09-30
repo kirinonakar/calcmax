@@ -8,5 +8,6 @@ The static web build includes:
 - [SymPy 1.14.0](https://www.sympy.org/), BSD license. The build extracts the full license to [vendor/licenses/sympy-LICENSE.txt](vendor/licenses/sympy-LICENSE.txt); the original wheel also contains all notices.
 - [mpmath 1.4.1](https://mpmath.org/), BSD license. The build extracts the full license to [vendor/licenses/mpmath-LICENSE.txt](vendor/licenses/mpmath-LICENSE.txt); the original wheel also contains its notices.
 - [jsdom](https://github.com/jsdom/jsdom), MIT license, is used only for development tests and is not shipped to the browser.
+- [STIX Two Math 2.13 b171](https://github.com/stipub/stixfonts/releases/tag/v2.13b171), SIL Open Font License 1.1, is bundled for consistent radical and script geometry on mobile and desktop. See [the font license](fonts/OFL.txt).
 
 The optional online currency workspace uses [ExchangeRate-API's open daily reference rates](https://www.exchangerate-api.com/docs/free), only when the user requests them. Rates and their reference timestamps are cached locally.
