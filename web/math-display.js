@@ -1,5 +1,6 @@
 import {roundNumber} from './display-format.js';
 import {expressionTree} from './expression-tree.js';
+import {trackMathRoots} from './math-roots.js';
 const NS = 'http://www.w3.org/1998/Math/MathML';
 function el(tag,children=[],text='') {
   const result = document.createElementNS(NS,tag);
@@ -26,8 +27,10 @@ export function mathDisplay(tree,digits=10,decimal=false,{notation='off',groupin
     const args = (t.args || []).map(child=>render(child,allowNotation&&t.kind==='unary')), value = t.value || '';
     switch(t.kind) {
       case 'fraction': return el('mfrac',args);
-      case 'root': return el('msqrt',args);
-      case 'indexed-root': return el('mroot',args);
+      case 'root': case 'indexed-root': {
+        const contents=args.map(arg=>{const content=row([arg]);content.classList.add('math-root-content');return content;});
+        return el(t.kind==='root'?'msqrt':'mroot',contents);
+      }
       case 'power': return superscript(['sum','product','explicit-product','implicit-product','unary','relation'].includes(t.args[0]?.kind)?fenced([args[0]]):args[0],args[1]);
       case 'sum': return row(args.flatMap((a,i) => i && t.args[i].kind !== 'unary' ? [operator('+'),a] : [a]));
       case 'product': return row(args.flatMap((a,i)=>{const item=t.args[i].kind==='sum'?fenced([a]):a;return i&&!(t.args[i-1].kind==='number'&&t.args[i].kind==='symbol')?[operator('·'),item]:[item];}));
@@ -83,5 +86,6 @@ export function mathDisplay(tree,digits=10,decimal=false,{notation='off',groupin
   function render(t,allowNotation=true){const result=draw(t,allowNotation);if(t?.start!==undefined){result.setAttribute('data-source-start',String(t.start));result.setAttribute('data-source-end',String(t.end));}return result;}
   const math = el('math',[render(tree)]);
   math.setAttribute('display','block');
+  trackMathRoots(math);
   return math;
 }

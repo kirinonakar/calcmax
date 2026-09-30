@@ -49,7 +49,10 @@ math{font-family:"CalcMax Math","Cambria Math",math;font-weight:400;font-synthes
 :root[data-workspace="scientific"] #expression{display:none;resize:none;height:100%;min-height:0;padding:4px 0;font-size:clamp(16px,3vw,28px);line-height:1.35;overflow:auto}
 :root[data-workspace="scientific"] .expression-preview{display:flex;align-items:center;min-width:0;min-height:0;overflow:auto;padding:4px 0;font-family:"Cambria Math",Cambria,serif;font-size:clamp(20px,4vw,32px);white-space:pre-wrap;overflow-wrap:anywhere;cursor:text}
 :root[data-workspace="scientific"] .expression-preview math{margin:0;flex-shrink:0}
-.input-math{position:relative;display:inline-block;flex-shrink:0}
+.input-math,.math-frame{position:relative;display:inline-block;flex-shrink:0}
+.math-root-overlay{position:absolute;left:0;top:0;overflow:visible;pointer-events:none;color:var(--math-ink)}
+.math-root-painted{color:transparent}
+.math-root-painted>.math-root-content{color:var(--math-ink)}
 .expression-preview .selected{background:var(--operator)}.expression-preview .input-slot{color:var(--muted);border:1px dashed var(--line)}
 .input-caret{position:absolute;display:block;width:2px;background:var(--accent);pointer-events:none;animation:input-blink 1.1s step-end infinite}.text-caret{color:var(--accent);animation:input-blink 1.1s step-end infinite}
 @keyframes input-blink{50%{opacity:0}}@media(prefers-reduced-motion:reduce){.input-caret,.text-caret{animation:none}}

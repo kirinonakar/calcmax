@@ -20,6 +20,7 @@ import {unitGroups} from './unit-groups.js';
 import {bindPythonEditor} from './python-tools.js';
 import {defineFunction,encodeFunctions,decodeFunctions} from './function-transfer.js';
 import {moveMathCursor} from './input-navigation.js';
+import {fractionInput} from './fraction-input.js';
 import {appVersion} from './app-version.js';
 import {parseCatalogHelp,helpExampleInput} from './catalog-help.js';
 
@@ -172,12 +173,13 @@ function preview() {
 }
 function renderInputCursor(){const field=$('expression'),display=$('expression-preview'),math=display.querySelector('math');if(math)markInputCursor(math,field.value,field.selectionStart,field.selectionEnd);else if(!field.value&&!display.querySelector('.text-caret')){const cursor=element('span','│','text-caret');display.append(cursor);}}
 $('expression-preview').onclick=event=>{const target=event.target.closest('[data-source-start]');if(target){const field=$('expression');field.setSelectionRange(Number(target.getAttribute('data-source-start')),Number(target.getAttribute('data-source-end')));}else{$('expression').setSelectionRange(value('expression').length,value('expression').length);}preview();};
-function insert(text,cursor=null,{factor=false}={}) {
+function insert(text,cursor=null,{factor=false,fraction=false}={}) {
   if(busy)return;
   const field=$('expression'),undo=undoStack();undo.push(field.value);if(undo.length>100)undo.shift();
-  if(committed){inputAnswer=null;field.value=!lastResult?.assignment&&/^[+\-*/÷^%!∠]/.test(text)?'Ans':'';field.setSelectionRange(field.value.length,field.value.length);committed=false;$('commit-indicator').textContent='';}
+  if(committed){inputAnswer=null;field.value=!lastResult?.assignment&&(fraction||/^[+\-*/÷^%!∠]/.test(text))?'Ans':'';field.setSelectionRange(field.value.length,field.value.length);committed=false;$('commit-indicator').textContent='';}
   if(state.autoCloseBrackets&&text.length===1&&field.selectionStart===field.selectionEnd&&!overwrite){const pairs={'(' : ')','[':']','{':'}'};if(pairs[text]){text+=pairs[text];cursor=1;}else if(')]}'.includes(text)&&field.value[field.selectionStart]===text){field.setSelectionRange(field.selectionStart+1,field.selectionStart+1);preview();return;}}
-  const start=field.selectionStart,end=overwrite&&field.selectionEnd===start?Math.min(field.value.length,start+text.length):field.selectionEnd;
+  let start=field.selectionStart,end=!fraction&&overwrite&&field.selectionEnd===start?Math.min(field.value.length,start+text.length):field.selectionEnd;
+  if(fraction){({start,end,text,cursor}=fractionInput(field.value,start,end));}
   let prefix='',suffix='';
   // Keypad operands are separate factors; typed/pasted names remain intact.
   if(factor&&(start===end||/^[\p{L}_][\p{L}\p{N}_]*$/u.test(text))){
@@ -323,6 +325,7 @@ async function performKey(input){
   else if(input==='DMS_INPUT'){const markers=value('expression').match(/[°′″]/g)||[];insert(['°','′','″'][markers.length%3]);}
   else if(input==='RANDOM')insert(String(Math.random()));
   else if(input==='RELATION')insert('=');
+  else if(input==='()/()')insert(input,null,{factor:true,fraction:true});
   else if(input==='*10^()'){const source=value('expression');insert(source&&!committed?input:'1'+input,(source&&!committed?input:'1'+input).indexOf('(')+1);}
   else {
     // Parenthesis templates place the cursor in their first empty argument.

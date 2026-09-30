@@ -1,4 +1,4 @@
-self.CALCMAX_CACHE = 'calcmax-static-5f0f641cd3f027a7';
+self.CALCMAX_CACHE = 'calcmax-static-c5097465f985b6c6';
 self.CALCMAX_ASSETS = [
   "./",
   "./app-icon.webp",
@@ -20,6 +20,7 @@ self.CALCMAX_ASSETS = [
   "./expression-display.js",
   "./expression-tree.js",
   "./formula-preview.js",
+  "./fraction-input.js",
   "./function-transfer.js",
   "./graph-view.js",
   "./graph-workspace.js",
@@ -30,6 +31,7 @@ self.CALCMAX_ASSETS = [
   "./keypad.js",
   "./LICENSE",
   "./math-display.js",
+  "./math-roots.js",
   "./money.js",
   "./native-locale.js",
   "./parser.js",

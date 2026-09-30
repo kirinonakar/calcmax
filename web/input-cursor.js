@@ -25,10 +25,11 @@ function cursorRect(target,source,start){
 }
 export function markInputCursor(math,source,start,end=start){
   let frame=math.parentElement;
-  if(!frame?.classList.contains('input-math')){
+  if(!frame?.classList.contains('input-math')&&!frame?.classList.contains('math-frame')){
     frame=math.ownerDocument.createElement('span');frame.className='input-math';
     math.replaceWith(frame);frame.append(math);
   }
+  frame.classList.add('input-math');
   for(const node of frame.querySelectorAll('.input-caret'))node.remove();
   const nodes=[...math.querySelectorAll('[data-source-start]')];
   for(const node of nodes)node.classList.toggle('selected',end>start&&Number(node.getAttribute('data-source-start'))>=start&&Number(node.getAttribute('data-source-end'))<=end);
