@@ -34,10 +34,11 @@ private fun displayAmount(value:BigDecimal)=value.setScale(6,RoundingMode.HALF_E
     var tipIsAmount by rememberSaveable{mutableStateOf(false)}
     var tax by rememberSaveable{mutableStateOf("0")}
     var people by rememberSaveable{mutableStateOf("1")}
+    var whole by rememberSaveable{mutableStateOf(true)}
     val places=2
     val result=runCatching{
-        if(tipIsAmount)Money.tipFromAmount(decimalInput(bill),decimalInput(tipAmount),decimalInput(tax),people.toInt(),places)
-        else Money.tip(decimalInput(bill),decimalInput(percent),decimalInput(tax),people.toInt(),places)
+        if(tipIsAmount)Money.tipFromAmount(decimalInput(bill),decimalInput(tipAmount),decimalInput(tax),people.toInt(),places,whole)
+        else Money.tip(decimalInput(bill),decimalInput(percent),decimalInput(tax),people.toInt(),places,whole)
     }
     Panel("Tip calculator","") {
         Field(bill,"Bill before tax",Modifier.fillMaxWidth()){bill=it}
@@ -51,9 +52,13 @@ private fun displayAmount(value:BigDecimal)=value.setScale(6,RoundingMode.HALF_E
             Field(people,"Number of people",Modifier.weight(1f)){people=it}
         }
         if(!tipIsAmount)Choices(listOf("0","5","10","15","18","20","25"),percent,{percent=it})
+        Row(verticalAlignment=Alignment.CenterVertically) {
+            Text(if(isKorean())"1인당 금액을 정수로 보정" else "Whole amounts per person",Modifier.weight(1f))
+            Switch(whole,{whole=it})
+        }
         result.getOrNull()?.let {r->
             val implied=runCatching{
-                if(tipIsAmount)Money.impliedTipPercent(decimalInput(bill),r.tip)?.setScale(4,RoundingMode.HALF_UP)?.stripTrailingZeros()
+                if(tipIsAmount||whole&&people.toInt()>1)Money.impliedTipPercent(decimalInput(bill),r.tip)?.setScale(2,RoundingMode.HALF_UP)?.stripTrailingZeros()
                 else decimalInput(percent).stripTrailingZeros()
             }.getOrNull()
             Text("${if(isKorean())"합계" else "Total"}  ${Money.format(r.total)}",style=MaterialTheme.typography.headlineMedium)

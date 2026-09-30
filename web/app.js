@@ -5,7 +5,7 @@ import {plot,dataBounds} from './plot.js';
 import {readState,writeState,downloadFile} from './storage.js';
 import {t,setLanguage,getLanguage,initialLanguage,translateDOM,applyTheme,setText} from './i18n.js';
 import {renderKeypad as buildKeypad,updateKeypadState,scientificRows,secondRows,numericRows,topKeys,topFunctions} from './keypad.js';
-import {expressionDisplay} from './expression-display.js';
+import {expressionDisplay,expressionInputDisplay} from './expression-display.js';
 import {calcVariables,calcBindings} from './calc-session.js';
 import {previousCalculations,renderPreviousCalculations,followTape} from './calculation-tape.js';
 import {createGraphWorkspace} from './graph-workspace.js';
@@ -15,7 +15,7 @@ import {statisticsCommand,distributionCommand,csvRows,numericStatisticsRows,equa
 import {statisticsPlot} from './statistics-plot.js';
 import {astSource} from './ast-source.js';
 import {tipCommand,moneyResult} from './money.js';
-import {markInputCursor} from './input-cursor.js';
+import {markInputCursor,followInputCursor,followTextCursor,inputPointPosition} from './input-cursor.js';
 import {unitGroups} from './unit-groups.js';
 import {bindPythonEditor} from './python-tools.js';
 import {defineFunction,encodeFunctions,decodeFunctions} from './function-transfer.js';
@@ -42,6 +42,7 @@ state.secondKeys=!!saved.secondKeys;
 state.tapeClearedAt=Number(saved.tapeClearedAt)||0;
 state.resultDisplayMode=['eng','sci'].includes(saved.resultDisplayMode)?saved.resultDisplayMode:'off';
 state.autoCloseBrackets=saved.autoCloseBrackets!==false;
+state.wordWrap=!!saved.wordWrap;
 state.persistHistory=saved.persistHistory!==false;state.haptics=!!saved.haptics;state.sound=!!saved.sound;
 state.inputFont=Math.max(10,Math.min(42,Number(saved.inputFont)||24));state.outputFont=Math.max(10,Math.min(48,Number(saved.outputFont)||30));
 state.assumptions=objectOrEmpty(saved.assumptions);
@@ -52,6 +53,7 @@ let activeHistoryEntry=null,inputAnswer=null;
 let tapeRows=null,tapeFormat='',keypadSignature='',saveTimer=null,keyAudioContext=null;
 const tapeFollow=followTape($('calculation-tape'),$('tape-active'));
 const expressionUndo=[];
+let previewSource=value('expression');
 const undoStack=()=>calcSession?.undo||expressionUndo;
 for(const [id,setting] of Object.entries(state.fields)) {
   const field=$(id);
@@ -166,13 +168,14 @@ function preview() {
   const source=value('expression'),display=$('expression-preview');display.replaceChildren();
   let target=display;
   if(calcSession){display.append(element('div',calcSession.source,'calc-source'));target=element('div','','calc-value');target.append(element('span',`${calcSession.names[calcSession.index]} = `));display.append(target);}
-  if(source)try{target.append(expressionDisplay(source));}catch{target.append(document.createTextNode(source));}
+  if(source)target.append(expressionInputDisplay(source,{wordWrap:state.wordWrap}));
+  previewSource=source;
   renderInputCursor();
   renderTape();tapeFollow.latest();
   schedulePersist();
 }
-function renderInputCursor(){const field=$('expression'),display=$('expression-preview'),math=display.querySelector('math');if(math)markInputCursor(math,field.value,field.selectionStart,field.selectionEnd);else if(!field.value&&!display.querySelector('.text-caret')){const cursor=element('span','│','text-caret');display.append(cursor);}}
-$('expression-preview').onclick=event=>{const target=event.target.closest('[data-source-start]');if(target){const field=$('expression');field.setSelectionRange(Number(target.getAttribute('data-source-start')),Number(target.getAttribute('data-source-end')));}else{$('expression').setSelectionRange(value('expression').length,value('expression').length);}preview();};
+function renderInputCursor(){const field=$('expression'),display=$('expression-preview'),math=display.querySelector('.input-flow,math');if(math){const marker=markInputCursor(math,field.value,field.selectionStart,field.selectionEnd);if(!typing)followInputCursor(display,marker||display.querySelector('.selected'),12,state.wordWrap);}else if(!field.value&&!display.querySelector('.text-caret')){const cursor=element('span','│','text-caret');display.append(cursor);}if(typing&&!state.wordWrap)followTextCursor(field);}
+$('expression-preview').onclick=event=>{const target=event.target.closest('[data-source-start]');if(target){const field=$('expression'),start=Number(target.getAttribute('data-source-start')),end=Number(target.getAttribute('data-source-end'));if(target.classList.contains('selected')||field.selectionStart===field.selectionEnd&&field.selectionStart>=start&&field.selectionStart<=end){const at=inputPointPosition(target,field.value,event.clientX,event.clientY);field.setSelectionRange(at,at);}else field.setSelectionRange(start,end);}else{$('expression').setSelectionRange(value('expression').length,value('expression').length);}preview();};
 function insert(text,cursor=null,{factor=false,fraction=false}={}) {
   if(busy)return;
   const field=$('expression'),undo=undoStack();undo.push(field.value);if(undo.length>100)undo.shift();
@@ -209,12 +212,14 @@ function mode(mode) {
 }
 $('mode').onchange=()=>mode(value('mode'));
 $('angle').onchange=persist;
-$('expression').oninput=()=>{if(committed)inputAnswer=null;committed=false;if(!calcSession)$('commit-indicator').textContent='';preview();};
+$('expression').oninput=()=>{if(value('expression')!==previewSource){const undo=undoStack();undo.push(previewSource);if(undo.length>100)undo.shift();}if(committed)inputAnswer=null;committed=false;if(!calcSession)$('commit-indicator').textContent='';preview();};
+$('expression').addEventListener('select',renderInputCursor);
+$('expression').addEventListener('keyup',renderInputCursor);
 $('expression').addEventListener('beforeinput',event=>{if(typing&&state.autoCloseBrackets&&event.inputType==='insertText'&&event.data?.length===1&&'()[]{}'.includes(event.data)){event.preventDefault();insert(event.data);}});
 $('expression').addEventListener('paste',event=>{const text=event.clipboardData?.getData('text');if(!text)return;try{const converted=latexInput(text);if(converted!==text){event.preventDefault();insert(converted);}}catch(exc){event.preventDefault();toast(exc.message);}});
 $('expression').addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();event.stopPropagation();if(!event.repeat)evaluate();}if(event.key==='Escape'){event.preventDefault();if(calcSession)cancelCalc();else if(busy)engine.cancel();else{$('expression').value='';preview();}}});
 $('clear').onclick=()=>{if(calcSession){cancelCalc();return;}expressionUndo.push(value('expression'));$('expression').value='';committed=false;lastResult=null;activeHistoryEntry=null;inputAnswer=null;$('answer').replaceChildren();$('note').textContent='';$('commit-indicator').textContent='';preview();};
-$('undo').onclick=()=>{const undo=undoStack();if(undo.length){$('expression').value=undo.pop();preview();}};
+$('undo').onclick=()=>{if(busy)return;const undo=undoStack();if(undo.length){const field=$('expression');field.value=undo.pop();field.setSelectionRange(field.value.length,field.value.length);committed=false;if(!calcSession)$('commit-indicator').textContent='';preview();}};
 async function clipboard(text) { try{await navigator.clipboard.writeText(text);toast('복사했습니다.');}catch{const field=element('textarea');field.value=text;openDialog('복사할 텍스트',field);field.select();} }
 $('copy').onclick=()=>{const f=$('expression');clipboard(f.value.slice(f.selectionStart,f.selectionEnd)||f.value);};
 $('cut').onclick=()=>{const field=$('expression'),start=field.selectionStart,end=field.selectionEnd;if(start!==end){clipboard(field.value.slice(start,end));undoStack().push(field.value);field.setRangeText('',start,end,'end');committed=false;preview();}};
@@ -326,7 +331,7 @@ async function performKey(input){
   else if(input==='RANDOM')insert(String(Math.random()));
   else if(input==='RELATION')insert('=');
   else if(input==='()/()')insert(input,null,{factor:true,fraction:true});
-  else if(input==='*10^()'){const source=value('expression');insert(source&&!committed?input:'1'+input,(source&&!committed?input:'1'+input).indexOf('(')+1);}
+  else if(input==='*10^()'){const field=$('expression'),before=field.value.slice(0,field.selectionStart).trimEnd(),text=!committed&&/[\p{L}\p{N}_.)\]}!%°′″]$/u.test(before)?input:'1'+input;insert(text,text.indexOf('(')+1,{factor:true});}
   else {
     // Parenthesis templates place the cursor in their first empty argument.
     insert(input,input.includes('(')?input.indexOf('(')+1:null,{factor:true});
@@ -402,7 +407,7 @@ function settingsDialog() {
   const content=element('div');
   for(const [key,label,min,max] of [['precision','내부 유효 숫자',3,200],['digits','표시 소수 자릿수',2,200]]){const input=element('input');input.type='number';input.min=min;input.max=max;input.value=state[key];input.dataset.setting=key;input.onchange=()=>{state[key]=Math.max(min,Math.min(max,Number(input.value)||min));state.digits=Math.min(state.precision,state.digits);input.value=state[key];$('digits-indicator').textContent=`≤ ${state.digits} digits`;persist();refreshDisplays();};const holder=element('label',label);holder.append(input);content.append(holder);}
   for(const [key,label,min,max] of [['inputFont','Input font',10,42],['outputFont','Output font',10,48]]){const input=element('input');input.type='range';input.min=min;input.max=max;input.value=state[key];input.dataset.setting=key;input.oninput=()=>{state[key]=Number(input.value);applyFonts();persist();};const holder=element('label',label);holder.append(input);content.append(holder);}
-  for(const [key,label] of [['autoCloseBrackets','Bracket auto-close'],['persistHistory','Save history locally'],['haptics','Key vibration'],['sound','Key sound']]){const input=element('input');input.type='checkbox';input.checked=state[key];input.dataset.setting=key;input.onchange=()=>{state[key]=input.checked;persist();};const holder=element('label',label,'check');holder.append(input);content.append(holder);}
+  for(const [key,label] of [['autoCloseBrackets','Bracket auto-close'],['wordWrap','Input word wrap'],['persistHistory','Save history locally'],['haptics','Key vibration'],['sound','Key sound']]){const input=element('input');input.type='checkbox';input.checked=state[key];input.dataset.setting=key;input.onchange=()=>{state[key]=input.checked;if(key==='wordWrap'){applyWordWrap();preview();}persist();};const holder=element('label',label,'check');holder.append(input);content.append(holder);}
   content.append(element('p','계산 기록, 변수, 함수, 작업 내용은 이 브라우저에 저장됩니다. 전체 백업에는 Python 코드도 포함됩니다.','hint'),control('전체 백업 내보내기',()=>{persist();downloadFile('calcmax-backup.json',JSON.stringify(state,null,2),'application/json');}),control('백업 가져오기',()=>pickFile('.json',async file=>{
     const backup=JSON.parse(await file.text());
     if(!backup||typeof backup!=='object'||!backup.fields||!backup.variables||!backup.functions)throw new Error('CalcMax 웹 백업 파일이 아닙니다.');
@@ -457,6 +462,8 @@ function refreshWorkspaceMath(){
   for(const [id,sources] of targets){const input=$(id);let preview=id==='distribution-math'?input:$(id+'-math');if(!preview){preview=element('div','','formula-preview');preview.id=id+'-math';input.closest('label')?.insertAdjacentElement('afterend',preview)||input.insertAdjacentElement('afterend',preview);}try{renderFormulas(preview,sources(),{digits:state.digits});}catch{preview.replaceChildren();preview.hidden=true;}}
 }
 function applyFonts(){document.documentElement.style.setProperty('--input-font',state.inputFont+'px');document.documentElement.style.setProperty('--output-font',state.outputFont+'px');renderInputCursor();}
+function applyWordWrap(){document.documentElement.dataset.wordWrap=String(state.wordWrap);$('expression').wrap=state.wordWrap?'soft':'off';for(const id of ['expression-preview','expression']){$(id).scrollLeft=0;$(id).scrollTop=0;}}
+applyWordWrap();
 function refreshDisplays(){renderResult();refreshWorkspaceMath();graphs.render();if(statisticsGraph)statisticsPlot($('statistics-plot'),statisticsGraph.rows,{type:value('statistics-plot-type'),digits:state.digits,curve:statisticsGraph.curve});}
 applyFonts();
 for(const field of document.querySelectorAll('main input,main textarea,main select'))if(field.id!=='expression'&&!field.id.startsWith('graph-')&&!field.id.startsWith('python-'))for(const name of ['input','change'])field.addEventListener(name,refreshWorkspaceMath);
@@ -549,7 +556,9 @@ async function run(workspace) {
 }
 document.querySelectorAll('[data-run]').forEach(button=>button.onclick=()=>run(button.dataset.run));
 document.addEventListener('keydown',event=>{
-  if(value('mode')==='scientific'&&!$('dialog').open&&!$('settings-dialog').open&&event.key==='Enter'&&!event.shiftKey&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&!event.isComposing&&event.target.closest('.keypad')){
+  // Enter calculates while calculator controls retain focus after a click.
+  // Cancel the native button activation before it can toggle display options.
+  if(value('mode')==='scientific'&&!$('dialog').open&&!$('settings-dialog').open&&event.key==='Enter'&&!event.shiftKey&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&!event.isComposing&&event.target.closest('.keypad, #calculator-display .answer-toolbar, #calculator-display .edit-actions')){
     event.preventDefault();event.stopPropagation();if(!event.repeat)evaluate();
   }
 },true);

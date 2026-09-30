@@ -62,6 +62,8 @@ export function mathDisplay(tree,digits=10,decimal=false,{notation='off',groupin
       case 'dms': return row(args.flatMap((a,i) => [a,operator(['°','′','″'][i])]));
       case 'symbol': return el('mi',[],{pi:'π',oo:'∞',E:'e',I:'i'}[value]||value);
       case 'fixed-number': return el('mn',[],value);
+      case 'input-operator': {const result=operator(value==='=='?'=':value);result.setAttribute('form','infix');return result;}
+      case 'input-text': return el('mtext',[],value);
       case 'number': case 'text': {
         let shown = value;
         if(allowNotation&&notation!=='off'&&/^-?\d+(?:\.\d+)?(?:e[+-]?\d+)?$/i.test(value)&&/[1-9]/.test(value.split(/e/i)[0])) {
@@ -86,6 +88,7 @@ export function mathDisplay(tree,digits=10,decimal=false,{notation='off',groupin
   function render(t,allowNotation=true){const result=draw(t,allowNotation);if(t?.start!==undefined){result.setAttribute('data-source-start',String(t.start));result.setAttribute('data-source-end',String(t.end));}return result;}
   const math = el('math',[render(tree)]);
   math.setAttribute('display','block');
+  math.setAttribute('displaystyle','true');
   trackMathRoots(math);
   return math;
 }

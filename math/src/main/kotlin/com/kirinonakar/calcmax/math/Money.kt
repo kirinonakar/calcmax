@@ -6,25 +6,22 @@ import java.math.RoundingMode
 
 data class TipResult(val tip:BigDecimal,val tax:BigDecimal,val total:BigDecimal,val share:BigDecimal,val extraShare:BigDecimal,val extraPeople:Int)
 object Money {
-    fun tip(bill:BigDecimal,percent:BigDecimal,taxPercent:BigDecimal,people:Int,places:Int=2):TipResult {
+    fun tip(bill:BigDecimal,percent:BigDecimal,taxPercent:BigDecimal,people:Int,places:Int=2,whole:Boolean=true):TipResult {
         require(bill.signum()>=0&&percent.signum()>=0&&taxPercent.signum()>=0){"Amounts and percentages must be non-negative"}
         require(people in 1..999){"People must be between 1 and 999"}
         require(places in 0..4)
         val tip=bill.multiply(percent).divide(BigDecimal(100)).setScale(places,RoundingMode.HALF_UP)
-        val tax=bill.multiply(taxPercent).divide(BigDecimal(100)).setScale(places,RoundingMode.HALF_UP)
-        val total=bill.setScale(places,RoundingMode.HALF_UP)+tip+tax
-        val minor=total.movePointRight(places).toBigIntegerExact()
-        val division=minor.divideAndRemainder(people.toBigInteger())
-        val share=BigDecimal(division[0],places)
-        return TipResult(tip,tax,total,share,share+BigDecimal.ONE.movePointLeft(places),division[1].toInt())
+        return tipFromAmount(bill,tip,taxPercent,people,places,whole)
     }
-    fun tipFromAmount(bill:BigDecimal,tipAmount:BigDecimal,taxPercent:BigDecimal,people:Int,places:Int=2):TipResult {
+    fun tipFromAmount(bill:BigDecimal,tipAmount:BigDecimal,taxPercent:BigDecimal,people:Int,places:Int=2,whole:Boolean=true):TipResult {
         require(bill.signum()>=0&&tipAmount.signum()>=0&&taxPercent.signum()>=0){"Amounts and percentages must be non-negative"}
         require(people in 1..999){"People must be between 1 and 999"}
         require(places in 0..4)
-        val tip=tipAmount.setScale(places,RoundingMode.HALF_UP)
+        val originalTip=tipAmount.setScale(places,RoundingMode.HALF_UP)
         val tax=bill.multiply(taxPercent).divide(BigDecimal(100)).setScale(places,RoundingMode.HALF_UP)
-        val total=bill.setScale(places,RoundingMode.HALF_UP)+tip+tax
+        val originalTotal=bill.setScale(places,RoundingMode.HALF_UP)+originalTip+tax
+        val total=if(whole&&people>1)originalTotal.divide(BigDecimal(people),0,RoundingMode.CEILING).multiply(BigDecimal(people)).setScale(places)else originalTotal
+        val tip=originalTip+total-originalTotal
         val minor=total.movePointRight(places).toBigIntegerExact()
         val division=minor.divideAndRemainder(people.toBigInteger())
         val share=BigDecimal(division[0],places)

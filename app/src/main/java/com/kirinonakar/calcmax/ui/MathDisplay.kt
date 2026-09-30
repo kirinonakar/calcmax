@@ -3,6 +3,8 @@ package com.kirinonakar.calcmax.ui
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -10,6 +12,7 @@ import androidx.compose.ui.*
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.*
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
@@ -35,6 +38,17 @@ val LocalCaretVisible=staticCompositionLocalOf{true}
 val LocalActiveToken=staticCompositionLocalOf<IntRange?>{null}
 val LocalPlaceCursor=staticCompositionLocalOf<((Int,Int,Int)->Unit)?>{null}
 val LocalTypedParens=staticCompositionLocalOf<List<IntRange>>{emptyList()}
+val LocalMathInputRevision=staticCompositionLocalOf<Any?>{null}
+
+@Composable private fun followMathCaret(active:Boolean,rect:Rect?=null):Modifier {
+    val revision=LocalMathInputRevision.current
+    if(!active||revision==null)return Modifier
+    val requester=remember {BringIntoViewRequester()}
+    LaunchedEffect(revision,rect) {
+        withFrameNanos{};requester.bringIntoView(rect)
+    }
+    return Modifier.bringIntoViewRequester(requester)
+}
 
 private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspecified)height/2 else it}
 @Composable internal fun MathText(text:String,size:Float,modifier:Modifier=Modifier,blink:Boolean=false,onLayout:(TextLayoutResult)->Unit={},hide:Boolean=false,tint:Color?=null,italic:Boolean=false) {
@@ -42,7 +56,7 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
     val visible=!hide&&(!blink||LocalCaretVisible.current)
     val styled=buildAnnotatedString {append(text);if(!visible)text.forEachIndexed{i,ch->if(ch=='│')addStyle(SpanStyle(color=Color.Transparent),i,i+1)}}
     Text(styled,fontFamily=FontFamily.Serif,fontStyle=if(italic)FontStyle.Italic else FontStyle.Normal,fontSize=size.sp,lineHeight=(size*1.18f).sp,color=color,softWrap=false,onTextLayout=onLayout,
-        modifier=modifier.layout {measurable,constraints->
+        modifier=modifier.then(followMathCaret(blink&&!hide)).layout {measurable,constraints->
             val p=measurable.measure(constraints);val baseline=p[FirstBaseline]
             val axis=if(baseline==AlignmentLine.Unspecified)p.height/2 else baseline-(size.sp.toPx()*.3f).toInt()
             layout(p.width,p.height,mapOf(MathAxis to axis)){p.place(0,0)}
@@ -343,7 +357,7 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
                             drawLine(c.ink,Offset(rect.left,rect.top),Offset(rect.left,rect.bottom),1.dp.toPx())
                         }
                     }
-                    MathText(shown,size,cursorLine.pointerInput(shown,selected,active,place){detectTapGestures{offset->
+                    MathText(shown,size,cursorLine.then(followMathCaret(caret,textLayout?.takeIf{it.layoutInput.text.text==shown}?.getCursorRect(at))).pointerInput(shown,selected,active,place){detectTapGestures{offset->
                         if(selected||active){val index=(textLayout?.takeIf{it.layoutInput.text.text==shown}?.getOffsetForPosition(offset) ?: 0).coerceIn(0,shown.length);place?.invoke(start,end,start+(index.toFloat()/shown.length.coerceAtLeast(1)*(end-start)).toInt())}
                         else select(start,end)
                     }},onLayout={textLayout=it},italic=mathItalic)

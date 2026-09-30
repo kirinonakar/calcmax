@@ -28,10 +28,30 @@ import com.kirinonakar.calcmax.math.BracketAutoClose
 import com.kirinonakar.calcmax.ui.theme.LocalInstrument
 import org.json.JSONObject
 import kotlinx.coroutines.delay
-import com.kirinonakar.calcmax.math.Lexer
-import com.kirinonakar.calcmax.math.Expr
 
 val Modes=listOf("Scientific/CAS","Graph","Python","Equations","Matrix","Vector","Statistics","Programmer","Units","Constants","Tip","Currency","Functions")
+private fun handleMathInputKey(m:CalculatorModel,event:KeyEvent):Boolean {
+    if(event.type!=KeyEventType.KeyDown)return false
+    val session=m.calcSession
+    if(session!=null)return when(event.key){
+        Key.Enter,Key.NumPadEnter->{m.submitCalcValue();true}
+        Key.Backspace->{m.editCalcValue(session.input.delete());true}
+        Key.Delete->{m.editCalcValue(session.input.deleteForward());true}
+        Key.DirectionLeft->{m.editCalcValue(session.input.move(-1));true}
+        Key.DirectionRight->{m.editCalcValue(session.input.move(1));true}
+        else->{val ch=event.nativeKeyEvent.unicodeChar;if(ch>=32&&ch!=127){m.insertCalcValue(ch.toChar().toString());true}else false}
+    }
+    return when(event.key){
+        Key.Enter,Key.NumPadEnter->{m.calculate();true}
+        Key.Backspace->{m.edit(m.editor.delete());true}
+        Key.Delete->{m.edit(m.editor.deleteForward());true}
+        Key.DirectionLeft->{if(m.engineeringConversion)m.shiftEngineering(1)else m.edit(m.editor.moveMatrix(0,-1) ?: m.editor.move(-1));true}
+        Key.DirectionRight->{if(m.engineeringConversion)m.shiftEngineering(-1)else m.edit(m.editor.moveMatrix(0,1) ?: m.editor.move(1));true}
+        Key.DirectionUp->{m.edit(m.editor.moveMatrix(-1,0) ?: m.editor.parent());true}
+        Key.DirectionDown->{m.edit(m.editor.moveMatrix(1,0) ?: m.editor.child());true}
+        else->{val ch=event.nativeKeyEvent.unicodeChar;if(ch>=32&&ch!=127){m.insert(ch.toChar().toString());true}else false}
+    }
+}
 private val LocalCalculatorOverlay=staticCompositionLocalOf<(String)->Unit> { {} }
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable fun CalculatorApp(m:CalculatorModel) {
@@ -221,16 +241,15 @@ internal fun largeHistoryTree(root:JSONObject?):Boolean {
 
 @Composable fun DisplayContent(m:CalculatorModel,typing:Boolean,requestInitialFocus:Boolean=true,scrollState:ScrollState?=null,onInitialFocus:()->Unit={}) {
     val c=LocalInstrument.current
-    val inputTree=remember(m.editor,m.answerDisplay,typing) {
-        if(typing||m.editor.source.length>800)null else m.inputTree()
+    val inputTree=remember(m.editor.source,m.answerDisplay,typing) {
+        if(typing)null else m.inputTree()
     }
-    val compactInput=m.editor.source.length>800||largeHistoryTree(inputTree)
     val focus=remember {FocusRequester()}
     val requestInputFocus:()->Boolean={try {focus.requestFocus()} catch (_:IllegalStateException) {false}}
     var caretVisible by remember{mutableStateOf(true)}
     LaunchedEffect(m.editor,m.committed){caretVisible=true;while(!m.committed){delay(500);caretVisible=!caretVisible}}
-    LaunchedEffect(typing,compactInput,m.poweredOn,requestInitialFocus){
-        if(requestInitialFocus&&!typing&&!compactInput&&m.poweredOn&&scrollState?.isScrollInProgress!=true&&requestInputFocus())onInitialFocus()
+    LaunchedEffect(typing,m.wordWrap,m.poweredOn,requestInitialFocus){
+        if(requestInitialFocus&&!typing&&m.poweredOn&&scrollState?.isScrollInProgress!=true&&requestInputFocus())onInitialFocus()
     }
     val calculating=m.busy||m.previewBusy
     var showCalculationStatus by remember{mutableStateOf(false)}
@@ -240,7 +259,7 @@ internal fun largeHistoryTree(root:JSONObject?):Boolean {
     }
     Column(Modifier.fillMaxWidth().padding(horizontal=14.dp)) {
         if(!m.poweredOn) Box(Modifier.fillMaxWidth().height(66.dp),contentAlignment=Alignment.Center){Text("OFF · press 2nd to resume",color=c.muted)}
-        else if(typing||compactInput) BasicTextField(
+        else if(typing) BasicTextField(
             value=TextFieldValue(m.editor.source,TextRange(m.editor.anchor.coerceIn(0,m.editor.source.length),m.editor.cursor.coerceIn(0,m.editor.source.length))),
             onValueChange={
                 val infinityDeleted=m.editor.atomicInfinityDeletion(it.text)
@@ -267,37 +286,14 @@ internal fun largeHistoryTree(root:JSONObject?):Boolean {
                 }
                 }
             },
-            modifier=Modifier.fillMaxWidth().heightIn(min=60.dp).onPreviewKeyEvent{if(it.type==KeyEventType.KeyDown&&it.key==Key.Enter){m.calculate();true}else false}.semantics{contentDescription="Expression input"},
+            modifier=Modifier.fillMaxWidth().heightIn(min=60.dp).focusRequester(focus).onPreviewKeyEvent{if(it.type==KeyEventType.KeyDown&&it.key in listOf(Key.Enter,Key.NumPadEnter)){m.calculate();true}else false}.semantics{contentDescription="Expression input"},
             textStyle=TextStyle(color=c.ink,fontSize=m.inputFont.sp,fontFamily=FontFamily.Monospace),
-            maxLines=if(compactInput)4 else Int.MAX_VALUE,
+            singleLine=!m.wordWrap,
+            maxLines=if(m.wordWrap)4 else 1,
             readOnly=m.calcSession!=null)
-        else Box(Modifier.fillMaxWidth().heightIn(min=60.dp).focusRequester(focus).onKeyEvent{event->
-            if(event.type!=KeyEventType.KeyDown)false else if(m.calcSession!=null)when(event.key){
-                Key.Enter,Key.NumPadEnter->{m.submitCalcValue();true}
-                Key.Backspace->{m.editCalcValue(m.calcSession!!.input.delete());true}
-                Key.Delete->{m.editCalcValue(m.calcSession!!.input.deleteForward());true}
-                Key.DirectionLeft->{m.editCalcValue(m.calcSession!!.input.move(-1));true}
-                Key.DirectionRight->{m.editCalcValue(m.calcSession!!.input.move(1));true}
-                else->{val ch=event.nativeKeyEvent.unicodeChar;if(ch>=32&&ch!=127){m.insertCalcValue(ch.toChar().toString());true}else false}
-            } else when(event.key){
-                Key.Enter,Key.NumPadEnter->{m.calculate();true}
-                Key.Backspace->{m.edit(m.editor.delete());true}
-                Key.Delete->{m.edit(m.editor.deleteForward());true}
-                Key.DirectionLeft->{if(m.engineeringConversion)m.shiftEngineering(1)else m.edit(m.editor.moveMatrix(0,-1) ?: m.editor.move(-1));true};Key.DirectionRight->{if(m.engineeringConversion)m.shiftEngineering(-1)else m.edit(m.editor.moveMatrix(0,1) ?: m.editor.move(1));true}
-                Key.DirectionUp->{m.edit(m.editor.moveMatrix(-1,0) ?: m.editor.parent());true};Key.DirectionDown->{m.edit(m.editor.moveMatrix(1,0) ?: m.editor.child());true}
-                else->{val ch=event.nativeKeyEvent.unicodeChar;if(ch>=32&&ch!=127){m.insert(ch.toChar().toString());true}else false}
-            }
-        }.focusable().horizontalScroll(rememberScrollState()).semantics{contentDescription="Current expression"},contentAlignment=Alignment.CenterStart){
-            Row(verticalAlignment=Alignment.CenterVertically){
-                CompositionLocalProvider(LocalMathCursorTarget provides if(m.committed)null else m.editor.cursorTarget(),LocalMathAfter provides {a,b->requestInputFocus();m.edit(m.editor.after(a,b))},LocalCaretVisible provides caretVisible,LocalActiveToken provides m.editor.activeToken,LocalTypedParens provides m.typedParens,LocalPlaceCursor provides {a,b,p->requestInputFocus();m.edit(m.editor.placeInToken(a,b,p))}) {
-                    if(m.editor.source.isBlank())Text("│",fontSize=m.inputFont.sp,color=if(caretVisible)c.accent else androidx.compose.ui.graphics.Color.Transparent)
-                    else if(inputTree!=null)MathNode(inputTree,m.inputFont,select={a,b->requestInputFocus();m.edit(m.editor.selectRange(a,b))},selection=minOf(m.editor.anchor,m.editor.cursor)..maxOf(m.editor.anchor,m.editor.cursor))
-                    else Row {Lexer.scan(m.editor.source).filter{it.text.isNotEmpty()}.forEach{token->
-                        MathNode(JSONObject(Expr("text",m.editor.source.substring(token.start,token.end),start=token.start,end=token.end).json()),m.inputFont,select={a,b->requestInputFocus();m.edit(m.editor.selectRange(a,b))},selection=minOf(m.editor.anchor,m.editor.cursor)..maxOf(m.editor.anchor,m.editor.cursor))
-                    }}
-                }
-                Box(Modifier.width(32.dp).heightIn(min=48.dp).clickable{requestInputFocus();val editor=m.editor;m.edit(editor.tree()?.let{editor.after(it.start,it.end)} ?: Editor(editor.source))}.semantics{contentDescription="After expression"},contentAlignment=Alignment.CenterStart){
-                }
+        else Box(Modifier.fillMaxWidth().heightIn(min=60.dp,max=if(m.wordWrap)180.dp else androidx.compose.ui.unit.Dp.Infinity).focusRequester(focus).onKeyEvent{handleMathInputKey(m,it)}.focusable().then(if(m.wordWrap)Modifier.verticalScroll(rememberScrollState())else Modifier.horizontalScroll(rememberScrollState())).semantics{contentDescription="Current expression"},contentAlignment=Alignment.CenterStart){
+            CompositionLocalProvider(LocalMathInputRevision provides if(m.committed)null else m.editor,LocalMathCursorTarget provides if(m.committed)null else m.editor.cursorTarget(),LocalMathAfter provides {a,b->requestInputFocus();m.edit(m.editor.after(a,b))},LocalCaretVisible provides caretVisible,LocalActiveToken provides m.editor.activeToken,LocalTypedParens provides m.typedParens,LocalPlaceCursor provides {a,b,p->requestInputFocus();m.edit(m.editor.placeInToken(a,b,p))}) {
+                MathInputLayout(inputTree,m.editor.source,m.inputFont,m.editor.cursor,if(m.committed)null else m.editor.cursorTarget(),select={a,b->requestInputFocus();m.edit(m.editor.selectRange(a,b))},selection=minOf(m.editor.anchor,m.editor.cursor)..maxOf(m.editor.anchor,m.editor.cursor),after={requestInputFocus();m.edit(Editor(m.editor.source))})
             }
         }
         // This answer region is always present, including while a worker is computing.

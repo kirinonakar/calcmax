@@ -134,6 +134,42 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
   $('tip-fixed').value='';document.querySelector('[data-run="tip"]').click();await waitFor(()=>$('answer').textContent.includes('Tip %: 16.00%'),'percent tip ignores disabled amount input and reports adjusted rate');$('tip-fixed').value='15';
   change('mode','functions');$('function-save').click();change('mode','scientific');$('expression').value='f(3)';document.querySelector('.key[data-evaluate]').click();await waitFor(()=>$('answer').textContent==='10','saved function');
   const edit=source=>{$('expression').value=source;$('expression').dispatchEvent(new window.Event('input'));};
+  await t.test('broken expressions retain selectable tokens, cursor movement, and undo',()=>{
+    key('AC').click();edit('12+3');edit('12+*3');
+    const token=$('expression-preview').querySelector('[data-source-start="2"]');
+    assert.ok(token,'invalid source still renders editable ranges');token.dispatchEvent(new window.MouseEvent('click',{bubbles:true}));
+    assert.equal($('expression').selectionStart,2);assert.equal($('expression').selectionEnd,3);
+    key('LEFT').click();assert.equal($('expression').selectionStart,2);
+    key('DEL').click();assert.equal($('expression').value,'1+*3');
+    $('undo').click();assert.equal($('expression').value,'12+*3');
+    $('undo').click();assert.equal($('expression').value,'12+3','typed syntax error can be undone');
+    assert.ok($('expression-preview').querySelector('.input-caret'));
+    key('AC').click();
+  });
+  await t.test('scientific exponent key supplies a missing coefficient at the insertion position',()=>{
+    for(const [source,at,expected] of [['',0,'1*10^()'],['2+',2,'2+1*10^()'],['sin()',4,'sin(1*10^())'],['2+3',0,'1*10^()*2+3'],['2+3',3,'2+3*10^()']]){
+      key('AC').click();edit(source);$('expression').setSelectionRange(at,at);key('*10^()').click();
+      assert.equal($('expression').value,expected);assert.ok($('expression-preview').querySelector('.input-slot'));
+      $('undo').click();assert.equal($('expression').value,source);
+    }
+    key('AC').click();
+  });
+  await t.test('input word wrap switches both input modes and persists the setting',()=>{
+    $('settings-button').click();
+    const setting=$('settings-dialog').querySelector('[data-setting="wordWrap"]');assert.ok(setting);assert.equal(setting.checked,false);
+    setting.checked=true;setting.dispatchEvent(new window.Event('change'));$('settings-close').click();
+    edit('123456789012345678901234567890*sqrt(2)');
+    assert.equal(document.documentElement.dataset.wordWrap,'true');assert.ok($('expression-preview').querySelector('.input-wrapped .input-caret'));
+    assert.equal(window.getComputedStyle($('expression-preview')).alignItems,'flex-start','wrapped lines start at the top of the scroll viewport');
+    assert.ok($('expression-preview').textContent.includes('×'));assert.ok(!$('expression-preview').textContent.includes('*'));
+    assert.ok($('expression-preview').querySelector('msqrt'),'word wrap preserves the native radical');
+    edit('1/2+sqrt(2)^3');assert.ok($('expression-preview').querySelector('mfrac'));assert.ok($('expression-preview').querySelector('msup'));assert.ok($('expression-preview').querySelector('msqrt'));
+    assert.equal($('expression').wrap,'soft');assert.equal(JSON.parse(localStorage.getItem('calcmax-web-v1')).wordWrap,true);
+    $('typing-toggle').click();assert.equal(document.documentElement.dataset.typing,'true');assert.equal($('expression').wrap,'soft');$('typing-toggle').click();
+    $('settings-button').click();const toggle=$('settings-dialog').querySelector('[data-setting="wordWrap"]');toggle.checked=false;toggle.dispatchEvent(new window.Event('change'));$('settings-close').click();
+    assert.equal($('expression').wrap,'off');assert.ok($('expression-preview').querySelector('math'));
+    key('AC').click();
+  });
   key('AC').click();key('8').click();key('()/()').click();
   assert.equal($('expression').value,'(8)/()','fraction key reuses 8 as the numerator');
   assert.equal($('expression').selectionStart,5,'typing continues in the denominator');
@@ -157,6 +193,42 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
   edit('7+8');key('8').focus();
   const enter=new window.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true});key('8').dispatchEvent(enter);
   assert.equal(enter.defaultPrevented,true);await waitFor(()=>$('answer').textContent==='15','Enter evaluates with focus on a numeric key');assert.equal($('expression').value,'7+8');
+  await t.test('Enter calculates without reactivating focused calculator controls',async()=>{
+    const press=(button,key,options={})=>{const event=new window.KeyboardEvent('keydown',{key,bubbles:true,cancelable:true,...options});button.dispatchEvent(event);return event;};
+    const displayState=()=>[$('exact-toggle').textContent,$('engineering-toggle').dataset.notation,$('grouping-toggle').className,document.documentElement.dataset.screenExpanded];
+    for(const id of ['exact-toggle','engineering-toggle','engineering-toggle','screen-toggle','grouping-toggle','undo']){
+      const button=$(id);button.focus();button.click();
+      const before=displayState();
+      key('AC').click();
+      for(const character of '1/8')assert.equal(press(button,character).defaultPrevented,true,`${id}: keyboard expression entry`);
+      assert.equal($('expression').value,'1/8');assert.equal(document.activeElement,button,'expression entry retains button focus');
+      const count=JSON.parse(localStorage.getItem('calcmax-web-v1')).history.length;
+      let clicks=0;const onClick=()=>clicks++;button.addEventListener('click',onClick);
+      assert.equal(press(button,'Enter').defaultPrevented,true,`${id}: suppress native Enter activation`);
+      assert.equal(press(button,'Enter',{repeat:true}).defaultPrevented,true,`${id}: suppress held Enter activation`);
+      await waitFor(()=>JSON.parse(localStorage.getItem('calcmax-web-v1')).history.length===count+1,`${id}: Enter computes once`);
+      const entry=JSON.parse(localStorage.getItem('calcmax-web-v1')).history[0];
+      assert.equal(entry.source,'1/8');assert.equal(entry.exact,'1/8');
+      assert.deepEqual(displayState(),before,`${id}: calculation preserves display options`);assert.equal(clicks,0);
+      button.removeEventListener('click',onClick);
+    }
+    const button=$('screen-toggle');button.focus();
+    $('typing-toggle').click();edit('2/8');button.focus();
+    const before=displayState(),count=JSON.parse(localStorage.getItem('calcmax-web-v1')).history.length;
+    assert.equal(press(button,'Enter').defaultPrevented,true,'Keyboard mode also suppresses focused button activation');
+    await waitFor(()=>JSON.parse(localStorage.getItem('calcmax-web-v1')).history.length===count+1,'Keyboard mode calculates from a focused display button');
+    assert.equal(JSON.parse(localStorage.getItem('calcmax-web-v1')).history[0].exact,'1/4');assert.deepEqual(displayState(),before);
+    $('typing-toggle').click();button.focus();
+    for(const options of [{shiftKey:true},{ctrlKey:true},{metaKey:true},{altKey:true},{isComposing:true}])assert.equal(press(button,'Enter',options).defaultPrevented,false,'modified and composing Enter keep their behavior');
+    assert.equal(press(button,' ').defaultPrevented,false,'Space retains button activation');
+    const historyButton=$('tape-history').querySelector('.tape-expression');assert.equal(press(historyButton,'Enter').defaultPrevented,false,'history reuse retains native Enter activation');
+    $('settings-button').focus();assert.equal(press($('settings-button'),'Enter').defaultPrevented,false,'Enter outside calculator controls retains button activation');
+    $('settings-button').click();assert.equal(press(button,'Enter').defaultPrevented,false,'settings dialog blocks calculator shortcuts');$('settings-close').click();
+    $('about-button').click();assert.equal(press(button,'Enter').defaultPrevented,false,'content dialog blocks calculator shortcuts');$('dialog').close();
+    change('mode','tip');assert.equal(press(button,'Enter').defaultPrevented,false,'other workspaces keep their keyboard behavior');change('mode','scientific');
+    $('exact-toggle').click();$('engineering-toggle').click();$('screen-toggle').click();$('grouping-toggle').click();
+    assert.equal($('exact-toggle').textContent,'Exact');assert.equal($('engineering-toggle').dataset.notation,'off');
+  });
   edit('B=5');$('expression').dispatchEvent(new window.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true}));await waitFor(()=>$('note').textContent.includes('Stored in B'),'inline STO');
   assert.equal(JSON.parse(localStorage.getItem('calcmax-web-v1')).variables.B.value,'5');
   edit('B+2');key('=').click();await waitFor(()=>$('answer').textContent==='7','recall inline STO');

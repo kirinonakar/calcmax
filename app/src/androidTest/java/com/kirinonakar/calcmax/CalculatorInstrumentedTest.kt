@@ -243,6 +243,43 @@ class CalculatorInstrumentedTest {
         compose.onNodeWithContentDescription("AC").performClick()
         compose.runOnIdle{assertEquals("",model().editor.source);assertEquals(0,model().variables.length());assertTrue(model().tape.isEmpty());assertEquals(count,model().history.size);assertEquals(10,model().precision);assertEquals(8,model().displayDigits);assertEquals(27f,model().inputFont);model().inputFont=25f;model().precision=30;model().displayDigits=10;model().sound=false;model().save()}
     }
+    @Test fun horizontalInputFollowsCursorAndWordWrapFitsTheViewport() {
+        val longNumber="1234567890".repeat(7)
+        compose.runOnIdle {model().mode="Scientific/CAS";model().poweredOn=true;model().wordWrap=false;model().clear(recordUndo=false);model().edit(Editor(longNumber))}
+        val input=compose.onNodeWithContentDescription("Current expression")
+        compose.waitUntil(5000){input.fetchSemanticsNode().config[SemanticsProperties.HorizontalScrollAxisRange].value()>0f}
+        compose.runOnIdle {model().edit(Editor(longNumber,0))}
+        compose.waitUntil(5000){input.fetchSemanticsNode().config[SemanticsProperties.HorizontalScrollAxisRange].value()==0f}
+        compose.runOnIdle {model().wordWrap=true}
+        compose.onNodeWithContentDescription("Current expression").assertExists()
+        compose.onAllNodesWithContentDescription("Expression input").assertCountEquals(0)
+        compose.runOnIdle {model().edit(Editor("1/2+sqrt(2)^3"))}
+        compose.onNodeWithContentDescription("Current expression").assertExists()
+        compose.runOnIdle {model().wordWrap=false;model().clear(recordUndo=false)}
+    }
+    @Test fun wrappingPreservesFractionIntegralAndRootDimensions() {
+        compose.runOnIdle {model().mode="Scientific/CAS";model().poweredOn=true;model().clear(recordUndo=false)}
+        for(source in listOf("1/2","integrate(x^2,x,0,1)","sqrt(2)^3","diff(x^3,x,2)")) {
+            compose.runOnIdle {model().wordWrap=false;model().edit(Editor(source,0))}
+            val regular=compose.onNodeWithTag("input-math-part-0").getUnclippedBoundsInRoot()
+            compose.runOnIdle {model().wordWrap=true}
+            val wrapped=compose.onNodeWithTag("input-math-part-0").getUnclippedBoundsInRoot()
+            assertEquals("$source width",regular.right-regular.left,wrapped.right-wrapped.left)
+            assertEquals("$source height",regular.bottom-regular.top,wrapped.bottom-wrapped.top)
+            compose.onAllNodesWithContentDescription("Expression input").assertCountEquals(0)
+        }
+        compose.runOnIdle {model().wordWrap=false;model().clear(recordUndo=false)}
+    }
+    @Test fun disablingWordWrapDoesNotNestUnboundedHorizontalScrollers() {
+        compose.runOnIdle {model().mode="Scientific/CAS";model().poweredOn=true;model().edit(Editor("integrate(x^2,x,0,1)+1/2+sqrt(2)^3"))}
+        repeat(5) {
+            compose.runOnIdle {model().wordWrap=true}
+            compose.onNodeWithContentDescription("Current expression").assertExists()
+            compose.runOnIdle {model().wordWrap=false}
+            compose.onNodeWithContentDescription("Current expression").assertExists()
+        }
+        compose.runOnIdle {model().clear(recordUndo=false)}
+    }
     @Test fun integralStartsWithAnEmptyPowerBase() {
         compose.runOnIdle {
             val m=model()

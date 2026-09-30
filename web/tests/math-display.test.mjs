@@ -3,8 +3,72 @@ import assert from 'node:assert/strict';
 import {JSDOM} from 'jsdom';
 import {readFileSync} from 'node:fs';
 import {mathDisplay} from '../math-display.js';
-import {expressionDisplay} from '../expression-display.js';
-import {markInputCursor} from '../input-cursor.js';
+import {expressionDisplay,expressionInputDisplay} from '../expression-display.js';
+import {markInputCursor,followInputCursor,inputPointPosition} from '../input-cursor.js';
+
+test('invalid and wrapped source preserves ranges and supports caret placement inside text',()=>{
+  const dom=new JSDOM();globalThis.document=dom.window.document;
+  for(const wordWrap of [false,true])for(const source of ['12+*3','1..2','sin(,*)','2+)3','@','12345678901234567890']){
+    const input=expressionInputDisplay(source,{wordWrap});document.body.append(input);
+    const shown=source.replaceAll('*','×');assert.equal(input.textContent,shown);
+    for(let at=0;at<=source.length;at++){const marker=markInputCursor(input,source,at);assert.equal(marker.dataset.sourceStart,String(at));assert.equal(input.textContent,shown);}
+    input.parentElement?.classList.contains('input-math')?input.parentElement.remove():input.remove();
+  }
+  const input=expressionInputDisplay('123+*4'),token=input.querySelector('[data-source-start="0"]');document.body.append(input);
+  token.getBoundingClientRect=()=>({left:100,right:136,top:10,height:24});
+  dom.window.Range.prototype.getBoundingClientRect=function(){return {left:100+this.startOffset*12,right:100+this.endOffset*12,top:10,height:24};};
+  assert.equal(inputPointPosition(token,'123+*4',124,22),2);
+  assert.equal(inputPointPosition(token,'123+*4',100,22),0);
+  dom.window.close();
+});
+
+test('multiplication uses the math symbol in normal, wrapped, and malformed input',()=>{
+  const dom=new JSDOM();globalThis.document=dom.window.document;
+  for(const [source,wordWrap] of [['2*3',false],['2*3',true],['2+*3',false],['2+*3',true]]){
+    const input=expressionInputDisplay(source,{wordWrap});document.body.append(input);
+    assert.ok(input.textContent.includes('×'));assert.ok(!input.textContent.includes('*'));
+    const operator=input.querySelector('[data-source-start="1"]')||input.querySelector('mo');
+    assert.ok(operator);
+    for(let at=0;at<=source.length;at++)assert.equal(markInputCursor(input,source,at).dataset.sourceStart,String(at));
+  }
+  dom.window.close();
+});
+
+test('word wrap retains fractions, powers, radicals, and absolute source ranges',()=>{
+  const dom=new JSDOM();globalThis.document=dom.window.document;
+  for(const source of ['1/2+sqrt(2)^3','(2+3)*nthroot(81,4)','sin(2)+3/4-5^2','1+2+3+4','123456789012345678901234567890']){
+    const input=expressionInputDisplay(source,{wordWrap:true});document.body.append(input);
+    assert.ok(input.querySelector('math'),'math remains MathML in wrapped mode');
+    for(const tag of ['mfrac','msup','msqrt','mroot'])assert.equal(input.querySelectorAll(tag).length,expressionDisplay(source).querySelectorAll(tag).length,`${source}: ${tag}`);
+    for(let at=0;at<=source.length;at++)assert.equal(markInputCursor(input,source,at).dataset.sourceStart,String(at));
+    for(const node of input.querySelectorAll('[data-source-start]')){assert.ok(Number(node.getAttribute('data-source-start'))>=0);assert.ok(Number(node.getAttribute('data-source-end'))<=source.length);}
+    assert.ok(input.querySelectorAll('.input-part').length>1,'top-level terms provide wrapping opportunities');
+  }
+  dom.window.close();
+});
+
+test('wrapped fractions and calculus use exactly the same display style and mathematical structure',()=>{
+  const dom=new JSDOM();globalThis.document=dom.window.document;
+  for(const source of ['1/2+3/4','integrate(x^2,x,0,1)+1/2','sum(k,(k,1,10))+sqrt(x^2+1)','limit(sin(x)/x,x,0)+diff(x^3,x,2)','2+-3']){
+    const regular=expressionInputDisplay(source),wrapped=expressionInputDisplay(source,{wordWrap:true});
+    document.body.append(regular,wrapped);
+    for(const math of [...regular.querySelectorAll('math'),...wrapped.querySelectorAll('math')]){assert.equal(math.getAttribute('display'),'block');assert.equal(math.getAttribute('displaystyle'),'true');}
+    for(const tag of ['mfrac','msup','msqrt','msubsup','munderover','munder'])assert.deepEqual([...wrapped.querySelectorAll(tag)].map(n=>n.outerHTML),[...regular.querySelectorAll(tag)].map(n=>n.outerHTML),`${source}: identical ${tag} renderer`);
+    assert.equal(wrapped.textContent,regular.textContent,'wrapping preserves every displayed operator');
+    assert.equal(wrapped.innerHTML,regular.innerHTML,'both modes use the identical renderer, source ranges, styles, and operator spacing');
+  }
+  dom.window.close();
+});
+
+test('input viewport follows the caret in both directions without moving when already visible',()=>{
+  const viewport={clientWidth:200,clientHeight:80,clientLeft:0,clientTop:0,scrollLeft:0,scrollTop:0,getBoundingClientRect:()=>({left:20,top:10})};
+  let rect={left:250,right:252,top:20,bottom:44};const marker={getBoundingClientRect:()=>rect};
+  followInputCursor(viewport,marker);assert.equal(viewport.scrollLeft,44);
+  rect={left:80,right:82,top:20,bottom:44};followInputCursor(viewport,marker);assert.equal(viewport.scrollLeft,44);
+  rect={left:24,right:26,top:20,bottom:44};followInputCursor(viewport,marker);assert.equal(viewport.scrollLeft,36);
+  rect={left:80,right:82,top:100,bottom:124};followInputCursor(viewport,marker,12,true);assert.equal(viewport.scrollLeft,36);assert.equal(viewport.scrollTop,34);
+  rect={left:80,right:82,top:5,bottom:29};followInputCursor(viewport,marker,12,true);assert.equal(viewport.scrollTop,29);
+});
 
 test('each root has one native radical and input cursors do not increase radicand height',()=>{
   const dom=new JSDOM();globalThis.document=dom.window.document;
