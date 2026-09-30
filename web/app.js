@@ -54,6 +54,7 @@ let tapeRows=null,tapeFormat='',keypadSignature='',saveTimer=null,keyAudioContex
 const tapeFollow=followTape($('calculation-tape'),$('tape-active'));
 const expressionUndo=[];
 let previewSource=value('expression');
+let inputBoundary=null;
 const undoStack=()=>calcSession?.undo||expressionUndo;
 for(const [id,setting] of Object.entries(state.fields)) {
   const field=$(id);
@@ -174,8 +175,8 @@ function preview() {
   renderTape();tapeFollow.latest();
   schedulePersist();
 }
-function renderInputCursor(){const field=$('expression'),display=$('expression-preview'),math=display.querySelector('.input-flow,math');if(math){const marker=markInputCursor(math,field.value,field.selectionStart,field.selectionEnd);if(!typing)followInputCursor(display,marker||display.querySelector('.selected'),12,state.wordWrap);}else if(!field.value&&!display.querySelector('.text-caret')){const cursor=element('span','│','text-caret');display.append(cursor);}if(typing&&!state.wordWrap)followTextCursor(field);}
-$('expression-preview').onclick=event=>{const target=event.target.closest('[data-source-start]');if(target){const field=$('expression'),start=Number(target.getAttribute('data-source-start')),end=Number(target.getAttribute('data-source-end'));if(target.classList.contains('selected')||field.selectionStart===field.selectionEnd&&field.selectionStart>=start&&field.selectionStart<=end){const at=inputPointPosition(target,field.value,event.clientX,event.clientY);field.setSelectionRange(at,at);}else field.setSelectionRange(start,end);}else{$('expression').setSelectionRange(value('expression').length,value('expression').length);}preview();};
+function renderInputCursor(){const field=$('expression'),display=$('expression-preview'),math=display.querySelector('.input-flow,math');if(inputBoundary&&(inputBoundary.source!==field.value||inputBoundary.position!==field.selectionStart||field.selectionStart!==field.selectionEnd))inputBoundary=null;if(math){const marker=markInputCursor(math,field.value,field.selectionStart,field.selectionEnd,{boundary:inputBoundary?.edge});if(!typing)followInputCursor(display,marker||display.querySelector('.selected'),12,state.wordWrap);}else if(!field.value&&!display.querySelector('.text-caret')){const cursor=element('span','│','text-caret');display.append(cursor);}if(typing&&!state.wordWrap)followTextCursor(field);}
+$('expression-preview').onclick=event=>{inputBoundary=null;const target=event.target.closest('[data-source-start]');if(target){const field=$('expression'),start=Number(target.getAttribute('data-source-start')),end=Number(target.getAttribute('data-source-end'));if(target.classList.contains('selected')||field.selectionStart===field.selectionEnd&&field.selectionStart>=start&&field.selectionStart<=end){const at=inputPointPosition(target,field.value,event.clientX,event.clientY);field.setSelectionRange(at,at);}else field.setSelectionRange(start,end);}else{$('expression').setSelectionRange(value('expression').length,value('expression').length);}preview();};
 function insert(text,cursor=null,{factor=false,fraction=false}={}) {
   if(busy)return;
   const field=$('expression'),undo=undoStack();undo.push(field.value);if(undo.length>100)undo.shift();
@@ -310,7 +311,7 @@ async function performKey(input){
   else if(input==='MIXED'){mixed=!mixed;decimal=false;$('exact-toggle').textContent='Exact';renderResult();}
   else if(input==='INS')$('insert-mode').click();
   else if(input==='NEG'){if(committed){$('expression').value='';committed=false;}insert('-');}
-  else if(input==='DEL'){const f=$('expression'),start=f.selectionStart,end=f.selectionEnd;undoStack().push(f.value);f.setRangeText('',start===end?Math.max(0,start-1):start,end,'end');committed=false;preview();}
+  else if(input==='DEL'||input==='DELETE_FORWARD'){const f=$('expression'),start=f.selectionStart,end=f.selectionEnd;undoStack().push(f.value);f.setRangeText('',start===end&&input==='DEL'?Math.max(0,start-1):start,start===end&&input==='DELETE_FORWARD'?Math.min(f.value.length,end+1):end,'end');committed=false;preview();}
   else if(['LEFT','RIGHT','UP','DOWN'].includes(input)){
     const f=$('expression');let start=f.selectionStart,end=f.selectionEnd;
     const position=typing?null:moveMathCursor(f.value,start,end,input);
@@ -556,6 +557,12 @@ async function run(workspace) {
 }
 document.querySelectorAll('[data-run]').forEach(button=>button.onclick=()=>run(button.dataset.run));
 document.addEventListener('keydown',event=>{
+  if(!event.defaultPrevented&&!event.isComposing&&!event.altKey&&value('mode')==='scientific'&&!$('dialog').open&&!$('settings-dialog').open&&['Home','End'].includes(event.key)&&(!event.target.closest('input,select,textarea,[contenteditable="true"]')||event.target===$('expression'))){
+    event.preventDefault();event.stopPropagation();
+    const field=$('expression'),position=moveMathCursor(field.value,field.selectionStart,field.selectionEnd,event.key.toUpperCase()),anchor=event.shiftKey?(field.selectionDirection==='backward'?field.selectionEnd:field.selectionStart):position;
+    field.setSelectionRange(Math.min(anchor,position),Math.max(anchor,position),position<anchor?'backward':'forward');inputBoundary=event.shiftKey?null:{source:field.value,position,edge:event.key.toLowerCase()};preview();if(typing)field.scrollTop=event.key==='End'?field.scrollHeight:0;return;
+  }
+  if(!['Shift','Control','Alt','Meta'].includes(event.key))inputBoundary=null;
   // Enter calculates while calculator controls retain focus after a click.
   // Cancel the native button activation before it can toggle display options.
   if(value('mode')==='scientific'&&!$('dialog').open&&!$('settings-dialog').open&&event.key==='Enter'&&!event.shiftKey&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&!event.isComposing&&event.target.closest('.keypad, #calculator-display .answer-toolbar, #calculator-display .edit-actions')){
@@ -566,7 +573,7 @@ document.addEventListener('keydown',event=>{
   if(event.defaultPrevented||event.isComposing)return;
   if(value('mode')!=='scientific'||typing||$('dialog').open||$('settings-dialog').open||event.ctrlKey||event.metaKey||event.altKey||event.target.closest('input,select,textarea'))return;
   if(event.target.closest('button')&&['Enter',' '].includes(event.key))return;
-  const action={Enter:'=',Backspace:'DEL',Delete:'DEL',ArrowLeft:'LEFT',ArrowRight:'RIGHT',ArrowUp:'UP',ArrowDown:'DOWN',Escape:'AC'}[event.key];
+  const action={Enter:'=',Backspace:'DEL',Delete:'DELETE_FORWARD',ArrowLeft:'LEFT',ArrowRight:'RIGHT',ArrowUp:'UP',ArrowDown:'DOWN',Escape:'AC'}[event.key];
   if(action){event.preventDefault();if(event.key==='Escape'&&busy)engine.cancel();else performKey(action);}
   else if(event.key.length===1&&/[0-9A-Za-z.,+\-*/÷×^%!()[\]{}=<>°∞π_]/.test(event.key)){event.preventDefault();insert(event.key);}
 });

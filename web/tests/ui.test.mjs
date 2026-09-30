@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 import {Worker as NodeWorker} from 'node:worker_threads';
 import {JSDOM} from 'jsdom';
 import {initialLanguage} from '../i18n.js';
+import {appVersion} from '../app-version.js';
 
 async function waitFor(check,message,timeout=15000) {
   const deadline=Date.now()+timeout;
@@ -56,7 +57,7 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
   assert.equal(document.documentElement.lang,'ko');
   assert.equal($('stop').textContent,'중지');
   assert.equal($('language').value,'ko');
-  $('about-button').click();assert.ok($('dialog').open);assert.equal($('dialog-title').textContent,'CalcMax');assert.equal($('dialog-body').querySelector('button').textContent,'닫기');assert.match($('dialog-body').textContent,/v1\.1\.9/);assert.equal($('dialog-body').querySelector('a').href,'https://github.com/kirinonakar/calcmax');assert.equal($('dialog-body').querySelector('img').width,64);$('dialog-body').querySelector('button').click();assert.equal($('dialog').open,false);
+  $('about-button').click();assert.ok($('dialog').open);assert.equal($('dialog-title').textContent,'CalcMax');assert.equal($('dialog-body').querySelector('button').textContent,'닫기');assert.ok($('dialog-body').textContent.includes(`v${appVersion}`));assert.equal($('dialog-body').querySelector('a').href,'https://github.com/kirinonakar/calcmax');assert.equal($('dialog-body').querySelector('img').width,64);$('dialog-body').querySelector('button').click();assert.equal($('dialog').open,false);
   $('settings-button').click();$('language').value='en';$('language').dispatchEvent(new window.Event('change'));$('settings-close').click();
   assert.equal(document.documentElement.lang,'en');
   assert.equal($('stop').textContent,'Stop');
@@ -134,6 +135,53 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
   $('tip-fixed').value='';document.querySelector('[data-run="tip"]').click();await waitFor(()=>$('answer').textContent.includes('Tip %: 16.00%'),'percent tip ignores disabled amount input and reports adjusted rate');$('tip-fixed').value='15';
   change('mode','functions');$('function-save').click();change('mode','scientific');$('expression').value='f(3)';document.querySelector('.key[data-evaluate]').click();await waitFor(()=>$('answer').textContent==='10','saved function');
   const edit=source=>{$('expression').value=source;$('expression').dispatchEvent(new window.Event('input'));};
+  await t.test('Home and End move to the whole expression boundaries in both input and wrapping modes',()=>{
+    const press=(target,key,options={})=>{const event=new window.KeyboardEvent('keydown',{key,bubbles:true,cancelable:true,...options});target.dispatchEvent(event);return event;};
+    for(const wrap of [false,true]){
+      $('settings-button').click();const setting=$('settings-dialog').querySelector('[data-setting="wordWrap"]');setting.checked=wrap;setting.dispatchEvent(new window.Event('change'));$('settings-close').click();
+      for(const keyboard of [false,true]){
+        if(keyboard)$('typing-toggle').click();
+        for(const source of ['1/2+sqrt(3)','12+*3','1+2\n+3','']){
+          edit(source);const field=$('expression'),target=keyboard?field:key('8');target.focus();field.setSelectionRange(1,Math.min(3,source.length));
+          assert.equal(press(target,'Home').defaultPrevented,true);assert.equal(field.selectionStart,0);assert.equal(field.selectionEnd,0);
+          assert.equal(press(target,'End').defaultPrevented,true);assert.equal(field.selectionStart,source.length);assert.equal(field.selectionEnd,source.length);assert.equal(field.value,source);
+          if(source)assert.equal($('expression-preview').querySelector('.input-caret').dataset.boundary,'end','End renders the caret after the entire math expression');
+        }
+        if(keyboard){
+          const field=$('expression');Object.defineProperty(field,'scrollHeight',{value:240,configurable:true});
+          press(field,'End');assert.equal(field.scrollTop,240,'End follows the caret to the last wrapped text line');press(field,'Home');assert.equal(field.scrollTop,0);delete field.scrollHeight;
+        }
+        edit('123+456');$('expression').setSelectionRange(3,3);const target=keyboard?$('expression'):key('8');
+        press(target,'Home',{shiftKey:true});assert.equal($('expression').selectionStart,0);assert.equal($('expression').selectionEnd,3);
+        press(target,'End',{shiftKey:true});assert.equal($('expression').selectionStart,3);assert.equal($('expression').selectionEnd,7);
+        assert.equal(press(target,'Home',{altKey:true}).defaultPrevented,false);
+        if(keyboard)$('typing-toggle').click();
+      }
+      edit('x^2   ');$('expression').setSelectionRange(1,1);press(key('8'),'End');assert.equal($('expression').selectionStart,6);assert.equal($('expression-preview').querySelector('.input-caret').dataset.boundary,'end');
+      press(key('8'),'ArrowLeft');assert.equal($('expression-preview').querySelector('.input-caret').dataset.boundary,undefined,'ordinary navigation leaves the explicit end boundary');
+    }
+    $('settings-button').click();const setting=$('settings-dialog').querySelector('[data-setting="wordWrap"]');setting.checked=false;setting.dispatchEvent(new window.Event('change'));
+    assert.equal(press(key('8'),'Home').defaultPrevented,false,'settings dialog retains its own keyboard controls');$('settings-close').click();
+    change('mode','python');assert.equal(press($('python-source'),'Home').defaultPrevented,false,'other workspace editors retain native navigation');change('mode','scientific');key('AC').click();
+  });
+  await t.test('End still moves to the whole expression boundary while calculating',async()=>{
+    edit('1/2+sqrt(2)^3');$('expression').setSelectionRange(0,0);key('=').click();assert.equal(document.documentElement.dataset.busy,'true');
+    const event=new window.KeyboardEvent('keydown',{key:'End',bubbles:true,cancelable:true});key('8').dispatchEvent(event);
+    assert.equal(event.defaultPrevented,true);assert.equal($('expression').selectionStart,$('expression').value.length);assert.equal($('expression-preview').querySelector('.input-caret').dataset.boundary,'end');
+    await waitFor(()=>document.documentElement.dataset.busy==='false','calculation completes after cursor navigation');key('AC').click();
+  });
+  await t.test('Delete removes the following character while Backspace and the DEL button remove the preceding one',()=>{
+    const press=keyName=>{const event=new window.KeyboardEvent('keydown',{key:keyName,bubbles:true,cancelable:true});key('8').dispatchEvent(event);assert.equal(event.defaultPrevented,true);};
+    for(const [keyName,expected,cursor] of [['Backspace','13+4',1],['Delete','12+4',2]]){
+      edit('123+4');$('expression').setSelectionRange(2,2);press(keyName);assert.equal($('expression').value,expected);assert.equal($('expression').selectionStart,cursor);
+      $('undo').click();assert.equal($('expression').value,'123+4');
+      $('expression').setSelectionRange(1,4);press(keyName);assert.equal($('expression').value,'14');assert.equal($('expression').selectionStart,1);
+      $('undo').click();assert.equal($('expression').value,'123+4');
+    }
+    $('expression').setSelectionRange(0,0);press('Backspace');assert.equal($('expression').value,'123+4');
+    $('expression').setSelectionRange(5,5);press('Delete');assert.equal($('expression').value,'123+4');
+    $('expression').setSelectionRange(2,2);key('DEL').click();assert.equal($('expression').value,'13+4');key('AC').click();
+  });
   await t.test('broken expressions retain selectable tokens, cursor movement, and undo',()=>{
     key('AC').click();edit('12+3');edit('12+*3');
     const token=$('expression-preview').querySelector('[data-source-start="2"]');

@@ -23,7 +23,11 @@ function cursorRect(target,source,start){
   }
   return {x:start<=Number(target.getAttribute('data-source-start'))?rect.left:rect.right,top:rect.top,height:rect.height};
 }
-export function markInputCursor(math,source,start,end=start){
+function edgeRect(target,edge){
+  const rect=target.getBoundingClientRect(),base=['msup','msub','msubsup'].includes(target.localName)?target.firstElementChild:target,axis=base.getBoundingClientRect();
+  return {x:edge==='end'?rect.right:rect.left,top:axis.top,height:axis.height};
+}
+export function markInputCursor(math,source,start,end=start,{boundary=null}={}){
   if(math.classList.contains('input-wrapped')&&math.clientWidth){
     for(const part of math.querySelectorAll('.input-part'))part.style.overflowX=part.firstElementChild.getBoundingClientRect().width>math.clientWidth?'auto':'';
   }
@@ -38,15 +42,16 @@ export function markInputCursor(math,source,start,end=start){
   for(const node of nodes)node.classList.toggle('selected',end>start&&Number(node.getAttribute('data-source-start'))>=start&&Number(node.getAttribute('data-source-end'))<=end);
   if(end>start)return;
   const candidates=nodes.filter(node=>Number(node.getAttribute('data-source-start'))<=start&&Number(node.getAttribute('data-source-end'))>=start).sort((a,b)=>(Number(a.getAttribute('data-source-end'))-Number(a.getAttribute('data-source-start')))-(Number(b.getAttribute('data-source-end'))-Number(b.getAttribute('data-source-start'))));
-  const target=candidates.find(node=>['mi','mn','mtext','span'].includes(node.localName))||candidates[0]||math.firstElementChild;
+  const parts=[...math.children].filter(node=>node.classList.contains('input-part')),edge=boundary==='end'?parts.at(-1):parts[0];
+  const target=boundary?(edge?.firstElementChild?.firstElementChild||math.firstElementChild):candidates.find(node=>['mi','mn','mtext','span'].includes(node.localName))||candidates[0]||math.firstElementChild;
   if(!target)return;
-  let rect=cursorRect(target,source,start);
+  let rect=boundary?edgeRect(target,boundary):cursorRect(target,source,start);
   const part=target.closest('.input-part');
   if(part?.style.overflowX==='auto'&&part.clientWidth){
     const bounds=part.getBoundingClientRect();
     if(rect.x<bounds.left+4)part.scrollLeft+=rect.x-bounds.left-4;
     else if(rect.x>bounds.right-4)part.scrollLeft+=rect.x-bounds.right+4;
-    rect=cursorRect(target,source,start);
+    rect=boundary?edgeRect(target,boundary):cursorRect(target,source,start);
   }
   const origin=frame.getBoundingClientRect();
   const font=target.style?math.ownerDocument.defaultView.getComputedStyle(target).fontSize:'';
@@ -56,6 +61,7 @@ export function markInputCursor(math,source,start,end=start){
   const marker=math.ownerDocument.createElement('span');marker.classList.add('input-caret');
   marker.setAttribute('aria-hidden','true');
   marker.setAttribute('data-source-start',String(start));marker.setAttribute('data-source-end',String(start));
+  if(boundary)marker.dataset.boundary=boundary;
   marker.setAttribute('style',`left:${rect.x-origin.left}px;top:${rect.top-origin.top+(rect.height-size)/2}px;height:${size}px`);
   frame.append(marker);
   return marker;

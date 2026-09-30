@@ -114,6 +114,7 @@ math{font-family:"CalcMax Math","Cambria Math",math;font-weight:400;font-synthes
 .keypad .key .key-face{display:flex;flex:1;min-height:0;min-width:0;align-items:center;justify-content:center;border:1px solid var(--line);border-radius:7px 7px 4px 4px;background:var(--key);font-size:clamp(10px,3.5cqh,24px);line-height:1;font-weight:600;overflow:hidden;white-space:nowrap}
 .key-fraction{display:inline-flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;font-size:.5em;line-height:1}
 .key-fraction-bar{width:1.6em;min-width:10px;border-top:1px solid currentColor}
+.key-backspace{display:block;width:1.333333em;height:1em;flex-shrink:0}
 .keypad .numeric .key-face{background:var(--number);font-size:clamp(12px,calc(var(--keypad-font-height) * .048),24px)}
 .keypad .danger .key-face{background:var(--lime);color:#18210e;font-size:clamp(12px,calc(var(--keypad-font-height) * .048),24px)}
 .keypad .action .key-face{background:var(--operator);font-size:clamp(9px,2.6cqh,18px)}

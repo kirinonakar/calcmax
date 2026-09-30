@@ -7,6 +7,13 @@ import {moveMathCursor} from '../input-navigation.js';
 import {roundNumber} from '../display-format.js';
 import {tipCommand} from '../money.js';
 
+test('Home and End address the whole source even when selected, multiline, or invalid',()=>{
+  for(const source of ['','1/2+sqrt(3)','12+*3','1+2\n+3']){
+    assert.equal(moveMathCursor(source,0,source.length,'HOME'),0);
+    assert.equal(moveMathCursor(source,0,source.length,'END'),source.length);
+  }
+});
+
 test('display decimals round nested numeric strings, preserve precision, and normalize negative zero',()=>{
   assert.equal(roundNumber('12345678901234567890.123456',3),'12345678901234567890.123');
   assert.equal(roundNumber('-0.00004999',3),'0');assert.equal(roundNumber('9.99995',3),'10');

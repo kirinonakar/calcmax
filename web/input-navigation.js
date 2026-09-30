@@ -1,5 +1,7 @@
 import {parse} from './parser.js';
 export function moveMathCursor(source,start,end,direction){
+  if(direction==='HOME')return 0;
+  if(direction==='END')return source.length;
   if(start!==end)return direction==='LEFT'?start:direction==='RIGHT'?end:null;
   const nodes=[];try{const visit=node=>{nodes.push(node);node.args.forEach(visit);};visit(parse(source,{allowHoles:true}));}catch{return ['LEFT','RIGHT'].includes(direction)?Math.max(0,Math.min(source.length,start+(direction==='LEFT'?-1:1))):null;}
   const roots=nodes.filter(node=>node.kind==='call'&&['sqrt','cbrt','nthroot'].includes(node.value)).sort((a,b)=>(a.end-a.start)-(b.end-b.start));

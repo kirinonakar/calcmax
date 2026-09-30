@@ -4,6 +4,8 @@ import android.graphics.Bitmap
 import android.app.UiModeManager
 import android.content.Context
 import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.graphics.asAndroidBitmap
@@ -26,6 +28,24 @@ import java.io.File
 class CalculatorInstrumentedTest {
     @get:Rule val compose=createAndroidComposeRule<MainActivity>()
     private fun model()=ViewModelProvider(compose.activity)[CalculatorModel::class.java]
+    @Test fun homeAndEndMoveAcrossTheWholeExpressionInBothInputModes() {
+        val source="1/2+sqrt(2)^3\n+4"
+        compose.runOnIdle {model().mode="Scientific/CAS";model().poweredOn=true;model().clear(recordUndo=false)}
+        for(wrap in listOf(false,true)) {
+            compose.runOnIdle {model().wordWrap=wrap;model().edit(Editor(source,4))}
+            for(keyboard in listOf(false,true)) {
+                if(keyboard)compose.onNodeWithText("Keyboard").performClick()
+                val input=compose.onNodeWithContentDescription(if(keyboard)"Expression input" else "Current expression")
+                input.performSemanticsAction(SemanticsActions.RequestFocus){it()}
+                input.performKeyInput {pressKey(Key.MoveHome)}
+                compose.runOnIdle {assertEquals(0,model().editor.cursor);assertEquals(0,model().editor.anchor);assertEquals(source,model().editor.source)}
+                input.performKeyInput {pressKey(Key.MoveEnd)}
+                compose.runOnIdle {assertEquals(source.length,model().editor.cursor);assertEquals(source.length,model().editor.anchor);assertEquals(source,model().editor.source)}
+                if(keyboard)compose.onNodeWithText("Math input").performClick()
+            }
+        }
+        compose.runOnIdle {model().wordWrap=false;model().clear(recordUndo=false)}
+    }
     private fun capture(name: String) {
         val file=File(compose.activity.filesDir,"qa/$name.png");file.parentFile!!.mkdirs()
         file.outputStream().use { val roots=compose.onAllNodes(isRoot());roots[roots.fetchSemanticsNodes().lastIndex].captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG,100,it) }

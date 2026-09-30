@@ -15,6 +15,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.*
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.platform.*
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontWeight
@@ -62,6 +66,10 @@ internal val KeypadShortcutGroups:Map<String,List<DisplayShortcut>> by lazy {
 }
 
 private fun pressedShade(base:Color)=if(base.luminance()>.45f)Color.Black.copy(alpha=.18f) else Color.White.copy(alpha=.24f)
+private val backspaceShape by lazy {
+    PathParser().parsePathString("M6.1 1.4H20.2C21.2 1.4 22 2.2 22 3.2V14.8C22 15.8 21.2 16.6 20.2 16.6H6.1C5.5 16.6 5.1 16.4 4.8 15.9L1.8 9.8C1.5 9.3 1.5 8.7 1.8 8.2L4.8 2.1C5.1 1.6 5.5 1.4 6.1 1.4Z").toPath()
+}
+private val backspaceCross by lazy {PathParser().parsePathString("M10.9 5.8L17.3 12.2M17.3 5.8L10.9 12.2").toPath()}
 
 private fun keypadOperandInput(value:String,editor:Editor,startingFresh:Boolean):String {
     if(startingFresh||editor.cursor!=editor.anchor)return value
@@ -218,6 +226,15 @@ internal fun performKeypadInput(m:CalculatorModel,requestedValue:String,open:(St
             val shape=if(key.type=="round")CircleShape else RoundedCornerShape(topStart=7.dp,topEnd=7.dp,bottomStart=4.dp,bottomEnd=4.dp)
             Box(Modifier.then(if(key.type=="round")Modifier.aspectRatio(1f).weight(1f,false) else Modifier.fillMaxWidth().weight(1f)).clip(shape).background(Brush.verticalGradient(listOf(bg,bg.copy(alpha=.85f)))).background(if(pressed)pressedShade(bg) else Color.Transparent).border(if(active)2.dp else 1.dp,if(active)c.accent else c.muted.copy(alpha=.26f),shape),contentAlignment=Alignment.Center){
                 if(key.title=="a/b")Column(horizontalAlignment=Alignment.CenterHorizontally){Text("□",color=ink,fontSize=9.sp,lineHeight=10.sp);Box(Modifier.width(15.dp).height(1.dp).background(ink));Text("□",color=ink,fontSize=9.sp,lineHeight=10.sp)}
+                else if(key.input=="DEL") {
+                    val iconSize=with(LocalDensity.current){keyFont.toDp()}
+                    Canvas(Modifier.size(width=iconSize*4f/3f,height=iconSize)) {
+                        scale(size.width/24f,size.height/18f,pivot=Offset.Zero){
+                            drawPath(backspaceShape,ink,style=Stroke(width=1.8f,cap=StrokeCap.Round,join=StrokeJoin.Round))
+                            drawPath(backspaceCross,ink,style=Stroke(width=2.2f,cap=StrokeCap.Round))
+                        }
+                    }
+                }
                 else if(key.title=="x□")Text(buildAnnotatedString{append("x");withStyle(SpanStyle(baselineShift=BaselineShift.Superscript,fontSize=(keyFont.value*.65f).sp)){append("□")}},color=ink,fontSize=keyFont)
                 else if(key.title=="∫"){
                     val limitFont=(keyFont.value*.52f).coerceAtLeast(6f).sp

@@ -70,6 +70,22 @@ test('input viewport follows the caret in both directions without moving when al
   rect={left:80,right:82,top:5,bottom:29};followInputCursor(viewport,marker,12,true);assert.equal(viewport.scrollTop,29);
 });
 
+test('End places the caret after the whole power on its baseline and after trailing whitespace',()=>{
+  const dom=new JSDOM();globalThis.document=dom.window.document;
+  for(const wordWrap of [false,true]){
+    const input=expressionInputDisplay('x^2',{wordWrap});document.body.append(input);
+    input.getBoundingClientRect=()=>({left:100,top:10});
+    const root=input.querySelector('msup'),base=root.firstElementChild,exponent=root.querySelector('mn');
+    root.getBoundingClientRect=()=>({left:100,right:160,top:10,height:36});base.getBoundingClientRect=()=>({left:100,right:116,top:22,height:24});exponent.getBoundingClientRect=()=>({left:142,right:160,top:10,height:14});
+    const caret=markInputCursor(input,'x^2',3,3,{boundary:'end'});
+    assert.equal(caret.style.left,'60px');assert.equal(caret.style.top,'12px');assert.equal(caret.style.height,'24px');assert.equal(caret.dataset.boundary,'end');
+    const spaced=expressionInputDisplay('1+2   ',{wordWrap});document.body.append(spaced);spaced.getBoundingClientRect=()=>({left:10,top:10});
+    spaced.querySelectorAll('.input-part').forEach((part,i)=>{part.firstElementChild.firstElementChild.getBoundingClientRect=()=>({left:10+i*20,right:30+i*20,top:10,height:24});});
+    const end=markInputCursor(spaced,'1+2   ',6,6,{boundary:'end'});assert.equal(end.style.left,'60px','trailing hidden whitespace still uses the last displayed term');
+  }
+  dom.window.close();
+});
+
 test('each root has one native radical and input cursors do not increase radicand height',()=>{
   const dom=new JSDOM();globalThis.document=dom.window.document;
   for(const source of ['sqrt()','sqrt(2)','nthroot(81,4)','sqrt(1/2)','sqrt(sqrt(2))','sqrt(2)^2']){

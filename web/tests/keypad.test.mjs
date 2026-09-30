@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {JSDOM} from 'jsdom';
-import {bindKeyPress,scientificRows,secondRows,numericRows,topKeys,topFunctions} from '../keypad.js';
+import {bindKeyPress,renderKeypad,updateKeypadState,scientificRows,secondRows,numericRows,topKeys,topFunctions} from '../keypad.js';
 import {expressionDisplay} from '../expression-display.js';
 
 test('both keypad pages retain Android row layout and shifted/alpha operations',()=>{
@@ -26,6 +26,17 @@ test('long press invokes only the shifted action; release does not also type the
   pointer('pointerdown');pointer('pointercancel');assert.equal(pending,null);button.click();assert.equal(short,2);
   pointer('pointerdown');pointer('pointermove',20);assert.equal(pending,null);
   button.disabled=true;pointer('pointerdown');assert.equal(pending,null);
+  dom.window.close();
+});
+
+test('both keypad pages show the backspace icon and preserve DEL and shifted INS actions',()=>{
+  const dom=new JSDOM('<div id="keypad"></div>');globalThis.document=dom.window.document;
+  for(const second of [false,true]){
+    let action;const container=document.getElementById('keypad');renderKeypad(container,{second,press:key=>action=key.input,longPress:key=>action=key.alternate});
+    const button=container.querySelector('[data-input="DEL"]');assert.equal(button.getAttribute('aria-label'),'DEL');assert.equal(button.querySelector('.key-face').textContent,'');assert.ok(button.querySelector('.key-face svg[aria-hidden="true"]'));
+    button.click();assert.equal(action,'DEL');assert.equal(button.querySelector('.key-hints').textContent,'INS');
+    updateKeypadState(container,{second,shift:true});assert.equal(button.getAttribute('aria-label'),'INS');assert.ok(button.querySelector('.key-backspace'));
+  }
   dom.window.close();
 });
 

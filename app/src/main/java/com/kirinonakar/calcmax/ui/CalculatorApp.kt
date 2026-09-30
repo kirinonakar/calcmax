@@ -33,6 +33,13 @@ val Modes=listOf("Scientific/CAS","Graph","Python","Equations","Matrix","Vector"
 private fun handleMathInputKey(m:CalculatorModel,event:KeyEvent):Boolean {
     if(event.type!=KeyEventType.KeyDown)return false
     val session=m.calcSession
+    if(event.key==Key.MoveHome||event.key==Key.MoveEnd) {
+        val editor=session?.input ?: m.editor
+        val position=if(event.key==Key.MoveHome)0 else editor.source.length
+        val next=Editor(editor.source,position,if(event.isShiftPressed)editor.anchor else position)
+        if(session!=null)m.editCalcValue(next)else m.edit(next)
+        return true
+    }
     if(session!=null)return when(event.key){
         Key.Enter,Key.NumPadEnter->{m.submitCalcValue();true}
         Key.Backspace->{m.editCalcValue(session.input.delete());true}
@@ -286,7 +293,7 @@ internal fun largeHistoryTree(root:JSONObject?):Boolean {
                 }
                 }
             },
-            modifier=Modifier.fillMaxWidth().heightIn(min=60.dp).focusRequester(focus).onPreviewKeyEvent{if(it.type==KeyEventType.KeyDown&&it.key in listOf(Key.Enter,Key.NumPadEnter)){m.calculate();true}else false}.semantics{contentDescription="Expression input"},
+            modifier=Modifier.fillMaxWidth().heightIn(min=60.dp).focusRequester(focus).onPreviewKeyEvent{if(it.key in listOf(Key.MoveHome,Key.MoveEnd))handleMathInputKey(m,it)else if(it.type==KeyEventType.KeyDown&&it.key in listOf(Key.Enter,Key.NumPadEnter)){m.calculate();true}else false}.semantics{contentDescription="Expression input"},
             textStyle=TextStyle(color=c.ink,fontSize=m.inputFont.sp,fontFamily=FontFamily.Monospace),
             singleLine=!m.wordWrap,
             maxLines=if(m.wordWrap)4 else 1,
@@ -304,7 +311,7 @@ internal fun largeHistoryTree(root:JSONObject?):Boolean {
                 BasicTextField(
                     value=TextFieldValue(session.input.source,TextRange(session.input.anchor.coerceIn(0,session.input.source.length),session.input.cursor.coerceIn(0,session.input.source.length))),
                     onValueChange={m.editCalcValue(session.input.atomicInfinityDeletion(it.text) ?: Editor(it.text,it.selection.end,it.selection.start))},
-                    modifier=Modifier.weight(1f).onPreviewKeyEvent{if(it.type==KeyEventType.KeyDown&&it.key==Key.Enter){m.submitCalcValue();true}else false}.semantics{contentDescription="Value for ${session.name}"},
+                    modifier=Modifier.weight(1f).onPreviewKeyEvent{if(it.key in listOf(Key.MoveHome,Key.MoveEnd))handleMathInputKey(m,it)else if(it.type==KeyEventType.KeyDown&&it.key==Key.Enter){m.submitCalcValue();true}else false}.semantics{contentDescription="Value for ${session.name}"},
                     textStyle=TextStyle(color=c.ink,fontSize=22.sp,fontFamily=FontFamily.Monospace),
                     decorationBox={inner->Box(Modifier.fillMaxWidth()) {
                         if(session.input.source.isEmpty()) {
