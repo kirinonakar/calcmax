@@ -25,9 +25,9 @@ function cursorRect(target,source,start){
 }
 function edgeRect(target,edge){
   const rect=target.getBoundingClientRect(),base=['msup','msub','msubsup'].includes(target.localName)?target.firstElementChild:target,axis=base.getBoundingClientRect();
-  return {x:edge==='end'?rect.right:rect.left,top:axis.top,height:axis.height};
+  return {x:edge==='after'?rect.right+2:edge==='end'?rect.right:rect.left,top:axis.top,height:axis.height};
 }
-export function markInputCursor(math,source,start,end=start,{boundary=null}={}){
+export function markInputCursor(math,source,start,end=start,{boundary=null,structure=null}={}){
   if(math.classList.contains('input-wrapped')&&math.clientWidth){
     for(const part of math.querySelectorAll('.input-part'))part.style.overflowX=part.firstElementChild.getBoundingClientRect().width>math.clientWidth?'auto':'';
   }
@@ -43,7 +43,8 @@ export function markInputCursor(math,source,start,end=start,{boundary=null}={}){
   if(end>start)return;
   const candidates=nodes.filter(node=>Number(node.getAttribute('data-source-start'))<=start&&Number(node.getAttribute('data-source-end'))>=start).sort((a,b)=>(Number(a.getAttribute('data-source-end'))-Number(a.getAttribute('data-source-start')))-(Number(b.getAttribute('data-source-end'))-Number(b.getAttribute('data-source-start'))));
   const parts=[...math.children].filter(node=>node.classList.contains('input-part')),edge=boundary==='end'?parts.at(-1):parts[0];
-  const target=boundary?(edge?.firstElementChild?.firstElementChild||math.firstElementChild):candidates.find(node=>['mi','mn','mtext','span'].includes(node.localName))||candidates[0]||math.firstElementChild;
+  const fraction=boundary==='after'&&structure?nodes.find(node=>node.localName==='mfrac'&&Number(node.getAttribute('data-source-start'))===structure.start&&Number(node.getAttribute('data-source-end'))===structure.end):null;
+  const target=fraction||(boundary?(edge?.firstElementChild?.firstElementChild||math.firstElementChild):candidates.find(node=>['mi','mn','mtext','span'].includes(node.localName))||candidates[0]||math.firstElementChild);
   if(!target)return;
   let rect=boundary?edgeRect(target,boundary):cursorRect(target,source,start);
   const part=target.closest('.input-part');
@@ -55,7 +56,8 @@ export function markInputCursor(math,source,start,end=start,{boundary=null}={}){
   }
   const origin=frame.getBoundingClientRect();
   const font=target.style?math.ownerDocument.defaultView.getComputedStyle(target).fontSize:'';
-  const size=font.endsWith('px')?parseFloat(font):rect.height||24;
+  const size=font.endsWith('px')?parseFloat(font):fraction?24:rect.height||24;
+  if(fraction){const box=fraction.getBoundingClientRect();rect={x:box.right+2,top:box.top+(box.height-size)/2,height:size};}
   // Use an HTML containing block: positioned MathML children can be offset
   // by the math baseline even with explicit top/left coordinates.
   const marker=math.ownerDocument.createElement('span');marker.classList.add('input-caret');

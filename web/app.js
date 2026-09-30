@@ -19,10 +19,12 @@ import {markInputCursor,followInputCursor,followTextCursor,inputPointPosition} f
 import {unitGroups} from './unit-groups.js';
 import {bindPythonEditor} from './python-tools.js';
 import {defineFunction,encodeFunctions,decodeFunctions} from './function-transfer.js';
-import {moveMathCursor} from './input-navigation.js';
+import {moveMathCursor,fractionExit} from './input-navigation.js';
+import {createDisplaySizing} from './display-sizing.js';
 import {fractionInput} from './fraction-input.js';
 import {appVersion} from './app-version.js';
 import {parseCatalogHelp,helpExampleInput} from './catalog-help.js';
+import {requiresExplicitEvaluation} from './evaluation-policy.js';
 
 const $=id=>document.getElementById(id);
 const value=id=>$(id).value;
@@ -52,9 +54,12 @@ let calcSession=null;
 let activeHistoryEntry=null,inputAnswer=null;
 let tapeRows=null,tapeFormat='',keypadSignature='',saveTimer=null,keyAudioContext=null;
 const tapeFollow=followTape($('calculation-tape'),$('tape-active'));
+const displaySizing=createDisplaySizing(document.querySelector('main'),$('expression-preview'),$('answer'));
 const expressionUndo=[];
 let previewSource=value('expression');
 let inputBoundary=null;
+let calculationPreviewTimer=null,calculationPreviewKey=null,calculationPreviewRevision=0;
+let stopTimer=null,stopVisible=false;
 const undoStack=()=>calcSession?.undo||expressionUndo;
 for(const [id,setting] of Object.entries(state.fields)) {
   const field=$(id);
@@ -70,6 +75,7 @@ function persist() {
   if(calcSession)state.fields.expression=calcSession.source;
   state.graph=graphs.snapshot();
   if(!writeState({...state,history:state.persistHistory?state.history:[]}) && !storageWarning) { storageWarning=true; toast('브라우저 저장 공간을 사용할 수 없어 이번 세션에서만 보관합니다.'); }
+  scheduleCalculationPreview();
 }
 function schedulePersist(){clearTimeout(saveTimer);saveTimer=setTimeout(persist,150);}
 function toast(message) { setText($('toast'),message); $('toast').hidden=false; clearTimeout(toast.timer); toast.timer=setTimeout(()=>$('toast').hidden=true,3500); }
@@ -96,16 +102,21 @@ $('dialog').addEventListener('click',event=>{if(event.target===$('dialog')){cons
 function requestOptions() { return {angle:value('angle'),precision:state.precision,displayDigits:state.digits,variables:state.variables,functions:state.functions,assumptions:state.assumptions}; }
 const engine=new EngineClient();
 const graphs=createGraphWorkspace({execute:request=>engine.execute(request),options:requestOptions,onError:error,persist,isBusy:()=>busy,isReady:()=>engine.ready,saved:saved.graph});
-function updateButtons() { document.querySelectorAll('[data-run],.key[data-evaluate]').forEach(button=>button.disabled=!engine.ready||busy);document.querySelectorAll('.tape-expression').forEach(button=>button.disabled=busy||!!calcSession);$('stop').disabled=!busy;$('stop').hidden=false;$('stop').style.visibility=busy?'':'hidden';$('expression').readOnly=!typing||busy;$('retry').hidden=engine.ready||busy;graphs.updateButtons();graphs.flush(); }
+function updateStopButton(){const visible=stopVisible&&!!engine.pending;$('stop').disabled=!visible;$('stop').hidden=false;$('stop').style.visibility=visible?'':'hidden';}
+function updateButtons() { document.querySelectorAll('[data-run],.key[data-evaluate]').forEach(button=>button.disabled=!engine.ready||busy);document.querySelectorAll('.tape-expression').forEach(button=>button.disabled=busy||!!calcSession);updateStopButton();$('expression').readOnly=!typing||busy;$('retry').hidden=engine.ready||busy;graphs.updateButtons();graphs.flush(); }
 document.documentElement.dataset.busy='false';document.documentElement.dataset.engine='loading';document.documentElement.dataset.typing='false';
 engine.addEventListener('status',event=>{setText($('status'),event.detail);document.documentElement.dataset.engine=engine.ready?'ready':'loading';updateButtons();});
-engine.addEventListener('ready',()=>{document.documentElement.dataset.engine='ready';updateButtons();});
+engine.addEventListener('ready',()=>{document.documentElement.dataset.engine='ready';updateButtons();calculationPreviewKey=null;scheduleCalculationPreview();});
 // Do not compete with the first WASM/SymPy download by precaching the same
 // large runtime files. Offline installation starts only after the engine works.
 engine.addEventListener('ready',registerOfflineCache,{once:true});
-engine.addEventListener('busy',event=>{busy=event.detail;document.documentElement.dataset.busy=String(busy);updateButtons();});
-$('stop').onclick=()=>engine.cancel();
-$('retry').onclick=()=>engine.cancel('계산 엔진을 재시작합니다.');
+engine.addEventListener('busy',event=>{busy=event.detail;document.documentElement.dataset.busy=String(busy);updateButtons();if(!busy){calculationPreviewKey=null;scheduleCalculationPreview();}});
+engine.addEventListener('activity',event=>{
+  clearTimeout(stopTimer);stopTimer=null;stopVisible=false;updateStopButton();
+  if(event.detail)stopTimer=setTimeout(()=>{stopTimer=null;stopVisible=true;updateStopButton();},1000);
+});
+$('stop').onclick=()=>{cancelCalculationPreview();engine.cancel();};
+$('retry').onclick=()=>{cancelCalculationPreview();engine.cancel('계산 엔진을 재시작합니다.');};
 function showResult(result,source='',displaySource=source) {
   if(!result.ok){error(result.error||'계산 오류');return;}
   const previousAnswer=value('mode')==='scientific'?(inputAnswer||state.variables.Ans):state.variables.Ans;
@@ -141,14 +152,16 @@ function renderResult() {
   $('result-source').hidden=['scientific','tip'].includes(value('mode'))||!lastResultSource;
   if(!$('result-source').hidden)renderFormulas($('result-source'),[lastResultSource],{digits:state.digits});
   const notes=[lastResult.note,...(lastResult.conditions||[]),lastResult.calcValues?Object.entries(lastResult.calcValues).map(([name,n])=>`${name} = ${n}`).join(', '):''].filter(Boolean).join('\n');
-  if(notes)$('note').textContent=notes;else setText($('note'),'Next input starts a new calculation');
+  if(notes)$('note').textContent=notes;else if(committed)setText($('note'),'Next input starts a new calculation');else $('note').textContent='';
   $('answer-insert').disabled=!lastResult.resultAst;
+  displaySizing.refresh();
   renderTape();
 }
 async function evaluate(source=value('expression')) {
   if(busy)return;
   if(!engine.ready){error('계산 엔진이 로딩 중입니다.');return;}
   if(calcSession){await submitCalcValue();return;}
+  cancelCalculationPreview();
   try {
     const converted=latexInput(state.autoCloseBrackets?closeInputBrackets(source):source);
     if(source===value('expression')&&converted!==source){$('expression').value=converted;preview();}
@@ -173,18 +186,57 @@ function preview() {
   previewSource=source;
   renderInputCursor();
   renderTape();tapeFollow.latest();
+  scheduleCalculationPreview();
   schedulePersist();
 }
-function renderInputCursor(){const field=$('expression'),display=$('expression-preview'),math=display.querySelector('.input-flow,math');if(inputBoundary&&(inputBoundary.source!==field.value||inputBoundary.position!==field.selectionStart||field.selectionStart!==field.selectionEnd))inputBoundary=null;if(math){const marker=markInputCursor(math,field.value,field.selectionStart,field.selectionEnd,{boundary:inputBoundary?.edge});if(!typing)followInputCursor(display,marker||display.querySelector('.selected'),12,state.wordWrap);}else if(!field.value&&!display.querySelector('.text-caret')){const cursor=element('span','│','text-caret');display.append(cursor);}if(typing&&!state.wordWrap)followTextCursor(field);}
+function calculationPreviewState() {
+  return JSON.stringify([value('expression'),value('mode'),committed,!!calcSession,inputAnswer,requestOptions()]);
+}
+function cancelCalculationPreview() {
+  clearTimeout(calculationPreviewTimer);calculationPreviewTimer=null;
+  calculationPreviewKey=null;calculationPreviewRevision++;
+}
+function scheduleCalculationPreview() {
+  const key=calculationPreviewState();
+  if(key===calculationPreviewKey)return;
+  cancelCalculationPreview();calculationPreviewKey=key;
+  if(value('mode')!=='scientific'||committed||calcSession)return;
+  lastResult=null;lastResultSource='';$('answer').replaceChildren();$('note').textContent='';
+  displaySizing.refresh();
+  const source=value('expression');
+  if(!source.trim()||!engine.ready||busy)return;
+  let tree;
+  try {
+    // Typing previews require a complete input, even when = can close brackets.
+    tree=evaluationTree(latexInput(source));
+    const userFunctions=new Set(Object.keys(state.functions).filter(name=>state.functions[name].parameters?.length>1));
+    if(requiresExplicitEvaluation(tree,userFunctions)||
+      ['=',':='].includes(tree.value)&&['symbol','call'].includes(tree.args?.[0]?.kind))return;
+  } catch {return;}
+  const revision=calculationPreviewRevision;
+  calculationPreviewTimer=setTimeout(async()=>{
+    calculationPreviewTimer=null;
+    try {
+      if(engine.pending)await engine.pending.promise;
+      if(revision!==calculationPreviewRevision||key!==calculationPreviewState()||busy||!engine.ready)return;
+      const result=await engine.execute({...requestOptions(),tree,budget:2},{background:true});
+      if(revision!==calculationPreviewRevision||key!==calculationPreviewState())return;
+      if(result.ok){lastResult=result;lastResultSource=source;renderResult();}
+    } catch { /* Incomplete or failed previews leave the input editable. */ }
+  },100);
+}
+function renderInputCursor(){displaySizing.refresh();const field=$('expression'),display=$('expression-preview'),math=display.querySelector('.input-flow,math');if(inputBoundary&&(inputBoundary.source!==field.value||inputBoundary.position!==field.selectionStart||field.selectionStart!==field.selectionEnd))inputBoundary=null;if(math){const marker=markInputCursor(math,field.value,field.selectionStart,field.selectionEnd,{boundary:inputBoundary?.edge,structure:inputBoundary});if(!typing)followInputCursor(display,marker||display.querySelector('.selected'),12,state.wordWrap);}else if(!field.value&&!display.querySelector('.text-caret')){const cursor=element('span','│','text-caret');display.append(cursor);}if(typing&&!state.wordWrap)followTextCursor(field);}
 $('expression-preview').onclick=event=>{inputBoundary=null;const target=event.target.closest('[data-source-start]');if(target){const field=$('expression'),start=Number(target.getAttribute('data-source-start')),end=Number(target.getAttribute('data-source-end'));if(target.classList.contains('selected')||field.selectionStart===field.selectionEnd&&field.selectionStart>=start&&field.selectionStart<=end){const at=inputPointPosition(target,field.value,event.clientX,event.clientY);field.setSelectionRange(at,at);}else field.setSelectionRange(start,end);}else{$('expression').setSelectionRange(value('expression').length,value('expression').length);}preview();};
 function insert(text,cursor=null,{factor=false,fraction=false}={}) {
   if(busy)return;
   const field=$('expression'),undo=undoStack();undo.push(field.value);if(undo.length>100)undo.shift();
+  const outsideFraction=inputBoundary?.edge==='after'&&inputBoundary.source===field.value&&inputBoundary.position===field.selectionStart&&field.selectionStart===field.selectionEnd;
   if(committed){inputAnswer=null;field.value=!lastResult?.assignment&&(fraction||/^[+\-*/÷^%!∠]/.test(text))?'Ans':'';field.setSelectionRange(field.value.length,field.value.length);committed=false;$('commit-indicator').textContent='';}
   if(state.autoCloseBrackets&&text.length===1&&field.selectionStart===field.selectionEnd&&!overwrite){const pairs={'(' : ')','[':']','{':'}'};if(pairs[text]){text+=pairs[text];cursor=1;}else if(')]}'.includes(text)&&field.value[field.selectionStart]===text){field.setSelectionRange(field.selectionStart+1,field.selectionStart+1);preview();return;}}
   let start=field.selectionStart,end=!fraction&&overwrite&&field.selectionEnd===start?Math.min(field.value.length,start+text.length):field.selectionEnd;
   if(fraction){({start,end,text,cursor}=fractionInput(field.value,start,end));}
   let prefix='',suffix='';
+  if(outsideFraction&&!fraction&&/^[\p{L}\p{N}_.(]/u.test(text))prefix='*';
   // Keypad operands are separate factors; typed/pasted names remain intact.
   if(factor&&(start===end||/^[\p{L}_][\p{L}\p{N}_]*$/u.test(text))){
     const before=field.value[start-1]||'',after=field.value[end]||'';
@@ -209,6 +261,7 @@ function mode(mode) {
   if(['matrix','vector'].includes(mode))renderMatrix();
   if(mode==='scientific'){renderTape();tapeFollow.latest();}
   graphs.activate(mode==='graph');refreshWorkspaceMath();$('result-source').hidden=['scientific','tip'].includes(mode)||!lastResultSource;
+  displaySizing.refresh();
   persist();
 }
 $('mode').onchange=()=>mode(value('mode'));
@@ -314,11 +367,13 @@ async function performKey(input){
   else if(input==='DEL'||input==='DELETE_FORWARD'){const f=$('expression'),start=f.selectionStart,end=f.selectionEnd;undoStack().push(f.value);f.setRangeText('',start===end&&input==='DEL'?Math.max(0,start-1):start,start===end&&input==='DELETE_FORWARD'?Math.min(f.value.length,end+1):end,'end');committed=false;preview();}
   else if(['LEFT','RIGHT','UP','DOWN'].includes(input)){
     const f=$('expression');let start=f.selectionStart,end=f.selectionEnd;
-    const position=typing?null:moveMathCursor(f.value,start,end,input);
+    const outside=inputBoundary?.edge==='after'&&inputBoundary.source===f.value&&inputBoundary.position===start&&start===end?inputBoundary:null;
+    const exit=!typing?fractionExit(f.value,start,end,input,outside):null;
+    const position=typing?null:outside&&input==='LEFT'?outside.denominatorEnd:exit?.position??(outside&&input==='RIGHT'?Math.min(f.value.length,start+1):moveMathCursor(f.value,start,end,input));
     if(position!==null)start=end=position;
     else if(input==='LEFT'||input==='RIGHT')start=end=Math.max(0,Math.min(f.value.length,(input==='LEFT'?start:end)+(input==='LEFT'?-1:1)));
     else try{const nodes=[];const visit=n=>{if(n.start<=start&&n.end>=end)nodes.push(n);n.args?.forEach(visit);};visit(parse(f.value,{allowHoles:true}));nodes.sort((a,b)=>(a.end-a.start)-(b.end-b.start));const selected=input==='UP'?nodes.find(n=>n.start<start||n.end>end):nodes[0]?.args?.[0];if(selected){start=selected.start;end=selected.end;}}catch{}
-    f.setSelectionRange(start,end);if(typing)f.focus({preventScroll:true});preview();
+    f.setSelectionRange(start,end);inputBoundary=exit?{...exit,source:f.value,edge:'after'}:outside&&input==='RIGHT'&&start===outside.position?outside:null;if(typing)f.focus({preventScroll:true});preview();
   }
   else if(input==='MATRIX_INPUT')matrixInsertDialog();
   else if(input==='TO_GRAPH'){$('graph-source').value=value('expression')||'x';mode('graph');}
@@ -562,7 +617,6 @@ document.addEventListener('keydown',event=>{
     const field=$('expression'),position=moveMathCursor(field.value,field.selectionStart,field.selectionEnd,event.key.toUpperCase()),anchor=event.shiftKey?(field.selectionDirection==='backward'?field.selectionEnd:field.selectionStart):position;
     field.setSelectionRange(Math.min(anchor,position),Math.max(anchor,position),position<anchor?'backward':'forward');inputBoundary=event.shiftKey?null:{source:field.value,position,edge:event.key.toLowerCase()};preview();if(typing)field.scrollTop=event.key==='End'?field.scrollHeight:0;return;
   }
-  if(!['Shift','Control','Alt','Meta'].includes(event.key))inputBoundary=null;
   // Enter calculates while calculator controls retain focus after a click.
   // Cancel the native button activation before it can toggle display options.
   if(value('mode')==='scientific'&&!$('dialog').open&&!$('settings-dialog').open&&event.key==='Enter'&&!event.shiftKey&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&!event.isComposing&&event.target.closest('.keypad, #calculator-display .answer-toolbar, #calculator-display .edit-actions')){
@@ -578,7 +632,7 @@ document.addEventListener('keydown',event=>{
   else if(event.key.length===1&&/[0-9A-Za-z.,+\-*/÷×^%!()[\]{}=<>°∞π_]/.test(event.key)){event.preventDefault();insert(event.key);}
 });
 document.querySelectorAll('main input,main select,main textarea').forEach(field=>field.addEventListener('change',persist));
-window.addEventListener('pagehide',()=>{persist();clearTimeout(toast.timer);tapeFollow.dispose();graphs.dispose();});
+window.addEventListener('pagehide',()=>{persist();cancelCalculationPreview();clearTimeout(stopTimer);clearTimeout(toast.timer);tapeFollow.dispose();displaySizing.dispose();graphs.dispose();});
 window.addEventListener('resize',()=>{graphs.render();renderInputCursor();});
 document.fonts?.addEventListener('loadingdone',renderInputCursor);
 async function initialize() {

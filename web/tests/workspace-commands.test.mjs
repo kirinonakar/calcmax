@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {csvRows,numericStatisticsRows,statisticsCommand,distributionCommand,equationCommand,polynomialEquation} from '../workspace-commands.js';
 import {closeInputBrackets,parse} from '../parser.js';
 import {encodeFunctions,decodeFunctions,defineFunction} from '../function-transfer.js';
-import {moveMathCursor} from '../input-navigation.js';
+import {moveMathCursor,fractionExit} from '../input-navigation.js';
 import {roundNumber} from '../display-format.js';
 import {tipCommand} from '../money.js';
 
@@ -12,6 +12,20 @@ test('Home and End address the whole source even when selected, multiline, or in
     assert.equal(moveMathCursor(source,0,source.length,'HOME'),0);
     assert.equal(moveMathCursor(source,0,source.length,'END'),source.length);
   }
+});
+
+test('Right leaves a completed denominator at the fraction boundary, including nested fractions',()=>{
+  for(const source of ['(1)/(234)','(1)/(2+3)','(1)/(sqrt(2))','1/234']){
+    const tree=parse(source),right=tree.args[1],at=right.kind==='group'?right.args[0].end:right.end;
+    const exit=fractionExit(source,at,at,'RIGHT');assert.equal(exit.position,source.length,source);
+    assert.equal(moveMathCursor(source,at,at,'RIGHT'),source.length);assert.equal(exit.denominatorEnd,at);
+  }
+  const nested='(1)/((2)/(3))+4',outer=parse(nested).args[0],inner=outer.args[1].args[0],at=inner.args[1].args[0].end;
+  assert.equal(fractionExit(nested,at,at,'RIGHT').end,inner.end,'the inner fraction exits first');
+  assert.equal(fractionExit(nested,inner.end,inner.end,'RIGHT').end,outer.end,'the next Right exits the outer fraction');
+  assert.equal(fractionExit('(1)/()',5,5,'RIGHT'),null,'an empty denominator remains editable');
+  assert.equal(fractionExit('(1)/(234)',6,6,'RIGHT'),null,'Right within a number advances normally');
+  assert.equal(fractionExit('1÷2',3,3,'RIGHT'),null,'linear division has no fraction boundary');
 });
 
 test('display decimals round nested numeric strings, preserve precision, and normalize negative zero',()=>{

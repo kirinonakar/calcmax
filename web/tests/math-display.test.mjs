@@ -5,6 +5,33 @@ import {readFileSync} from 'node:fs';
 import {mathDisplay} from '../math-display.js';
 import {expressionDisplay,expressionInputDisplay} from '../expression-display.js';
 import {markInputCursor,followInputCursor,inputPointPosition} from '../input-cursor.js';
+import {fractionExit} from '../input-navigation.js';
+import {fitCalculationDisplay} from '../display-sizing.js';
+
+test('denominator exit draws a normal-height caret to the right of the entire fraction',()=>{
+  const dom=new JSDOM();globalThis.document=dom.window.document;
+  for(const source of ['(1)/(234)','1/234','(1)/((2)/(3))']){
+    const at=source.indexOf('3')+1+(source.includes('234')?1:0),exit=fractionExit(source,at,at,'RIGHT');
+    const input=expressionInputDisplay(source);document.body.append(input);input.getBoundingClientRect=()=>({left:100,top:10});
+    const fraction=[...input.querySelectorAll('mfrac')].find(node=>Number(node.getAttribute('data-source-end'))===exit.end);
+    fraction.getBoundingClientRect=()=>({left:100,right:180,top:10,height:80});
+    const caret=markInputCursor(input,source,exit.position,exit.position,{boundary:'after',structure:exit});
+    assert.equal(caret.style.left,'82px');assert.equal(caret.style.top,'28px');assert.equal(caret.style.height,'24px');assert.equal(caret.dataset.boundary,'after');
+  }
+  dom.window.close();
+});
+
+test('nested fractions retain display style and grow the display instead of shrinking operands',()=>{
+  const dom=new JSDOM();globalThis.document=dom.window.document;
+  const display=document.createElement('main'),input=document.createElement('div'),answer=document.createElement('div');display.append(input,answer);
+  input.append(expressionInputDisplay('(1)/((2)/(3))'));answer.append(mathDisplay({kind:'fraction',args:[{kind:'number',value:'1'},{kind:'number',value:'2'}]}));
+  for(const fraction of input.querySelectorAll('mfrac'))assert.equal(fraction.getAttribute('displaystyle'),'true');
+  input.querySelector('math').getBoundingClientRect=()=>({top:10,bottom:130,height:120});
+  answer.querySelector('math').getBoundingClientRect=()=>({top:140,bottom:200,height:60});
+  fitCalculationDisplay(display,input,answer);assert.ok(parseFloat(input.style.minHeight)>120);assert.ok(parseFloat(display.style.getPropertyValue('--calculation-content-height'))>180);
+  input.replaceChildren();answer.replaceChildren();fitCalculationDisplay(display,input,answer);assert.equal(input.style.minHeight,'60px');assert.equal(display.style.getPropertyValue('--calculation-content-height'),'0px');
+  dom.window.close();
+});
 
 test('invalid and wrapped source preserves ranges and supports caret placement inside text',()=>{
   const dom=new JSDOM();globalThis.document=dom.window.document;

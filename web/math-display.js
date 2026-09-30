@@ -26,7 +26,11 @@ export function mathDisplay(tree,digits=10,decimal=false,{notation='off',groupin
     if (!t) return el('mtext');
     const args = (t.args || []).map(child=>render(child,allowNotation&&t.kind==='unary')), value = t.value || '';
     switch(t.kind) {
-      case 'fraction': return el('mfrac',args);
+      case 'fraction': {
+        // Nested fractions retain normal operand sizes instead of adding
+        // another compact MathML script level at every fraction bar.
+        const fraction=el('mfrac',args);fraction.setAttribute('displaystyle','true');return fraction;
+      }
       case 'root': case 'indexed-root': {
         const contents=args.map(arg=>{const content=row([arg]);content.classList.add('math-root-content');return content;});
         return el(t.kind==='root'?'msqrt':'mroot',contents);

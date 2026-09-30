@@ -73,3 +73,35 @@ test('a runtime error settles a calculation without treating it as cold startup'
   assert.equal(engine.pending,null);assert.equal(engine.ready,false);assert.equal(statuses.at(-1),'runtime failed');
   tick(240000);assert.equal(workers.length,1);
 });
+
+test('background previews leave editing unlocked and foreground work waits for them',async t=>{
+  const {engine,workers}=runtime(t),busy=[];
+  engine.addEventListener('busy',event=>busy.push(event.detail));
+  workers[0].message({type:'ready'});
+  const preview=engine.execute({tree:{kind:'number',value:'1'}},{background:true});
+  const previewId=workers[0].request.id;
+  assert.deepEqual(busy,[],'a preview does not lock the keypad');
+  const commit=engine.execute({tree:{kind:'number',value:'2'}});
+  assert.deepEqual(busy,[true],'explicit work locks controls while waiting');
+  assert.equal(workers[0].request.id,previewId,'requests never overlap in the worker');
+  workers[0].message({type:'result',id:previewId,result:{ok:true,exact:'1'}});
+  assert.equal((await preview).exact,'1');
+  await Promise.resolve();
+  assert.notEqual(workers[0].request.id,previewId);
+  workers[0].message({type:'result',id:workers[0].request.id,result:{ok:true,exact:'2'}});
+  assert.equal((await commit).exact,'2');
+  assert.equal(busy.at(-1),false);
+});
+
+test('completed previews and cancelled background work never leave controls busy',async t=>{
+  const {engine,workers}=runtime(t),busy=[];
+  engine.addEventListener('busy',event=>busy.push(event.detail));
+  workers[0].message({type:'ready'});
+  const preview=engine.execute({},{background:true});
+  workers[0].message({type:'result',id:workers[0].request.id,result:{ok:true}});
+  await preview;assert.deepEqual(busy,[]);
+  const next=engine.execute({},{background:true});
+  const commit=engine.execute({});engine.cancel();
+  assert.equal((await next).ok,false);assert.equal((await commit).ok,false);
+  assert.equal(busy.at(-1),false);assert.equal(engine.pending,null);
+});

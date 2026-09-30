@@ -1,4 +1,4 @@
-self.CALCMAX_CACHE = 'calcmax-static-011e007e9bbe692c';
+self.CALCMAX_CACHE = 'calcmax-static-4b463a24bb774d33';
 self.CALCMAX_ASSETS = [
   "./",
   "./app-icon.png",
@@ -13,10 +13,12 @@ self.CALCMAX_ASSETS = [
   "./catalog_help.md",
   "./catalog_help_ko.md",
   "./display-format.js",
+  "./display-sizing.js",
   "./engine-bootstrap.js",
   "./engine-client.js",
   "./engine-fetch.js",
   "./engine.zip",
+  "./evaluation-policy.js",
   "./expression-display.js",
   "./expression-tree.js",
   "./formula-preview.js",

@@ -31,18 +31,28 @@ export class EngineClient extends EventTarget {
   finish(result) {
     if (!this.pending) return;
     clearTimeout(this.pending.timer);
-    const {resolve} = this.pending; this.pending = null;
-    this.emit('busy',false); resolve(result);
+    const {resolve,background} = this.pending; this.pending = null;
+    this.emit('activity',false);
+    if (!background) this.emit('busy',false);
+    resolve(result);
   }
-  execute(request) {
+  execute(request,{background=false}={}) {
     if (!this.ready) return Promise.resolve({ok:false,error:'계산 엔진이 로딩 중입니다.'});
-    if (this.pending) return Promise.resolve({ok:false,error:'계산 중입니다. 중지한 뒤 다시 실행해 주세요.'});
-    return new Promise(resolve => {
-      const id = ++this.counter;
-      this.pending = {id,resolve,timer:setTimeout(() => this.cancel('계산 시간이 20초를 초과했습니다.'),20000)};
+    if (this.pending?.background && !background) {
+      // Explicit work takes priority, while allowing the current preview to finish.
+      this.pending.background = false;
       this.emit('busy',true);
-      this.worker.postMessage({id,request});
-    });
+      return this.pending.promise.then(() => this.execute(request));
+    }
+    if (this.pending) return Promise.resolve({ok:false,error:'계산 중입니다. 중지한 뒤 다시 실행해 주세요.'});
+    let resolve;
+    const promise = new Promise(done => { resolve = done; });
+    const id = ++this.counter;
+    this.pending = {id,resolve,promise,background,timer:setTimeout(() => this.cancel('계산 시간이 20초를 초과했습니다.'),20000)};
+    this.emit('activity',true);
+    if (!background) this.emit('busy',true);
+    this.worker.postMessage({id,request});
+    return promise;
   }
   cancel(message='계산이 중지되었습니다.') {
     clearTimeout(this.startupTimer);

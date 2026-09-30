@@ -41,7 +41,7 @@ math{font-family:"CalcMax Math","Cambria Math",math;font-weight:400;font-synthes
 :root[data-workspace="scientific"] .runtime-bar{min-width:0;padding:2px 14px;font-size:10px}
 :root[data-workspace="scientific"] #status{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 :root[data-workspace="scientific"][data-engine="ready"] .runtime-bar{display:none}
-:root[data-workspace="scientific"] main{min-height:0;overflow:hidden;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) minmax(0,1fr) minmax(0,min(68%,520px))}
+:root[data-workspace="scientific"] main{min-height:0;overflow:hidden;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) minmax(0,1fr) minmax(0,min(68%,520px,max(35%,calc(100% - var(--calculation-content-height,0px)))))}
 :root[data-workspace="scientific"] .workspace[data-mode="scientific"]:not(.keypad-workspace){grid-row:1;min-height:0;overflow:hidden;padding:0 14px;display:grid;grid-template-rows:28px minmax(0,1fr)}
 :root[data-workspace="scientific"] .edit-actions{height:28px;min-width:0;margin:0;padding:0;align-items:center;gap:1px;overflow-x:auto;white-space:nowrap}
 :root[data-workspace="scientific"] .edit-actions button{min-width:0;flex-shrink:0;font-size:11px;padding:5px 8px}
@@ -75,7 +75,7 @@ math{font-family:"CalcMax Math","Cambria Math",math;font-weight:400;font-synthes
 .answer-toolbar #engineering-toggle:not(.active),.answer-toolbar #screen-toggle:not(.active),.answer-toolbar #grouping-toggle:not(.active){color:var(--muted);opacity:.45}
 :root[data-workspace="scientific"] .keypad-workspace{grid-row:3;min-height:0;min-width:0;overflow:hidden;padding:4px 8px;background:var(--bg);container-type:size}
 :root[data-workspace="scientific"] .calculation-display{grid-column:1;grid-row:1 / span 2;min-height:0;min-width:0;overflow:hidden;display:grid;grid-template-rows:28px minmax(0,1fr) 30px;padding:0 14px}
-.calculation-tape{min-height:0;min-width:0;overflow:auto;overscroll-behavior-y:contain;display:flex;flex-direction:column;scrollbar-width:thin;scrollbar-gutter:stable;padding-right:8px;overflow-anchor:none}
+.calculation-tape{min-height:0;min-width:0;overflow:auto;overscroll-behavior-y:contain;display:flex;flex-direction:column;scrollbar-width:none;padding-right:8px;overflow-anchor:none}
 .tape-history{flex:none;min-width:0}
 .tape-active{flex:none;min-width:0;min-height:100%;display:flex;flex-direction:column;justify-content:flex-start}
 :root[data-workspace="scientific"] .calculation-display .workspace[data-mode="scientific"]:not(.keypad-workspace){display:block;grid-row:auto;overflow:visible;padding:0;flex:none}
@@ -92,6 +92,10 @@ math{font-family:"CalcMax Math","Cambria Math",math;font-weight:400;font-synthes
 .tape-note{font-size:10px;line-height:1.5;color:var(--muted);overflow-wrap:anywhere}
 .formula-preview{min-width:0;overflow-x:auto;padding:8px 0;font-family:"Cambria Math",Cambria,serif;font-size:clamp(16px,2.6vw,24px);color:var(--ink)}
 .formula-line{min-width:0;overflow-x:auto;padding:4px 0}.formula-preview math{margin:0;display:inline-block}
+/* Tall fractions can overflow MathML line boxes. Keep scrolling available
+   without native scrollbar tracks inside the calculation display. */
+.expression-preview,#answer,.tape-expression,.tape-result,.formula-preview,.formula-line{scrollbar-width:none}
+.calculation-tape::-webkit-scrollbar,.expression-preview::-webkit-scrollbar,#answer::-webkit-scrollbar,.tape-expression::-webkit-scrollbar,.tape-result::-webkit-scrollbar,.formula-preview::-webkit-scrollbar,.formula-line::-webkit-scrollbar{display:none}
 :root[data-workspace="scientific"] .expression-preview{font-size:var(--input-font,24px)}
 #answer,:root[data-workspace="scientific"] #answer{font-size:var(--output-font,30px)}
 #answer,:root[data-workspace="scientific"] #answer{padding-right:8px;padding-bottom:10px}

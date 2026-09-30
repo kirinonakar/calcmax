@@ -12,10 +12,11 @@ async function waitFor(check,message,timeout=15000) {
 }
 test('DOM workflows use the production Worker, real WASM, both languages, and themes',async t=>{
   const dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'),{url:'http://localhost/',pretendToBeVisual:true});
-  const workers=[];
+  const workers=[],requests=[],heldPreviewResults=[];
+  let holdPreviewResults=false;
   class BrowserWorker {
-    constructor(url,options){assert.equal(options?.type,'module','Pyodide requires a module Worker');assert.equal(url.pathname.endsWith('/worker.js'),true);this.node=new NodeWorker(new URL('./worker-bridge.mjs',import.meta.url));workers.push(this.node);this.node.on('message',data=>this.onmessage?.({data}));this.node.on('error',error=>this.onerror?.({message:error.message}));}
-    postMessage(data){this.node.postMessage(data);}
+    constructor(url,options){assert.equal(options?.type,'module','Pyodide requires a module Worker');assert.equal(url.pathname.endsWith('/worker.js'),true);this.node=new NodeWorker(new URL('./worker-bridge.mjs',import.meta.url));workers.push(this.node);this.node.on('message',data=>{const deliver=()=>this.onmessage?.({data});if(holdPreviewResults&&data.type==='result'&&requests.findLast(request=>request.id===data.id)?.request.budget===2)heldPreviewResults.push(deliver);else deliver();});this.node.on('error',error=>this.onerror?.({message:error.message}));}
+    postMessage(data){requests.push(data);this.node.postMessage(data);}
     terminate(){this.node.terminate();}
   }
   const {window}=dom;
@@ -107,7 +108,7 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
   assert.equal(document.documentElement.dataset.busy,'true');
   assert.equal(window.getComputedStyle(document.querySelector('.runtime-bar')).display,'none','ready status must stay hidden while calculating');
   assert.equal($('stop').closest('.edit-actions')!==null,true,'stop stays in a reserved editing-row slot');
-  assert.equal($('stop').hidden,false);assert.equal($('stop').style.visibility,'');
+  assert.equal($('stop').hidden,false);assert.equal($('stop').style.visibility,'hidden','short calculations never show Stop');
   assert.equal(toolbar.innerHTML,toolbarMarkup,'busy state leaves the Exact toolbar unchanged');
   await waitFor(()=>$('answer').textContent==='12','exact fraction');
   assert.equal(area('main'),'main','calculation busy/idle transitions keep the same main track');
@@ -135,6 +136,63 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
   $('tip-fixed').value='';document.querySelector('[data-run="tip"]').click();await waitFor(()=>$('answer').textContent.includes('Tip %: 16.00%'),'percent tip ignores disabled amount input and reports adjusted rate');$('tip-fixed').value='15';
   change('mode','functions');$('function-save').click();change('mode','scientific');$('expression').value='f(3)';document.querySelector('.key[data-evaluate]').click();await waitFor(()=>$('answer').textContent==='10','saved function');
   const edit=source=>{$('expression').value=source;$('expression').dispatchEvent(new window.Event('input'));};
+  await t.test('simple input previews without committing, blocking typing, or changing Ans',async()=>{
+    key('AC').click();$('typing-toggle').click();
+    const before=JSON.parse(localStorage.getItem('calcmax-web-v1'));
+    edit('2+3*4');await waitFor(()=>$('answer').textContent==='14','automatic arithmetic preview');
+    assert.equal($('commit-indicator').textContent,'');assert.equal($('note').textContent,'');
+    assert.equal($('expression').readOnly,false);assert.equal(document.documentElement.dataset.busy,'false');
+    assert.equal($('stop').style.visibility,'hidden');
+    const after=JSON.parse(localStorage.getItem('calcmax-web-v1'));
+    assert.deepEqual(after.variables.Ans,before.variables.Ans);assert.equal(after.history.length,before.history.length);
+    key('5').click();assert.equal($('expression').value,'2+3*45','preview leaves the entry editable');
+    await waitFor(()=>$('answer').textContent==='137','continued keypad input previews');
+    edit('nthroot(8,3)');await waitFor(()=>$('answer').textContent==='2','multi-argument entry helper previews');
+    edit('2+');assert.equal($('answer').textContent,'','incomplete input clears the old preview');
+    edit('integrate(x,x)');const count=requests.length;
+    await new Promise(resolve=>setTimeout(resolve,200));assert.equal(requests.length,count,'integration waits for =');assert.equal($('answer').textContent,'');
+    edit('f(3)');await waitFor(()=>$('answer').textContent==='10','single-argument user function previews like Android');
+    edit('A=99');const assignments=requests.length;
+    await new Promise(resolve=>setTimeout(resolve,200));assert.equal(requests.length,assignments,'assignment waits for =');
+    edit('sin(30)');change('angle','DEG');await waitFor(()=>$('answer').textContent==='12','DEG preview');
+    change('angle','RAD');await waitFor(()=>$('answer').textContent!=='12'&&$('answer').textContent.length>0,'angle change updates preview');
+    edit('2+3');await waitFor(()=>$('answer').textContent==='5','result ready before commit');
+    key('=').click();await waitFor(()=>$('commit-indicator').textContent==='=','equals commits the previewed input');
+    const committedState=JSON.parse(localStorage.getItem('calcmax-web-v1'));
+    assert.equal(committedState.history.length,before.history.length+1);assert.equal(committedState.variables.Ans.value,'5');
+    $('typing-toggle').click();key('AC').click();
+  });
+  await t.test('slow previews show Stop only after one second and discard stale responses',async()=>{
+    $('typing-toggle').click();holdPreviewResults=true;
+    try {
+      edit('6*7');await waitFor(()=>heldPreviewResults.length===1,'hold a real WASM preview response');
+      assert.equal($('stop').style.visibility,'hidden');assert.equal($('stop').disabled,true);
+      assert.equal($('expression').readOnly,false);assert.equal(document.documentElement.dataset.busy,'false');
+      await waitFor(()=>$('stop').style.visibility==='','Stop appears after one second');
+      edit('7*8');heldPreviewResults.shift()();
+      assert.equal($('stop').style.visibility,'hidden','completion hides Stop immediately');
+      await waitFor(()=>heldPreviewResults.length===1,'latest input is calculated');assert.equal($('answer').textContent,'','stale 42 cannot replace the latest input');
+      key('AC').click();heldPreviewResults.shift()();
+      await new Promise(resolve=>setTimeout(resolve,25));assert.equal($('answer').textContent,'','AC invalidates an in-flight result');
+    } finally {holdPreviewResults=false;for(const deliver of heldPreviewResults.splice(0))deliver();$('typing-toggle').click();key('AC').click();}
+  });
+  await t.test('Right after denominator input exits the fraction and subsequent typing stays outside',()=>{
+    key('AC').click();key('8').click();key('()/()').click();key('2').click();key('3').click();
+    assert.equal($('expression').value,'(8)/(23)');assert.equal($('expression').selectionStart,7);
+    key('RIGHT').click();assert.equal($('expression').selectionStart,8);assert.equal($('expression-preview').querySelector('.input-caret').dataset.boundary,'after');
+    key('LEFT').click();assert.equal($('expression').selectionStart,7);assert.equal($('expression-preview').querySelector('.input-caret').dataset.boundary,undefined);
+    key('RIGHT').click();key('4').click();assert.equal($('expression').value,'(8)/(23)*4','a new digit is a factor outside the denominator');
+    edit('1/2');$('expression').setSelectionRange(3,3);key('8').focus();
+    key('8').dispatchEvent(new window.KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true,cancelable:true}));
+    assert.equal($('expression-preview').querySelector('.input-caret').dataset.boundary,'after','unparenthesized fractions have a distinct outside cursor at the same source offset');
+    key('RIGHT').click();assert.equal($('expression-preview').querySelector('.input-caret').dataset.boundary,'after','repeated Right at the end keeps the cursor outside');
+    key('8').dispatchEvent(new window.KeyboardEvent('keydown',{key:'3',bubbles:true,cancelable:true}));assert.equal($('expression').value,'1/2*3');
+    edit('(1)/((2)/(3))+4');$('expression').setSelectionRange(11,11);key('RIGHT').click();
+    assert.equal($('expression').selectionStart,12);assert.equal($('expression-preview').querySelector('.input-caret').dataset.boundary,'after');
+    key('RIGHT').click();assert.equal($('expression').selectionStart,13);assert.equal($('expression-preview').querySelector('.input-caret').dataset.boundary,'after','another Right exits the outer fraction');
+    key('RIGHT').click();assert.equal($('expression').selectionStart,14,'Right outside the fraction continues to the next source position');
+    key('AC').click();
+  });
   await t.test('Home and End move to the whole expression boundaries in both input and wrapping modes',()=>{
     const press=(target,key,options={})=>{const event=new window.KeyboardEvent('keydown',{key,bubbles:true,cancelable:true,...options});target.dispatchEvent(event);return event;};
     for(const wrap of [false,true]){
@@ -419,7 +477,7 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
   key('+').click();key('1').click();key('=').click();await waitFor(()=>$('answer').textContent==='12','new calculation resumes the current Ans');
   edit('1/3');key('=').click();await waitFor(()=>$('answer').textContent==='13','fraction on tape');key('AC').click();$('exact-toggle').click();assert.equal($('tape-history').lastElementChild.querySelector('.tape-result').textContent,'0.3333333333','decimal toggle formats earlier entries even with an empty current answer');$('exact-toggle').click();
   // Non-cooperative Python cannot freeze the page; hard cancellation restores WASM.
-  change('mode','python');assert.ok($('stop').closest('.runtime-bar'),'Python stop stays at the top of the workspace');$('python-source').value='while True: pass';document.querySelector('[data-run="python"]').click();await waitFor(()=>!$('stop').disabled,'script running');$('stop').click();await waitFor(()=>$('python-output').textContent.includes('cancelled'),'hard cancellation');await waitFor(()=>!document.querySelector('[data-run="python"]').disabled,'engine recovery');
+  change('mode','python');assert.ok($('stop').closest('.runtime-bar'),'Python stop stays at the top of the workspace');$('python-source').value='while True: pass';document.querySelector('[data-run="python"]').click();assert.equal($('stop').style.visibility,'hidden','long scripts initially hide Stop');await waitFor(()=>!$('stop').disabled,'script running for at least one second');assert.equal($('stop').style.visibility,'');$('stop').click();await waitFor(()=>$('python-output').textContent.includes('cancelled'),'hard cancellation');assert.equal($('stop').style.visibility,'hidden');await waitFor(()=>!document.querySelector('[data-run="python"]').disabled,'engine recovery');
   $('python-source').value='print(42)';document.querySelector('[data-run="python"]').click();await waitFor(()=>$('python-output').textContent==='42\n','post-cancellation script');
   assert.equal(offlineRegistrations,1,'engine recovery does not register the service worker again');
   await t.test('clearing history preserves starred entries and persisted favorites',async()=>{

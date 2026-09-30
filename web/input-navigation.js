@@ -1,8 +1,27 @@
 import {parse} from './parser.js';
+export function fractionExit(source,start,end,direction,outside=null){
+  if(direction!=='RIGHT'||start!==end)return null;
+  const fractions=[];
+  try{
+    const visit=node=>{if(node.kind==='binary'&&node.value==='/'&&node.displayOperator!=='÷')fractions.push(node);node.args.forEach(visit);};
+    visit(parse(source,{allowHoles:true}));
+  }catch{return null;}
+  fractions.sort((a,b)=>(a.end-a.start)-(b.end-b.start));
+  for(const node of fractions){
+    if(outside&&node.start===outside.start&&node.end===outside.end)continue;
+    const denominator=node.args[1],content=denominator.kind==='group'?denominator.args[0]:denominator;
+    const incomplete=node=>node.kind==='hole'||node.args.some(incomplete);
+    if(!content||incomplete(content))continue;
+    if(start===content.end||denominator.kind==='group'&&start===denominator.end-1)
+      return {position:node.end,start:node.start,end:node.end,denominatorEnd:content.end};
+  }
+  return null;
+}
 export function moveMathCursor(source,start,end,direction){
   if(direction==='HOME')return 0;
   if(direction==='END')return source.length;
   if(start!==end)return direction==='LEFT'?start:direction==='RIGHT'?end:null;
+  const exit=fractionExit(source,start,end,direction);if(exit)return exit.position;
   const nodes=[];try{const visit=node=>{nodes.push(node);node.args.forEach(visit);};visit(parse(source,{allowHoles:true}));}catch{return ['LEFT','RIGHT'].includes(direction)?Math.max(0,Math.min(source.length,start+(direction==='LEFT'?-1:1))):null;}
   const roots=nodes.filter(node=>node.kind==='call'&&['sqrt','cbrt','nthroot'].includes(node.value)).sort((a,b)=>(a.end-a.start)-(b.end-b.start));
   for(const root of roots){const argument=root.args[0];if(!argument)continue;if(direction==='LEFT'&&start===argument.start)return root.start;if(direction==='RIGHT'&&start===argument.end)return root.end;if(direction==='RIGHT'&&start===root.start)return argument.start;if(direction==='LEFT'&&start===root.end)return argument.end;if(direction==='UP'&&start>=argument.start&&start<=argument.end)return root.end;}
