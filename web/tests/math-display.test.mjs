@@ -21,15 +21,27 @@ test('denominator exit draws a normal-height caret to the right of the entire fr
   dom.window.close();
 });
 
-test('nested fractions retain display style and grow the display instead of shrinking operands',()=>{
+test('large fractions grow scrollable content without changing the keypad layout',()=>{
   const dom=new JSDOM();globalThis.document=dom.window.document;
+  document.documentElement.dataset.workspace='scientific';
+  const style=document.createElement('style');style.textContent=readFileSync(new URL('../calculator.css',import.meta.url),'utf8');document.head.append(style);
   const display=document.createElement('main'),input=document.createElement('div'),answer=document.createElement('div');display.append(input,answer);
+  document.body.append(display);
+  const rows=dom.window.getComputedStyle(display).gridTemplateRows;
+  assert.ok(rows.includes('min(68%,520px)'),'keypad height is based on viewport space');
+  assert.ok(!rows.includes('var('),'math content cannot change the keypad track');
   input.append(expressionInputDisplay('(1)/((2)/(3))'));answer.append(mathDisplay({kind:'fraction',args:[{kind:'number',value:'1'},{kind:'number',value:'2'}]}));
   for(const fraction of input.querySelectorAll('mfrac'))assert.equal(fraction.getAttribute('displaystyle'),'true');
   input.querySelector('math').getBoundingClientRect=()=>({top:10,bottom:130,height:120});
   answer.querySelector('math').getBoundingClientRect=()=>({top:140,bottom:200,height:60});
-  fitCalculationDisplay(display,input,answer);assert.ok(parseFloat(input.style.minHeight)>120);assert.ok(parseFloat(display.style.getPropertyValue('--calculation-content-height'))>180);
-  input.replaceChildren();answer.replaceChildren();fitCalculationDisplay(display,input,answer);assert.equal(input.style.minHeight,'60px');assert.equal(display.style.getPropertyValue('--calculation-content-height'),'0px');
+  for(const height of [60,240,480,60]){
+    answer.querySelector('math').getBoundingClientRect=()=>({top:140,bottom:140+height,height});
+    fitCalculationDisplay(input,answer);
+    assert.ok(parseFloat(input.style.minHeight)>120);assert.ok(parseFloat(answer.style.minHeight)>height,'large math retains space to scroll');
+    assert.equal(display.style.cssText,'','sizing does not change the parent layout');
+    assert.equal(dom.window.getComputedStyle(display).gridTemplateRows,rows);
+  }
+  input.replaceChildren();answer.replaceChildren();fitCalculationDisplay(input,answer);assert.equal(input.style.minHeight,'60px');assert.equal(answer.style.minHeight,'56px');assert.equal(display.style.cssText,'');
   dom.window.close();
 });
 

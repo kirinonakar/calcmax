@@ -41,7 +41,8 @@ math{font-family:"CalcMax Math","Cambria Math",math;font-weight:400;font-synthes
 :root[data-workspace="scientific"] .runtime-bar{min-width:0;padding:2px 14px;font-size:10px}
 :root[data-workspace="scientific"] #status{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 :root[data-workspace="scientific"][data-engine="ready"] .runtime-bar{display:none}
-:root[data-workspace="scientific"] main{min-height:0;overflow:hidden;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) minmax(0,1fr) minmax(0,min(68%,520px,max(35%,calc(100% - var(--calculation-content-height,0px)))))}
+/* Keep keypad geometry tied to the viewport; tall math scrolls in the tape. */
+:root[data-workspace="scientific"] main{min-height:0;overflow:hidden;display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) minmax(0,1fr) minmax(0,min(68%,520px))}
 :root[data-workspace="scientific"] .workspace[data-mode="scientific"]:not(.keypad-workspace){grid-row:1;min-height:0;overflow:hidden;padding:0 14px;display:grid;grid-template-rows:28px minmax(0,1fr)}
 :root[data-workspace="scientific"] .edit-actions{height:28px;min-width:0;margin:0;padding:0;align-items:center;gap:1px;overflow-x:auto;white-space:nowrap}
 :root[data-workspace="scientific"] .edit-actions button{min-width:0;flex-shrink:0;font-size:11px;padding:5px 8px}
