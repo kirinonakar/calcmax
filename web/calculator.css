@@ -2,6 +2,7 @@
    long expressions/results scroll inside their displays, never below the keypad. */
 :root{--bg:#e9ede9;--panel:#f3f6ee;--bar:#d8e0da;--ink:#162a26;--muted:#53635d;--line:#b3c0b8;--accent:#006d5b;--key:#d8e0da;--number:#fafbf8;--lime:#acca4a;--gold:#785600;--alpha:#754584;--operator:#c6d9d2}
 :root[data-theme="dark"]{--bg:#111916;--panel:#09120f;--bar:#202d27;--ink:#e6f0e7;--muted:#9eb3a6;--line:#3c5246;--accent:#79dbb7;--key:#202d27;--number:#2b3731;--lime:#acca4a;--gold:#e7c36e;--alpha:#d6ace9;--operator:#29443a}
+.title-button{font:inherit;letter-spacing:inherit;color:inherit;padding:4px 0;min-height:0;border:0;border-radius:4px}.about-content{display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center}.about-content p{margin:0}.about-content a{font-size:12px}.about-content button{align-self:flex-end}
 .mode-choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.preferences{width:100%;padding:0;margin-bottom:18px;border:0;gap:16px}.preferences label{flex:1}.preferences select{width:100%;font-size:14px;padding:10px 24px 10px 12px}#digits-indicator{white-space:nowrap;font-size:10px;color:var(--muted)}#key-modifier{font-size:10px;color:var(--gold)}#key-modifier.alpha{color:var(--alpha)}#insert-mode{color:var(--muted);font-weight:400;font-size:10px;padding:4px}.mode-bar #mode{max-width:none;min-width:0;flex:1}.mode-bar #angle{width:70px;flex-shrink:0}.edit-actions #commit-indicator{margin-right:auto;color:var(--muted)}.answer-toolbar{overflow-x:auto;white-space:nowrap}.answer-toolbar button{flex-shrink:0}.answer-toolbar #exact-toggle{margin-right:0}.answer-toolbar button.active{color:var(--accent);background:var(--bar)}
 :root[data-workspace="scientific"] body{height:100dvh;min-height:0;padding:0;overflow:hidden}
 :root[data-workspace="scientific"] .instrument{height:100dvh;min-height:0;max-height:100dvh;border-radius:0;display:grid;grid-template-areas:"header" "mode" "runtime" "main";grid-template-rows:44px 48px auto minmax(0,1fr);padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
@@ -28,6 +29,8 @@
 :root[data-workspace="scientific"] .expression-preview{display:flex;align-items:center;min-width:0;min-height:0;overflow:auto;padding:4px 0;font-family:"Cambria Math",Cambria,serif;font-size:clamp(20px,4vw,32px);white-space:pre-wrap;overflow-wrap:anywhere;cursor:text}
 :root[data-workspace="scientific"] .expression-preview math{margin:0;flex-shrink:0}
 .expression-preview .selected{background:var(--operator)}.expression-preview .input-slot{color:var(--muted);border:1px dashed var(--line)}
+.input-caret{background:var(--accent);animation:input-blink 1.1s step-end infinite}.text-caret{color:var(--accent);animation:input-blink 1.1s step-end infinite}
+@keyframes input-blink{50%{opacity:0}}@media(prefers-reduced-motion:reduce){.input-caret,.text-caret{animation:none}}
 :root[data-calc-active="true"] .expression-preview{flex-direction:column;align-items:stretch;justify-content:center;gap:4px}
 .calc-source{font:12px Consolas,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--muted)}
 .calc-value{display:flex;align-items:center;min-height:0;gap:6px}
@@ -56,6 +59,14 @@
 .tape-expression math,.tape-result math{margin:0;flex-shrink:0}
 .tape-expression math{display:inline-block}
 .tape-note{font-size:10px;line-height:1.5;color:var(--muted);overflow-wrap:anywhere}
+.formula-preview{min-width:0;overflow-x:auto;padding:8px 0;font-family:"Cambria Math",Cambria,serif;font-size:clamp(16px,2.6vw,24px);color:var(--ink)}
+.formula-line{min-width:0;overflow-x:auto;padding:4px 0}.formula-preview math{margin:0;display:inline-block}
+:root[data-workspace="scientific"] .expression-preview{font-size:var(--input-font,24px)}
+#answer,:root[data-workspace="scientific"] #answer{font-size:var(--output-font,30px)}
+#answer math{max-width:none}.graph-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:8px 0}.graph-toolbar label{margin:0;min-width:100px}.graph-toolbar button{background:var(--bar)}
+.interactive-plot{touch-action:none;user-select:none;cursor:grab}.interactive-plot:active{cursor:grabbing}.interactive-plot svg{display:block;aspect-ratio:800/460;width:100%;height:auto;max-height:none}
+#graph-formulas .formula-line{border-left:3px solid var(--accent);padding-left:8px}.analysis-point{display:inline-block;margin:4px;background:var(--bar)}
+#graph-parameters label{min-width:200px}#graph-analysis{padding:12px 0}#graph-table tr[tabindex]{cursor:pointer}#graph-table tr[tabindex]:hover{background:var(--bar)}
 :root[data-workspace="scientific"] footer{display:none}
 .keypad{height:100%;min-height:0;display:flex;flex-direction:column;gap:4px}
 .keypad-top{flex:2;min-height:0;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));column-gap:4px;row-gap:4px}

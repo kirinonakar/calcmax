@@ -1,16 +1,32 @@
 export class EngineClient extends EventTarget {
   constructor() { super(); this.counter = 0; this.pending = null; this.start(); }
   emit(type,detail) { this.dispatchEvent(new CustomEvent(type,{detail})); }
-  start() {
+  start(attempt=0) {
+    clearTimeout(this.startupTimer);
     this.ready = false;
-    this.worker = new Worker(new URL('./worker.js',import.meta.url),{type:'module'});
-    this.worker.onmessage = ({data}) => {
-      if (data.type === 'ready') { this.ready = true; this.emit('status','계산 엔진 준비 완료 · WASM'); this.emit('ready'); }
+    const worker = this.worker = new Worker(new URL('./worker.js',import.meta.url),{type:'module'});
+    const fail = error => {
+      if (this.worker !== worker) return;
+      clearTimeout(this.startupTimer);
+      const initializing = !this.ready;
+      worker.terminate(); this.worker = null; this.ready = false;
+      this.finish({ok:false,error});
+      if (initializing && attempt < 1) {
+        this.emit('status','계산 엔진 로딩을 다시 시도합니다…');
+        this.start(attempt+1);
+      } else this.emit('status',error);
+    };
+    worker.onmessage = ({data}) => {
+      // A terminated startup attempt can still have queued messages.
+      if (this.worker !== worker) return;
+      if (data.type === 'ready') { clearTimeout(this.startupTimer); this.ready = true; this.emit('status','계산 엔진 준비 완료 · WASM'); this.emit('ready'); }
       else if (data.type === 'status') this.emit('status',data.message);
-      else if (data.type === 'fatal') { this.ready = false; this.emit('status',data.error); this.finish({ok:false,error:data.error}); }
+      else if (data.type === 'fatal') fail(data.error);
       else if (data.type === 'result' && data.id === this.pending?.id) this.finish(data.result);
     };
-    this.worker.onerror = event => { this.ready = false; this.emit('status',event.message || '엔진을 시작할 수 없습니다. 정적 서버와 빌드 파일을 확인해 주세요.'); this.finish({ok:false,error:event.message || 'Engine failed'}); };
+    worker.onerror = event => fail(event.message || '엔진을 시작할 수 없습니다. 정적 서버와 빌드 파일을 확인해 주세요.');
+    // Cold WASM downloads may be slow, but must never leave the UI loading forever.
+    this.startupTimer = setTimeout(() => fail('계산 엔진 로딩 시간이 초과되었습니다. 다시 로딩을 눌러 주세요.'),120000);
   }
   finish(result) {
     if (!this.pending) return;
@@ -29,7 +45,9 @@ export class EngineClient extends EventTarget {
     });
   }
   cancel(message='계산이 중지되었습니다.') {
-    this.worker.terminate();
+    clearTimeout(this.startupTimer);
+    this.worker?.terminate();
+    this.worker = null; this.ready = false;
     this.finish({ok:false,error:message});
     this.emit('status','계산 엔진 재시작…');
     this.start();

@@ -44,6 +44,7 @@ export function bindKeyPress(button,press,longPress,{delay=500,schedule=setTimeo
 export function renderKeypad(container,{second=false,shift=false,alpha=false,hyperbolic=false,press,longPress}) {
   const create=k=>{
     const button=document.createElement('button');button.type='button';button.className=`key ${k.type}`;button.dataset.input=k.input;
+    button.keySpec=k;
     if(k.input==='='||k.input==='CALC')button.dataset.evaluate='true';
     button.setAttribute('aria-label',shift&&k.alternate?k.alternate:k.title);
     if(['SHIFT','ALPHA','SECOND','HYP'].includes(k.input)){const active=k.input==='SHIFT'?shift:k.input==='ALPHA'?alpha:k.input==='SECOND'?second:hyperbolic;button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));}
@@ -60,4 +61,10 @@ export function renderKeypad(container,{second=false,shift=false,alpha=false,hyp
   top.append(directions);
   const rows=(second?secondRows:scientificRows).concat(numericRows).map((specs,i)=>{const row=document.createElement('div');row.className=`keypad-row ${i<3?'scientific-row':'numeric-row'}`;row.append(...specs.map(create));return row;});
   container.replaceChildren(top,...rows);container.dataset.page=second?'2':'1';
+}
+export function updateKeypadState(container,{second=false,shift=false,alpha=false,hyperbolic=false}){
+  for(const button of container.querySelectorAll('.key')){const k=button.keySpec;if(!k)continue;
+    const label=alpha&&k.alpha?k.alpha:shift&&k.alternate?k.alternate:k.title;button.setAttribute('aria-label',label);
+    if(['SHIFT','ALPHA','SECOND','HYP'].includes(k.input)){const active=k.input==='SHIFT'?shift:k.input==='ALPHA'?alpha:k.input==='SECOND'?second:hyperbolic;button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));}
+  }
 }

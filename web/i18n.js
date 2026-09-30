@@ -1,6 +1,8 @@
+import {nativeKorean} from './native-locale.js';
 // Source strings are stable translation keys. Math expressions and user code are
 // never translated; language switches do not change their values.
 const english={
+  '계산 엔진 로딩을 다시 시도합니다…':'Retrying engine loading…','계산 엔진 로딩 시간이 초과되었습니다. 다시 로딩을 눌러 주세요.':'Engine loading timed out. Click Reload engine to try again.',
   '작업 모드':'Workspace','그래프':'Graph','방정식':'Equations','행렬':'Matrix','벡터':'Vector','데이터 & 통계':'Data & Statistics','프로그래머':'Programmer','단위 변환':'Units','상수':'Constants','팁 계산':'Tip','환율':'Currency','사용자 함수':'Functions','각도 단위':'Angle unit',
   'WebAssembly 런타임 로딩…':'Loading WebAssembly runtime…','SymPy 계산 엔진 로딩…':'Loading SymPy engine…','계산 엔진 준비 완료 · WASM':'Engine ready · WASM','계산 엔진 재시작…':'Restarting engine…','계산 엔진이 로딩 중입니다.':'The engine is still loading.','계산 중입니다. 중지한 뒤 다시 실행해 주세요.':'A calculation is running. Stop it before trying again.','계산 시간이 20초를 초과했습니다.':'Calculation exceeded the 20-second limit.','계산이 중지되었습니다.':'Calculation cancelled.','계산 엔진을 재시작합니다.':'Restarting the calculation engine.','다시 로딩':'Reload engine','중지':'Stop','엔진을 시작할 수 없습니다. 정적 서버와 빌드 파일을 확인해 주세요.':'Could not start the engine. Check the static server and build files.',
   '계산할 수식':'Expression','수식을 입력하세요 · 1/3 + 1/6':'Enter an expression · 1/3 + 1/6','종류':'Type','매개변수 (x(t), y(t))':'Parametric (x(t), y(t))','극좌표 r = f(t)':'Polar r = f(t)','수열 u(n)':'Sequence u(n)','미분방정식 dy/dt':'Differential equation dy/dt','그리기':'Plot','수식 · 한 줄에 하나':'Expressions · one per line','x / t / n 최소':'x / t / n minimum','최대':'Maximum','y 최소':'y minimum','수열 초기값 / 미분방정식 y₀':'Sequence seeds / differential y₀','매개변수: (cos(t),sin(t)) · 극좌표: 1+cos(t) · 수열: u(n-1)+1 · 3D: sin(x)*cos(y)':'Parametric: (cos(t),sin(t)) · Polar: 1+cos(t) · Sequence: u(n-1)+1 · 3D: sin(x)*cos(y)','[shade] y < x^2 또는 [shade] sin(x),cos(x) ; 0..pi 로 영역을 표시합니다.':'Use [shade] y < x^2 or [shade] sin(x),cos(x) ; 0..pi to shade a region.','계산된 함수 그래프':'Calculated function graph','좌표 표':'Coordinate table',
@@ -23,6 +25,87 @@ const korean={History:'기록',Catalog:'함수 목록',Setup:'설정',Undo:'실�
   'Engine archive is missing. Run python web/build.py.':'engine.zip이 없습니다. python web/build.py를 실행해 주세요.',
   'Not enough input values. Enter one value per line in Python inputs.':'입력값이 부족합니다. Python 입력란에 한 줄씩 입력해 주세요.'
 };
+Object.assign(korean,nativeKorean,{
+  "Equation type": "방정식 유형",
+  "General / system": "일반식 / 연립방정식",
+  "Linear": "일차",
+  "Quadratic": "이차",
+  "Cubic": "삼차",
+  "View x minimum": "보기 x 최솟값",
+  "View x maximum": "보기 x 최댓값",
+  "Zoom in": "확대",
+  "Zoom out": "축소",
+  "Pan left": "왼쪽 이동",
+  "Pan right": "오른쪽 이동",
+  "Pan up": "위로 이동",
+  "Pan down": "아래로 이동",
+  "Fit": "범위 맞춤",
+  "Selected curve": "선택한 곡선",
+  "Derivative curve": "도함수 그래프",
+  "Analysis": "분석",
+  "Other curve": "다른 곡선",
+  "a / point": "a / 지점",
+  "Clear analysis": "분석 지우기",
+  "Slider minimum": "슬라이더 최솟값",
+  "Slider maximum": "슬라이더 최댓값",
+  "Vertical tangent": "수직 접선",
+  "No points found in this interval": "이 구간에서 찾은 점이 없습니다.",
+  "Tap to trace · drag to pan · pinch or scroll to zoom": "눌러 추적 · 드래그하여 이동 · 두 손가락 또는 휠로 확대/축소",
+  "x: decimal": "x: 소수",
+  "x: π rad": "x: π 라디안",
+  "Grouping": "그룹 지정",
+  "x = group, y = value": "x = 그룹, y = 값",
+  "One-sample z test": "단일 표본 z 검정",
+  "Independent z test": "독립 표본 z 검정",
+  "z confidence interval": "z 신뢰구간",
+  "χ² independence test": "χ² 독립성 검정",
+  "Fisher exact test": "Fisher 정확 검정",
+  "Known σ": "알려진 σ",
+  "Known σy": "알려진 σy",
+  "Plot type": "그래프 유형",
+  "Scatter": "산점도",
+  "Plot data": "데이터 그리기",
+  "Store dataset as variable": "데이터를 변수로 저장",
+  "Model y =": "모형 y =",
+  "Initial values and bounds (optional)": "초깃값 및 범위 (선택)",
+  "Density / P(X = k)": "밀도 / P(X = k)",
+  "Cumulative probability": "누적 확률",
+  "Interval probability": "구간 확률",
+  "Mean μ": "평균 μ",
+  "Trials n": "시행 횟수 n",
+  "Success probability": "성공 확률",
+  "Mean λ": "평균 λ",
+  "Other matrix / vector": "다른 행렬 / 벡터",
+  "Store grid": "격자 저장",
+  "Load variable": "변수 불러오기",
+  "Unit category": "단위 분류",
+  "All units": "모든 단위",
+  "Search constants": "상수 검색",
+  "Paste expression": "수식 붙여넣기",
+  "Redo": "다시 실행",
+  "Indent": "들여쓰기",
+  "Outdent": "내어쓰기",
+  "Skip header row": "머리글 제외",
+  "Select one to three columns": "1~3개 열을 선택하세요.",
+  "Symbol assumption": "기호 가정",
+  "Set assumption": "가정 설정",
+  "Use up to twelve shortcuts": "단축 버튼은 12개까지 설정할 수 있습니다.",
+  "Find button or function": "버튼 또는 함수 찾기",
+  "Customize display buttons": "표시 버튼 사용자 지정",
+  "Swap currencies": "통화 바꾸기",
+  "skipped": "제외됨",
+  "저장했습니다.": "저장했습니다.",
+  "Enter finite values with minimum < maximum": "유한한 최솟값과 최댓값을 입력하세요.",
+  "Enter finite values with a < b": "a < b인 유한한 값을 입력하세요.",
+  "Enter a valid variable name": "올바른 변수 이름을 입력하세요.",
+  "Enter a function to graph": "그릴 함수를 입력하세요.",
+  "Shading requires a Cartesian graph": "영역 표시는 직교좌표 그래프에서 가능합니다.",
+  "This function name is invalid or reserved": "함수 이름이 올바르지 않거나 예약된 이름입니다.",
+  "Enter distinct valid parameter names": "서로 다른 올바른 매개변수 이름을 입력하세요.",
+  "About CalcMax": "CalcMax 정보",
+  "Whole amounts per person": "1인당 금액을 정수로 보정"
+});
+for(const [en,ko] of Object.entries(korean))if(!english[ko])english[ko]=en;
 const reverse=Object.fromEntries(Object.entries(english).map(([ko,en])=>[en,ko]));
 let language='en';
 const originals=new WeakMap();
@@ -40,7 +123,7 @@ export function translateDOM(root=document.body) {
   const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
   while(walker.nextNode()) {
     const text=walker.currentNode;
-    if(text.parentElement?.closest('script,style,textarea,code,pre,#python-output,#expression-preview,#tape-history') || text.parentElement?.closest('#answer')&&!text.parentElement?.closest('.error,.empty'))continue;
+    if(text.parentElement?.closest('script,style,textarea,code,pre,math,#python-output,#expression-preview,#tape-history') || text.parentElement?.closest('#answer')&&!text.parentElement?.closest('.error,.empty'))continue;
     const key=originals.get(text)??text.nodeValue;
     const trimmed=key.trim();
     if(!english[trimmed]&&!korean[trimmed]&&!reverse[trimmed])continue;

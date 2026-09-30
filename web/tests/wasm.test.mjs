@@ -4,6 +4,8 @@ import {readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {loadPyodide} from '../vendor/pyodide.mjs';
 import {parse} from '../parser.js';
+import {tipCommand,moneyResult} from '../money.js';
+import {statisticsCommand,distributionCommand} from '../workspace-commands.js';
 
 test('actual CPython WASM reuses the Android engine across workspaces',async()=>{
   const py=await loadPyodide({indexURL:fileURLToPath(new URL('../vendor/',import.meta.url))});
@@ -27,6 +29,16 @@ test('actual CPython WASM reuses the Android engine across workspaces',async()=>
   assert.match(evaluate('factor(x^4-1)').exact,/x/);
   assert.match(evaluate('solve(x^2-5x+6=0,x)').exact,/2.*3/);
   assert.match(evaluate('stats([1,2,3,4])').exact,/mean/i);
+  assert.match(evaluate(statisticsCommand('A,1\nA,2\nA,3\nB,2\nB,4\nB,6',{op:'ztest2',grouping:'groups',sigma:'1',sigmaY:'2',tail:'left'})).exact,/p value/);
+  assert.match(evaluate(statisticsCommand('A,yes\nA,no\nB,yes\nB,no',{op:'chi2independence'})).exact,/chi-square/);
+  const fit=evaluate(statisticsCommand('0,1\n1,3\n2,5\n3,7',{op:'regression',regression:'custom',formula:'a*x+b',initials:'[[a,1],[b,0]]'}));assert.equal(fit.parameters.length,2);assert.ok(fit.curve.length>10);
+  for(const family of ['normal','t','chi2','f','binomial','poisson','geometric'])evaluate(distributionCommand({family,query:'cdf'}));
+  for(const [bill,people,whole,tip,total,share] of [['100','3',true,'17','117','39'],['100','2',true,'16','116','58'],['100','1',true,'15','115','115'],['100.01','3',false,'15','115.01',null],['1000000.01','3',true,'150001.99','1150002','383334']]){
+    const result=moneyResult(evaluate(tipCommand({bill,people,whole}),{precision:3}),Number(people)),rows=result.tree.args;
+    assert.equal(Number(rows[0].args[0].value),Number(tip));assert.equal(Number(rows[2].args[0].value),Number(total));
+    if(share!==null)assert.equal(Number(rows[3].args[0].value),Number(share));
+    else assert.equal(rows[3].args[0].args.reduce((sum,node)=>sum+Math.round(Number(node.value)*100),0),Math.round(Number(total)*100));
+  }
   assert.equal(evaluate('f(3)',{functions:{f:{parameters:['x'],body:parse('x^2+1')}}}).exact,'10');
   const previous=evaluate('1/7');
   assert.equal(evaluate('Ans*7',{variables:{Ans:previous.resultAst}}).exact,'1');

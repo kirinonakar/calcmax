@@ -21,6 +21,15 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
   assert.equal(window.document.documentElement.lang,'en','initial HTML is English before JavaScript initializes');
   assert.equal(window.document.getElementById('status').textContent,'Loading WebAssembly runtime…');
   Object.defineProperty(window.navigator,'language',{value:'ko-KR',configurable:true});
+  let offlineRegistrations=0;
+  Object.defineProperty(window.navigator,'serviceWorker',{value:{
+    register:async(url,options)=>{
+      assert.equal(window.document.documentElement.dataset.engine,'ready','offline precaching must wait for WASM/SymPy readiness');
+      assert.equal(url,'./sw.js');assert.equal(options.updateViaCache,'none');
+      offlineRegistrations++;
+      return {active:true,addEventListener(){}};
+    }
+  }});
   for(const name of ['styles.css','calculator.css']){const style=window.document.createElement('style');style.textContent=readFileSync(new URL('../'+name,import.meta.url),'utf8');window.document.head.append(style);}
   window.matchMedia=()=>({matches:false,addEventListener(){}});
   window.HTMLDialogElement.prototype.showModal=function(){this.open=true;};
@@ -35,15 +44,19 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
   t.after(async()=>{window.dispatchEvent(new window.Event('pagehide'));await Promise.all(workers.map(w=>w.terminate()));window.close();});
   await import('../app.js');
   await waitFor(()=>$('keypad').childElementCount>0,'app initialization');
+  assert.equal(offlineRegistrations,0,'cold startup does not download the entire offline runtime concurrently');
   const area=selector=>window.getComputedStyle(document.querySelector(selector)).gridArea;
   assert.equal(area('main'),'main','calculation area is assigned to the flexible main track');
   assert.equal(area('header'),'header');assert.equal(area('.mode-bar'),'mode');assert.equal(area('.runtime-bar'),'runtime');
   await waitFor(()=>!document.querySelector('.key[data-evaluate]').disabled,'WASM readiness');
+  assert.equal(offlineRegistrations,1);
+  await waitFor(()=>$('offline-status').textContent==='오프라인 사용 가능','offline installation after readiness');
   assert.equal(area('main'),'main','hiding the loading row cannot auto-place main in the runtime track');
   assert.equal(window.getComputedStyle(document.querySelector('.runtime-bar')).display,'none');
   assert.equal(document.documentElement.lang,'ko');
   assert.equal($('stop').textContent,'중지');
   assert.equal($('language').value,'ko');
+  $('about-button').click();assert.ok($('dialog').open);assert.equal($('dialog-title').textContent,'CalcMax');assert.equal($('dialog-body').querySelector('button').textContent,'닫기');assert.match($('dialog-body').textContent,/v1\.1\.9/);assert.equal($('dialog-body').querySelector('a').href,'https://github.com/kirinonakar/calcmax');assert.equal($('dialog-body').querySelector('img').width,64);$('dialog-body').querySelector('button').click();assert.equal($('dialog').open,false);
   $('settings-button').click();$('language').value='en';$('language').dispatchEvent(new window.Event('change'));$('settings-close').click();
   assert.equal(document.documentElement.lang,'en');
   assert.equal($('stop').textContent,'Stop');
@@ -112,7 +125,7 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
   change('mode','statistics');change('statistics-op','mean');document.querySelector('[data-run="statistics"]').click();await waitFor(()=>$('answer').querySelector('mfrac'),'mean fraction');assert.equal($('answer').textContent,'52');
   change('mode','programmer');document.querySelector('[data-run="programmer"]').click();await waitFor(()=>$('programmer-output').textContent.includes('HEX  000000FF'),'programmer bases');
   change('mode','units');document.querySelector('[data-run="units"]').click();await waitFor(()=>$('answer').textContent==='0','temperature conversion');
-  change('mode','tip');document.querySelector('[data-run="tip"]').click();await waitFor(()=>$('answer').querySelector('mfrac'),'tip exact result');assert.equal($('answer').textContent,'1152');
+  change('mode','tip');document.querySelector('[data-run="tip"]').click();await waitFor(()=>$('answer').textContent.includes('Per person: 58'),'whole amount tip split');assert.match($('answer').textContent,/Total: 116/);assert.match($('answer').textContent,/Tip: 16/);
   change('mode','functions');$('function-save').click();change('mode','scientific');$('expression').value='f(3)';document.querySelector('.key[data-evaluate]').click();await waitFor(()=>$('answer').textContent==='10','saved function');
   const edit=source=>{$('expression').value=source;$('expression').dispatchEvent(new window.Event('input'));};
   const shifted=input=>{key('SHIFT').click();key(input).click();};
@@ -145,14 +158,70 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
   key('CALC').click();key('=').click();await waitFor(()=>$('commit-indicator').textContent==='y?','blank CALC entry recalls stored x');key('=').click();await waitFor(()=>!document.documentElement.dataset.calcActive&&$('answer').textContent==='192','blank CALC entry recalls stored y');
   edit('x+1');key('CALC').click();key('4').click();key('AC').click();assert.equal($('expression').value,'x+1');assert.equal(document.documentElement.dataset.calcActive,undefined,'AC cancels CALC without losing the formula');
   edit('integrate(x^2,x,0,1)');key('CALC').click();assert.equal(document.documentElement.dataset.calcActive,undefined,'integration variable is not a CALC input');await waitFor(()=>$('answer').textContent==='13','CALC evaluates expressions with no free inputs');
+  await t.test('math input pastes, closes missing parentheses, and shows root cursor movement',async()=>{
+    key('AC').click();const event=new window.Event('paste',{bubbles:true,cancelable:true});Object.defineProperty(event,'clipboardData',{value:{getData:()=> '4+sqrt(5'}});$('expression-preview').dispatchEvent(event);
+    assert.equal(event.defaultPrevented,true);assert.equal($('expression').value,'4+sqrt(5');assert.ok($('expression-preview').querySelector('.input-caret'));
+    key('=').click();await waitFor(()=>$('answer').querySelector('msqrt'),'auto-closed radical answer');assert.equal($('expression').value,'4+sqrt(5)');assert.ok($('answer').textContent.includes('4')&&$('answer').textContent.includes('5'));
+    edit('4+sqrt(5)');$('expression').setSelectionRange(7,7);key('LEFT').click();assert.equal($('expression').selectionStart,2);assert.equal($('expression-preview').querySelector('.input-caret').getAttribute('data-source-start'),'2');
+    key('RIGHT').click();assert.equal($('expression').selectionStart,7);$('expression').setSelectionRange(8,8);key('RIGHT').click();assert.equal($('expression').selectionStart,9);
+  });
+  await t.test('equations show the original formula above answers and Stop preserves the header space',async()=>{
+    change('mode','equation');change('equation-kind','solve');change('equation-form','2');$('equation-a').value='1';$('equation-b').value='-5';$('equation-c').value='6';$('equation-variable').value='x';
+    assert.equal($('stop').hidden,false);assert.equal($('stop').style.visibility,'hidden');const stopParent=$('stop').parentElement;
+    document.querySelector('[data-run="equation"]').click();assert.equal($('stop').hidden,false);assert.equal($('stop').parentElement,stopParent);
+    await waitFor(()=>$('answer').textContent.includes('2,3'),'coefficient quadratic');assert.equal($('stop').style.visibility,'hidden');
+    assert.ok($('result-source').querySelector('msup'));assert.ok($('result-source').compareDocumentPosition($('answer'))&window.Node.DOCUMENT_POSITION_FOLLOWING);assert.doesNotMatch($('result-source').textContent,/solve/);
+    change('equation-kind','dsolve');$('equation-initial').value='y(0)=1';document.querySelector('[data-run="equation"]').click();await waitFor(()=>$('answer').querySelector('msup')&&$('answer').textContent.includes('e'),'ODE initial condition');
+    change('equation-kind','solve');change('equation-form','general');
+  });
+  await t.test('display digits apply to statistical rows, distributions, matrices, and graph coordinates without losing exact values',async()=>{
+    $('settings-button').click();const digits=document.querySelector('[data-setting="digits"]');digits.value='3';digits.dispatchEvent(new window.Event('change'));$('settings-close').click();
+    change('mode','statistics');assert.equal($('statistics-op-math'),null,'no expression sits beside the Analyze dropdown');$('statistics-data').value='1\n2\n4';change('statistics-op','stats');document.querySelector('[data-run="statistics"]').click();await waitFor(()=>$('answer').querySelector('mtable'),'MathML statistics rows');
+    $('exact-toggle').click();for(const number of $('answer').querySelectorAll('mn')){const match=/\.([0-9]+)(?:e|$)/i.exec(number.textContent);if(match)assert.ok(match[1].length<=3,number.textContent);}
+    $('exact-toggle').click();change('distribution-family','normal');change('distribution-query','pdf');$('distribution-x').value='1';document.querySelector('[data-run="distribution"]').click();await waitFor(()=>$('answer').querySelector('mfrac')&&!document.querySelector('[data-run="distribution"]').disabled,'exact normal density');$('exact-toggle').click();assert.equal($('answer').textContent,'0.242');$('exact-toggle').click();assert.ok($('distribution-math').querySelector('math'));
+    change('mode','matrix');$('matrix-name').value='B';$('matrix-store').click();await waitFor(()=>JSON.parse(localStorage.getItem('calcmax-web-v1')).variables.B,'matrix storage');$('matrix-clear').click();$('matrix-load').click();assert.equal($('matrix-grid').querySelector('input').value,'1');
+  });
+  await t.test('graph controls connect all Android analysis operations and ranges/sliders stay below the plot',async()=>{
+    change('mode','graph');$('graph-source').value='x^2-1\nx';$('graph-source').dispatchEvent(new window.Event('input'));for(const [id,number] of [['graph-min','-2'],['graph-max','2'],['graph-ymin','-2'],['graph-ymax','4']]){$(id).value=number;$(id).dispatchEvent(new window.Event('change'));}
+    document.querySelector('[data-run="graph"]').click();await waitFor(()=>$('graph-plot').querySelectorAll('path').length===2&&!$('graph-analysis-run').disabled,'two Cartesian curves');
+    assert.ok($('graph-formulas').querySelector('msup'));assert.ok($('graph-plot').compareDocumentPosition($('graph-ranges'))&window.Node.DOCUMENT_POSITION_FOLLOWING);
+    $('graph-min-slider').value='-1.234567';$('graph-min-slider').dispatchEvent(new window.Event('input'));assert.equal($('graph-min').value,'-1.235');$('graph-min-slider').dispatchEvent(new window.Event('change'));await waitFor(()=>!$('graph-analysis-run').disabled,'range slider sampling');
+    assert.equal(JSON.parse(localStorage.getItem('calcmax-web-v1')).graph.ranges['graph-min'],-1.234567,'rounded range keeps its original value');
+    $('graph-analysis-a').value='-1';$('graph-analysis-b').value='1';change('graph-analysis-action','root');$('graph-analysis-run').click();await waitFor(()=>$('graph-analysis-result').querySelectorAll('.analysis-point').length===2,'two roots');
+    change('graph-analysis-action','intersection');$('graph-other').value='1';$('graph-analysis-a').value='-2';$('graph-analysis-b').value='2';$('graph-analysis-run').click();await waitFor(()=>$('graph-analysis-result').querySelectorAll('.analysis-point').length===2&&!$('graph-analysis-run').disabled,'intersections');
+    for(const action of ['minimum','maximum']){change('graph-analysis-action',action);$('graph-analysis-run').click();await waitFor(()=>$('graph-analysis-result').firstChild?.textContent===action[0].toUpperCase()+action.slice(1)&&!$('graph-analysis-run').disabled,action);assert.ok($('graph-analysis-result').querySelector('.analysis-point'));}
+    change('graph-analysis-action','tangent');$('graph-analysis-a').value='1';$('graph-analysis-run').click();await waitFor(()=>$('graph-plot').querySelector('[data-tangent]'),'tangent overlay');assert.equal(Array.from($('graph-analysis').querySelectorAll('input[type="range"]')).filter(input=>!input.closest('[hidden]')).length,1,'only one tangent slider is visible');
+    $('graph-tangent-slider').value='.5';$('graph-tangent-slider').dispatchEvent(new window.Event('input'));$('graph-tangent-slider').dispatchEvent(new window.Event('change'));await waitFor(()=>$('graph-analysis-result').textContent.includes('0.5')&&!$('graph-analysis-run').disabled,'moving tangent');
+    for(const action of ['derivative','integral','arclength']){change('graph-analysis-action',action);$('graph-analysis-a').value='0';$('graph-analysis-b').value='1';$('graph-analysis-run').click();await waitFor(()=>$('graph-analysis-result').firstChild?.textContent==={derivative:'Derivative',integral:'Integral',arclength:'Arc length'}[action]&&!$('graph-analysis-run').disabled,action);assert.ok($('graph-analysis-result').querySelector('math'));}
+    $('graph-derivative').checked=true;$('graph-derivative').dispatchEvent(new window.Event('change'));await waitFor(()=>$('graph-plot').querySelectorAll('path').length===3,'derivative curve');
+    const before=Number($('graph-max').value)-Number($('graph-min').value);$('graph-zoom-in').click();assert.ok(Number($('graph-max').value)-Number($('graph-min').value)<before);await waitFor(()=>!$('graph-analysis-run').disabled,'zoom sampling');
+    for(const cell of $('graph-table').querySelectorAll('td')){const match=/\.([0-9]+)(?:e|$)/i.exec(cell.textContent);if(match)assert.ok(match[1].length<=3,cell.textContent);}
+    $('graph-source').value='x^3';$('graph-source').dispatchEvent(new window.Event('input'));document.querySelector('[data-run="graph"]').click();await waitFor(()=>!$('graph-analysis-run').disabled,'inflection source');change('graph-analysis-action','inflection');$('graph-analysis-a').value='-1';$('graph-analysis-b').value='1';$('graph-analysis-run').click();await waitFor(()=>$('graph-analysis-result').firstChild?.textContent==='Inflection'&&$('graph-analysis-result').querySelector('.analysis-point'),'inflection point');
+    change('graph-kind','parametric');assert.equal($('graph-source').value,'[cos(t),sin(t)]');assert.equal($('graph-min').dataset.fullValue,'0');assert.equal(Number($('graph-max').dataset.fullValue),2*Math.PI);await waitFor(()=>!$('graph-analysis-run').disabled,'parametric sampling');
+    $('graph-source').value='[2*cos(t),sin(t)]';$('graph-source').dispatchEvent(new window.Event('input'));change('graph-kind','cartesian');assert.equal($('graph-source').value,'x^3');change('graph-kind','parametric');assert.equal($('graph-source').value,'[2*cos(t),sin(t)]');change('graph-kind','cartesian');await waitFor(()=>!$('graph-analysis-run').disabled,'restored Cartesian sampling');
+    change('mode','scientific');
+  });
+  await t.test('tip has answers only, no extra rows, and the allocated amounts add up to Total',async()=>{
+    change('mode','tip');$('tip-people').value='3';document.querySelector('[data-run="tip"]').click();await waitFor(()=>$('answer').textContent.includes('Per person: 39'),'whole amounts for three people');assert.match($('answer').textContent,/Tip: 17/);assert.match($('answer').textContent,/Total: 117/);assert.equal($('tip-amount-math'),null);assert.equal($('result-source').hidden,true);assert.doesNotMatch($('answer').textContent,/Extra/);
+    $('tip-whole').checked=false;document.querySelector('[data-run="tip"]').click();await waitFor(()=>$('answer').textContent.includes('38.34,38.33,38.33'),'cent remainder allocation');$('tip-whole').checked=true;
+    assert.equal(3834+3833+3833,11500);change('mode','currency');assert.equal($('currency-amount-math'),null,'no expression sits next to the currency amount');
+    $('settings-button').click();const digits=document.querySelector('[data-setting="digits"]');digits.value='10';digits.dispatchEvent(new window.Event('change'));$('settings-close').click();change('mode','scientific');
+  });
   $('history-button').click();assert.ok($('dialog').open);assert.ok($('dialog-body').textContent.includes('f(3)'));$('dialog-close').click();
   $('catalog-button').click();assert.ok($('dialog-body').textContent.includes('sin()'));$('dialog-close').click();
+  $('about-button').click();assert.equal($('dialog-body').querySelector('button').textContent,'Close');$('dialog-close').click();
   for(let i=1;i<=12;i++){edit(`${i}+100`);key('=').click();await waitFor(()=>$('answer').textContent===String(i+100),`tape calculation ${i}`);}
   const recent=Array.from($('tape-history').querySelectorAll('.tape-expression'));
   assert.equal(recent.length,10,'only ten earlier calculations are on the inline tape');
   assert.deepEqual(recent.map(button=>button.dataset.source),Array.from({length:10},(_,i)=>`${i+2}+100`));
   assert.equal($('answer').closest('#tape-active')!==null,true);assert.equal($('keypad').closest('.keypad-workspace').parentElement.tagName,'MAIN','keypad is outside the scrolling display');
   assert.equal(window.getComputedStyle($('calculation-tape')).overflow,'auto');
+  await t.test('ordinary typing reuses the keypad and history DOM and batches local storage writes',async()=>{
+    const button=key('1'),rows=Array.from($('tape-history').children),original=window.Storage.prototype.setItem;let writes=0;
+    window.Storage.prototype.setItem=function(...args){writes++;return original.apply(this,args);};
+    try{edit('');for(let i=0;i<20;i++)key('1').click();assert.equal(key('1'),button);assert.deepEqual(Array.from($('tape-history').children),rows);assert.equal(writes,0,'keypresses do not synchronously serialize all saved data');await waitFor(()=>writes>0,'debounced draft backup');assert.equal(writes,1);assert.equal(JSON.parse(localStorage.getItem('calcmax-web-v1')).fields.expression,'1'.repeat(20));}
+    finally{window.Storage.prototype.setItem=original;}
+  });
   recent[0].click();assert.equal($('expression').value,'2+100');key('=').click();await waitFor(()=>$('answer').textContent==='102','reuse from the scrolling tape');
   edit('10');key('=').click();await waitFor(()=>$('answer').textContent==='10','historical Ans seed');
   edit('Ans+1');key('=').click();await waitFor(()=>$('answer').textContent==='11','historical Ans expression');
@@ -163,5 +232,6 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
   // Non-cooperative Python cannot freeze the page; hard cancellation restores WASM.
   change('mode','python');assert.ok($('stop').closest('.runtime-bar'),'Python stop stays at the top of the workspace');$('python-source').value='while True: pass';document.querySelector('[data-run="python"]').click();await waitFor(()=>!$('stop').disabled,'script running');$('stop').click();await waitFor(()=>$('python-output').textContent.includes('cancelled'),'hard cancellation');await waitFor(()=>!document.querySelector('[data-run="python"]').disabled,'engine recovery');
   $('python-source').value='print(42)';document.querySelector('[data-run="python"]').click();await waitFor(()=>$('python-output').textContent==='42\n','post-cancellation script');
+  assert.equal(offlineRegistrations,1,'engine recovery does not register the service worker again');
   const persisted=JSON.parse(localStorage.getItem('calcmax-web-v1'));assert.equal(persisted.language,'en');assert.equal(persisted.theme,'light');assert.ok(persisted.history.length>=8);assert.ok(persisted.functions.f);
 });

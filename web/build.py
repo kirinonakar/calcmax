@@ -30,6 +30,14 @@ def download(name, url=None):
 
 def build(skip_download=False, output=None):
     shutil.copyfile(PROJECT / "LICENSE", ROOT / "LICENSE")
+    shutil.copyfile(PROJECT / "app/src/main/res/mipmap-xxxhdpi/ic_launcher.webp", ROOT / "app-icon.webp")
+    app_version = re.search(r'versionName\s*=\s*"([^"]+)"', (PROJECT / "app/build.gradle.kts").read_text(encoding="utf-8")).group(1)
+    (ROOT / "app-version.js").write_text("export const appVersion = " + json.dumps(app_version) + ";\n", encoding="utf-8")
+    ui_source = PROJECT / "app/src/main/java/com/kirinonakar/calcmax/ui"
+    groups = {name: re.findall(r'"([^"\n]+)"', items) for name, items in re.findall(r'"([^"\n]+)" to listOf\(([^\n]+)\)', (ui_source / "UnitsConstantsScreens.kt").read_text(encoding="utf-8"))}
+    native_locale = dict(re.findall(r'"([^"\n]+)" to "([^"\n]+)"', (ui_source / "Localization.kt").read_text(encoding="utf-8")))
+    for filename, symbol, data in [("unit-groups.js", "unitGroups", groups), ("native-locale.js", "nativeKorean", native_locale)]:
+        (ROOT / filename).write_text(f"export const {symbol} = " + json.dumps(data, ensure_ascii=False, indent=2) + ";\n", encoding="utf-8")
     with zipfile.ZipFile(ROOT / "engine.zip", "w", zipfile.ZIP_DEFLATED) as archive:
         for source in sorted((PROJECT / "app/src/main/python").glob("*.py")):
             archive.write(source, source.name)
@@ -87,7 +95,7 @@ def build(skip_download=False, output=None):
 
 
 def assets_manifest():
-    files = sorted(path for path in ROOT.iterdir() if (path.suffix in (".html", ".css", ".js", ".json", ".zip", ".md") or path.name == "LICENSE") and path.name not in ("assets.js", "package.json", "package-lock.json", "design-qa.md"))
+    files = sorted(path for path in ROOT.iterdir() if (path.suffix in (".html", ".css", ".js", ".json", ".zip", ".md", ".webp") or path.name == "LICENSE") and path.name not in ("assets.js", "package.json", "package-lock.json", "design-qa.md"))
     files += sorted(path for path in (ROOT / "vendor").rglob("*") if path.is_file() and not path.name.endswith(".tmp"))
     digest = hashlib.sha256()
     for path in files:
