@@ -9,11 +9,12 @@ self.addEventListener('activate',event=>{
     const previous=(await caches.keys()).filter(key=>key.startsWith('calcmax-static-')&&key!==CACHE);
     for(const key of previous)await caches.delete(key);
     await self.clients.claim();
-    // A prior cache can contain the classic Worker bootstrap. Reload existing
-    // app pages once after an upgrade so they cannot keep running that script.
-    // pagehide saves their current drafts before navigation.
+    // Refresh old bootstraps once on upgrade; pagehide saves their drafts.
+    // Do not await navigation inside activate.waitUntil: its fetch event is
+    // held until activation finishes, so waiting here deadlocks page loading.
+    // A closed tab or cancelled navigation must not fail activation either.
     if(previous.length)for(const client of await self.clients.matchAll({type:'window'})){
-      if(client.url.startsWith(self.registration.scope))await client.navigate(client.url);
+      if(client.url.startsWith(self.registration.scope))void client.navigate(client.url).catch(()=>{});
     }
   })());
 });

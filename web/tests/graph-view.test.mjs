@@ -33,9 +33,9 @@ test('graph formulas strip prefixes and shading preserves commas nested in funct
 });
 test('MathML cursor is visible inside root and fractional tokens without losing empty-slot styling',()=>{
   const dom=new JSDOM();globalThis.document=dom.window.document;
-  const math=expressionDisplay('sqrt(123)');markInputCursor(math,'sqrt(123)',6);assert.equal(math.querySelector('.input-caret').getAttribute('data-source-start'),'6');assert.equal(math.textContent,'123');
+  const math=expressionDisplay('sqrt(123)');markInputCursor(math,'sqrt(123)',6);assert.equal(math.parentElement.querySelector('.input-caret').getAttribute('data-source-start'),'6');assert.equal(math.textContent,'123');
   const empty=expressionDisplay('sqrt()');markInputCursor(empty,'sqrt()',5);assert.ok(empty.querySelector('.input-slot'));
-  const outside=expressionDisplay('sqrt(123)');markInputCursor(outside,'sqrt(123)',0);assert.equal(outside.querySelector('.input-caret').parentElement,outside,'root-boundary caret is outside the radical');
+  const outside=expressionDisplay('sqrt(123)');markInputCursor(outside,'sqrt(123)',0);assert.equal(outside.parentElement.querySelector('.input-caret').parentElement,outside.parentElement,'root-boundary caret is outside the math layout');
   const nested=expressionDisplay('sqrt(5)/2');markInputCursor(nested,'sqrt(5)/2',0);assert.equal(nested.querySelector('mfrac').children.length,2,'caret wrappers preserve fraction arity');
   const selected=expressionDisplay('1/3');markInputCursor(selected,'1/3',0,1);assert.ok(selected.querySelector('.selected'));dom.window.close();
 });
