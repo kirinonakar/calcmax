@@ -8,7 +8,7 @@ function svgElement(tag,attributes={},text='') {
   if (text) el.textContent = text;
   return el;
 }
-export function plot(container,result,bounds,{dots=false,digits=10,analysis=null,trace=null,selected=0,integral=null,radianAxis=false,surfaceView={rotation:35,elevation:32,zoom:1}}={}) {
+export function plot(container,result,bounds,{dots=false,scatterCurves=[],digits=10,analysis=null,trace=null,selected=0,integral=null,radianAxis=false,surfaceView={rotation:35,elevation:32,zoom:1}}={}) {
   const {xmin,xmax,ymin,ymax} = bounds;
   if (![xmin,xmax,ymin,ymax].every(Number.isFinite) || xmax<=xmin || ymax<=ymin) throw new Error('그래프 범위를 확인해 주세요.');
   const w=800,h=460,pad=42,innerW=w-2*pad,innerH=h-2*pad;
@@ -37,9 +37,9 @@ export function plot(container,result,bounds,{dots=false,digits=10,analysis=null
       const [xx,yy] = projection ? projection(point) : [x(point[0]),y(point[1])];
       if(!Number.isFinite(xx) || !Number.isFinite(yy)) { pen=false; continue; }
       d+=(pen?'L':'M')+xx.toFixed(2)+','+yy.toFixed(2); pen=true;
-      if(dots) group.append(svgElement('circle',{cx:xx,cy:yy,r:3,fill:color}));
+      if(dots || scatterCurves.includes(index)) group.append(svgElement('circle',{cx:xx,cy:yy,r:3,fill:color}));
     }
-    group.append(svgElement('path',{d,fill:'none',stroke:color,'stroke-width':!result.surface&&index===selected?4:2,'data-curve':index,'data-selected':!result.surface&&index===selected,'stroke-linejoin':'round','stroke-linecap':'round'}));
+    if(!scatterCurves.includes(index)) group.append(svgElement('path',{d,fill:'none',stroke:color,'stroke-width':!result.surface&&index===selected?4:2,'data-curve':index,'data-selected':!result.surface&&index===selected,'stroke-linejoin':'round','stroke-linecap':'round'}));
   }
   for(const shade of result.shadings || []) for(const points of shade.fill || []) {
     group.append(svgElement('polygon',{points:points.map(p=>`${x(p[0])},${y(p[1])}`).join(' '),fill:colors[0],opacity:.16}));

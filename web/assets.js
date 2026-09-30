@@ -1,4 +1,4 @@
-self.CALCMAX_CACHE = 'calcmax-static-c5097465f985b6c6';
+self.CALCMAX_CACHE = 'calcmax-static-d079cc4db213e61d';
 self.CALCMAX_ASSETS = [
   "./",
   "./app-icon.webp",
