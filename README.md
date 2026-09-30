@@ -10,6 +10,9 @@ A native Android scientific, graphing, programming and Computer Algebra System (
 ## 📥 Download
 You can download the latest release from the [Releases Page](https://github.com/kirinonakar/calcmax/releases).
 
+## 🌐 Web version
+Try CalcMax in your browser: [kirinonakar.github.io/calcmax](https://kirinonakar.github.io/calcmax/).
+
 ## Everyday use
 
 * The first keypad page groups scientific and numeric operations. The second page groups symbolic tools.
