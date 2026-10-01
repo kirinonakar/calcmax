@@ -71,7 +71,7 @@ test('actual CPython WASM reuses the Android engine across workspaces',async()=>
   assert.equal(run({action:'programmer',width:8,base:16,a:'FF',op:'>>',b:'1',signed:true}).bases.HEX,'FF');
   assert.ok(run({action:'constants'}).constants.length>10);
   for(const [graphKind,source,options] of [
-    ['cartesian','1/x',{}],['parametric','(cos(t),sin(t))',{variable:'t'}],
+    ['cartesian','1/x',{}],['implicit','x^2+y^2=1',{yMin:-3,yMax:3}],['parametric','(cos(t),sin(t))',{variable:'t'}],
     ['polar','1+cos(t)',{variable:'t'}],['sequence','u(n-1)+1',{min:0,max:10,initialTrees:[parse('1')]}],
     ['surface','sin(x)*cos(y)',{surfaceYMin:-3,surfaceYMax:3}],
     ['differential','y',{min:0,max:3,initialValues:[1]}]
@@ -81,6 +81,11 @@ test('actual CPython WASM reuses the Android engine across workspaces',async()=>
     assert.ok(result.curves?.[0].length>5 || result.surface?.length>10);
   }
   const discontinuity=run({action:'graph',trees:[parse('1/x')],min:-1,max:1});
+  const implicit=run({action:'graph',graphKind:'implicit',trees:[parse('x^2+y^2=a'),parse('x=.3')],parameters:{a:4},min:-3,max:3,yMin:-3,yMax:3});
+  assert.equal(implicit.ok,true,implicit.error);assert.deepEqual(implicit.parameters,['a']);assert.equal(implicit.curves.length,2);
+  const circle=implicit.curves[0].filter(Boolean);assert.ok(circle.some(([x,y])=>x<0&&y<0)&&circle.some(([x,y])=>x>0&&y>0));
+  assert.ok(circle.every(([x,y])=>Math.abs(x*x+y*y-4)<1e-5));
+  assert.ok(implicit.curves[1].filter(Boolean).every(([x])=>Math.abs(x-.3)<1e-6));
   assert.ok(discontinuity.curves[0].some(p=>p===null));
   py.globals.set('payload',JSON.stringify({source:'import calcmax_catalog as calc\nprint(calc.mean([1,2,3]))'}));
   assert.equal(JSON.parse(py.runPython('script_runner.run(payload)')).output,'2\n');

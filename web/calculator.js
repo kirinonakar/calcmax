@@ -254,7 +254,12 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
       f.setSelectionRange(start,end);inputBoundary=exit?{...exit,source:f.value,edge:'after'}:outside&&input==='RIGHT'&&start===outside.position?outside:null;if(typing)f.focus({preventScroll:true});preview();
     }
     else if(input==='MATRIX_INPUT')matrixInsertDialog();
-    else if(input==='TO_GRAPH'){$('graph-source').value=value('expression')||'x';changeMode('graph');}
+    else if(input==='TO_GRAPH'){
+      const source=value('expression')||'x';let graphKind='cartesian';
+      try{const tree=parse(latexInput(source));if(tree.kind==='relation'&&['=','=='].includes(tree.value))graphKind='implicit';}catch{}
+      if($('graph-kind').value!==graphKind){$('graph-kind').value=graphKind;$('graph-kind').dispatchEvent(new window.Event('change'));}
+      $('graph-source').value=source;$('graph-source').dispatchEvent(new window.Event('input'));changeMode('graph');
+    }
     else if(jumps[input])changeMode(jumps[input]);
     else if(input==='M+'||input==='M−'){
       return updateMemory(input);

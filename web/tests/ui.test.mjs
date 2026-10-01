@@ -494,6 +494,23 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
     $('graph-source').value='[2*cos(t),sin(t)]';$('graph-source').dispatchEvent(new window.Event('input'));change('graph-kind','cartesian');assert.equal($('graph-source').value,'x^3');change('graph-kind','parametric');assert.equal($('graph-source').value,'[2*cos(t),sin(t)]');change('graph-kind','cartesian');await waitFor(()=>!$('graph-analysis-run').disabled,'restored Cartesian sampling');
     change('mode','scientific');
   });
+  await t.test('Implicit Graph plots equations with the real Worker, slider updates, and calculator transfer',async()=>{
+    change('mode','graph');change('graph-kind','implicit');
+    assert.equal($('graph-source').value,'x^2+y^2=1');assert.equal($('graph-analysis').hidden,true);
+    const plotted=()=>!$('graph-analysis-run').disabled&&$('graph-plot').querySelector('path')?.getAttribute('d').length>0;
+    await waitFor(plotted,'implicit unit circle');assert.equal($('graph-parameters').children.length,0);
+    $('graph-source').value='x^2+y^2=a\nx=.3';$('graph-source').dispatchEvent(new window.Event('input'));
+    await waitFor(()=>plotted()&&$('graph-parameters').querySelector('[data-parameter="a"]')&&$('graph-plot').querySelectorAll('[data-curve]').length===2,'two implicit curves and radius slider');
+    const before=$('graph-plot').querySelector('[data-curve="0"]').getAttribute('d'),slider=$('graph-parameters').querySelector('input[type="range"]');slider.value='4';slider.dispatchEvent(new window.Event('input'));
+    await waitFor(()=>plotted()&&$('graph-plot').querySelector('[data-curve="0"]').getAttribute('d')!==before,'implicit parameter update');
+    assert.equal($('graph-formulas').textContent.includes('f1'),false);
+    change('language','ko');assert.equal($('graph-kind').selectedOptions[0].textContent,'Implicit Graph(음함수 그래프)');change('language','en');
+    change('mode','scientific');edit('x^2+y^2=1');if(!key('TO_GRAPH'))key('SECOND').click();key('TO_GRAPH').click();
+    assert.equal($('mode').value,'graph');assert.equal($('graph-kind').value,'implicit');assert.equal($('graph-source').value,'x^2+y^2=1');
+    await waitFor(()=>plotted()&&$('graph-parameters').children.length===0,'calculator equation transfer');
+    assert.equal(JSON.parse(localStorage.getItem('calcmax-web-v1')).graph.sources.implicit,'x^2+y^2=1');
+    change('graph-kind','cartesian');change('mode','scientific');if($('keypad').dataset.page==='2')key('SECOND').click();
+  });
   await t.test('tip has answers only, no extra rows, and the allocated amounts add up to Total',async()=>{
     change('mode','tip');$('tip-people').value='3';document.querySelector('[data-run="tip"]').click();await waitFor(()=>$('answer').textContent.includes('Per person: 39'),'whole amounts for three people');assert.match($('answer').textContent,/Tip: 17/);assert.match($('answer').textContent,/Total: 117/);assert.equal($('tip-amount-math'),null);assert.equal($('result-source').hidden,true);assert.doesNotMatch($('answer').textContent,/Extra/);
     assert.match($('answer').textContent,/Tip %: 17\.00%/);

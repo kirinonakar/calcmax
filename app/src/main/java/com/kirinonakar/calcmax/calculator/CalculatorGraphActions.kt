@@ -34,9 +34,9 @@ internal object CalculatorGraphActions {
                 catch(e:Exception) {error=e.message ?: "Syntax ERROR";return}
             }
         }
-        val source=graphSource;val kind=graphKind;val min=if(kind in listOf("cartesian","surface"))xMin else parameterMin;val max=if(kind in listOf("cartesian","surface"))xMax else parameterMax
+        val source=graphSource;val kind=graphKind;val min=if(kind in listOf("cartesian","implicit","surface"))xMin else parameterMin;val max=if(kind in listOf("cartesian","implicit","surface"))xMax else parameterMax
         val request=request("graph").put("angle","RAD").put("trees",JSONArray(trees)).put("graphKind",kind)
-            .put("variable",when(kind){"cartesian"->"x";"sequence"->"n";"surface"->"x";else->"t"})
+            .put("variable",when(kind){"cartesian","implicit","surface"->"x";"sequence"->"n";else->"t"})
             .put("min",min).put("max",max).put("samples",500).put("yMin",yMin).put("yMax",yMax)
             .put("parameters",graphState.parameterPayload())
         if(derivativeSelected!=null)request.put("derivativeCurveIndex",trees.lastIndex)
@@ -67,7 +67,7 @@ internal object CalculatorGraphActions {
             graphBusy=true; error=""
             try {
                 val response=engine.execute(request)
-                if(source==graphSource && kind==graphKind && derivativeSelected==graphDerivativeSelected && min==(if(kind in listOf("cartesian","surface"))xMin else parameterMin) && max==(if(kind in listOf("cartesian","surface"))xMax else parameterMax)) {
+                if(source==graphSource && kind==graphKind && derivativeSelected==graphDerivativeSelected && min==(if(kind in listOf("cartesian","implicit","surface"))xMin else parameterMin) && max==(if(kind in listOf("cartesian","implicit","surface"))xMax else parameterMax)) {
                     if(response.optBoolean("ok")) {
                         if(derivativeSelected!=null)response.put("derivativeSelected",derivativeSelected).put("derivativeCurveIndex",trees.lastIndex)
                         graphData=response;graphState.syncParameters(response.optJSONArray("parameters"))
@@ -169,6 +169,15 @@ internal object CalculatorGraphActions {
         val source=editor.source.trim()
         if(source.isEmpty()) {error="Enter an expression to graph";return}
         val tree=try {Parser(source).parse()} catch(e:Exception) {error=e.message ?: "Syntax ERROR";return}
+        val implicit=tree.kind=="relation" && tree.value in listOf("=","==") &&
+            !(tree.args[0].kind=="symbol" && tree.args[0].value=="z") &&
+            !(tree.args[0].kind=="symbol" && tree.args[0].value=="y" && tree.args[1].nodes().none {it.kind=="symbol" && it.value=="y"})
+        if(implicit) {
+            changeGraphKind("implicit")
+            updateGraphSource(source)
+            error="";mode="Graph"
+            return
+        }
         var lhsVar:String?=null
         var rhsTree=tree
         var rhsSource=source

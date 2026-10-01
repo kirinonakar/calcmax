@@ -58,6 +58,7 @@ internal class GraphState(private val prefs:SharedPreferences) {
         sources.put(graphKind,graphSource)
         graphKind=kind
         graphSource=sources.optString(kind,when(kind){
+            "implicit"->"x^2+y^2=1"
             "parametric"->"[cos(t),sin(t)]";"polar"->"2*cos(3*t)";"sequence"->"n\nu(n-1)+u(n-2)"
             "surface"->"sin(sqrt(x^2+y^2))";"differential"->"y-t";else->"sin(x)\ncos(x)"
         })
@@ -67,7 +68,7 @@ internal class GraphState(private val prefs:SharedPreferences) {
             parameterMin=0.0;parameterMax=20.0;xMin=0.0;xMax=20.0;yMin=-2.0;yMax=20.0
         } else if(kind=="differential") {
             parameterMin=-5.0;parameterMax=5.0;xMin=-5.0;xMax=5.0;yMin=-3.0;yMax=5.0
-        } else if(kind=="surface") {
+        } else if(kind in listOf("surface","implicit")) {
             xMin=-3.0;xMax=3.0;yMin=-3.0;yMax=3.0
         } else if(kind!="cartesian" && xMin == -10.0 && xMax == 10.0 && yMin == -5.0 && yMax == 5.0) {
             xMin=-3.0;xMax=3.0;yMin=-3.0;yMax=3.0

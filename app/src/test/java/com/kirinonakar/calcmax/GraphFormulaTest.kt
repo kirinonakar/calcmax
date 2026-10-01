@@ -10,6 +10,14 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class GraphFormulaTest {
+    @Test fun implicitFormulasPreserveEquationsAndAppendZeroToBareExpressions() {
+        val equation=graphEquationTree("implicit","x^2+y^2=1",0)!!
+        assertEquals("relation",equation.getString("kind"))
+        assertEquals("binary",equation.getJSONArray("args").getJSONObject(0).getString("kind"))
+        assertEquals("1",equation.getJSONArray("args").getJSONObject(1).getString("value"))
+        val bare=graphEquationTree("implicit","x*y-1",0)!!
+        assertEquals("0",bare.getJSONArray("args").getJSONObject(1).getString("value"))
+    }
     @Test fun eachGraphKindBuildsASymbolicEquation() {
         val cases=listOf(
             Triple("cartesian","sin(x)","f2"),

@@ -70,7 +70,8 @@ class WorkspaceStatesTest {
     }
 
     @Test fun graphKindsKeepSeparateSourcesAndDiscardOldAnalysis() {
-        val graph=GraphState(MemoryPreferences())
+        val prefs=MemoryPreferences()
+        val graph=GraphState(prefs)
         graph.updateSource("x^2")
         graph.graphData=org.json.JSONObject().put("old",true)
         assertTrue(graph.changeKind("polar"))
@@ -80,6 +81,19 @@ class WorkspaceStatesTest {
         assertTrue(graph.changeKind("cartesian"))
         assertEquals("x^2",graph.graphSource)
         assertFalse(graph.changeKind("cartesian"))
+        assertTrue(graph.changeKind("implicit"))
+        assertEquals("x^2+y^2=1",graph.graphSource)
+        assertEquals(-3.0,graph.xMin,0.0)
+        assertEquals(3.0,graph.yMax,0.0)
+        graph.updateSource("x*y=1")
+        assertTrue(graph.changeKind("cartesian"))
+        assertTrue(graph.changeKind("implicit"))
+        assertEquals("x*y=1",graph.graphSource)
+        val editor=prefs.edit()
+        graph.writeTo(editor);editor.apply()
+        val restored=GraphState(prefs)
+        assertEquals("implicit",restored.graphKind)
+        assertEquals("x*y=1",restored.graphSource)
     }
 
     private class MemoryPreferences(initial:Map<String,Any?> = emptyMap()):SharedPreferences {

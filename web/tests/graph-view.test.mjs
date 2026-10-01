@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {JSDOM} from 'jsdom';
 import {transformBounds,pinchFactors,nearestPoint,bindGraphGestures} from '../graph-view.js';
-import {graphExpressions,graphShadings} from '../graph-workspace.js';
+import {graphExpressions,graphShadings,implicitFormula,createGraphWorkspace} from '../graph-workspace.js';
+import {readFileSync} from 'node:fs';
 import {plot} from '../plot.js';
 import {expressionDisplay} from '../expression-display.js';
 import {markInputCursor} from '../input-cursor.js';
@@ -30,6 +31,35 @@ test('graph formulas strip prefixes and shading preserves commas nested in funct
   assert.deepEqual(graphExpressions('y=sqrt(x)\n[shade] y<x^2','cartesian'),['sqrt(x)']);
   assert.equal(graphShadings('[shade] log(x,2), sqrt(x), 0..4','cartesian')[0].trees.length,2);
   assert.equal(graphShadings('[shade] x^2>y','cartesian')[0].side,'below');
+});
+
+test('implicit equations preserve both sides and separate contour segments in the renderer',()=>{
+  assert.deepEqual(graphExpressions('x^2+y^2=1\nx=2','implicit'),['x^2+y^2=1','x=2']);
+  assert.equal(implicitFormula('x^2+y^2=1'),'x^2+y^2=1');
+  assert.equal(implicitFormula('x*y-1'),'x*y-1=0');
+  assert.equal(implicitFormula('x^'),'x^');
+  const dom=new JSDOM('<div id="plot"></div>');globalThis.document=dom.window.document;
+  plot(document.getElementById('plot'),{implicit:true,curves:[[[0,1],[1,0],null,[0,-1],[-1,0],null],[[.5,-1],[.5,1],null]]},{xmin:-2,xmax:2,ymin:-2,ymax:2});
+  const paths=document.querySelectorAll('[data-curve]');assert.equal(paths.length,2);
+  const circlePath=document.querySelector('[data-curve="0"]');assert.equal(circlePath.getAttribute('d').match(/M/g).length,2);
+  assert.notEqual(paths[0].getAttribute('stroke'),paths[1].getAttribute('stroke'));dom.window.close();
+});
+
+test('implicit workspace sends x and y bounds, hides function analysis, and saves its draft',async()=>{
+  const dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));globalThis.document=dom.window.document;
+  const $=id=>document.getElementById(id),requests=[];
+  const workspace=createGraphWorkspace({execute:async request=>{requests.push(request);return {ok:true,implicit:true,curves:[[[0,1],[1,0],null]],parameters:[]};},options:()=>({displayDigits:10}),onError:message=>assert.fail(message),persist:()=>{},isBusy:()=>false});
+  $('graph-kind').value='implicit';$('graph-kind').onchange();
+  assert.equal($('graph-source').value,'x^2+y^2=1');
+  assert.equal($('graph-analysis').hidden,true);assert.equal($('graph-viewport-ranges').hidden,true);
+  $('graph-min').value='-.5';$('graph-max').value='.5';$('graph-ymin').value='-1.5';$('graph-ymax').value='1.5';
+  await workspace.run();assert.equal(requests[0].graphKind,'implicit');assert.equal(requests[0].variable,'x');
+  assert.equal(requests[0].min,-.5);assert.equal(requests[0].max,.5);assert.equal(requests[0].yMin,-1.5);assert.equal(requests[0].yMax,1.5);
+  assert.equal(requests[0].trees[0].kind,'relation');assert.equal($('graph-formulas').textContent.includes('f1'),false);
+  assert.equal(workspace.snapshot().sources.implicit,'x^2+y^2=1');
+  $('graph-kind').value='cartesian';$('graph-kind').onchange();assert.equal($('graph-source').value,'sin(x)\ncos(x)');
+  $('graph-kind').value='implicit';$('graph-kind').onchange();assert.equal($('graph-source').value,'x^2+y^2=1');
+  workspace.dispose();dom.window.close();
 });
 test('MathML cursor is visible inside root and fractional tokens without losing empty-slot styling',()=>{
   const dom=new JSDOM();globalThis.document=dom.window.document;

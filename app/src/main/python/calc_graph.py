@@ -28,6 +28,8 @@ def graph(engine, request):
     trees = request.get("trees",[])
     start,end = float(request.get("min",-10)),float(request.get("max",10))
     require(math.isfinite(start) and math.isfinite(end) and end>start,"Invalid graph range")
+    if kind == "implicit":
+        return graph_implicit(engine, request, trees, start, end)
     if kind == "sequence":
         return graph_sequence(engine, request, trees, start, end)
     if kind == "surface":
@@ -57,6 +59,88 @@ def graph(engine, request):
     if kind == "cartesian" and shade_items:
         result["shadings"] = graph_shading(engine, request, shade_items, shade_expressions, sliders, start, end)
     return result
+
+def graph_implicit(engine, request, trees, xmin, xmax):
+    """Contour F(x,y)=0 with finite, independently separated line segments."""
+    ymin, ymax = float(request.get("yMin", -3)), float(request.get("yMax", 3))
+    require(math.isfinite(ymin) and math.isfinite(ymax) and ymax > ymin, "Invalid implicit y range")
+    require(1 <= len(trees) <= 6, "Enter one to six implicit equations")
+    x, y = engine.symbol("x"), engine.symbol("y")
+    engine.bindings.update({"x": x, "y": y})
+    expressions = []
+    for tree in trees:
+        expression = engine.build(tree)
+        if isinstance(expression, s.Equality):
+            expression = expression.lhs-expression.rhs
+        require(isinstance(expression, s.Expr), "Enter an equation F(x,y)=0")
+        expressions.append(expression)
+    names = parameter_names(expressions, {"x", "y"})
+    sliders = resolved_parameters(engine, request, expressions, {"x", "y"})
+    # Coordinate names remain axes even if a previous graph stored slider values for them.
+    sliders = {key: value for key, value in sliders.items() if key not in (x, y)}
+    count = min(240, max(80, int(math.sqrt(max(1, int(request.get("samples", 500))))*8)))
+    curves = []
+    for expression in expressions:
+        expression = substitute_parameters(expression, sliders)
+        require(expression != 0, "Equation is true everywhere; enter a curve equation")
+        # Repeated polynomial factors have the same zero set but no sign change.
+        if expression.is_polynomial(x, y):
+            polynomial = s.Poly(expression, x, y)
+            if polynomial.total_degree() <= 12:
+                expression = polynomial.sqf_part().as_expr()
+        function = s.lambdify((x, y), expression, modules="math", cse=True, docstring_limit=0)
+        curves.append(implicit_samples(function, xmin, xmax, ymin, ymax, count))
+    return {"curves": curves, "implicit": True, "parameters": sorted(names)}
+
+def implicit_samples(function, xmin, xmax, ymin, ymax, count):
+    """March triangles; refine edge roots and reject sign changes across poles."""
+    def value(point):
+        try:
+            return _finite_real(function(*point))
+        except (TypeError, ValueError, ZeroDivisionError, OverflowError):
+            return None
+    xs = [xmin+(xmax-xmin)*i/count for i in range(count+1)]
+    ys = [ymin+(ymax-ymin)*i/count for i in range(count+1)]
+    values = [[value((xx, yy)) for xx in xs] for yy in ys]
+    edges = {}
+    def crossing(a, b):
+        va, vb = values[a[1]][a[0]], values[b[1]][b[0]]
+        if va is None or vb is None or va != 0 and vb != 0 and (va < 0) == (vb < 0): return None
+        key = tuple(sorted((a, b)))
+        if key in edges: return edges[key]
+        pa, pb = [xs[a[0]], ys[a[1]]], [xs[b[0]], ys[b[1]]]
+        root = None
+        if va is not None and vb is not None:
+            if va == 0: root = pa
+            elif vb == 0: root = pb
+            elif (va < 0) != (vb < 0):
+                scale = max(abs(va), abs(vb))
+                for _ in range(20):
+                    middle = [(pa[0]+pb[0])/2, (pa[1]+pb[1])/2]
+                    vm = value(middle)
+                    if vm is None: break
+                    if abs(vm) <= scale*1e-7:
+                        root = middle
+                        break
+                    if (va < 0) == (vm < 0): pa, va = middle, vm
+                    else: pb, vb = middle, vm
+                else:
+                    if abs(vm) <= scale*1e-4: root = middle
+        edges[key] = root
+        return root
+    curve = []
+    for row in range(count):
+        for col in range(count):
+            a, b, c, d = (col,row), (col+1,row), (col+1,row+1), (col,row+1)
+            for triangle in ((a,b,c), (a,c,d)):
+                samples = [values[p[1]][p[0]] for p in triangle]
+                if None in samples or min(samples) > 0 or max(samples) < 0: continue
+                roots = []
+                for i in range(3):
+                    root = crossing(triangle[i], triangle[(i+1)%3])
+                    if root is not None and root not in roots: roots.append(root)
+                if len(roots) == 2: curve.extend([roots[0], roots[1], None])
+    return curve
 
 def _finite_real(value):
     try:
