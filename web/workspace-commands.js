@@ -8,14 +8,25 @@ export function csvRows(source,{maxColumns=3,skipHeader=true}={}){
   if(!rows.length)throw new Error('Enter data below the header');
   const columns=Math.max(...rows.map(r=>r.length));if(columns>maxColumns)throw new Error('Use up to three data columns');return rows.map(r=>Array.from({length:columns},(_,i)=>r[i]||''));
 }
+export function statisticsDataRows(source,kind){
+  const columns={list:1,xy:2,xyz:3}[kind];
+  if(!columns)throw new Error('Select List, x,y data, or x,y,z data');
+  return csvRows(source).map(row=>Array.from({length:columns},(_,i)=>row[i]||''));
+}
 export function numericStatisticsRows(rows){
   const dates=rows.map(row=>{const match=/^(\d{4})([-/.])(\d{1,2})\2(\d{1,2})$/.exec(row[0]);if(!match)return null;const at=Date.UTC(Number(match[1]),Number(match[3])-1,Number(match[4])),date=new Date(at);return date.getUTCFullYear()===Number(match[1])&&date.getUTCMonth()===Number(match[3])-1&&date.getUTCDate()===Number(match[4])?at:null;}),valid=dates.filter(n=>n!==null),origin=valid.length?Math.min(...valid)-86400000:null;
   return rows.map((row,i)=>row.map((cell,j)=>j===0&&origin!==null?dates[i]===null?'':String((dates[i]-origin)/86400000):/^[+-]?\d{1,3}(?:,\d{3})+(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(cell)?cell.replace(/,/g,''):cell));
 }
 const vector=values=>'['+values.join(',')+']';
-export function statisticsCommand(source,{op='stats',column=0,extra='0',tail='two',sigma='1',sigmaY='1',regression='linear',formula='A*exp(-k*x)+C',variable='x',initials='',grouping='columns',firstGroup='',secondGroup=''}={}){
+export function statisticsDatasetSource(source,kind){
+  const rows=numericStatisticsRows(statisticsDataRows(source,kind));
+  return vector(kind==='list'?rows.map(row=>row[0]).filter(Boolean):rows.filter(row=>row.every(Boolean)).map(vector));
+}
+export function statisticsCommand(source,{op='stats',column=0,extra='0',tail='two',sigma='1',sigmaY='1',regression='linear',formula='A*exp(-k*x)+C',variable='x',initials='',grouping='columns',firstGroup='',secondGroup='',kind}={}){
+  if(kind&&kind!=='xy')grouping='columns';
+  if(op==='regression'&&kind&&kind!=='xy')throw new Error('Regression needs x,y data');
   const paired=['regression','correlation','ttestpaired','chi2independence','fisherexact'].includes(op);
-  const raw=csvRows(source),rows=grouping==='groups'&&!paired||['chi2independence','fisherexact'].includes(op)?raw:numericStatisticsRows(raw),columns=Array.from({length:rows[0].length},(_,i)=>rows.map(r=>r[i]).filter(Boolean)),pairs=rows.filter(r=>r[0]&&r[1]),groups=new Map();
+  const raw=kind?statisticsDataRows(source,kind):csvRows(source),rows=grouping==='groups'&&!paired||['chi2independence','fisherexact'].includes(op)?raw:numericStatisticsRows(raw),columns=Array.from({length:rows[0].length},(_,i)=>rows.map(r=>r[i]).filter(Boolean)),pairs=rows.filter(r=>r[0]&&r[1]),groups=new Map();
   if(grouping==='groups'&&!paired)for(const [name,number] of pairs){if(!groups.has(name))groups.set(name,[]);groups.get(name).push(number);}
   const groupNames=[...groups.keys()],first=groups.get(firstGroup)||groups.get(groupNames[0]),second=groups.get(secondGroup&&secondGroup!==(firstGroup||groupNames[0])?secondGroup:groupNames.find(n=>n!==(firstGroup||groupNames[0])));
   const data=first||columns[column];

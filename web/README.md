@@ -52,6 +52,7 @@ For deployment, `node_modules/`, `tests/`, `package*.json`, `build.py`, and `ser
 - Python editor with local `.py` open/save, `calcmax_catalog`, standard library/SymPy/mpmath, bounded output, and pre-entered `input()` values (one per line).
 - Statistics, matrices, and vectors use spreadsheet tables with row/column headers and arrow-key cell navigation. Statistics columns and independent sample selectors are named x/y/z; controls unused by the selected analysis are disabled. Group/value data select group names from the data.
 - Statistics include grouped and categorical data, custom regression, distribution queries, and scatter/histogram/box plots.
+- Select List, x,y data, or x,y,z data as on Android. Tables, available analysis columns, and dataset recall follow the selected format. Switching to fewer columns retains existing values for switching back; saved datasets remember their format.
 - History, variables, custom functions, datasets, drafts, and settings are saved in browser local storage. Setup can export/import a full backup. No account is required.
 - After the calculation engine is ready, the service worker caches the complete static application for offline use on HTTPS or localhost. The cache version changes when any shipped source or engine file changes. Calculation itself does not require the internet; the optional currency download does.
 

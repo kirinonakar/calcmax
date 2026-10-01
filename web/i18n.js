@@ -27,6 +27,13 @@ const korean={History:'기록',Catalog:'함수 목록',Setup:'설정',Undo:'실�
 };
 Object.assign(korean,nativeKorean,{
   "Help": "도움말",
+  "Data type": "데이터 형식",
+  "List": "리스트",
+  "x,y data": "x,y 데이터",
+  "x,y,z data": "x,y,z 데이터",
+  "x, y values": "x, y 값",
+  "x, y, z values": "x, y, z 값",
+  "Regression needs x,y data": "회귀에는 x,y 데이터가 필요합니다.",
   "Main keys": "기본 키",
   "2nd keys": "2nd 키",
   "Number keys": "숫자 키",

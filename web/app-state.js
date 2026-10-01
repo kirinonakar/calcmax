@@ -8,6 +8,7 @@ export function createAppState(saved={},browserLanguage='en') {
     variables:objectOrEmpty(saved.variables),
     functions:objectOrEmpty(saved.functions),
     datasets:objectOrEmpty(saved.datasets),
+    datasetKinds:objectOrEmpty(saved.datasetKinds),
     history:Array.isArray(saved.history)?saved.history.slice(0,500):[],
     favorites:Array.isArray(saved.favorites)?saved.favorites:[],
     recent:Array.isArray(saved.recent)?saved.recent:[],

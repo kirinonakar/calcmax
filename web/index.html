@@ -60,8 +60,9 @@ print(calc.integrate(x**2, x, 0, 1))</textarea></label>
     </section>
     <section class="workspace" data-mode="statistics" hidden="">
       <div class="form-row"><label>Saved datasets<select id="dataset-list"><option value="">New dataset</option></select></label><input id="dataset-name" placeholder="Dataset name" aria-label="Dataset name" data-i18nplaceholder="데이터 이름" data-i18narialabel="데이터 이름"><button id="dataset-save">Save</button><button id="dataset-delete">Delete</button><button id="csv-open">Import CSV</button><button id="csv-save">Export CSV</button></div>
+      <div class="form-row"><label>Data type<select id="statistics-kind"><option value="list">List</option><option value="xy" selected>x,y data</option><option value="xyz">x,y,z data</option></select></label></div>
       <div id="statistics-data-actions" class="form-row"><button id="statistics-table-toggle" aria-controls="statistics-editor" aria-pressed="false">Table editor</button><button id="statistics-add-row">Add row</button><button id="statistics-store">Store dataset as variable</button></div>
-      <div id="statistics-editor"><label>Data · one observation per row, comma-separated columns<textarea id="statistics-data" class="code" rows="6">1,2
+      <div id="statistics-editor"><label><span id="statistics-data-label">x, y values</span><textarea id="statistics-data" class="code" rows="6">1,2
 2,4
 3,6
 4,8</textarea></label><div id="statistics-grid" class="scroll-table" hidden=""></div></div>

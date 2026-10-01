@@ -19,8 +19,8 @@ function page(t) {
 }
 
 test('saved state rejects malformed collections and bounds preferences and retained entries',()=>{
-  const state=createAppState({variables:[],functions:null,datasets:'invalid',fields:[],matrixCells:null,rates:[],assumptions:'invalid',history:'invalid',favorites:{},recent:null,precision:999,digits:999,inputFont:1,outputFont:999,theme:'invalid',resultDisplayMode:'invalid'},'ko-KR');
-  for(const key of ['variables','functions','datasets','fields','matrixCells','rates','assumptions'])assert.deepEqual(state[key],{});
+  const state=createAppState({variables:[],functions:null,datasets:'invalid',datasetKinds:[],fields:[],matrixCells:null,rates:[],assumptions:'invalid',history:'invalid',favorites:{},recent:null,precision:999,digits:999,inputFont:1,outputFont:999,theme:'invalid',resultDisplayMode:'invalid'},'ko-KR');
+  for(const key of ['variables','functions','datasets','datasetKinds','fields','matrixCells','rates','assumptions'])assert.deepEqual(state[key],{});
   for(const key of ['history','favorites','recent'])assert.deepEqual(state[key],[]);
   assert.equal(state.precision,200);assert.equal(state.digits,200);
   assert.equal(state.inputFont,10);assert.equal(state.outputFont,48);

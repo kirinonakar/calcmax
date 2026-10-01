@@ -1,7 +1,7 @@
 import test from 'node:test';
 import {regressionGraphSource} from '../statistics-workspace.js';
 import assert from 'node:assert/strict';
-import {csvRows,numericStatisticsRows,statisticsCommand,distributionCommand,equationCommand,polynomialEquation} from '../workspace-commands.js';
+import {csvRows,statisticsDataRows,statisticsDatasetSource,numericStatisticsRows,statisticsCommand,distributionCommand,equationCommand,polynomialEquation} from '../workspace-commands.js';
 import {closeInputBrackets,parse} from '../parser.js';
 import {encodeFunctions,decodeFunctions,defineFunction} from '../function-transfer.js';
 import {moveMathCursor,fractionExit} from '../input-navigation.js';
@@ -49,6 +49,21 @@ test('regression transfer rounds numeric tokens and renames only the independent
   const custom=regressionGraphSource('-0.123456*exp(-1.987654*t)+0.333333',3,'t');
   assert.ok(parse(custom));assert.match(custom,/0\.123/);assert.match(custom,/1\.988/);assert.match(custom,/exp\(/);assert.doesNotMatch(custom,/\bt\b/);assert.match(custom,/\bx\b/);
   assert.match(regressionGraphSource('0.123456*x1+x',2),/x1/,'digits in symbol names stay intact');
+});
+
+test('List, xy, and xyz analyses use only the selected columns and pad missing cells',()=>{
+  const source='x,y,z\n1,4,7\n2,5,8\n3,6,9';
+  assert.deepEqual(statisticsDataRows(source,'list'),[['1'],['2'],['3']]);
+  assert.deepEqual(statisticsDataRows(source,'xy'),[['1','4'],['2','5'],['3','6']]);
+  assert.deepEqual(statisticsDataRows('1\n2,3','xyz'),[['1','',''],['2','3','']]);
+  assert.equal(statisticsDatasetSource(source,'list'),'[1,2,3]');
+  assert.equal(statisticsDatasetSource(source,'xy'),'[[1,4],[2,5],[3,6]]');
+  assert.equal(statisticsDatasetSource('1,4,7\n,5,8\n3,6,','xyz'),'[[1,4,7]]','incomplete rows are omitted when storing a table');
+  assert.equal(statisticsCommand('1,@,@\n2,@,@',{op:'mean',kind:'list',grouping:'groups'}),'mean([1,2])','hidden columns do not affect a list analysis');
+  assert.equal(statisticsCommand(source,{op:'anova',kind:'xy'}),'anova([1,2,3],[4,5,6])');
+  assert.equal(statisticsCommand(source,{op:'anova',kind:'xyz'}),'anova([1,2,3],[4,5,6],[7,8,9])');
+  assert.throws(()=>statisticsCommand(source,{op:'correlation',kind:'list'}),/paired rows/);
+  assert.throws(()=>statisticsCommand(source,{op:'regression',kind:'xyz'}),/x,y data/);
 });
 
 test('independent samples select x/y/z and paired operations ignore unused group and column settings',()=>{

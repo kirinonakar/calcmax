@@ -533,6 +533,7 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
   edit('1/3');key('=').click();await waitFor(()=>$('answer').textContent==='13','fraction on tape');key('AC').click();$('exact-toggle').click();assert.equal($('tape-history').lastElementChild.querySelector('.tape-result').textContent,'0.3333333333','decimal toggle formats earlier entries even with an empty current answer');$('exact-toggle').click();
   await t.test('spreadsheet tables navigate cells, persist edits, and keep controls relevant to the analysis',()=>{
     change('mode','statistics');$('statistics-data').value='1,4,7\n2,5,8\n3,6,9';$('statistics-data').dispatchEvent(new window.Event('input'));
+    change('statistics-kind','xyz');
     change('statistics-op','mean');$('statistics-table-toggle').click();
     assert.deepEqual([...$('statistics-grid').querySelectorAll('thead th')].map(th=>th.textContent),['#','x','y','z','']);
     assert.equal(window.getComputedStyle($('statistics-grid').querySelector('tbody th')).top,'auto','row labels do not overlap the column header when scrolling');
@@ -545,12 +546,30 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
     change('statistics-first-group','y');change('statistics-second-group','z');assert.equal($('statistics-extra').disabled,false);assert.equal($('statistics-tail').disabled,false);assert.equal($('statistics-sigma').disabled,true);
     change('statistics-op','ztest2');assert.equal($('statistics-sigma').disabled,false);assert.equal($('statistics-sigma-y').disabled,false);
     change('statistics-op','correlation');assert.equal($('statistics-grouping').disabled,true);assert.equal($('statistics-first-group').disabled,true);assert.equal($('statistics-second-group').disabled,true);
-    $('statistics-table-toggle').click();change('statistics-op','mean');$('statistics-data').value='1,2\n2,4\n3,6\n4,8';$('statistics-data').dispatchEvent(new window.Event('input'));
+    $('statistics-table-toggle').click();change('statistics-op','mean');$('statistics-data').value='1,2\n2,4\n3,6\n4,8';$('statistics-data').dispatchEvent(new window.Event('input'));change('statistics-kind','xy');
     change('mode','matrix');assert.ok($('matrix-grid').querySelector('table.editable-table'));cell('matrix-grid',0,0).focus();move('ArrowRight');move('ArrowDown');assert.equal(document.activeElement,cell('matrix-grid',1,1));
     assert.equal(parseFloat(window.getComputedStyle(cell('matrix-grid',1,1)).borderRadius),0);
     cell('matrix-grid',1,1).value='2/3';cell('matrix-grid',1,1).dispatchEvent(new window.Event('input'));assert.equal(JSON.parse(localStorage.getItem('calcmax-web-v1')).matrixCells['m-1-1'],'2/3');
     cell('matrix-grid',1,1).value='1';cell('matrix-grid',1,1).dispatchEvent(new window.Event('input'));
     change('mode','vector');assert.equal($('matrix-grid').querySelectorAll('tbody tr').length,3);assert.equal($('matrix-grid').querySelectorAll('thead th').length,2);cell('matrix-grid',0,0).focus();move('ArrowDown');assert.equal(document.activeElement,cell('matrix-grid',1,0));change('mode','scientific');key('AC').click();
+  });
+  await t.test('statistics data type switches table columns, calculates selected data, and recalls the saved type',async()=>{
+    change('mode','statistics');const originalData=$('statistics-data').value,originalName=$('dataset-name').value;
+    const headers=()=>[...$('statistics-grid').querySelectorAll('thead th')].map(th=>th.textContent),columns=()=>[...$('statistics-column').options].map(option=>option.textContent);
+    assert.deepEqual([...$('statistics-kind').options].map(option=>option.value),['list','xy','xyz']);
+    $('statistics-data').value='1,4,7\n2,5,8\n3,6,9';change('statistics-kind','xyz');$('statistics-table-toggle').click();
+    assert.deepEqual(headers(),['#','x','y','z','']);assert.deepEqual(columns(),['x','y','z']);assert.equal($('regression-section').hidden,true);
+    change('statistics-kind','list');assert.deepEqual(headers(),['#','x','']);assert.deepEqual(columns(),['x']);assert.equal($('statistics-column').disabled,true);assert.equal($('statistics-grouping').disabled,true);assert.equal($('statistics-op').querySelector('[value="correlation"]').disabled,true);assert.equal($('statistics-op').querySelector('[value="anova"]').disabled,true);assert.equal($('statistics-plot-type').value,'histogram');assert.equal($('statistics-data-label').textContent,'One value per line');
+    const first=$('statistics-grid').querySelector('input');first.value='10';first.dispatchEvent(new window.Event('input'));assert.equal($('statistics-data').value,'10,4,7\n2,5,8\n3,6,9','editing list values retains the hidden y/z values');
+    change('statistics-op','mean');document.querySelector('[data-run="statistics"]').click();await waitFor(()=>JSON.parse(localStorage.getItem('calcmax-web-v1')).history[0].source==='mean([10,2,3])'&&document.documentElement.dataset.busy==='false','list mean uses x only');assert.equal($('answer').textContent,'5');
+    $('dataset-name').value='KindTest';$('dataset-save').click();assert.equal(JSON.parse(localStorage.getItem('calcmax-web-v1')).datasetKinds.KindTest,'list');
+    key('AC').click();$('variables-button').click();[...$('dialog-body').querySelectorAll('button')].find(button=>button.textContent.startsWith('KindTest ·')).click();assert.equal($('expression').value,'[10,2,3]','recalling a saved List keeps its selected shape');change('mode','statistics');
+    change('statistics-kind','xy');assert.deepEqual(headers(),['#','x','y','']);assert.deepEqual(columns(),['x','y']);assert.equal($('regression-section').hidden,false);assert.equal($('statistics-plot-type').value,'scatter');
+    change('statistics-column','1');document.querySelector('[data-run="statistics"]').click();await waitFor(()=>JSON.parse(localStorage.getItem('calcmax-web-v1')).history[0].source==='mean([4,5,6])'&&document.documentElement.dataset.busy==='false','xy mean uses the chosen column');
+    change('dataset-list','KindTest');assert.equal($('statistics-kind').value,'list');assert.deepEqual(headers(),['#','x','']);assert.equal(JSON.parse(localStorage.getItem('calcmax-web-v1')).fields['statistics-kind'],'list');
+    change('statistics-kind','xyz');assert.equal($('statistics-grid').querySelector('input[data-column="2"]').value,'7');assert.deepEqual(columns(),['x','y','z']);
+    $('dataset-delete').click();assert.equal(JSON.parse(localStorage.getItem('calcmax-web-v1')).datasetKinds.KindTest,undefined);
+    $('statistics-table-toggle').click();$('statistics-data').value=originalData;$('dataset-name').value=originalName;change('statistics-kind','xy');change('statistics-column','0');change('mode','scientific');key('AC').click();
   });
   await t.test('display customization separates keypad and catalog categories and searches all buttons',()=>{
     $('shortcut-settings').click();const content=$('dialog-body');
