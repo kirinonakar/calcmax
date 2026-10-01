@@ -136,6 +136,30 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
   $('tip-fixed').value='';document.querySelector('[data-run="tip"]').click();await waitFor(()=>$('answer').textContent.includes('Tip %: 16.00%'),'percent tip ignores disabled amount input and reports adjusted rate');$('tip-fixed').value='15';
   change('mode','functions');$('function-save').click();change('mode','scientific');$('expression').value='f(3)';document.querySelector('.key[data-evaluate]').click();await waitFor(()=>$('answer').textContent==='10','saved function');
   const edit=source=>{$('expression').value=source;$('expression').dispatchEvent(new window.Event('input'));};
+  await t.test('clipboard failure opens manual paste and the inserted formula still calculates',async()=>{
+    key('AC').click();
+    const original=Object.getOwnPropertyDescriptor(navigator,'clipboard');
+    Object.defineProperty(navigator,'clipboard',{value:{readText:async()=>{throw new Error('Permission denied');}},configurable:true});
+    try{
+      $('paste').click();await waitFor(()=>$('dialog').open,'manual paste dialog');
+      const field=$('dialog-body').querySelector('textarea');assert.ok(field);
+      field.value='\\frac{1}{2}+\\frac{1}{6}';
+      Array.from($('dialog-body').querySelectorAll('button')).find(button=>button.textContent==='Insert').click();
+      assert.equal($('dialog').open,false);assert.ok($('expression-preview').querySelector('mfrac'));
+      key('=').click();await waitFor(()=>$('answer').textContent==='23','pasted fractions');
+    }finally{
+      if(original)Object.defineProperty(navigator,'clipboard',original);else delete navigator.clipboard;
+      $('dialog').close();key('AC').click();
+    }
+  });
+  await t.test('keypad memory commands store exact operands and reset SHIFT after subtraction',async()=>{
+    edit('2');key('M+').click();await waitFor(()=>JSON.parse(localStorage.getItem('calcmax-web-v1')).variables.M?.value==='2','first memory operand');
+    edit('3');key('M+').click();await waitFor(()=>JSON.parse(localStorage.getItem('calcmax-web-v1')).variables.M?.value==='5','memory addition');
+    edit('1');key('SHIFT').click();key('M+').click();
+    await waitFor(()=>JSON.parse(localStorage.getItem('calcmax-web-v1')).variables.M?.value==='4','memory subtraction');
+    await waitFor(()=>key('SHIFT').getAttribute('aria-pressed')==='false','memory operation resets modifiers');
+    assert.equal($('answer').textContent,'1');key('AC').click();
+  });
   await t.test('simple input previews without committing, blocking typing, or changing Ans',async()=>{
     key('AC').click();$('typing-toggle').click();
     const before=JSON.parse(localStorage.getItem('calcmax-web-v1'));

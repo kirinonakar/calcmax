@@ -19,6 +19,20 @@ from build import publish_directory
 
 
 class StaticDeploymentTests(unittest.TestCase):
+    def test_application_module_dependencies_are_cached_for_offline_use(self):
+        manifest = (WEB / "assets.js").read_text(encoding="utf-8")
+        assets = set(json.loads(re.search(r"self.CALCMAX_ASSETS = (\[[\s\S]+\]);", manifest).group(1)))
+        pending, visited = ["app.js", "worker.js"], set()
+        while pending:
+            name = pending.pop()
+            if name in visited:
+                continue
+            visited.add(name)
+            self.assertIn("./" + name, assets, name)
+            source = (WEB / name).read_text(encoding="utf-8")
+            for dependency in re.findall(r"\bfrom\s+['\"](\./[^'\"]+)['\"]", source):
+                pending.append((pathlib.PurePosixPath(name).parent / dependency).as_posix())
+
     def test_engine_archive_matches_android_sources(self):
         sources = WEB.parent / "app/src/main/python"
         with zipfile.ZipFile(WEB / "engine.zip") as archive:

@@ -65,6 +65,19 @@ Engine asset requests have a 30-second deadline covering headers and the complet
 
 ## Validation / 검증
 
+### JavaScript structure / 코드 구조
+
+`app.js` composes the controllers, switches workspaces, and manages page lifecycle. Modules communicate through explicit callbacks; each controller owns its transient state.
+
+- `app-state.js`: saved-state defaults, field restoration, and debounced persistence.
+- `app-ui.js` / `app-dialogs.js`: shared UI helpers, dialogs, catalog, and settings.
+- `engine-ui.js`: engine status, busy/Stop controls, and offline registration.
+- `calculator.js` / `calculator-keypad.js`: expression editing, evaluation, previews, CALC, results/tape, and keypad modifiers.
+- `workspaces.js`: workspace execution routing, shared formula previews, and simple tool forms.
+- `matrix-workspace.js`, `statistics-workspace.js`, `python-workspace.js`, `functions-workspace.js`, and `graph-workspace.js`: each workspace's controls and state.
+
+### Run tests / 테스트 실행
+
 ```powershell
 cd web
 npm ci
