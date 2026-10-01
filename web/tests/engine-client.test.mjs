@@ -105,3 +105,19 @@ test('completed previews and cancelled background work never leave controls busy
   assert.equal((await next).ok,false);assert.equal((await commit).ok,false);
   assert.equal(busy.at(-1),false);assert.equal(engine.pending,null);
 });
+
+test('cancelled foreground work waiting for a preview cannot run on the restarted worker',async t=>{
+  const {engine,workers}=runtime(t);
+  workers[0].message({type:'ready'});
+  const preview=engine.execute({},{background:true});
+  const fit=engine.execute({action:'regression'});
+  engine.cancel();
+  // The replacement may be ready before the preview promise continuation runs.
+  workers[1].message({type:'ready'});
+  assert.equal((await preview).ok,false);
+  assert.equal((await fit).ok,false);
+  assert.equal(workers[1].request,undefined);
+  const next=engine.execute({action:'regression'});
+  workers[1].message({type:'result',id:workers[1].request.id,result:{ok:true}});
+  assert.equal((await next).ok,true);
+});

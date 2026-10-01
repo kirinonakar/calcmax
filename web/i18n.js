@@ -129,7 +129,10 @@ Object.assign(korean,nativeKorean,{
   "Enter distinct valid parameter names": "서로 다른 올바른 매개변수 이름을 입력하세요.",
   "About CalcMax": "CalcMax 정보",
   "Whole amounts per person": "1인당 금액을 정수로 보정",
-  "Input word wrap": "입력 자동 줄바꿈 (Word wrap)"
+  "Input word wrap": "입력 자동 줄바꿈 (Word wrap)",
+  "New": "새로 만들기",
+  "Cancel": "취소",
+  "Fitting regression…": "회귀 적합 중…"
 });
 for(const [en,ko] of Object.entries(korean))if(!english[ko])english[ko]=en;
 const reverse=Object.fromEntries(Object.entries(english).map(([ko,en])=>[en,ko]));

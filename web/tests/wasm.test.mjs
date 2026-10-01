@@ -31,6 +31,15 @@ test('actual CPython WASM reuses the Android engine across workspaces',async()=>
   assert.match(evaluate(statisticsCommand('A,1\nA,2\nA,3\nB,2\nB,4\nB,6',{op:'ztest2',grouping:'groups',sigma:'1',sigmaY:'2',tail:'left'})).exact,/p value/);
   assert.match(evaluate(statisticsCommand('A,yes\nA,no\nB,yes\nB,no',{op:'chi2independence'})).exact,/chi-square/);
   const fit=evaluate(statisticsCommand('0,1\n1,3\n2,5\n3,7',{op:'regression',regression:'custom',formula:'a*x+b',initials:'[[a,1],[b,0]]'}));assert.equal(fit.parameters.length,2);assert.ok(fit.curve.length>10);
+  for(const regression of ['exponential','power']){
+    const model=x=>regression==='power'?2*x**1.5:2*Math.exp(.01*x);
+    const data=Array.from({length:300},(_,i)=>`${i+1},${model(i+1)}`).join('\n');
+    const start=performance.now(),result=evaluate(statisticsCommand(data,{op:'regression',regression}),{precision:60});
+    assert.ok(result.curve.length>100);assert.ok(result.exact.length<300);assert.equal(result.approximate,true);
+    const predicted=evaluate('subs(Ans,x,15)',{variables:{Ans:result.resultAst},precision:60});
+    assert.ok(Math.abs(Number(predicted.decimal)/model(15)-1)<1e-12,'reusable fitted expression predicts the model');
+    console.log(`WASM ${regression} regression: 300 points in ${(performance.now()-start).toFixed(0)} ms`);
+  }
   for(const family of ['normal','t','chi2','f','binomial','poisson','geometric'])evaluate(distributionCommand({family,query:'cdf'}));
   for(const [bill,people,whole,tip,total,share] of [['100','3',true,'17','117','39'],['100','2',true,'16','116','58'],['100','1',true,'15','115','115'],['100.01','3',false,'15','115.01',null],['1000000.01','3',true,'150001.99','1150002','383334']]){
     const result=moneyResult(evaluate(tipCommand({bill,people,whole}),{precision:3}),Number(people)),rows=result.tree.args;

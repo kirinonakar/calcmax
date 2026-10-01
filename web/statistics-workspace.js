@@ -14,9 +14,17 @@ export function regressionGraphSource(source,digits=10,variable='x') {
   return astSource(rounded(parse(latexInput(source))));
 }
 
-export function createStatisticsWorkspace({state,ui,persist,refreshWorkspaceMath,storeExpression,error,changeMode,replaceInput,graphs}) {
+export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorkspaceMath,storeExpression,error,changeMode,replaceInput,graphs}) {
   const {toast,pickFile,openDialog}=ui;
   let statisticsGraph=null;
+  let regressionRun=null;
+  function regressionBusy(busy){$('regression-progress').hidden=!busy;$('regression-cancel').hidden=!busy;$('regression-section').setAttribute('aria-busy',String(busy));}
+  function cancelRegression(){if(!regressionRun)return;regressionRun=null;regressionBusy(false);engine.cancel();}
+  $('regression-cancel').onclick=cancelRegression;
+  $('statistics-new').onclick=()=>{
+    cancelRegression();$('statistics-data').value='';$('dataset-name').value='';$('dataset-list').value='';
+    dataKindChange();$('statistics-plot').hidden=true;persist();
+  };
   const dataColumns=()=>({list:1,xy:2,xyz:3}[value('statistics-kind')]);
   function inferDataKind(){try{return ['list','xy','xyz'][csvRows(value('statistics-data'))[0].length-1];}catch{return 'list';}}
   if(!['list','xy','xyz'].includes(state.fields['statistics-kind']))$('statistics-kind').value=inferDataKind();
@@ -24,7 +32,25 @@ export function createStatisticsWorkspace({state,ui,persist,refreshWorkspaceMath
   $('dataset-list').onchange=()=>{const name=value('dataset-list');if(state.datasets[name]){$('statistics-data').value=state.datasets[name];$('dataset-name').value=name;const savedKind=state.datasetKinds[name];$('statistics-kind').value=['list','xy','xyz'].includes(savedKind)?savedKind:inferDataKind();dataKindChange();persist();}};
   $('dataset-save').onclick=()=>{const name=value('dataset-name').trim();if(!name){toast('데이터 이름을 입력하세요.');return;}state.datasets[name]=value('statistics-data');state.datasetKinds[name]=value('statistics-kind');datasetsList();$('dataset-list').value=name;persist();toast('데이터를 저장했습니다.');};
   $('dataset-delete').onclick=()=>{delete state.datasetKinds[value('dataset-list')];delete state.datasets[value('dataset-list')];datasetsList();persist();};
-  $('csv-open').onclick=()=>pickFile('.csv,.tsv,text/csv',async file=>{const rows=csvRows((await file.text()).replace(/^\uFEFF/,''),{maxColumns:100,skipHeader:false}),content=element('div'),columns=[],header=element('input');header.type='checkbox';header.checked=rows[0].every(cell=>cell!==''&&!Number.isFinite(Number(cell)))&&rows.slice(1).some(row=>row.some(cell=>cell!==''&&Number.isFinite(Number(cell))));const headerLabel=element('label','Skip header row','check');headerLabel.append(header);content.append(headerLabel);for(let index=0;index<rows[0].length;index++){const input=element('input');input.type='checkbox';input.checked=index<3;columns.push(input);const label=element('label',`${t('Column')} ${index+1}: ${rows[0][index]}`,'check');label.append(input);content.append(label);}content.append(control('Import CSV',()=>{const selected=columns.map((input,i)=>input.checked?i:null).filter(i=>i!==null);if(!selected.length||selected.length>3){toast('Select one to three columns');return;}$('statistics-data').value=rows.slice(header.checked?1:0).map(row=>selected.map(i=>row[i].includes(',')?'"'+row[i].replace(/"/g,'""')+'"':row[i]).join(',')).join('\n');$('dataset-name').value=file.name.replace(/\.(csv|tsv)$/i,'');$('statistics-kind').value=['list','xy','xyz'][selected.length-1];dataKindChange();persist();$('dialog').close();}));openDialog('Import CSV',content);});
+  $('csv-open').onclick=()=>pickFile('.csv,.tsv,text/csv',async file=>{
+    const rows=csvRows((await file.text()).replace(/^\uFEFF/,''),{maxColumns:100,skipHeader:false}),content=element('div'),columns=[],header=element('input'),preview=element('pre','','csv-preview');
+    const selectedColumns=()=>columns.map((input,i)=>input.checked?i:null).filter(i=>i!==null);
+    function updatePreview(){const selected=selectedColumns();preview.textContent=selected.length?rows.slice(header.checked?1:0).slice(0,3).map(row=>selected.map(i=>row[i]).join('  |  ')).join('\n'):'';}
+    preview.setAttribute('aria-live','polite');
+    header.type='checkbox';header.checked=rows[0].every(cell=>cell!==''&&!Number.isFinite(Number(cell)))&&rows.slice(1).some(row=>row.some(cell=>cell!==''&&Number.isFinite(Number(cell))));
+    header.onchange=updatePreview;
+    const headerLabel=element('label','Skip header row','check');headerLabel.append(header);content.append(headerLabel);
+    for(let index=0;index<rows[0].length;index++){
+      const input=element('input');input.type='checkbox';input.checked=index<3;input.onchange=updatePreview;columns.push(input);
+      const label=element('label',`${t('Column')} ${index+1}: ${rows[0][index]}`,'check');label.append(input);content.append(label);
+    }
+    content.append(element('h3','Preview'),preview);updatePreview();
+    content.append(control('Import CSV',()=>{
+      const selected=selectedColumns();if(!selected.length||selected.length>3){toast('Select one to three columns');return;}
+      $('statistics-data').value=rows.slice(header.checked?1:0).map(row=>selected.map(i=>row[i].includes(',')?'"'+row[i].replace(/"/g,'""')+'"':row[i]).join(',')).join('\n');
+      $('dataset-name').value=file.name.replace(/\.(csv|tsv)$/i,'');$('statistics-kind').value=['list','xy','xyz'][selected.length-1];dataKindChange();persist();$('dialog').close();
+    }));openDialog('Import CSV',content);
+  });
   $('csv-save').onclick=()=>downloadFile(`${value('dataset-name')||'calcmax-data'}.csv`,value('statistics-data'),'text/csv');
   function dataRows(){return statisticsDataRows(value('statistics-data'),value('statistics-kind'));}
   function statisticsExpression(op=value('statistics-op')){return statisticsCommand(value('statistics-data'),{op,kind:value('statistics-kind'),column:Number(value('statistics-column')),extra:value('statistics-extra')||'0',tail:value('statistics-tail'),sigma:value('statistics-sigma'),sigmaY:value('statistics-sigma-y'),regression:value('regression-kind'),formula:value('regression-formula'),variable:value('regression-variable'),initials:value('regression-initials'),grouping:value('statistics-grouping'),firstGroup:value('statistics-first-group'),secondGroup:value('statistics-second-group')});}
@@ -39,7 +65,7 @@ export function createStatisticsWorkspace({state,ui,persist,refreshWorkspaceMath
   $('distribution-insert').onclick=()=>{changeMode('scientific');replaceInput(distributionExpression(),{uncommit:true});};
   $('regression-kind').onchange=()=>{$('regression-custom').hidden=value('regression-kind')!=='custom';refreshWorkspaceMath();};
   $('regression-custom').hidden=value('regression-kind')!=='custom';
-  $('regression-clear').onclick=()=>{statisticsGraph=null;$('regression-caption').replaceChildren();$('regression-transfer').hidden=true;if(!$('statistics-plot').hidden)$('statistics-plot-run').click();};
+  $('regression-clear').onclick=()=>{cancelRegression();statisticsGraph=null;$('regression-caption').replaceChildren();$('regression-transfer').hidden=true;if(!$('statistics-plot').hidden)$('statistics-plot-run').click();};
   function statisticsControls(){
     const columns=dataColumns(),kind=value('statistics-kind'),pairOps=['correlation','ttestpaired','chi2independence','fisherexact'],multiOps=['ttest2','ztest2','anova','tukey'];
     for(const option of $('statistics-op').options)option.disabled=columns===1&&[...pairOps,...multiOps].includes(option.value);
@@ -69,7 +95,7 @@ export function createStatisticsWorkspace({state,ui,persist,refreshWorkspaceMath
     setText($('statistics-data-label'),kind==='list'?'One value per line':kind==='xy'?'x, y values':'x, y, z values');
     try{$('statistics-samples').textContent=analysisSummary();}catch{setText($('statistics-samples'),'Enter data to see analyzed groups');}
   }
-  function dataKindChange(){statisticsGraph=null;$('regression-caption').replaceChildren();$('regression-transfer').hidden=true;$('statistics-plot').replaceChildren();$('statistics-plot-type').value=value('statistics-kind')==='xy'?'scatter':'histogram';render();refreshWorkspaceMath();}
+  function dataKindChange(){cancelRegression();statisticsGraph=null;$('regression-caption').replaceChildren();$('regression-transfer').hidden=true;$('statistics-plot').replaceChildren();$('statistics-plot-type').value=value('statistics-kind')==='xy'?'scatter':'histogram';render();refreshWorkspaceMath();}
   $('statistics-kind').onchange=dataKindChange;
   $('statistics-op').onchange=()=>{if(['tinterval','zinterval'].includes(value('statistics-op'))&&value('statistics-extra')==='0')$('statistics-extra').value='95';statisticsControls();refreshWorkspaceMath();};
   $('statistics-grouping').onchange=()=>{statisticsControls();refreshWorkspaceMath();};
@@ -104,6 +130,20 @@ export function createStatisticsWorkspace({state,ui,persist,refreshWorkspaceMath
     $('statistics-plot').hidden=false;render();
     $('regression-transfer').hidden=false;
   }
+  async function runRegression(options,showResult){
+    if(regressionRun||!engine.ready)return;
+    const run={};
+    regressionRun=run;
+    try{
+      const source=statisticsExpression('regression'),tree=parse(latexInput(source));
+      regressionBusy(true);
+      const result=await engine.execute({...options,tree});
+      if(regressionRun!==run||source!==statisticsExpression('regression'))return;
+      showResult(result,source,source,{decimalDisplay:true});
+      if(result.ok)showRegression(result);
+    }catch(exc){if(regressionRun===run)error(exc.message);}
+    finally{if(regressionRun===run){regressionRun=null;regressionBusy(false);}}
+  }
   statisticsControls();
-  return {datasetsList,expression:statisticsExpression,analysisSummary,distributionExpression,distributionControls,render,showRegression};
+  return {datasetsList,expression:statisticsExpression,analysisSummary,distributionExpression,distributionControls,render,showRegression,runRegression};
 }

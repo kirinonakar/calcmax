@@ -650,17 +650,51 @@ def fit_regression(engine, rows, mode):
     require(len(rows)>=2 and all(len(row)==2 for row in rows),"Regression requires x,y pairs")
     xs,ys = zip(*rows)
     require(mode in ("linear","quadratic","logarithmic","exponential","power"),"Unknown regression type")
-    if mode in ("logarithmic","power"): require(all(x>0 for x in xs),"Logarithmic x values must be positive"); xs = tuple(s.log(x) for x in xs)
-    if mode in ("exponential","power"): require(all(y>0 for y in ys),"Logarithmic y values must be positive"); ys = tuple(s.log(y) for y in ys)
+    if mode in ("logarithmic", "exponential", "power"):
+        return _fit_transformed_regression(engine, xs, ys, mode)
     degree = 2 if mode == "quadratic" else 1
     design = s.Matrix([[x**i for i in range(degree+1)] for x in xs]); target = s.Matrix(ys)
     coef = (design.T*design).inv()*design.T*target
     x = engine.symbol("x")
     result = sum(c*x**i for i,c in enumerate(coef))
-    if mode == "logarithmic": result = result.subs(x,s.log(x))
-    if mode == "exponential": result = s.exp(result)
-    if mode == "power": result = s.exp(coef[0])*x**coef[1]
     return result
+
+def _fit_transformed_regression(engine, xs, ys, mode):
+    """Log-linear least squares without constructing symbolic log matrices."""
+    log_x = mode in ("logarithmic", "power")
+    log_y = mode in ("exponential", "power")
+    for value in (*xs, *ys):
+        _real_value(value, "Regression values must be real numbers")
+        require(value.is_finite is True, "Regression values must be finite numbers")
+    if log_x: require(all(x > 0 for x in xs), "Logarithmic x values must be positive")
+    if log_y: require(all(y > 0 for y in ys), "Logarithmic y values must be positive")
+    with mp.workdps(engine.precision + 10):
+        # Subtract the origin before conversion so large offsets do not erase
+        # small differences in exact inputs. log1p preserves close log ratios.
+        def centered(values, logarithmic):
+            origin = values[0]
+            base = _mpf(origin, engine.precision)
+            offsets = [_mpf(value - origin, engine.precision) for value in values]
+            if logarithmic:
+                offsets = [mp.log1p(offset / base) if abs(offset) < abs(base)/2
+                           else mp.log(_mpf(value, engine.precision)) - mp.log(base)
+                           for value, offset in zip(values, offsets)]
+                base = mp.log(base)
+            return base, offsets
+        x_origin, tx = centered(xs, log_x)
+        y_origin, ty = centered(ys, log_y)
+        mx, my = mp.fsum(tx)/len(tx), mp.fsum(ty)/len(ty)
+        dx, dy = [value - mx for value in tx], [value - my for value in ty]
+        variance = mp.fsum(value*value for value in dx)
+        require(variance > 0, "Regression requires variation in x values")
+        slope = mp.fsum(x*y for x, y in zip(dx, dy))/variance
+        intercept = y_origin + my - slope*(x_origin + mx)
+        a = _mp_result(mp.exp(intercept) if log_y else intercept, engine)
+        b = _mp_result(slope, engine)
+    x = engine.symbol("x")
+    if mode == "logarithmic": return a + b*s.log(x)
+    if mode == "exponential": return a*s.exp(b*x)
+    return a*x**b
 
 def fit_custom_regression(engine, rows, expression, independent, options=None):
     """Fit an arbitrary real y(x) with damped nonlinear least squares.

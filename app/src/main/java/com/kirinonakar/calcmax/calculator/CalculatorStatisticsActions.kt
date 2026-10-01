@@ -58,7 +58,6 @@ internal object CalculatorStatisticsActions {
     fun CalculatorModel.performCancelRegression() {
         if(!statisticsState.regressionBusy)return
         regressionJob?.cancel()
-        engine.cancel()
         regressionJob=null
         statisticsState.regressionBusy=false
     }

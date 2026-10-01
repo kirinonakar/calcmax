@@ -42,7 +42,8 @@ export class EngineClient extends EventTarget {
       // Explicit work takes priority, while allowing the current preview to finish.
       this.pending.background = false;
       this.emit('busy',true);
-      return this.pending.promise.then(() => this.execute(request));
+      const worker=this.worker;
+      return this.pending.promise.then(result => this.worker===worker&&this.ready ? this.execute(request) : result);
     }
     if (this.pending) return Promise.resolve({ok:false,error:'계산 중입니다. 중지한 뒤 다시 실행해 주세요.'});
     let resolve;
