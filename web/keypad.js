@@ -55,6 +55,12 @@ export function renderKeypad(container,{second=false,shift=false,alpha=false,hyp
       const fraction=document.createElement('span');fraction.className='key-fraction';fraction.setAttribute('aria-hidden','true');
       for(const [text,className] of [['□',''],['','key-fraction-bar'],['□','']]){const part=document.createElement('span');part.textContent=text;part.className=className;fraction.append(part);}
       face.append(fraction);
+    }else if(k.input==='integrate(,x,,)'){
+      const integral=document.createElement('span');integral.className='key-integral';integral.setAttribute('aria-hidden','true');
+      const symbol=document.createElement('span');symbol.textContent='∫';
+      const limits=document.createElement('span');limits.className='key-integral-limits';
+      for(const text of ['b','a']){const limit=document.createElement('span');limit.textContent=text;limits.append(limit);}
+      integral.append(symbol,limits);face.append(integral);
     }else if(k.input==='DEL'){
       const ns='http://www.w3.org/2000/svg',icon=document.createElementNS(ns,'svg'),shape=document.createElementNS(ns,'path'),cross=document.createElementNS(ns,'path');
       icon.setAttribute('viewBox','0 0 24 18');icon.setAttribute('aria-hidden','true');icon.setAttribute('focusable','false');icon.classList.add('key-backspace');
