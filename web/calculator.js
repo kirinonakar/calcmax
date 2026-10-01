@@ -24,8 +24,9 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
   let inputBoundary=null;
   let calculationPreviewTimer=null,calculationPreviewKey=null,calculationPreviewRevision=0;
   const undoStack=()=>calcSession?.undo||expressionUndo;
-  function showResult(result,source='',displaySource=source) {
+  function showResult(result,source='',displaySource=source,{decimalDisplay=false}={}) {
     if(!result.ok){error(result.error||'계산 오류');return;}
+    if(decimalDisplay){decimal=true;$('exact-toggle').textContent='≈ Decimal';}
     const previousAnswer=value('mode')==='scientific'?(inputAnswer||state.variables.Ans):state.variables.Ans;
     engineeringConversion=false;engineeringShift=0;syncEngineering();
     lastResult=result;lastResultSource=displaySource;

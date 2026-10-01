@@ -45,3 +45,12 @@ test('SVG redraw retains discontinuities and draws trace, tangent, integration s
   assert.equal(container.querySelector('path').getAttribute('d').match(/M/g).length,2);assert.ok(container.querySelector('[data-trace]'));assert.ok(container.querySelector('[data-tangent]'));assert.ok(container.querySelector('[data-integral]'));
   const result={surface:[[[-1,-1,0],[1,-1,1]],[[-1,1,1],[1,1,0]]],zMin:0,zMax:1};plot(container,result,bounds);const before=container.querySelector('path').getAttribute('d');plot(container,result,bounds,{surfaceView:{rotation:90,elevation:70,zoom:2}});assert.notEqual(container.querySelector('path').getAttribute('d'),before);dom.window.close();
 });
+
+test('radian axes use adaptive pi ticks for decimal, zoomed, and panned bounds',()=>{
+  const dom=new JSDOM('<div id="plot"></div>');globalThis.document=dom.window.document;const container=document.getElementById('plot'),result={curves:[[[-1,-1],[0,0],[1,1]]]},bounds={xmin:-10,xmax:10,ymin:-5,ymax:5};
+  const labels=()=>[...container.querySelectorAll('[data-axis="x"]')].map(label=>label.textContent);
+  plot(container,result,bounds);const decimals=labels(),path=container.querySelector('path').getAttribute('d');assert.ok(decimals.every(label=>!label.includes('π')));
+  plot(container,result,bounds,{radianAxis:true});assert.ok(labels().includes('π'));assert.ok(labels().includes('-π'));assert.ok(labels().includes('0'));assert.notDeepEqual(labels(),decimals);assert.equal(container.querySelector('path').getAttribute('d'),path);
+  for(const [xmin,xmax] of [[-Math.PI/8,Math.PI/8],[.1,.9],[1000,1020]]){plot(container,result,{...bounds,xmin,xmax},{radianAxis:true});assert.ok(labels().length>0&&labels().length<=9);assert.ok(labels().every(label=>label==='0'||label.includes('π')));for(const label of container.querySelectorAll('[data-axis="x"]'))assert.ok(Number(label.getAttribute('x'))>=42-1e-8&&Number(label.getAttribute('x'))<=758+1e-8);}
+  plot(container,result,bounds);assert.deepEqual(labels(),decimals);dom.window.close();
+});

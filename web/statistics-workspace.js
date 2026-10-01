@@ -5,6 +5,14 @@ import {statisticsCommand,distributionCommand,csvRows,numericStatisticsRows} fro
 import {statisticsPlot} from './statistics-plot.js';
 import {renderFormulas} from './formula-preview.js';
 import {editableTable} from './editable-table.js';
+import {parse,latexInput} from './parser.js';
+import {astSource} from './ast-source.js';
+import {roundNumber} from './display-format.js';
+
+export function regressionGraphSource(source,digits=10,variable='x') {
+  function rounded(node){return {...node,value:node.kind==='number'?roundNumber(node.value,digits):node.kind==='symbol'&&node.value===variable?'x':node.value,args:node.args.map(rounded)};}
+  return astSource(rounded(parse(latexInput(source))));
+}
 
 export function createStatisticsWorkspace({state,ui,persist,refreshWorkspaceMath,storeExpression,error,changeMode,replaceInput,graphs}) {
   const {toast,pickFile,openDialog}=ui;
@@ -62,15 +70,15 @@ export function createStatisticsWorkspace({state,ui,persist,refreshWorkspaceMath
   $('statistics-data').addEventListener('input',statisticsControls);
   $('statistics-data').addEventListener('change',()=>{statisticsControls();if(!$('statistics-grid').hidden)statisticsGrid();});
   $('statistics-store').onclick=async()=>{const name=value('dataset-name').trim();if(!/^[A-Za-z][A-Za-z0-9_]*$/.test(name)){error('Dataset name must be a valid variable name');return;}await storeExpression(name,`[${dataRows().map(row=>row.length===1?row[0]:'['+row.join(',')+']').join(',')}]`);};
-  $('statistics-plot-run').onclick=()=>{try{statisticsGraph={rows:numericStatisticsRows(dataRows()),curve:statisticsGraph?.curve||[]};$('statistics-plot').hidden=false;statisticsPlot($('statistics-plot'),statisticsGraph.rows,{type:value('statistics-plot-type'),digits:state.digits,curve:statisticsGraph.curve});}catch(exc){error(exc.message);}};
+  $('statistics-plot-run').onclick=()=>{try{statisticsGraph={...statisticsGraph,rows:numericStatisticsRows(dataRows()),curve:statisticsGraph?.curve||[]};$('statistics-plot').hidden=false;statisticsPlot($('statistics-plot'),statisticsGraph.rows,{type:value('statistics-plot-type'),digits:state.digits,curve:statisticsGraph.curve});}catch(exc){error(exc.message);}};
   $('statistics-plot-type').onchange=()=>$('statistics-plot-run').click();
-  $('regression-transfer').onclick=()=>{if(!statisticsGraph?.fit)return;const variable=value('regression-kind')==='custom'?value('regression-variable'):'x';$('graph-kind').value='cartesian';$('graph-source').value=statisticsGraph.fit.replaceAll('**','^').replace(new RegExp(`\\b${variable}\\b`,'g'),'x');changeMode('graph');graphs.run();};
+  $('regression-transfer').onclick=()=>{if(!statisticsGraph?.fit)return;try{const source=regressionGraphSource(statisticsGraph.fit,state.digits,statisticsGraph.variable);$('graph-kind').value='cartesian';$('graph-source').value=source;changeMode('graph');graphs.run();}catch(exc){error(exc.message);}};
 
-  function render(){statisticsControls();if(!$('statistics-grid').hidden)statisticsGrid();if(statisticsGraph)statisticsPlot($('statistics-plot'),statisticsGraph.rows,{type:value('statistics-plot-type'),digits:state.digits,curve:statisticsGraph.curve});}
+  function render(){statisticsControls();if(!$('statistics-grid').hidden)statisticsGrid();if(statisticsGraph){statisticsPlot($('statistics-plot'),statisticsGraph.rows,{type:value('statistics-plot-type'),digits:state.digits,curve:statisticsGraph.curve});if(statisticsGraph.captions)renderFormulas($('regression-caption'),statisticsGraph.captions,{digits:state.digits});}}
   function showRegression(result) {
-    statisticsGraph={rows:numericStatisticsRows(dataRows()),curve:result.curve||[],fit:result.exact};
+    statisticsGraph={rows:numericStatisticsRows(dataRows()),curve:result.curve||[],fit:result.decimal||result.exact,variable:value('regression-kind')==='custom'?value('regression-variable'):'x',
+      captions:[`y=${result.decimal||result.exact}`,...(result.correlation!==null&&result.correlation!==undefined?[`r=${result.correlation}`]:[]),...(result.parameters||[]).map(([name,n])=>`${name}=${n}`)]};
     $('statistics-plot').hidden=false;render();
-    renderFormulas($('regression-caption'),[`y=${result.exact}`,...(result.correlation!==null&&result.correlation!==undefined?[`r=${result.correlation}`]:[]),...(result.parameters||[]).map(([name,n])=>`${name}=${n}`)],{digits:state.digits});
     $('regression-transfer').hidden=false;
   }
   statisticsControls();

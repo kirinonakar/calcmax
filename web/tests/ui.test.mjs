@@ -385,6 +385,18 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
   $('graph-formulas').children[0].click();assert.equal($('graph-selected').value,'0');assert.equal($('graph-plot').querySelector('path[data-curve="0"]').getAttribute('stroke-width'),'4');
   change('mode','statistics');assert.equal($('statistics-op').querySelector('[value="regression"]'),null);assert.ok($('regression-kind').closest('#regression-section'));
   document.querySelector('[data-run="regression"]').click();await waitFor(()=>$('regression-caption').textContent.includes('y='),'independent regression action');assert.equal($('statistics-op').value,'mean');assert.equal($('regression-transfer').hidden,false);
+  await t.test('regression displays decimals and transfers the current display digits while retaining exact history',async()=>{
+    const data=$('statistics-data').value;
+    $('statistics-data').value='0,1/3\n1,2/3\n2,1';change('regression-kind','linear');
+    document.querySelector('[data-run="regression"]').click();await waitFor(()=>$('regression-caption').textContent.includes('0.3333333333'),'decimal regression coefficients');
+    assert.equal($('regression-caption').querySelector('mfrac'),null);assert.equal($('answer').querySelector('mfrac'),null);assert.match($('answer').textContent,/0\.3333333333/);assert.equal($('exact-toggle').textContent,'≈ Decimal');
+    assert.match(JSON.parse(localStorage.getItem('calcmax-web-v1')).history[0].exact,/\/3/,'the exact coefficients remain saved');
+    $('settings-button').click();const digits=document.querySelector('[data-setting="digits"]');digits.value='3';digits.dispatchEvent(new window.Event('change'));$('settings-close').click();
+    assert.match($('regression-caption').textContent,/0\.333/);assert.doesNotMatch($('regression-caption').textContent,/0\.3333/);
+    $('regression-transfer').click();assert.match($('graph-source').value,/0\.333/,'the graph receives decimal coefficients');assert.doesNotMatch($('graph-source').value,/0\.3333|\/3/,'transferred coefficients respect current display digits');await waitFor(()=>document.documentElement.dataset.busy==='false','rounded regression graph');
+    $('settings-button').click();digits.value='10';const resetDigits=document.querySelector('[data-setting="digits"]');resetDigits.value='10';resetDigits.dispatchEvent(new window.Event('change'));$('settings-close').click();
+    change('mode','statistics');$('statistics-data').value=data;$('exact-toggle').click();assert.equal($('exact-toggle').textContent,'Exact');
+  });
   $('regression-clear').click();assert.equal($('regression-caption').textContent,'');assert.equal($('regression-transfer').hidden,true);
   change('mode','scientific');
   const shifted=input=>{key('SHIFT').click();key(input).click();};
@@ -462,6 +474,9 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
   await t.test('graph controls connect all Android analysis operations and ranges/sliders stay below the plot',async()=>{
     change('mode','graph');$('graph-source').value='x^2-1\nx';$('graph-source').dispatchEvent(new window.Event('input'));for(const [id,number] of [['graph-min','-2'],['graph-max','2'],['graph-ymin','-2'],['graph-ymax','4']]){$(id).value=number;$(id).dispatchEvent(new window.Event('change'));}
     document.querySelector('[data-run="graph"]').click();await waitFor(()=>$('graph-plot').querySelectorAll('path').length===2&&!$('graph-analysis-run').disabled,'two Cartesian curves');
+    const axisLabels=()=>[...$('graph-plot').querySelectorAll('[data-axis="x"]')].map(label=>label.textContent),decimalLabels=axisLabels(),curve=$('graph-plot').querySelector('path').getAttribute('d');
+    $('graph-axis').click();assert.ok(axisLabels().some(label=>label.includes('π')),'radian mode generates pi ticks for decimal bounds');assert.notDeepEqual(axisLabels(),decimalLabels);assert.equal($('graph-plot').querySelector('path').getAttribute('d'),curve,'axis formatting keeps curve coordinates');assert.equal(JSON.parse(localStorage.getItem('calcmax-web-v1')).graph.radianAxis,true);
+    $('graph-axis').click();assert.deepEqual(axisLabels(),decimalLabels);assert.equal(JSON.parse(localStorage.getItem('calcmax-web-v1')).graph.radianAxis,false);
     assert.ok($('graph-formulas').querySelector('msup'));assert.ok($('graph-plot').compareDocumentPosition($('graph-ranges'))&window.Node.DOCUMENT_POSITION_FOLLOWING);
     $('graph-min-slider').value='-1.234567';$('graph-min-slider').dispatchEvent(new window.Event('input'));assert.equal($('graph-min').value,'-1.235');$('graph-min-slider').dispatchEvent(new window.Event('change'));await waitFor(()=>!$('graph-analysis-run').disabled,'range slider sampling');
     assert.equal(JSON.parse(localStorage.getItem('calcmax-web-v1')).graph.ranges['graph-min'],-1.234567,'rounded range keeps its original value');

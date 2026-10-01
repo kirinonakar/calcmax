@@ -68,7 +68,7 @@ export function createWorkspaces({state,engine,ui,persist,restoreSelect,requestO
       else if(workspace==='units')source=`convert(${value('unit-value')},${value('unit-from')},${value('unit-to')})`;
       else if(workspace==='tip')source=tipExpression();
       else if(workspace==='currency'){source=`(${value('currency-amount')})*(${value('currency-rate')})`;}
-      let result=await engine.execute({...requestOptions(),tree:parse(latexInput(source))});if(workspace==='tip'&&result.ok)result=moneyResult(result,Number(value('tip-people')));showResult(result,source,workspace==='equation'?equationSource():source);
+      let result=await engine.execute({...requestOptions(),tree:parse(latexInput(source))});if(workspace==='tip'&&result.ok)result=moneyResult(result,Number(value('tip-people')));showResult(result,source,workspace==='equation'?equationSource():source,{decimalDisplay:workspace==='regression'});
       if(workspace==='regression'&&result.ok)statistics.showRegression(result);
     }catch(exc){error(exc.message);}
   }

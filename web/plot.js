@@ -17,11 +17,11 @@ export function plot(container,result,bounds,{dots=false,scatterCurves=[],digits
   clip.append(svgElement('rect',{x:pad,y:pad,width:innerW,height:innerH})); defs.append(clip); svg.append(defs);
   const x = v => pad+(v-xmin)/(xmax-xmin)*innerW, y = v => h-pad-(v-ymin)/(ymax-ymin)*innerH;
   const group = svgElement('g',{'clip-path':`url(#clip-${container.id})`});
-  for(let i=0;i<=10;i++) {
-    const at=pad+innerW*i/10;
+  const xTicks=radianAxis?piTicks(xmin,xmax):Array.from({length:11},(_,i)=>xmin+(xmax-xmin)*i/10);
+  for(const [i,number] of xTicks.entries()) {
+    const at=x(number);
     svg.append(svgElement('line',{x1:at,y1:pad,x2:at,y2:h-pad,stroke:'#a4b8ab',opacity:.25}));
-    const number=xmin+(xmax-xmin)*i/10;
-    if (i%2===0) svg.append(svgElement('text',{x:at,y:h-14,fill:'var(--muted)','font-size':12,'text-anchor':'middle'},radianAxis?piLabel(number,digits):displayNumber(number,digits)));
+    if (radianAxis||i%2===0) svg.append(svgElement('text',{x:at,y:h-14,fill:'var(--muted)','font-size':12,'text-anchor':'middle','data-axis':'x'},radianAxis?piLabel(number,digits):displayNumber(number,digits)));
   }
   for(let i=0;i<=8;i++) {
     const at=pad+innerH*i/8;
@@ -70,7 +70,11 @@ export function plot(container,result,bounds,{dots=false,scatterCurves=[],digits
   }
   svg.append(group); container.replaceChildren(svg);return svg;
 }
-function piLabel(value,digits){const ratio=value/Math.PI;for(const denominator of [1,2,3,4,6,8,12]){const numerator=Math.round(ratio*denominator);if(Math.abs(ratio-numerator/denominator)<1e-7){if(!numerator)return '0';return `${numerator===1?'':numerator===-1?'-':numerator}π${denominator===1?'':'/'+denominator}`;}}return displayNumber(value,digits);}
+function piTicks(min,max){
+  const step=Math.PI*2**Math.ceil(Math.log2((max-min)/Math.PI/8)),first=Math.ceil(min/step),last=Math.floor(max/step);
+  return Array.from({length:Math.min(9,Math.max(0,last-first+1))},(_,i)=>(first+i)*step);
+}
+function piLabel(value,digits){const ratio=value/Math.PI;if(!ratio)return '0';for(const denominator of [1,2,3,4,6,8,12,16,32,64,128,256,512,1024]){const numerator=Math.round(ratio*denominator);if(numerator&&Math.abs(ratio-numerator/denominator)<1e-9){return `${numerator===1?'':numerator===-1?'-':numerator}π${denominator===1?'':'/'+denominator}`;}}return displayNumber(ratio,digits)+'π';}
 export function dataBounds(points) {
   const good=points.filter(p=>p && p.every(Number.isFinite));
   const xs=good.map(p=>p[0]),ys=good.map(p=>p[1]);

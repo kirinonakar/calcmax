@@ -1,4 +1,5 @@
 import test from 'node:test';
+import {regressionGraphSource} from '../statistics-workspace.js';
 import assert from 'node:assert/strict';
 import {csvRows,numericStatisticsRows,statisticsCommand,distributionCommand,equationCommand,polynomialEquation} from '../workspace-commands.js';
 import {closeInputBrackets,parse} from '../parser.js';
@@ -42,6 +43,14 @@ test('CSV blanks retain paired alignment; independent samples omit blanks separa
   assert.deepEqual(numericStatisticsRows(csvRows('date,value\n2026-09-30,2\n2026-10-02,4')),[['1','2'],['3','4']]);
   assert.deepEqual(csvRows('"a,b",2\n"x""y",4'),[['a,b','2'],['x"y','4']]);
 });
+test('regression transfer rounds numeric tokens and renames only the independent variable',()=>{
+  const source=regressionGraphSource('0.333333333333333*x + 0.666666666666667',3);
+  assert.ok(parse(source));assert.match(source,/0\.333/);assert.match(source,/0\.667/);assert.doesNotMatch(source,/0\.3333/);
+  const custom=regressionGraphSource('-0.123456*exp(-1.987654*t)+0.333333',3,'t');
+  assert.ok(parse(custom));assert.match(custom,/0\.123/);assert.match(custom,/1\.988/);assert.match(custom,/exp\(/);assert.doesNotMatch(custom,/\bt\b/);assert.match(custom,/\bx\b/);
+  assert.match(regressionGraphSource('0.123456*x1+x',2),/x1/,'digits in symbol names stay intact');
+});
+
 test('independent samples select x/y/z and paired operations ignore unused group and column settings',()=>{
   const source='1,4,7\n2,5,8\n3,6,9';
   assert.equal(statisticsCommand(source,{op:'ttest2',firstGroup:'y',secondGroup:'z'}),'ttest2(0,[4,5,6],[7,8,9])');
