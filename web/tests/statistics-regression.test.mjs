@@ -70,6 +70,31 @@ test('New empties text and table, cancels regression, clears plots and selection
   assert.equal($('statistics-data').value,'1,2\n2,4');
 });
 
+test('selecting an empty saved dataset clears the workspace and retains its selection',async t=>{
+  const context=workspace(t),{$,state,requests,results,statistics,run}=context;
+  state.datasets.empty='';state.datasetKinds.empty='xyz';statistics.datasetsList();
+  const select=name=>{$('dataset-list').value=name;$('dataset-list').dispatchEvent(new document.defaultView.Event('change'));};
+  select('saved');
+  statistics.showRegression({ok:true,decimal:'2*x',curve:[[1,2],[2,4]]});
+  $('statistics-table-toggle').click();
+  assert.ok($('statistics-grid').querySelectorAll('input').length>0);
+  const before=context.saves,pending=run();
+  select('empty');
+  assert.equal($('statistics-data').value,'');assert.equal($('dataset-name').value,'empty');
+  assert.equal($('statistics-kind').value,'xyz');assert.equal($('dataset-list').value,'empty');
+  assert.equal($('statistics-grid').querySelectorAll('input').length,0);
+  assert.equal($('statistics-plot').childElementCount,0);
+  assert.equal($('regression-caption').childElementCount,0);assert.equal($('regression-transfer').hidden,true);
+  assert.equal(context.cancels,1);assert.equal(context.saves,before+1);
+  statistics.datasetsList();assert.equal($('dataset-list').value,'empty');
+  requests[0].resolve({ok:true,exact:'2*x'});await pending;
+  assert.equal(results.length,0);
+  select('saved');assert.equal($('statistics-data').value,'1,2\n2,4');assert.equal($('statistics-kind').value,'xy');
+  delete state.datasetKinds.empty;select('empty');
+  assert.equal($('statistics-data').value,'');assert.equal($('statistics-kind').value,'list');
+  assert.deepEqual(context.errors,[]);
+});
+
 test('invalid input and failed fits release busy state; edited input discards old results',async t=>{
   const context=workspace(t),{$,requests,results,errors,run}=context;
   $('statistics-data').value='';await run();
