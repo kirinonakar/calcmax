@@ -5,7 +5,7 @@ import {readFileSync} from 'node:fs';
 import {mathDisplay} from '../math-display.js';
 import {expressionDisplay,expressionInputDisplay} from '../expression-display.js';
 import {markInputCursor,followInputCursor,inputPointPosition} from '../input-cursor.js';
-import {fractionExit} from '../input-navigation.js';
+import {fractionExit,mathStructureExit} from '../input-navigation.js';
 import {fitCalculationDisplay} from '../display-sizing.js';
 
 test('denominator exit draws a normal-height caret to the right of the entire fraction',()=>{
@@ -17,6 +17,44 @@ test('denominator exit draws a normal-height caret to the right of the entire fr
     fraction.getBoundingClientRect=()=>({left:100,right:180,top:10,height:80});
     const caret=markInputCursor(input,source,exit.position,exit.position,{boundary:'after',structure:exit});
     assert.equal(caret.style.left,'82px');assert.equal(caret.style.top,'28px');assert.equal(caret.style.height,'24px');assert.equal(caret.dataset.boundary,'after');
+  }
+  dom.window.close();
+});
+
+test('exponent exit draws the caret after the specific power at its parent height',()=>{
+  const dom=new JSDOM();globalThis.document=dom.window.document;
+  for(const wordWrap of [false,true])for(const source of ['5^2','(9)^(9)','5^2+1','2^(3^4)']){
+    const at=source==='(9)^(9)'?6:source==='2^(3^4)'?6:3;
+    const exit=mathStructureExit(source,at,at,'RIGHT');
+    const input=expressionInputDisplay(source,{wordWrap});document.body.append(input);
+    input.getBoundingClientRect=()=>({left:100,top:10});
+    const power=[...input.querySelectorAll('msup')].find(node=>Number(node.getAttribute('data-source-start'))===exit.start&&Number(node.getAttribute('data-source-end'))===exit.end);
+    const base=power.firstElementChild,height=exit.start?14:24;
+    power.getBoundingClientRect=()=>({left:100,right:160,top:10,height:36});
+    base.getBoundingClientRect=()=>({left:100,right:116,top:22,height});
+    const caret=markInputCursor(input,source,exit.position,exit.position,{boundary:'after',structure:exit});
+    assert.equal(caret.style.left,'62px');assert.equal(caret.style.top,'12px');assert.equal(caret.style.height,`${height}px`);assert.equal(caret.dataset.boundary,'after');
+  }
+  dom.window.close();
+});
+
+test('a later square or cube keeps its caret after that term instead of the first power',()=>{
+  const dom=new JSDOM();globalThis.document=dom.window.document;
+  for(const wordWrap of [false,true])for(const source of ['5^2+3^2','5^2+3^3','5^2+3^2+7^3']){
+    const exit=mathStructureExit(source,source.length,source.length,'RIGHT');
+    const input=expressionInputDisplay(source,{wordWrap});document.body.append(input);
+    input.getBoundingClientRect=()=>({left:100,top:10});
+    const powers=[...input.querySelectorAll('msup')];
+    powers.forEach((power,index)=>{
+      // MathML bounds may be reported at the first formula's origin. The HTML
+      // part still identifies where each complete term is actually displayed.
+      power.getBoundingClientRect=()=>({left:100,right:160,top:10,height:36});
+      power.closest('.input-part').getBoundingClientRect=()=>({left:100+index*100,right:160+index*100,top:10+(wordWrap?index*48:0),width:60,height:36});
+      power.firstElementChild.getBoundingClientRect=()=>({left:100+index*100,right:116+index*100,top:22,height:24});
+    });
+    const caret=markInputCursor(input,source,source.length,source.length,{boundary:'after',structure:exit});
+    assert.equal(caret.style.left,`${62+(powers.length-1)*100}px`,source);
+    assert.equal(caret.style.top,`${12+(wordWrap?(powers.length-1)*48:0)}px`);
   }
   dom.window.close();
 });

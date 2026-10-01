@@ -6,7 +6,7 @@ import {calcVariables,calcBindings} from './calc-session.js';
 import {previousCalculations,renderPreviousCalculations,followTape} from './calculation-tape.js';
 import {renderFormulas} from './formula-preview.js';
 import {markInputCursor,followInputCursor,followTextCursor,inputPointPosition} from './input-cursor.js';
-import {moveMathCursor,fractionExit,emptyCallDeletion,emptyPowerDeletion,emptyFractionDeletion,infinityDeletion,powerInput} from './input-navigation.js';
+import {moveMathCursor,mathStructureExit,emptyCallDeletion,emptyPowerDeletion,emptyFractionDeletion,infinityDeletion,powerInput} from './input-navigation.js';
 import {createDisplaySizing} from './display-sizing.js';
 import {fractionInput} from './fraction-input.js';
 import {requiresExplicitEvaluation} from './evaluation-policy.js';
@@ -141,13 +141,13 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
     if(isBusy())return;
     if(engineeringConversion)exitEngineering();
     const field=$('expression'),undo=undoStack();undo.push(field.value);if(undo.length>100)undo.shift();
-    const outsideFraction=inputBoundary?.edge==='after'&&inputBoundary.source===field.value&&inputBoundary.position===field.selectionStart&&field.selectionStart===field.selectionEnd;
+    const outsideStructure=inputBoundary?.edge==='after'&&inputBoundary.source===field.value&&inputBoundary.position===field.selectionStart&&field.selectionStart===field.selectionEnd;
     if(committed){inputAnswer=null;field.value=!lastResult?.assignment&&(fraction||/^[+\-*/÷^%!∠]/.test(text))?'Ans':'';field.setSelectionRange(field.value.length,field.value.length);committed=false;$('commit-indicator').textContent='';}
     if(state.autoCloseBrackets&&text.length===1&&field.selectionStart===field.selectionEnd&&!overwrite){const pairs={'(' : ')','[':']','{':'}'};if(pairs[text]){text+=pairs[text];cursor=1;}else if(')]}'.includes(text)&&field.value[field.selectionStart]===text){field.setSelectionRange(field.selectionStart+1,field.selectionStart+1);preview();return;}}
     let start=field.selectionStart,end=!fraction&&overwrite&&field.selectionEnd===start?Math.min(field.value.length,start+text.length):field.selectionEnd;
     if(fraction){({start,end,text,cursor}=fractionInput(field.value,start,end));}
     let prefix='',suffix='';
-    if(outsideFraction&&!fraction&&/^[\p{L}\p{N}_.(]/u.test(text))prefix='*';
+    if(outsideStructure&&!fraction&&/^[\p{L}\p{N}_.(]/u.test(text))prefix='*';
     // Keypad operands are separate factors; typed/pasted names remain intact.
     if(factor&&(start===end||/^[\p{L}_][\p{L}\p{N}_]*$/u.test(text))){
       const before=field.value[start-1]||'',after=field.value[end]||'';
@@ -258,8 +258,8 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
     else if(['LEFT','RIGHT','UP','DOWN'].includes(input)){
       const f=$('expression');let start=f.selectionStart,end=f.selectionEnd;
       const outside=inputBoundary?.edge==='after'&&inputBoundary.source===f.value&&inputBoundary.position===start&&start===end?inputBoundary:null;
-      const exit=!typing?fractionExit(f.value,start,end,input,outside):null;
-      const position=typing?null:outside&&input==='LEFT'?outside.denominatorEnd:exit?.position??(outside&&input==='RIGHT'?Math.min(f.value.length,start+1):moveMathCursor(f.value,start,end,input));
+      const exit=!typing?mathStructureExit(f.value,start,end,input,outside):null;
+      const position=typing?null:outside&&input==='LEFT'?(outside.exponentEnd??outside.denominatorEnd):exit?.position??(outside&&input==='RIGHT'?Math.min(f.value.length,start+1):moveMathCursor(f.value,start,end,input));
       if(position!==null)start=end=position;
       else if(input==='LEFT'||input==='RIGHT')start=end=Math.max(0,Math.min(f.value.length,(input==='LEFT'?start:end)+(input==='LEFT'?-1:1)));
       else try{const nodes=[];const visit=n=>{if(n.start<=start&&n.end>=end)nodes.push(n);n.args?.forEach(visit);};visit(parse(f.value,{allowHoles:true}));nodes.sort((a,b)=>(a.end-a.start)-(b.end-b.start));const selected=input==='UP'?nodes.find(n=>n.start<start||n.end>end):nodes[0]?.args?.[0];if(selected){start=selected.start;end=selected.end;}}catch{}
@@ -287,6 +287,10 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
       const field=$('expression'),source=committed?(lastResult?.assignment?'':'Ans'):field.value;
       const start=committed?source.length:field.selectionStart,end=committed?source.length:field.selectionEnd;
       const template=powerInput(source,start,end,input);insert(template.text,template.cursor,{factor:true});
+      if(['^2','^3'].includes(input)&&template.text===input){
+        const exit=mathStructureExit(field.value,field.selectionStart,field.selectionEnd,'RIGHT');
+        if(exit){inputBoundary={...exit,source:field.value,edge:'after'};renderInputCursor();}
+      }
     }
     else if(input==='*10^()'){const field=$('expression'),before=field.value.slice(0,field.selectionStart).trimEnd(),text=!committed&&/[\p{L}\p{N}_.)\]}!%°′″]$/u.test(before)?input:'1'+input;insert(text,text.indexOf('(')+1,{factor:true});}
     else {

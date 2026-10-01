@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {emptyCallDeletion,emptyPowerDeletion,emptyFractionDeletion,infinityDeletion,powerInput} from '../input-navigation.js';
+import {emptyCallDeletion,emptyPowerDeletion,emptyFractionDeletion,infinityDeletion,powerInput,moveMathCursor,mathStructureExit} from '../input-navigation.js';
 import {scientificRows,secondRows,topFunctions} from '../keypad.js';
 
 test('infinity deletes as a whole symbol without treating names containing oo as infinity',()=>{
@@ -22,6 +22,35 @@ test('power keys create an editable base when an operand is missing',()=>{
       assert.deepEqual(powerInput(source,at,at,suffix),{text:`()${suffix}`,cursor:1});
     assert.deepEqual(powerInput('3',1,1,suffix),{text:suffix,cursor:suffix==='^()'?2:suffix.length});
   }
+});
+
+test('Right enters the exponent directly from a filled power base',()=>{
+  for(const [source,baseEnd,exponentStart] of [
+    ['(9)^()',2,5],['(9)^2',2,4],['9^()',1,3],['9^2',1,2],
+    ['sin((9)^())',6,9],['(1+2)^(3+4)',4,7],
+  ]){
+    assert.equal(moveMathCursor(source,baseEnd,baseEnd,'RIGHT'),exponentStart,source);
+    assert.equal(moveMathCursor(source,exponentStart,exponentStart,'LEFT'),baseEnd,source);
+  }
+});
+
+test('Right exits completed exponents and visits nested power/fraction parents in order',()=>{
+  for(const source of ['5^2','5^3','5^(-1)','(9)^(9)','5^(23)+1']){
+    const treeEnd=source.endsWith('+1')?source.length-2:source.length;
+    const at=source[treeEnd-1]===')'?treeEnd-1:treeEnd;
+    assert.deepEqual(mathStructureExit(source,at,at,'RIGHT'),{position:treeEnd,start:0,end:treeEnd,exponentEnd:at},source);
+    assert.equal(moveMathCursor(source,at,at,'RIGHT'),treeEnd,source);
+  }
+  for(const source of ['2^(3^4)','1/(2^3)','2^(1/3)','2^3^4']){
+    const at=source.endsWith(')')?source.length-1:source.length;
+    const inner=mathStructureExit(source,at,at,'RIGHT');assert.ok(inner.start>0,source);
+    const outer=mathStructureExit(source,inner.position,inner.position,'RIGHT',inner);
+    assert.equal(outer.start,0,source);assert.equal(outer.position,source.length,source);
+  }
+  for(const [source,at] of [['5^()',3],['5^(2+)',5],['5^(234)',5]])
+    assert.equal(mathStructureExit(source,at,at,'RIGHT'),null,source);
+  assert.equal(mathStructureExit('5^2',2,3,'RIGHT'),null,'selection collapse is not an exponent exit');
+  assert.equal(mathStructureExit('5^2',3,3,'LEFT'),null);
 });
 
 test('empty powers and fractions delete as a unit while filled heads survive empty-tail deletion',()=>{

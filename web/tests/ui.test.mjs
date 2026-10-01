@@ -326,6 +326,64 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
     key('RIGHT').click();assert.equal($('expression').selectionStart,14,'Right outside the fraction continues to the next source position');
     key('AC').click();
   });
+  await t.test('power arrows enter the exponent and leave it for the parent before further input',()=>{
+    const caret=()=>$('expression-preview').querySelector('.input-caret');
+    for(const wrap of [false,true]){
+      $('settings-button').click();const setting=$('settings-dialog').querySelector('[data-setting="wordWrap"]');setting.checked=wrap;setting.dispatchEvent(new window.Event('change'));$('settings-close').click();
+      key('AC').click();key('^()').click();key('9').click();
+      assert.equal($('expression').value,'(9)^()');assert.equal($('expression').selectionStart,2);
+      key('RIGHT').click();assert.equal($('expression').selectionStart,5);
+      key('9').click();assert.equal($('expression').value,'(9)^(9)');
+      key('RIGHT').click();assert.equal($('expression').selectionStart,7);assert.equal(caret().dataset.boundary,'after');
+      key('2').click();assert.equal($('expression').value,'(9)^(9)*2');
+      for(const suffix of ['^2','^3','^(-1)']){
+        key('AC').click();key('5').click();
+        if(suffix==='^3')key('SHIFT').click();
+        key(suffix==='^3'?'^2':suffix).click();
+        const source=`5${suffix}`;assert.equal($('expression').value,source);
+        if(suffix!=='^(-1)')assert.equal(caret().dataset.boundary,'after','square and cube exit immediately');
+        key('8').dispatchEvent(new window.KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true,cancelable:true}));
+        assert.equal($('expression').selectionStart,source.length);assert.equal(caret().dataset.boundary,'after');
+        key('RIGHT').click();assert.equal(caret().dataset.boundary,'after','repeated Right stays outside');
+        key('LEFT').click();assert.equal($('expression').selectionStart,source.endsWith(')')?source.length-1:source.length);assert.equal(caret().dataset.boundary,undefined);
+        key('RIGHT').click();key('4').click();assert.equal($('expression').value,`${source}*4`);
+      }
+      for(const cube of [false,true]){
+        key('AC').click();key('5').click();if(cube)key('SHIFT').click();key('^2').click();
+        assert.equal(caret().dataset.boundary,'after');
+        key('+').click();key('1').click();assert.equal($('expression').value,`5^${cube?'3':'2'}+1`);
+        assert.equal($('expression-preview').querySelector('msup').lastElementChild.textContent,cube?'3':'2','+ and the next number stay outside the exponent');
+      }
+      const originalBounds=window.Element.prototype.getBoundingClientRect;
+      try{
+        window.Element.prototype.getBoundingClientRect=function(){
+          if(this.classList.contains('input-flow'))return {left:100,top:10};
+          if(this.classList.contains('input-part')){
+            const term=this.querySelector('math').firstElementChild,start=Number(term.getAttribute('data-source-start')),end=Number(term.getAttribute('data-source-end'));
+            return {left:100+start*30,right:100+end*30,top:10,width:(end-start)*30,height:36};
+          }
+          if(this.localName==='msup')return {left:100,right:190,top:10,height:36};
+          if(this.localName==='mn')return {left:100,right:130,top:22,height:24};
+          return originalBounds.call(this);
+        };
+        for(const cube of [false,true]){
+          key('AC').click();key('5').click();key('^2').click();key('+').click();key('3').click();if(cube)key('SHIFT').click();key('^2').click();
+          const source=`5^2+3^${cube?'3':'2'}`;
+          assert.equal($('expression').value,source);assert.equal($('expression').selectionStart,source.length);
+          assert.equal(caret().style.left,'212px','caret follows the second power rather than the first');
+          assert.equal(caret().style.top,'12px');assert.equal(caret().dataset.boundary,'after');
+          key('+').click();key('1').click();assert.equal($('expression').value,`${source}+1`);
+        }
+      }finally{window.Element.prototype.getBoundingClientRect=originalBounds;}
+      for(const source of ['2^(3^4)','1/(2^3)','2^(1/3)','2^3^4']){
+        edit(source);const at=source.endsWith(')')?source.length-1:source.length;$('expression').setSelectionRange(at,at);
+        key('RIGHT').click();assert.equal(caret().dataset.boundary,'after');
+        key('RIGHT').click();assert.equal($('expression').selectionStart,source.length);assert.equal(caret().dataset.boundary,'after');
+        key('5').click();assert.equal($('expression').value,`${source}*5`);
+      }
+    }
+    $('settings-button').click();const setting=$('settings-dialog').querySelector('[data-setting="wordWrap"]');setting.checked=false;setting.dispatchEvent(new window.Event('change'));$('settings-close').click();key('AC').click();
+  });
   await t.test('Home and End move to the whole expression boundaries in both input and wrapping modes',()=>{
     const press=(target,key,options={})=>{const event=new window.KeyboardEvent('keydown',{key,bubbles:true,cancelable:true,...options});target.dispatchEvent(event);return event;};
     for(const wrap of [false,true]){
