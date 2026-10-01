@@ -8,11 +8,18 @@ export function expressionTree(source) {
     if(n.kind==='symbol')return mapped('symbol',{pi:'π',oo:'∞',Ans:'Ans'}[n.value]||n.value);
     if(n.kind==='group')return mapped('parentheses');
     if(n.kind==='unary'||n.kind==='relation')return mapped(n.kind,n.value);
+    if(n.kind==='list'&&n.args.length&&n.args[0].args.length&&
+      n.args.every(row=>row.kind==='list'&&row.args.length===n.args[0].args.length))return mapped('matrix');
     if(['list','set','tuple'].includes(n.kind))return mapped(n.kind);
     if(n.kind==='sexagesimal')return mapped('dms');
     if(n.kind==='binary') {
       if(n.value==='/')return n.displayOperator==='÷'?mapped('relation','÷'):mapped('fraction','',n.args.map(node=>node.kind==='group'?convert(node.args[0]):convert(node)));
-      if(n.value==='^')return mapped('power','',[args[0],n.args[1].kind==='group'?convert(n.args[1].args[0]):args[1]]);
+      if(n.value==='^'){
+        const base=n.args[0],inner=base.args[0];
+        // Hide template grouping around an editable base, keeping its source range.
+        const displayBase=base.kind==='group'&&['hole','number','symbol','call'].includes(inner?.kind)?convert(inner):args[0];
+        return mapped('power','',[displayBase,n.args[1].kind==='group'?convert(n.args[1].args[0]):args[1]]);
+      }
       if(n.value==='*')return mapped(n.displayOperator==='∘'?'implicit-product':'explicit-product');
       if(n.value==='+')return mapped('sum');
       return mapped('relation',n.value);

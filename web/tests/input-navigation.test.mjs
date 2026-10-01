@@ -1,7 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {emptyCallDeletion,emptyPowerDeletion,emptyFractionDeletion,powerInput} from '../input-navigation.js';
+import {emptyCallDeletion,emptyPowerDeletion,emptyFractionDeletion,infinityDeletion,powerInput} from '../input-navigation.js';
 import {scientificRows,secondRows,topFunctions} from '../keypad.js';
+
+test('infinity deletes as a whole symbol without treating names containing oo as infinity',()=>{
+  for(const at of [1,2])assert.deepEqual(infinityDeletion('oo',at,at),{start:0,end:2,text:''});
+  for(const at of [0,1])assert.deepEqual(infinityDeletion('oo',at,at,false),{start:0,end:2,text:''});
+  assert.deepEqual(infinityDeletion('limit(1/x,x,oo)',14,14),{start:12,end:14,text:''});
+  assert.deepEqual(infinityDeletion('oo^2',2,2),{start:0,end:2,text:'()'});
+  assert.deepEqual(infinityDeletion('2*oo',4,4),{start:2,end:4,text:'()'});
+  assert.deepEqual(infinityDeletion('1+*oo',5,5),{start:3,end:5,text:''},'invalid expressions still delete the token atomically');
+  for(const source of ['foo','oo_value','oo2','food','root'])assert.equal(infinityDeletion(source,source.length,source.length),null,source);
+  assert.equal(infinityDeletion('oo',0,0),null);
+  assert.equal(infinityDeletion('oo',2,2,false),null);
+  assert.equal(infinityDeletion('oo',0,1),null,'selections retain their own deletion behavior');
+});
 
 test('power keys create an editable base when an operand is missing',()=>{
   for(const suffix of ['^2','^3','^(-1)','^()']){

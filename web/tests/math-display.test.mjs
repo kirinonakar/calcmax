@@ -155,6 +155,48 @@ test('cursor insertion preserves root and superscript operand counts at every so
   dom.window.close();
 });
 
+test('matrix literals render as an editable grid with source ranges in both wrapping modes',()=>{
+  const dom=new JSDOM();globalThis.document=dom.window.document;
+  for(const wordWrap of [false,true]){
+    const source='[[,],[,]]',input=expressionInputDisplay(source,{wordWrap});document.body.append(input);
+    const table=input.querySelector('mtable');assert.ok(table);
+    assert.equal(table.children.length,2);assert.deepEqual([...table.children].map(row=>row.children.length),[2,2]);
+    assert.equal(input.textContent,'[□□□□]','only the matrix fence surrounds the four cells');
+    const slots=[...table.querySelectorAll('.input-slot')];assert.equal(slots.length,4);
+    assert.deepEqual(slots.map(slot=>Number(slot.getAttribute('data-source-start'))),[2,3,6,7]);
+    for(const at of [2,3,6,7])assert.ok(markInputCursor(input,source,at),'each cell retains an editable caret');
+    input.remove();
+    const filled=expressionInputDisplay('det([[1,2],[3,4]])',{wordWrap});
+    assert.deepEqual([...filled.querySelectorAll('mtd')].map(cell=>cell.textContent),['1','2','3','4']);
+    assert.ok(expressionInputDisplay('[[1/2,x^2],[sqrt(3),4]]',{wordWrap}).querySelector('mtable mfrac'));
+    for(const list of ['[1,2]','[[1,2],[3]]','[[],[]]'])assert.equal(expressionInputDisplay(list,{wordWrap}).querySelector('mtable'),null,list);
+  }
+  dom.window.close();
+});
+
+test('power templates hide base delimiters while retaining editable boxes and required grouping',()=>{
+  const dom=new JSDOM();globalThis.document=dom.window.document;
+  for(const wordWrap of [false,true]){
+    for(const [source,expected] of [['()^2','□2'],['()^()','□□'],['()^(-1)','□-1'],['(23)^2','232'],['(x)^(-1)','x-1']]){
+      const input=expressionInputDisplay(source,{wordWrap});document.body.append(input);
+      const power=input.querySelector('msup'),base=power.firstElementChild;
+      assert.equal(power.textContent,expected,source);
+      assert.equal(base.getAttribute('data-source-start'),'1');
+      const at=source.indexOf(')');assert.equal(base.getAttribute('data-source-end'),String(at));
+      assert.ok(markInputCursor(input,source,at),'hidden grouping keeps its editable cursor position');
+      assert.equal(power.children.length,2);
+      if(source.startsWith('()'))assert.ok(base.classList.contains('input-slot'));
+      input.remove();
+    }
+    for(const source of ['(1+2)^2','(-2)^2','(x*y)^2']){
+      const input=expressionInputDisplay(source,{wordWrap});
+      assert.ok(input.querySelector('msup').firstElementChild.textContent.startsWith('('),source);
+      assert.ok(input.querySelector('msup').firstElementChild.textContent.endsWith(')'),source);
+    }
+  }
+  dom.window.close();
+});
+
 test('powers lower exponent ink and retain MathML scripts, source positions, and derivative orders',()=>{
   const dom=new JSDOM();globalThis.document=dom.window.document;
   for(const source of ['sqrt(2)^2','nthroot(2,3)^2','(sqrt(2)+1)^2']){

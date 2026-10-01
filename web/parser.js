@@ -28,6 +28,7 @@ function scan(source) {
   return tokens;
 }
 const node = (kind,value='',args=[],start=0,end=0,displayOperator='') => ({kind,value,args,start,end,...(displayOperator ? {displayOperator} : {})});
+export {scan as scanInputTokens};
 export function closeInputBrackets(source){
   const stack=[],pairs={'(' : ')','[':']','{':'}'};
   for(const character of source){if(pairs[character])stack.push(pairs[character]);else if(')]}'.includes(character)){if(stack.pop()!==character)return source;}}

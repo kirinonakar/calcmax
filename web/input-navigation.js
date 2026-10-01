@@ -1,4 +1,4 @@
-import {parse} from './parser.js';
+import {parse,scanInputTokens} from './parser.js';
 function emptyNodeDeletion(nodes,target){
   const structuralOperand=nodes.some(node=>node.kind==='binary'&&
     (node.value==='^'?node.args[0].start===target.start&&node.args[0].end===target.end:
@@ -9,6 +9,16 @@ function tailDeletion(source,node){
   const head=node.args[0],inner=head.args[0];
   const keep=head.kind==='group'&&['number','symbol','call'].includes(inner?.kind)?inner:head;
   return {start:node.start,end:node.end,text:source.slice(keep.start,keep.end),cursor:keep.end-keep.start};
+}
+export function infinityDeletion(source,start,end,backward=true){
+  if(start!==end)return null;
+  let token;
+  try{token=scanInputTokens(source).find(token=>token.text==='oo'&&(backward?
+    start>token.start&&start<=token.end:start>=token.start&&start<token.end));}catch{return null;}
+  if(!token)return null;
+  const nodes=[];
+  try{const visit=node=>{nodes.push(node);node.args.forEach(visit);};visit(parse(source,{allowHoles:true}));}catch{}
+  return emptyNodeDeletion(nodes,token);
 }
 // Remove an unused function template as a unit, including its hidden delimiters.
 export function emptyCallDeletion(source,start,end){

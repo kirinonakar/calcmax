@@ -90,9 +90,18 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
   await t.test('MATRIX inserts a 2 by 2 template directly and SHIFT or holding selects its size',async()=>{
     key('AC').click();key('SECOND').click();key('MATRIX_INPUT').click();
     assert.equal($('dialog').open,false);assert.equal($('expression').value,'[[,],[,]]');assert.equal($('expression').selectionStart,2);
+    const table=$('expression-preview').querySelector('mtable');assert.ok(table,'matrix insertion renders a MathML grid');
+    assert.equal(table.querySelectorAll('mtr').length,2);assert.equal(table.querySelectorAll('mtd .input-slot').length,4);
     key('1').click();key('RIGHT').click();key('2').click();
     assert.equal($('expression').value,'[[1,2],[,]]');
     $('undo').click();assert.equal($('expression').value,'[[1,],[,]]');
+    key('AC').click();key('MATRIX_INPUT').click();
+    for(const input of ['1','RIGHT','2','RIGHT','3','RIGHT','4'])key(input).click();
+    assert.equal($('expression').value,'[[1,2],[3,4]]');
+    assert.deepEqual([...$('expression-preview').querySelectorAll('mtd')].map(cell=>cell.textContent),['1','2','3','4']);
+    key('AC').click();key('MATRIX_INPUT').click();
+    $('expression-preview').querySelector('.input-slot[data-source-start="3"]').dispatchEvent(new window.MouseEvent('click',{bubbles:true}));key('6').click();
+    assert.equal($('expression').value,'[[,6],[,]]','touching a grid cell edits that cell');
     key('AC').click();key('SHIFT').click();key('MATRIX_INPUT').click();assert.equal($('dialog').open,true);$('dialog').close();
     await longClick('MATRIX_INPUT');assert.equal($('dialog').open,true);$('dialog').close();
     key('SECOND').click();key('AC').click();
@@ -108,11 +117,24 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
     key('SECOND').click();key('diff(,x)').click();key('DEL').click();assert.equal($('expression').value,'');
     key('SECOND').click();key('AC').click();
   });
+  await t.test('infinity is removed atomically by DEL and by native backward or forward deletion',()=>{
+    key('AC').click();key('SECOND').click();key('oo').click();assert.equal($('expression-preview').textContent,'∞');
+    key('DEL').click();assert.equal($('expression').value,'');assert.equal($('expression').selectionStart,0);
+    $('undo').click();assert.equal($('expression').value,'oo');key('DEL').click();assert.equal($('expression').value,'');
+    $('typing-toggle').click();
+    for(const [inputType,position] of [['deleteContentBackward',2],['deleteContentForward',0]]){
+      key('oo').click();$('expression').setSelectionRange(position,position);
+      const event=new window.InputEvent('beforeinput',{inputType,bubbles:true,cancelable:true});$('expression').dispatchEvent(event);
+      assert.equal(event.defaultPrevented,true);assert.equal($('expression').value,'');
+    }
+    $('typing-toggle').click();key('SECOND').click();key('AC').click();
+  });
   await t.test('power and fraction keys delete empty templates and preserve a filled base or numerator',()=>{
     for(const input of ['^2','^(-1)','^()','()/()']){
       for(const nested of [false,true]){
         key('AC').click();if(nested)key('sin()').click();key(input).click();const source=$('expression').value;
         assert.ok($('expression-preview').querySelector('.input-slot'),input);
+        if(input.startsWith('^'))assert.equal($('expression-preview').querySelector('msup').querySelectorAll('mo').length,input==='^(-1)'?1:0,'power templates show boxes without grouping parentheses');
         key('DEL').click();assert.equal($('expression').value,nested?'sin()':'',input);
         assert.equal($('expression').selectionStart,nested?4:0);
         $('undo').click();assert.equal($('expression').value,source,input);
@@ -125,6 +147,7 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
       assert.equal($('expression').value,'3');assert.equal($('expression').selectionStart,1);
     }
     key('AC').click();key('^2').click();key('2').click();assert.equal($('expression').value,'(2)^2');
+    assert.equal($('expression-preview').querySelector('msup').textContent,'22','filling the base keeps its grouping hidden');
     key('DEL').click();assert.equal($('expression').value,'()^2');key('DEL').click();assert.equal($('expression').value,'');
     key('AC').click();
   });
