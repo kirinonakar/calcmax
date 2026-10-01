@@ -135,6 +135,21 @@ input:disabled,select:disabled{opacity:.45;cursor:default}
 .graph-range-slider input[type="range"]:focus-visible{outline:none;z-index:1}
 .graph-range-slider input[type="range"]:focus-visible::-webkit-slider-thumb{outline:2px solid var(--accent);outline-offset:3px}
 .graph-range-slider input[type="range"]:focus-visible::-moz-range-thumb{outline:2px solid var(--accent);outline-offset:3px}
+.graph-range-slider:has(input:disabled){opacity:.45}
+.graph-range-slider input[type="range"]:disabled::-webkit-slider-thumb{pointer-events:none;cursor:default}
+.graph-range-slider input[type="range"]:disabled::-moz-range-thumb{pointer-events:none;cursor:default}
+.graph-surface-panel{display:grid;gap:16px;padding:16px;margin:12px 0;border:1px solid var(--line);border-radius:8px;background:var(--number)}
+.graph-surface-appearance,.graph-surface-camera{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:start}
+.graph-surface-panel label{margin:0;min-width:0;gap:6px}.graph-surface-panel label>span{line-height:20px}
+.graph-surface-appearance select,.graph-surface-appearance input[type="color"]{height:42px;min-width:0;width:100%}
+.graph-surface-appearance input[type="color"]{padding:5px;cursor:pointer}
+.graph-surface-slider{display:flex;align-items:center;gap:10px;min-width:0;height:42px}
+.graph-surface-slider input[type="range"]{flex:1;min-width:0;width:100%;height:36px;padding:0;border:0;background:transparent}
+.graph-surface-slider output{flex:none;min-width:5ch;text-align:right;white-space:nowrap;font-size:12px;font-variant-numeric:tabular-nums;color:var(--ink)}
+.graph-surface-density-heading{display:flex;justify-content:space-between;align-items:center;gap:8px;min-height:20px;margin-bottom:6px;line-height:20px}.graph-surface-density-heading .check{padding:0;gap:4px}.graph-surface-density-heading input{margin:0}
+.graph-surface-z-range{display:grid;gap:8px;padding-top:12px;border-top:1px solid var(--line)}
+.graph-surface-z-range .check{padding:0;gap:8px;min-height:24px}.graph-surface-z-range .form-row{margin:0}
+@media(max-width:600px){.graph-surface-appearance{grid-template-columns:repeat(2,minmax(0,1fr))}.graph-surface-density{grid-column:1/-1}.graph-surface-camera{grid-template-columns:minmax(0,1fr);gap:8px}.graph-surface-camera label{display:grid;grid-template-columns:84px minmax(0,1fr);align-items:center;gap:12px}}
 :root[data-workspace="scientific"] footer{display:none}
 .keypad{--keypad-font-height:100cqh;height:100%;min-height:0;display:flex;flex-direction:column;gap:4px}
 .keypad-top{flex:2;min-height:0;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));column-gap:4px;row-gap:4px}

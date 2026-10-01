@@ -41,7 +41,7 @@ internal object CalculatorGraphActions {
             .put("parameters",graphState.parameterPayload())
         if(derivativeSelected!=null)request.put("derivativeCurveIndex",trees.lastIndex)
         if(shadings.length()>0)request.put("shadings",shadings)
-        if(kind=="surface")request.put("surfaceYMin",yMin).put("surfaceYMax",yMax)
+        if(kind=="surface")request.put("surfaceYMin",yMin).put("surfaceYMax",yMax).put("surfaceSamples",SurfaceMesh.sampleCount(xMin,xMax,yMin,yMax,surfaceSamples,surfaceAutoDensity,surfaceZoom.toDouble()))
         if(kind=="sequence") {
             try {
                 val seeds=sequenceInitials.split(',').map(String::trim).filter(String::isNotEmpty).map { JSONObject(Parser(it).parse().json()) }

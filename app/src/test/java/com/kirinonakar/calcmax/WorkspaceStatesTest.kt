@@ -8,6 +8,18 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class WorkspaceStatesTest {
+    @Test fun surfaceAppearancePersistsAndInvalidSavedOptionsUseDefaults() {
+        val prefs=MemoryPreferences()
+        val state=GraphState(prefs)
+        state.surfaceRenderMode="surface-wireframe";state.surfaceColor="#3b70bd";state.surfaceSamples=40;state.surfaceAutoDensity=false;state.surfaceZoom=2f
+        val editor=prefs.edit();state.writeTo(editor);editor.apply()
+        val restored=GraphState(prefs)
+        assertEquals("surface-wireframe",restored.surfaceRenderMode)
+        assertEquals("#3b70bd",restored.surfaceColor);assertEquals(40,restored.surfaceSamples)
+        assertFalse(restored.surfaceAutoDensity);assertEquals(2f,restored.surfaceZoom,0f)
+        val invalid=GraphState(MemoryPreferences(mapOf("surfaceRenderMode" to "unknown","surfaceColor" to "invalid","surfaceSamples" to 1000)))
+        assertEquals("wireframe",invalid.surfaceRenderMode);assertEquals("#007b68",invalid.surfaceColor);assertEquals(96,invalid.surfaceSamples)
+    }
     @Test fun oldPreferencesStillRoundTripWithoutBackingUpDocumentUri() {
         val prefs=MemoryPreferences(mapOf(
             "graphKind" to "polar", "graphSources" to "{\"polar\":\"2*cos(t)\"}",

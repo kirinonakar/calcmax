@@ -28,12 +28,14 @@ import com.kirinonakar.calcmax.ui.theme.LocalInstrument
     modifier:Modifier=Modifier,
     valueRange:ClosedFloatingPointRange<Float> = 0f..1f,
     steps:Int=0,
-    onValueChangeFinished:(()->Unit)?=null
+    onValueChangeFinished:(()->Unit)?=null,
+    enabled:Boolean=true
 ) {
     val c=LocalInstrument.current
     val colors=SliderDefaults.colors(activeTrackColor=c.accent,inactiveTrackColor=c.muted.copy(alpha=.3f))
     CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
         Slider(value,onValueChange,modifier.height(36.dp),valueRange=valueRange,steps=steps,onValueChangeFinished=onValueChangeFinished,
+            enabled=enabled,
             colors=colors,thumb={CompactSliderThumb()},track={state->
                 SliderDefaults.Track(sliderState=state,modifier=Modifier.height(4.dp),colors=colors,drawStopIndicator=null,drawTick={_,_->},thumbTrackGapSize=0.dp,trackInsideCornerSize=0.dp)
             })

@@ -339,7 +339,7 @@ def graph_surface(engine, request, trees, xmin, xmax):
     names = parameter_names([expression], {"x","y"})
     expression = substitute_parameters(expression, resolved_parameters(engine, request, [expression], {"x","y"}))
     fn = s.lambdify((x,y), expression, modules="math", cse=True, docstring_limit=0)
-    count = min(40, max(12, int(request.get("surfaceSamples", 26))))
+    count = min(96, max(12, int(request.get("surfaceSamples", 26))))
     mesh = []
     for row in range(count+1):
         yy = ymin+(ymax-ymin)*row/count

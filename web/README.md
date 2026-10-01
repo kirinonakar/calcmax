@@ -55,7 +55,7 @@ For deployment, `node_modules/`, `tests/`, `package*.json`, `build.py`, and `ser
 
 The WASM interpreter runs in a dedicated **module** Web Worker, as required by Pyodide 314. Stop or the 20-second deadline terminates the Worker and starts a new interpreter, including for scripts such as `while True: pass`. Stored browser state survives this restart. No SharedArrayBuffer or COOP/COEP headers are needed. Service-worker upgrades reload old cached pages once after saving their drafts, so obsolete classic-worker scripts do not survive an update. Activation does not wait for those navigations: browsers defer their fetch events until activation finishes, so awaiting navigation there would deadlock page and engine loading. Cancelling a navigation or closing a tab does not fail activation.
 
-웹은 MathML 수학 입출력과 텍스트 편집을 사용합니다. Android의 문서 제공자 권한과 공유 창은 웹 파일 선택·다운로드·클립보드로 대체합니다. Python `input()`은 대화 상자 대신 미리 입력한 값을 순서대로 받습니다. 그래프는 SVG이며 3D 와이어프레임의 회전·고도·확대를 조절할 수 있습니다. SymPy의 계산 한도와 미해결 기호 결과는 Android와 동일하게 유지합니다.
+웹은 MathML 수학 입출력과 텍스트 편집을 사용합니다. Android의 문서 제공자 권한과 공유 창은 웹 파일 선택·다운로드·클립보드로 대체합니다. Python `input()`은 대화 상자 대신 미리 입력한 값을 순서대로 받습니다. 그래프는 SVG이며 3D 축·눈금이 표면과 함께 회전합니다. 와이어프레임·표면·표면+격자 렌더링, 표면 색상, 격자 밀도(12×12~96×96), 회전·고도·확대, 자동·수동 z 범위를 조절하고 설정을 저장할 수 있습니다. SymPy의 계산 한도와 미해결 기호 결과는 Android와 동일하게 유지합니다.
 
 Only the standard library, SymPy, and mpmath are bundled; arbitrary native Python packages are not installed. A runtime's first load transfers approximately 18 MB of local static assets and can take longer on mobile devices. Browser storage and offline cache availability depend on the browser. Clearing site data removes locally saved work; use full backups to keep a copy.
 

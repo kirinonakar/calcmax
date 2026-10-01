@@ -182,7 +182,7 @@ The desktop tests consume AST fixtures produced by the actual Kotlin parser. The
 
 * Symbolic integration/solving is subject to SymPy's algorithmic coverage and the computation budget. Unsolved integrals and conditional solution sets are retained with an explanatory message. There is no claim of solving every possible symbolic problem.
 * Matrix entry grid: up to 9×9 and vector entry: up to 9 components; expression matrices: up to 32×32. Large exact factorizations/eigensystems may time out.
-* Graphs use bounded adaptive samples; very narrow features can still be missed. Cartesian analysis controls apply only to Cartesian functions. The RK4 differential-equation plots are numerical approximations, and 3D surfaces use a finite wireframe grid.
+* Graphs use bounded adaptive samples; very narrow features can still be missed. Cartesian analysis controls apply only to Cartesian functions. The RK4 differential-equation plots are numerical approximations, and 3D surfaces use a finite grid with wireframe, shaded surface, or surface-plus-mesh rendering, customizable colors, and adjustable density from 12×12 to 96×96 (automatic density adapts to the range and zoom).
 * General output such as condition sets and series remainder terms can use textual mathematical notation where a dedicated native layout is not available. Such results may be copyable but not reusable through Ans; the app disables result insertion for them.
 
 ## 📄 License

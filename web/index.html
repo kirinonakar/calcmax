@@ -36,7 +36,22 @@ cos(x)</textarea></label>
       <section id="graph-ranges" aria-label="Range"><h2>Range</h2>
       <div class="form-row ranges"><label>x / t / n minimum<input id="graph-min" type="number" value="-10" step="any"></label><label>Maximum<input id="graph-max" type="number" value="10" step="any"></label><label>y minimum<input id="graph-ymin" type="number" value="-5" step="any"></label><label>Maximum<input id="graph-ymax" type="number" value="5" step="any"></label></div>
       <div id="graph-viewport-ranges" class="form-row"><label>View x minimum<input id="graph-xmin" type="number" value="-10" step="any"></label><label>View x maximum<input id="graph-xmax" type="number" value="10" step="any"></label></div>
-      <div id="graph-surface-controls" class="form-row" hidden=""><label>Rotate<input id="graph-rotation" type="range" min="0" max="360" value="35"></label><label>Elevation<input id="graph-elevation" type="range" min="5" max="85" value="32"></label><label>Zoom<input id="graph-surface-zoom" type="range" min="0.4" max="3" step="0.01" value="1"></label><label>z minimum<input id="graph-zmin" type="number" step="any" placeholder="Auto"></label><label>z maximum<input id="graph-zmax" type="number" step="any" placeholder="Auto"></label></div>
+      <div id="graph-surface-controls" class="graph-surface-panel" hidden="">
+        <div class="graph-surface-appearance">
+          <label><span>Rendering</span><select id="graph-surface-render"><option value="wireframe">Wireframe</option><option value="surface">Surface</option><option value="surface-wireframe">Surface + mesh</option></select></label>
+          <label><span>Surface color</span><input id="graph-surface-color" type="color" value="#007b68"></label>
+          <div class="graph-surface-density"><div class="graph-surface-density-heading"><label for="graph-surface-samples">Mesh density</label><label class="check"><input id="graph-auto-density" type="checkbox" checked>Auto</label></div><span class="graph-surface-slider"><input id="graph-surface-samples" type="range" min="12" max="96" step="1" value="26"><output id="graph-surface-samples-value">26 × 26</output></span></div>
+        </div>
+        <div class="graph-surface-camera">
+          <label><span>Rotate</span><span class="graph-surface-slider"><input id="graph-rotation" type="range" min="0" max="360" step="any" value="35"><output id="graph-rotation-value">35°</output></span></label>
+          <label><span>Elevation</span><span class="graph-surface-slider"><input id="graph-elevation" type="range" min="5" max="85" step="any" value="32"><output id="graph-elevation-value">32°</output></span></label>
+          <label><span>Zoom</span><span class="graph-surface-slider"><input id="graph-surface-zoom" type="range" min="0.4" max="3" step="0.01" value="1"><output id="graph-surface-zoom-value">100%</output></span></label>
+        </div>
+        <div class="graph-surface-z-range">
+          <label class="check"><input id="graph-auto-z" type="checkbox" checked>Automatic z range</label>
+          <div class="form-row"><label>z minimum<input id="graph-zmin" type="number" step="any" value="-1"></label><label>z maximum<input id="graph-zmax" type="number" step="any" value="1"></label></div>
+        </div>
+      </div>
       </section>
       <details id="graph-analysis"><summary>Analyze</summary><div class="form-row"><label>Analysis<select id="graph-analysis-action"><option value="root">Root</option><option value="intersection">Intersection</option><option value="minimum">Minimum</option><option value="maximum">Maximum</option><option value="inflection">Inflection</option><option value="derivative">Derivative</option><option value="tangent">Tangent</option><option value="integral">Integral</option><option value="arclength">Arc length</option></select></label><label>Other curve<select id="graph-other"></select></label><label>a / point<input id="graph-analysis-a" value="-10"></label><label>b<input id="graph-analysis-b" value="10"></label><button id="graph-analysis-run">Analyze</button><button id="graph-analysis-clear">Clear analysis</button></div><label id="graph-tangent-position" hidden="">Tangent position<input id="graph-tangent-slider" type="range" min="-10" max="10" value="0" step="any"></label><div id="graph-analysis-result" class="formula-preview" aria-live="polite"></div></details>
       <details><summary>Coordinate table</summary><div id="graph-table" class="scroll-table"></div></details>

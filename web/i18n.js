@@ -133,7 +133,15 @@ Object.assign(korean,nativeKorean,{
   "Input word wrap": "입력 자동 줄바꿈 (Word wrap)",
   "New": "새로 만들기",
   "Cancel": "취소",
-  "Fitting regression…": "회귀 적합 중…"
+  "Fitting regression…": "회귀 적합 중…",
+  "Rendering": "렌더링",
+  "Wireframe": "와이어프레임",
+  "Surface": "표면",
+  "Surface + mesh": "표면+격자",
+  "Surface color": "표면 색상",
+  "Mesh density": "격자 밀도",
+  "Automatic z range": "자동 z 범위",
+  "Fit Z": "z 범위 맞춤"
 });
 for(const [en,ko] of Object.entries(korean))if(!english[ko])english[ko]=en;
 const reverse=Object.fromEntries(Object.entries(english).map(([ko,en])=>[en,ko]));

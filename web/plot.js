@@ -1,5 +1,6 @@
 // SVG only: no network chart library, and discontinuities retain null breaks.
 import {displayNumber} from './display-format.js';
+import {plotSurface} from './surface-plot.js';
 const NS = 'http://www.w3.org/2000/svg';
 const colors = ['#007b68','#a04c75','#3b70bd','#b17d00','#6b5ec2','#a34629'];
 function svgElement(tag,attributes={},text='') {
@@ -11,6 +12,7 @@ function svgElement(tag,attributes={},text='') {
 export function plot(container,result,bounds,{dots=false,scatterCurves=[],digits=10,analysis=null,trace=null,selected=0,integral=null,radianAxis=false,surfaceView={rotation:35,elevation:32,zoom:1}}={}) {
   const {xmin,xmax,ymin,ymax} = bounds;
   if (![xmin,xmax,ymin,ymax].every(Number.isFinite) || xmax<=xmin || ymax<=ymin) throw new Error('그래프 범위를 확인해 주세요.');
+  if(result.surface)return plotSurface(container,result,bounds,{digits,...surfaceView});
   const w=800,h=460,pad=42,innerW=w-2*pad,innerH=h-2*pad;
   const svg = svgElement('svg',{viewBox:`0 0 ${w} ${h}`,role:'img','aria-label':result.surface ? '3D surface graph' : 'Function graph'});
   const defs = svgElement('defs'), clip = svgElement('clipPath',{id:`clip-${container.id}`});
@@ -48,20 +50,8 @@ export function plot(container,result,bounds,{dots=false,scatterCurves=[],digits
     const angle=Math.atan(slope*(xmax-xmin)/(ymax-ymin)*innerH/innerW),dx=7*Math.cos(angle),dy=-7*Math.sin(angle);
     group.append(svgElement('line',{x1:x(at)-dx,y1:y(value)-dy,x2:x(at)+dx,y2:y(value)+dy,stroke:'#738a7c',opacity:.6}));
   }
-  if(result.surface) {
-    const zspan = result.zMax-result.zMin || 1;
-    const rotation=surfaceView.rotation*Math.PI/180,elevation=surfaceView.elevation*Math.PI/180;
-    const project = ([xx,yy,zz]) => {
-      const nx=(xx-xmin)/(xmax-xmin)-.5,ny=(yy-ymin)/(ymax-ymin)-.5,nz=(zz-result.zMin)/zspan-.5;
-      const horizontal=nx*Math.cos(rotation)-ny*Math.sin(rotation),depth=nx*Math.sin(rotation)+ny*Math.cos(rotation);
-      return [w/2+horizontal*innerW*.6*surfaceView.zoom,h/2+(depth*Math.sin(elevation)-nz*Math.cos(elevation))*innerH*.75*surfaceView.zoom];
-    };
-    for(const row of result.surface) path(row,colors[0],0,project);
-    for(let i=0;i<result.surface[0].length;i++) path(result.surface.map(row=>row[i]),colors[2],1,project);
-  } else {
-    (result.curves || []).forEach((curve,i)=>{if(i!==selected)path(curve,colors[i%colors.length],i);});
-    if(result.curves?.[selected])path(result.curves[selected],colors[selected%colors.length],selected);
-  }
+  (result.curves || []).forEach((curve,i)=>{if(i!==selected)path(curve,colors[i%colors.length],i);});
+  if(result.curves?.[selected])path(result.curves[selected],colors[selected%colors.length],selected);
   if(!result.surface){
     if(integral){let segment=[];const flush=()=>{if(segment.length>1)group.append(svgElement('polygon',{points:[[segment[0][0],0],...segment,[segment.at(-1)[0],0]].map(p=>`${x(p[0])},${y(p[1])}`).join(' '),fill:colors[selected%colors.length],opacity:.18,'data-integral':'true'}));segment=[];};for(const point of result.curves?.[selected]||[]){if(point&&point[0]>=integral[0]&&point[0]<=integral[1])segment.push(point);else flush();}flush();}
     if(analysis?.line?.length===2){const line=analysis.line;group.append(svgElement('line',{x1:x(line[0][0]),y1:y(line[0][1]),x2:x(line[1][0]),y2:y(line[1][1]),stroke:'var(--accent)','stroke-width':2,'stroke-dasharray':'6 4','data-tangent':'true'}));}

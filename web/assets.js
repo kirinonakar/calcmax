@@ -1,4 +1,4 @@
-self.CALCMAX_CACHE = 'calcmax-static-aab2b43a07af304a';
+self.CALCMAX_CACHE = 'calcmax-static-6c85d07fd43586f1';
 self.CALCMAX_ASSETS = [
   "./",
   "./app-dialogs.js",
@@ -54,6 +54,8 @@ self.CALCMAX_ASSETS = [
   "./statistics-workspace.js",
   "./storage.js",
   "./styles.css",
+  "./surface-geometry.js",
+  "./surface-plot.js",
   "./sw.js",
   "./THIRD_PARTY.md",
   "./unit-groups.js",

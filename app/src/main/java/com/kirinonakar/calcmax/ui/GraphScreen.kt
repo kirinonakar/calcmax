@@ -19,6 +19,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -28,6 +29,9 @@ import androidx.compose.ui.unit.*
 import com.kirinonakar.calcmax.calculator.CalculatorModel
 import com.kirinonakar.calcmax.math.PiAxis
 import com.kirinonakar.calcmax.math.GraphZoom
+import com.kirinonakar.calcmax.math.SurfaceBounds
+import com.kirinonakar.calcmax.math.SurfaceMesh
+import com.kirinonakar.calcmax.math.SurfaceProjection
 import com.kirinonakar.calcmax.math.Parser
 import com.kirinonakar.calcmax.ui.theme.LocalInstrument
 import kotlinx.coroutines.delay
@@ -47,7 +51,6 @@ import kotlin.math.*
     var surfaceExtra by remember { mutableStateOf(0.dp) }
     var surfaceRotation by rememberSaveable { mutableFloatStateOf(35f) }
     var surfaceElevation by rememberSaveable { mutableFloatStateOf(32f) }
-    var surfaceZoom by rememberSaveable { mutableFloatStateOf(1f) }
     var halfGraphHeight by rememberSaveable { mutableStateOf(false) }
     var first by rememberSaveable { mutableStateOf(m.xMin.toString()) }; var second by rememberSaveable { mutableStateOf(m.xMax.toString()) }
     var pointAt by rememberSaveable { mutableStateOf(((m.xMin+m.xMax)/2).toString()) }
@@ -73,7 +76,7 @@ import kotlin.math.*
         scrollToSection=null
     }
     val parameterSignature=m.graphParameters.entries.joinToString(","){"${it.key}=${it.value.value}"}
-    LaunchedEffect(m.graphSource,m.graphDerivativeSelected,m.xMin,m.xMax,m.yMin,m.yMax,m.graphKind,m.parameterMin,m.parameterMax,m.sequenceInitials,m.differentialInitials,m.differentialT0,parameterSignature) { delay(350);m.plot(auto=true) }
+    LaunchedEffect(m.graphSource,m.graphDerivativeSelected,m.xMin,m.xMax,m.yMin,m.yMax,m.graphKind,m.parameterMin,m.parameterMax,m.sequenceInitials,m.differentialInitials,m.differentialT0,parameterSignature,m.surfaceSamples,m.surfaceAutoDensity,if(m.surfaceAutoDensity)m.surfaceZoom else 1f) { delay(350);m.plot(auto=true) }
     BoxWithConstraints(Modifier.fillMaxSize()) {
     val density=LocalDensity.current
     val availableHeight=if(maxHeight.value.isFinite())maxHeight else 720.dp
@@ -194,20 +197,26 @@ import kotlin.math.*
         }}
         if(m.graphKind=="surface") {
             Box(Modifier.fillMaxWidth().height(plotHeight).clipToBounds()) {
-            SurfaceGraph(m,surfaceRotation,surfaceElevation,surfaceZoom,Modifier.fillMaxSize().clipToBounds().pointerInput(m.graphKind) {
+            SurfaceGraph(m,surfaceRotation,surfaceElevation,m.surfaceZoom,m.surfaceRenderMode,m.surfaceColor,Modifier.fillMaxSize().clipToBounds().pointerInput(m.graphKind) {
                 detectTransformGestures { _,pan,zoom,_->
                     surfaceRotation=((surfaceRotation+pan.x*.7f)%360f+360f)%360f
                     surfaceElevation=(surfaceElevation+pan.y*.5f).coerceIn(5f,85f)
-                    surfaceZoom=(surfaceZoom*zoom).coerceIn(.4f,3f)
+                    m.surfaceZoom=(m.surfaceZoom*zoom).coerceIn(.4f,3f)
                 }
             })
             GraphHeightToggle(halfGraphHeight,{halfGraphHeight=!halfGraphHeight},Modifier.align(Alignment.TopEnd))
             }
-            val surfaceZMin=m.zMin ?: m.graphData?.optDouble("zMin",Double.NaN)?.takeIf { it.isFinite() }
-            val surfaceZMax=m.zMax ?: m.graphData?.optDouble("zMax",Double.NaN)?.takeIf { it.isFinite() }
+            val surfaceZRange=m.graphData?.let {SurfaceMesh.zRange(m.zMin ?: it.optDouble("zMin",-1.0),m.zMax ?: it.optDouble("zMax",1.0))}
             Column(Modifier.fillMaxWidth().onSizeChanged{surfaceExtra=with(density){it.height.toDp()}}) {
             GraphFormulas(m.graphKind,sources,0,null,"",shadeSources,null,{},m.displayDigits)
-            Text("x: %.3g ~ %.3g   y: %.3g ~ %.3g".format(m.xMin,m.xMax,m.yMin,m.yMax)+(if(surfaceZMin!=null&&surfaceZMax!=null)"   z: %.3g ~ %.3g".format(surfaceZMin,surfaceZMax) else ""),Modifier.padding(horizontal=14.dp,vertical=2.dp),fontSize=11.sp,color=c.muted)
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal=14.dp),horizontalArrangement=Arrangement.spacedBy(6.dp),verticalAlignment=Alignment.CenterVertically) {
+                Text(if(isKorean())"렌더링" else "Rendering",fontSize=11.sp,color=c.muted)
+                listOf("wireframe" to (if(isKorean())"와이어프레임" else "Wireframe"),"surface" to (if(isKorean())"표면" else "Surface"),"surface-wireframe" to (if(isKorean())"표면+격자" else "Surface + mesh")).forEach { (mode,label)->
+                    SmallAction(label,active=m.surfaceRenderMode==mode,shaded=m.surfaceRenderMode==mode) {m.surfaceRenderMode=mode;m.save()}
+                }
+            }
+            SurfaceAppearanceControls(m)
+            Text("x: %.3g ~ %.3g   y: %.3g ~ %.3g".format(m.xMin,m.xMax,m.yMin,m.yMax)+(surfaceZRange?.let {"   z: %.3g ~ %.3g".format(it.first,it.second)} ?: ""),Modifier.padding(horizontal=14.dp,vertical=2.dp),fontSize=11.sp,color=c.muted)
             Row(Modifier.fillMaxWidth().height(38.dp).padding(horizontal=14.dp),verticalAlignment=Alignment.CenterVertically) {
                 Text(tr("Rotate"),fontSize=11.sp,color=c.muted);CompactSlider(surfaceRotation,{surfaceRotation=it},Modifier.weight(1f),valueRange=0f..360f);Text("${surfaceRotation.toInt()}°",fontSize=11.sp,color=c.muted)
             }
@@ -216,11 +225,11 @@ import kotlin.math.*
             }
             Row(Modifier.fillMaxWidth().height(38.dp).padding(horizontal=14.dp),verticalAlignment=Alignment.CenterVertically) {
                 Text(tr("Zoom"),fontSize=11.sp,color=c.muted)
-                CompactSlider(surfaceZoom,{surfaceZoom=it},Modifier.weight(1f),valueRange=.4f..3f)
-                Text("${(surfaceZoom*100).toInt()}%",fontSize=11.sp,color=c.muted)
+                CompactSlider(m.surfaceZoom,{m.surfaceZoom=it},Modifier.weight(1f),valueRange=.4f..3f,onValueChangeFinished={m.save()})
+                Text("${(m.surfaceZoom*100).toInt()}%",fontSize=11.sp,color=c.muted)
                 Text(tr("Reset"),Modifier.padding(start=4.dp).background(c.scientific,RoundedCornerShape(8.dp)).clickable {
                     m.xMin=-3.0;m.xMax=3.0;m.yMin=-3.0;m.yMax=3.0;m.zMin=null;m.zMax=null
-                    surfaceRotation=35f;surfaceElevation=32f;surfaceZoom=1f;m.save();m.plot()
+                    surfaceRotation=35f;surfaceElevation=32f;m.surfaceZoom=1f;m.save();m.plot()
                 }.padding(horizontal=8.dp,vertical=7.dp),fontSize=11.sp,color=c.accent)
             }
             Text(if(isKorean())"드래그하여 회전 · 손가락 두 개로 확대/축소" else "Drag to rotate freely · Pinch to zoom",Modifier.padding(horizontal=14.dp,vertical=2.dp),fontSize=11.sp,color=c.muted)
@@ -434,8 +443,9 @@ import kotlin.math.*
         var tmin by remember {mutableStateOf(m.parameterMin.toString())};var tmax by remember {mutableStateOf(m.parameterMax.toString())}
         val sampledMin=m.graphData?.optDouble("zMin",-1.0)?.takeIf(Double::isFinite) ?: -1.0
         val sampledMax=m.graphData?.optDouble("zMax",1.0)?.takeIf(Double::isFinite) ?: 1.0
-        var zmin by remember {mutableStateOf((m.zMin ?: if(sampledMin<sampledMax)sampledMin else sampledMin-1.0).toString())}
-        var zmax by remember {mutableStateOf((m.zMax ?: if(sampledMin<sampledMax)sampledMax else sampledMax+1.0).toString())}
+        val sampledRange=SurfaceMesh.zRange(sampledMin,sampledMax)
+        var zmin by remember {mutableStateOf((m.zMin ?: sampledRange.first).toString())}
+        var zmax by remember {mutableStateOf((m.zMax ?: sampledRange.second).toString())}
         var autoZ by remember {mutableStateOf(m.zMin==null || m.zMax==null)}
         AlertDialog(onDismissRequest={rangeDialog=false},title={Text(tr("Graph range"))},text={Column(Modifier.verticalScroll(rememberScrollState())) {
             RangeAxisEditor(if(m.graphKind=="sequence")"n" else "x",xmin,xmax,m.xMin,m.xMax,{xmin=it},{xmax=it})
@@ -647,7 +657,32 @@ internal fun graphShadeFormula(source:String,displayDigits:Int?=null):GraphShade
     }
 }
 
-@Composable private fun SurfaceGraph(m:CalculatorModel,rotation:Float,elevationDeg:Float,zoom:Float,modifier:Modifier=Modifier) {
+@Composable private fun SurfaceAppearanceControls(m:CalculatorModel) {
+    val c=LocalInstrument.current
+    val korean=isKorean()
+    var hex by remember(m.surfaceColor) {mutableStateOf(m.surfaceColor)}
+    Row(Modifier.fillMaxWidth().padding(horizontal=14.dp,vertical=2.dp),horizontalArrangement=Arrangement.spacedBy(6.dp),verticalAlignment=Alignment.CenterVertically) {
+        listOf("#007b68","#3b70bd","#a04c75","#b17d00").forEach { color->
+            Box(Modifier.size(28.dp).background(Color(android.graphics.Color.parseColor(color)),RoundedCornerShape(6.dp))
+                .border(if(m.surfaceColor.equals(color,true))2.dp else 0.dp,c.ink,RoundedCornerShape(6.dp))
+                .clickable {m.surfaceColor=color;m.save()}.semantics {contentDescription=(if(korean)"표면 색상 " else "Surface color ")+color;selected=m.surfaceColor.equals(color,true)})
+        }
+        Field(hex,if(isKorean())"색상 #RRGGBB" else "Color #RRGGBB",Modifier.weight(1f),translate=false) {
+            hex=it
+            if(it.matches(Regex("#[0-9a-fA-F]{6}"))) {m.surfaceColor=it;m.save()}
+        }
+    }
+    Row(Modifier.fillMaxWidth().height(38.dp).padding(horizontal=14.dp),verticalAlignment=Alignment.CenterVertically) {
+        Text(if(isKorean())"격자 밀도" else "Mesh density",fontSize=11.sp,color=c.muted)
+        val count=SurfaceMesh.sampleCount(m.xMin,m.xMax,m.yMin,m.yMax,m.surfaceSamples,m.surfaceAutoDensity,m.surfaceZoom.toDouble())
+        CompactSlider(count.toFloat(),{m.surfaceSamples=it.roundToInt()},Modifier.weight(1f),valueRange=12f..96f,steps=83,onValueChangeFinished={m.save()},enabled=!m.surfaceAutoDensity)
+        Text("$count × $count",fontSize=11.sp,color=c.muted)
+        Checkbox(m.surfaceAutoDensity,{m.surfaceAutoDensity=it;m.save()})
+        Text(if(korean)"자동" else "Auto",fontSize=11.sp,color=c.muted)
+    }
+}
+
+@Composable private fun SurfaceGraph(m:CalculatorModel,rotation:Float,elevationDeg:Float,zoom:Float,renderMode:String,colorHex:String,modifier:Modifier=Modifier) {
     val c=LocalInstrument.current
     val mesh=remember(m.graphData) {
         val rows=m.graphData?.optJSONArray("surface")
@@ -655,26 +690,22 @@ internal fun graphShadeFormula(source:String,displayDigits:Int?=null):GraphShade
             val row=rows!!.optJSONArray(ri)
             (0 until (row?.length() ?: 0)).map { ci->
                 val point=row?.optJSONArray(ci)
-                if(point==null || point.isNull(2)) null else doubleArrayOf(point.optDouble(0),point.optDouble(1),point.optDouble(2))
+                if(point==null || point.isNull(2)) null else doubleArrayOf(point.optDouble(0),point.optDouble(1),point.optDouble(2)).takeIf {it.all(Double::isFinite)}
             }
         }
     }
+    val xmin=m.xMin;val xmax=m.xMax;val ymin=m.yMin;val ymax=m.yMax
+    val (zmin,zmax)=SurfaceMesh.zRange(m.zMin ?: m.graphData?.optDouble("zMin",-1.0) ?: -1.0,m.zMax ?: m.graphData?.optDouble("zMax",1.0) ?: 1.0)
+    val bounds=SurfaceBounds(xmin,xmax,ymin,ymax,zmin,zmax)
+    val projection=remember(bounds,rotation,elevationDeg) {SurfaceProjection(bounds,rotation.toDouble(),elevationDeg.toDouble())}
+    val faces=remember(mesh,projection,renderMode) {if(renderMode=="wireframe")emptyList() else SurfaceMesh.faces(mesh,projection)}
+    val surfaceColor=remember(colorHex) {runCatching {Color(android.graphics.Color.parseColor(colorHex))}.getOrDefault(Color(0xFF007B68))}
     Canvas(modifier.background(c.display).semantics { contentDescription="Three dimensional surface. Drag to rotate freely, pinch to zoom, and adjust x, y and z ranges." }) {
         if(mesh.isEmpty())return@Canvas
-        val xmin=m.xMin;val xmax=m.xMax;val ymin=m.yMin;val ymax=m.yMax
-        val zmin=m.zMin ?: m.graphData?.optDouble("zMin",-1.0) ?: -1.0
-        val zmax=m.zMax ?: m.graphData?.optDouble("zMax",1.0) ?: 1.0
-        val zspan=(zmax-zmin).takeIf { it.isFinite() && it>0.0 } ?: 1.0
-        val theta=Math.toRadians(rotation.toDouble());val elevation=Math.toRadians(elevationDeg.toDouble())
         val scale=min(size.width,size.height)*.34f*zoom
         fun project(point:DoubleArray):Offset {
-            val xx=2*(point[0]-(xmin+xmax)/2)/(xmax-xmin)
-            val yy=2*(point[1]-(ymin+ymax)/2)/(ymax-ymin)
-            val zz=2*(point[2]-zmin)/zspan-1
-            val horizontal=xx*cos(theta)-yy*sin(theta)
-            val depth=xx*sin(theta)+yy*cos(theta)
-            val vertical=depth*sin(elevation)+zz*cos(elevation)
-            return Offset(size.width/2+horizontal.toFloat()*scale,size.height/2-vertical.toFloat()*scale)
+            val p=projection.project(point)
+            return Offset(size.width/2+p[0].toFloat()*scale,size.height/2+p[1].toFloat()*scale)
         }
         fun niceStep(range:Double):Double {
             if(!range.isFinite()||range<=0.0)return 1.0
@@ -684,27 +715,31 @@ internal fun graphShadeFormula(source:String,displayDigits:Int?=null):GraphShade
         val axisPaint=Paint(Paint.ANTI_ALIAS_FLAG).apply { color=c.muted.toArgb();textSize=11.sp.toPx() }
         val labelPaint=Paint(Paint.ANTI_ALIAS_FLAG).apply { color=c.ink.toArgb();textSize=12.sp.toPx();isFakeBoldText=true }
         fun surfaceSegment(a:DoubleArray?,b:DoubleArray?,color:Color,width:Float) {
-            if(a==null||b==null)return
-            val dz=b[2]-a[2]
-            if(dz==0.0 && a[2] !in zmin..zmax)return
-            val start=if(dz==0.0)0.0 else minOf((zmin-a[2])/dz,(zmax-a[2])/dz).coerceIn(0.0,1.0)
-            val end=if(dz==0.0)1.0 else maxOf((zmin-a[2])/dz,(zmax-a[2])/dz).coerceIn(0.0,1.0)
-            if(start>=end || a[2]+dz*(start+end)/2 !in zmin..zmax)return
-            fun interpolate(fraction:Double)=doubleArrayOf(a[0]+(b[0]-a[0])*fraction,a[1]+(b[1]-a[1])*fraction,a[2]+dz*fraction)
-            drawLine(color,project(interpolate(start)),project(interpolate(end)),width)
+            val segment=SurfaceMesh.clipSegment(a,b,bounds) ?: return
+            drawLine(color,project(segment.first),project(segment.second),width)
         }
         clipRect {
+            for(face in faces) {
+                val path=Path().apply {
+                    face.points.forEachIndexed { index,point->val p=project(point);if(index==0)moveTo(p.x,p.y)else lineTo(p.x,p.y) };close()
+                }
+                val color=lerp(Color.Black,surfaceColor,((.65+.35*face.height)*face.light).toFloat())
+                drawPath(path,color)
+                drawPath(path,if(renderMode=="surface-wireframe")c.muted else color,style=Stroke(if(renderMode=="surface-wireframe").65.dp.toPx() else .35.dp.toPx()))
+            }
+            if(renderMode=="wireframe") {
             mesh.forEachIndexed { ri,row->
                 for(ci in 0 until row.lastIndex) {
                     val a=row[ci];val b=row[ci+1]
-                    surfaceSegment(a,b,c.curves[ri%c.curves.size].copy(alpha=.78f),1.15.dp.toPx())
+                    surfaceSegment(a,b,surfaceColor.copy(alpha=.78f),1.15.dp.toPx())
                 }
             }
             if(mesh.isNotEmpty())for(ci in mesh.first().indices) {
                 for(ri in 0 until mesh.lastIndex) {
                     val a=mesh[ri].getOrNull(ci);val b=mesh[ri+1].getOrNull(ci)
-                    surfaceSegment(a,b,c.accent.copy(alpha=.62f),1.dp.toPx())
+                    surfaceSegment(a,b,surfaceColor.copy(alpha=.78f),1.dp.toPx())
                 }
+            }
             }
             val x0=doubleArrayOf(xmin,ymin,zmin)
             val x1=doubleArrayOf(xmax,ymin,zmin)

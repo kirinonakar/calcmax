@@ -198,6 +198,21 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     var zMax
         get()=graphState.zMax
         set(value) {graphState.zMax=value}
+    var surfaceRenderMode
+        get()=graphState.surfaceRenderMode
+        set(value) {graphState.surfaceRenderMode=value}
+    var surfaceColor
+        get()=graphState.surfaceColor
+        set(value) {graphState.surfaceColor=value}
+    var surfaceSamples
+        get()=graphState.surfaceSamples
+        set(value) {graphState.surfaceSamples=value.coerceIn(12,96)}
+    var surfaceAutoDensity
+        get()=graphState.surfaceAutoDensity
+        set(value) {graphState.surfaceAutoDensity=value}
+    var surfaceZoom
+        get()=graphState.surfaceZoom
+        set(value) {graphState.surfaceZoom=value.coerceIn(.4f,3f)}
     var graphData
         get()=graphState.graphData
         set(value) {graphState.graphData=value}

@@ -90,6 +90,11 @@ test('actual CPython WASM reuses the Android engine across workspaces',async()=>
     assert.ok(result.curves?.[0].length>5 || result.surface?.length>10);
   }
   const discontinuity=run({action:'graph',trees:[parse('1/x')],min:-1,max:1});
+  for(const surfaceSamples of [12,26,40,96]){
+    const result=run({action:'graph',graphKind:'surface',trees:[parse('x+y')],min:-1,max:1,surfaceYMin:-1,surfaceYMax:1,surfaceSamples});
+    assert.equal(result.ok,true,result.error);assert.equal(result.surfaceSamples,surfaceSamples);
+    assert.equal(result.surface.length,surfaceSamples+1);assert.ok(result.surface.every(row=>row.length===surfaceSamples+1));
+  }
   const implicit=run({action:'graph',graphKind:'implicit',trees:[parse('x^2+y^2=a'),parse('x=.3')],parameters:{a:4},min:-3,max:3,yMin:-3,yMax:3});
   assert.equal(implicit.ok,true,implicit.error);assert.deepEqual(implicit.parameters,['a']);assert.equal(implicit.curves.length,2);
   const circle=implicit.curves[0].filter(Boolean);assert.ok(circle.some(([x,y])=>x<0&&y<0)&&circle.some(([x,y])=>x>0&&y>0));
