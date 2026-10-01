@@ -42,6 +42,15 @@ test('CSV blanks retain paired alignment; independent samples omit blanks separa
   assert.deepEqual(numericStatisticsRows(csvRows('date,value\n2026-09-30,2\n2026-10-02,4')),[['1','2'],['3','4']]);
   assert.deepEqual(csvRows('"a,b",2\n"x""y",4'),[['a,b','2'],['x"y','4']]);
 });
+test('independent samples select x/y/z and paired operations ignore unused group and column settings',()=>{
+  const source='1,4,7\n2,5,8\n3,6,9';
+  assert.equal(statisticsCommand(source,{op:'ttest2',firstGroup:'y',secondGroup:'z'}),'ttest2(0,[4,5,6],[7,8,9])');
+  assert.equal(statisticsCommand(source,{op:'ztest2',firstGroup:'z',secondGroup:'x',sigma:'2',sigmaY:'3'}),'ztest2(0,2,3,[7,8,9],[1,2,3])');
+  assert.throws(()=>statisticsCommand(source,{op:'ttest2',firstGroup:'x',secondGroup:'x'}),/different/);
+  assert.equal(statisticsCommand('1,2\n3,4',{op:'correlation',column:2,grouping:'groups'}),'correlation([1,3],[2,4])');
+  assert.equal(statisticsCommand('A,1\nB,2\nA,3\nB,4',{op:'mean',grouping:'groups',firstGroup:'B'}),'mean([2,4])');
+});
+
 test('distribution and equation commands match Android engine arity, coefficient forms, and initial conditions',()=>{
   assert.equal(distributionCommand({family:'normal',query:'cdf',x:'1',mean:'2',sigma:'3'}),'normcdf(-oo,1,2,3)');
   assert.equal(distributionCommand({family:'binomial',query:'list-pdf',trials:'4',success:'1/2'}),'binompdf(4,1/2)');

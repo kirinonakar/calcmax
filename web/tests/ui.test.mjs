@@ -169,10 +169,12 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
     assert.equal($('stop').style.visibility,'hidden');
     const after=JSON.parse(localStorage.getItem('calcmax-web-v1'));
     assert.deepEqual(after.variables.Ans,before.variables.Ans);assert.equal(after.history.length,before.history.length);
+    const previousOutput=$('answer').firstChild;
     key('5').click();assert.equal($('expression').value,'2+3*45','preview leaves the entry editable');
+    assert.equal($('answer').firstChild,previousOutput,'the answer remains mounted while the next preview is pending');
     await waitFor(()=>$('answer').textContent==='137','continued keypad input previews');
     edit('nthroot(8,3)');await waitFor(()=>$('answer').textContent==='2','multi-argument entry helper previews');
-    edit('2+');assert.equal($('answer').textContent,'','incomplete input clears the old preview');
+    edit('2+');assert.equal($('answer').textContent,'2','an intermediate operator keeps the previous answer visible');
     edit('integrate(x,x)');const count=requests.length;
     await new Promise(resolve=>setTimeout(resolve,200));assert.equal(requests.length,count,'integration waits for =');assert.equal($('answer').textContent,'');
     edit('f(3)');await waitFor(()=>$('answer').textContent==='10','single-argument user function previews like Android');
@@ -185,6 +187,20 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
     const committedState=JSON.parse(localStorage.getItem('calcmax-web-v1'));
     assert.equal(committedState.history.length,before.history.length+1);assert.equal(committedState.variables.Ans.value,'5');
     $('typing-toggle').click();key('AC').click();
+  });
+  await t.test('ENG keypad changes only display and arrows shift mantissa like Android',async()=>{
+    edit('12345');key('=').click();await waitFor(()=>$('commit-indicator').textContent==='='&&$('answer').textContent==='12345','engineering seed');
+    const before=JSON.parse(localStorage.getItem('calcmax-web-v1')),requestCount=requests.length,cursor=$('expression').selectionStart;
+    key('ENG').click();assert.equal($('answer').textContent,'12.345×103');assert.equal(document.documentElement.dataset.engineeringConversion,'true');
+    assert.ok(key('ENG').classList.contains('active'));assert.match($('note').textContent,/ENG mode/);
+    key('LEFT').click();assert.equal($('answer').textContent,'1.2345×104');
+    key('RIGHT').click();assert.equal($('answer').textContent,'12.345×103');assert.equal($('expression').selectionStart,cursor);
+    key('SHIFT').click();key('ENG').click();assert.equal($('answer').textContent,'0.012345×106');
+    key('ENG').click();assert.equal($('answer').textContent,'12.345×103');
+    key('=').click();assert.equal($('answer').textContent,'12345');assert.equal(document.documentElement.dataset.engineeringConversion,'false');
+    assert.equal(requests.length,requestCount,'ENG, shifting, and leaving with = do not calculate');
+    const after=JSON.parse(localStorage.getItem('calcmax-web-v1'));assert.deepEqual(after.variables.Ans,before.variables.Ans);assert.equal(after.history.length,before.history.length);
+    key('ENG').click();key('AC').click();assert.equal(document.documentElement.dataset.engineeringConversion,'false');assert.equal($('answer').textContent,'');
   });
   await t.test('slow previews show Stop only after one second and discard stale responses',async()=>{
     $('typing-toggle').click();holdPreviewResults=true;
@@ -500,6 +516,36 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
   Array.from($('tape-history').querySelectorAll('.tape-expression')).find(button=>button.dataset.source==='Ans+1').click();key('=').click();await waitFor(()=>$('answer').textContent==='11','reused Ans uses the original full-precision snapshot');
   key('+').click();key('1').click();key('=').click();await waitFor(()=>$('answer').textContent==='12','new calculation resumes the current Ans');
   edit('1/3');key('=').click();await waitFor(()=>$('answer').textContent==='13','fraction on tape');key('AC').click();$('exact-toggle').click();assert.equal($('tape-history').lastElementChild.querySelector('.tape-result').textContent,'0.3333333333','decimal toggle formats earlier entries even with an empty current answer');$('exact-toggle').click();
+  await t.test('spreadsheet tables navigate cells, persist edits, and keep controls relevant to the analysis',()=>{
+    change('mode','statistics');$('statistics-data').value='1,4,7\n2,5,8\n3,6,9';$('statistics-data').dispatchEvent(new window.Event('input'));
+    change('statistics-op','mean');$('statistics-table-toggle').click();
+    assert.deepEqual([...$('statistics-grid').querySelectorAll('thead th')].map(th=>th.textContent),['#','x','y','z','']);
+    assert.equal(window.getComputedStyle($('statistics-grid').querySelector('tbody th')).top,'auto','row labels do not overlap the column header when scrolling');
+    assert.equal($('statistics-column').disabled,false);assert.equal($('statistics-first-group').disabled,true);assert.equal($('statistics-second-group').disabled,true);assert.equal($('statistics-extra').disabled,true);assert.equal($('statistics-tail').disabled,true);
+    const cell=(holder,row,col)=>$(holder).querySelector(`input[data-row="${row}"][data-column="${col}"]`);
+    const move=key=>document.activeElement.dispatchEvent(new window.KeyboardEvent('keydown',{key,bubbles:true,cancelable:true}));
+    cell('statistics-grid',0,0).focus();move('ArrowRight');assert.equal(document.activeElement,cell('statistics-grid',0,1));move('ArrowDown');assert.equal(document.activeElement,cell('statistics-grid',1,1));move('ArrowLeft');move('ArrowUp');assert.equal(document.activeElement,cell('statistics-grid',0,0));
+    cell('statistics-grid',0,0).value='10';cell('statistics-grid',0,0).dispatchEvent(new window.Event('input'));assert.equal($('statistics-data').value,'10,4,7\n2,5,8\n3,6,9');
+    change('statistics-op','ttest2');assert.equal($('statistics-column').disabled,true);assert.equal($('statistics-first-group').tagName,'SELECT');assert.equal($('statistics-first-group').disabled,false);assert.equal($('statistics-second-group').disabled,false);assert.deepEqual([...$('statistics-first-group').options].map(option=>option.value),['x','y','z']);
+    change('statistics-first-group','y');change('statistics-second-group','z');assert.equal($('statistics-extra').disabled,false);assert.equal($('statistics-tail').disabled,false);assert.equal($('statistics-sigma').disabled,true);
+    change('statistics-op','ztest2');assert.equal($('statistics-sigma').disabled,false);assert.equal($('statistics-sigma-y').disabled,false);
+    change('statistics-op','correlation');assert.equal($('statistics-grouping').disabled,true);assert.equal($('statistics-first-group').disabled,true);assert.equal($('statistics-second-group').disabled,true);
+    $('statistics-table-toggle').click();change('statistics-op','mean');$('statistics-data').value='1,2\n2,4\n3,6\n4,8';$('statistics-data').dispatchEvent(new window.Event('input'));
+    change('mode','matrix');assert.ok($('matrix-grid').querySelector('table.editable-table'));cell('matrix-grid',0,0).focus();move('ArrowRight');move('ArrowDown');assert.equal(document.activeElement,cell('matrix-grid',1,1));
+    assert.equal(parseFloat(window.getComputedStyle(cell('matrix-grid',1,1)).borderRadius),0);
+    cell('matrix-grid',1,1).value='2/3';cell('matrix-grid',1,1).dispatchEvent(new window.Event('input'));assert.equal(JSON.parse(localStorage.getItem('calcmax-web-v1')).matrixCells['m-1-1'],'2/3');
+    cell('matrix-grid',1,1).value='1';cell('matrix-grid',1,1).dispatchEvent(new window.Event('input'));
+    change('mode','vector');assert.equal($('matrix-grid').querySelectorAll('tbody tr').length,3);assert.equal($('matrix-grid').querySelectorAll('thead th').length,2);cell('matrix-grid',0,0).focus();move('ArrowDown');assert.equal(document.activeElement,cell('matrix-grid',1,0));change('mode','scientific');key('AC').click();
+  });
+  await t.test('display customization separates keypad and catalog categories and searches all buttons',()=>{
+    $('shortcut-settings').click();const content=$('dialog-body');
+    assert.deepEqual([...content.querySelectorAll('[data-category]')].map(button=>button.dataset.category),['Main keys','2nd keys','Number keys','ALPHA']);
+    content.querySelector('[data-category="ALPHA"]').click();assert.equal(content.querySelectorAll('[data-choice]').length,52);assert.ok(content.querySelector('[data-choice="Z"]'));
+    content.querySelector('[data-source="Catalog"]').click();assert.ok(content.querySelector('[data-category="Scientific"]'));assert.ok(content.querySelector('[data-choice="sin()"]'));assert.equal(content.querySelector('[data-choice="ENG"]'),null);
+    const search=content.querySelector('input');search.value='tukey';search.dispatchEvent(new window.Event('input'));assert.equal(content.querySelectorAll('[data-choice]').length,1);assert.match(content.querySelector('[data-choice]').dataset.choice,/tukey/);
+    const count=document.querySelectorAll('.answer-toolbar [data-shortcut]').length;content.querySelector('[data-choice]').click();assert.equal(document.querySelectorAll('.answer-toolbar [data-shortcut]').length,count+1);
+    [...content.querySelectorAll('.list-row')].at(-1).querySelectorAll('button')[1].click();assert.equal(document.querySelectorAll('.answer-toolbar [data-shortcut]').length,count);$('dialog').close();
+  });
   // Non-cooperative Python cannot freeze the page; hard cancellation restores WASM.
   change('mode','python');assert.ok($('stop').closest('.runtime-bar'),'Python stop stays at the top of the workspace');$('python-source').value='while True: pass';document.querySelector('[data-run="python"]').click();assert.equal($('stop').style.visibility,'hidden','long scripts initially hide Stop');await waitFor(()=>!$('stop').disabled,'script running for at least one second');assert.equal($('stop').style.visibility,'');$('stop').click();await waitFor(()=>$('python-output').textContent.includes('cancelled'),'hard cancellation');assert.equal($('stop').style.visibility,'hidden');await waitFor(()=>!document.querySelector('[data-run="python"]').disabled,'engine recovery');
   $('python-source').value='print(42)';document.querySelector('[data-run="python"]').click();await waitFor(()=>$('python-output').textContent==='42\n','post-cancellation script');

@@ -228,8 +228,21 @@ test('ENG and SCI normalize numeric results without losing high precision or cha
   assert.equal(display('1.25e-100','eng').textContent,'125×10-102');
   assert.equal(display('1.25e-100','sci').textContent,'1.25×10-100');
   assert.equal(display('0','sci').textContent,'0');
+  assert.equal(mathDisplay({kind:'number',value:'12.345'},10,false,{notation:'eng',showZeroExponent:true}).textContent,'12.345×100');
+  assert.equal(mathDisplay({kind:'number',value:'12345'},10,false,{notation:'eng',engineeringShift:3,showZeroExponent:true}).textContent,'0.012345×106');
   const fraction={kind:'fraction',args:[{kind:'number',value:'12345'},{kind:'number',value:'7'}]},snapshot=JSON.stringify(fraction);
   assert.equal(mathDisplay(fraction,10,false,{notation:'sci'}).querySelectorAll('msup').length,0,'exact fraction leaves are not converted to powers');
   assert.equal(JSON.stringify(fraction),snapshot,'display formatting leaves the engine value intact');
+  dom.window.close();
+});
+
+test('pending multiplication has a caret without an operand box, while structural slots stay visible',()=>{
+  const dom=new JSDOM();globalThis.document=dom.window.document;
+  for(const source of ['45*','45×','45x','45+']){
+    const input=expressionInputDisplay(source);document.body.append(input);
+    assert.equal(input.querySelector('.input-slot'),null,source);
+    assert.ok(markInputCursor(input,source,source.length),source);
+  }
+  for(const source of ['sqrt()','45^()','()/()'])assert.ok(expressionInputDisplay(source).querySelector('.input-slot'),source);
   dom.window.close();
 });

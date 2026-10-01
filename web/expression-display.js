@@ -13,6 +13,8 @@ export function expressionInputDisplay(source,{wordWrap=false}={}) {
     const append=node=>{const part=document.createElement('span');part.className='input-part';part.append(mathDisplay(node,10,false,{roundNumbers:false}));frame.append(part);};
     const operator=(value,start,end)=>append({kind:'input-operator',value,args:[],start,end});
     function flow(node){
+      // Inline pending operands use the caret; fraction/power slots stay visible.
+      if(node.kind==='hole')return;
       if(['sum','explicit-product','implicit-product','relation'].includes(node.kind)){
         node.args.forEach((child,i)=>{
           if(i){const previous=node.args[i-1],value=node.kind==='sum'?(child.kind==='unary'?'':'+'):node.kind==='explicit-product'?'×':node.kind==='relation'?node.value:'';if(value)operator(value,previous.end,child.start);}

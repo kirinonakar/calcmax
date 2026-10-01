@@ -27,6 +27,12 @@ const korean={History:'기록',Catalog:'함수 목록',Setup:'설정',Undo:'실�
 };
 Object.assign(korean,nativeKorean,{
   "Help": "도움말",
+  "Main keys": "기본 키",
+  "2nd keys": "2nd 키",
+  "Number keys": "숫자 키",
+  "Keypad": "입력패드",
+  "No matching buttons": "일치하는 버튼이 없습니다.",
+  "ENG mode · ←/→ shifts mantissa": "ENG 모드 · ←/→로 가수 이동",
   "Clear search": "검색어 지우기",
   "Stored in": "저장한 변수:",
   "Reserved constant or answer name": "상수 또는 Ans 이름에는 저장할 수 없습니다.",

@@ -26,11 +26,31 @@ export function createAppDialogs({state,ui,persist,calculator,changeMode,pressKe
     link.href='https://github.com/kirinonakar/calcmax';link.target='_blank';link.rel='noopener noreferrer';
     content.append(icon,version,link,control('Close',()=>$('dialog').close()));openDialog('CalcMax',content);
   };
-  function renderDisplayShortcuts(){const toolbar=$('exact-toggle').parentElement;toolbar.querySelectorAll('[data-shortcut]').forEach(button=>button.remove());for(const shortcut of state.displayShortcuts){const button=control(shortcut.label,()=>pressKey(shortcut.input));button.dataset.shortcut=shortcut.input;toolbar.insertBefore(button,$('answer-copy'));}toolbar.append($('shortcut-settings'));}
-  $('shortcut-settings').onclick=()=>{const content=element('div'),current=element('div'),search=element('input'),choices=element('div');search.placeholder=t('Find button or function');
-    const keypad=[...topKeys(),...topFunctions(),...topFunctions(true),...scientificRows.flat(),...secondRows.flat(),...numericRows.flat()],options=[...keypad.flatMap(k=>[{label:k.title,input:k.input},...(k.alternate?[{label:k.secondary||k.alternate,input:k.alternate}]:[]),...(k.alpha?[{label:k.alpha,input:k.alpha}]:[])]),...Object.values(catalog).flat().map(input=>({label:input,input}))];
-    function render(){current.replaceChildren();for(const [index,shortcut] of state.displayShortcuts.entries()){const row=element('div','','list-row');row.append(element('span',shortcut.label,'content'),control('←',()=>{if(index){[state.displayShortcuts[index-1],state.displayShortcuts[index]]=[state.displayShortcuts[index],state.displayShortcuts[index-1]];renderDisplayShortcuts();render();persist();}}),control('Delete',()=>{state.displayShortcuts.splice(index,1);renderDisplayShortcuts();render();persist();}));current.append(row);}choices.replaceChildren();for(const choice of options.filter(c=>`${c.label} ${c.input}`.toLowerCase().includes(search.value.toLowerCase())).slice(0,80))choices.append(control(choice.label,()=>{if(state.displayShortcuts.length>=12){toast('Use up to twelve shortcuts');return;}state.displayShortcuts.push(choice);renderDisplayShortcuts();render();persist();}));}
-    search.oninput=render;content.append(current,search,choices);render();openDialog('Customize display buttons',content);};
+  function renderDisplayShortcuts(){const toolbar=$('exact-toggle').parentElement;toolbar.querySelectorAll('[data-shortcut]').forEach(button=>button.remove());for(const shortcut of state.displayShortcuts){const button=control(shortcut.label,()=>{if(shortcut.source==='catalog')calculator.insert(shortcut.input,shortcut.input.includes('[]')?shortcut.input.indexOf('[]')+1:shortcut.input.includes('(')?shortcut.input.indexOf('(')+1:shortcut.input.length);else pressKey(shortcut.input);});button.dataset.shortcut=shortcut.input;toolbar.insertBefore(button,$('answer-copy'));}toolbar.append($('shortcut-settings'));}
+  $('shortcut-settings').onclick=()=>{
+    const content=element('div'),current=element('div'),sources=element('div','','catalog-tabs'),tabs=element('div','','catalog-tabs'),search=element('input'),choices=element('div','','shortcut-choices');
+    search.placeholder=t('Find button or function');search.setAttribute('aria-label',t('Find button or function'));
+    let source='Keypad',category='Main keys';
+    const keyChoices=keys=>keys.flatMap(k=>[{label:k.title,input:k.input},...(k.alternate?[{label:k.secondary||k.alternate,input:k.alternate}]:[]),...(k.alpha?[{label:k.alpha,input:k.input==='CALC'?'RELATION':k.alpha}]:[])]);
+    const keypadGroups={
+      'Main keys':keyChoices([...topKeys(),...topFunctions(),...['UP','LEFT','RIGHT','DOWN'].map((input,i)=>({title:['▲','◀','▶','▼'][i],input})),...scientificRows.flat()]),
+      '2nd keys':keyChoices([...topFunctions(true),...secondRows.flat()]),
+      'Number keys':keyChoices(numericRows.flat()),
+      ALPHA:Array.from('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz',label=>({label,input:label}))
+    };
+    function render(){
+      current.replaceChildren();for(const [index,shortcut] of state.displayShortcuts.entries()){const row=element('div','','list-row');row.append(element('span',shortcut.label,'content'),control('←',()=>{if(index){[state.displayShortcuts[index-1],state.displayShortcuts[index]]=[state.displayShortcuts[index],state.displayShortcuts[index-1]];renderDisplayShortcuts();render();persist();}}),control('Delete',()=>{state.displayShortcuts.splice(index,1);renderDisplayShortcuts();render();persist();}));current.append(row);}
+      const groups=source==='Keypad'?keypadGroups:Object.fromEntries(Object.entries(catalog).map(([name,items])=>[name,items.map(input=>({label:input.split('(')[0],input,source:'catalog'}))]));
+      if(!groups[category])category=Object.keys(groups)[0];
+      sources.querySelectorAll('button').forEach(button=>{const active=button.dataset.source===source;button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));});
+      tabs.replaceChildren();for(const name of Object.keys(groups)){const button=control(name,()=>{category=name;render();});button.dataset.category=name;button.classList.toggle('active',name===category);button.setAttribute('aria-pressed',String(name===category));tabs.append(button);}
+      const query=search.value.trim().toLowerCase(),entries=query?Object.values(groups).flat().filter(choice=>`${choice.label} ${choice.input}`.toLowerCase().includes(query)):groups[category]||[];
+      choices.replaceChildren();for(const choice of entries){const button=control(source==='Catalog'?choice.input:choice.label,()=>{if(state.displayShortcuts.length>=12){toast('Use up to twelve shortcuts');return;}state.displayShortcuts.push(choice);renderDisplayShortcuts();render();persist();});button.dataset.choice=choice.input;choices.append(button);}
+      if(!entries.length)choices.append(element('p','No matching buttons','hint'));
+    }
+    for(const name of ['Keypad','Catalog']){const button=control(name,()=>{source=name;category=name==='Keypad'?'Main keys':'Scientific';render();});button.dataset.source=name;sources.append(button);}
+    search.oninput=render;content.append(current,sources,clearableCatalogSearch(search),tabs,choices);render();openDialog('Customize display buttons',content);
+  };
   renderDisplayShortcuts();
   function modeDialog(){const choices=element('div','','mode-choices');for(const option of $('mode').options)choices.append(control(option.textContent,()=>{changeMode(option.value);$('dialog').close();}));openDialog('Workspace',choices);}
   function matrixInsertDialog(){const content=element('div'),rows=element('input'),cols=element('input');for(const [input,name] of [[rows,'Rows / components'],[cols,'Column']]){input.type='number';input.min='1';input.max='9';input.value='2';const label=element('label',name);label.append(input);content.append(label);}content.append(control('Insert',()=>{const r=Number(rows.value),c=Number(cols.value);if(!Number.isInteger(r)||!Number.isInteger(c)||r<1||c<1||r>9||c>9)return;changeMode('scientific');calculator.insert(`[${Array.from({length:r},()=>`[${Array(c).fill('0').join(',')}]`).join(',')}]`);$('dialog').close();}));openDialog('Matrix',content);}

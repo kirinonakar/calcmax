@@ -21,6 +21,22 @@ math{font-family:"CalcMax Math","Cambria Math",math;font-weight:400;font-synthes
 .regression-section{border-block:1px solid var(--line);padding:14px 0;margin:16px 0}.regression-section h2{margin-bottom:12px}
 #tip-percent:disabled,#tip-fixed:disabled{opacity:.45;cursor:not-allowed}
 #statistics-editor{margin-bottom:16px}#statistics-editor>label{margin-bottom:0}
+.matrix-grid{display:block;margin:20px 0;overflow:auto}
+.editable-table{width:100%;min-width:max-content;border-collapse:collapse;table-layout:fixed;background:var(--panel)}
+.editable-table td,.editable-table th{border:1px solid var(--line);padding:0;min-width:80px}
+.editable-table th{padding:7px 10px;text-align:center;font-weight:500;background:var(--bar)}
+.editable-table thead th{z-index:2}
+.editable-table tbody th{position:sticky;left:0;top:auto;z-index:1}
+.editable-table th:first-child{min-width:36px;width:36px}
+.editable-table input{display:block;width:100%;min-width:80px;margin:0;padding:9px 10px;border:0;border-radius:0;background:transparent;text-align:right;box-shadow:none}
+.editable-table input:focus{outline:2px solid var(--accent);outline-offset:-2px;background:var(--bg)}
+.editable-table .table-row-action{min-width:36px;width:36px;text-align:center}
+.editable-table .table-row-action button{padding:5px 8px}
+label:has(>input:disabled),label:has(>select:disabled){color:var(--muted)}
+input:disabled,select:disabled{opacity:.45;cursor:default}
+:root[data-engineering-conversion="true"] .key[data-input="ENG"]{color:var(--accent);background:var(--bar)}
+.shortcut-choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;max-height:260px;overflow:auto}
+.shortcut-choices button{text-align:left;overflow-wrap:anywhere}
 :root{--bg:#e9ede9;--panel:#f3f6ee;--bar:#d8e0da;--ink:#162a26;--muted:#53635d;--line:#b3c0b8;--accent:#006d5b;--key:#d8e0da;--number:#fafbf8;--lime:#acca4a;--gold:#785600;--alpha:#754584;--operator:#c6d9d2}
 :root[data-theme="dark"]{--bg:#111916;--panel:#09120f;--bar:#202d27;--ink:#e6f0e7;--muted:#9eb3a6;--line:#3c5246;--accent:#79dbb7;--key:#202d27;--number:#2b3731;--lime:#acca4a;--gold:#e7c36e;--alpha:#d6ace9;--operator:#29443a}
 .title-button{display:inline-flex;align-items:center;gap:8px;font:inherit;letter-spacing:inherit;color:inherit;padding:4px 0;min-height:0;border:0;border-radius:4px}.title-icon{display:block;flex-shrink:0;width:24px;height:24px}.about-content{display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center}.about-content p{margin:0}.about-content a{font-size:12px}.about-content button{align-self:flex-end}

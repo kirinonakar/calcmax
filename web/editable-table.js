@@ -1,0 +1,33 @@
+import {element,control} from './app-ui.js';
+import {t} from './i18n.js';
+
+// One spreadsheet surface for statistics, matrices, and vectors.
+export function editableTable({rows,columns,value,onInput,onDeleteRow,label}) {
+  const table=element('table','','editable-table'),head=element('thead'),heading=element('tr'),body=element('tbody');
+  table.setAttribute('aria-label',label);
+  heading.append(element('th','#'));
+  for(const name of columns){const th=element('th',name);th.scope='col';heading.append(th);}
+  if(onDeleteRow)heading.append(element('th',''));
+  head.append(heading);
+  for(let row=0;row<rows;row++){
+    const tr=element('tr'),number=element('th',String(row+1));number.scope='row';tr.append(number);
+    for(let col=0;col<columns.length;col++){
+      const td=element('td'),input=element('input');
+      input.value=value(row,col);input.dataset.row=String(row);input.dataset.column=String(col);
+      input.setAttribute('aria-label',`${columns[col]}, ${row+1}`);
+      input.autocomplete='off';input.spellcheck=false;input.size=1;
+      input.oninput=()=>onInput(row,col,input.value,input);
+      input.onkeydown=event=>{
+        const delta={ArrowLeft:[0,-1],ArrowRight:[0,1],ArrowUp:[-1,0],ArrowDown:[1,0]}[event.key];
+        if(!delta||event.isComposing||event.altKey||event.ctrlKey||event.metaKey||event.shiftKey)return;
+        event.preventDefault();event.stopPropagation();
+        const next=table.querySelector(`input[data-row="${row+delta[0]}"][data-column="${col+delta[1]}"]`);
+        if(next){next.focus({preventScroll:true});next.select();next.scrollIntoView?.({block:'nearest',inline:'nearest'});}
+      };
+      td.append(input);tr.append(td);
+    }
+    if(onDeleteRow){const td=element('td'),remove=control('−',()=>onDeleteRow(row));remove.setAttribute('aria-label',`${t('Delete')} ${row+1}`);td.className='table-row-action';td.append(remove);tr.append(td);}
+    body.append(tr);
+  }
+  table.append(head,body);return table;
+}

@@ -21,7 +21,7 @@ function superscript(base,exponent) {
   script.setAttribute('voffset',radical?'-0.3em':'-0.12em');
   return el('msup',[base,script]);
 }
-export function mathDisplay(tree,digits=10,decimal=false,{notation='off',grouping=false,roundNumbers=true}={}) {
+export function mathDisplay(tree,digits=10,decimal=false,{notation='off',grouping=false,roundNumbers=true,engineeringShift=0,showZeroExponent=false}={}) {
   function draw(t,allowNotation) {
     if (!t) return el('mtext');
     const args = (t.args || []).map(child=>render(child,allowNotation&&t.kind==='unary')), value = t.value || '';
@@ -71,10 +71,12 @@ export function mathDisplay(tree,digits=10,decimal=false,{notation='off',groupin
       case 'number': case 'text': {
         let shown = value;
         if(allowNotation&&notation!=='off'&&/^-?\d+(?:\.\d+)?(?:e[+-]?\d+)?$/i.test(value)&&/[1-9]/.test(value.split(/e/i)[0])) {
-          const [mantissa,exponent='0']=value.replace(/^-/,'').split(/e/i),[whole,fraction='']=mantissa.split('.'),combined=whole+fraction,first=combined.search(/[1-9]/),power=whole.length-first-1+Number(exponent),engPower=notation==='eng'?Math.floor(power/3)*3:power,places=power-engPower+1,normalized=combined.slice(first).padEnd(places,'0');
-          const mantissaText=(value.startsWith('-')?'-':'')+normalized.slice(0,places)+(normalized.length>places?'.'+normalized.slice(places):'');
+          const [mantissa,exponent='0']=value.replace(/^-/,'').split(/e/i),[whole,fraction='']=mantissa.split('.'),combined=whole+fraction,first=combined.search(/[1-9]/),power=whole.length-first-1+Number(exponent),engPower=(notation==='eng'?Math.floor(power/3)*3:power)+engineeringShift,places=power-engPower+1;
+          if(Math.abs(engPower)>40000||Math.abs(places)>40000)return el('mn',[],roundNumber(value,digits));
+          const normalized=combined.slice(first).padEnd(Math.max(0,places),'0');
+          const mantissaText=(value.startsWith('-')?'-':'')+(places<=0?'0.'+'0'.repeat(-places)+normalized:normalized.slice(0,places)+(normalized.length>places?'.'+normalized.slice(places):''));
           const rendered=mathDisplay({kind:'number',value:mantissaText},digits,true,{grouping}).firstChild;
-          return engPower?row([rendered,operator('×'),superscript(el('mn',[],'10'),el('mn',[],String(engPower)))]):rendered;
+          return engPower||showZeroExponent?row([rendered,operator('×'),superscript(el('mn',[],'10'),el('mn',[],String(engPower)))]):rendered;
         }
         if(roundNumbers)shown=roundNumber(value,digits);
         const number=/^-?[\d.]+(?:e[+-]?\d+)?$/i.test(shown);

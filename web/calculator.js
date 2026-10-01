@@ -16,6 +16,7 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
   const {toast,openDialog,clipboard}=ui;
   let lastResult=null,decimal=false,typing=false,overwrite=false,committed=false,screenExpanded=false,grouping=false,mixed=false,lastResultSource='';
   let calcSession=null,activeHistoryEntry=null,inputAnswer=null,tapeRows=null,tapeFormat='';
+  let engineeringConversion=false,engineeringShift=0;
   const tapeFollow=followTape($('calculation-tape'),$('tape-active'));
   const displaySizing=createDisplaySizing(document.querySelector('main'),$('expression-preview'),$('answer'));
   const expressionUndo=[];
@@ -26,6 +27,7 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
   function showResult(result,source='',displaySource=source) {
     if(!result.ok){error(result.error||'계산 오류');return;}
     const previousAnswer=value('mode')==='scientific'?(inputAnswer||state.variables.Ans):state.variables.Ans;
+    engineeringConversion=false;engineeringShift=0;syncEngineering();
     lastResult=result;lastResultSource=displaySource;
     committed=true;$('commit-indicator').textContent='=';
     if(result.resultAst&&!result.assignment) state.variables.Ans=result.resultAst;
@@ -51,19 +53,21 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
     if(mixed&&!decimal&&tree?.kind==='fraction'){
       try{const numerator=BigInt(tree.args[0].value),denominator=BigInt(tree.args[1].value),whole=numerator/denominator,remainder=(numerator<0n?-numerator:numerator)%denominator;if(whole)tree={kind:'mixed',args:[{kind:'number',value:whole.toString()},{kind:'fraction',args:[{kind:'number',value:remainder.toString()},{kind:'number',value:denominator.toString()}]}]};}catch{}
     }
-    $('answer').replaceChildren();
     const text=(decimal ? lastResult.decimal : lastResult.exact)||'';
-    if(tree && text.length<=40000) $('answer').append(mathDisplay(tree,state.digits,decimal||lastResult.approximate,{notation:state.resultDisplayMode,grouping}));
-    else renderFormulas($('answer'),text.split(/\r?\n/),{digits:state.digits});
+    const output=element('div');
+    if(tree && text.length<=40000) output.append(mathDisplay(tree,state.digits,decimal||lastResult.approximate,{notation:engineeringConversion?'eng':state.resultDisplayMode,grouping,engineeringShift,showZeroExponent:engineeringConversion}));
+    else renderFormulas(output,text.split(/\r?\n/),{digits:state.digits});
+    if(output.childNodes.length!==$('answer').childNodes.length||[...output.childNodes].some((node,i)=>!node.isEqualNode($('answer').childNodes[i])))$('answer').replaceChildren(...output.childNodes);
     updateResultSource();
     if(!$('result-source').hidden)renderFormulas($('result-source'),[lastResultSource],{digits:state.digits});
     const notes=[lastResult.note,...(lastResult.conditions||[]),lastResult.calcValues?Object.entries(lastResult.calcValues).map(([name,n])=>`${name} = ${n}`).join(', '):''].filter(Boolean).join('\n');
-    if(notes)$('note').textContent=notes;else if(committed)setText($('note'),'Next input starts a new calculation');else $('note').textContent='';
+    if(engineeringConversion)setText($('note'),'ENG mode · ←/→ shifts mantissa');else if(notes)$('note').textContent=notes;else if(committed)setText($('note'),'Next input starts a new calculation');else $('note').textContent='';
     $('answer-insert').disabled=!lastResult.resultAst;
     displaySizing.refresh();
     renderTape();
   }
   async function evaluate(source=value('expression')) {
+    if(engineeringConversion){exitEngineering();return;}
     if(isBusy())return;
     if(!engine.ready){error('계산 엔진이 로딩 중입니다.');return;}
     if(calcSession){await submitCalcValue();return;}
@@ -107,17 +111,16 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
     if(key===calculationPreviewKey)return;
     cancelCalculationPreview();calculationPreviewKey=key;
     if(value('mode')!=='scientific'||committed||calcSession)return;
-    lastResult=null;lastResultSource='';$('answer').replaceChildren();$('note').textContent='';
-    displaySizing.refresh();
     const source=value('expression');
-    if(!source.trim()||!engine.ready||isBusy())return;
+    if(!source.trim()){clearPreviewResult();return;}
+    if(!engine.ready||isBusy())return;
     let tree;
     try {
       // Typing previews require a complete input, even when = can close brackets.
       tree=evaluationTree(latexInput(source));
       const userFunctions=new Set(Object.keys(state.functions).filter(name=>state.functions[name].parameters?.length>1));
       if(requiresExplicitEvaluation(tree,userFunctions)||
-        ['=',':='].includes(tree.value)&&['symbol','call'].includes(tree.args?.[0]?.kind))return;
+        ['=',':='].includes(tree.value)&&['symbol','call'].includes(tree.args?.[0]?.kind)){clearPreviewResult();return;}
     } catch {return;}
     const revision=calculationPreviewRevision;
     calculationPreviewTimer=setTimeout(async()=>{
@@ -127,7 +130,7 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
         if(revision!==calculationPreviewRevision||key!==calculationPreviewState()||isBusy()||!engine.ready)return;
         const result=await engine.execute({...requestOptions(),tree,budget:2},{background:true});
         if(revision!==calculationPreviewRevision||key!==calculationPreviewState())return;
-        if(result.ok){lastResult=result;lastResultSource=source;renderResult();}
+        if(result.ok){lastResult=result;lastResultSource=source;renderResult();}else clearPreviewResult();
       } catch { /* Incomplete or failed previews leave the input editable. */ }
     },100);
   }
@@ -135,6 +138,7 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
   $('expression-preview').onclick=event=>{inputBoundary=null;const target=event.target.closest('[data-source-start]');if(target){const field=$('expression'),start=Number(target.getAttribute('data-source-start')),end=Number(target.getAttribute('data-source-end'));if(target.classList.contains('selected')||field.selectionStart===field.selectionEnd&&field.selectionStart>=start&&field.selectionStart<=end){const at=inputPointPosition(target,field.value,event.clientX,event.clientY);field.setSelectionRange(at,at);}else field.setSelectionRange(start,end);}else{$('expression').setSelectionRange(value('expression').length,value('expression').length);}preview();};
   function insert(text,cursor=null,{factor=false,fraction=false}={}) {
     if(isBusy())return;
+    if(engineeringConversion)exitEngineering();
     const field=$('expression'),undo=undoStack();undo.push(field.value);if(undo.length>100)undo.shift();
     const outsideFraction=inputBoundary?.edge==='after'&&inputBoundary.source===field.value&&inputBoundary.position===field.selectionStart&&field.selectionStart===field.selectionEnd;
     if(committed){inputAnswer=null;field.value=!lastResult?.assignment&&(fraction||/^[+\-*/÷^%!∠]/.test(text))?'Ans':'';field.setSelectionRange(field.value.length,field.value.length);committed=false;$('commit-indicator').textContent='';}
@@ -153,13 +157,13 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
     const position=start+prefix.length+(cursor??text.length);field.setSelectionRange(position,position);
     if(typing)field.focus({preventScroll:true});preview();
   }
-  $('expression').oninput=()=>{if(value('expression')!==previewSource){const undo=undoStack();undo.push(previewSource);if(undo.length>100)undo.shift();}if(committed)inputAnswer=null;committed=false;if(!calcSession)$('commit-indicator').textContent='';preview();};
+  $('expression').oninput=()=>{if(engineeringConversion)exitEngineering();if(value('expression')!==previewSource){const undo=undoStack();undo.push(previewSource);if(undo.length>100)undo.shift();}if(committed)inputAnswer=null;committed=false;if(!calcSession)$('commit-indicator').textContent='';preview();};
   $('expression').addEventListener('select',renderInputCursor);
   $('expression').addEventListener('keyup',renderInputCursor);
   $('expression').addEventListener('beforeinput',event=>{if(typing&&state.autoCloseBrackets&&event.inputType==='insertText'&&event.data?.length===1&&'()[]{}'.includes(event.data)){event.preventDefault();insert(event.data);}});
   $('expression').addEventListener('paste',event=>{const text=event.clipboardData?.getData('text');if(!text)return;try{const converted=latexInput(text);if(converted!==text){event.preventDefault();insert(converted);}}catch(exc){event.preventDefault();toast(exc.message);}});
   $('expression').addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();event.stopPropagation();if(!event.repeat)evaluate();}if(event.key==='Escape'){event.preventDefault();if(calcSession)cancelCalc();else if(isBusy())engine.cancel();else{$('expression').value='';preview();}}});
-  $('clear').onclick=()=>{if(calcSession){cancelCalc();return;}expressionUndo.push(value('expression'));$('expression').value='';committed=false;lastResult=null;activeHistoryEntry=null;inputAnswer=null;$('answer').replaceChildren();$('note').textContent='';$('commit-indicator').textContent='';preview();};
+  $('clear').onclick=()=>{if(engineeringConversion)exitEngineering();if(calcSession){cancelCalc();return;}expressionUndo.push(value('expression'));$('expression').value='';committed=false;lastResult=null;activeHistoryEntry=null;inputAnswer=null;$('answer').replaceChildren();$('note').textContent='';$('commit-indicator').textContent='';preview();};
   $('undo').onclick=()=>{if(isBusy())return;const undo=undoStack();if(undo.length){const field=$('expression');field.value=undo.pop();field.setSelectionRange(field.value.length,field.value.length);committed=false;if(!calcSession)$('commit-indicator').textContent='';preview();}};
   $('copy').onclick=()=>{const f=$('expression');clipboard(f.value.slice(f.selectionStart,f.selectionEnd)||f.value);};
   $('cut').onclick=()=>{const field=$('expression'),start=field.selectionStart,end=field.selectionEnd;if(start!==end){clipboard(field.value.slice(start,end));undoStack().push(field.value);field.setRangeText('',start,end,'end');committed=false;preview();}};
@@ -183,6 +187,7 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
     if(typing)$('expression').focus({preventScroll:true});
   }
   async function startCalc(){
+    if(engineeringConversion){exitEngineering();return;}
     if(isBusy())return;
     if(calcSession){await submitCalcValue();return;}
     try{
@@ -223,6 +228,8 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
       if(input==='AC'){cancelCalc();return;}
       if(input==='='||input==='CALC')return submitCalcValue();
     }
+    if(engineeringConversion&&['LEFT','RIGHT'].includes(input)){engineeringShift=Math.max(-40000,Math.min(40000,engineeringShift+(input==='LEFT'?1:-1)));renderResult();return;}
+    if(engineeringConversion&&!['ENG','ENG−','=','CALC','AC','CLR ALL'].includes(input))exitEngineering();
     if(input==='CALC')startCalc();
     else if(input==='=')evaluate();
     else if(input==='SOLVE')evaluate(`solve(${value('expression')||'x'},x)`);
@@ -251,7 +258,7 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
     else if(input==='M+'||input==='M−'){
       return updateMemory(input);
     }
-    else if(input==='ENG'||input==='ENG−')return transformAnswer(`eng(Ans${input==='ENG−'?',3':''})`);
+    else if(input==='ENG'||input==='ENG−'){if(lastResult){engineeringConversion=true;engineeringShift=input==='ENG−'?3:0;syncEngineering();renderResult();}}
     else if(input==='DMS')return transformAnswer('dms(Ans)');
     else if(input==='DMS_INPUT'){const markers=value('expression').match(/[°′″]/g)||[];insert(['°','′','″'][markers.length%3]);}
     else if(input==='RANDOM')insert(String(Math.random()));
@@ -269,11 +276,15 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
   async function transformAnswer(source) {
     if(lastResult?.resultAst){const result=await engine.execute({...requestOptions(),tree:parse(source)});showResult(result);}
   }
+  function clearPreviewResult(){engineeringConversion=false;engineeringShift=0;syncEngineering();lastResult=null;lastResultSource='';$('answer').replaceChildren();$('note').textContent='';displaySizing.refresh();}
+  function syncEngineering(){document.documentElement.dataset.engineeringConversion=String(engineeringConversion);$('keypad').querySelectorAll('[data-input="ENG"]').forEach(button=>button.classList.toggle('active',engineeringConversion));}
+  function exitEngineering(){engineeringConversion=false;engineeringShift=0;syncEngineering();renderResult();}
   function applyFonts(){document.documentElement.style.setProperty('--input-font',state.inputFont+'px');document.documentElement.style.setProperty('--output-font',state.outputFont+'px');renderInputCursor();}
   function applyWordWrap(){document.documentElement.dataset.wordWrap=String(state.wordWrap);$('expression').wrap=state.wordWrap?'soft':'off';for(const id of ['expression-preview','expression']){$(id).scrollLeft=0;$(id).scrollTop=0;}}
   applyWordWrap();
   applyFonts();
   document.addEventListener('keydown',event=>{
+    if(engineeringConversion&&!event.defaultPrevented&&!event.isComposing&&!event.altKey&&!event.ctrlKey&&!event.metaKey&&value('mode')==='scientific'&&!$('dialog').open&&!$('settings-dialog').open&&['ArrowLeft','ArrowRight'].includes(event.key)&&(!event.target.closest('input,select,textarea')||event.target===$('expression'))){event.preventDefault();event.stopPropagation();handleKey(event.key==='ArrowLeft'?'LEFT':'RIGHT');return;}
     if(!event.defaultPrevented&&!event.isComposing&&!event.altKey&&value('mode')==='scientific'&&!$('dialog').open&&!$('settings-dialog').open&&['Home','End'].includes(event.key)&&(!event.target.closest('input,select,textarea,[contenteditable="true"]')||event.target===$('expression'))){
       event.preventDefault();event.stopPropagation();
       const field=$('expression'),position=moveMathCursor(field.value,field.selectionStart,field.selectionEnd,event.key.toUpperCase()),anchor=event.shiftKey?(field.selectionDirection==='backward'?field.selectionEnd:field.selectionStart):position;
