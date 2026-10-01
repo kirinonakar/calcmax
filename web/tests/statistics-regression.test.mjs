@@ -65,7 +65,7 @@ test('New empties text and table, cancels regression, clears plots and selection
   assert.deepEqual(state.datasets,{saved:'1,2\n2,4'});assert.deepEqual(state.datasetKinds,{saved:'xy'});
   requests[0].resolve({ok:true,exact:'2*x',curve:[[1,2],[2,4]]});await pending;
   assert.equal(results.length,0);assert.equal($('statistics-plot').hidden,true);
-  $('statistics-add-row').click();assert.equal($('statistics-data').value,'0,0');
+  $('statistics-add-row').click();assert.equal($('statistics-data').value,',');
   $('dataset-list').value='saved';$('dataset-list').dispatchEvent(new document.defaultView.Event('change'));
   assert.equal($('statistics-data').value,'1,2\n2,4');
 });
@@ -93,6 +93,37 @@ test('selecting an empty saved dataset clears the workspace and retains its sele
   delete state.datasetKinds.empty;select('empty');
   assert.equal($('statistics-data').value,'');assert.equal($('statistics-kind').value,'list');
   assert.deepEqual(context.errors,[]);
+});
+
+test('new and added statistics rows stay blank across editing, saving, and data types',t=>{
+  const context=workspace(t),{$,statistics,errors}=context;
+  $('statistics-table-toggle').click();
+  const cell=(row,col)=>$('statistics-grid').querySelector(`input[data-row="${row}"][data-column="${col}"]`);
+  const change=id=>$(id).dispatchEvent(new document.defaultView.Event('change'));
+  for(const [kind,columns] of [['list',1],['xy',2],['xyz',3]]){
+    $('statistics-kind').value=kind;change('statistics-kind');$('statistics-new').click();
+    assert.equal($('statistics-data').value,'');
+    assert.equal($('statistics-grid').querySelectorAll('tbody tr').length,0);
+    $('statistics-add-row').click();$('statistics-add-row').click();statistics.render();
+    assert.equal($('statistics-grid').querySelectorAll('tbody tr').length,2);
+    assert.deepEqual([...$('statistics-grid').querySelectorAll('input')].map(input=>input.value),Array(columns*2).fill(''));
+    cell(1,0).value='5';cell(1,0).dispatchEvent(new document.defaultView.Event('input'));
+    $('statistics-add-row').click();
+    assert.equal($('statistics-grid').querySelectorAll('tbody tr').length,3);
+    assert.equal(cell(0,0).value,'');assert.equal(cell(1,0).value,'5');assert.equal(cell(2,0).value,'');
+    $('statistics-op').value='mean';$('statistics-column').value='0';$('statistics-grouping').value='columns';
+    assert.equal(statistics.expression(),'mean([5])','blank rows must not become zero observations');
+    $('dataset-name').value=`blank-${kind}`;$('dataset-save').click();$('statistics-new').click();
+    $('dataset-list').value=`blank-${kind}`;change('dataset-list');
+    assert.equal($('statistics-grid').querySelectorAll('tbody tr').length,3);
+    assert.equal(cell(0,0).value,'');assert.equal(cell(1,0).value,'5');assert.equal(cell(2,0).value,'');
+    $('statistics-table-toggle').click();$('statistics-table-toggle').click();
+    assert.equal($('statistics-grid').querySelectorAll('tbody tr').length,3);
+    $('statistics-grid').querySelectorAll('.table-row-action button')[1].click();
+    assert.equal($('statistics-grid').querySelectorAll('tbody tr').length,2);
+    assert.deepEqual([...$('statistics-grid').querySelectorAll('input')].map(input=>input.value),Array(columns*2).fill(''));
+  }
+  assert.deepEqual(errors,[]);
 });
 
 test('invalid input and failed fits release busy state; edited input discards old results',async t=>{

@@ -1,8 +1,8 @@
 import {parse} from './parser.js';
-export function csvRows(source,{maxColumns=3,skipHeader=true}={}){
+export function csvRows(source,{maxColumns=3,skipHeader=true,preserveEmptyRows=false}={}){
   const rows=[];let row=[],cell='',quoted=false;
-  for(let i=0;i<source.length;i++){const ch=source[i];if(ch==='"'){if(quoted&&source[i+1]==='"'){cell+='"';i++;}else quoted=!quoted;}else if(!quoted&&(ch===','||ch==='\t')){row.push(cell.trim());cell='';}else if(!quoted&&(ch==='\n'||ch==='\r')){if(ch==='\r'&&source[i+1]==='\n')i++;row.push(cell.trim());if(row.some(Boolean))rows.push(row);row=[];cell='';}else cell+=ch;}
-  if(quoted)throw new Error('Unclosed CSV quote');row.push(cell.trim());if(row.some(Boolean))rows.push(row);
+  for(let i=0;i<source.length;i++){const ch=source[i];if(ch==='"'){if(quoted&&source[i+1]==='"'){cell+='"';i++;}else quoted=!quoted;}else if(!quoted&&(ch===','||ch==='\t')){row.push(cell.trim());cell='';}else if(!quoted&&(ch==='\n'||ch==='\r')){if(ch==='\r'&&source[i+1]==='\n')i++;row.push(cell.trim());if(row.some(Boolean)||preserveEmptyRows)rows.push(row);row=[];cell='';}else cell+=ch;}
+  if(quoted)throw new Error('Unclosed CSV quote');row.push(cell.trim());if(row.some(Boolean)||preserveEmptyRows&&source.length&&!/[\r\n]$/.test(source))rows.push(row);
   if(!rows.length||rows.length>5000)throw new Error('Enter 1–5000 data rows');
   if(skipHeader&&['x','n','value','y','x,y','group,value','date,value','date,y','x,y,z'].includes(rows[0].map(s=>s.toLowerCase()).join(',')))rows.shift();
   if(!rows.length)throw new Error('Enter data below the header');

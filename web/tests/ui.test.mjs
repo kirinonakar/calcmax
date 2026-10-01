@@ -579,6 +579,9 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
     change('statistics-kind','xyz');
     change('statistics-op','mean');$('statistics-table-toggle').click();
     assert.deepEqual([...$('statistics-grid').querySelectorAll('thead th')].map(th=>th.textContent),['#','x','y','z','']);
+    assert.deepEqual([...$('statistics-grid').querySelectorAll('col')].map(col=>col.style.width),['36px','','','','36px'],'row numbers and delete controls have their own fixed columns');
+    assert.equal(window.getComputedStyle($('statistics-grid').querySelector('table')).minWidth,'312px','narrow viewports scroll instead of collapsing data columns');
+    assert.equal(parseFloat(window.getComputedStyle($('statistics-grid').querySelector('input')).minWidth),0,'inputs stay inside their assigned columns');
     assert.equal(window.getComputedStyle($('statistics-grid').querySelector('tbody th')).top,'auto','row labels do not overlap the column header when scrolling');
     assert.equal($('statistics-column').disabled,false);assert.equal($('statistics-first-group').disabled,true);assert.equal($('statistics-second-group').disabled,true);assert.equal($('statistics-extra').disabled,true);assert.equal($('statistics-tail').disabled,true);
     const cell=(holder,row,col)=>$(holder).querySelector(`input[data-row="${row}"][data-column="${col}"]`);
@@ -591,6 +594,7 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
     change('statistics-op','correlation');assert.equal($('statistics-grouping').disabled,true);assert.equal($('statistics-first-group').disabled,true);assert.equal($('statistics-second-group').disabled,true);
     $('statistics-table-toggle').click();change('statistics-op','mean');$('statistics-data').value='1,2\n2,4\n3,6\n4,8';$('statistics-data').dispatchEvent(new window.Event('input'));change('statistics-kind','xy');
     change('mode','matrix');assert.ok($('matrix-grid').querySelector('table.editable-table'));cell('matrix-grid',0,0).focus();move('ArrowRight');move('ArrowDown');assert.equal(document.activeElement,cell('matrix-grid',1,1));
+    assert.deepEqual([...$('matrix-grid').querySelectorAll('col')].map(col=>col.style.width),['36px','','',''],'matrix columns share the same stable table layout without a delete column');
     assert.equal(parseFloat(window.getComputedStyle(cell('matrix-grid',1,1)).borderRadius),0);
     cell('matrix-grid',1,1).value='2/3';cell('matrix-grid',1,1).dispatchEvent(new window.Event('input'));assert.equal(JSON.parse(localStorage.getItem('calcmax-web-v1')).matrixCells['m-1-1'],'2/3');
     cell('matrix-grid',1,1).value='1';cell('matrix-grid',1,1).dispatchEvent(new window.Event('input'));

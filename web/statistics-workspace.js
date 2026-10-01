@@ -100,9 +100,11 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
   $('statistics-op').onchange=()=>{if(['tinterval','zinterval'].includes(value('statistics-op'))&&value('statistics-extra')==='0')$('statistics-extra').value='95';statisticsControls();refreshWorkspaceMath();};
   $('statistics-grouping').onchange=()=>{statisticsControls();refreshWorkspaceMath();};
   for(const id of ['statistics-column','statistics-first-group','statistics-second-group'])$(id).onchange=()=>{statisticsControls();refreshWorkspaceMath();};
-  function writeRows(rows){$('statistics-data').value=rows.map(row=>row.map(cell=>/[",\r\n]/.test(cell)?'"'+cell.replace(/"/g,'""')+'"':cell).join(',')).join('\n');statisticsControls();refreshWorkspaceMath();persist();}
+  function editorRows(){return value('statistics-data').trim()?csvRows(value('statistics-data'),{preserveEmptyRows:true}):[];}
+  // Quote an empty List cell so a blank row survives serialization and reload.
+  function writeRows(rows){$('statistics-data').value=rows.map(row=>row.length===1&&!row[0]?'""':row.map(cell=>/[",\r\n]/.test(cell)?'"'+cell.replace(/"/g,'""')+'"':cell).join(',')).join('\n');statisticsControls();refreshWorkspaceMath();persist();}
   function statisticsGrid(){
-    const rows=value('statistics-data').trim()?csvRows(value('statistics-data')):[],columns=dataColumns();
+    const rows=editorRows(),columns=dataColumns();
     const table=editableTable({rows:rows.length,columns:['x','y','z'].slice(0,columns),label:t('Stats data'),value:(row,col)=>rows[row][col]||'',
       onInput:(row,col,cell)=>{while(rows[row].length<columns)rows[row].push('');rows[row][col]=cell;writeRows(rows);},
       onDeleteRow:row=>{rows.splice(row,1);writeRows(rows);statisticsGrid();}});
@@ -115,7 +117,7 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
     setText($('statistics-table-toggle'),tableMode?'Direct input':'Table editor');
     $('statistics-table-toggle').setAttribute('aria-pressed',String(tableMode));
   };
-  $('statistics-add-row').onclick=()=>{try{const rows=value('statistics-data').trim()?csvRows(value('statistics-data')):[],columns=Math.max(dataColumns(),rows[0]?.length||0);rows.push(Array.from({length:columns},(_,i)=>i<dataColumns()?'0':''));writeRows(rows);if(!$('statistics-grid').hidden)statisticsGrid();}catch(exc){error(exc.message);}};
+  $('statistics-add-row').onclick=()=>{try{const rows=editorRows(),columns=Math.max(dataColumns(),rows[0]?.length||0);rows.push(Array(columns).fill(''));writeRows(rows);if(!$('statistics-grid').hidden)statisticsGrid();}catch(exc){error(exc.message);}};
   $('statistics-data').addEventListener('input',statisticsControls);
   $('statistics-data').addEventListener('change',()=>{statisticsControls();if(!$('statistics-grid').hidden)statisticsGrid();});
   $('statistics-store').onclick=async()=>{const name=value('dataset-name').trim();if(!/^[A-Za-z][A-Za-z0-9_]*$/.test(name)){error('Dataset name must be a valid variable name');return;}try{await storeExpression(name,statisticsDatasetSource(value('statistics-data'),value('statistics-kind')));}catch(exc){error(exc.message);}};

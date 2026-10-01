@@ -8,6 +8,16 @@ import {moveMathCursor,fractionExit} from '../input-navigation.js';
 import {roundNumber} from '../display-format.js';
 import {tipCommand} from '../money.js';
 
+test('CSV editing preserves empty rows while analysis omits them',()=>{
+  const source=',\r\n1,2\r\n,\r\n3,4\r\n,';
+  assert.deepEqual(csvRows(source,{preserveEmptyRows:true}),[['',''],['1','2'],['',''],['3','4'],['','']]);
+  assert.deepEqual(csvRows(source),[['1','2'],['3','4']]);
+  assert.deepEqual(csvRows('""\n5\n""',{preserveEmptyRows:true}),[[''],['5'],['']]);
+  assert.deepEqual(csvRows('1,2\n',{preserveEmptyRows:true}),[['1','2']]);
+  assert.deepEqual(csvRows('"a\nb",2\n,',{preserveEmptyRows:true}),[['a\nb','2'],['','']]);
+  assert.throws(()=>csvRows(',\n,'),/Enter 1–5000 data rows/);
+});
+
 test('Home and End address the whole source even when selected, multiline, or invalid',()=>{
   for(const source of ['','1/2+sqrt(3)','12+*3','1+2\n+3']){
     assert.equal(moveMathCursor(source,0,source.length,'HOME'),0);

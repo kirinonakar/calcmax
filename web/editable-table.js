@@ -3,7 +3,12 @@ import {t} from './i18n.js';
 
 // One spreadsheet surface for statistics, matrices, and vectors.
 export function editableTable({rows,columns,value,onInput,onDeleteRow,label}) {
-  const table=element('table','','editable-table'),head=element('thead'),heading=element('tr'),body=element('tbody');
+  const table=element('table','','editable-table'),colgroup=element('colgroup'),head=element('thead'),heading=element('tr'),body=element('tbody');
+  // Fixed table layout needs explicit column sizes; cell min-width is unreliable.
+  table.style.minWidth=`${columns.length*80+36+(onDeleteRow?36:0)}px`;
+  const numberColumn=element('col');numberColumn.style.width='36px';colgroup.append(numberColumn);
+  colgroup.append(...columns.map(()=>element('col')));
+  if(onDeleteRow){const actionColumn=element('col');actionColumn.style.width='36px';colgroup.append(actionColumn);}
   table.setAttribute('aria-label',label);
   heading.append(element('th','#'));
   for(const name of columns){const th=element('th',name);th.scope='col';heading.append(th);}
@@ -29,5 +34,5 @@ export function editableTable({rows,columns,value,onInput,onDeleteRow,label}) {
     if(onDeleteRow){const td=element('td'),remove=control('−',()=>onDeleteRow(row));remove.setAttribute('aria-label',`${t('Delete')} ${row+1}`);td.className='table-row-action';td.append(remove);tr.append(td);}
     body.append(tr);
   }
-  table.append(head,body);return table;
+  table.append(colgroup,head,body);return table;
 }
