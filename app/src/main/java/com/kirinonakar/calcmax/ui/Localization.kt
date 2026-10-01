@@ -55,7 +55,7 @@ private val korean = mapOf(
     "Edit" to "편집", "Insert" to "삽입", "Python code" to "Python 코드", "Enter" to "입력",
     "Open .py" to ".py 열기",
     "Discard" to "버리기", "Unsaved changes" to "저장하지 않은 변경 사항",
-    "Reset" to "초기화", "Reset sliders" to "슬라이더 초기화", "Rotate" to "회전", "Tilt" to "기울기", "Zoom" to "확대",
+    "Reset" to "초기화", "Reset ranges" to "범위 초기화", "Reset sliders" to "슬라이더 초기화", "Rotate" to "회전", "Tilt" to "기울기", "Zoom" to "확대", "Half height" to "높이 ½", "Full height" to "전체 높이",
     "Graph range" to "그래프 범위", "Automatic z range" to "z 범위 자동 설정",
     "One [x(t),y(t)] pair per line" to "한 줄에 [x(t),y(t)] 한 쌍",
     "r(t) · radians · one curve per line" to "r(t) · 라디안 · 한 줄에 곡선 하나",

@@ -1,5 +1,5 @@
 import {parse,latexInput} from './parser.js';
-import {plot} from './plot.js';
+import {plotGraph as plot} from './graph-canvas.js';
 import {mathDisplay} from './math-display.js';
 import {renderFormulas} from './formula-preview.js';
 import {displayNumber} from './display-format.js';
@@ -43,7 +43,16 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
   const $=id=>document.getElementById(id),value=id=>$(id).value,kind=()=>value('graph-kind');
   const onError=message=>{setText($('graph-status'),message);$('graph-status').classList.add('error');reportError(message);};
   let result=null,bounds=null,analysis=null,trace=null,integral=null,parameters={...(saved.parameters||{})},parameterRanges={...(saved.parameterRanges||{})},derivative=null,radianAxis=!!saved.radianAxis,active=false,pending=false,timer=null,animation=null,revision=0,analysisRevision=0,signature='';
+  let animationEnabled={...(saved.animationEnabled||{})},halfHeight=!!saved.halfHeight,running=false,frame=null,formulaSignature='',tableResult=null,tableDigits=null,tableLanguage=null;
+  const window=$('graph-plot').ownerDocument.defaultView;
+  const requestFrame=callback=>window.requestAnimationFrame?window.requestAnimationFrame(callback):window.setTimeout(callback,16);
+  const cancelFrame=id=>window.cancelAnimationFrame?window.cancelAnimationFrame(id):window.clearTimeout(id);
+  function draw(){if(result&&bounds){let range;try{range=result.surface?zRange():null;}catch{return;}plot($('graph-plot'),range?{...result,zMin:range[0],zMax:range[1]}:result,bounds,{digits:options().displayDigits,dots:kind()==='sequence',analysis,trace,integral,selected:selected(),radianAxis,halfHeight,surfaceView:surface});}}
+  function queueDraw(){if(frame!==null)return;frame=requestFrame(()=>{frame=null;draw();});}
+  const resizeObserver=window.ResizeObserver?new window.ResizeObserver(queueDraw):null;
+  resizeObserver?.observe($('graph-plot'));
   const surface={rotation:35,elevation:32,zoom:1,renderMode:'wireframe',color:'#007b68',samples:26,autoDensity:true,autoZ:!['graph-zmin','graph-zmax'].every(id=>Number.isFinite(saved.ranges?.[id])),...saved.surface};
+  surface.elevation=Number.isFinite(surface.elevation)?Math.max(-90,Math.min(90,surface.elevation)):32;
   if(!['wireframe','surface','surface-wireframe'].includes(surface.renderMode))surface.renderMode='wireframe';
   if(!/^#[0-9a-f]{6}$/i.test(surface.color))surface.color='#007b68';
   surface.samples=Number.isFinite(surface.samples)?Math.max(12,Math.min(96,Math.round(surface.samples))):26;
@@ -85,7 +94,7 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
     if(!trees.length&&!shadings.length)throw new Error('Enter a function to graph');
     if(![min,max,...Object.values(view)].every(Number.isFinite)||max<=min||view.xmax<=view.xmin||view.ymax<=view.ymin)throw new Error('Enter finite values with minimum < maximum');
     if(kind()==='surface')zRange();
-    const request={...options(),action:'graph',angle:'RAD',graphKind:kind(),trees,shadings,min,max,yMin:view.ymin,yMax:view.ymax,surfaceYMin:view.ymin,surfaceYMax:view.ymax,parameters,variable:['parametric','polar','differential'].includes(kind())?'t':kind()==='sequence'?'n':'x',samples:500};
+    const request={...options(),action:'graph',angle:'RAD',graphKind:kind(),trees,shadings,min,max,xMin:view.xmin,xMax:view.xmax,yMin:view.ymin,yMax:view.ymax,surfaceYMin:view.ymin,surfaceYMax:view.ymax,parameters:{...parameters},variable:['parametric','polar','differential'].includes(kind())?'t':kind()==='sequence'?'n':'x',samples:500};
     if(kind()==='surface')request.surfaceSamples=surfaceSampleCount(view,surface.samples,surface.autoDensity,surface.zoom);
     if(kind()==='sequence')request.initialTrees=splitTopLevel(value('graph-initial')).map(s=>parse(s));
     if(kind()==='differential'){request.initialValues=splitTopLevel(value('graph-initial')).map(Number);request.t0=numeric('graph-t0');}
@@ -93,13 +102,14 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
     return request;
   }
   function densityControls(){const count=surfaceSampleCount(currentBounds(),surface.samples,surface.autoDensity,surface.zoom);$('graph-auto-density').checked=surface.autoDensity;$('graph-surface-samples').disabled=surface.autoDensity;$('graph-surface-samples').value=String(count);$('graph-surface-samples-value').textContent=`${count} × ${count}`;}
-  function queue(){pending=true;densityControls();clearTimeout(timer);if(!active)return;timer=setTimeout(()=>{timer=null;if(active&&!isBusy()&&isReady())run();},180);}
-  function flush(){if(pending&&active&&!isBusy()&&isReady())queue();}
+  function queue(){pending=true;densityControls();clearTimeout(timer);if(!active)return;timer=setTimeout(()=>{timer=null;if(active&&!running&&!isBusy()&&isReady())run();},180);}
+  function flush(){if(pending&&active&&!running&&!isBusy()&&isReady()&&timer===null)queue();}
   function selections(){
     const count=expressions().length;
     for(const id of ['graph-selected','graph-other']){const before=value(id)===''?(id==='graph-other'?1:0):Number(value(id));$(id).replaceChildren(...Array.from({length:count},(_,i)=>{const option=document.createElement('option');option.value=String(i);option.textContent=`f${i+1}`;return option;}));$(id).value=String(Math.min(before,Math.max(0,count-1)));}
   }
   function formulas(){
+    const next=JSON.stringify([value('graph-source'),kind(),derivative,selected(),options().displayDigits,document.documentElement.lang]);if(next===formulaSignature)return;formulaSignature=next;
     const variable=kind()==='sequence'?'n':['parametric','polar','differential'].includes(kind())?'t':'x',labels=expressions().map((s,i)=>kind()==='implicit'?implicitFormula(s):kind()==='parametric'?`f${i+1}(t)=${s}`:kind()==='surface'?`z=${s}`:kind()==='differential'?`diff(y,t)=${s}`:kind()==='polar'?`r${i+1}(t)=${s}`:`f${i+1}(${variable})=${s}`);
     if(derivative!==null&&kind()==='cartesian'&&expressions()[derivative])labels.push(`diff((${expressions()[derivative]}),x)`);
     for(const line of graphSources(value('graph-source'),kind()).filter(s=>s.startsWith('[shade]')))labels.push(line.slice(7).split(';')[0].trim());
@@ -111,7 +121,7 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
     });
   }
   function render(){
-    densityControls();formulas();renderRangeNumbers();for(const caption of $('graph-parameters').querySelectorAll('[data-parameter]'))caption.textContent=`${caption.dataset.parameter} = ${displayNumber(parameters[caption.dataset.parameter],options().displayDigits)}`;if(!result||!bounds)return;
+    heightControls();densityControls();formulas();renderRangeNumbers();for(const caption of $('graph-parameters').querySelectorAll('[data-parameter]'))caption.textContent=`${caption.dataset.parameter} = ${displayNumber(parameters[caption.dataset.parameter],options().displayDigits)}`;if(!result||!bounds)return;
     for(const [id,number,suffix] of [['graph-rotation',surface.rotation,'°'],['graph-elevation',surface.elevation,'°'],['graph-surface-zoom',surface.zoom*100,'%']]){let output=$(id+'-value');if(!output){output=document.createElement('output');output.id=id+'-value';$(id).insertAdjacentElement('afterend',output);}output.textContent=displayNumber(number,options().displayDigits)+suffix;}
     let shown=result;
     if(result.surface){
@@ -119,11 +129,12 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
       const [zMin,zMax]=range;shown={...result,zMin,zMax};
       if(surface.autoZ){showNumber('graph-zmin',zMin);showNumber('graph-zmax',zMax);resetRangeDomain(pairedSliders.get('graph-zmin'));}
     }
-    plot($('graph-plot'),shown,bounds,{digits:options().displayDigits,dots:kind()==='sequence',analysis,trace,integral,selected:selected(),radianAxis,surfaceView:surface});
+    plot($('graph-plot'),shown,bounds,{digits:options().displayDigits,dots:kind()==='sequence',analysis,trace,integral,selected:selected(),radianAxis,halfHeight,surfaceView:surface});
     table();renderAnalysis();
     $('graph-trace').replaceChildren();if(trace)$('graph-trace').append(mathDisplay({kind:'relation',value:'≈',args:[{kind:'symbol',value:'Trace'},{kind:'tuple',args:trace.map(n=>({kind:'number',value:String(n)}))}]},options().displayDigits,true));
   }
   function table(){
+    if(tableResult===result&&tableDigits===options().displayDigits&&tableLanguage===document.documentElement.lang)return;tableResult=result;tableDigits=options().displayDigits;tableLanguage=document.documentElement.lang;
     const table=document.createElement('table'),head=document.createElement('thead'),header=document.createElement('tr');
     for(const name of ['Curve','x / n','y',...(result.curveParameters?['t']:result.surface?['z']:[])]){const th=document.createElement('th');th.textContent=t(name);header.append(th);}head.append(header);table.append(head);const body=document.createElement('tbody');
     (result.curves||result.surface||[]).forEach((curve,i)=>curve.forEach((point,index)=>{if(!point||index%Math.max(1,Math.floor(curve.length/60))!==0)return;const row=document.createElement('tr');for(const number of [i+1,...point,...(result.curveParameters?[result.curveParameters[i]?.[index]]:[])]){const td=document.createElement('td');td.textContent=displayNumber(number,options().displayDigits);row.append(td);}if(!result.surface){row.tabIndex=0;const pick=()=>{trace=point;render();};row.onclick=pick;row.onkeydown=e=>{if(['Enter',' '].includes(e.key)){e.preventDefault();pick();}};}body.append(row);}));table.append(body);$('graph-table').replaceChildren(table);
@@ -133,21 +144,22 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
     $('graph-parameters').dataset.names=JSON.stringify(names);
     $('graph-parameters').replaceChildren();$('graph-parameter-actions').hidden=!names.length;
     for(const name of names){if(!(name in parameters))parameters[name]=1;const limits=parameterRanges[name]||[-5,5],label=document.createElement('label'),caption=document.createElement('span'),input=document.createElement('input'),ranges=document.createElement('div'),low=document.createElement('input'),high=document.createElement('input');
+      const toggleLabel=document.createElement('label'),toggle=document.createElement('input');toggleLabel.className='check';toggle.type='checkbox';toggle.checked=animationEnabled[name]!==false;toggle.dataset.animateParameter=name;toggle.setAttribute('aria-label',`${t('Animate')}: ${name}`);toggle.onchange=()=>{animationEnabled[name]=toggle.checked;persist();};toggleLabel.append(toggle,document.createTextNode(`${t('Animate')} ${name}`));
       input.type='range';input.min=String(limits[0]);input.max=String(limits[1]);input.step='any';input.value=String(parameters[name]);caption.dataset.parameter=name;caption.textContent=`${name} = ${displayNumber(parameters[name],options().displayDigits)}`;
       input.oninput=()=>{parameters[name]=Number(input.value);caption.textContent=`${name} = ${displayNumber(parameters[name],options().displayDigits)}`;analysis=null;queue();};
       for(const [field,number,labelText] of [[low,limits[0],'Slider minimum'],[high,limits[1],'Slider maximum']]){field.type='number';field.step='any';field.value=String(number);field.setAttribute('aria-label',`${t(labelText)}: ${name}`);field.onchange=()=>{const a=Number(low.value),b=Number(high.value);if(!Number.isFinite(a)||!Number.isFinite(b)||a>=b){onError(t('Enter finite values with minimum < maximum'));return;}parameterRanges[name]=[a,b];parameters[name]=Math.max(a,Math.min(b,parameters[name]));parameterControls(names,true);queue();};}
-      ranges.className='form-row';ranges.append(low,high);label.append(caption,input,ranges);$('graph-parameters').append(label);
+      ranges.className='form-row';ranges.append(low,high);label.append(caption,input,ranges);const group=document.createElement('div');group.append(label,toggleLabel);$('graph-parameters').append(group);
     }
   }
   async function run(){
-    clearTimeout(timer);timer=null;if(isBusy()||!isReady()){pending=true;return;}pending=false;
+    clearTimeout(timer);timer=null;if(running||isBusy()||!isReady()){pending=true;return;}pending=false;running=true;
     try{
       const request=makeRequest(),token=++revision,source=value('graph-source'),graphKind=kind(),view=currentBounds();
       const nextSignature=JSON.stringify([source,graphKind,parameters,derivative]);if(nextSignature!==signature){analysis=null;trace=null;integral=null;analysisRevision++;signature=nextSignature;}
       const response=await execute(request);if(token!==revision||source!==value('graph-source')||graphKind!==kind())return;
       if(!response.ok){onError(response.error);return;}
-      result=response;bounds=pending?currentBounds():view;$('graph-status').textContent='';selections();parameterControls(response.parameters);render();persist();
-    }catch(error){onError(error.message);}
+      result=response;bounds=currentBounds();$('graph-status').textContent='';selections();parameterControls(response.parameters);render();persist();
+    }catch(error){onError(error.message);}finally{running=false;flush();}
   }
   function renderAnalysis(){
     const container=$('graph-analysis-result');container.replaceChildren();if(!analysis)return;
@@ -167,11 +179,14 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
       analysis=response;$('graph-status').textContent='';integral=action==='integral'&&graphKind==='cartesian'?[a,b]:null;trace=response.points?.[0]||null;$('graph-analysis-action').value=action;analysisControls();render();
     }catch(error){onError(error.message);}
   }
-  function changeView(next,commit=true){if(!Object.values(next).every(Number.isFinite)||next.xmin>=next.xmax||next.ymin>=next.ymax){onError('Enter finite values with minimum < maximum');return;}bounds=next;writeBounds(next);render();if(commit){persist();if(['cartesian','implicit','surface','differential'].includes(kind()))queue();}}
-  function surfaceChange(dx,dy,zoom){const previousCount=surfaceSampleCount(currentBounds(),surface.samples,surface.autoDensity,surface.zoom);surface.rotation=((surface.rotation+dx*.7)%360+360)%360;surface.elevation=Math.max(5,Math.min(85,surface.elevation+dy*.5));surface.zoom=Math.max(.4,Math.min(3,surface.zoom*zoom));$('graph-rotation').value=String(surface.rotation);$('graph-elevation').value=String(surface.elevation);$('graph-surface-zoom').value=String(surface.zoom);render();persist();if(surface.autoDensity&&previousCount!==surfaceSampleCount(currentBounds(),surface.samples,true,surface.zoom))queue();}
+  function changeView(next,commit=true){if(!Object.values(next).every(Number.isFinite)||next.xmin>=next.xmax||next.ymin>=next.ymax){onError('Enter finite values with minimum < maximum');return;}bounds=next;writeBounds(next);queueDraw();if(commit){render();persist();if(['cartesian','implicit','surface','differential'].includes(kind()))queue();}}
+  function surfaceChange(dx,dy,zoom){const previousCount=surfaceSampleCount(currentBounds(),surface.samples,surface.autoDensity,surface.zoom);surface.rotation=((surface.rotation+dx*.7)%360+360)%360;surface.elevation=Math.max(-90,Math.min(90,surface.elevation+dy*.5));surface.zoom=Math.max(.4,Math.min(3,surface.zoom*zoom));$('graph-rotation').value=String(surface.rotation);$('graph-elevation').value=String(surface.elevation);$('graph-surface-zoom').value=String(surface.zoom);queueDraw();persist();if(surface.autoDensity&&previousCount!==surfaceSampleCount(currentBounds(),surface.samples,true,surface.zoom))queue();}
   const disposeGestures=bindGraphGestures($('graph-plot'),{getBounds:()=>bounds,onView:changeView,onTrace:position=>{const closest=nearestPoint(result,bounds,position,selected());if(closest){trace=closest.point;render();if(analysis?.analysis==='tangent'){ $('graph-analysis-a').value=String(closest.parameter);$('graph-tangent-slider').value=String(closest.parameter);analyze('tangent',closest.parameter);}}},isSurface:()=>kind()==='surface',onSurface:surfaceChange});
   const zoom=z=>{if(kind()==='surface'){surfaceChange(0,0,z);return;}const at={x:.5,y:.5};changeView(transformBounds(bounds||currentBounds(),at,at,z));};
   $('graph-zoom-in').onclick=()=>zoom(2);$('graph-zoom-out').onclick=()=>zoom(.5);
+  function heightControls(){const button=$('graph-height-toggle'),label=halfHeight?'Full height':'Half height';button.setAttribute('aria-pressed',String(halfHeight));button.setAttribute('aria-label',t(label));button.title=t(label);button.textContent=halfHeight?'↕':'½';}
+  $('graph-height-toggle').onclick=()=>{halfHeight=!halfHeight;heightControls();render();persist();};heightControls();
+  $('graph-reset-ranges').onclick=()=>{surface.autoZ=true;$('graph-auto-z').checked=true;zControls();changeView({xmin:-3,xmax:3,ymin:-3,ymax:3});for(const pair of new Set(pairedSliders.values()))resetRangeDomain(pair);};
   for(const [id,dx,dy] of [['left',.15,0],['right',-.15,0],['up',0,.15],['down',0,-.15]])$('graph-'+id).onclick=()=>changeView(transformBounds(bounds||currentBounds(),{x:.5,y:.5},{x:.5+dx,y:.5+dy},1));
   $('graph-fit').onclick=()=>{if(kind()==='surface'){surface.autoZ=true;$('graph-auto-z').checked=true;zControls();render();persist();return;}const view=bounds||currentBounds(),curves=derivative!==null?(result?.curves||[]).slice(0,expressions().length):result?.curves||[],ys=curves.flat().filter(p=>p&&p.every(Number.isFinite)&&p[0]>=view.xmin&&p[0]<=view.xmax).map(p=>p[1]);if(ys.length){const low=Math.min(...ys),high=Math.max(...ys),padding=Math.max((high-low)*.12,high===low?1:1e-6);changeView({...view,ymin:low-padding,ymax:high+padding});}};
   $('graph-reset').onclick=()=>{analysis=null;trace=null;integral=null;surface.rotation=35;surface.elevation=32;surface.zoom=1;$('graph-rotation').value='35';$('graph-elevation').value='32';$('graph-surface-zoom').value='1';if(kind()==='sequence'){showNumber('graph-min',0);showNumber('graph-max',20);changeView({xmin:0,xmax:20,ymin:-2,ymax:20});queue();}else if(kind()==='differential'){showNumber('graph-min',-5);showNumber('graph-max',5);changeView({xmin:-5,xmax:5,ymin:-3,ymax:5});}else if(kind()==='implicit'){changeView({xmin:-3,xmax:3,ymin:-3,ymax:3});}else if(kind()==='surface'){surface.autoZ=true;$('graph-auto-z').checked=true;zControls();changeView({xmin:-3,xmax:3,ymin:-3,ymax:3});}else changeView({xmin:-10,xmax:10,ymin:-5,ymax:5});};
@@ -190,8 +205,8 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
   $('graph-auto-z').onchange=()=>{surface.autoZ=$('graph-auto-z').checked;zControls();if(!surface.autoZ&&(!Number.isFinite(numeric('graph-zmax')-numeric('graph-zmin'))||numeric('graph-zmax')<=numeric('graph-zmin'))){const [min,max]=surfaceZRange(result?.zMin??-1,result?.zMax??1);showNumber('graph-zmin',min);showNumber('graph-zmax',max);}render();persist();};
   for(const id of ['graph-zmin','graph-zmax'])$(id).onchange=()=>{try{zRange();render();$('graph-status').textContent='';persist();}catch(error){onError(error.message);}};
   $('graph-reset-parameters').onclick=()=>{for(const name of Object.keys(parameters)){const [a,b]=parameterRanges[name]||[-5,5];parameters[name]=Math.max(a,Math.min(b,1));}parameterControls(Object.keys(parameters),true);queue();};
-  $('graph-animate').onclick=()=>{if(animation){clearInterval(animation);animation=null;setText($('graph-animate'),'Animate');return;}let phase=0;setText($('graph-animate'),'Stop');animation=setInterval(()=>{phase+=.2;for(const name of Object.keys(parameters)){const [a,b]=parameterRanges[name]||[-5,5];parameters[name]=a+(b-a)*(Math.sin(phase)+1)/2;}queue();},250);};
-  function typeControls(){$('graph-viewport-ranges').hidden=['cartesian','implicit','surface'].includes(kind());$('graph-surface-controls').hidden=kind()!=='surface';setText($('graph-fit'),kind()==='surface'?'Fit Z':'Fit Y');$('graph-analysis').hidden=!['cartesian','parametric','polar'].includes(kind());$('graph-derivative').closest('label').hidden=kind()!=='cartesian';$('graph-initial').closest('label').hidden=!['sequence','differential'].includes(kind());$('graph-t0').closest('label').hidden=kind()!=='differential';$('graph-analysis-action').querySelector('[value="intersection"]').disabled=kind()!=='cartesian';analysisControls();}
+  $('graph-animate').onclick=()=>{if(animation){clearInterval(animation);animation=null;setText($('graph-animate'),'Animate');persist();return;}let phase=0;setText($('graph-animate'),'Stop');animation=setInterval(()=>{phase+=.2;let changed=false;for(const name of Object.keys(parameters)){if(animationEnabled[name]===false)continue;const [a,b]=parameterRanges[name]||[-5,5];parameters[name]=a+(b-a)*(Math.sin(phase)+1)/2;changed=true;}if(changed)queue();},250);};
+  function typeControls(){$('graph-reset-ranges').hidden=kind()!=='surface';$('graph-viewport-ranges').hidden=['cartesian','implicit','surface'].includes(kind());$('graph-surface-controls').hidden=kind()!=='surface';setText($('graph-fit'),kind()==='surface'?'Fit Z':'Fit Y');$('graph-analysis').hidden=!['cartesian','parametric','polar'].includes(kind());$('graph-derivative').closest('label').hidden=kind()!=='cartesian';$('graph-initial').closest('label').hidden=!['sequence','differential'].includes(kind());$('graph-t0').closest('label').hidden=kind()!=='differential';$('graph-analysis-action').querySelector('[value="intersection"]').disabled=kind()!=='cartesian';analysisControls();}
   $('graph-kind').onchange=()=>{
     sourceDrafts[sourceKind]=value('graph-source');sourceKind=kind();$('graph-source').value=sourceDrafts[sourceKind];
     if(animation){clearInterval(animation);animation=null;setText($('graph-animate'),'Animate');}
@@ -221,5 +236,5 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
   $('graph-surface-render').value=surface.renderMode;$('graph-auto-z').checked=surface.autoZ;zControls();
   $('graph-surface-color').value=surface.color;densityControls();
   renderRangeNumbers();
-  return {run,render,flush,snapshot:()=>({sources:{...sourceDrafts,[kind()]:value('graph-source')},parameters,parameterRanges,radianAxis,surface:{...surface},ranges:Object.fromEntries(rangeIds.filter(id=>!(surface.autoZ&&id.startsWith('graph-z'))&&value(id)!==''&&Number.isFinite(numeric(id))).map(id=>[id,numeric(id)]))}),updateButtons(){ $('graph-analysis-run').disabled=isBusy()||!isReady();},activate(value){active=value;if(active&&(!result||pending))queue();if(!active){clearTimeout(timer);timer=null;if(animation){clearInterval(animation);animation=null;setText($('graph-animate'),'Animate');}}},dispose(){disposeGestures();clearTimeout(timer);clearInterval(animation);revision++;analysisRevision++;}};
+  return {run,render,flush,snapshot:()=>({sources:{...sourceDrafts,[kind()]:value('graph-source')},parameters:{...parameters},parameterRanges,animationEnabled:{...animationEnabled},halfHeight,radianAxis,surface:{...surface},ranges:Object.fromEntries(rangeIds.filter(id=>!(surface.autoZ&&id.startsWith('graph-z'))&&value(id)!==''&&Number.isFinite(numeric(id))).map(id=>[id,numeric(id)]))}),updateButtons(){ $('graph-analysis-run').disabled=isBusy()||!isReady();},activate(value){active=value;if(active&&(!result||pending))queue();if(!active){clearTimeout(timer);timer=null;if(animation){clearInterval(animation);animation=null;setText($('graph-animate'),'Animate');}}},dispose(){active=false;disposeGestures();resizeObserver?.disconnect();if(frame!==null)cancelFrame(frame);clearTimeout(timer);clearInterval(animation);revision++;analysisRevision++;}};
 }

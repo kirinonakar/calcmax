@@ -49,7 +49,8 @@ internal class GraphState(private val prefs:SharedPreferences) {
             val low=entry?.optDouble("min",-5.0)?.takeIf(Double::isFinite) ?: -5.0
             val high=entry?.optDouble("max",5.0)?.takeIf(Double::isFinite) ?: 5.0
             val value=entry?.optDouble("value",1.0)?.takeIf(Double::isFinite) ?: 1.0
-            if(low<high)GraphParameter(value.coerceIn(low,high),low,high) else GraphParameter(1.0,-5.0,5.0)
+            val animate=entry?.optBoolean("animate",true) ?: true
+            if(low<high)GraphParameter(value.coerceIn(low,high),low,high,animate) else GraphParameter(1.0,-5.0,5.0,animate)
         }
     }.getOrDefault(emptyMap())
 
@@ -87,6 +88,10 @@ internal class GraphState(private val prefs:SharedPreferences) {
 
     fun parameterPayload():JSONObject = JSONObject().also {payload->graphParameters.forEach {(name,spec)->payload.put(name,spec.value)}}
 
+    fun resetSurfaceRanges() {
+        xMin=-3.0;xMax=3.0;yMin=-3.0;yMax=3.0;zMin=null;zMax=null
+    }
+
     fun syncParameters(names:JSONArray?) {
         val next=(0 until (names?.length() ?: 0)).mapNotNull {names?.optString(it)}.filter(String::isNotBlank).distinct().sorted()
             .associateWith {name->graphParameters[name] ?: GraphParameter(1.0,-5.0,5.0)}
@@ -111,9 +116,20 @@ internal class GraphState(private val prefs:SharedPreferences) {
         graphParameters=graphParameters.mapValues {(_,spec)->spec.copy(value=if(spec.min<=1.0&&1.0<=spec.max)1.0 else (spec.min+spec.max)/2)}
     }
 
+    fun setParameterAnimation(name:String,enabled:Boolean) {
+        val spec=graphParameters[name] ?: return
+        graphParameters=graphParameters+(name to spec.copy(animate=enabled))
+    }
+
+    fun animateParameters(swing:Double):Boolean {
+        if(graphParameters.values.none {it.animate})return false
+        graphParameters=graphParameters.mapValues {(_,spec)->if(spec.animate)spec.copy(value=spec.min+(spec.max-spec.min)*swing) else spec}
+        return true
+    }
+
     fun writeTo(editor:SharedPreferences.Editor) {
         val parameters=JSONObject()
-        graphParameters.forEach {(name,spec)->parameters.put(name,JSONObject().put("value",spec.value).put("min",spec.min).put("max",spec.max))}
+        graphParameters.forEach {(name,spec)->parameters.put(name,JSONObject().put("value",spec.value).put("min",spec.min).put("max",spec.max).put("animate",spec.animate))}
         editor.putString("sequenceInitials",sequenceInitials).putString("differentialInitials",differentialInitials).putString("differentialT0",differentialT0)
             .putString("graphSource",graphSource).putString("graphSources",sources.put(graphKind,graphSource).toString()).putString("graphKind",graphKind)
             .putString("xMin",xMin.toString()).putString("xMax",xMax.toString()).putString("yMin",yMin.toString()).putString("yMax",yMax.toString())

@@ -11,7 +11,7 @@ data class TapeEntry(val source: String,val input: String,val result: String,val
 data class CalcSession(val source:String,val names:List<String>,val index:Int=0,val input:Editor=Editor(),val accepted:Map<String,JSONObject> = emptyMap()) {
     val name get()=names[index]
 }
-data class GraphParameter(val value:Double,val min:Double,val max:Double)
+data class GraphParameter(val value:Double,val min:Double,val max:Double,val animate:Boolean=true)
 data class DisplayShortcut(val label:String,val input:String,val source:String="keypad")
 val DefaultDisplayShortcuts=listOf(
     DisplayShortcut("∫","integrate(,x)"),

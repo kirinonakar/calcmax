@@ -1,3 +1,4 @@
+import {installCanvas,surfaceFills} from './canvas-context.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -44,7 +45,7 @@ test('surface faces are clipped, shaded, and sorted from the back after rotation
 });
 
 test('SVG axes and labels rotate with the same surface projection and all render modes work',()=>{
-  const dom=new JSDOM('<div id="plot"></div>');globalThis.document=dom.window.document;
+  const dom=new JSDOM('<div id="plot"></div>');globalThis.document=dom.window.document;installCanvas(dom);
   try{
     const container=document.getElementById('plot'),result={surface:mesh,zMin:-1,zMax:1};
     const render=(rotation,renderMode)=>plot(container,result,bounds,{surfaceView:{rotation,elevation:32,zoom:1,renderMode}});
@@ -63,7 +64,7 @@ test('SVG axes and labels rotate with the same surface projection and all render
 });
 
 test('surface workspace exposes automatic/manual z bounds, exact paired sliders, validation, fit and saved options',async()=>{
-  const dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));globalThis.document=dom.window.document;
+  const dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));globalThis.document=dom.window.document;installCanvas(dom);
   const $=id=>document.getElementById(id),requests=[],errors=[];let saves=0;
   const workspace=createGraphWorkspace({execute:async request=>{requests.push(request);return {ok:true,surface:mesh,zMin:-2,zMax:2,parameters:[]};},options:()=>({displayDigits:3}),onError:message=>errors.push(message),persist:()=>saves++,isBusy:()=>false});
   const input=(id,number,event='change')=>{$(id).value=String(number);$(id).dispatchEvent(new dom.window.Event(event));};
@@ -72,7 +73,7 @@ test('surface workspace exposes automatic/manual z bounds, exact paired sliders,
     assert.equal($('graph-fit').textContent,'Fit Z');assert.equal($('graph-surface-controls').hidden,false);
     assert.equal($('graph-zmin').disabled,true);assert.equal($('graph-zmin-slider').disabled,true);
     assert.equal($('graph-zmin').value,'-2');assert.equal($('graph-zmax').value,'2');assert.equal(workspace.snapshot().ranges['graph-zmin'],undefined);
-    input('graph-surface-render','surface');assert.equal($('graph-plot').querySelector('svg').dataset.renderMode,'surface');assert.ok($('graph-plot').querySelector('[data-surface-face]'));assert.equal(requests.length,1);
+    input('graph-surface-render','surface');assert.equal($('graph-plot').querySelector('canvas').dataset.renderMode,'surface');assert.ok(surfaceFills($('graph-plot')).length);assert.equal(requests.length,1);
     $('graph-auto-z').checked=false;$('graph-auto-z').dispatchEvent(new dom.window.Event('change'));
     assert.equal($('graph-zmin').disabled,false);assert.equal($('graph-zmin-slider').parentElement,$('graph-zmax-slider').parentElement);
     input('graph-zmin',-.123456789);input('graph-zmax',.234567891);
@@ -91,14 +92,14 @@ test('surface workspace exposes automatic/manual z bounds, exact paired sliders,
 });
 
 test('constant surfaces keep a centered, increasing automatic z range',async()=>{
-  const dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));globalThis.document=dom.window.document;
+  const dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));globalThis.document=dom.window.document;installCanvas(dom);
   document.getElementById('graph-kind').value='surface';
   const workspace=createGraphWorkspace({execute:async()=>({ok:true,surface:[[[-1,-1,42],[1,-1,42]],[[-1,1,42],[1,1,42]]],zMin:42,zMax:42,parameters:[]}),options:()=>({displayDigits:10}),onError:assert.fail,persist:()=>{},isBusy:()=>false});
   try{await workspace.run();assert.equal(Number(document.getElementById('graph-zmin').value),37.8);assert.equal(Number(document.getElementById('graph-zmax').value),46.2);assert.ok(!document.getElementById('graph-plot').innerHTML.includes('NaN'));}finally{workspace.dispose();dom.window.close();}
 });
 
 test('surface color changes every render mode immediately and density resamples and restores',async()=>{
-  let dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));globalThis.document=dom.window.document;
+  let dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));globalThis.document=dom.window.document;installCanvas(dom);
   let workspace;const requests=[];
   const setup=saved=>createGraphWorkspace({execute:async request=>{
     requests.push(request);const count=request.surfaceSamples;
@@ -107,14 +108,14 @@ test('surface color changes every render mode immediately and density resamples 
   const $=id=>document.getElementById(id),input=(id,value,event)=>{$(id).value=value;$(id).dispatchEvent(new dom.window.Event(event));};
   try{
     $('graph-kind').value='surface';workspace=setup({surface:{samples:12,autoDensity:false}});await workspace.run();assert.equal(requests[0].surfaceSamples,12);
-    input('graph-surface-color','#ff0000','input');assert.ok([...$('graph-plot').querySelectorAll('path')].every(path=>path.getAttribute('stroke')==='#ff0000'));assert.equal(requests.length,1);
-    input('graph-surface-render','surface','change');assert.equal($('graph-plot').querySelectorAll('[data-surface-face]').length,2*12*12);
-    assert.match($('graph-plot').querySelector('[data-surface-face]').getAttribute('fill'),/^rgb\(\d+,0,0\)$/);
-    input('graph-surface-render','surface-wireframe','change');assert.match($('graph-plot').querySelector('[data-surface-face]').getAttribute('fill'),/^rgb\(\d+,0,0\)$/);
+    input('graph-surface-color','#ff0000','input');assert.ok($('graph-plot').querySelector('canvas').getContext('2d').commands.some(c=>c.op==='stroke'&&c.strokeStyle==='#ff0000'));assert.equal(requests.length,1);
+    input('graph-surface-render','surface','change');assert.equal(surfaceFills($('graph-plot')).length,2*12*12);
+    assert.match(surfaceFills($('graph-plot'))[0].fillStyle,/^rgb\(\d+,0,0\)$/);
+    input('graph-surface-render','surface-wireframe','change');assert.match(surfaceFills($('graph-plot'))[0].fillStyle,/^rgb\(\d+,0,0\)$/);
     input('graph-surface-samples','40','input');input('graph-surface-samples','40','change');await workspace.run();
-    assert.equal(requests.at(-1).surfaceSamples,40);assert.equal($('graph-surface-samples-value').textContent,'40 × 40');assert.equal($('graph-plot').querySelectorAll('[data-surface-face]').length,2*40*40);
+    assert.equal(requests.at(-1).surfaceSamples,40);assert.equal($('graph-surface-samples-value').textContent,'40 × 40');assert.equal(surfaceFills($('graph-plot')).length,2*40*40);
     const saved=workspace.snapshot();workspace.dispose();dom.window.close();
-    dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));globalThis.document=dom.window.document;$('graph-kind').value='surface';workspace=setup(saved);
+    dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));globalThis.document=dom.window.document;installCanvas(dom);$('graph-kind').value='surface';workspace=setup(saved);
     assert.equal($('graph-surface-color').value,'#ff0000');assert.equal($('graph-surface-samples').value,'40');assert.equal($('graph-surface-render').value,'surface-wireframe');
     await workspace.run();assert.equal(requests.at(-1).surfaceSamples,40);
     assert.ok($('graph-surface-render').closest('.graph-surface-appearance'));

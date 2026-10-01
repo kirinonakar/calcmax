@@ -311,6 +311,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     internal var job: Job? = null
     internal var graphJob: Job? = null
     internal var graphRequestSignature: String? = null
+    internal var graphPendingPlot: (() -> Unit)? = null
     internal var analysisJob: Job? = null
     internal var regressionJob: Job? = null
     internal var pythonJob: Job? = null
@@ -742,6 +743,8 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     fun cancelRegression() = with(CalculatorStatisticsActions) { performCancelRegression() }
     fun plot(auto: Boolean = false) = with(CalculatorGraphActions) { performPlot(auto) }
     fun setGraphParameter(name:String,value:Double) = with(CalculatorGraphActions) { performSetGraphParameter(name,value) }
+    fun setGraphParameterAnimation(name:String,enabled:Boolean) {graphState.setParameterAnimation(name,enabled);save()}
+    fun resetSurfaceRanges() {graphState.resetSurfaceRanges();save();plot()}
     fun setGraphParameterRange(name:String,low:Double,high:Double) = with(CalculatorGraphActions) { performSetGraphParameterRange(name,low,high) }
     fun resetGraphParameters() = with(CalculatorGraphActions) { performResetGraphParameters() }
     fun toggleGraphAnimation() = with(CalculatorGraphActions) { performToggleGraphAnimation() }

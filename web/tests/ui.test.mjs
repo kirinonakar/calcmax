@@ -1,3 +1,4 @@
+import {installCanvas,curveStrokes} from './canvas-context.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -12,6 +13,7 @@ async function waitFor(check,message,timeout=15000) {
 }
 test('DOM workflows use the production Worker, real WASM, both languages, and themes',async t=>{
   const dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'),{url:'http://localhost/',pretendToBeVisual:true});
+  installCanvas(dom);
   const workers=[],requests=[],heldPreviewResults=[];
   let holdPreviewResults=false;
   class BrowserWorker {
@@ -213,7 +215,7 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
   $('exact-toggle').click();assert.match($('answer').textContent,/0.5/);$('exact-toggle').click();
   key('-').click();key('1').click();assert.equal($('expression').value,'Ans-1');key('=').click();await waitFor(()=>$('answer').textContent==='-12','subtraction continues the previous answer');
   change('mode','equation');document.querySelector('[data-run="equation"]').click();await waitFor(()=>$('answer').textContent.includes('2,3'),'equation solutions');
-  change('mode','graph');document.querySelector('[data-run="graph"]').click();await waitFor(()=>$('graph-plot').querySelectorAll('path').length===2,'graph SVG');assert.ok($('graph-table').querySelectorAll('tbody tr').length>10);
+  change('mode','graph');document.querySelector('[data-run="graph"]').click();await waitFor(()=>curveStrokes($('graph-plot')).length===2,'graph Canvas');assert.ok($('graph-table').querySelectorAll('tbody tr').length>10);
   change('mode','python');$('python-source').value='name=input("Name: ")\nprint("Hello",name)';$('python-input').value='CalcMax';document.querySelector('[data-run="python"]').click();await waitFor(()=>$('python-output').textContent.includes('Hello CalcMax'),'Python input bridge');
   change('mode','matrix');document.querySelector('[data-run="matrix"]').click();await waitFor(()=>$('answer').textContent==='1','identity determinant');
   change('mode','vector');change('matrix-op','dot');document.querySelector('[data-run="matrix"]').click();await waitFor(()=>$('answer').textContent==='32','dot product');
@@ -532,8 +534,8 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
   edit('B=B+1');key('=').click();await waitFor(()=>$('note').textContent.includes('Stored in B'),'self-referential STO');
   edit('B');key('=').click();await waitFor(()=>$('answer').textContent==='6','STO freezes its previous value');
   change('mode','graph');await waitFor(()=>!document.documentElement.dataset.busy.includes('true'),'graph idle');
-  change('graph-selected','1');assert.equal($('graph-plot').querySelector('path[data-curve="1"]').getAttribute('stroke-width'),'4');assert.equal($('graph-plot').querySelector('path[data-curve="0"]').getAttribute('stroke-width'),'2');
-  $('graph-formulas').children[0].click();assert.equal($('graph-selected').value,'0');assert.equal($('graph-plot').querySelector('path[data-curve="0"]').getAttribute('stroke-width'),'4');
+  change('graph-selected','1');assert.equal(curveStrokes($('graph-plot')).find(c=>c.strokeStyle==='#a04c75').lineWidth,4);assert.equal(curveStrokes($('graph-plot')).find(c=>c.strokeStyle==='#007b68').lineWidth,2);
+  $('graph-formulas').children[0].click();assert.equal($('graph-selected').value,'0');assert.equal(curveStrokes($('graph-plot')).find(c=>c.strokeStyle==='#007b68').lineWidth,4);
   change('mode','statistics');assert.equal($('statistics-op').querySelector('[value="regression"]'),null);assert.ok($('regression-kind').closest('#regression-section'));
   document.querySelector('[data-run="regression"]').click();await waitFor(()=>$('regression-caption').textContent.includes('y='),'independent regression action');assert.equal($('statistics-op').value,'mean');assert.equal($('regression-transfer').hidden,false);
   await t.test('regression displays decimals and transfers the current display digits while retaining exact history',async()=>{
@@ -650,9 +652,9 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
   });
   await t.test('graph controls connect all Android analysis operations and ranges/sliders stay below the plot',async()=>{
     change('mode','graph');$('graph-source').value='x^2-1\nx';$('graph-source').dispatchEvent(new window.Event('input'));for(const [id,number] of [['graph-min','-2'],['graph-max','2'],['graph-ymin','-2'],['graph-ymax','4']]){$(id).value=number;$(id).dispatchEvent(new window.Event('change'));}
-    document.querySelector('[data-run="graph"]').click();await waitFor(()=>$('graph-plot').querySelectorAll('path').length===2&&!$('graph-analysis-run').disabled,'two Cartesian curves');
-    const axisLabels=()=>[...$('graph-plot').querySelectorAll('[data-axis="x"]')].map(label=>label.textContent),decimalLabels=axisLabels(),curve=$('graph-plot').querySelector('path').getAttribute('d');
-    $('graph-axis').click();assert.ok(axisLabels().some(label=>label.includes('π')),'radian mode generates pi ticks for decimal bounds');assert.notDeepEqual(axisLabels(),decimalLabels);assert.equal($('graph-plot').querySelector('path').getAttribute('d'),curve,'axis formatting keeps curve coordinates');assert.equal(JSON.parse(localStorage.getItem('calcmax-web-v1')).graph.radianAxis,true);
+    document.querySelector('[data-run="graph"]').click();await waitFor(()=>curveStrokes($('graph-plot')).length===2&&!$('graph-analysis-run').disabled,'two Cartesian curves');
+    const axisLabels=()=>$('graph-plot').querySelector('canvas').getContext('2d').commands.filter(c=>c.op==='fillText'&&c.args[2]===Number($('graph-plot').querySelector('canvas').dataset.plotHeight)-14).map(c=>c.args[0]),decimalLabels=axisLabels(),curve=JSON.stringify(curveStrokes($('graph-plot'))[0]?.path);
+    $('graph-axis').click();assert.ok(axisLabels().some(label=>label.includes('π')),'radian mode generates pi ticks for decimal bounds');assert.notDeepEqual(axisLabels(),decimalLabels);assert.equal(JSON.stringify(curveStrokes($('graph-plot'))[0]?.path),curve,'axis formatting keeps curve coordinates');assert.equal(JSON.parse(localStorage.getItem('calcmax-web-v1')).graph.radianAxis,true);
     $('graph-axis').click();assert.deepEqual(axisLabels(),decimalLabels);assert.equal(JSON.parse(localStorage.getItem('calcmax-web-v1')).graph.radianAxis,false);
     assert.ok($('graph-formulas').querySelector('msup'));assert.ok($('graph-plot').compareDocumentPosition($('graph-ranges'))&window.Node.DOCUMENT_POSITION_FOLLOWING);
     $('graph-min-slider').value='-1.234567';$('graph-min-slider').dispatchEvent(new window.Event('input'));assert.equal($('graph-min').value,'-1.235');$('graph-min-slider').dispatchEvent(new window.Event('change'));await waitFor(()=>!$('graph-analysis-run').disabled,'range slider sampling');
@@ -660,10 +662,10 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
     $('graph-analysis-a').value='-1';$('graph-analysis-b').value='1';change('graph-analysis-action','root');$('graph-analysis-run').click();await waitFor(()=>$('graph-analysis-result').querySelectorAll('.analysis-point').length===2,'two roots');
     change('graph-analysis-action','intersection');$('graph-other').value='1';$('graph-analysis-a').value='-2';$('graph-analysis-b').value='2';$('graph-analysis-run').click();await waitFor(()=>$('graph-analysis-result').querySelectorAll('.analysis-point').length===2&&!$('graph-analysis-run').disabled,'intersections');
     for(const action of ['minimum','maximum']){change('graph-analysis-action',action);$('graph-analysis-run').click();await waitFor(()=>$('graph-analysis-result').firstChild?.textContent===action[0].toUpperCase()+action.slice(1)&&!$('graph-analysis-run').disabled,action);assert.ok($('graph-analysis-result').querySelector('.analysis-point'));}
-    change('graph-analysis-action','tangent');$('graph-analysis-a').value='1';$('graph-analysis-run').click();await waitFor(()=>$('graph-plot').querySelector('[data-tangent]'),'tangent overlay');assert.equal(Array.from($('graph-analysis').querySelectorAll('input[type="range"]')).filter(input=>!input.closest('[hidden]')).length,1,'only one tangent slider is visible');
+    change('graph-analysis-action','tangent');$('graph-analysis-a').value='1';$('graph-analysis-run').click();await waitFor(()=>$('graph-plot').querySelector('canvas').getContext('2d').commands.some(c=>c.op==='stroke'&&c.lineDash[0]===6),'tangent overlay');assert.equal(Array.from($('graph-analysis').querySelectorAll('input[type="range"]')).filter(input=>!input.closest('[hidden]')).length,1,'only one tangent slider is visible');
     $('graph-tangent-slider').value='.5';$('graph-tangent-slider').dispatchEvent(new window.Event('input'));$('graph-tangent-slider').dispatchEvent(new window.Event('change'));await waitFor(()=>$('graph-analysis-result').textContent.includes('0.5')&&!$('graph-analysis-run').disabled,'moving tangent');
     for(const action of ['derivative','integral','arclength']){change('graph-analysis-action',action);$('graph-analysis-a').value='0';$('graph-analysis-b').value='1';$('graph-analysis-run').click();await waitFor(()=>$('graph-analysis-result').firstChild?.textContent==={derivative:'Derivative',integral:'Integral',arclength:'Arc length'}[action]&&!$('graph-analysis-run').disabled,action);assert.ok($('graph-analysis-result').querySelector('math'));}
-    $('graph-derivative').checked=true;$('graph-derivative').dispatchEvent(new window.Event('change'));await waitFor(()=>$('graph-plot').querySelectorAll('path').length===3,'derivative curve');
+    $('graph-derivative').checked=true;$('graph-derivative').dispatchEvent(new window.Event('change'));await waitFor(()=>curveStrokes($('graph-plot')).length===3,'derivative curve');
     const before=Number($('graph-max').value)-Number($('graph-min').value);$('graph-zoom-in').click();assert.ok(Number($('graph-max').value)-Number($('graph-min').value)<before);await waitFor(()=>!$('graph-analysis-run').disabled,'zoom sampling');
     for(const cell of $('graph-table').querySelectorAll('td')){const match=/\.([0-9]+)(?:e|$)/i.exec(cell.textContent);if(match)assert.ok(match[1].length<=3,cell.textContent);}
     $('graph-source').value='x^3';$('graph-source').dispatchEvent(new window.Event('input'));document.querySelector('[data-run="graph"]').click();await waitFor(()=>!$('graph-analysis-run').disabled,'inflection source');change('graph-analysis-action','inflection');$('graph-analysis-a').value='-1';$('graph-analysis-b').value='1';$('graph-analysis-run').click();await waitFor(()=>$('graph-analysis-result').firstChild?.textContent==='Inflection'&&$('graph-analysis-result').querySelector('.analysis-point'),'inflection point');
@@ -674,12 +676,12 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
   await t.test('Implicit Graph plots equations with the real Worker, slider updates, and calculator transfer',async()=>{
     change('mode','graph');change('graph-kind','implicit');
     assert.equal($('graph-source').value,'x^2+y^2=1');assert.equal($('graph-analysis').hidden,true);
-    const plotted=()=>!$('graph-analysis-run').disabled&&$('graph-plot').querySelector('path')?.getAttribute('d').length>0;
+    const plotted=()=>!$('graph-analysis-run').disabled&&curveStrokes($('graph-plot')).some(c=>c.path.length>1);
     await waitFor(plotted,'implicit unit circle');assert.equal($('graph-parameters').children.length,0);
     $('graph-source').value='x^2+y^2=a\nx=.3';$('graph-source').dispatchEvent(new window.Event('input'));
-    await waitFor(()=>plotted()&&$('graph-parameters').querySelector('[data-parameter="a"]')&&$('graph-plot').querySelectorAll('[data-curve]').length===2,'two implicit curves and radius slider');
-    const before=$('graph-plot').querySelector('[data-curve="0"]').getAttribute('d'),slider=$('graph-parameters').querySelector('input[type="range"]');slider.value='4';slider.dispatchEvent(new window.Event('input'));
-    await waitFor(()=>plotted()&&$('graph-plot').querySelector('[data-curve="0"]').getAttribute('d')!==before,'implicit parameter update');
+    await waitFor(()=>plotted()&&$('graph-parameters').querySelector('[data-parameter="a"]')&&curveStrokes($('graph-plot')).length===2,'two implicit curves and radius slider');
+    const before=JSON.stringify(curveStrokes($('graph-plot')).find(c=>c.strokeStyle==='#007b68')?.path),slider=$('graph-parameters').querySelector('input[type="range"]');slider.value='4';slider.dispatchEvent(new window.Event('input'));
+    await waitFor(()=>plotted()&&JSON.stringify(curveStrokes($('graph-plot')).find(c=>c.strokeStyle==='#007b68')?.path)!==before,'implicit parameter update');
     assert.equal($('graph-formulas').textContent.includes('f1'),false);
     change('language','ko');assert.equal($('graph-kind').selectedOptions[0].textContent,'Implicit Graph(음함수 그래프)');change('language','en');
     change('mode','scientific');edit('x^2+y^2=1');if(!key('TO_GRAPH'))key('SECOND').click();key('TO_GRAPH').click();

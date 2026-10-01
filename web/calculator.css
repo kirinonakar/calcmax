@@ -120,7 +120,7 @@ input:disabled,select:disabled{opacity:.45;cursor:default}
 #answer math{max-width:none}.graph-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:8px 0}.graph-toolbar label{margin:0;min-width:100px}.graph-toolbar button{background:var(--bar)}
 .graph-toolbar .graph-curve-picker{flex-direction:row;align-items:center;gap:10px}.graph-curve-picker span{white-space:nowrap}.graph-curve-picker select{width:auto;min-width:85px}
 #graph-formulas .formula-line[role="button"]{cursor:pointer}#graph-formulas .selected-curve{background:var(--bar);font-weight:600;border-left-width:5px}
-.interactive-plot{touch-action:none;user-select:none;cursor:grab}.interactive-plot:active{cursor:grabbing}.interactive-plot svg{display:block;aspect-ratio:800/460;width:100%;height:auto;max-height:none}
+.interactive-plot{touch-action:none;user-select:none;cursor:grab}.interactive-plot:active{cursor:grabbing}.interactive-plot svg{display:block;aspect-ratio:800/460;width:100%;height:auto;max-height:none}.interactive-plot canvas{display:block;aspect-ratio:800/460;width:100%;height:auto;max-height:none}
 #graph-formulas .formula-line{border-left:3px solid var(--accent);padding-left:8px}.analysis-point{display:inline-block;margin:4px;background:var(--bar)}
 #graph-parameters label{min-width:200px}#graph-analysis{padding:12px 0}#graph-table tr[tabindex]{cursor:pointer}#graph-table tr[tabindex]:hover{background:var(--bar)}
 .graph-range-pair{flex:1 1 240px;min-width:0}.graph-range-fields{display:flex;gap:12px}.graph-range-fields label{min-width:0!important;flex:1}.graph-range-fields output{font-variant-numeric:tabular-nums}
@@ -213,3 +213,7 @@ input:disabled,select:disabled{opacity:.45;cursor:default}
   :root[data-workspace="scientific"][data-screen-expanded="true"] .keypad{--keypad-font-height:calc(225cqh - 4px)}
   .keypad,.keypad-row,.keypad-top{gap:2px}
 }
+
+.graph-plot-frame{position:relative;margin:18px 0}.graph-plot-frame .plot{margin:0}.graph-plot-frame:has(.plot:empty){display:none}#graph-height-toggle{position:absolute;top:6px;right:6px;width:32px;height:32px;padding:0;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--ink);font-size:19px;line-height:1}#graph-height-toggle[aria-pressed="true"]{color:var(--accent)}
+
+.graph-range-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}

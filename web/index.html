@@ -32,8 +32,8 @@ cos(x)</textarea></label>
       <div id="graph-formulas" class="formula-preview"></div>
       <div class="graph-toolbar"><button id="graph-zoom-in" aria-label="Zoom in">+</button><button id="graph-zoom-out" aria-label="Zoom out">−</button><button id="graph-left" aria-label="Pan left">◀</button><button id="graph-right" aria-label="Pan right">▶</button><button id="graph-up" aria-label="Pan up">▲</button><button id="graph-down" aria-label="Pan down">▼</button><button id="graph-fit">Fit Y</button><button id="graph-reset">Reset</button><button id="graph-axis">x: decimal</button><label class="graph-curve-picker"><span>Selected curve</span><select id="graph-selected"></select></label><label class="check"><input id="graph-derivative" type="checkbox">Derivative curve</label></div>
       <div id="graph-parameters" class="form-row"></div><div class="graph-toolbar" id="graph-parameter-actions" hidden=""><button id="graph-animate">Animate</button><button id="graph-reset-parameters">Reset sliders</button></div>
-      <p class="hint">Tap to trace · drag to pan · pinch or scroll to zoom</p><div id="graph-plot" class="plot interactive-plot" tabindex="0" aria-label="Calculated function graph" data-i18narialabel="계산된 함수 그래프"></div><div id="graph-status" role="status" class="hint"></div><div id="graph-trace" class="formula-preview" aria-live="polite"></div>
-      <section id="graph-ranges" aria-label="Range"><h2>Range</h2>
+      <p class="hint">Tap to trace · drag to pan · pinch or scroll to zoom</p><div class="graph-plot-frame"><div id="graph-plot" class="plot interactive-plot" tabindex="0" aria-label="Calculated function graph" data-i18narialabel="계산된 함수 그래프"></div><button id="graph-height-toggle" aria-controls="graph-plot" aria-label="Half height" aria-pressed="false" title="Half height">½</button></div><div id="graph-status" role="status" class="hint"></div><div id="graph-trace" class="formula-preview" aria-live="polite"></div>
+      <section id="graph-ranges" aria-label="Range"><div class="graph-range-heading"><h2>Range</h2><button id="graph-reset-ranges" hidden>Reset ranges</button></div>
       <div class="form-row ranges"><label>x / t / n minimum<input id="graph-min" type="number" value="-10" step="any"></label><label>Maximum<input id="graph-max" type="number" value="10" step="any"></label><label>y minimum<input id="graph-ymin" type="number" value="-5" step="any"></label><label>Maximum<input id="graph-ymax" type="number" value="5" step="any"></label></div>
       <div id="graph-viewport-ranges" class="form-row"><label>View x minimum<input id="graph-xmin" type="number" value="-10" step="any"></label><label>View x maximum<input id="graph-xmax" type="number" value="10" step="any"></label></div>
       <div id="graph-surface-controls" class="graph-surface-panel" hidden="">
@@ -44,7 +44,7 @@ cos(x)</textarea></label>
         </div>
         <div class="graph-surface-camera">
           <label><span>Rotate</span><span class="graph-surface-slider"><input id="graph-rotation" type="range" min="0" max="360" step="any" value="35"><output id="graph-rotation-value">35°</output></span></label>
-          <label><span>Elevation</span><span class="graph-surface-slider"><input id="graph-elevation" type="range" min="5" max="85" step="any" value="32"><output id="graph-elevation-value">32°</output></span></label>
+          <label><span>Elevation</span><span class="graph-surface-slider"><input id="graph-elevation" type="range" min="-90" max="90" step="any" value="32"><output id="graph-elevation-value">32°</output></span></label>
           <label><span>Zoom</span><span class="graph-surface-slider"><input id="graph-surface-zoom" type="range" min="0.4" max="3" step="0.01" value="1"><output id="graph-surface-zoom-value">100%</output></span></label>
         </div>
         <div class="graph-surface-z-range">

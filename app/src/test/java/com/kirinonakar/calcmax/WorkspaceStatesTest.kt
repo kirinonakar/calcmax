@@ -8,6 +8,36 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class WorkspaceStatesTest {
+    @Test fun surfaceRangeResetPreservesAppearanceAndZoomAndPersistsAutomaticZ() {
+        val prefs=MemoryPreferences();val state=GraphState(prefs)
+        state.xMin=100.0;state.xMax=101.0;state.yMin=200.0;state.yMax=201.0;state.zMin=3.0;state.zMax=4.0
+        state.surfaceZoom=2f;state.surfaceRenderMode="surface";state.surfaceColor="#ff0000"
+        state.resetSurfaceRanges()
+        assertEquals(-3.0,state.xMin,0.0);assertEquals(3.0,state.xMax,0.0)
+        assertEquals(-3.0,state.yMin,0.0);assertEquals(3.0,state.yMax,0.0)
+        assertNull(state.zMin);assertNull(state.zMax)
+        assertEquals(2f,state.surfaceZoom,0f);assertEquals("surface",state.surfaceRenderMode);assertEquals("#ff0000",state.surfaceColor)
+        val editor=prefs.edit();state.writeTo(editor);editor.apply()
+        val restored=GraphState(prefs);assertNull(restored.zMin);assertNull(restored.zMax);assertEquals(-3.0,restored.xMin,0.0)
+    }
+    @Test fun graphAnimationOnlyMovesEnabledParametersAndPersistsSelection() {
+        val prefs=MemoryPreferences(mapOf("graphParameters" to "{\"a\":{\"value\":1,\"min\":0,\"max\":4},\"b\":{\"value\":2,\"min\":-5,\"max\":5}}"))
+        val state=GraphState(prefs)
+        assertTrue(state.graphParameters.getValue("a").animate)
+        state.setParameterAnimation("b",false)
+        assertTrue(state.animateParameters(.75))
+        assertEquals(3.0,state.graphParameters.getValue("a").value,0.0)
+        assertEquals(2.0,state.graphParameters.getValue("b").value,0.0)
+        val editor=prefs.edit();state.writeTo(editor);editor.apply()
+        val restored=GraphState(prefs)
+        assertFalse(restored.graphParameters.getValue("b").animate)
+        restored.setParameterAnimation("a",false)
+        assertFalse(restored.animateParameters(.25))
+        assertEquals(3.0,restored.graphParameters.getValue("a").value,0.0)
+        restored.setParameterAnimation("b",true)
+        assertTrue(restored.animateParameters(.25))
+        assertEquals(-2.5,restored.graphParameters.getValue("b").value,0.0)
+    }
     @Test fun surfaceAppearancePersistsAndInvalidSavedOptionsUseDefaults() {
         val prefs=MemoryPreferences()
         val state=GraphState(prefs)

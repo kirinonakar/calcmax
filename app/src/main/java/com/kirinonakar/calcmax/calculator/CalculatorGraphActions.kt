@@ -35,10 +35,11 @@ internal object CalculatorGraphActions {
             }
         }
         val source=graphSource;val kind=graphKind;val min=if(kind in listOf("cartesian","implicit","surface"))xMin else parameterMin;val max=if(kind in listOf("cartesian","implicit","surface"))xMax else parameterMax
+        val viewYMin=yMin;val viewYMax=yMax;val parameters=graphState.parameterPayload()
         val request=request("graph").put("angle","RAD").put("trees",JSONArray(trees)).put("graphKind",kind)
             .put("variable",when(kind){"cartesian","implicit","surface"->"x";"sequence"->"n";else->"t"})
-            .put("min",min).put("max",max).put("samples",500).put("yMin",yMin).put("yMax",yMax)
-            .put("parameters",graphState.parameterPayload())
+            .put("min",min).put("max",max).put("samples",500).put("xMin",xMin).put("xMax",xMax).put("yMin",viewYMin).put("yMax",viewYMax)
+            .put("parameters",parameters)
         if(derivativeSelected!=null)request.put("derivativeCurveIndex",trees.lastIndex)
         if(shadings.length()>0)request.put("shadings",shadings)
         if(kind=="surface")request.put("surfaceYMin",yMin).put("surfaceYMax",yMax).put("surfaceSamples",SurfaceMesh.sampleCount(xMin,xMax,yMin,yMax,surfaceSamples,surfaceAutoDensity,surfaceZoom.toDouble()))
@@ -61,20 +62,27 @@ internal object CalculatorGraphActions {
         // The screen's delayed auto-plot can repeat a transfer or explicit Plot request.
         // Cancelling an active engine call restarts its process, so reuse that request.
         if(graphRequestSignature==signature && (graphJob?.isActive==true || auto && graphData!=null)) return
-        graphJob?.cancel()
+        // Conflate updates while a request is running. Cancelling each frame
+        // restarts the Python process and discards its compiled function cache.
+        if(graphJob?.isActive==true) {graphPendingPlot={performPlot(auto)};return}
         graphRequestSignature=signature
         graphJob=viewModelScope.launch {
             graphBusy=true; error=""
             try {
                 val response=engine.execute(request)
-                if(source==graphSource && kind==graphKind && derivativeSelected==graphDerivativeSelected && min==(if(kind in listOf("cartesian","implicit","surface"))xMin else parameterMin) && max==(if(kind in listOf("cartesian","implicit","surface"))xMax else parameterMax)) {
+                if(source==graphSource && kind==graphKind && derivativeSelected==graphDerivativeSelected && min==(if(kind in listOf("cartesian","implicit","surface"))xMin else parameterMin) && max==(if(kind in listOf("cartesian","implicit","surface"))xMax else parameterMax) && viewYMin==yMin && viewYMax==yMax && (graphAnimating || parameters.toString()==graphState.parameterPayload().toString())) {
                     if(response.optBoolean("ok")) {
                         if(derivativeSelected!=null)response.put("derivativeSelected",derivativeSelected).put("derivativeCurveIndex",trees.lastIndex)
                         graphData=response;graphState.syncParameters(response.optJSONArray("parameters"))
                     } else {graphData=null;error=response.optString("error")}
                 }
                 if(!graphState.graphAnimating)save()
-            } finally { if(graphRequestSignature==signature) graphBusy=false }
+            } finally {
+                graphBusy=false
+                graphJob=null
+                val pending=graphPendingPlot;graphPendingPlot=null
+                if(isActive)pending?.invoke()
+            }
         }
     }
     fun CalculatorModel.performSetGraphParameter(name:String,value:Double) {
@@ -108,8 +116,7 @@ internal object CalculatorGraphActions {
                 animationPhase+=0.05
                 if(animationPhase>2*PI)animationPhase-=2*PI
                 val swing=(sin(animationPhase)+1.0)/2.0
-                graphState.graphParameters=graphState.graphParameters.mapValues {(_,spec)->spec.copy(value=spec.min+(spec.max-spec.min)*swing) }
-                if(++ticks>=4) {ticks=0;plot()}
+                if(graphState.animateParameters(swing)&&++ticks>=4) {ticks=0;plot()}
             }
         }
     }

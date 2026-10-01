@@ -28,8 +28,8 @@ class SurfaceMeshTest {
     }
     @Test fun facesAreClippedShadedAndOrderedAfterRotation() {
         val mesh=listOf(listOf(p(-1.0,-1.0,-2.0),p(1.0,-1.0,0.0)),listOf(p(-1.0,1.0,0.0),p(1.0,1.0,2.0)))
-        for(rotation in listOf(0.0,35.0,90.0,180.0,270.0,359.0)) {
-            val projection=SurfaceProjection(bounds,rotation,32.0)
+        for(rotation in listOf(0.0,35.0,90.0,180.0,270.0,359.0))for(elevation in listOf(-90.0,-45.0,0.0,32.0,90.0)) {
+            val projection=SurfaceProjection(bounds,rotation,elevation)
             val faces=SurfaceMesh.faces(mesh,projection)
             assertEquals(2,faces.size)
             assertTrue(faces.all {face->face.points.all(::inside)&&face.height in 0.0..1.0&&face.light in .35..1.0})

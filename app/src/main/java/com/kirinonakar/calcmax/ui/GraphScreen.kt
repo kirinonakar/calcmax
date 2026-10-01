@@ -21,8 +21,6 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.*
@@ -45,10 +43,6 @@ import kotlin.math.*
     var showTable by rememberSaveable { mutableStateOf(false) }
     var parametersOpen by rememberSaveable { mutableStateOf(true) }
     var rangeParameter by remember { mutableStateOf<String?>(null) }
-    var topChrome by remember { mutableStateOf(0.dp) }
-    var panelHeight by remember { mutableStateOf(0.dp) }
-    var bottomChrome by remember { mutableStateOf(0.dp) }
-    var surfaceExtra by remember { mutableStateOf(0.dp) }
     var surfaceRotation by rememberSaveable { mutableFloatStateOf(35f) }
     var surfaceElevation by rememberSaveable { mutableFloatStateOf(32f) }
     var halfGraphHeight by rememberSaveable { mutableStateOf(false) }
@@ -78,14 +72,12 @@ import kotlin.math.*
     val parameterSignature=m.graphParameters.entries.joinToString(","){"${it.key}=${it.value.value}"}
     LaunchedEffect(m.graphSource,m.graphDerivativeSelected,m.xMin,m.xMax,m.yMin,m.yMax,m.graphKind,m.parameterMin,m.parameterMax,m.sequenceInitials,m.differentialInitials,m.differentialT0,parameterSignature,m.surfaceSamples,m.surfaceAutoDensity,if(m.surfaceAutoDensity)m.surfaceZoom else 1f) { delay(350);m.plot(auto=true) }
     BoxWithConstraints(Modifier.fillMaxSize()) {
-    val density=LocalDensity.current
-    val availableHeight=if(maxHeight.value.isFinite())maxHeight else 720.dp
-    val panelExtra=if(parametersOpen&&m.graphParameters.isNotEmpty())panelHeight else 0.dp
-    val surfaceExtraHeight=if(m.graphKind=="surface")surfaceExtra else 0.dp
-    val graphHeight=(availableHeight-topChrome+panelExtra-bottomChrome-surfaceExtraHeight).coerceAtLeast(200.dp)
+    // Cartesian and every other graph use the same viewport height. Expression
+    // rows, sliders, and settings scroll with the plot instead of resizing it.
+    val graphHeight=if(maxWidth.value.isFinite())maxWidth else 360.dp
     val plotHeight=if(halfGraphHeight)graphHeight*0.5f else graphHeight
     Column(Modifier.fillMaxSize().verticalScroll(graphScrollState)) {
-    Column(Modifier.fillMaxWidth().zIndex(1f).onSizeChanged{topChrome=with(density){it.height.toDp()}}) {
+    Column(Modifier.fillMaxWidth().zIndex(1f)) {
         OutlinedTextField(m.graphSource,{m.updateGraphSource(it)},Modifier.fillMaxWidth().padding(start=10.dp,end=10.dp,top=8.dp),label={Text(tr(when(m.graphKind){"implicit"->"F(x,y)=0 · e.g. x^2+y^2=1";"parametric"->"One [x(t),y(t)] pair per line";"polar"->"r(t) · radians · one curve per line";"sequence"->"u(n) · use u(n−1) for recurrences";"surface"->"z = f(x,y)";"differential"->"dy/dt = f(t,y)";else->"f(x) · one per line · [shade] y<f(x) or f, g"}))},minLines=if(m.graphKind in listOf("surface","differential"))1 else 2,maxLines=4)
         Column(Modifier.fillMaxWidth().zIndex(1f).background(c.body)) {
             Row(Modifier.fillMaxWidth().zIndex(2f).padding(top=2.dp,bottom=1.dp).horizontalScroll(rememberScrollState()).semantics { contentDescription="Graph types" },horizontalArrangement=Arrangement.spacedBy(6.dp)) {
@@ -109,10 +101,12 @@ import kotlin.math.*
                     SmallAction(if(m.graphAnimating)"Stop" else "Animate",active=if(m.graphAnimating)true else null,shaded=m.graphAnimating){m.toggleGraphAnimation()}
                     SmallAction("Reset sliders"){m.resetGraphParameters()}
                 }
-                if(parametersOpen)Column(Modifier.fillMaxWidth().heightIn(max=150.dp).onSizeChanged{panelHeight=with(density){it.height.toDp()}}.verticalScroll(rememberScrollState())) {
+                if(parametersOpen)Column(Modifier.fillMaxWidth().heightIn(max=150.dp).verticalScroll(rememberScrollState())) {
                     m.graphParameters.entries.forEach { (name,spec)->
+                        val animateLabel="${tr("Animate")}: $name"
                         val low=spec.min.toFloat();val high=spec.max.toFloat()
                         Row(Modifier.fillMaxWidth().height(38.dp).padding(horizontal=12.dp),verticalAlignment=Alignment.CenterVertically) {
+                            Checkbox(spec.animate,{m.setGraphParameterAnimation(name,it)},Modifier.size(32.dp).semantics {contentDescription=animateLabel})
                             Text(name,Modifier.width(24.dp),fontSize=13.sp,color=c.accent,fontWeight=FontWeight.SemiBold)
                             CompactSlider(spec.value.toFloat(),{m.setGraphParameter(name,it.toDouble())},Modifier.weight(1f),valueRange=(if(low<high)low else low-1f)..(if(high>low)high else low+1f))
                             Text("%.3g".format(spec.value),Modifier.width(52.dp),fontSize=12.sp,color=c.ink)
@@ -200,14 +194,14 @@ import kotlin.math.*
             SurfaceGraph(m,surfaceRotation,surfaceElevation,m.surfaceZoom,m.surfaceRenderMode,m.surfaceColor,Modifier.fillMaxSize().clipToBounds().pointerInput(m.graphKind) {
                 detectTransformGestures { _,pan,zoom,_->
                     surfaceRotation=((surfaceRotation+pan.x*.7f)%360f+360f)%360f
-                    surfaceElevation=(surfaceElevation+pan.y*.5f).coerceIn(5f,85f)
+                    surfaceElevation=(surfaceElevation+pan.y*.5f).coerceIn(-90f,90f)
                     m.surfaceZoom=(m.surfaceZoom*zoom).coerceIn(.4f,3f)
                 }
             })
             GraphHeightToggle(halfGraphHeight,{halfGraphHeight=!halfGraphHeight},Modifier.align(Alignment.TopEnd))
             }
             val surfaceZRange=m.graphData?.let {SurfaceMesh.zRange(m.zMin ?: it.optDouble("zMin",-1.0),m.zMax ?: it.optDouble("zMax",1.0))}
-            Column(Modifier.fillMaxWidth().onSizeChanged{surfaceExtra=with(density){it.height.toDp()}}) {
+            Column(Modifier.fillMaxWidth()) {
             GraphFormulas(m.graphKind,sources,0,null,"",shadeSources,null,{},m.displayDigits)
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal=14.dp),horizontalArrangement=Arrangement.spacedBy(6.dp),verticalAlignment=Alignment.CenterVertically) {
                 Text(if(isKorean())"렌더링" else "Rendering",fontSize=11.sp,color=c.muted)
@@ -216,12 +210,14 @@ import kotlin.math.*
                 }
             }
             SurfaceAppearanceControls(m)
-            Text("x: %.3g ~ %.3g   y: %.3g ~ %.3g".format(m.xMin,m.xMax,m.yMin,m.yMax)+(surfaceZRange?.let {"   z: %.3g ~ %.3g".format(it.first,it.second)} ?: ""),Modifier.padding(horizontal=14.dp,vertical=2.dp),fontSize=11.sp,color=c.muted)
+            Row(Modifier.fillMaxWidth().padding(horizontal=14.dp,vertical=2.dp),verticalAlignment=Alignment.CenterVertically) {
+                Text("x: %.3g ~ %.3g   y: %.3g ~ %.3g".format(m.xMin,m.xMax,m.yMin,m.yMax)+(surfaceZRange?.let {"   z: %.3g ~ %.3g".format(it.first,it.second)} ?: ""),Modifier.weight(1f),fontSize=11.sp,color=c.muted)
+            }
             Row(Modifier.fillMaxWidth().height(38.dp).padding(horizontal=14.dp),verticalAlignment=Alignment.CenterVertically) {
                 Text(tr("Rotate"),fontSize=11.sp,color=c.muted);CompactSlider(surfaceRotation,{surfaceRotation=it},Modifier.weight(1f),valueRange=0f..360f);Text("${surfaceRotation.toInt()}°",fontSize=11.sp,color=c.muted)
             }
             Row(Modifier.fillMaxWidth().height(38.dp).padding(horizontal=14.dp),verticalAlignment=Alignment.CenterVertically) {
-                Text(tr("Tilt"),fontSize=11.sp,color=c.muted);CompactSlider(surfaceElevation,{surfaceElevation=it},Modifier.weight(1f),valueRange=5f..85f);Text("${surfaceElevation.toInt()}°",fontSize=11.sp,color=c.muted)
+                Text(tr("Tilt"),fontSize=11.sp,color=c.muted);CompactSlider(surfaceElevation,{surfaceElevation=it},Modifier.weight(1f),valueRange=-90f..90f);Text("${surfaceElevation.toInt()}°",fontSize=11.sp,color=c.muted)
             }
             Row(Modifier.fillMaxWidth().height(38.dp).padding(horizontal=14.dp),verticalAlignment=Alignment.CenterVertically) {
                 Text(tr("Zoom"),fontSize=11.sp,color=c.muted)
@@ -235,6 +231,8 @@ import kotlin.math.*
             Text(if(isKorean())"드래그하여 회전 · 손가락 두 개로 확대/축소" else "Drag to rotate freely · Pinch to zoom",Modifier.padding(horizontal=14.dp,vertical=2.dp),fontSize=11.sp,color=c.muted)
             }
         } else Box(Modifier.fillMaxWidth().height(plotHeight).clipToBounds()) {
+        val curveDash=remember {PathEffect.dashPathEffect(floatArrayOf(12f,5f))}
+        val derivativeDash=remember {PathEffect.dashPathEffect(floatArrayOf(10f,6f))}
         Canvas(Modifier.fillMaxSize().clipToBounds().background(c.display).then(transform).pointerInput(m.graphKind,selected) { detectTapGestures { p ->
             val target=m.xMin+(m.xMax-m.xMin)*p.x/size.width
             val targetY=m.yMax-(m.yMax-m.yMin)*p.y/size.height
@@ -267,6 +265,18 @@ import kotlin.math.*
             val xlo=m.xMin;val xhi=m.xMax
             fun px(x:Double)=((x-xlo)/(xhi-xlo)*size.width).toFloat()
             fun py(y:Double)=(size.height-(y-m.yMin)/(m.yMax-m.yMin)*size.height).toFloat()
+            fun curvePath(points:List<Pair<Double,Double>?>):Path {
+                val path=Path();var previous:Offset?=null
+                points.forEach {point->
+                    val current=point?.let {Offset(px(it.first),py(it.second))}?.takeIf {it.x.isFinite()&&it.y.isFinite()}
+                    if(current!=null) {
+                        if(previous!=null)path.lineTo(current.x,current.y)
+                        else path.moveTo(current.x,current.y)
+                    }
+                    previous=current
+                }
+                return path
+            }
             val paint=Paint(Paint.ANTI_ALIAS_FLAG).apply { color=c.muted.toArgb();textSize=11.sp.toPx() }
             fun step(range:Double):Double { val raw=range/7;val p=10.0.pow(floor(log10(raw)));val v=raw/p;return p*(if(v>5)10 else if(v>2)5 else if(v>1)2 else 1) }
             val sx=if(m.radianAxis)PiAxis.step(xhi-xlo) else step(xhi-xlo);val sy=step(m.yMax-m.yMin)
@@ -298,33 +308,19 @@ import kotlin.math.*
                         }
                     }
                     shading.second.forEach { line->
-                        var previous:Offset?=null
-                        line.forEach { point->
-                            val current=point?.let {Offset(px(it.first),py(it.second))}
-                            if(current!=null&&previous!=null&&abs(current.y-previous!!.y)<size.height*.65f)drawLine(shadeColor.copy(alpha=.85f),previous!!,current,1.6.dp.toPx())
-                            previous=current
-                        }
+                        drawPath(curvePath(line),shadeColor.copy(alpha=.85f),style=Stroke(1.6.dp.toPx()))
                     }
                 }
                 curves.forEachIndexed { ci,points ->
-                    var previous: Offset?=null
-                    points.forEach { point ->
-                        val current=point?.let { Offset(px(it.first),py(it.second)) }
-                        if(ci==selected && point!=null && m.shadedInterval?.let {point.first in min(it.first,it.second)..max(it.first,it.second)}==true) drawLine(c.curves[ci%c.curves.size].copy(alpha=.2f),Offset(current!!.x,py(0.0)),current,3f)
-                        if(current!=null && previous!=null && abs(current.y-previous!!.y)<size.height*.65f) drawLine(c.curves[ci%c.curves.size],previous!!,current,if(ci==selected)4.dp.toPx() else 1.5.dp.toPx(),pathEffect=if(ci%2==1)PathEffect.dashPathEffect(floatArrayOf(12f,5f)) else null)
-                        previous=current
+                    val color=c.curves[ci%c.curves.size]
+                    drawPath(curvePath(points),color,style=Stroke(if(ci==selected)4.dp.toPx() else 1.5.dp.toPx(),pathEffect=if(ci%2==1)curveDash else null))
+                    if(ci==selected&&m.shadedInterval!=null)points.forEach {point->
+                        if(point!=null&&m.shadedInterval?.let {point.first in min(it.first,it.second)..max(it.first,it.second)}==true)
+                            drawLine(color.copy(alpha=.2f),Offset(px(point.first),py(0.0)),Offset(px(point.first),py(point.second)),3f)
                     }
                 }
                 derivativeCurve?.let {points->
-                    var previous:Offset?=null
-                    points.forEach {point->
-                        val current=point?.let {Offset(px(it.first),py(it.second))}
-                        previous?.let {from->
-                            if(current!=null && abs(current.y-from.y)<size.height*.65f)
-                                drawLine(c.accent,from,current,2.5.dp.toPx(),pathEffect=PathEffect.dashPathEffect(floatArrayOf(10f,6f)))
-                        }
-                        previous=current
-                    }
+                    drawPath(curvePath(points),c.accent,style=Stroke(2.5.dp.toPx(),pathEffect=derivativeDash))
                 }
                 if(m.graphKind=="differential") {
                     val fieldData=m.graphData?.optJSONArray("fields")
@@ -353,7 +349,7 @@ import kotlin.math.*
         }
         GraphHeightToggle(halfGraphHeight,{halfGraphHeight=!halfGraphHeight},Modifier.align(Alignment.TopEnd))
         }
-        Column(Modifier.fillMaxWidth().onSizeChanged{bottomChrome=with(density){it.height.toDp()}}) {
+        Column(Modifier.fillMaxWidth()) {
         if(m.graphKind!="surface")GraphFormulas(m.graphKind,sources,selected,derivativeSelected,derivativeExpression,shadeSources,{i->selected=i;if(other==selected)other=(i+1)%sources.size},{m.toggleGraphDerivative(selected)},m.displayDigits)
         if(m.graphKind!="surface" && (curves.isNotEmpty()||shadeSources.isNotEmpty()))Row(Modifier.horizontalScroll(rememberScrollState()),verticalAlignment=Alignment.CenterVertically) {
             SmallAction("−") { val cx=(m.xMin+m.xMax)/2;val cy=(m.yMin+m.yMax)/2;val halfX=(m.xMax-m.xMin);val halfY=(m.yMax-m.yMin);m.xMin=cx-halfX;m.xMax=cx+halfX;m.yMin=cy-halfY;m.yMax=cy+halfY }
@@ -451,6 +447,10 @@ import kotlin.math.*
             RangeAxisEditor(if(m.graphKind=="sequence")"n" else "x",xmin,xmax,m.xMin,m.xMax,{xmin=it},{xmax=it})
             RangeAxisEditor("y",ymin,ymax,m.yMin,m.yMax,{ymin=it},{ymax=it})
             if(m.graphKind=="surface") {
+                SmallAction("Reset ranges") {
+                    xmin="-3.0";xmax="3.0";ymin="-3.0";ymax="3.0";autoZ=true
+                    m.resetSurfaceRanges()
+                }
                 Row(verticalAlignment=Alignment.CenterVertically) {Checkbox(autoZ,{autoZ=it});Text(tr("Automatic z range"))}
                 if(!autoZ)RangeAxisEditor("z",zmin,zmax,zmin.toDoubleOrNull() ?: -1.0,zmax.toDoubleOrNull() ?: 1.0,{zmin=it},{zmax=it})
             }
@@ -714,9 +714,10 @@ internal fun graphShadeFormula(source:String,displayDigits:Int?=null):GraphShade
         }
         val axisPaint=Paint(Paint.ANTI_ALIAS_FLAG).apply { color=c.muted.toArgb();textSize=11.sp.toPx() }
         val labelPaint=Paint(Paint.ANTI_ALIAS_FLAG).apply { color=c.ink.toArgb();textSize=12.sp.toPx();isFakeBoldText=true }
-        fun surfaceSegment(a:DoubleArray?,b:DoubleArray?,color:Color,width:Float) {
+        fun surfaceSegment(path:Path,a:DoubleArray?,b:DoubleArray?) {
             val segment=SurfaceMesh.clipSegment(a,b,bounds) ?: return
-            drawLine(color,project(segment.first),project(segment.second),width)
+            val from=project(segment.first);val to=project(segment.second)
+            path.moveTo(from.x,from.y);path.lineTo(to.x,to.y)
         }
         clipRect {
             for(face in faces) {
@@ -728,18 +729,21 @@ internal fun graphShadeFormula(source:String,displayDigits:Int?=null):GraphShade
                 drawPath(path,if(renderMode=="surface-wireframe")c.muted else color,style=Stroke(if(renderMode=="surface-wireframe").65.dp.toPx() else .35.dp.toPx()))
             }
             if(renderMode=="wireframe") {
-            mesh.forEachIndexed { ri,row->
+            val rows=Path();val columns=Path()
+            mesh.forEach {row->
                 for(ci in 0 until row.lastIndex) {
                     val a=row[ci];val b=row[ci+1]
-                    surfaceSegment(a,b,surfaceColor.copy(alpha=.78f),1.15.dp.toPx())
+                    surfaceSegment(rows,a,b)
                 }
             }
             if(mesh.isNotEmpty())for(ci in mesh.first().indices) {
                 for(ri in 0 until mesh.lastIndex) {
                     val a=mesh[ri].getOrNull(ci);val b=mesh[ri+1].getOrNull(ci)
-                    surfaceSegment(a,b,surfaceColor.copy(alpha=.78f),1.dp.toPx())
+                    surfaceSegment(columns,a,b)
                 }
             }
+            drawPath(rows,surfaceColor.copy(alpha=.78f),style=Stroke(1.15.dp.toPx()))
+            drawPath(columns,surfaceColor.copy(alpha=.78f),style=Stroke(1.dp.toPx()))
             }
             val x0=doubleArrayOf(xmin,ymin,zmin)
             val x1=doubleArrayOf(xmax,ymin,zmin)
