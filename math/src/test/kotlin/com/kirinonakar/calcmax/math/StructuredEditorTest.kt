@@ -2,6 +2,27 @@ package com.kirinonakar.calcmax.math
 import org.junit.Assert.*
 import org.junit.Test
 class StructuredEditorTest {
+    @Test fun deletingEmptyFunctionTemplatesRemovesTheWholeCall() {
+        for(template in listOf("sin()","cos()","tan()","asin()","sinh()","sqrt()","cbrt()","log()","ln()",
+            "log(,)","nthroot(,)","mixed(,,)","nPr(,)","det()","inverse()","transpose()","norm()",
+            "diff(,x)","integrate(,x,,)","nderivative(,x,)","limit(,x,)","sum(,x,,)","product(,x,,)","mean([])")) {
+            val position=template.indexOf('(')+1
+            val editor=Editor(template,position)
+            assertEquals(template,"",editor.delete().source)
+            assertEquals(template,"",editor.deleteForward().source)
+            assertEquals(0,editor.delete().cursor)
+        }
+        assertEquals("1+",Editor("1+sin()",6).delete().source)
+        assertEquals("sin()",Editor("sin(cos())",8).delete().source)
+        assertEquals("()^2",Editor("sin()^2",4).delete().source)
+        assertEquals("2*()*3",Editor("2*sin()*3",6).delete().source)
+        assertEquals("log(,2)",Editor("log(,2)",4).delete().source)
+        assertEquals("integrate(,y,,)",Editor("integrate(,y,,)",10).delete().source)
+        assertEquals("sin()",Editor("sin(2)",5).delete().source)
+        assertEquals("",Editor("sin(2)",5).delete().delete().source)
+        assertEquals("",Editor("log(,)",5).delete().source)
+        assertEquals("",Editor("mean([])",6).delete().source)
+    }
     @Test fun parentSelectsVisibleSumAfterEmptyPrefix() {
         for(source in listOf("sqrt()A+B","()^2A+B")) {
             val b=Editor(source,source.length).parent()
@@ -182,11 +203,11 @@ class StructuredEditorTest {
         assertEquals("integrate(5^(24),x,,)",insideExponent.insert("4").source)
         assertEquals(10..13,insideExponent.move(1).cursorTarget())
     }
-    @Test fun deletingIntegralInputPreservesItsHiddenOpeningParenthesis() {
+    @Test fun deletingIntegralInputThenEmptyTemplateRemovesTheWholeCall() {
         val filled=Editor("integrate(,x,,)",10).insert("2")
         val empty=filled.delete()
         assertEquals("integrate(,x,,)",empty.source)
-        assertEquals(empty,empty.delete())
+        assertEquals("",empty.delete().source)
         assertEquals("call",empty.tree()?.kind)
         assertEquals("integrate",empty.tree()?.value)
         assertEquals(empty.source,Editor(empty.source,9).deleteForward().source)

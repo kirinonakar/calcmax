@@ -187,4 +187,4 @@ private class MatrixNav{var cursorEnd:Boolean?=null}
         Text("$rows × $columns matrix",fontSize=11.sp,color=c.muted)
     }},confirmButton={TextButton(onClick={m.insert(matrixTemplate(rows,columns),2);close()}){Text(tr("Insert"))}},dismissButton={TextButton(onClick=close){Text(tr("Cancel"))}})
 }
-private fun matrixTemplate(rows:Int,columns:Int)=List(rows){"["+",".repeat(columns-1)+"]"}.joinToString(",","[","]")
+internal fun matrixTemplate(rows:Int,columns:Int)=List(rows){"["+",".repeat(columns-1)+"]"}.joinToString(",","[","]")

@@ -1,4 +1,21 @@
 import {parse} from './parser.js';
+// Remove an unused function template as a unit, including its hidden delimiters.
+export function emptyCallDeletion(source,start,end){
+  if(start!==end)return null;
+  const nodes=[];
+  try{const visit=node=>{nodes.push(node);node.args.forEach(visit);};visit(parse(source,{allowHoles:true}));}catch{return null;}
+  const empty=node=>node.kind==='hole'||['group','list','set','tuple','matrix'].includes(node.kind)&&node.args.every(empty);
+  const variableTemplates=['diff','integrate','nderivative','limit','sum','product'];
+  const call=nodes.filter(node=>node.kind==='call'&&
+    node.args.some(arg=>empty(arg)&&start>=arg.start&&start<=arg.end)&&
+    node.args.every((arg,index)=>empty(arg)||index===1&&variableTemplates.includes(node.value)&&arg.kind==='symbol'&&arg.value==='x'))
+    .sort((a,b)=>(a.end-a.start)-(b.end-b.start))[0];
+  if(!call)return null;
+  const structuralOperand=nodes.some(node=>node.kind==='binary'&&
+    (node.value==='^'?node.args[0].start===call.start&&node.args[0].end===call.end:
+      (node.value==='*'||node.value==='/'&&node.displayOperator!=='÷')&&node.args.some(arg=>arg.start===call.start&&arg.end===call.end)));
+  return {start:call.start,end:call.end,text:structuralOperand?'()':''};
+}
 export function fractionExit(source,start,end,direction,outside=null){
   if(direction!=='RIGHT'||start!==end)return null;
   const fractions=[];

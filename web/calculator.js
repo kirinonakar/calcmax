@@ -6,7 +6,7 @@ import {calcVariables,calcBindings} from './calc-session.js';
 import {previousCalculations,renderPreviousCalculations,followTape} from './calculation-tape.js';
 import {renderFormulas} from './formula-preview.js';
 import {markInputCursor,followInputCursor,followTextCursor,inputPointPosition} from './input-cursor.js';
-import {moveMathCursor,fractionExit} from './input-navigation.js';
+import {moveMathCursor,fractionExit,emptyCallDeletion} from './input-navigation.js';
 import {createDisplaySizing} from './display-sizing.js';
 import {fractionInput} from './fraction-input.js';
 import {requiresExplicitEvaluation} from './evaluation-policy.js';
@@ -242,7 +242,13 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
     else if(input==='MIXED'){mixed=!mixed;decimal=false;$('exact-toggle').textContent='Exact';renderResult();}
     else if(input==='INS')$('insert-mode').click();
     else if(input==='NEG'){if(committed){$('expression').value='';committed=false;}insert('-');}
-    else if(input==='DEL'||input==='DELETE_FORWARD'){const f=$('expression'),start=f.selectionStart,end=f.selectionEnd;undoStack().push(f.value);f.setRangeText('',start===end&&input==='DEL'?Math.max(0,start-1):start,start===end&&input==='DELETE_FORWARD'?Math.min(f.value.length,end+1):end,'end');committed=false;preview();}
+    else if(input==='DEL'||input==='DELETE_FORWARD'){
+      const f=$('expression'),start=f.selectionStart,end=f.selectionEnd,call=emptyCallDeletion(f.value,start,end);
+      undoStack().push(f.value);
+      if(call){f.setRangeText(call.text,call.start,call.end,'end');const at=call.start+(call.text?1:0);f.setSelectionRange(at,at);}
+      else f.setRangeText('',start===end&&input==='DEL'?Math.max(0,start-1):start,start===end&&input==='DELETE_FORWARD'?Math.min(f.value.length,end+1):end,'end');
+      committed=false;preview();
+    }
     else if(['LEFT','RIGHT','UP','DOWN'].includes(input)){
       const f=$('expression');let start=f.selectionStart,end=f.selectionEnd;
       const outside=inputBoundary?.edge==='after'&&inputBoundary.source===f.value&&inputBoundary.position===start&&start===end?inputBoundary:null;
@@ -253,7 +259,8 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
       else try{const nodes=[];const visit=n=>{if(n.start<=start&&n.end>=end)nodes.push(n);n.args?.forEach(visit);};visit(parse(f.value,{allowHoles:true}));nodes.sort((a,b)=>(a.end-a.start)-(b.end-b.start));const selected=input==='UP'?nodes.find(n=>n.start<start||n.end>end):nodes[0]?.args?.[0];if(selected){start=selected.start;end=selected.end;}}catch{}
       f.setSelectionRange(start,end);inputBoundary=exit?{...exit,source:f.value,edge:'after'}:outside&&input==='RIGHT'&&start===outside.position?outside:null;if(typing)f.focus({preventScroll:true});preview();
     }
-    else if(input==='MATRIX_INPUT')matrixInsertDialog();
+    else if(input==='MATRIX_INPUT')insert('[[,],[,]]',2);
+    else if(input==='MATRIX_SIZE')matrixInsertDialog();
     else if(input==='TO_GRAPH'){
       const source=value('expression')||'x';let graphKind='cartesian';
       try{const tree=parse(latexInput(source));if(tree.kind==='relation'&&['=','=='].includes(tree.value))graphKind='implicit';}catch{}

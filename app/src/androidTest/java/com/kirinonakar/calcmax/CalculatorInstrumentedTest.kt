@@ -28,6 +28,29 @@ import java.io.File
 class CalculatorInstrumentedTest {
     @get:Rule val compose=createAndroidComposeRule<MainActivity>()
     private fun model()=ViewModelProvider(compose.activity)[CalculatorModel::class.java]
+    @Test fun topRightKeysAlignWithScientificColumns() {
+        compose.runOnIdle {model().mode="Scientific/CAS";model().poweredOn=true;model().secondKeys=false;model().shift=false;model().alpha=false}
+        for((upper,lower) in listOf("MODE" to "log","2nd" to "ln","x⁻¹" to "log","logₐ□" to "ln")) {
+            val top=compose.onNodeWithContentDescription(upper).fetchSemanticsNode().boundsInRoot
+            val bottom=compose.onNodeWithContentDescription(lower).fetchSemanticsNode().boundsInRoot
+            assertEquals("$upper left edge",bottom.left,top.left,1f)
+            assertEquals("$upper right edge",bottom.right,top.right,1f)
+        }
+    }
+    @Test fun delRemovesUntouchedFunctionKeysIncludingCalculusTemplates() {
+        compose.runOnIdle {model().mode="Scientific/CAS";model().poweredOn=true;model().secondKeys=false;model().shift=false;model().alpha=false;model().clear()}
+        for(key in listOf("sin","cos","tan","√","log","ln","∫","logₐ□")) {
+            compose.onNodeWithContentDescription(key).performClick()
+            compose.onNodeWithContentDescription("DEL").performClick()
+            compose.runOnIdle {assertEquals(key,"",model().editor.source);assertEquals(0,model().editor.cursor)}
+        }
+        compose.onNodeWithContentDescription("2nd").performClick()
+        for(key in listOf("d/dx","lim","Π","det","inv","T","‖v‖")) {
+            compose.onNodeWithContentDescription(key).performClick()
+            compose.onNodeWithContentDescription("DEL").performClick()
+            compose.runOnIdle {assertEquals(key,"",model().editor.source)}
+        }
+    }
     @Test fun enteringMatrixVectorAndStatisticsDoesNotScrollToTheExpression() {
         compose.runOnIdle {
             model().mode="Scientific/CAS";model().language="en";model().poweredOn=true
@@ -235,8 +258,7 @@ class CalculatorInstrumentedTest {
         compose.onNodeWithContentDescription("Graph current expression").performClick()
         compose.runOnIdle {assertEquals("Graph",model().mode);assertEquals("cartesian",model().graphKind);assertEquals("x^2+1",model().graphSource)}
         compose.runOnIdle {model().mode="Scientific/CAS";model().clear();model().secondKeys=true}
-        compose.onNodeWithContentDescription("Insert matrix, choose size").performClick()
-        compose.onNodeWithText("Insert").performClick()
+        compose.onNodeWithContentDescription("Insert 2 by 2 matrix").performClick()
         compose.runOnIdle {assertEquals("[[,],[,]]",model().editor.source);assertEquals(2,model().editor.cursor)}
         compose.runOnIdle {model().clear();model().secondKeys=true}
         compose.onNodeWithContentDescription("SHIFT").performClick()

@@ -70,6 +70,16 @@ data class Editor(val source: String = "", val cursor: Int = source.length, val 
     fun replaceSlot(slot:IntRange,text:String,inside:Int=text.length)=Editor(source.substring(0,slot.first)+text+source.substring(slot.last),slot.first+inside.coerceIn(0,text.length))
     private fun hiddenCallOpen(position:Int):Boolean = source.getOrNull(position)=='(' &&
         tree()?.nodes()?.any {it.kind=="call" && it.start<position && it.args.firstOrNull()?.start==position+1}==true
+    private fun emptyCallAt(position:Int):Expr? {
+        fun empty(node:Expr):Boolean = node.kind=="hole" ||
+            node.kind in setOf("group","list","set","tuple","matrix") && node.args.all(::empty)
+        val variableTemplates=setOf("diff","integrate","nderivative","limit","sum","product")
+        return tree()?.nodes()?.filter {node->
+            node.kind=="call" && node.args.any {arg->empty(arg) && position in arg.start..arg.end} &&
+                node.args.withIndex().all {(index,arg)->empty(arg) ||
+                    index==1 && node.value in variableTemplates && arg.kind=="symbol" && arg.value=="x"}
+        }?.minByOrNull {it.end-it.start}
+    }
     private fun fraction(node:Expr):Boolean = node.kind=="binary" && node.value=="/" && node.displayOperator!="÷"
     private fun fractionAfterDenominator(position:Int):Expr? = tree()?.nodes()?.filter {node->
         fraction(node) && node.end==position && node.args[1].kind=="group" && node.args[1].end==position
@@ -160,6 +170,7 @@ data class Editor(val source: String = "", val cursor: Int = source.length, val 
             selectedDenominator(start,end)?.let{return removeEmptyDenominator(it)}
             return remove(start,end)
         }
+        emptyCallAt(cursor)?.let{return remove(it.start,it.end)}
         fractionAfterDenominator(cursor)?.let {fraction->
             val denominator=fraction.args[1]
             val value=denominator.args[0]
@@ -182,6 +193,7 @@ data class Editor(val source: String = "", val cursor: Int = source.length, val 
             selectedDenominator(start,end)?.let{return removeEmptyDenominator(it)}
             return remove(start,end)
         }
+        emptyCallAt(cursor)?.let{return remove(it.start,it.end)}
         emptyExponentAt(cursor)?.let{return removeEmptyExponent(it)}
         emptyDenominatorAt(cursor)?.let{return removeEmptyDenominator(it)}
         emptyMultiplicationOperandAt(cursor)?.let{return removeEmptyMultiplicationOperand(it.first,it.second)}

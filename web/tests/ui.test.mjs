@@ -87,6 +87,27 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
   key('factor()').click();assert.equal($('expression').value,'factor()');assert.ok($('expression-preview').querySelector('.input-slot'));
   key('AC').click();key('SECOND').click();assert.equal($('keypad').dataset.page,'1');
   const longClick=async input=>{const button=key(input);button.dispatchEvent(new window.MouseEvent('pointerdown',{bubbles:true,button:0}));await new Promise(resolve=>setTimeout(resolve,550));button.dispatchEvent(new window.MouseEvent('pointerup',{bubbles:true,button:0}));button.click();};
+  await t.test('MATRIX inserts a 2 by 2 template directly and SHIFT or holding selects its size',async()=>{
+    key('AC').click();key('SECOND').click();key('MATRIX_INPUT').click();
+    assert.equal($('dialog').open,false);assert.equal($('expression').value,'[[,],[,]]');assert.equal($('expression').selectionStart,2);
+    key('1').click();key('RIGHT').click();key('2').click();
+    assert.equal($('expression').value,'[[1,2],[,]]');
+    $('undo').click();assert.equal($('expression').value,'[[1,],[,]]');
+    key('AC').click();key('SHIFT').click();key('MATRIX_INPUT').click();assert.equal($('dialog').open,true);$('dialog').close();
+    await longClick('MATRIX_INPUT');assert.equal($('dialog').open,true);$('dialog').close();
+    key('SECOND').click();key('AC').click();
+  });
+  await t.test('DEL removes empty function templates, including multi-slot and nested functions, with undo',()=>{
+    for(const input of ['sin()','cos()','sqrt()','log()','log(,)','integrate(,x,,)']){
+      key('AC').click();key(input).click();const source=$('expression').value;
+      key('DEL').click();assert.equal($('expression').value,'',input);assert.equal($('expression').selectionStart,0);
+      $('undo').click();assert.equal($('expression').value,source,input);
+    }
+    key('AC').click();key('sin()').click();key('cos()').click();key('DEL').click();assert.equal($('expression').value,'sin()');
+    key('DEL').click();assert.equal($('expression').value,'');
+    key('SECOND').click();key('diff(,x)').click();key('DEL').click();assert.equal($('expression').value,'');
+    key('SECOND').click();key('AC').click();
+  });
   await t.test('mode status shares the keypad dialog and long press returns to the calculator',async()=>{
     const status=$('mode-status');
     assert.ok($('mode').hidden,'native mode selector cannot intercept mobile taps');

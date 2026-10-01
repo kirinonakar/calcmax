@@ -40,7 +40,7 @@ private val ScientificKeys=listOf(
 private val SecondKeys=listOf(
     listOf(KeySpec("simp","simplify()"),KeySpec("factor","factor()","factorint","factorint()"),KeySpec("expand","expand()"),KeySpec("x", "x", "^", "^()"),KeySpec("y",secondary="=",alternate="RELATION"),KeySpec("z")),
     listOf(KeySpec("⌊x⌋","floor()","mod","mod(,)"),KeySpec("⌈x⌉","ceil()","divmod","divmod(,)"),KeySpec("∞","oo","sign","sign()"),KeySpec(","),KeySpec("{",secondary="[",alternate="["),KeySpec("}",secondary="]",alternate="]")),
-    listOf(KeySpec("MATRIX","MATRIX_INPUT",secondary="n×m",type="action"),KeySpec("det","det()",secondary="Pol",alternate="pol(,)"),KeySpec("inv","inverse()",secondary="Rec",alternate="rec(,)"),KeySpec("T","transpose()"),KeySpec("‖v‖","norm()"),KeySpec("GRAPH","TO_GRAPH",secondary="MODE",alternate="Graph",type="action"))
+    listOf(KeySpec("MATRIX","MATRIX_INPUT",secondary="n×m",alternate="MATRIX_SIZE",type="action"),KeySpec("det","det()",secondary="Pol",alternate="pol(,)"),KeySpec("inv","inverse()",secondary="Rec",alternate="rec(,)"),KeySpec("T","transpose()"),KeySpec("‖v‖","norm()"),KeySpec("GRAPH","TO_GRAPH",secondary="MODE",alternate="Graph",type="action"))
 )
 private val NumericKeys=listOf(
     listOf(KeySpec("7",secondary="CONST",alternate="Constants"),KeySpec("8",secondary="CONV",alternate="Units"),KeySpec("9",secondary="CLR",alternate="Clear"),KeySpec("DEL",secondary="INS",alternate="INS",type="danger"),KeySpec("AC",secondary="CLR ALL",alternate="CLR ALL",type="danger")),
@@ -93,7 +93,7 @@ internal fun performKeypadInput(m:CalculatorModel,requestedValue:String,open:(St
             "LEFT"->m.editCalcValue(m.calcSession!!.input.move(-1))
             "RIGHT"->m.editCalcValue(m.calcSession!!.input.move(1))
             "NEG"->m.insertCalcValue("-")
-            "RCL","STO","Clear","CLR ALL","MODE","SETUP","ENG","ENG−","S⇔D","MIXED","M+","M−","SOLVE","RELATION","Graph","Equations","Scientific/CAS","Python","TO_GRAPH"->Unit
+            "RCL","STO","Clear","CLR ALL","MODE","SETUP","ENG","ENG−","S⇔D","MIXED","M+","M−","SOLVE","RELATION","Graph","Equations","Scientific/CAS","Python","TO_GRAPH","MATRIX_INPUT","MATRIX_SIZE"->Unit
             else->{val input=keypadOperandInput(value,m.calcSession!!.input,false);val at=if(input.contains('('))input.indexOf('(')+1 else input.length;m.insertCalcValue(input,at)}
         }
         m.shift=false;m.alpha=false
@@ -129,7 +129,8 @@ internal fun performKeypadInput(m:CalculatorModel,requestedValue:String,open:(St
         "DMS_INPUT"->m.insertDmsSymbol()
         "DMS"->m.toggleDms()
         "TO_GRAPH"->m.sendExpressionToGraph()
-        "MATRIX_INPUT"->open("MatrixSize")
+        "MATRIX_INPUT"->m.insert(matrixTemplate(2,2),2)
+        "MATRIX_SIZE"->open("MatrixSize")
         "*10^()"->{val text=if(m.editor.source.isBlank()||m.committed)"1$value" else value;m.insert(text,text.indexOf('(')+1)}
         else->{val input=keypadOperandInput(value,m.editor,m.committed);val at=when {input=="()/()"->1;input.contains('(')->input.indexOf('(')+1;else->input.length};m.insert(input,at)}
     }
@@ -171,13 +172,15 @@ internal fun performKeypadInput(m:CalculatorModel,requestedValue:String,open:(St
     Column(modifier.background(c.body).padding(horizontal=8.dp,vertical=4.dp).semantics {contentDescription="Calculator keypad"},verticalArrangement=Arrangement.spacedBy(4.dp)) {
         if(!numericOnly) {
             BoxWithConstraints(Modifier.fillMaxWidth().weight(2f)) {
-                val column=maxWidth/6
+                val gap=5.dp
+                val keyWidth=(maxWidth-gap*5)/6
+                val column=keyWidth+gap
                 val row=maxHeight/2
                 val top=listOf(KeySpec("SHIFT",type="utility"),KeySpec("ALPHA",type="utility"),KeySpec("MODE",alternate="Scientific/CAS",type="utility"),KeySpec(if(m.secondKeys)"1st" else "2nd","SECOND",type="utility"))
-                top.forEachIndexed {i,k->val col=if(i<2)i else i+2;Keycap(k,Modifier.offset(x=column*col).width(column-4.dp).height(row),m.shift&&k.title=="SHIFT"||m.alpha&&k.title=="ALPHA",onClick={press(k)},onLongClick={pressLong(k)})}
+                top.forEachIndexed {i,k->val col=if(i<2)i else i+2;Keycap(k,Modifier.offset(x=column*col).width(keyWidth).height(row),m.shift&&k.title=="SHIFT"||m.alpha&&k.title=="ALPHA",onClick={press(k)},onLongClick={pressLong(k)})}
                 val bottom=if(m.secondKeys)listOf(KeySpec("d/dx","diff(,x)","∫","integrate(,x)"),KeySpec("lim","limit(,x,)"),KeySpec("sinc","sinc()"),KeySpec("Π","product(,x,,)")) else listOf(KeySpec("CALC",secondary="SOLVE",alternate="SOLVE",alpha="="),KeySpec("∫","integrate(,x,,)","d/dx","nderivative(,x,)",":"),KeySpec("x⁻¹","^(-1)","x!","!"),KeySpec("logₐ□","log(,)","Σ","sum(,x,,)"))
-                bottom.forEachIndexed {i,k->val col=if(i<2)i else i+2;Keycap(k,Modifier.offset(x=column*col,y=row).width(column-4.dp).height(row),onClick={press(k)},onLongClick={pressLong(k)})}
-                Box(Modifier.offset(x=column*2).width(column*2-4.dp).fillMaxHeight(),contentAlignment=Alignment.Center) {
+                bottom.forEachIndexed {i,k->val col=if(i<2)i else i+2;Keycap(k,Modifier.offset(x=column*col,y=row).width(keyWidth).height(row),onClick={press(k)},onLongClick={pressLong(k)})}
+                Box(Modifier.offset(x=column*2).width(keyWidth*2+gap).fillMaxHeight(),contentAlignment=Alignment.Center) {
                     Box(Modifier.fillMaxSize(.88f).clip(CircleShape).background(c.scientific).border(1.dp,c.muted.copy(alpha=.3f),CircleShape))
                     DirectionKey("▲","Cursor up",Modifier.align(Alignment.TopCenter).fillMaxWidth(.3f).fillMaxHeight(.34f)){press(KeySpec("UP"))}
                     DirectionKey("◀","Cursor left",Modifier.align(Alignment.CenterStart).fillMaxWidth(.36f).fillMaxHeight(.32f)){press(KeySpec("LEFT"))}
@@ -213,7 +216,7 @@ internal fun performKeypadInput(m:CalculatorModel,requestedValue:String,open:(St
     }
     val bg=when(key.type){"numeric"->c.numeric;"danger"->c.clearKey;"action"->c.operator;else->c.scientific}
     val ink=if(key.type=="danger")c.clearInk else c.ink
-    BoxWithConstraints(modifier.combinedClickable(interactionSource=interaction,indication=null,onClick=onClick,onLongClick=onLongClick).semantics(mergeDescendants=true){contentDescription=when(key.input){"TO_GRAPH"->"Graph current expression";"MATRIX_INPUT"->"Insert matrix, choose size";else->if(shifted&&key.alternate.isNotBlank())if(key.alternate=="RELATION")"Insert equals" else key.alternate else key.title};stateDescription=if(active)"Active" else listOf(key.secondary,key.alpha).filter{it.isNotBlank()}.joinToString()}) {
+    BoxWithConstraints(modifier.combinedClickable(interactionSource=interaction,indication=null,onClick=onClick,onLongClick=onLongClick).semantics(mergeDescendants=true){contentDescription=when(key.input){"TO_GRAPH"->"Graph current expression";"MATRIX_INPUT"->if(shifted)"Insert matrix, choose size" else "Insert 2 by 2 matrix";else->if(shifted&&key.alternate.isNotBlank())if(key.alternate=="RELATION")"Insert equals" else key.alternate else key.title};stateDescription=if(active)"Active" else listOf(key.secondary,key.alpha).filter{it.isNotBlank()}.joinToString()}) {
         val labelHeight=(maxHeight*.25f).coerceAtMost(15.dp)
         val keyFont=(maxHeight.value*(when(key.type){"numeric","danger"->.44f;"action"->.24f;else->.32f})).coerceIn(10f,24f).sp
         val smallFont=(labelHeight.value*.66f).coerceIn(6f,if(key.secondary.length+key.alpha.length>10)7.5f else 10f).sp

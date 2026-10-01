@@ -14,7 +14,7 @@ export function createCalculatorKeypad({state,persist,isCalcActive,isBusy,handle
     if(input==='SECOND'){state.secondKeys=!state.secondKeys;shift=false;alpha=false;persist();renderKeypad();return;}
     if(isCalcActive()){
       if(['AC','=','CALC'].includes(input))return handleKey(input);
-      if(['MODE','STO','RCL','Clear','CLR ALL','SOLVE','RELATION','ENG','ENG−','S⇔D','MIXED','M+','M−','INS','MATRIX_INPUT','TO_GRAPH',...Object.keys(jumps)].includes(input)){shift=false;alpha=false;renderKeypad();return;}
+      if(['MODE','STO','RCL','Clear','CLR ALL','SOLVE','RELATION','ENG','ENG−','S⇔D','MIXED','M+','M−','INS','MATRIX_INPUT','MATRIX_SIZE','TO_GRAPH',...Object.keys(jumps)].includes(input)){shift=false;alpha=false;renderKeypad();return;}
     }
     if(input==='HYP'){hyperbolic=!hyperbolic;shift=false;alpha=false;renderKeypad();return;}
     if(hyperbolic&&/^(?:a?sin|a?cos|a?tan)\(\)$/.test(input))input=input.replace('()','h()');
