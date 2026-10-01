@@ -8,6 +8,26 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class WorkspaceStatesTest {
+    @Test fun surfaceRecalculationFailuresRetainTheLastMeshAndCanBeRetried() {
+        val state=GraphState(MemoryPreferences());state.changeKind("surface")
+        val first=org.json.JSONObject("{\"ok\":true,\"surface\":[[[0,0,1],[1,0,2]],[[0,1,2],[1,1,3]]],\"parameters\":[]}")
+        state.applyPlotResponse(first,"first")
+        state.updateSource(state.graphSource)
+        assertSame(first,state.graphData)
+        state.surfaceZoom=3f
+        state.applyPlotResponse(org.json.JSONObject().put("ok",false).put("error","Computation timed out"),"higher-density")
+        assertSame(first,state.graphData)
+        assertEquals("first",state.graphResultSignature)
+        assertNotEquals("higher-density",state.graphResultSignature)
+        state.updateSource("sin(x+y)")
+        assertSame(first,state.graphData)
+        val next=org.json.JSONObject(first.toString())
+        state.applyPlotResponse(next,"higher-density")
+        assertSame(next,state.graphData)
+        assertEquals("higher-density",state.graphResultSignature)
+        state.changeKind("cartesian")
+        assertNull(state.graphData);assertNull(state.graphResultSignature)
+    }
     @Test fun surfaceRangeResetPreservesAppearanceAndZoomAndPersistsAutomaticZ() {
         val prefs=MemoryPreferences();val state=GraphState(prefs)
         state.xMin=100.0;state.xMax=101.0;state.yMin=200.0;state.yMax=201.0;state.zMin=3.0;state.zMax=4.0

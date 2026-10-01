@@ -74,7 +74,18 @@ class EngineService : Service() {
                     } else Python.getInstance().getModule(module).callAttr("dispatch", payload, control).toString()
                 } catch (e: Exception) { JSONObject().put("ok", false).put("error", e.message ?: "Engine error").toString() }
                 finally { requests.remove(id, control) }
-                runCatching { reply.send(Message.obtain(null, 1, id, 0).apply { data = Bundle().apply { putString("result", result) } }) }
+                runCatching {
+                    val compressed=EngineResultCodec.compress(result)
+                    reply.send(Message.obtain(null, 1, id, 0).apply {
+                        data=Bundle().apply {if(compressed==null)putString("result",result) else putByteArray("resultGzip",compressed)}
+                    })
+                }.onFailure {
+                    // Report a transport failure immediately rather than leaving
+                    // the client waiting until its calculation timeout expires.
+                    runCatching {reply.send(Message.obtain(null,1,id,0).apply {
+                        data=Bundle().apply {putString("result",JSONObject().put("ok",false).put("error","Could not transfer calculation result. Reduce graph density and try again.").toString())}
+                    })}
+                }
             }
             true
         }
@@ -114,7 +125,11 @@ class EngineClient(private val context: Context) {
             timeouts.remove(msg.arg1)?.let(handler::removeCallbacks)
             inputHandlers.remove(msg.arg1)
             val continuation = pending.remove(msg.arg1)
-            if (continuation?.isActive == true) continuation.resume(JSONObject(msg.data.getString("result") ?: "{}"))
+            if (continuation?.isActive == true) {
+                val response=runCatching {JSONObject(EngineResultCodec.decode(msg.data.getString("result"),msg.data.getByteArray("resultGzip")))}
+                    .getOrElse {JSONObject().put("ok",false).put("error","Could not read calculation result. Try again.")}
+                continuation.resume(response)
+            }
         }
         true
     })

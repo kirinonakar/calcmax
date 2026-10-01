@@ -229,6 +229,7 @@ import kotlin.math.*
                 }.padding(horizontal=8.dp,vertical=7.dp),fontSize=11.sp,color=c.accent)
             }
             Text(if(isKorean())"드래그하여 회전 · 손가락 두 개로 확대/축소" else "Drag to rotate freely · Pinch to zoom",Modifier.padding(horizontal=14.dp,vertical=2.dp),fontSize=11.sp,color=c.muted)
+            if(m.error.isNotBlank())Text(m.error,Modifier.padding(horizontal=14.dp,vertical=2.dp),fontSize=12.sp,color=MaterialTheme.colorScheme.error)
             }
         } else Box(Modifier.fillMaxWidth().height(plotHeight).clipToBounds()) {
         val curveDash=remember {PathEffect.dashPathEffect(floatArrayOf(12f,5f))}

@@ -61,7 +61,7 @@ internal object CalculatorGraphActions {
         val signature=request.toString()
         // The screen's delayed auto-plot can repeat a transfer or explicit Plot request.
         // Cancelling an active engine call restarts its process, so reuse that request.
-        if(graphRequestSignature==signature && (graphJob?.isActive==true || auto && graphData!=null)) return
+        if(graphRequestSignature==signature && graphJob?.isActive==true || auto && graphState.graphResultSignature==signature && graphData!=null) return
         // Conflate updates while a request is running. Cancelling each frame
         // restarts the Python process and discards its compiled function cache.
         if(graphJob?.isActive==true) {graphPendingPlot={performPlot(auto)};return}
@@ -73,8 +73,8 @@ internal object CalculatorGraphActions {
                 if(source==graphSource && kind==graphKind && derivativeSelected==graphDerivativeSelected && min==(if(kind in listOf("cartesian","implicit","surface"))xMin else parameterMin) && max==(if(kind in listOf("cartesian","implicit","surface"))xMax else parameterMax) && viewYMin==yMin && viewYMax==yMax && (graphAnimating || parameters.toString()==graphState.parameterPayload().toString())) {
                     if(response.optBoolean("ok")) {
                         if(derivativeSelected!=null)response.put("derivativeSelected",derivativeSelected).put("derivativeCurveIndex",trees.lastIndex)
-                        graphData=response;graphState.syncParameters(response.optJSONArray("parameters"))
-                    } else {graphData=null;error=response.optString("error")}
+                    } else error=response.optString("error")
+                    graphState.applyPlotResponse(response,signature)
                 }
                 if(!graphState.graphAnimating)save()
             } finally {

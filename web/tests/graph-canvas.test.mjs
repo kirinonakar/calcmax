@@ -124,19 +124,22 @@ test('3D range reset restores x/y and automatic z, resamples and preserves the c
   }finally{workspace.dispose();dom.window.close();}
 });
 
-test('height toggle halves every graph, restores/persists it, and tracing uses the compact viewport',async()=>{
+test('height cycles 1x to half to 2x, persists scale, and tracing uses the current viewport',async()=>{
   const dom=setup(page()),$=id=>document.getElementById(id),requests=[];
-  $('graph-plot').getBoundingClientRect=()=>({left:0,top:0,width:800,height:$('graph-plot').querySelector('canvas')?.dataset.halfHeight==='true'?230:460});
+  $('graph-plot').getBoundingClientRect=()=>({left:0,top:0,width:800,height:Number($('graph-plot').querySelector('canvas')?.dataset.plotHeight)||460});
   const create=saved=>createGraphWorkspace({execute:async request=>{requests.push(request);return {ok:true,curves:[[[0,1],[1,0]]],parameters:[]};},options,onError:assert.fail,persist:()=>{},isBusy:()=>false,saved});
   let workspace=create();
   try{
     await workspace.run();const canvas=$('graph-plot').firstChild,fullHeight=canvas.height,range=workspace.snapshot().ranges;
-    $('graph-height-toggle').click();assert.equal(canvas.height,fullHeight/2);assert.equal($('graph-height-toggle').getAttribute('aria-pressed'),'true');assert.equal($('graph-height-toggle').getAttribute('aria-label'),'Full height');assert.deepEqual(workspace.snapshot().ranges,range);assert.equal(requests.length,1);
+    $('graph-height-toggle').click();assert.equal(canvas.height,fullHeight/2);assert.equal($('graph-height-toggle').getAttribute('aria-pressed'),'true');assert.equal($('graph-height-toggle').getAttribute('aria-label'),'Double height');assert.deepEqual(workspace.snapshot().ranges,range);assert.equal(requests.length,1);
     const xmin=Number($('graph-min').value),xmax=Number($('graph-max').value),ymin=Number($('graph-ymin').value),ymax=Number($('graph-ymax').value),x=42+(0-xmin)/(xmax-xmin)*716,y=230-42-(1-ymin)/(ymax-ymin)*146;
     for(const type of ['pointerdown','pointerup']){const event=new dom.window.MouseEvent(type,{clientX:x,clientY:y,button:0,cancelable:true});Object.defineProperty(event,'pointerId',{value:1});$('graph-plot').dispatchEvent(event);}
     assert.ok($('graph-trace').textContent.includes('1'));
     const saved=workspace.snapshot();workspace.dispose();workspace=create(saved);await workspace.run();assert.equal(canvas.height,fullHeight/2);assert.equal(workspace.snapshot().halfHeight,true);
     $('graph-kind').value='surface';$('graph-kind').onchange();await workspace.run();const surfaceCanvas=$('graph-plot').firstChild;assert.equal(surfaceCanvas.height,fullHeight/2);
-    $('graph-height-toggle').click();assert.equal(surfaceCanvas.height,fullHeight);assert.equal(workspace.snapshot().halfHeight,false);assert.equal($('graph-height-toggle').getAttribute('aria-label'),'Half height');
+    $('graph-height-toggle').click();assert.equal(surfaceCanvas.height,fullHeight*2);assert.equal(workspace.snapshot().heightScale,2);assert.equal($('graph-height-toggle').getAttribute('aria-label'),'Full height');
+    const doubled=workspace.snapshot();workspace.dispose();workspace=create(doubled);await workspace.run();const restoredCanvas=$('graph-plot').firstChild;assert.equal(restoredCanvas.height,fullHeight*2);assert.equal(workspace.snapshot().heightScale,2);
+    $('graph-height-toggle').click();assert.equal(restoredCanvas.height,fullHeight);assert.equal(workspace.snapshot().heightScale,1);assert.equal(workspace.snapshot().halfHeight,false);assert.equal($('graph-height-toggle').getAttribute('aria-label'),'Half height');
+    workspace.dispose();workspace=create({halfHeight:true});await workspace.run();assert.equal(workspace.snapshot().heightScale,.5);assert.equal(restoredCanvas.height,fullHeight/2);
   }finally{workspace.dispose();dom.window.close();}
 });

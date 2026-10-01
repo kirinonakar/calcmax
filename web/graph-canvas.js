@@ -7,15 +7,16 @@ const finite=point=>point&&point.every(Number.isFinite);
 
 // One persistent bitmap per workspace, with a backing store sized for its
 // actual CSS width and device pixel ratio. Geometry uses the gesture viewBox.
-export function plotGraph(container,result,bounds,{digits=10,dots=false,selected=0,analysis=null,trace=null,integral=null,radianAxis=false,halfHeight=false,surfaceView={}}={}){
-  const h=halfHeight?230:460,iw=w-2*pad,ih=h-2*pad;
+export function plotGraph(container,result,bounds,{digits=10,dots=false,selected=0,analysis=null,trace=null,integral=null,radianAxis=false,halfHeight=false,heightScale=halfHeight?.5:1,surfaceView={}}={}){
+  const scale=[1,.5,2].includes(heightScale)?heightScale:1;
+  const h=460*scale,iw=w-2*pad,ih=h-2*pad;
   const {xmin,xmax,ymin,ymax}=bounds;
   if(![xmin,xmax,ymin,ymax].every(Number.isFinite)||xmax<=xmin||ymax<=ymin)throw new Error('Enter finite values with minimum < maximum');
   let canvas=container.querySelector('canvas');
   if(!canvas){canvas=document.createElement('canvas');canvas.setAttribute('role','img');container.replaceChildren(canvas);}
   canvas.setAttribute('aria-label',result.surface?'3D surface graph':'Function graph');
   canvas.dataset.renderMode=result.surface?(surfaceView.renderMode||'wireframe'):'curves';
-  canvas.dataset.halfHeight=String(halfHeight);canvas.dataset.plotHeight=String(h);canvas.style.aspectRatio=`${w}/${h}`;
+  canvas.dataset.halfHeight=String(scale===.5);canvas.dataset.heightScale=String(scale);canvas.dataset.plotHeight=String(h);canvas.style.aspectRatio=`${w}/${h}`;
   const window=container.ownerDocument.defaultView,ratio=window.devicePixelRatio||1;
   const cssWidth=canvas.getBoundingClientRect().width||container.getBoundingClientRect().width||w;
   const width=Math.max(1,Math.round(cssWidth*ratio)),height=Math.max(1,Math.round(cssWidth*h/w*ratio));

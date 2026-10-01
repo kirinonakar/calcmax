@@ -29,6 +29,7 @@ internal class GraphState(private val prefs:SharedPreferences) {
     var surfaceAutoDensity by mutableStateOf(prefs.getBoolean("surfaceAutoDensity",true))
     var surfaceZoom by mutableFloatStateOf(prefs.getFloat("surfaceZoom",1f).takeIf {it.isFinite()}?.coerceIn(.4f,3f) ?: 1f)
     var graphData by mutableStateOf<JSONObject?>(null)
+    var graphResultSignature:String?=null
     var graphDerivativeSelected by mutableStateOf<Int?>(null)
     var graphAnalysis by mutableStateOf<JSONObject?>(null)
     var graphAnalysisBusy by mutableStateOf(false)
@@ -55,8 +56,9 @@ internal class GraphState(private val prefs:SharedPreferences) {
     }.getOrDefault(emptyMap())
 
     fun updateSource(source:String) {
+        if(source==graphSource)return
         graphSource=source
-        clearAnalysis()
+        clearAnalysis(clearGraph=graphKind!="surface")
     }
 
     fun changeKind(kind:String):Boolean {
@@ -82,8 +84,18 @@ internal class GraphState(private val prefs:SharedPreferences) {
         return true
     }
 
-    private fun clearAnalysis() {
-        graphDerivativeSelected=null;graphData=null;graphAnalysis=null;trace=null;shadedInterval=null
+    private fun clearAnalysis(clearGraph:Boolean=true) {
+        graphDerivativeSelected=null;graphAnalysis=null;trace=null;shadedInterval=null
+        if(clearGraph) {graphData=null;graphResultSignature=null}
+    }
+
+    fun applyPlotResponse(response:JSONObject,signature:String) {
+        if(response.optBoolean("ok")) {
+            graphData=response;graphResultSignature=signature
+            syncParameters(response.optJSONArray("parameters"))
+        } else if(graphKind!="surface") {
+            graphData=null;graphResultSignature=null
+        }
     }
 
     fun parameterPayload():JSONObject = JSONObject().also {payload->graphParameters.forEach {(name,spec)->payload.put(name,spec.value)}}
