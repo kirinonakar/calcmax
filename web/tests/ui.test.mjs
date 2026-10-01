@@ -571,6 +571,24 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
     $('dataset-delete').click();assert.equal(JSON.parse(localStorage.getItem('calcmax-web-v1')).datasetKinds.KindTest,undefined);
     $('statistics-table-toggle').click();$('statistics-data').value=originalData;$('dataset-name').value=originalName;change('statistics-kind','xy');change('statistics-column','0');change('mode','scientific');key('AC').click();
   });
+  await t.test('paired t and xyz ANOVA display exactly the groups sent to the real engine',async()=>{
+    change('mode','statistics');const data=$('statistics-data').value;
+    $('statistics-data').value='1,2,9\n2,5,8\n,7,6\n4,,5\n6,8,4';change('statistics-kind','xyz');
+    $('statistics-first-group').value='x';$('statistics-second-group').value='x';$('statistics-grouping').value='groups';change('statistics-op','ttestpaired');
+    assert.equal($('statistics-first-group').value,'x');assert.equal($('statistics-second-group').value,'y');assert.equal($('statistics-first-group').disabled,true);assert.equal($('statistics-second-group').disabled,true);
+    assert.equal($('statistics-samples').textContent,'Compared columns: x ↔ y · Complete pairs: 3');
+    $('statistics-extra').value='0';change('statistics-tail','two');document.querySelector('[data-run="statistics"]').click();
+    await waitFor(()=>JSON.parse(localStorage.getItem('calcmax-web-v1')).history[0].source==='ttestpaired(0,[1,2,6],[2,5,8])'&&document.documentElement.dataset.busy==='false','paired x/y request');
+    assert.match($('note').textContent,/x ↔ y/);assert.match($('note').textContent,/Complete pairs: 3/);assert.match($('answer').textContent,/pairs: 3/);
+    $('statistics-data').value='1,4,7\n2,5,8\n3,7,10';$('statistics-data').dispatchEvent(new window.Event('input'));change('statistics-op','anova');
+    assert.equal($('statistics-first-group').closest('label').hidden,true);assert.equal($('statistics-second-group').closest('label').hidden,true);
+    assert.equal($('statistics-samples').textContent,'Analyzed groups (3): x (n=3) · y (n=3) · z (n=3)');
+    document.querySelector('[data-run="statistics"]').click();await waitFor(()=>JSON.parse(localStorage.getItem('calcmax-web-v1')).history[0].source==='anova([1,2,3],[4,5,7],[7,8,10])'&&document.documentElement.dataset.busy==='false','three-group ANOVA request');
+    assert.equal($('note').textContent,$('statistics-samples').textContent);assert.match($('answer').textContent,/df numerator: 2/);assert.match($('answer').textContent,/df denominator: 6/);
+    change('statistics-op','ttest2');assert.equal($('statistics-first-group').closest('label').hidden,false);change('statistics-first-group','y');change('statistics-second-group','z');assert.equal($('statistics-samples').textContent,'Analyzed groups (2): y (n=3) · z (n=3)');
+    change('statistics-first-group','z');assert.notEqual($('statistics-first-group').value,$('statistics-second-group').value,'independent samples stay distinct');
+    $('statistics-data').value=data;change('statistics-kind','xy');change('statistics-op','mean');change('statistics-grouping','columns');change('mode','scientific');key('AC').click();
+  });
   await t.test('display customization separates keypad and catalog categories and searches all buttons',()=>{
     $('shortcut-settings').click();const content=$('dialog-body');
     assert.deepEqual([...content.querySelectorAll('[data-category]')].map(button=>button.dataset.category),['Main keys','2nd keys','Number keys','ALPHA']);

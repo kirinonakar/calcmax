@@ -1,7 +1,7 @@
 import {$,value,element,control} from './app-ui.js';
 import {t,setText} from './i18n.js';
 import {downloadFile} from './storage.js';
-import {statisticsCommand,distributionCommand,csvRows,statisticsDataRows,statisticsDatasetSource,numericStatisticsRows} from './workspace-commands.js';
+import {statisticsCommand,statisticsAnalysisData,distributionCommand,csvRows,statisticsDataRows,statisticsDatasetSource,numericStatisticsRows} from './workspace-commands.js';
 import {statisticsPlot} from './statistics-plot.js';
 import {renderFormulas} from './formula-preview.js';
 import {editableTable} from './editable-table.js';
@@ -28,6 +28,11 @@ export function createStatisticsWorkspace({state,ui,persist,refreshWorkspaceMath
   $('csv-save').onclick=()=>downloadFile(`${value('dataset-name')||'calcmax-data'}.csv`,value('statistics-data'),'text/csv');
   function dataRows(){return statisticsDataRows(value('statistics-data'),value('statistics-kind'));}
   function statisticsExpression(op=value('statistics-op')){return statisticsCommand(value('statistics-data'),{op,kind:value('statistics-kind'),column:Number(value('statistics-column')),extra:value('statistics-extra')||'0',tail:value('statistics-tail'),sigma:value('statistics-sigma'),sigmaY:value('statistics-sigma-y'),regression:value('regression-kind'),formula:value('regression-formula'),variable:value('regression-variable'),initials:value('regression-initials'),grouping:value('statistics-grouping'),firstGroup:value('statistics-first-group'),secondGroup:value('statistics-second-group')});}
+  function analysisSummary(){
+    const plan=statisticsAnalysisData(value('statistics-data'),{op:value('statistics-op'),kind:value('statistics-kind'),column:Number(value('statistics-column')),grouping:value('statistics-grouping'),firstGroup:value('statistics-first-group'),secondGroup:value('statistics-second-group')});
+    if(plan.paired)return `${t('Compared columns')}: x ↔ y · ${t('Complete pairs')}: ${plan.pairs.length}`;
+    return `${t('Analyzed groups')} (${plan.samples.length}): ${plan.samples.map(sample=>`${sample.label} (n=${sample.values?.length||0})`).join(' · ')}`;
+  }
   function distributionExpression(){return distributionCommand(Object.fromEntries(['family','query','x','a','b','p','mean','sigma','df','df2','trials','success','lambda','k'].map(name=>[name,value('distribution-'+name)])));}
   function distributionControls(){const family=value('distribution-family'),discrete=['binomial','poisson','geometric'].includes(family),queries=discrete?(family==='binomial'?['pdf','cdf','list-pdf','list-cdf']:['pdf','cdf']):['normal','t'].includes(family)?['pdf','cdf','interval','quantile']:['pdf','cdf','interval'];for(const option of $('distribution-query').options)option.disabled=!queries.includes(option.value);if(!queries.includes(value('distribution-query')))$('distribution-query').value='cdf';const query=value('distribution-query'),shown=new Set(discrete?(query.startsWith('list')?[]:['k']):query==='interval'?['a','b']:query==='quantile'?['p']:['x']);for(const name of family==='normal'?['mean','sigma']:family==='f'?['df','df2']:['t','chi2'].includes(family)?['df']:family==='binomial'?['trials','success']:family==='poisson'?['lambda']:['success'])shown.add(name);for(const name of ['x','a','b','p','mean','sigma','df','df2','trials','success','lambda','k'])$('distribution-'+name).closest('label').hidden=!shown.has(name);refreshWorkspaceMath();}
   $('distribution-family').onchange=distributionControls;$('distribution-query').onchange=distributionControls;
@@ -39,14 +44,17 @@ export function createStatisticsWorkspace({state,ui,persist,refreshWorkspaceMath
     const columns=dataColumns(),kind=value('statistics-kind'),pairOps=['correlation','ttestpaired','chi2independence','fisherexact'],multiOps=['ttest2','ztest2','anova','tukey'];
     for(const option of $('statistics-op').options)option.disabled=columns===1&&[...pairOps,...multiOps].includes(option.value);
     if($('statistics-op').selectedOptions[0]?.disabled)$('statistics-op').value='stats';
-    const op=value('statistics-op'),paired=pairOps.includes(op),multi=['ttest2','ztest2'].includes(op),all=['anova','tukey'].includes(op),grouped=kind==='xy'&&value('statistics-grouping')==='groups';
+    const op=value('statistics-op'),paired=pairOps.includes(op),multi=['ttest2','ztest2'].includes(op),all=['anova','tukey'].includes(op),grouped=!paired&&kind==='xy'&&value('statistics-grouping')==='groups';
     let rows=[];try{rows=dataRows();}catch{}
-    const names=grouped?[...new Set(rows.filter(row=>row[0]&&row[1]).map(row=>row[0]))]:['x','y','z'].slice(0,columns);
+    const names=paired?['x','y']:grouped?[...new Set(rows.filter(row=>row[0]&&row[1]).map(row=>row[0]))]:['x','y','z'].slice(0,columns);
     const selectedColumn=value('statistics-column');$('statistics-column').replaceChildren(...['x','y','z'].slice(0,columns).map((name,i)=>{const option=element('option',name);option.value=String(i);return option;}));$('statistics-column').value=Number(selectedColumn)<columns?selectedColumn:'0';
     for(const [id,fallback] of [['statistics-first-group',0],['statistics-second-group',1]]){
       const select=$(id),previous=select.value;select.replaceChildren(...names.map(name=>{const option=element('option',name);option.value=name;return option;}));
-      select.value=names.includes(previous)?previous:names[fallback]||names[0]||'';
+      select.value=paired?names[fallback]:names.includes(previous)?previous:names[fallback]||names[0]||'';
     }
+    if(multi){const second=$('statistics-second-group'),first=value('statistics-first-group');if(second.value===first)second.value=names.find(name=>name!==first)||'';for(const option of second.options)option.disabled=option.value===first;}
+    $('statistics-first-group').closest('label').hidden=all||!paired&&!multi&&!grouped;
+    $('statistics-second-group').closest('label').hidden=all||!paired&&!multi;
     $('statistics-grouping').disabled=paired||kind!=='xy';
     $('statistics-column').disabled=paired||multi||all||grouped||columns===1;
     $('statistics-first-group').disabled=paired||all||!multi&&!grouped||columns===1;
@@ -59,11 +67,13 @@ export function createStatisticsWorkspace({state,ui,persist,refreshWorkspaceMath
     $('statistics-plot-type').querySelector('[value="scatter"]').disabled=kind!=='xy';
     if(kind!=='xy'&&value('statistics-plot-type')==='scatter')$('statistics-plot-type').value='histogram';
     setText($('statistics-data-label'),kind==='list'?'One value per line':kind==='xy'?'x, y values':'x, y, z values');
+    try{$('statistics-samples').textContent=analysisSummary();}catch{setText($('statistics-samples'),'Enter data to see analyzed groups');}
   }
   function dataKindChange(){statisticsGraph=null;$('regression-caption').replaceChildren();$('regression-transfer').hidden=true;$('statistics-plot').replaceChildren();$('statistics-plot-type').value=value('statistics-kind')==='xy'?'scatter':'histogram';render();refreshWorkspaceMath();}
   $('statistics-kind').onchange=dataKindChange;
   $('statistics-op').onchange=()=>{if(['tinterval','zinterval'].includes(value('statistics-op'))&&value('statistics-extra')==='0')$('statistics-extra').value='95';statisticsControls();refreshWorkspaceMath();};
   $('statistics-grouping').onchange=()=>{statisticsControls();refreshWorkspaceMath();};
+  for(const id of ['statistics-column','statistics-first-group','statistics-second-group'])$(id).onchange=()=>{statisticsControls();refreshWorkspaceMath();};
   function writeRows(rows){$('statistics-data').value=rows.map(row=>row.map(cell=>/[",\r\n]/.test(cell)?'"'+cell.replace(/"/g,'""')+'"':cell).join(',')).join('\n');statisticsControls();refreshWorkspaceMath();persist();}
   function statisticsGrid(){
     const rows=value('statistics-data').trim()?csvRows(value('statistics-data')):[],columns=dataColumns();
@@ -95,5 +105,5 @@ export function createStatisticsWorkspace({state,ui,persist,refreshWorkspaceMath
     $('regression-transfer').hidden=false;
   }
   statisticsControls();
-  return {datasetsList,expression:statisticsExpression,distributionExpression,distributionControls,render,showRegression};
+  return {datasetsList,expression:statisticsExpression,analysisSummary,distributionExpression,distributionControls,render,showRegression};
 }

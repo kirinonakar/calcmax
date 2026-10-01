@@ -59,16 +59,16 @@ export function createWorkspaces({state,engine,ui,persist,restoreSelect,requestO
       if(workspace==='constants') {
         const result=await engine.execute({...requestOptions(),action:'constants'});if(!result.ok){error(result.error);return;}$('constants-list').replaceChildren();for(const c of result.constants){const row=element('div','','list-row');row.dataset.search=`${c.symbol} ${c.name} ${c.unit}`.toLowerCase();const text=element('div','','content');text.append(element('strong',`${c.symbol} · ${c.name}`),element('p',`${displayNumber(c.value.replace(/…$/,''),state.digits)} ${c.unit}`,'hint'));row.append(text,control('사용',()=>{changeMode('scientific');insert(c.symbol);}));$('constants-list').append(row);}return;
       }
-      let source;
+      let source,statisticsContext='';
       if(workspace==='scientific'){await evaluate();return;}
       if(workspace==='equation'){source=equationCommand({kind:value('equation-kind'),source:equationSource(),variable:value('equation-variable').trim(),extra:value('equation-extra'),initial:value('equation-initial'),hint:value('equation-hint')});
       }else if(workspace==='matrix'){source=matrix.command();
-      }else if(workspace==='statistics'||workspace==='regression')source=statistics.expression(workspace==='regression'?'regression':value('statistics-op'));
+      }else if(workspace==='statistics'||workspace==='regression'){source=statistics.expression(workspace==='regression'?'regression':value('statistics-op'));if(workspace==='statistics')statisticsContext=statistics.analysisSummary();}
       else if(workspace==='distribution')source=statistics.distributionExpression();
       else if(workspace==='units')source=`convert(${value('unit-value')},${value('unit-from')},${value('unit-to')})`;
       else if(workspace==='tip')source=tipExpression();
       else if(workspace==='currency'){source=`(${value('currency-amount')})*(${value('currency-rate')})`;}
-      let result=await engine.execute({...requestOptions(),tree:parse(latexInput(source))});if(workspace==='tip'&&result.ok)result=moneyResult(result,Number(value('tip-people')));showResult(result,source,workspace==='equation'?equationSource():source,{decimalDisplay:workspace==='regression'});
+      let result=await engine.execute({...requestOptions(),tree:parse(latexInput(source))});if(workspace==='tip'&&result.ok)result=moneyResult(result,Number(value('tip-people')));if(statisticsContext&&result.ok)result={...result,note:[statisticsContext,result.note].filter(Boolean).join('\n')};showResult(result,source,workspace==='equation'?equationSource():source,{decimalDisplay:workspace==='regression'});
       if(workspace==='regression'&&result.ok)statistics.showRegression(result);
     }catch(exc){error(exc.message);}
   }

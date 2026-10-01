@@ -27,6 +27,10 @@ const korean={History:'기록',Catalog:'함수 목록',Setup:'설정',Undo:'실�
 };
 Object.assign(korean,nativeKorean,{
   "Help": "도움말",
+  "Analyzed groups": "분석 그룹",
+  "Compared columns": "비교 열",
+  "Complete pairs": "완전한 대응 쌍",
+  "Enter data to see analyzed groups": "데이터를 입력하면 분석 그룹이 표시됩니다.",
   "Data type": "데이터 형식",
   "List": "리스트",
   "x,y data": "x,y 데이터",

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import {regressionGraphSource} from '../statistics-workspace.js';
 import assert from 'node:assert/strict';
-import {csvRows,statisticsDataRows,statisticsDatasetSource,numericStatisticsRows,statisticsCommand,distributionCommand,equationCommand,polynomialEquation} from '../workspace-commands.js';
+import {csvRows,statisticsDataRows,statisticsDatasetSource,statisticsAnalysisData,numericStatisticsRows,statisticsCommand,distributionCommand,equationCommand,polynomialEquation} from '../workspace-commands.js';
 import {closeInputBrackets,parse} from '../parser.js';
 import {encodeFunctions,decodeFunctions,defineFunction} from '../function-transfer.js';
 import {moveMathCursor,fractionExit} from '../input-navigation.js';
@@ -73,6 +73,22 @@ test('independent samples select x/y/z and paired operations ignore unused group
   assert.throws(()=>statisticsCommand(source,{op:'ttest2',firstGroup:'x',secondGroup:'x'}),/different/);
   assert.equal(statisticsCommand('1,2\n3,4',{op:'correlation',column:2,grouping:'groups'}),'correlation([1,3],[2,4])');
   assert.equal(statisticsCommand('A,1\nB,2\nA,3\nB,4',{op:'mean',grouping:'groups',firstGroup:'B'}),'mean([2,4])');
+});
+
+test('displayed analysis samples match paired, independent, and all-group command arguments',()=>{
+  const source='1,2,@\n2,5,@\n,7,@\n4,,@\n6,8,@',pairedOptions={kind:'xyz',op:'ttestpaired',grouping:'groups',column:2,firstGroup:'x',secondGroup:'x'};
+  const paired=statisticsAnalysisData(source,pairedOptions);
+  assert.deepEqual(paired.samples,[{label:'x',values:['1','2','6']},{label:'y',values:['2','5','8']}]);
+  assert.equal(statisticsCommand(source,pairedOptions),'ttestpaired(0,[1,2,6],[2,5,8])');
+  const data='1,4,7\n2,5,8\n3,7,10',options={kind:'xyz',op:'anova',grouping:'groups',firstGroup:'x',secondGroup:'x'};
+  assert.deepEqual(statisticsAnalysisData(data,options).samples.map(sample=>[sample.label,sample.values.length]),[['x',3],['y',3],['z',3]]);
+  assert.equal(statisticsCommand(data,options),'anova([1,2,3],[4,5,7],[7,8,10])');
+  const independent={kind:'xyz',op:'ttest2',firstGroup:'y',secondGroup:'z'};
+  assert.deepEqual(statisticsAnalysisData(data,independent).samples.map(sample=>sample.label),['y','z']);
+  assert.equal(statisticsCommand(data,independent),'ttest2(0,[4,5,7],[7,8,10])');
+  const grouped='A,1\nB,2\nC,3\nA,4\nB,5\nC,6',groupOptions={kind:'xy',op:'anova',grouping:'groups'};
+  assert.deepEqual(statisticsAnalysisData(grouped,groupOptions).samples.map(sample=>sample.label),['A','B','C']);
+  assert.equal(statisticsCommand(grouped,groupOptions),'anova([1,4],[2,5],[3,6])');
 });
 
 test('distribution and equation commands match Android engine arity, coefficient forms, and initial conditions',()=>{
