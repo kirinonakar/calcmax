@@ -39,7 +39,7 @@ class CalculatorInstrumentedTest {
     }
     @Test fun delRemovesUntouchedFunctionKeysIncludingCalculusTemplates() {
         compose.runOnIdle {model().mode="Scientific/CAS";model().poweredOn=true;model().secondKeys=false;model().shift=false;model().alpha=false;model().clear()}
-        for(key in listOf("sin","cos","tan","√","log","ln","∫","logₐ□")) {
+        for(key in listOf("sin","cos","tan","√","log","ln","∫","logₐ□","x²","x⁻¹","x□","a/b")) {
             compose.onNodeWithContentDescription(key).performClick()
             compose.onNodeWithContentDescription("DEL").performClick()
             compose.runOnIdle {assertEquals(key,"",model().editor.source);assertEquals(0,model().editor.cursor)}

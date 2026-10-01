@@ -108,6 +108,26 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
     key('SECOND').click();key('diff(,x)').click();key('DEL').click();assert.equal($('expression').value,'');
     key('SECOND').click();key('AC').click();
   });
+  await t.test('power and fraction keys delete empty templates and preserve a filled base or numerator',()=>{
+    for(const input of ['^2','^(-1)','^()','()/()']){
+      for(const nested of [false,true]){
+        key('AC').click();if(nested)key('sin()').click();key(input).click();const source=$('expression').value;
+        assert.ok($('expression-preview').querySelector('.input-slot'),input);
+        key('DEL').click();assert.equal($('expression').value,nested?'sin()':'',input);
+        assert.equal($('expression').selectionStart,nested?4:0);
+        $('undo').click();assert.equal($('expression').value,source,input);
+      }
+    }
+    key('AC').click();key('SHIFT').click();key('^2').click();assert.equal($('expression').value,'()^3');
+    key('DEL').click();assert.equal($('expression').value,'');
+    for(const input of ['^()','()/()']){
+      key('AC').click();key('3').click();key(input).click();key('DEL').click();
+      assert.equal($('expression').value,'3');assert.equal($('expression').selectionStart,1);
+    }
+    key('AC').click();key('^2').click();key('2').click();assert.equal($('expression').value,'(2)^2');
+    key('DEL').click();assert.equal($('expression').value,'()^2');key('DEL').click();assert.equal($('expression').value,'');
+    key('AC').click();
+  });
   await t.test('mode status shares the keypad dialog and long press returns to the calculator',async()=>{
     const status=$('mode-status');
     assert.ok($('mode').hidden,'native mode selector cannot intercept mobile taps');

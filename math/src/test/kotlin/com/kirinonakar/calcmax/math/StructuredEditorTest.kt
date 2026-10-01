@@ -2,6 +2,27 @@ package com.kirinonakar.calcmax.math
 import org.junit.Assert.*
 import org.junit.Test
 class StructuredEditorTest {
+    @Test fun deletingEmptyPowerAndFractionTemplatesRemovesTheWholeStructure() {
+        for(template in listOf("()^2","()^3","()^(-1)","()^()","()/()")) {
+            val editor=Editor(template,1)
+            assertEquals(template,"",editor.delete().source)
+            assertEquals(template,"",editor.deleteForward().source)
+            assertEquals(0,editor.delete().cursor)
+            val nested="sin($template)"
+            assertEquals("sin()",Editor(nested,5).delete().source)
+            assertEquals("1+",Editor("1+$template",3).delete().source)
+        }
+        assertEquals("",Editor("()^()",4).delete().source)
+        assertEquals("",Editor("()/()",4).delete().source)
+        assertEquals("2*()*3",Editor("2*()^2*3",3).delete().source)
+        assertEquals("3",Editor("3^()",3).delete().source)
+        assertEquals("3",Editor("(3)/()",5).delete().source)
+        assertEquals("(3+4)",Editor("(3+4)/()",7).delete().source)
+        val filled=Editor("()^2",1).insert("2")
+        assertEquals("(2)^2",filled.source)
+        assertEquals("()^2",filled.delete().source)
+        assertEquals("",filled.delete().delete().source)
+    }
     @Test fun deletingEmptyFunctionTemplatesRemovesTheWholeCall() {
         for(template in listOf("sin()","cos()","tan()","asin()","sinh()","sqrt()","cbrt()","log()","ln()",
             "log(,)","nthroot(,)","mixed(,,)","nPr(,)","det()","inverse()","transpose()","norm()",
@@ -120,7 +141,7 @@ class StructuredEditorTest {
         assertEquals("integrate(3,x,,)",denominator.deleteForward().source)
         assertEquals(denominator,denominator.move(1))
         val emptyNumerator=Editor(source,source.indexOf('(',10)+1)
-        assertEquals(emptyNumerator,emptyNumerator.delete())
+        assertEquals("integrate(,x,,)",emptyNumerator.delete().source)
         val filledDenominator=denominator.insert("4")
         val outsideFraction=filledDenominator.move(1)
         assertEquals("integrate((3)/(4)*5,x,,)",outsideFraction.insert("5").source)
@@ -174,7 +195,7 @@ class StructuredEditorTest {
         assertEquals(11,empty.cursor)
         assertEquals("integrate",empty.tree()?.value)
         assertEquals("^",empty.tree()?.args?.firstOrNull()?.value)
-        assertEquals(empty,empty.delete())
+        assertEquals("integrate(,x,,)",empty.delete().source)
         assertEquals(empty.source,Editor(source,source.indexOf('^')).deleteForward().source)
     }
     @Test fun filledIntegralPowerBoxMovesPastHiddenClosingParenthesis() {
@@ -222,7 +243,7 @@ class StructuredEditorTest {
         val power=empty.tree()!!.args[0]
         assertEquals("^",power.value)
         assertEquals("hole",power.args[0].args[0].kind)
-        assertEquals(empty,empty.delete())
+        assertEquals("integrate(,x,,)",empty.delete().source)
         assertEquals("integrate((3)^2,x,,)",empty.insert("3").source)
         val exponent=empty.move(1)
         assertEquals(empty.source.indexOf('2'),exponent.cursor)

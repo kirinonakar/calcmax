@@ -112,6 +112,16 @@ data class Editor(val source: String = "", val cursor: Int = source.length, val 
         val base=power.args[0]
         return if(base.kind=="group"&&base.args.firstOrNull()?.kind=="hole")this else remove(base.start,base.end)
     }
+    private fun emptyPowerAt(position:Int):Expr? = tree()?.nodes()?.filter {power->
+        if(power.kind!="binary" || power.value!="^")false else {
+            val base=power.args[0]
+            val baseHole=if(base.kind=="group")base.args.firstOrNull() else base
+            val exponent=power.args[1]
+            val exponentHole=if(exponent.kind=="group")exponent.args.firstOrNull() else exponent
+            baseHole?.kind=="hole" && (baseHole.start==position ||
+                exponentHole?.kind=="hole" && exponentHole.start==position)
+        }
+    }?.minByOrNull {it.end-it.start}
     private fun emptyExponentAt(position:Int):Expr? = tree()?.nodes()?.filter {power->
         if(power.kind!="binary" || power.value!="^")false else {
             val exponent=power.args[1]
@@ -131,6 +141,12 @@ data class Editor(val source: String = "", val cursor: Int = source.length, val 
             val denominator=node.args[1]
             val hole=if(denominator.kind=="group")denominator.args.firstOrNull() else denominator
             hole?.kind=="hole" && hole.start==position
+        }
+    }?.minByOrNull {it.end-it.start}
+    private fun emptyFractionAt(position:Int):Expr? = tree()?.nodes()?.filter {node->
+        if(!fraction(node))false else {
+            val holes=node.args.map {if(it.kind=="group")it.args.firstOrNull() else it}
+            holes.all {it?.kind=="hole"} && holes.any {it?.start==position}
         }
     }?.minByOrNull {it.end-it.start}
     private fun removeEmptyDenominator(fraction:Expr):Editor = removeTailKeepingHead(fraction.args[0],fraction.end)
@@ -170,6 +186,8 @@ data class Editor(val source: String = "", val cursor: Int = source.length, val 
             selectedDenominator(start,end)?.let{return removeEmptyDenominator(it)}
             return remove(start,end)
         }
+        emptyPowerAt(cursor)?.let{return remove(it.start,it.end)}
+        emptyFractionAt(cursor)?.let{return remove(it.start,it.end)}
         emptyCallAt(cursor)?.let{return remove(it.start,it.end)}
         fractionAfterDenominator(cursor)?.let {fraction->
             val denominator=fraction.args[1]
@@ -193,6 +211,8 @@ data class Editor(val source: String = "", val cursor: Int = source.length, val 
             selectedDenominator(start,end)?.let{return removeEmptyDenominator(it)}
             return remove(start,end)
         }
+        emptyPowerAt(cursor)?.let{return remove(it.start,it.end)}
+        emptyFractionAt(cursor)?.let{return remove(it.start,it.end)}
         emptyCallAt(cursor)?.let{return remove(it.start,it.end)}
         emptyExponentAt(cursor)?.let{return removeEmptyExponent(it)}
         emptyDenominatorAt(cursor)?.let{return removeEmptyDenominator(it)}

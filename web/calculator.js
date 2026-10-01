@@ -6,7 +6,7 @@ import {calcVariables,calcBindings} from './calc-session.js';
 import {previousCalculations,renderPreviousCalculations,followTape} from './calculation-tape.js';
 import {renderFormulas} from './formula-preview.js';
 import {markInputCursor,followInputCursor,followTextCursor,inputPointPosition} from './input-cursor.js';
-import {moveMathCursor,fractionExit,emptyCallDeletion} from './input-navigation.js';
+import {moveMathCursor,fractionExit,emptyCallDeletion,emptyPowerDeletion,emptyFractionDeletion,powerInput} from './input-navigation.js';
 import {createDisplaySizing} from './display-sizing.js';
 import {fractionInput} from './fraction-input.js';
 import {requiresExplicitEvaluation} from './evaluation-policy.js';
@@ -243,9 +243,9 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
     else if(input==='INS')$('insert-mode').click();
     else if(input==='NEG'){if(committed){$('expression').value='';committed=false;}insert('-');}
     else if(input==='DEL'||input==='DELETE_FORWARD'){
-      const f=$('expression'),start=f.selectionStart,end=f.selectionEnd,call=emptyCallDeletion(f.value,start,end);
+      const f=$('expression'),start=f.selectionStart,end=f.selectionEnd,call=emptyPowerDeletion(f.value,start,end)||emptyFractionDeletion(f.value,start,end)||emptyCallDeletion(f.value,start,end);
       undoStack().push(f.value);
-      if(call){f.setRangeText(call.text,call.start,call.end,'end');const at=call.start+(call.text?1:0);f.setSelectionRange(at,at);}
+      if(call){f.setRangeText(call.text,call.start,call.end,'end');const at=call.start+(call.cursor??(call.text?1:0));f.setSelectionRange(at,at);}
       else f.setRangeText('',start===end&&input==='DEL'?Math.max(0,start-1):start,start===end&&input==='DELETE_FORWARD'?Math.min(f.value.length,end+1):end,'end');
       committed=false;preview();
     }
@@ -277,6 +277,11 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
     else if(input==='RANDOM')insert(String(Math.random()));
     else if(input==='RELATION')insert('=');
     else if(input==='()/()')insert(input,null,{factor:true,fraction:true});
+    else if(['^2','^3','^()','^(-1)'].includes(input)){
+      const field=$('expression'),source=committed?(lastResult?.assignment?'':'Ans'):field.value;
+      const start=committed?source.length:field.selectionStart,end=committed?source.length:field.selectionEnd;
+      const template=powerInput(source,start,end,input);insert(template.text,template.cursor,{factor:true});
+    }
     else if(input==='*10^()'){const field=$('expression'),before=field.value.slice(0,field.selectionStart).trimEnd(),text=!committed&&/[\p{L}\p{N}_.)\]}!%°′″]$/u.test(before)?input:'1'+input;insert(text,text.indexOf('(')+1,{factor:true});}
     else {
       // Parenthesis templates place the cursor in their first empty argument.

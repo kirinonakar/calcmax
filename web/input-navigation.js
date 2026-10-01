@@ -1,4 +1,15 @@
 import {parse} from './parser.js';
+function emptyNodeDeletion(nodes,target){
+  const structuralOperand=nodes.some(node=>node.kind==='binary'&&
+    (node.value==='^'?node.args[0].start===target.start&&node.args[0].end===target.end:
+      (node.value==='*'||node.value==='/'&&node.displayOperator!=='÷')&&node.args.some(arg=>arg.start===target.start&&arg.end===target.end)));
+  return {start:target.start,end:target.end,text:structuralOperand?'()':''};
+}
+function tailDeletion(source,node){
+  const head=node.args[0],inner=head.args[0];
+  const keep=head.kind==='group'&&['number','symbol','call'].includes(inner?.kind)?inner:head;
+  return {start:node.start,end:node.end,text:source.slice(keep.start,keep.end),cursor:keep.end-keep.start};
+}
 // Remove an unused function template as a unit, including its hidden delimiters.
 export function emptyCallDeletion(source,start,end){
   if(start!==end)return null;
@@ -11,10 +22,35 @@ export function emptyCallDeletion(source,start,end){
     node.args.every((arg,index)=>empty(arg)||index===1&&variableTemplates.includes(node.value)&&arg.kind==='symbol'&&arg.value==='x'))
     .sort((a,b)=>(a.end-a.start)-(b.end-b.start))[0];
   if(!call)return null;
-  const structuralOperand=nodes.some(node=>node.kind==='binary'&&
-    (node.value==='^'?node.args[0].start===call.start&&node.args[0].end===call.end:
-      (node.value==='*'||node.value==='/'&&node.displayOperator!=='÷')&&node.args.some(arg=>arg.start===call.start&&arg.end===call.end)));
-  return {start:call.start,end:call.end,text:structuralOperand?'()':''};
+  return emptyNodeDeletion(nodes,call);
+}
+export function powerInput(source,start,end,suffix){
+  const before=source[start-1];
+  const emptyBase=!source.trim()||start===end&&(!before||'+-−×*÷/([,='.includes(before));
+  return emptyBase?{text:`()${suffix}`,cursor:1}:{text:suffix,cursor:suffix==='^()'?2:suffix.length};
+}
+export function emptyPowerDeletion(source,start,end){
+  if(start!==end)return null;
+  const nodes=[];
+  try{const visit=node=>{nodes.push(node);node.args.forEach(visit);};visit(parse(source,{allowHoles:true}));}catch{return null;}
+  const content=node=>node.kind==='group'?node.args[0]:node;
+  const power=nodes.filter(node=>node.kind==='binary'&&node.value==='^'&&
+    node.args.some(arg=>content(arg)?.kind==='hole'&&content(arg).start===start))
+    .sort((a,b)=>(a.end-a.start)-(b.end-b.start))[0];
+  if(!power)return null;
+  return content(power.args[0])?.kind==='hole'?emptyNodeDeletion(nodes,power):tailDeletion(source,power);
+}
+export function emptyFractionDeletion(source,start,end){
+  if(start!==end)return null;
+  const nodes=[];
+  try{const visit=node=>{nodes.push(node);node.args.forEach(visit);};visit(parse(source,{allowHoles:true}));}catch{return null;}
+  const content=node=>node.kind==='group'?node.args[0]:node;
+  const fraction=nodes.filter(node=>node.kind==='binary'&&node.value==='/'&&node.displayOperator!=='÷'&&
+    content(node.args[1])?.kind==='hole'&&(content(node.args[1]).start===start||
+      content(node.args[0])?.kind==='hole'&&content(node.args[0]).start===start))
+    .sort((a,b)=>(a.end-a.start)-(b.end-b.start))[0];
+  if(!fraction)return null;
+  return content(fraction.args[0])?.kind==='hole'?emptyNodeDeletion(nodes,fraction):tailDeletion(source,fraction);
 }
 export function fractionExit(source,start,end,direction,outside=null){
   if(direction!=='RIGHT'||start!==end)return null;
