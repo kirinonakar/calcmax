@@ -15,6 +15,8 @@ import com.kirinonakar.calcmax.ui.theme.LocalInstrument
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
+private val CatalogDialogHeight=700.dp
+
 internal val Catalog=linkedMapOf(
 "Scientific" to listOf("sin()","cos()","tan()","asin()","acos()","atan()","abs()","floor()","ceil()","round(,0)","roundh(,0)","sign()","sqrt()","cbrt()","nthroot(,3)","atan2(,1)","frac()","iPart()","log(,10)","ln()","exp()","sinc()","sinh()","cosh()","tanh()","asinh()","acosh()","atanh()","gamma()","erf()","erfc()","Ei()","Si()","Ci()","zeta()","factorial()","nCr(,)","nPr(,)","gcd(,)","lcm(,)","prime()","isprime()","factorint()","divisors()","rnd()","eng()","pol(,)","rec(,)","randInt(,)","sexagesimal(,,)","dms()","mixed(,,)","quotient(,)","remainder(,)","mod(,)","divmod(,)","sumdata([])","percent()","degree()","rad()","gradian()","fibonacci()","lucas()","bernoulli()","harmonic()","subfactorial()","totient()","divisor_sigma()","primepi()","nextprime()","prevprime()","lambertw()","beta(,)","digamma()","polygamma(,)","besselj(,)","bessely(,)","besseli(,)","besselk(,)"),
     "Symbolic" to listOf("simplify()","expand()","factor()","collect(,x)","subs(,x,0)","diff(,x)","diff(,x,2)","integrate(,x)","integrate(,x,0,1)","limit(,x,0)","limit(,x,0,left)","limit(,x,0,right)","series(,x,0,6)","taylor(,x,0,4)","sum(,x,1,10)","product(,x,1,10)","solve(,x)","nsolve(,x,0,1)","nintegrate(,x,0,1)","nderivative(,x,0)","minimum(,x,0,1)","maximum(,x,0,1)","piecewise([,x>0],[0,true])","apart(,x)","partfrac(,x)","together()","cancel()","trigsimp()","trigexpand()","powsimp()","powdenest()","hyperexpand()","nsimplify()","comDenom()","numden()","coeff(,x)","quo(,,x)","rem(,,x)","resultant(,,x)","discriminant(,x)","domain(,x)","range(,x)","roots(,x)","real_roots(,x)","rsolve(,,)"),
@@ -37,7 +39,7 @@ internal fun catalogCategories(m:CalculatorModel):Map<String,List<String>> {
 @Composable fun CatalogDialog(m: CalculatorModel,close: ()->Unit) {
     var category by remember {mutableStateOf("Scientific")};var search by remember {mutableStateOf("")};var showHelp by remember {mutableStateOf(false)}
     val categories=catalogCategories(m)
-    AlertDialog(onDismissRequest=close,title={Column(Modifier.fillMaxWidth()) {
+    AlertDialog(onDismissRequest=close,modifier=Modifier.height(CatalogDialogHeight),title={Column(Modifier.fillMaxWidth()) {
         Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {Text(tr("Function catalog"),Modifier.weight(1f));SmallAction("Help",description=tr("Open the function catalog help")){showHelp=true}}
         SearchField(search,"Find function") {search=it}
         Choices(listOf("Recent","Favorites"),category,{category=it})
@@ -102,7 +104,7 @@ private sealed interface HelpBlock {
         document=null
         document=withContext(Dispatchers.IO) {runCatching {context.assets.open(if(language=="ko")"catalog_help_ko.md" else "catalog_help.md").bufferedReader().use {it.readText()}}.getOrNull()}
     }
-    AlertDialog(onDismissRequest=close,title={Column(Modifier.fillMaxWidth()) {
+    AlertDialog(onDismissRequest=close,modifier=Modifier.height(CatalogDialogHeight),title={Column(Modifier.fillMaxWidth()) {
         Text(tr("Function catalog - help"))
         SearchField(search,"Search"){search=it}
     }},text={Column(Modifier.fillMaxWidth()) {
