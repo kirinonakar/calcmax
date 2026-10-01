@@ -47,8 +47,16 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
   let sourceKind=kind();sourceDrafts[sourceKind]=value('graph-source');
   const rangeIds=['graph-min','graph-max','graph-ymin','graph-ymax','graph-xmin','graph-xmax','graph-analysis-a','graph-analysis-b','graph-t0','graph-zmin','graph-zmax'];
   const sliderIds=rangeIds.filter(id=>!['graph-t0','graph-zmin','graph-zmax'].includes(id));
+  const rangePairs=[['graph-min','graph-max'],['graph-ymin','graph-ymax'],['graph-xmin','graph-xmax']];
+  const pairedSliders=new Map();
   function numeric(id){const input=$(id);return input.value.trim()===''?NaN:Number(input.dataset.displayValue===input.value?input.dataset.fullValue:input.value);}
-  function showNumber(id,number){const input=$(id);if(!Number.isFinite(number))return;input.dataset.fullValue=String(number);input.value=displayNumber(number,options().displayDigits);input.dataset.displayValue=input.value;const output=$(id+'-value');if(output)output.textContent=displayNumber(number,options().displayDigits);const slider=$(id+'-slider');if(slider){if(number<Number(slider.min))slider.min=String(number);if(number>Number(slider.max))slider.max=String(number);slider.value=String(number);}}
+  function syncRangePair(pair){
+    const numbers=pair.ids.map(numeric);if(!numbers.every(Number.isFinite))return;
+    const sliders=pair.ids.map(id=>$(id+'-slider')),low=Math.min(...sliders.map(slider=>Number(slider.min)),...numbers),high=Math.max(...sliders.map(slider=>Number(slider.max)),...numbers);
+    sliders.forEach((slider,index)=>{slider.min=String(low);slider.max=String(high);slider.value=String(numbers[index]);slider.setAttribute('aria-valuetext',displayNumber(numbers[index],options().displayDigits));});
+    pair.track.style.setProperty('--range-start',`${100*(numbers[0]-low)/(high-low)}%`);pair.track.style.setProperty('--range-end',`${100*(numbers[1]-low)/(high-low)}%`);
+  }
+  function showNumber(id,number){const input=$(id);if(!Number.isFinite(number))return;input.dataset.fullValue=String(number);input.value=displayNumber(number,options().displayDigits);input.dataset.displayValue=input.value;const output=$(id+'-value');if(output)output.textContent=displayNumber(number,options().displayDigits);const slider=$(id+'-slider');if(slider){if(number<Number(slider.min))slider.min=String(number);if(number>Number(slider.max))slider.max=String(number);slider.value=String(number);}const pair=pairedSliders.get(id);if(pair)syncRangePair(pair);}
   function renderRangeNumbers(){for(const id of rangeIds){if(value(id)!=='')showNumber(id,numeric(id));}}
   const displayOptions=()=>({digits:options().displayDigits,notation:'off'});
   const selected=()=>Number(value('graph-selected'))||0;
@@ -164,10 +172,17 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
   };
   $('graph-source').oninput=()=>{derivative=null;$('graph-derivative').checked=false;analysis=null;trace=null;integral=null;revision++;analysisRevision++;selections();formulas();queue();};
   for(const id of ['graph-min','graph-max','graph-ymin','graph-ymax','graph-xmin','graph-xmax','graph-initial','graph-t0'])$(id).onchange=()=>{analysisControls();queue();};
-  for(const id of rangeIds){const field=$(id);for(const name of ['input','change'])field.addEventListener(name,()=>{delete field.dataset.displayValue;});}
+  for(const id of rangeIds){const field=$(id);for(const name of ['input','change'])field.addEventListener(name,()=>{delete field.dataset.displayValue;const pair=pairedSliders.get(id);if(pair)syncRangePair(pair);});}
   for(const id of sliderIds){const field=$(id),slider=document.createElement('input'),output=document.createElement('output'),current=numeric(id);slider.type='range';slider.id=id+'-slider';slider.min=String(Math.min(-30,current-20));slider.max=String(Math.max(30,current+20));slider.step='any';slider.value=String(current);slider.setAttribute('aria-label',field.closest('label').firstChild.textContent.trim());output.id=id+'-value';output.textContent=displayNumber(current,options().displayDigits);field.insertAdjacentElement('afterend',output);output.insertAdjacentElement('afterend',slider);
     slider.oninput=()=>{const number=Number(slider.value),partner=id.endsWith('min')?id.replace(/min$/,'max'):id.endsWith('max')?id.replace(/max$/,'min'):null;let bounded=number;if(partner){const limit=numeric(partner),gap=Math.max(2e-7,Math.abs(limit)*1e-10);bounded=id.endsWith('min')?Math.min(number,limit-gap):Math.max(number,limit+gap);}showNumber(id,bounded);if(!id.startsWith('graph-analysis')){bounds=currentBounds();render();}else renderRangeNumbers();};
     slider.onchange=()=>{persist();if(id.startsWith('graph-analysis'))analysisControls();else queue();};
+  }
+  for(const ids of rangePairs){
+    const group=document.createElement('div'),fields=document.createElement('div'),track=document.createElement('div'),labels=ids.map(id=>$(id).closest('label'));
+    group.className='graph-range-pair';fields.className='graph-range-fields';track.className='graph-range-slider';group.setAttribute('role','group');group.setAttribute('aria-labelledby',ids.map(id=>id+'-label').join(' '));
+    group.append(fields,track);labels[0].before(group);
+    labels.forEach((label,index)=>{label.id=ids[index]+'-label';fields.append(label);track.append($(ids[index]+'-slider'));});
+    const pair={ids,track};for(const id of ids)pairedSliders.set(id,pair);syncRangePair(pair);
   }
   for(const [id,number] of Object.entries(saved.ranges||{}))if(rangeIds.includes(id))showNumber(id,number);
   selections();formulas();typeControls();setText($('graph-axis'),radianAxis?'x: π rad':'x: decimal');for(const [id,name] of [['graph-rotation','rotation'],['graph-elevation','elevation'],['graph-surface-zoom','zoom']])$(id).value=String(surface[name]);

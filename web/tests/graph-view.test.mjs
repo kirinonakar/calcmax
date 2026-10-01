@@ -61,6 +61,47 @@ test('implicit workspace sends x and y bounds, hides function analysis, and save
   $('graph-kind').value='implicit';$('graph-kind').onchange();assert.equal($('graph-source').value,'x^2+y^2=1');
   workspace.dispose();dom.window.close();
 });
+
+test('shared range sliders update both endpoints, prevent crossing, and keep exact graph bounds',async()=>{
+  const dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));globalThis.document=dom.window.document;
+  const $=id=>document.getElementById(id),requests=[];let saves=0;
+  const workspace=createGraphWorkspace({execute:async request=>{requests.push(request);return {ok:true,curves:[[[-1,-1],[0,0],[1,1]]],parameters:[]};},options:()=>({displayDigits:3}),onError:message=>assert.fail(message),persist:()=>saves++,isBusy:()=>false});
+  try{
+    const move=(id,number)=>{const slider=$(id+'-slider');slider.value=String(number);slider.dispatchEvent(new dom.window.Event('input'));slider.dispatchEvent(new dom.window.Event('change'));};
+    for(const [low,high] of [['graph-min','graph-max'],['graph-ymin','graph-ymax'],['graph-xmin','graph-xmax']]){
+      assert.equal($(low+'-slider').parentElement,$(high+'-slider').parentElement,'both handles share one track');
+      assert.ok($(low+'-slider').getAttribute('aria-label'));assert.ok($(high+'-slider').getAttribute('aria-label'));
+      move(low,-1.234567);move(high,2.345678);
+      assert.equal($(low).value,'-1.235');assert.equal($(high).value,'2.346');
+      assert.equal(workspace.snapshot().ranges[low],-1.234567);assert.equal(workspace.snapshot().ranges[high],2.345678);
+      move(low,10);assert.ok(workspace.snapshot().ranges[low]<workspace.snapshot().ranges[high]);
+      move(high,-10);assert.ok(workspace.snapshot().ranges[low]<workspace.snapshot().ranges[high]);
+      move(low,-1.234567);move(high,2.345678);
+    }
+    assert.equal(saves,18);
+    await workspace.run();assert.equal(requests.at(-1).min,-1.234567);assert.equal(requests.at(-1).max,2.345678);assert.equal(requests.at(-1).yMin,-1.234567);assert.equal(requests.at(-1).yMax,2.345678);
+    $('graph-min').value='-100';$('graph-min').dispatchEvent(new dom.window.Event('change'));
+    assert.equal($('graph-min-slider').min,'-100');assert.equal($('graph-max-slider').min,'-100');assert.equal($('graph-min-slider').value,'-100');
+    $('graph-max').value='120';$('graph-max').dispatchEvent(new dom.window.Event('change'));
+    assert.equal($('graph-min-slider').max,'120');assert.equal($('graph-max-slider').max,'120');
+    $('graph-reset').click();assert.equal($('graph-min-slider').value,'-10');assert.equal($('graph-max-slider').value,'10');
+    $('graph-zoom-in').click();assert.equal($('graph-min-slider').value,'-5');assert.equal($('graph-max-slider').value,'5');
+    $('graph-kind').value='parametric';$('graph-kind').onchange();assert.equal($('graph-viewport-ranges').hidden,false);
+    assert.equal($('graph-min-slider').value,'0');assert.equal(Number($('graph-max-slider').value),2*Math.PI);
+    move('graph-xmin',-2);move('graph-xmax',2);assert.equal(workspace.snapshot().ranges['graph-xmin'],-2);assert.equal(workspace.snapshot().ranges['graph-xmax'],2);
+  }finally{workspace.dispose();dom.window.close();}
+});
+
+test('shared range sliders restore saved endpoints outside the default slider domain',()=>{
+  const dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));globalThis.document=dom.window.document;
+  const $=id=>document.getElementById(id),ranges={'graph-min':1000.123456,'graph-max':1020.654321,'graph-ymin':-200,'graph-ymax':-100};
+  const workspace=createGraphWorkspace({execute:async()=>({ok:true,curves:[],parameters:[]}),options:()=>({displayDigits:3}),onError:message=>assert.fail(message),persist:()=>{},isBusy:()=>false,saved:{ranges}});
+  try{
+    for(const [id,number] of Object.entries(ranges))assert.equal(Number($(id+'-slider').value),number);
+    assert.equal($('graph-min-slider').max,$('graph-max-slider').max);assert.equal($('graph-ymin-slider').min,$('graph-ymax-slider').min);
+    for(const [id,number] of Object.entries(ranges))assert.equal(workspace.snapshot().ranges[id],number);
+  }finally{workspace.dispose();dom.window.close();}
+});
 test('MathML cursor is visible inside root and fractional tokens without losing empty-slot styling',()=>{
   const dom=new JSDOM();globalThis.document=dom.window.document;
   const math=expressionDisplay('sqrt(123)');markInputCursor(math,'sqrt(123)',6);assert.equal(math.parentElement.querySelector('.input-caret').getAttribute('data-source-start'),'6');assert.equal(math.textContent,'123');

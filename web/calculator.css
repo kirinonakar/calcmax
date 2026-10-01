@@ -122,6 +122,18 @@ input:disabled,select:disabled{opacity:.45;cursor:default}
 .interactive-plot{touch-action:none;user-select:none;cursor:grab}.interactive-plot:active{cursor:grabbing}.interactive-plot svg{display:block;aspect-ratio:800/460;width:100%;height:auto;max-height:none}
 #graph-formulas .formula-line{border-left:3px solid var(--accent);padding-left:8px}.analysis-point{display:inline-block;margin:4px;background:var(--bar)}
 #graph-parameters label{min-width:200px}#graph-analysis{padding:12px 0}#graph-table tr[tabindex]{cursor:pointer}#graph-table tr[tabindex]:hover{background:var(--bar)}
+.graph-range-pair{flex:1 1 240px;min-width:0}.graph-range-fields{display:flex;gap:12px}.graph-range-fields label{min-width:0!important;flex:1}.graph-range-fields output{font-variant-numeric:tabular-nums}
+.graph-range-slider{position:relative;height:36px;margin:4px 0 8px;isolation:isolate}
+.graph-range-slider::before{content:"";position:absolute;left:10px;right:10px;top:16px;height:4px;border-radius:2px;background:linear-gradient(to right,var(--line) 0 var(--range-start),var(--accent) var(--range-start) var(--range-end),var(--line) var(--range-end) 100%)}
+.graph-range-slider input[type="range"]{appearance:none;-webkit-appearance:none;position:absolute;inset:0;width:100%;height:36px;margin:0;padding:0;border:0;border-radius:0;background:transparent;pointer-events:none}
+.graph-range-slider input[type="range"]::-webkit-slider-runnable-track{height:4px;background:transparent}
+.graph-range-slider input[type="range"]::-moz-range-track{height:4px;background:transparent}
+.graph-range-slider input[type="range"]::-moz-range-progress{background:transparent}
+.graph-range-slider input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:20px;height:20px;margin-top:-8px;border:2px solid var(--accent);border-radius:50%;background:var(--number);pointer-events:auto;cursor:ew-resize}
+.graph-range-slider input[type="range"]::-moz-range-thumb{box-sizing:border-box;width:20px;height:20px;border:2px solid var(--accent);border-radius:50%;background:var(--number);pointer-events:auto;cursor:ew-resize}
+.graph-range-slider input[type="range"]:focus-visible{outline:none;z-index:1}
+.graph-range-slider input[type="range"]:focus-visible::-webkit-slider-thumb{outline:2px solid var(--accent);outline-offset:3px}
+.graph-range-slider input[type="range"]:focus-visible::-moz-range-thumb{outline:2px solid var(--accent);outline-offset:3px}
 :root[data-workspace="scientific"] footer{display:none}
 .keypad{--keypad-font-height:100cqh;height:100%;min-height:0;display:flex;flex-direction:column;gap:4px}
 .keypad-top{flex:2;min-height:0;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));column-gap:4px;row-gap:4px}
