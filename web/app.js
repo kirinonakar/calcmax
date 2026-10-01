@@ -10,6 +10,7 @@ import {createCalculator} from './calculator.js';
 import {createCalculatorKeypad} from './calculator-keypad.js';
 import {createWorkspaces} from './workspaces.js';
 import {createAppDialogs} from './app-dialogs.js';
+import {bindKeyPress} from './keypad.js';
 
 const saved=readState(),state=createAppState(saved,navigator.language),ui=createAppUI();
 setLanguage(state.language);
@@ -44,6 +45,7 @@ function error(message) {
 }
 function changeMode(mode) {
   $('mode').value=mode;document.documentElement.dataset.workspace=mode;
+  setText($('mode-status'),$('mode').selectedOptions[0].textContent);
   const panel=$('answer').closest('.answer-panel'),actions=$('exact-toggle').parentElement;
   panel.hidden=['graph','python','programmer','constants'].includes(mode);actions.hidden=panel.hidden;
   if(mode==='scientific'){$('tape-active').append(panel);$('calculator-display').append(actions);}
@@ -59,8 +61,9 @@ function changeMode(mode) {
 }
 function refreshDisplays(){calculator.renderResult();workspaces.render();graphs.render();}
 $('mode').onchange=()=>changeMode(value('mode'));$('angle').onchange=persist;
+const clearModePress=bindKeyPress($('mode-status'),()=>dialogs.mode(),()=>changeMode('scientific'));
 document.querySelectorAll('main input,main select,main textarea').forEach(field=>field.addEventListener('change',persist));
-window.addEventListener('pagehide',()=>{persist();persistence.dispose();calculator.dispose();runtime.dispose();ui.dispose();graphs.dispose();});
+window.addEventListener('pagehide',()=>{clearModePress();persist();persistence.dispose();calculator.dispose();runtime.dispose();ui.dispose();graphs.dispose();});
 window.addEventListener('resize',()=>{graphs.render();calculator.renderInputCursor();});
 
 async function initialize() {

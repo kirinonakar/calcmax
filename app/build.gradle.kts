@@ -14,8 +14,8 @@ android {
         applicationId = "com.kirinonakar.calcmax"
         minSdk = 26
         targetSdk = 36
-        versionCode = 21
-        versionName = "1.2.1"
+        versionCode = 22
+        versionName = "1.2.2"
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

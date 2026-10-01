@@ -128,6 +128,7 @@ Object.assign(korean,nativeKorean,{
   "This function name is invalid or reserved": "함수 이름이 올바르지 않거나 예약된 이름입니다.",
   "Enter distinct valid parameter names": "서로 다른 올바른 매개변수 이름을 입력하세요.",
   "About CalcMax": "CalcMax 정보",
+  "Choose calculation mode, long press for Scientific/CAS mode": "계산 모드 선택, 길게 누르면 Scientific/CAS 모드로 이동",
   "Whole amounts per person": "1인당 금액을 정수로 보정",
   "Input word wrap": "입력 자동 줄바꿈 (Word wrap)",
   "New": "새로 만들기",

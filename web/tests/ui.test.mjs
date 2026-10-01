@@ -87,6 +87,35 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
   key('factor()').click();assert.equal($('expression').value,'factor()');assert.ok($('expression-preview').querySelector('.input-slot'));
   key('AC').click();key('SECOND').click();assert.equal($('keypad').dataset.page,'1');
   const longClick=async input=>{const button=key(input);button.dispatchEvent(new window.MouseEvent('pointerdown',{bubbles:true,button:0}));await new Promise(resolve=>setTimeout(resolve,550));button.dispatchEvent(new window.MouseEvent('pointerup',{bubbles:true,button:0}));button.click();};
+  await t.test('mode status shares the keypad dialog and long press returns to the calculator',async()=>{
+    const status=$('mode-status');
+    assert.ok($('mode').hidden,'native mode selector cannot intercept mobile taps');
+    assert.equal(status.getAttribute('aria-haspopup'),'dialog');
+    assert.ok(status.closest('.mode-picker'),'status retains the mode arrow container');
+    key('MODE').click();
+    const keypadChoices=Array.from($('dialog-body').querySelectorAll('button'),button=>button.textContent);
+    $('dialog').close();
+    for(const mode of ['matrix','vector','statistics']){
+      status.click();assert.ok($('dialog').open);
+      const choices=Array.from($('dialog-body').querySelectorAll('button'));
+      assert.deepEqual(choices.map(button=>button.textContent),keypadChoices);
+      choices[Array.from($('mode').options).findIndex(option=>option.value===mode)].click();
+      assert.equal($('mode').value,mode);assert.equal($('dialog').open,false);
+      assert.equal(status.textContent,$('mode').selectedOptions[0].textContent);
+      assert.equal(JSON.parse(localStorage.getItem('calcmax-web-v1')).fields.mode,mode);
+      status.dispatchEvent(new window.MouseEvent('pointerdown',{bubbles:true,button:0}));
+      await new Promise(resolve=>setTimeout(resolve,550));
+      assert.equal($('mode').value,'scientific','long press switches before releasing');
+      status.dispatchEvent(new window.MouseEvent('pointerup',{bubbles:true,button:0}));status.click();
+      assert.equal($('dialog').open,false,'release does not reopen the mode dialog');
+      assert.equal(status.textContent,$('mode').selectedOptions[0].textContent);
+    }
+    change('mode','matrix');change('language','ko');
+    assert.equal(status.textContent,$('mode').selectedOptions[0].textContent,'mode status follows language changes');
+    assert.equal(status.getAttribute('aria-label'),'계산 모드 선택, 길게 누르면 Scientific/CAS 모드로 이동');
+    change('language','en');change('mode','scientific');
+    assert.equal(status.textContent,$('mode').selectedOptions[0].textContent);
+  });
   await longClick('sin()');assert.equal($('expression').value,'asin()');
   key('AC').click();await longClick('SHIFT');assert.equal(key('SHIFT').getAttribute('aria-pressed'),'true');key('cos()').click();assert.equal($('expression').value,'acos()');assert.equal(key('SHIFT').getAttribute('aria-pressed'),'false');
   key('AC').click();key('ALPHA').click();key('log()').click();assert.equal($('expression').value,'n');key('AC').click();
@@ -335,7 +364,7 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
   assert.ok($('expression-preview').querySelector('msqrt msup'),'root roof contains the complete power');key('=').click();await waitFor(()=>$('answer').textContent==='16','root with an internal exponent computes correctly');
   edit('sqrt(2)');$('expression').setSelectionRange(7,7);key('^2').click();assert.equal($('expression').value,'sqrt(2)^2','placing the cursor after the root still squares the whole root');
   edit('sqrt(2)');$('expression').setSelectionRange(6,6);key('^()').click();assert.equal($('expression').value,'sqrt(2^())');assert.ok($('expression-preview').querySelector('msqrt msup .input-slot'),'editable exponent stays under the root roof');
-  assert.ok($('mode').closest('.mode-picker'),'mode dropdown has an explicit arrow container');
+  assert.ok($('mode-status').closest('.mode-picker'),'mode status has an explicit arrow container');
   edit('7+8');key('8').focus();
   const enter=new window.KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true});key('8').dispatchEvent(enter);
   assert.equal(enter.defaultPrevented,true);await waitFor(()=>$('answer').textContent==='15','Enter evaluates with focus on a numeric key');assert.equal($('expression').value,'7+8');

@@ -252,6 +252,7 @@ internal fun largeHistoryTree(root:JSONObject?):Boolean {
         if(typing)null else m.inputTree()
     }
     val focus=remember {FocusRequester()}
+    var inputFocused by remember {mutableStateOf(false)}
     val requestInputFocus:()->Boolean={try {focus.requestFocus()} catch (_:IllegalStateException) {false}}
     var caretVisible by remember{mutableStateOf(true)}
     LaunchedEffect(m.editor,m.committed){caretVisible=true;while(!m.committed){delay(500);caretVisible=!caretVisible}}
@@ -298,8 +299,9 @@ internal fun largeHistoryTree(root:JSONObject?):Boolean {
             singleLine=!m.wordWrap,
             maxLines=if(m.wordWrap)4 else 1,
             readOnly=m.calcSession!=null)
-        else Box(Modifier.fillMaxWidth().heightIn(min=60.dp,max=if(m.wordWrap)180.dp else androidx.compose.ui.unit.Dp.Infinity).focusRequester(focus).onKeyEvent{handleMathInputKey(m,it)}.focusable().then(if(m.wordWrap)Modifier.verticalScroll(rememberScrollState())else Modifier.horizontalScroll(rememberScrollState())).semantics{contentDescription="Current expression"},contentAlignment=Alignment.CenterStart){
-            CompositionLocalProvider(LocalMathInputRevision provides if(m.committed)null else m.editor,LocalMathCursorTarget provides if(m.committed)null else m.editor.cursorTarget(),LocalMathAfter provides {a,b->requestInputFocus();m.edit(m.editor.after(a,b))},LocalCaretVisible provides caretVisible,LocalActiveToken provides m.editor.activeToken,LocalTypedParens provides m.typedParens,LocalPlaceCursor provides {a,b,p->requestInputFocus();m.edit(m.editor.placeInToken(a,b,p))}) {
+        else Box(Modifier.fillMaxWidth().heightIn(min=60.dp,max=if(m.wordWrap)180.dp else androidx.compose.ui.unit.Dp.Infinity).focusRequester(focus).onFocusChanged{inputFocused=it.isFocused}.onKeyEvent{handleMathInputKey(m,it)}.focusable().then(if(m.wordWrap)Modifier.verticalScroll(rememberScrollState())else Modifier.horizontalScroll(rememberScrollState())).semantics{contentDescription="Current expression"},contentAlignment=Alignment.CenterStart){
+            // In scrollable workspaces, merely composing this display must not reveal its caret.
+            CompositionLocalProvider(LocalMathInputRevision provides if(m.committed||!inputFocused)null else m.editor,LocalMathCursorTarget provides if(m.committed)null else m.editor.cursorTarget(),LocalMathAfter provides {a,b->requestInputFocus();m.edit(m.editor.after(a,b))},LocalCaretVisible provides caretVisible,LocalActiveToken provides m.editor.activeToken,LocalTypedParens provides m.typedParens,LocalPlaceCursor provides {a,b,p->requestInputFocus();m.edit(m.editor.placeInToken(a,b,p))}) {
                 MathInputLayout(inputTree,m.editor.source,m.inputFont,m.editor.cursor,if(m.committed)null else m.editor.cursorTarget(),select={a,b->requestInputFocus();m.edit(m.editor.selectRange(a,b))},selection=minOf(m.editor.anchor,m.editor.cursor)..maxOf(m.editor.anchor,m.editor.cursor),after={requestInputFocus();m.edit(Editor(m.editor.source))})
             }
         }

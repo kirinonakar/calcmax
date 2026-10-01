@@ -28,6 +28,24 @@ import java.io.File
 class CalculatorInstrumentedTest {
     @get:Rule val compose=createAndroidComposeRule<MainActivity>()
     private fun model()=ViewModelProvider(compose.activity)[CalculatorModel::class.java]
+    @Test fun enteringMatrixVectorAndStatisticsDoesNotScrollToTheExpression() {
+        compose.runOnIdle {
+            model().mode="Scientific/CAS";model().language="en";model().poweredOn=true
+            model().clear(recordUndo=false);model().edit(Editor("sqrt(2)+1"))
+        }
+        for((mode,title) in listOf("Matrix" to "Matrix workspace","Vector" to "Vector workspace","Statistics" to "Data & statistics")) {
+            compose.runOnIdle {model().mode=mode}
+            compose.waitForIdle()
+            val panel=compose.onNode(hasScrollAction() and hasAnyDescendant(hasText(title)))
+            compose.runOnIdle {
+                val range=panel.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange]
+                assertEquals("$mode must stay at the top on entry",0f,range.value(),.5f)
+            }
+            compose.onNodeWithText(title).assertIsDisplayed()
+            compose.runOnIdle {model().mode="Scientific/CAS"}
+        }
+        compose.runOnIdle {model().clear(recordUndo=false)}
+    }
     @Test fun homeAndEndMoveAcrossTheWholeExpressionInBothInputModes() {
         val source="1/2+sqrt(2)^3\n+4"
         compose.runOnIdle {model().mode="Scientific/CAS";model().poweredOn=true;model().clear(recordUndo=false)}

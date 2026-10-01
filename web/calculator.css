@@ -4,7 +4,7 @@
 math{font-family:"CalcMax Math","Cambria Math",math;font-weight:400;font-synthesis:none;line-height:normal}
 .mode-picker{position:relative;flex:0 1 176px;width:176px;max-width:55%;min-width:0;margin-right:auto;color:var(--ink)}
 .mode-picker::after{content:"";position:absolute;left:12px;top:50%;width:7px;height:7px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:translateY(-70%) rotate(45deg);pointer-events:none}
-.mode-bar .mode-picker #mode{appearance:none;-webkit-appearance:none;width:100%;max-width:none;padding-left:30px;padding-right:8px}
+.mode-bar .mode-picker #mode-status{width:100%;max-width:none;padding-left:30px;padding-right:8px;color:inherit;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;touch-action:manipulation;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 .catalog-dialog[open]{display:flex;flex-direction:column;overflow:hidden;height:min(720px,85dvh)}
 .catalog-dialog .dialog-heading{flex:none}
 .catalog-dialog #dialog-body{display:flex;flex:1;min-height:0;overflow:hidden}
@@ -53,7 +53,7 @@ input:disabled,select:disabled{opacity:.45;cursor:default}
 :root .header-actions{gap:0}
 :root .header-actions button{font-size:11px;padding:6px 8px;white-space:nowrap}
 :root .mode-bar{height:48px;padding:0 8px;gap:6px}
-:root .mode-bar #mode{font-size:12px;font-weight:400;padding-left:30px;letter-spacing:0}
+:root .mode-bar #mode-status{font-size:12px;font-weight:400;padding-left:30px;letter-spacing:0}
 :root .mode-bar #angle{font-size:11px;width:62px;padding-right:12px}
 :root[data-workspace="scientific"] .runtime-bar{min-width:0;padding:2px 14px;font-size:10px}
 :root[data-workspace="scientific"] #status{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
