@@ -84,7 +84,7 @@ import kotlin.math.*
     val plotHeight=if(halfGraphHeight)graphHeight*0.5f else graphHeight
     Column(Modifier.fillMaxSize().verticalScroll(graphScrollState)) {
     Column(Modifier.fillMaxWidth().zIndex(1f)) {
-        OutlinedTextField(m.graphSource,{m.updateGraphSource(it)},Modifier.fillMaxWidth().padding(start=10.dp,end=10.dp,top=8.dp),label={Text(tr(when(m.graphKind){"parametric"->"One [x(t),y(t)] pair per line";"polar"->"r(t) · radians · one curve per line";"sequence"->"u(n) · use u(n−1) for recurrences";"surface"->"z = f(x,y)";"differential"->"dy/dt = f(t,y)";else->"Function / y=f(x) · Implicit / F(x,y)=0"}))},placeholder={if(m.graphKind=="cartesian")Text("x+1\ny=x+1\ny^2+x^2=1")},minLines=if(m.graphKind in listOf("surface","differential"))1 else 2,maxLines=4)
+        OutlinedTextField(m.graphSource,{m.updateGraphSource(it)},Modifier.fillMaxWidth().padding(start=10.dp,end=10.dp,top=8.dp),label={Text(tr(when(m.graphKind){"parametric"->"One [x(t),y(t)] pair per line";"polar"->"r(t) · radians · one curve per line";"sequence"->"u(n) · use u(n−1) for recurrences";"surface"->"z = f(x,y)";"differential"->"dy/dt = f(t,y)";else->"Function / y=f(x) · Implicit / F(x,y)=0"}))},minLines=if(m.graphKind in listOf("surface","differential"))1 else 2,maxLines=4)
         if(m.graphKind=="cartesian")Text(tr("One curve per line · [shade] y<f(x) · between functions: [shade] f, g"),Modifier.padding(horizontal=14.dp,vertical=3.dp),fontSize=11.sp,color=c.muted)
         Column(Modifier.fillMaxWidth().zIndex(1f).background(c.body)) {
             Row(Modifier.fillMaxWidth().zIndex(2f).padding(top=2.dp,bottom=1.dp).horizontalScroll(rememberScrollState()).semantics { contentDescription="Graph types" },horizontalArrangement=Arrangement.spacedBy(6.dp)) {
