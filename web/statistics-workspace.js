@@ -47,7 +47,7 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
     content.append(element('h3','Preview'),preview);updatePreview();
     content.append(control('Import CSV',()=>{
       const selected=selectedColumns();if(!selected.length||selected.length>3){toast('Select one to three columns');return;}
-      $('statistics-data').value=rows.slice(header.checked?1:0).map(row=>selected.map(i=>row[i].includes(',')?'"'+row[i].replace(/"/g,'""')+'"':row[i]).join(',')).join('\n');
+      $('statistics-data').value=rows.slice(header.checked?1:0).map(row=>selected.map(i=>/[",\r\n\t]/.test(row[i])?'"'+row[i].replace(/"/g,'""')+'"':row[i]).join(',')).join('\n');
       $('dataset-name').value=file.name.replace(/\.(csv|tsv)$/i,'');$('statistics-kind').value=['list','xy','xyz'][selected.length-1];dataKindChange();persist();$('dialog').close();
     }));openDialog('Import CSV',content);
   });
@@ -102,7 +102,7 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
   for(const id of ['statistics-column','statistics-first-group','statistics-second-group'])$(id).onchange=()=>{statisticsControls();refreshWorkspaceMath();};
   function editorRows(){return value('statistics-data').trim()?csvRows(value('statistics-data'),{preserveEmptyRows:true}):[];}
   // Quote an empty List cell so a blank row survives serialization and reload.
-  function writeRows(rows){$('statistics-data').value=rows.map(row=>row.length===1&&!row[0]?'""':row.map(cell=>/[",\r\n]/.test(cell)?'"'+cell.replace(/"/g,'""')+'"':cell).join(',')).join('\n');statisticsControls();refreshWorkspaceMath();persist();}
+  function writeRows(rows){$('statistics-data').value=rows.map(row=>row.length===1&&!row[0]?'""':row.map(cell=>/[",\r\n\t]/.test(cell)?'"'+cell.replace(/"/g,'""')+'"':cell).join(',')).join('\n');statisticsControls();refreshWorkspaceMath();persist();}
   function statisticsGrid(){
     const rows=editorRows(),columns=dataColumns();
     const table=editableTable({rows:rows.length,columns:['x','y','z'].slice(0,columns),label:t('Stats data'),value:(row,col)=>rows[row][col]||'',

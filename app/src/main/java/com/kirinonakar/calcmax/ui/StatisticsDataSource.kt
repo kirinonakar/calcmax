@@ -38,7 +38,7 @@ internal fun importStatisticsCsv(preview:StatisticsCsvImport,columns:List<Int>,s
 
 internal fun statisticsCsvLine(cells:List<String>):String=cells.joinToString(",") {it.csvCell()}
 
-private fun String.csvCell():String=if(any {it==','||it=='"'||it=='\n'})"\"${replace("\"","\"\"")}\"" else this
+private fun String.csvCell():String=if(any {it==','||it=='"'||it=='\n'||it=='\r'||it=='\t'})"\"${replace("\"","\"\"")}\"" else this
 
 private val groupedStatisticNumber=Regex("^[+-]?\\d{1,3}(?:,\\d{3})+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$")
 internal fun String.statisticsNumericCell():String=if(groupedStatisticNumber.matches(trim()))trim().replace(",","") else trim()
@@ -98,13 +98,19 @@ internal fun statisticsRecallSource(editor:Editor,csv:String,kind:String,committ
 }
 
 internal fun String.splitCsvRecord():List<String> {
+    // Excel separates columns with tabs; commas inside those cells are literal.
+    var inQuotes=false
+    val delimiter=if(any {ch->
+        if(ch=='"')inQuotes=!inQuotes
+        ch=='\t'&&!inQuotes
+    })'\t' else ','
     val cells=mutableListOf<String>();val current=StringBuilder();var quoted=false;var i=0
     while(i<length) {
         val ch=this[i]
         when {
             ch=='"'&&quoted&&i+1<length&&this[i+1]=='"'->{current.append('"');i++}
             ch=='"'->quoted=!quoted
-            ch==','&&!quoted->{cells+=current.toString().trim();current.setLength(0)}
+            ch==delimiter&&!quoted->{cells+=current.toString().trim();current.setLength(0)}
             else->current.append(ch)
         }
         i++

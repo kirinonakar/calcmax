@@ -16,6 +16,33 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class StatisticsDataSourceTest {
+    @Test fun excelPasteKeepsDateAndPaddedThousandsAsTwoColumns() {
+        val dates=listOf("2022-12-02","2023-01-15","2023-02-05","2023-03-05","2023-04-01","2023-05-01","2023-06-01","2023-07-01","2023-08-01","2023-09-01")
+        val values=listOf("166,682","168,254","169,131","172,166","175,120","177,330","177,409","181,512","181,286","183,566")
+        val days=listOf("1","45","66","94","121","151","182","212","243","274")
+        val source=dates.zip(values).joinToString("\r\n",postfix="\r\n") {(date,value)->"$date\t \u00a0\u00a0        $value\u00a0 "}
+        val rows=com.kirinonakar.calcmax.ui.statisticsRows(source).filter {row->row.any(String::isNotBlank)}
+        assertEquals(dates.zip(values).map {(date,value)->listOf(date,value)},rows)
+        val expected=days.zip(values).map {(day,value)->listOf(day,value.replace(",",""))}
+        assertEquals(expected,statisticsNumericRows(rows,statisticsDateAxis(rows)))
+        val table=expected.joinToString(",","[","]") {it.joinToString(",","[","]")}
+        assertEquals(table,statisticsDataSource(source,"xy"))
+        assertEquals(10,Parser("regression($table,linear)").parse().args.first().args.size)
+        val preview=previewStatisticsCsv(source)
+        assertFalse(preview.hasHeader)
+        assertEquals(2,preview.columnCount)
+        assertEquals(table,statisticsDataSource(importStatisticsCsv(preview,listOf(0,1),false),"xy"))
+    }
+
+    @Test fun tabSeparatedRowsPreserveQuotesCommasAndMissingCells() {
+        val source="x\ty\tz\r\n\"A,B\"\t\"1,234\"\t\r\n\t\"C\"\"D\"\t5\r\n1,2,3"
+        assertEquals(listOf(listOf("A,B","1,234",""),listOf("","C\"D","5"),listOf("1","2","3")),com.kirinonakar.calcmax.ui.statisticsRows(source))
+        val row=listOf("a\tb","1,234")
+        assertEquals("\"a\tb\",\"1,234\"",statisticsCsvLine(row))
+        assertEquals(listOf(row),com.kirinonakar.calcmax.ui.statisticsRows(statisticsCsvLine(row)))
+        assertEquals(listOf(listOf("1","2","3")),com.kirinonakar.calcmax.ui.statisticsRows("1,2,3"))
+    }
+
     @Test fun quotedThousandsInDateSeriesPlotAndRegressAsNumbers() {
         val source="2022-12-02,\"166,682\"\n2023-01-15,\"168,254\"\n2023-02-05,\"169,131\""
         val preview=previewStatisticsCsv(source)

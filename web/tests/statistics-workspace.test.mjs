@@ -14,7 +14,7 @@ test('CSV import previews the first three selected rows and follows import optio
   window.HTMLDialogElement.prototype.close=function(){this.open=false;};
   const $=id=>document.getElementById(id),ui=createAppUI();
   let saves=0;
-  createStatisticsWorkspace({state:{fields:{'statistics-kind':'list'},datasets:{},datasetKinds:{},digits:10},ui,
+  const workspace=createStatisticsWorkspace({state:{fields:{'statistics-kind':'list'},datasets:{},datasetKinds:{},digits:10},ui,
     persist:()=>saves++,refreshWorkspaceMath:()=>{},storeExpression:()=>{},error:assert.fail,changeMode:()=>{},replaceInput:()=>{},graphs:{}});
   t.after(()=>{ui.dispose();setLanguage('en');dom.window.close();});
   const load=async(source,name='sample.csv')=>{
@@ -67,5 +67,34 @@ test('CSV import previews the first three selected rows and follows import optio
     assert.equal($('dialog').open,true);assert.equal($('statistics-data').value,data);assert.equal(saves,before);
     assert.equal($('toast').textContent,'Select one to three columns');
     toggle(checkboxes[1]);assert.equal(preview().textContent,'<b>alpha,beta</b>\ngamma\ndelta');
+  });
+
+  await t.test('Excel TSV import keeps thousands in two columns',async()=>{
+    const checkboxes=await load('2022-12-02\t\u00a0 166,682 \r\n2023-01-15\t 168,254 \r\n','excel.tsv');
+    assert.equal(checkboxes.length,3);assert.equal(checkboxes[0].checked,false);
+    assert.equal(preview().textContent,'2022-12-02  |  166,682\n2023-01-15  |  168,254');
+    $('dialog-body').querySelector('button').click();
+    assert.equal($('statistics-data').value,'2022-12-02,"166,682"\n2023-01-15,"168,254"');
+    assert.equal($('statistics-kind').value,'xy');
+  });
+
+  await t.test('direct Excel input updates analysis, table editing and stored data',()=>{
+    $('statistics-data').value='2022-12-02\t\u00a0 166,682 \r\n2023-01-15\t 168,254 \r\n2023-02-05\t 169,131 ';
+    $('statistics-data').dispatchEvent(new window.Event('input'));
+    $('statistics-data').dispatchEvent(new window.Event('change'));
+    $('statistics-op').value='mean';$('statistics-column').value='1';
+    assert.equal(workspace.expression(),'mean([166682,168254,169131])');
+    assert.match(workspace.analysisSummary(),/y \(n=3\)/);
+    assert.equal(workspace.expression('regression'),'regression([[1,166682],[45,168254],[66,169131]],linear)');
+    $('statistics-table-toggle').click();
+    const cells=[...$('statistics-grid').querySelectorAll('input')];
+    assert.deepEqual(cells.map(input=>input.value),['2022-12-02','166,682','2023-01-15','168,254','2023-02-05','169,131']);
+    cells[3].value='170,000';cells[3].dispatchEvent(new window.Event('input'));
+    assert.equal(workspace.expression(),'mean([166682,170000,169131])');
+    assert.equal($('statistics-data').value,'2022-12-02,"166,682"\n2023-01-15,"170,000"\n2023-02-05,"169,131"');
+    $('dataset-name').value='ExcelPaste';$('dataset-save').click();
+    $('statistics-new').click();$('dataset-list').value='ExcelPaste';$('dataset-list').dispatchEvent(new window.Event('change'));
+    $('statistics-column').value='1';
+    assert.equal(workspace.expression(),'mean([166682,170000,169131])');
   });
 });

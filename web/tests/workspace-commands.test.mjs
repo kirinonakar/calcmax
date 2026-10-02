@@ -8,6 +8,30 @@ import {moveMathCursor,fractionExit} from '../input-navigation.js';
 import {roundNumber} from '../display-format.js';
 import {tipCommand} from '../money.js';
 
+test('Excel paste keeps dates and padded thousands as two columns for analysis and regression',()=>{
+  const dates=['2022-12-02','2023-01-15','2023-02-05','2023-03-05','2023-04-01','2023-05-01','2023-06-01','2023-07-01','2023-08-01','2023-09-01'];
+  const values=['166,682','168,254','169,131','172,166','175,120','177,330','177,409','181,512','181,286','183,566'];
+  const days=['1','45','66','94','121','151','182','212','243','274'];
+  const source=dates.map((date,i)=>`${date}\t \u00a0\u00a0        ${values[i]}\u00a0 `).join('\r\n')+'\r\n';
+  const rows=dates.map((date,i)=>[date,values[i]]),numeric=days.map((day,i)=>[day,values[i].replace(',','')]);
+  assert.deepEqual(csvRows(source),rows);
+  assert.deepEqual(numericStatisticsRows(statisticsDataRows(source,'xy')),numeric);
+  const table='['+numeric.map(row=>'['+row.join(',')+']').join(',')+']';
+  assert.equal(statisticsDatasetSource(source,'xy'),table);
+  assert.equal(statisticsCommand(source,{kind:'xy',op:'regression'}),`regression(${table},linear)`);
+  assert.equal(statisticsCommand(source,{kind:'xy',op:'mean',column:1}),`mean([${numeric.map(row=>row[1]).join(',')}])`);
+  assert.equal(parse(statisticsCommand(source,{kind:'xy',op:'regression'})).args[0].args.length,10);
+});
+
+test('TSV preserves literal commas, quotes and blanks while CSV records keep their delimiter',()=>{
+  assert.deepEqual(csvRows('x\ty\tz\r\n"A,B"\t"1,234"\t\r\n\t"C""D"\t5\r\n1,2,3'),[['A,B','1,234',''],['','C"D','5'],['1','2','3']]);
+  assert.deepEqual(csvRows('"a\tb",2'),[['a\tb','2']]);
+  assert.deepEqual(csvRows('"a\nb,c"\t1,234\r\n"d""e,f"\t5,678'),[['a\nb,c','1,234'],['d"e,f','5,678']]);
+  assert.deepEqual(csvRows(',\n2022-12-02\t166,682\n,',{preserveEmptyRows:true}),[['',''],['2022-12-02','166,682'],['','']]);
+  assert.deepEqual(csvRows('1,2,3'),[['1','2','3']]);
+  assert.throws(()=>csvRows('2022-12-02\t"166,682'),/Unclosed CSV quote/);
+});
+
 test('CSV editing preserves empty rows while analysis omits them',()=>{
   const source=',\r\n1,2\r\n,\r\n3,4\r\n,';
   assert.deepEqual(csvRows(source,{preserveEmptyRows:true}),[['',''],['1','2'],['',''],['3','4'],['','']]);
