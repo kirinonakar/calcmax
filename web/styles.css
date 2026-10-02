@@ -7,3 +7,9 @@
 :root[data-theme="dark"]{color-scheme:dark;--bg:#202b27;--panel:#17251f;--bar:#304139;--ink:#e2eee6;--muted:#a4b8ab;--line:#4b6052;--accent:#76d6b7;--key:#304038;--number:#26382f;--lime:#a2bb50;--gold:#dbc174}[data-theme="dark"] .key.primary{background:#076c58}[data-theme="dark"] .key.clear{color:#142419}[data-theme="dark"] .error{color:#ffab95}[data-theme="dark"] .key:hover{background:var(--bar)}
 header{flex-wrap:wrap}.header-actions{margin-left:auto}.preferences{display:flex;gap:8px}.preferences select{width:auto;font-size:12px;background:transparent;padding:7px 20px 7px 8px}.preferences select#language{min-width:86px}
 @media(max-width:600px){.preferences{width:100%;justify-content:flex-end;border-top:1px solid var(--line);padding-top:8px}.preferences select{padding:4px 20px 4px 8px}header{row-gap:10px}}
+
+button[data-run="python"]{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:800;padding-inline:20px}
+button[data-run="python"]:hover:not(:disabled){background:#006553;border-color:#006553}
+button[data-run="python"]:active:not(:disabled){transform:translateY(1px)}
+:root[data-theme="dark"] button[data-run="python"]{background:#076c58;border-color:#076c58}
+:root[data-theme="dark"] button[data-run="python"]:hover:not(:disabled){background:#085b4b;border-color:#085b4b}

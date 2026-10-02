@@ -28,7 +28,7 @@ test('saved state rejects malformed collections and bounds preferences and retai
   assert.equal(state.language,'ko');assert.equal(state.autoCloseBrackets,true);
   const saved={precision:8,digits:20,history:Array.from({length:501},(_,time)=>({time})),displayShortcuts:Array.from({length:13},(_,label)=>({label}))};
   const bounded=createAppState(saved);
-  assert.equal(bounded.digits,8);assert.equal(bounded.history.length,500);assert.equal(bounded.displayShortcuts.length,12);
+  assert.equal(bounded.digits,8);assert.equal(bounded.history.length,500);assert.equal(bounded.displayShortcuts.length,6);
   assert.equal(saved.history.length,501,'normalization does not truncate the source backup');
 });
 

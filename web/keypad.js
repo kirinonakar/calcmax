@@ -20,7 +20,7 @@ export const numericRows=[
 export function topKeys(second=false){return [key('SHIFT','SHIFT','','','','utility'),key('ALPHA','ALPHA','','','','utility'),key('MODE','MODE','','Scientific/CAS','','utility'),key(second?'1st':'2nd','SECOND','','','','utility')];}
 export function topFunctions(second=false){return second?
   [key('d/dx','diff(,x)','∫','integrate(,x)'),key('lim','limit(,x,)'),key('sinc','sinc()'),key('Π','product(,x,,)')]:
-  [key('CALC','CALC','SOLVE','SOLVE','='),key('∫','integrate(,x,,)','d/dx','nderivative(,x,)',':'),key('x⁻¹','^(-1)','x!','!'),key('logₐ□','log(,)','Σ','sum(,x,,)')];
+  [key('CALC','CALC','SOLVE','SOLVE','='),key('∫ₐᵇ','integrate(,x,,)','d/dx','nderivative(,x,)',':'),key('x⁻¹','^(-1)','x!','!'),key('logₐ□','log(,)','Σ','sum(,x,,)')];
 }
 
 export function bindKeyPress(button,press,longPress,{delay=500,schedule=setTimeout,cancel=clearTimeout}={}) {

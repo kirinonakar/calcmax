@@ -12,7 +12,7 @@ function runtime(t) {
     message(data){this.onmessage({data});}
   }
   globalThis.Worker=Worker;
-  t.mock.timers.enable({apis:['setTimeout']});
+  t.mock.timers.enable({apis:['setTimeout','Date']});
   t.after(()=>{
     if(original)Object.defineProperty(globalThis,'Worker',original);
     else delete globalThis.Worker;
@@ -120,4 +120,42 @@ test('cancelled foreground work waiting for a preview cannot run on the restarte
   const next=engine.execute({action:'regression'});
   workers[1].message({type:'result',id:workers[1].request.id,result:{ok:true}});
   assert.equal((await next).ok,true);
+});
+
+test('Python input pauses the deadline and resumes with the remaining execution budget',async t=>{
+  const {engine,workers,tick}=runtime(t);
+  workers[0].message({type:'ready'});
+  let answer;
+  const result=engine.execute({action:'python'},{onInput:()=>new Promise(resolve=>answer=resolve)});
+  const id=workers[0].request.id;
+  tick(5000);
+  workers[0].message({type:'input',id,inputId:1,prompt:'a=',output:'before\n'});
+  tick(60000);assert.equal(workers.length,1);assert.ok(engine.pending);
+  answer('');await Promise.resolve();
+  assert.deepEqual(workers[0].request,{type:'input',id,inputId:1,value:''});
+  tick(14999);assert.equal(workers.length,1);
+  tick(1);assert.equal(workers.length,2);
+  assert.match((await result).error,/20/);
+});
+
+test('cancel and stale input replies cannot resume a replacement worker',async t=>{
+  const {engine,workers}=runtime(t);
+  workers[0].message({type:'ready'});
+  let answer,signal;
+  const result=engine.execute({action:'python'},{onInput:request=>{signal=request.signal;return new Promise(resolve=>answer=resolve);}});
+  const id=workers[0].request.id;
+  workers[0].message({type:'input',id:999,inputId:1});assert.equal(signal,undefined);
+  workers[0].message({type:'input',id,inputId:1});
+  engine.cancel();assert.equal(signal.aborted,true);
+  workers[1].message({type:'ready'});
+  answer('late');await Promise.resolve();
+  assert.equal(workers[1].request,undefined);assert.equal((await result).ok,false);
+});
+
+test('closing a Python input dialog cancels execution',async t=>{
+  const {engine,workers}=runtime(t);
+  workers[0].message({type:'ready'});
+  const result=engine.execute({action:'python'},{onInput:()=>null});
+  workers[0].message({type:'input',id:workers[0].request.id,inputId:1});
+  assert.equal((await result).ok,false);assert.equal(workers[0].terminated,true);
 });

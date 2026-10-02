@@ -38,14 +38,24 @@ export function createAppDialogs({state,ui,persist,calculator,changeMode,pressKe
       'Number keys':keyChoices(numericRows.flat()),
       ALPHA:Array.from('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz',label=>({label,input:label}))
     };
+    function moveShortcut(index,offset){
+      const target=index+offset;if(target<0||target>=state.displayShortcuts.length)return;
+      [state.displayShortcuts[index],state.displayShortcuts[target]]=[state.displayShortcuts[target],state.displayShortcuts[index]];
+      renderDisplayShortcuts();render();persist();
+    }
     function render(){
-      current.replaceChildren();for(const [index,shortcut] of state.displayShortcuts.entries()){const row=element('div','','list-row');row.append(element('span',shortcut.label,'content'),control('←',()=>{if(index){[state.displayShortcuts[index-1],state.displayShortcuts[index]]=[state.displayShortcuts[index],state.displayShortcuts[index-1]];renderDisplayShortcuts();render();persist();}}),control('Delete',()=>{state.displayShortcuts.splice(index,1);renderDisplayShortcuts();render();persist();}));current.append(row);}
+      current.replaceChildren();for(const [index,shortcut] of state.displayShortcuts.entries()){
+        const row=element('div','','list-row'),up=control('↑',()=>moveShortcut(index,-1)),down=control('↓',()=>moveShortcut(index,1));
+        for(const [button,label] of [[up,'Move up'],[down,'Move down']]){button.setAttribute('aria-label',t(label));button.title=t(label);}
+        up.disabled=index===0;down.disabled=index===state.displayShortcuts.length-1;
+        row.append(element('span',shortcut.label,'content'),up,down,control('Delete',()=>{state.displayShortcuts.splice(index,1);renderDisplayShortcuts();render();persist();}));current.append(row);
+      }
       const groups=source==='Keypad'?keypadGroups:Object.fromEntries(Object.entries(catalog).map(([name,items])=>[name,items.map(input=>({label:input.split('(')[0],input,source:'catalog'}))]));
       if(!groups[category])category=Object.keys(groups)[0];
       sources.querySelectorAll('button').forEach(button=>{const active=button.dataset.source===source;button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));});
       tabs.replaceChildren();for(const name of Object.keys(groups)){const button=control(name,()=>{category=name;render();});button.dataset.category=name;button.classList.toggle('active',name===category);button.setAttribute('aria-pressed',String(name===category));tabs.append(button);}
       const query=search.value.trim().toLowerCase(),entries=query?Object.values(groups).flat().filter(choice=>`${choice.label} ${choice.input}`.toLowerCase().includes(query)):groups[category]||[];
-      choices.replaceChildren();for(const choice of entries){const button=control(source==='Catalog'?choice.input:choice.label,()=>{if(state.displayShortcuts.length>=12){toast('Use up to twelve shortcuts');return;}state.displayShortcuts.push(choice);renderDisplayShortcuts();render();persist();});button.dataset.choice=choice.input;choices.append(button);}
+      choices.replaceChildren();for(const choice of entries){const button=control(source==='Catalog'?choice.input:choice.label,()=>{if(state.displayShortcuts.length>=6){toast('Use up to six shortcuts');return;}state.displayShortcuts.push(choice);renderDisplayShortcuts();render();persist();});button.dataset.choice=choice.input;choices.append(button);}
       if(!entries.length)choices.append(element('p','No matching buttons','hint'));
     }
     for(const name of ['Keypad','Catalog']){const button=control(name,()=>{source=name;category=name==='Keypad'?'Main keys':'Scientific';render();});button.dataset.source=name;sources.append(button);}

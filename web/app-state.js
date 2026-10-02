@@ -37,7 +37,7 @@ export function createAppState(saved={},browserLanguage='en') {
   state.inputFont=Math.max(10,Math.min(42,Number(saved.inputFont)||24));
   state.outputFont=Math.max(10,Math.min(48,Number(saved.outputFont)||30));
   state.assumptions=objectOrEmpty(saved.assumptions);
-  state.displayShortcuts=Array.isArray(saved.displayShortcuts)?saved.displayShortcuts.slice(0,12):[{label:'∫',input:'integrate(,x)'},{label:'∫ₐᵇ',input:'integrate(,x,0,1)'},{label:'d/dx',input:'diff(,x)'}];
+  state.displayShortcuts=Array.isArray(saved.displayShortcuts)?saved.displayShortcuts.slice(0,6):[{label:'∫',input:'integrate(,x)'},{label:'∫ₐᵇ',input:'integrate(,x,0,1)'},{label:'d/dx',input:'diff(,x)'}];
   return state;
 }
 

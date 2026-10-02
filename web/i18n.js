@@ -29,6 +29,10 @@ const korean={
   'Not enough input values. Enter one value per line in Python inputs.':'입력값이 부족합니다. Python 입력란에 한 줄씩 입력해 주세요.'
 };
 Object.assign(korean,nativeKorean,{
+  "Python input": "Python 입력",
+  "Continue": "계속",
+  "Optional input() values · one per line": "input() 미리 입력할 값 · 한 줄에 하나 (선택)",
+  "Missing values will be requested while the script runs.": "미리 입력하지 않은 값은 실행 중 입력창에서 받습니다.",
   'Scalar (k)':'스칼라 (k)',
   'New variable…':'새 변수…',
   'New variable name':'새 변수 이름',
@@ -138,7 +142,9 @@ Object.assign(korean,nativeKorean,{
   "Select one to three columns": "1~3개 열을 선택하세요.",
   "Symbol assumption": "기호 가정",
   "Set assumption": "가정 설정",
-  "Use up to twelve shortcuts": "단축 버튼은 12개까지 설정할 수 있습니다.",
+  "Use up to six shortcuts": "단축 버튼은 6개까지 설정할 수 있습니다.",
+  "Move up": "위로 이동",
+  "Move down": "아래로 이동",
   "Find button or function": "버튼 또는 함수 찾기",
   "Customize display buttons": "표시 버튼 사용자 지정",
   "Swap currencies": "통화 바꾸기",
