@@ -722,6 +722,23 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
     assert.equal($('graph-analysis-result').querySelectorAll('.analysis-point').length,2);assert.notEqual($('graph-analysis-result').textContent,firstIntersections);
     change('graph-kind','cartesian');change('mode','scientific');if($('keypad').dataset.page==='2')key('SECOND').click();
   });
+  await t.test('implicit circle tangent chooses a default branch and a graph click changes to the lower branch',async()=>{
+    change('mode','graph');change('graph-kind','cartesian');$('graph-source').value='x^2+y^2=5';$('graph-source').dispatchEvent(new window.Event('input'));
+    change('graph-analysis-action','tangent');$('graph-analysis-a').value='1';$('graph-analysis-run').click();
+    await waitFor(()=>$('graph-analysis-result').firstChild?.textContent==='Tangent'&&!$('graph-analysis-run').disabled,'circle tangent without selecting a point');
+    assert.match($('graph-analysis-result').textContent,/-0\.5/);assert.equal($('graph-status').textContent,'');
+    assert.ok(requests.findLast(item=>item.request?.action==='graphAnalysis').request.tracePoint[1]>0);
+    $('graph-analysis-clear').click();
+    const plot=$('graph-plot'),canvas=plot.querySelector('canvas'),left=Number(canvas.dataset.plotLeft),width=Number(canvas.dataset.plotWidth),height=Number(canvas.dataset.plotHeight),originalBounds=plot.getBoundingClientRect;
+    plot.getBoundingClientRect=()=>({left:0,top:0,width:800,height});const rect=plot.getBoundingClientRect();
+    const xmin=Number($('graph-min').value),xmax=Number($('graph-max').value),ymin=Number($('graph-ymin').value),ymax=Number($('graph-ymax').value);
+    const x=rect.left+(left+(1-xmin)/(xmax-xmin)*width)/800*rect.width,y=rect.top+(42+(ymax+2)/(ymax-ymin)*(height-84))/height*rect.height;
+    for(const type of ['pointerdown','pointerup']){const event=new window.MouseEvent(type,{clientX:x,clientY:y,button:0,cancelable:true});Object.defineProperty(event,'pointerId',{value:1});plot.dispatchEvent(event);}
+    await waitFor(()=>$('graph-analysis-result').firstChild?.textContent==='Tangent'&&!$('graph-analysis-run').disabled,'first lower-branch click calculates the tangent');
+    const request=requests.findLast(item=>item.request?.action==='graphAnalysis').request;
+    assert.ok(request.tracePoint[1]<0);assert.ok(Math.abs(request.a-1)<.1);assert.ok(Math.abs(Number($('graph-analysis-a').dataset.fullValue)-request.a)<1e-10);assert.equal($('graph-status').textContent,'');plot.getBoundingClientRect=originalBounds;
+    change('mode','scientific');
+  });
   await t.test('tip has answers only, no extra rows, and the allocated amounts add up to Total',async()=>{
     change('mode','tip');$('tip-people').value='3';document.querySelector('[data-run="tip"]').click();await waitFor(()=>$('answer').textContent.includes('Per person: 39'),'whole amounts for three people');assert.match($('answer').textContent,/Tip: 17/);assert.match($('answer').textContent,/Total: 117/);assert.equal($('tip-amount-math'),null);assert.equal($('result-source').hidden,true);assert.doesNotMatch($('answer').textContent,/Extra/);
     assert.match($('answer').textContent,/Tip %: 17\.00%/);

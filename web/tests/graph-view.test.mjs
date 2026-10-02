@@ -2,7 +2,7 @@ import {installCanvas,surfaceFills} from './canvas-context.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {JSDOM} from 'jsdom';
-import {transformBounds,pinchFactors,nearestPoint,bindGraphGestures} from '../graph-view.js';
+import {transformBounds,pinchFactors,nearestPoint,bindGraphGestures,curvePointAtX} from '../graph-view.js';
 import {graphExpressions,graphShadings,implicitFormula,cartesianFormula,graphExpressionTarget,createGraphWorkspace} from '../graph-workspace.js';
 import {readFileSync} from 'node:fs';
 import {plot} from '../plot.js';
@@ -102,6 +102,27 @@ test('shared range sliders restore saved endpoints outside the default slider do
     for(const [id,number] of Object.entries(ranges))assert.equal(Number($(id+'-slider').value),number);
     assert.equal($('graph-min-slider').max,$('graph-max-slider').max);assert.equal($('graph-ymin-slider').min,$('graph-ymax-slider').min);
     for(const [id,number] of Object.entries(ranges))assert.equal(workspace.snapshot().ranges[id],number);
+  }finally{workspace.dispose();dom.window.close();}
+});
+test('implicit branch selection interpolates at x and uses the upper branch unless a lower point was selected',()=>{
+  const curve=[[-2,1],[0,Math.sqrt(5)],[2,1],null,[-2,-1],[0,-Math.sqrt(5)],[2,-1]];
+  assert.deepEqual(curvePointAtX(curve,0),[0,Math.sqrt(5)]);
+  assert.deepEqual(curvePointAtX(curve,0,-2),[0,-Math.sqrt(5)]);
+  assert.equal(curvePointAtX(curve,1)[0],1);assert.ok(curvePointAtX(curve,1)[1]>0);
+  assert.equal(curvePointAtX([],0),null);assert.equal(curvePointAtX(curve,NaN),null);
+});
+test('web implicit tangents work without a prior trace and a first graph click selects and analyzes the lower branch',async()=>{
+  const dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));globalThis.document=dom.window.document;installCanvas(dom);
+  const requests=[],$=id=>document.getElementById(id),curve=[[-2,1],[0,Math.sqrt(5)],[2,1],null,[-2,-1],[0,-Math.sqrt(5)],[2,-1]];
+  $('graph-plot').getBoundingClientRect=()=>({left:0,top:0,width:800,height:460});
+  const workspace=createGraphWorkspace({execute:async request=>{requests.push(request);if(request.action!=='graphAnalysis')return {ok:true,curves:[curve],implicitCurves:[true],parameters:[]};assert.ok(request.tracePoint,'web chooses a branch before asking the engine for a tangent');const y=Math.sqrt(5-request.a**2)*(request.tracePoint[1]<0?-1:1);return {ok:true,analysis:'tangent',points:[[request.a,y]],value:-request.a/y,line:[[-3,y],[3,y]]};},options:()=>({displayDigits:3}),onError:assert.fail,persist:()=>{},isBusy:()=>false});
+  try{
+    $('graph-source').value='x^2+y^2=5';await workspace.run();$('graph-analysis-action').value='tangent';$('graph-analysis-action').onchange();$('graph-analysis-a').value='0';
+    await $('graph-analysis-run').onclick();assert.ok(requests.at(-1).tracePoint[1]>0);assert.equal($('graph-status').textContent,'');
+    $('graph-analysis-clear').click();const canvas=$('graph-plot').querySelector('canvas'),left=Number(canvas.dataset.plotLeft),width=Number(canvas.dataset.plotWidth),x=left+(2+10)/20*width,y=42+(5+1)/10*(460-84);
+    for(const type of ['pointerdown','pointerup']){const event=new dom.window.MouseEvent(type,{clientX:x,clientY:y,button:0,cancelable:true});Object.defineProperty(event,'pointerId',{value:1});$('graph-plot').dispatchEvent(event);}
+    await Promise.resolve();await Promise.resolve();assert.equal(requests.at(-1).a,2);assert.equal(requests.at(-1).tracePoint[1],-1);assert.equal($('graph-analysis-a').dataset.fullValue,'2');
+    $('graph-tangent-slider').value='1';$('graph-tangent-slider').oninput();await $('graph-tangent-slider').onchange();assert.ok(requests.at(-1).tracePoint[1]<0,'moving the tangent preserves the selected branch');
   }finally{workspace.dispose();dom.window.close();}
 });
 test('Cartesian formulas and calculator transfers keep equations and distinguish explicit 3D surfaces',()=>{

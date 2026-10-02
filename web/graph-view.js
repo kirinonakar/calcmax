@@ -21,6 +21,21 @@ export function nearestPoint(result,bounds,position,selected=0){
   }
   return best;
 }
+export function curvePointAtX(curve,x,referenceY=null){
+  if(!Number.isFinite(x))return null;
+  const finite=point=>point?.length>=2&&point.every(Number.isFinite);
+  let best=null,score=Infinity,nearest=null,distance=Infinity;
+  for(let i=0;i<curve.length;i++){
+    const point=curve[i];if(!finite(point))continue;
+    const dx=Math.abs(point[0]-x);
+    if(dx<distance||(dx===distance&&point[1]>nearest[1])){nearest=point;distance=dx;}
+    const previous=curve[i-1];if(!finite(previous)||previous[0]===point[0])continue;
+    const at=(x-previous[0])/(point[0]-previous[0]);if(at<0||at>1)continue;
+    const y=previous[1]+at*(point[1]-previous[1]),nextScore=Number.isFinite(referenceY)?Math.abs(y-referenceY):-y;
+    if(nextScore<score){best=[x,y];score=nextScore;}
+  }
+  return best||nearest;
+}
 // Bind to the container: the SVG can be redrawn without losing pointer capture.
 export function bindGraphGestures(container,{getBounds,onView,onTrace,isSurface=()=>false,onSurface=()=>{}}){
   const pointers=new Map();let moved=false,axis=null,start=null;

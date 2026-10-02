@@ -3,7 +3,7 @@ import {plotGraph as plot} from './graph-canvas.js';
 import {mathDisplay} from './math-display.js';
 import {renderFormulas} from './formula-preview.js';
 import {displayNumber} from './display-format.js';
-import {bindGraphGestures,transformBounds,nearestPoint} from './graph-view.js';
+import {bindGraphGestures,transformBounds,nearestPoint,curvePointAtX} from './graph-view.js';
 import {surfaceZRange,surfaceSampleCount} from './surface-geometry.js';
 import {t,setText} from './i18n.js';
 
@@ -157,7 +157,7 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
     if(tableResult===result&&tableDigits===options().displayDigits&&tableLanguage===document.documentElement.lang)return;tableResult=result;tableDigits=options().displayDigits;tableLanguage=document.documentElement.lang;
     const table=document.createElement('table'),head=document.createElement('thead'),header=document.createElement('tr');
     for(const name of ['Curve','x / n','y',...(result.curveParameters?['t']:result.surface?['z']:[])]){const th=document.createElement('th');th.textContent=t(name);header.append(th);}head.append(header);table.append(head);const body=document.createElement('tbody');
-    (result.curves||result.surface||[]).forEach((curve,i)=>curve.forEach((point,index)=>{if(!point||index%Math.max(1,Math.floor(curve.length/60))!==0)return;const row=document.createElement('tr');for(const number of [i+1,...point,...(result.curveParameters?[result.curveParameters[i]?.[index]]:[])]){const td=document.createElement('td');td.textContent=displayNumber(number,options().displayDigits);row.append(td);}if(!result.surface){row.tabIndex=0;const pick=()=>{trace=point;render();};row.onclick=pick;row.onkeydown=e=>{if(['Enter',' '].includes(e.key)){e.preventDefault();pick();}};}body.append(row);}));table.append(body);$('graph-table').replaceChildren(table);
+    (result.curves||result.surface||[]).forEach((curve,i)=>curve.forEach((point,index)=>{if(!point||index%Math.max(1,Math.floor(curve.length/60))!==0)return;const row=document.createElement('tr');for(const number of [i+1,...point,...(result.curveParameters?[result.curveParameters[i]?.[index]]:[])]){const td=document.createElement('td');td.textContent=displayNumber(number,options().displayDigits);row.append(td);}if(!result.surface){row.tabIndex=0;const pick=()=>{if(i<expressions().length&&i!==selected()){$('graph-selected').value=String(i);$('graph-selected').onchange();}selectTrace(point,result.curveParameters?.[i]?.[index]??point[0]);};row.onclick=pick;row.onkeydown=e=>{if(['Enter',' '].includes(e.key)){e.preventDefault();pick();}};}body.append(row);}));table.append(body);$('graph-table').replaceChildren(table);
   }
   function parameterVisibility(){
     const hasParameters=$('graph-parameters').children.length>0;
@@ -218,24 +218,33 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
     const title=document.createElement('div');title.textContent=t($('graph-analysis-action').selectedOptions[0]?.textContent||'Analyze');container.append(title);
     if(analysis.value!==undefined)container.append(mathDisplay({kind:'number',value:String(analysis.value)},options().displayDigits,true));
     if(analysis.vertical){const note=document.createElement('div');note.textContent=t('Vertical tangent');container.append(note);}
-    for(const point of analysis.points||[]){const button=document.createElement('button');button.className='analysis-point';button.append(mathDisplay({kind:'tuple',args:point.map(n=>({kind:'number',value:String(n)}))},options().displayDigits,true));button.onclick=()=>{trace=point;render();};container.append(button);}
+    for(const point of analysis.points||[]){const button=document.createElement('button');button.className='analysis-point';button.append(mathDisplay({kind:'tuple',args:point.map(n=>({kind:'number',value:String(n)}))},options().displayDigits,true));button.onclick=()=>{if(kind()==='cartesian')selectTrace(point);else{trace=point;render();}};container.append(button);}
     if(!analysis.points?.length&&analysis.value===undefined&&!analysis.vertical){const note=document.createElement('div');note.textContent=t('No points found in this interval');container.append(note);}
   }
   async function analyze(action=value('graph-analysis-action'),point=null){
     if(running||isBusy()||!isReady()){pendingAnalysis={action,point};return;}
+    if(pending&&kind()==='cartesian'&&['derivative','tangent'].includes(action)){pendingAnalysis={action,point};return run();}
     pendingAnalysis=null;clearTimeout(timer);timer=null;
     try{
       const trees=expressions().map(s=>parse(latexInput(s))),a=point??numeric('graph-analysis-a'),b=['derivative','tangent'].includes(action)?a:numeric('graph-analysis-b'),view=bounds||currentBounds(),token=++analysisRevision,source=value('graph-source'),graphKind=kind();
       if(!Number.isFinite(a)||!Number.isFinite(b)||!['derivative','tangent'].includes(action)&&a>=b)throw new Error('Enter finite values with a < b');
       const currentParameters={...parameters};
-      const response=await execute({...options(),angle:'RAD',action:'graphAnalysis',graphKind,trees,analysis:action,a,b,selected:selected(),other:Number(value('graph-other')),variable:graphKind==='cartesian'?'x':'t',parameters:currentParameters,tracePoint:trace,xMin:view.xmin,xMax:view.xmax,yMin:view.ymin,yMax:view.ymax});
+      const tracePoint=trace||(graphKind==='cartesian'&&['derivative','tangent'].includes(action)&&result?.implicitCurves?.[selected()]?curvePointAtX(result.curves[selected()],a):null);
+      const response=await execute({...options(),angle:'RAD',action:'graphAnalysis',graphKind,trees,analysis:action,a,b,selected:selected(),other:Number(value('graph-other')),variable:graphKind==='cartesian'?'x':'t',parameters:currentParameters,tracePoint,xMin:view.xmin,xMax:view.xmax,yMin:view.ymin,yMax:view.ymax});
       if(token!==analysisRevision||source!==value('graph-source')||graphKind!==kind()||JSON.stringify(currentParameters)!==JSON.stringify(parameters))return;if(!response.ok){onError(response.error);return;}
       analysis=response;$('graph-status').textContent='';integral=action==='integral'&&graphKind==='cartesian'?[a,b]:null;trace=response.points?.[0]||trace;$('graph-analysis-action').value=action;analysisControls();render();
     }catch(error){onError(error.message);}finally{flush();}
   }
   function changeView(next,commit=true){if(!Object.values(next).every(Number.isFinite)||next.xmin>=next.xmax||next.ymin>=next.ymax){onError('Enter finite values with minimum < maximum');return;}bounds=next;writeBounds(next);queueDraw();if(commit){render();persist();if(['cartesian','implicit','surface','differential'].includes(kind()))queue();}}
   function surfaceChange(dx,dy,zoom){const previousCount=surfaceSampleCount(currentBounds(),surface.samples,surface.autoDensity,surface.zoom);surface.rotation=((surface.rotation+dx*.7)%360+360)%360;surface.elevation=Math.max(-90,Math.min(90,surface.elevation+dy*.5));surface.zoom=Math.max(.4,Math.min(3,surface.zoom*zoom));$('graph-rotation').value=String(surface.rotation);$('graph-elevation').value=String(surface.elevation);$('graph-surface-zoom').value=String(surface.zoom);queueDraw();persist();if(surface.autoDensity&&previousCount!==surfaceSampleCount(currentBounds(),surface.samples,true,surface.zoom))queue();}
-  const disposeGestures=bindGraphGestures($('graph-plot'),{getBounds:()=>bounds,onView:changeView,onTrace:position=>{const closest=nearestPoint(result,bounds,position,selected());if(closest){trace=closest.point;render();if(analysis?.analysis==='tangent'){ $('graph-analysis-a').value=String(closest.parameter);$('graph-tangent-slider').value=String(closest.parameter);analyze('tangent',closest.parameter);}}},isSurface:()=>kind()==='surface',onSurface:surfaceChange});
+  function selectTrace(point,parameter=point[0]){
+    trace=point;
+    const action=value('graph-analysis-action');
+    if(['derivative','tangent'].includes(action)){showNumber('graph-analysis-a',parameter);$('graph-tangent-slider').value=String(parameter);}
+    render();
+    if(action==='tangent')analyze('tangent',parameter);
+  }
+  const disposeGestures=bindGraphGestures($('graph-plot'),{getBounds:()=>bounds,onView:changeView,onTrace:position=>{const closest=nearestPoint(result,bounds,position,selected());if(closest)selectTrace(closest.point,closest.parameter);},isSurface:()=>kind()==='surface',onSurface:surfaceChange});
   const zoom=z=>{if(kind()==='surface'){surfaceChange(0,0,z);return;}const at={x:.5,y:.5};changeView(transformBounds(bounds||currentBounds(),at,at,z));};
   $('graph-zoom-in').onclick=()=>zoom(2);$('graph-zoom-out').onclick=()=>zoom(.5);
   function heightControls(){const button=$('graph-height-toggle'),label=heightScale===1?'Half height':heightScale===.5?'Double height':'Full height';button.dataset.heightScale=String(heightScale);button.setAttribute('aria-pressed',String(heightScale!==1));button.setAttribute('aria-label',t(label));button.title=t(label);button.textContent=heightScale===1?'½':heightScale===.5?'2×':'1×';}

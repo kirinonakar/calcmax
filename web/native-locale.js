@@ -163,6 +163,7 @@ export const nativeKorean = {
   "Enter an equation F(x,y)=0": "F(x,y)=0 형태의 방정식을 입력하세요.",
   "Equation is true everywhere; enter a curve equation": "모든 점에서 참인 식입니다. 곡선을 정의하는 방정식을 입력하세요.",
   "f(x) · one per line · [shade] y<f(x) or f, g": "f(x) · 한 줄에 하나 · 음영: [shade] y<f(x) 또는 f, g",
+  "One curve per line · [shade] y<f(x) · between functions: [shade] f, g": "한 줄에 하나 · [shade] y<f(x) · 두 함수 사이: [shade] f, g",
   "Initial values at n=0 · comma separated": "n=0의 초깃값 · 쉼표로 구분",
   "Initial time t₀": "초기 시각 t₀",
   "Initial y values · comma separated": "y 초깃값 · 쉼표로 구분",
