@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {JSDOM} from 'jsdom';
 import {transformBounds,pinchFactors,nearestPoint,bindGraphGestures,curvePointAtX} from '../graph-view.js';
-import {graphExpressions,graphShadings,implicitFormula,cartesianFormula,graphExpressionTarget,createGraphWorkspace} from '../graph-workspace.js';
+import {graphExpressions,graphShadings,implicitFormula,cartesianFormula,graphExpressionTarget,appendGraphSource,createGraphWorkspace} from '../graph-workspace.js';
 import {readFileSync} from 'node:fs';
 import {plot} from '../plot.js';
 import {expressionDisplay} from '../expression-display.js';
@@ -143,12 +143,13 @@ test('typed graph parameters keep exact values, expand slider ranges, plot and r
     input.value='12.345678901';input.dispatchEvent(new dom.window.Event('change'));
     assert.equal(workspace.snapshot().parameters.a,12.345678901);assert.deepEqual(workspace.snapshot().parameterRanges.a,[-5,12.345678901]);
     assert.equal(Number(slider().value),12.345678901);assert.equal(Number(slider().max),12.345678901);assert.ok(saves>=2);
-    await workspace.run();assert.equal(requests.at(-1).parameters.a,12.345678901);assert.equal(field('a'),input);assert.equal(input.value,'12.345678901','editing uses full precision despite rounded captions');
+    await workspace.run();assert.equal(requests.at(-1).parameters.a,12.345678901);assert.equal(field('a'),input);assert.equal(input.value,'12.346');
+    input.focus();assert.equal(input.value,'12.345678901','editing uses full precision despite rounded captions');input.blur();assert.equal(input.value,'12.346');
     input.value='-2e1';input.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Enter',cancelable:true}));
     assert.equal(workspace.snapshot().parameters.a,-20);assert.deepEqual(workspace.snapshot().parameterRanges.a,[-20,12.345678901]);
-    slider().value='0.123456789';slider().dispatchEvent(new dom.window.Event('input'));assert.equal(input.value,'0.123456789');
+    slider().value='0.123456789';slider().dispatchEvent(new dom.window.Event('input'));assert.equal(input.value,'0.123');
     const saved=workspace.snapshot();workspace.dispose();workspace=create(saved);await workspace.run();
-    assert.equal(field('a').value,'0.123456789');assert.equal(Number(slider().min),-20);assert.equal(Number(slider().max),12.345678901);assert.equal(workspace.snapshot().animationEnabled.a,false);
+    assert.equal(field('a').value,'0.123');assert.equal(Number(slider().min),-20);assert.equal(Number(slider().max),12.345678901);assert.equal(workspace.snapshot().animationEnabled.a,false);
     document.querySelector('[data-parameter-bound="1"]').value='-10';document.querySelector('[data-parameter-bound="1"]').dispatchEvent(new dom.window.Event('change'));
     assert.equal(field('a').value,'-10');assert.equal(workspace.snapshot().parameters.a,-10);
   }finally{workspace.dispose();dom.window.close();}
@@ -168,6 +169,41 @@ test('graph parameter drafts survive redraw and invalid input never changes the 
     assert.equal(input.value,'1.23456789');assert.equal(input.hasAttribute('aria-invalid'),false);
     input.value='0';input.dispatchEvent(new dom.window.Event('change'));assert.equal(workspace.snapshot().parameters.a,0);
     input.blur();workspace.render();assert.equal(input.value,'0');
+  }finally{workspace.dispose();dom.window.close();}
+});
+
+test('display digits round intervals, bounds, parameters and analysis while requests keep full precision',async()=>{
+  const dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));globalThis.document=dom.window.document;installCanvas(dom);
+  const $=id=>document.getElementById(id),requests=[],a=1.23456789,b=2.34567891;let digits=3;
+  const workspace=createGraphWorkspace({execute:async request=>{requests.push(request);return request.action==='graphAnalysis'?{ok:true,value:a,points:[[a,b]]}:{ok:true,curves:[[[a,b]]],parameters:['a']};},options:()=>({displayDigits:digits}),onError:assert.fail,persist:()=>{},isBusy:()=>false,saved:{ranges:{'graph-min':-a,'graph-max':b,'graph-analysis-a':a,'graph-analysis-b':b},parameters:{a},parameterRanges:{a:[-b,b]}}});
+  try{
+    await workspace.run();
+    const input=document.querySelector('[data-parameter-value="a"]'),high=()=>document.querySelector('[data-parameter-bound="1"]');
+    assert.equal(input.value,'1.235');assert.equal(high().value,'2.346');assert.equal($('graph-analysis-a').value,'1.235');
+    input.dispatchEvent(new dom.window.Event('change'));assert.equal(workspace.snapshot().parameters.a,a,'an unchanged rounded value must not replace the parameter');
+    const low=document.querySelector('[data-parameter-bound="0"]');low.value='-3';low.dispatchEvent(new dom.window.Event('change'));assert.equal(workspace.snapshot().parameterRanges.a[1],b,'editing one range endpoint preserves the other');
+    $('graph-analysis-a').focus();assert.equal($('graph-analysis-a').value,String(a));workspace.render();assert.equal($('graph-analysis-a').value,String(a));$('graph-analysis-a').blur();assert.equal($('graph-analysis-a').value,'1.235');
+    await $('graph-analysis-run').onclick();assert.equal(requests.at(-1).a,a);assert.equal(requests.at(-1).b,b);
+    assert.deepEqual([...$('graph-analysis-result').querySelectorAll('mn')].map(node=>node.textContent),['1.235','1.235','2.346']);
+    assert.match($('graph-trace').textContent,/1\.235.*2\.346/);assert.equal($('graph-table').querySelectorAll('td')[1].textContent,'1.235');
+    digits=5;workspace.render();assert.equal(document.querySelector('[data-parameter-value="a"]').value,'1.23457');assert.equal(high().value,'2.34568');assert.equal($('graph-analysis-a').value,'1.23457');
+    assert.equal(workspace.snapshot().parameters.a,a);assert.equal(workspace.snapshot().ranges['graph-min'],-a);
+  }finally{workspace.dispose();dom.window.close();}
+});
+
+test('graph transfers append to the target draft and preserve existing curves, shading and other graph kinds',async()=>{
+  assert.equal(appendGraphSource('x\n[shade] y<x','y=x^2'),'x\n[shade] y<x\ny=x^2');
+  assert.throws(()=>appendGraphSource('x\n2*x\n3*x\n4*x\n5*x\n6*x','7*x'),/Graph limit reached/);
+  const dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));globalThis.document=dom.window.document;installCanvas(dom);
+  const $=id=>document.getElementById(id),requests=[];
+  const workspace=createGraphWorkspace({execute:async request=>{requests.push(request);return {ok:true,curves:[],parameters:[]};},options:()=>({displayDigits:3}),onError:assert.fail,persist:()=>{},isBusy:()=>false});
+  try{
+    $('graph-source').value='x\n[shade] y<x';$('graph-source').oninput();
+    $('graph-kind').value='polar';$('graph-kind').onchange();$('graph-source').value='3*cos(t)';$('graph-source').oninput();
+    workspace.addExpression('y=x^2','cartesian');assert.equal($('graph-source').value,'x\n[shade] y<x\ny=x^2');assert.equal(workspace.snapshot().sources.polar,'3*cos(t)');
+    await workspace.run();assert.equal(requests.at(-1).trees.length,2);assert.equal(requests.at(-1).shadings.length,1);
+    const before=workspace.snapshot().sources.cartesian;workspace.addExpression('y=x^2','cartesian');assert.equal($('graph-source').value,before);
+    $('graph-source').value='x\n2*x\n3*x\n4*x\n5*x\n6*x';const full=$('graph-source').value;assert.throws(()=>workspace.addExpression('7*x','cartesian'),/Graph limit reached/);assert.equal($('graph-source').value,full);
   }finally{workspace.dispose();dom.window.close();}
 });
 test('analysis captures current parameter values and discards a result after those values change',async()=>{

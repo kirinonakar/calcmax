@@ -7,6 +7,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 val LocalLanguage = staticCompositionLocalOf { "en" }
 
 private val korean = mapOf(
+    "Graph limit reached. Remove a function before adding another." to "그래프 개수 한도에 도달했습니다. 기존 함수를 지운 뒤 추가하세요.",
     "Calculation mode" to "계산 모드", "Choose calculation mode, long press for Scientific/CAS mode" to "계산 모드 선택, 길게 누르면 Scientific/CAS 모드",
     "Stored memory" to "저장된 메모리", "Overwrite mode" to "덮어쓰기 모드", "Insert mode" to "삽입 모드",
     "Clear" to "지우기", "Close" to "닫기", "Done" to "완료", "Cancel" to "취소", "Apply" to "적용",

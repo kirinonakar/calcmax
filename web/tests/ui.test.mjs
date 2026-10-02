@@ -691,9 +691,10 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
     assert.equal($('graph-formulas').textContent.includes('f1'),false);
     change('language','ko');assert.equal($('graph-kind').selectedOptions[0].textContent,'카테시안');change('language','en');
     change('mode','scientific');edit('x^2+y^2=1');if(!key('TO_GRAPH'))key('SECOND').click();key('TO_GRAPH').click();
-    assert.equal($('mode').value,'graph');assert.equal($('graph-kind').value,'cartesian');assert.equal($('graph-source').value,'x^2+y^2=1');
-    await waitFor(()=>plotted()&&$('graph-parameters').children.length===0,'calculator equation transfer');
-    assert.equal(JSON.parse(localStorage.getItem('calcmax-web-v1')).graph.sources.cartesian,'x^2+y^2=1');
+    assert.equal($('mode').value,'graph');assert.equal($('graph-kind').value,'cartesian');assert.equal($('graph-source').value,'x^2+y^2=a\nx=.3\nx^2+y^2=1');
+    await waitFor(()=>plotted()&&curveStrokes($('graph-plot')).length===3,'calculator equation appended');
+    assert.equal(JSON.parse(localStorage.getItem('calcmax-web-v1')).graph.sources.cartesian,'x^2+y^2=a\nx=.3\nx^2+y^2=1');
+    change('graph-selected','2');
     for(const [action,expected] of [['root',2],['minimum',1],['maximum',1]]){
       change('graph-analysis-action',action);$('graph-analysis-a').value='-2';$('graph-analysis-b').value='2';$('graph-analysis-run').click();
       await waitFor(()=>$('graph-analysis-result').firstChild?.textContent==={root:'Root',minimum:'Minimum',maximum:'Maximum'}[action]&&!$('graph-analysis-run').disabled,`circle ${action}`);

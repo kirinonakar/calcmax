@@ -254,9 +254,9 @@ class CalculatorInstrumentedTest {
         }
     }
     @Test fun secondPageInsertsStructuresAndGraphsCurrentExpression() {
-        compose.runOnIdle {model().mode="Scientific/CAS";model().clear();model().secondKeys=true;model().edit(Editor("y=x^2+1"))}
+        compose.runOnIdle {model().mode="Scientific/CAS";model().clear();model().graphKind="cartesian";model().graphSource="sin(x)\ncos(x)";model().secondKeys=true;model().edit(Editor("y=x^2+1"))}
         compose.onNodeWithContentDescription("Graph current expression").performClick()
-        compose.runOnIdle {assertEquals("Graph",model().mode);assertEquals("cartesian",model().graphKind);assertEquals("x^2+1",model().graphSource)}
+        compose.runOnIdle {assertEquals("Graph",model().mode);assertEquals("cartesian",model().graphKind);assertEquals("sin(x)\ncos(x)\ny=x^2+1",model().graphSource)}
         compose.runOnIdle {model().mode="Scientific/CAS";model().clear();model().secondKeys=true}
         compose.onNodeWithContentDescription("Insert 2 by 2 matrix").performClick()
         compose.runOnIdle {assertEquals("[[,],[,]]",model().editor.source);assertEquals(2,model().editor.cursor)}
@@ -302,6 +302,35 @@ class CalculatorInstrumentedTest {
         compose.onNodeWithContentDescription("SHIFT").performClick()
         compose.onNodeWithContentDescription("AC").performClick()
         compose.runOnIdle{assertEquals("",model().editor.source);assertEquals(0,model().variables.length());assertTrue(model().tape.isEmpty());assertEquals(count,model().history.size);assertEquals(10,model().precision);assertEquals(8,model().displayDigits);assertEquals(27f,model().inputFont);model().inputFont=25f;model().precision=30;model().displayDigits=10;model().sound=false;model().save()}
+    }
+    @Test fun graphDisplayDigitsRoundFieldsAndKeepOriginalBoundsAndParameters() {
+        compose.runOnIdle {
+            model().language="en";model().poweredOn=true;model().mode="Graph";model().graphKind="cartesian"
+            model().displayDigits=3;model().graphSource="a*x";model().xMin=-1.23456789;model().xMax=2.34567891
+            model().plot()
+        }
+        compose.waitUntil(30000) {!model().graphBusy&&model().graphParameters.containsKey("a")}
+        compose.runOnIdle {model().setGraphParameter("a",1.23456789,expandRange=true)}
+        compose.waitForIdle()
+        fun fieldText(label:String)=compose.onNodeWithContentDescription(label).fetchSemanticsNode().config[SemanticsProperties.EditableText].text
+        assertEquals("1.235",fieldText("Parameter value: a"))
+        compose.onNodeWithContentDescription("Parameter value: a").performClick()
+        assertEquals("1.23456789",fieldText("Parameter value: a"))
+        compose.onNodeWithText("Range",useUnmergedTree=true).performClick()
+        assertEquals("-1.235",fieldText("x minimum"))
+        assertEquals("2.346",fieldText("x maximum"))
+        compose.onNodeWithContentDescription("x minimum").performClick()
+        assertEquals("-1.23456789",fieldText("x minimum"))
+        compose.onNodeWithText("Apply").performClick()
+        compose.runOnIdle {
+            assertEquals(-1.23456789,model().xMin,0.0);assertEquals(2.34567891,model().xMax,0.0)
+            assertEquals(1.23456789,model().graphParameters.getValue("a").value,0.0)
+        }
+        compose.onNodeWithText("Analyze",useUnmergedTree=true).performScrollTo().performClick()
+        compose.onNodeWithContentDescription("a").performScrollTo()
+        assertEquals("-1.235",fieldText("a"));assertEquals("2.346",fieldText("b"))
+        compose.runOnIdle {model().displayDigits=5}
+        assertEquals("-1.23457",fieldText("a"));assertEquals("2.34568",fieldText("b"))
     }
     @Test fun horizontalInputFollowsCursorAndWordWrapFitsTheViewport() {
         val longNumber="1234567890".repeat(7)

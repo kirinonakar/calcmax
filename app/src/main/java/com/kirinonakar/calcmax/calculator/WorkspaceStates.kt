@@ -66,16 +66,19 @@ internal class GraphState(private val prefs:SharedPreferences) {
         clearAnalysis(clearGraph=graphKind!="surface")
     }
 
+    fun sourceForKind(kind:String):String = if(kind==graphKind)graphSource else sources.optString(kind,when(kind){
+        "implicit"->"x^2+y^2=1"
+        "parametric"->"[cos(t),sin(t)]";"polar"->"2*cos(3*t)";"sequence"->"n\nu(n-1)+u(n-2)"
+        "surface"->"sin(sqrt(x^2+y^2))";"differential"->"y-t";else->"sin(x)\ncos(x)"
+    })
+
     fun changeKind(kind:String):Boolean {
         if(kind=="implicit")return changeKind("cartesian")
         if(kind==graphKind)return false
         sources.put(graphKind,graphSource)
+        val nextSource=sourceForKind(kind)
         graphKind=kind
-        graphSource=sources.optString(kind,when(kind){
-            "implicit"->"x^2+y^2=1"
-            "parametric"->"[cos(t),sin(t)]";"polar"->"2*cos(3*t)";"sequence"->"n\nu(n-1)+u(n-2)"
-            "surface"->"sin(sqrt(x^2+y^2))";"differential"->"y-t";else->"sin(x)\ncos(x)"
-        })
+        graphSource=nextSource
         clearAnalysis()
         graphAnimating=false
         if(kind=="sequence") {

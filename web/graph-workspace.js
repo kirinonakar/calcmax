@@ -37,6 +37,13 @@ export function graphSources(source,kind){
 export function graphExpressions(source,kind){
   return graphSources(source,kind).filter(s=>!s.startsWith('[shade]')).slice(0,['surface','differential'].includes(kind)?1:6).map(s=>s.replace(kind==='surface'?/^z\s*=\s*/:kind==='differential'?/^dy\/dt\s*=\s*/:kind==='sequence'?/^u\(n\)\s*=\s*/:kind==='polar'?/^r\s*=\s*/:/^\s*=/,''));
 }
+export function appendGraphSource(existing,source,kind='cartesian'){
+  const lines=existing.split(/\r?\n/).filter(line=>line.trim());
+  const limit=['surface','differential'].includes(kind)?1:6;
+  if(lines.some(line=>line.trim()===source.trim()))return existing;
+  if(lines.length>=8||lines.filter(line=>!line.trim().startsWith('[shade]')).length>=limit)throw new Error('Graph limit reached. Remove a function before adding another.');
+  return existing.trimEnd()+(lines.length?'\n':'')+source;
+}
 export function graphShadings(source,kind){
   return graphSources(source,kind).filter(s=>s.startsWith('[shade]')).slice(0,4).map(line=>{
     if(kind!=='cartesian')throw new Error('Shading requires a Cartesian graph');
@@ -79,7 +86,10 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
   const sliderIds=rangeIds.filter(id=>id!=='graph-t0');
   const rangePairs=[['graph-min','graph-max'],['graph-ymin','graph-ymax'],['graph-xmin','graph-xmax'],['graph-zmin','graph-zmax']];
   const pairedSliders=new Map();
-  function numeric(id){const input=$(id);return input.value.trim()===''?NaN:Number(input.dataset.displayValue===input.value?input.dataset.fullValue:input.value);}
+  function fieldNumber(input){return input.value.trim()===''?NaN:Number(input.dataset.displayValue===input.value?input.dataset.fullValue:input.value);}
+  function numeric(id){return fieldNumber($(id));}
+  function displayField(input,number){input.dataset.fullValue=String(number);input.value=displayNumber(number,options().displayDigits);input.dataset.displayValue=input.value;}
+  function editField(input){input.onfocus=()=>{if(input.dataset.displayValue===input.value){input.value=input.dataset.fullValue;input.dataset.displayValue=input.value;}};input.onblur=()=>{const number=fieldNumber(input);if(Number.isFinite(number)&&!input.hasAttribute('aria-invalid'))displayField(input,number);};}
   function syncRangePair(pair){
     const numbers=pair.ids.map(numeric);if(!numbers.every(Number.isFinite))return;
     const sliders=pair.ids.map(id=>$(id+'-slider')),low=Math.min(...sliders.map(slider=>Number(slider.min)),...numbers),high=Math.max(...sliders.map(slider=>Number(slider.max)),...numbers);
@@ -92,8 +102,8 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
     for(const id of pair.ids){$(id+'-slider').min=String(low);$(id+'-slider').max=String(high);}
     syncRangePair(pair);
   }
-  function showNumber(id,number){const input=$(id);if(!Number.isFinite(number))return;input.dataset.fullValue=String(number);input.value=displayNumber(number,options().displayDigits);input.dataset.displayValue=input.value;const output=$(id+'-value');if(output)output.textContent=displayNumber(number,options().displayDigits);const slider=$(id+'-slider');if(slider){if(number<Number(slider.min))slider.min=String(number);if(number>Number(slider.max))slider.max=String(number);slider.value=String(number);}const pair=pairedSliders.get(id);if(pair)syncRangePair(pair);}
-  function renderRangeNumbers(){for(const id of rangeIds){if(value(id)!=='')showNumber(id,numeric(id));}}
+  function showNumber(id,number){const input=$(id);if(!Number.isFinite(number))return;displayField(input,number);const output=$(id+'-value');if(output)output.textContent=displayNumber(number,options().displayDigits);const slider=$(id+'-slider');if(slider){if(number<Number(slider.min))slider.min=String(number);if(number>Number(slider.max))slider.max=String(number);slider.value=String(number);slider.setAttribute('aria-valuetext',displayNumber(number,options().displayDigits));}const pair=pairedSliders.get(id);if(pair)syncRangePair(pair);}
+  function renderRangeNumbers(){for(const id of rangeIds){if(value(id)!==''&&document.activeElement!==$(id))showNumber(id,numeric(id));}}
   const displayOptions=()=>({digits:options().displayDigits,notation:'off'});
   const selected=()=>Number(value('graph-selected'))||0;
   const expressions=()=>graphExpressions(value('graph-source'),kind());
@@ -172,9 +182,9 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
       const name=caption.dataset.parameter,group=caption.closest('.graph-parameter'),number=parameters[name],limits=parameterRanges[name]||[-5,5];
       caption.textContent=`${name} = ${displayNumber(number,options().displayDigits)}`;
       const slider=group.querySelector('input[type="range"]'),field=group.querySelector('[data-parameter-value]');
-      slider.min=String(limits[0]);slider.max=String(limits[1]);slider.value=String(number);
-      if(document.activeElement!==field){field.value=String(number);field.removeAttribute('aria-invalid');}
-      for(const bound of group.querySelectorAll('[data-parameter-bound]'))if(document.activeElement!==bound)bound.value=String(limits[Number(bound.dataset.parameterBound)]);
+      slider.min=String(limits[0]);slider.max=String(limits[1]);slider.value=String(number);slider.setAttribute('aria-valuetext',displayNumber(number,options().displayDigits));
+      if(document.activeElement!==field){displayField(field,number);field.removeAttribute('aria-invalid');}
+      for(const bound of group.querySelectorAll('[data-parameter-bound]'))if(document.activeElement!==bound)displayField(bound,limits[Number(bound.dataset.parameterBound)]);
     }
   }
   function parameterControls(names=[],force=false){
@@ -186,9 +196,9 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
       input.type='range';input.min=String(limits[0]);input.max=String(limits[1]);input.step='any';input.value=String(parameters[name]);caption.dataset.parameter=name;caption.textContent=`${name} = ${displayNumber(parameters[name],options().displayDigits)}`;
       input.setAttribute('aria-label',`${t('Parameter value')}: ${name}`);
       input.oninput=()=>{parameters[name]=Number(input.value);if(animation)animation.phases[name]=parameterPhase(name)-animation.phase;syncParameterControls();parameterChanged();};
-      valueInput.type='number';valueInput.step='any';valueInput.value=String(parameters[name]);valueInput.dataset.parameterValue=name;valueInput.setAttribute('aria-label',`${t('Parameter value')}: ${name}`);
+      valueInput.type='number';valueInput.step='any';displayField(valueInput,parameters[name]);editField(valueInput);valueInput.dataset.parameterValue=name;valueInput.setAttribute('aria-label',`${t('Parameter value')}: ${name}`);
       const applyValue=()=>{
-        const number=valueInput.value.trim()===''?NaN:Number(valueInput.value);
+        const number=fieldNumber(valueInput);
         if(!Number.isFinite(number)||Math.abs(number)>1e9){valueInput.setAttribute('aria-invalid','true');onError(t('Enter a finite value between -1e9 and 1e9'));return;}
         const [a,b]=parameterRanges[name]||[-5,5];
         parameterRanges[name]=[Math.min(a,number),Math.max(b,number)];parameters[name]=number;
@@ -196,11 +206,11 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
         valueInput.removeAttribute('aria-invalid');$('graph-status').textContent='';syncParameterControls();persist();parameterChanged();
       };
       valueInput.oninput=()=>valueInput.removeAttribute('aria-invalid');valueInput.onchange=applyValue;
-      valueInput.onkeydown=event=>{if(event.key==='Enter'){event.preventDefault();applyValue();}else if(event.key==='Escape'){event.preventDefault();valueInput.value=String(parameters[name]);valueInput.removeAttribute('aria-invalid');}};
-      for(const [index,[field,number,labelText]] of [[low,limits[0],'Slider minimum'],[high,limits[1],'Slider maximum']].entries()){field.type='number';field.step='any';field.value=String(number);field.dataset.parameterBound=String(index);field.setAttribute('aria-label',`${t(labelText)}: ${name}`);field.onchange=()=>{const a=low.value.trim()===''?NaN:Number(low.value),b=high.value.trim()===''?NaN:Number(high.value);if(!Number.isFinite(a)||!Number.isFinite(b)||a>=b){onError(t('Enter finite values with minimum < maximum'));return;}parameterRanges[name]=[a,b];parameters[name]=Math.max(a,Math.min(b,parameters[name]));if(animation)animation.phases[name]=parameterPhase(name)-animation.phase;parameterControls(names,true);parameterChanged();};}
+      valueInput.onkeydown=event=>{if(event.key==='Enter'){event.preventDefault();applyValue();}else if(event.key==='Escape'){event.preventDefault();displayField(valueInput,parameters[name]);if(document.activeElement===valueInput){valueInput.value=valueInput.dataset.fullValue;valueInput.dataset.displayValue=valueInput.value;}valueInput.removeAttribute('aria-invalid');}};
+      for(const [index,[field,number,labelText]] of [[low,limits[0],'Slider minimum'],[high,limits[1],'Slider maximum']].entries()){field.type='number';field.step='any';displayField(field,number);editField(field);field.dataset.parameterBound=String(index);field.setAttribute('aria-label',`${t(labelText)}: ${name}`);field.onchange=()=>{const a=fieldNumber(low),b=fieldNumber(high);if(!Number.isFinite(a)||!Number.isFinite(b)||a>=b){onError(t('Enter finite values with minimum < maximum'));return;}parameterRanges[name]=[a,b];parameters[name]=Math.max(a,Math.min(b,parameters[name]));if(animation)animation.phases[name]=parameterPhase(name)-animation.phase;parameterControls(names,true);parameterChanged();};}
       label.className='graph-parameter-value';label.append(caption,valueInput);ranges.className='form-row';ranges.append(low,high);const group=document.createElement('div');group.className='graph-parameter';group.append(label,input,ranges,toggleLabel);$('graph-parameters').append(group);
     }
-    parameterVisibility();
+    syncParameterControls();parameterVisibility();
   }
   async function run(){
     clearTimeout(timer);timer=null;if(running||isBusy()||!isReady()){pending=true;return;}pending=false;running=true;
@@ -295,7 +305,7 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
   };
   $('graph-source').oninput=()=>{pendingAnalysis=null;derivative=null;$('graph-derivative').checked=false;analysis=null;trace=null;integral=null;revision++;analysisRevision++;selections();formulas();queue();};
   for(const id of ['graph-min','graph-max','graph-ymin','graph-ymax','graph-xmin','graph-xmax','graph-initial','graph-t0'])$(id).onchange=()=>{analysisControls();queue();};
-  for(const id of rangeIds){const field=$(id);for(const name of ['input','change'])field.addEventListener(name,()=>{if(field.dataset.displayValue!==field.value)delete field.dataset.displayValue;const pair=pairedSliders.get(id);if(pair)syncRangePair(pair);});}
+  for(const id of rangeIds){const field=$(id);editField(field);for(const name of ['input','change'])field.addEventListener(name,()=>{if(field.dataset.displayValue!==field.value)delete field.dataset.displayValue;const pair=pairedSliders.get(id);if(pair)syncRangePair(pair);});}
   for(const id of sliderIds){const field=$(id),slider=document.createElement('input'),output=document.createElement('output'),current=numeric(id);slider.type='range';slider.id=id+'-slider';slider.min=String(Math.min(-30,current-20));slider.max=String(Math.max(30,current+20));slider.step='any';slider.value=String(current);slider.setAttribute('aria-label',field.closest('label').firstChild.textContent.trim());output.id=id+'-value';output.textContent=displayNumber(current,options().displayDigits);field.insertAdjacentElement('afterend',output);output.insertAdjacentElement('afterend',slider);
     slider.oninput=()=>{const number=Number(slider.value),partner=id.endsWith('min')?id.replace(/min$/,'max'):id.endsWith('max')?id.replace(/max$/,'min'):null;let bounded=number;if(partner){const limit=numeric(partner),gap=Math.max(2e-7,Math.abs(limit)*1e-10);bounded=id.endsWith('min')?Math.min(number,limit-gap):Math.max(number,limit+gap);}showNumber(id,bounded);if(!id.startsWith('graph-analysis')){bounds=currentBounds();render();}else renderRangeNumbers();};
     slider.onchange=()=>{persist();if(id.startsWith('graph-analysis'))analysisControls();else if(!id.startsWith('graph-z'))queue();};
@@ -313,5 +323,10 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
   $('graph-surface-render').value=surface.renderMode;$('graph-auto-z').checked=surface.autoZ;zControls();
   $('graph-surface-color').value=surface.color;densityControls();
   renderRangeNumbers();parameterControls([],true);
-  return {run,render,flush,snapshot:()=>({sources:{...sourceDrafts,[kind()]:value('graph-source')},parameters:{...parameters},parameterRanges,parametersOpen,animationEnabled:{...animationEnabled},heightScale,halfHeight:heightScale===.5,radianAxis,surface:{...surface},ranges:Object.fromEntries(rangeIds.filter(id=>!(surface.autoZ&&id.startsWith('graph-z'))&&value(id)!==''&&Number.isFinite(numeric(id))).map(id=>[id,numeric(id)]))}),updateButtons(){ $('graph-analysis-run').disabled=isBusy()||!isReady();},activate(value){active=value;if(active&&(!result||pending))queue();if(!active){pendingAnalysis=null;clearTimeout(timer);timer=null;stopAnimation(false);}},dispose(){pendingAnalysis=null;active=false;disposeGestures();resizeObserver?.disconnect();if(frame!==null)cancelFrame(frame);clearTimeout(timer);stopAnimation(false);revision++;analysisRevision++;}};
+  function addExpression(source,graphKind){
+    const next=appendGraphSource(kind()===graphKind?value('graph-source'):sourceDrafts[graphKind]||'',source,graphKind);
+    if(kind()!==graphKind){$('graph-kind').value=graphKind;$('graph-kind').onchange();}
+    $('graph-source').value=next;$('graph-source').oninput();persist();
+  }
+  return {addExpression,run,render,flush,snapshot:()=>({sources:{...sourceDrafts,[kind()]:value('graph-source')},parameters:{...parameters},parameterRanges,parametersOpen,animationEnabled:{...animationEnabled},heightScale,halfHeight:heightScale===.5,radianAxis,surface:{...surface},ranges:Object.fromEntries(rangeIds.filter(id=>!(surface.autoZ&&id.startsWith('graph-z'))&&value(id)!==''&&Number.isFinite(numeric(id))).map(id=>[id,numeric(id)]))}),updateButtons(){ $('graph-analysis-run').disabled=isBusy()||!isReady();},activate(value){active=value;if(active&&(!result||pending))queue();if(!active){pendingAnalysis=null;clearTimeout(timer);timer=null;stopAnimation(false);}},dispose(){pendingAnalysis=null;active=false;disposeGestures();resizeObserver?.disconnect();if(frame!==null)cancelFrame(frame);clearTimeout(timer);stopAnimation(false);revision++;analysisRevision++;}};
 }

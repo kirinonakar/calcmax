@@ -24,7 +24,7 @@ const requestOptions=()=>({angle:value('angle'),precision:state.precision,displa
 const engine=new EngineClient();
 const runtime=createEngineUI({engine,onChange:updateButtons,onReady:()=>calculator.resetPreview(),cancelPreview:()=>calculator.cancelPreview()});
 graphs=createGraphWorkspace({execute:request=>engine.execute(request),options:requestOptions,onError:error,persist,isBusy:()=>runtime.busy,isReady:()=>engine.ready,saved:state.graph});
-calculator=createCalculator({state,engine,isBusy:()=>runtime.busy,ui,persist,schedulePersist,requestOptions,error,changeMode,updateButtons,
+calculator=createCalculator({state,engine,isBusy:()=>runtime.busy,ui,persist,schedulePersist,requestOptions,error,changeMode,updateButtons,graphs,
   pressKey:input=>keypad.press(input),modeDialog:()=>dialogs.mode(),variablesDialog:()=>dialogs.variables(),matrixInsertDialog:()=>dialogs.matrixInsert()});
 keypad=createCalculatorKeypad({state,persist,isCalcActive:()=>calculator.calcActive,isBusy:()=>runtime.busy,handleKey:calculator.handleKey,updateButtons});
 workspaces=createWorkspaces({state,engine,ui,persist,restoreSelect:id=>restoreSelect(state,id),requestOptions,isBusy:()=>runtime.busy,error,changeMode,

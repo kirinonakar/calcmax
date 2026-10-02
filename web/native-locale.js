@@ -1,4 +1,5 @@
 export const nativeKorean = {
+  "Graph limit reached. Remove a function before adding another.": "그래프 개수 한도에 도달했습니다. 기존 함수를 지운 뒤 추가하세요.",
   "Calculation mode": "계산 모드",
   "Choose calculation mode, long press for Scientific/CAS mode": "계산 모드 선택, 길게 누르면 Scientific/CAS 모드",
   "Stored memory": "저장된 메모리",

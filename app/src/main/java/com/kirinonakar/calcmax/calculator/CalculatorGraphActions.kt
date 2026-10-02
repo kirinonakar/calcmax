@@ -22,6 +22,14 @@ internal fun graphExpressionTarget(source:String):Pair<String,String> {
     return "cartesian" to source
 }
 
+internal fun appendGraphSource(existing:String,source:String,kind:String="cartesian"):String {
+    val lines=existing.lines().filter(String::isNotBlank)
+    val limit=if(kind in listOf("surface","differential"))1 else 6
+    if(lines.any {it.trim()==source.trim()})return existing
+    require(lines.size<8 && lines.count {!it.trim().startsWith("[shade]")}<limit) {"Graph limit reached. Remove a function before adding another."}
+    return existing.trimEnd()+(if(lines.isEmpty())"" else "\n")+source
+}
+
 internal object CalculatorGraphActions {
     private suspend fun nextAnimationFrame():Long = suspendCancellableCoroutine {continuation->
         val clock=Choreographer.getInstance()
@@ -195,8 +203,9 @@ internal object CalculatorGraphActions {
         val source=editor.source.trim()
         if(source.isEmpty()) {error="Enter an expression to graph";return}
         val target=try {graphExpressionTarget(source)} catch(e:Exception) {error=e.message ?: "Syntax ERROR";return}
+        val next=try {appendGraphSource(graphState.sourceForKind(target.first),target.second,target.first)} catch(e:Exception) {error=e.message ?: "Syntax ERROR";return}
         changeGraphKind(target.first)
-        updateGraphSource(target.second)
+        updateGraphSource(next)
         error="";mode="Graph"
     }
     fun CalculatorModel.performChangeGraphKind(kind:String) {

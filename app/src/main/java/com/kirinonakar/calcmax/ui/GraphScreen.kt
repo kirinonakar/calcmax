@@ -94,7 +94,7 @@ import kotlin.math.*
             }
             if(m.graphKind=="sequence") Field(m.sequenceInitials,"Initial values at n=0 · comma separated",Modifier.fillMaxWidth()) {m.sequenceInitials=it;m.save()}
             if(m.graphKind=="differential") {
-                Row(horizontalArrangement=Arrangement.spacedBy(6.dp)) {Field(m.differentialT0,"Initial time t₀",Modifier.weight(1f)){m.differentialT0=it;m.save()};Field(m.differentialInitials,"Initial y values · comma separated",Modifier.weight(2f)){m.differentialInitials=it;m.save()} }
+                Row(horizontalArrangement=Arrangement.spacedBy(6.dp)) {GraphNumberField(m.differentialT0,"Initial time t₀",m.displayDigits,Modifier.weight(1f)){m.differentialT0=it;m.save()};Field(m.differentialInitials,"Initial y values · comma separated",Modifier.weight(2f)){m.differentialInitials=it;m.save()} }
             }
             Row(Modifier.horizontalScroll(rememberScrollState())) {
                 SmallAction("Plot") {focusManager.clearFocus();m.plot()};SmallAction("Range") {rangeDialog=true}
@@ -117,7 +117,7 @@ import kotlin.math.*
                                 Checkbox(spec.animate,{m.setGraphParameterAnimation(name,it)},Modifier.size(32.dp).semantics {contentDescription=animateLabel})
                                 Text(name,Modifier.width(24.dp),fontSize=13.sp,color=c.accent,fontWeight=FontWeight.SemiBold)
                                 CompactSlider(spec.value.toFloat(),{focusManager.clearFocus();m.setGraphParameter(name,it.toDouble())},Modifier.weight(1f),valueRange=(if(low<high)low else low-1f)..(if(high>low)high else low+1f))
-                                GraphParameterValueField(name,spec.value,{value->m.setGraphParameter(name,value,expandRange=true);m.error="";m.save()},{m.error=it})
+                                GraphParameterValueField(name,spec.value,m.displayDigits,{value->m.setGraphParameter(name,value,expandRange=true);m.error="";m.save()},{m.error=it})
                                 Box(Modifier.size(30.dp).background(c.scientific,RoundedCornerShape(8.dp)).clickable{focusManager.clearFocus();rangeParameter=name}.semantics {contentDescription="Set $name slider range"},contentAlignment=Alignment.Center) {
                                     Text("±",fontSize=16.sp,color=c.accent)
                                 }
@@ -227,18 +227,18 @@ import kotlin.math.*
             }
             SurfaceAppearanceControls(m)
             Row(Modifier.fillMaxWidth().padding(horizontal=14.dp,vertical=2.dp),verticalAlignment=Alignment.CenterVertically) {
-                Text("x: %.3g ~ %.3g   y: %.3g ~ %.3g".format(m.xMin,m.xMax,m.yMin,m.yMax)+(surfaceZRange?.let {"   z: %.3g ~ %.3g".format(it.first,it.second)} ?: ""),Modifier.weight(1f),fontSize=11.sp,color=c.muted)
+                Text("x: ${graphDisplayNumber(m.xMin,m.displayDigits)} ~ ${graphDisplayNumber(m.xMax,m.displayDigits)}   y: ${graphDisplayNumber(m.yMin,m.displayDigits)} ~ ${graphDisplayNumber(m.yMax,m.displayDigits)}"+(surfaceZRange?.let {"   z: ${graphDisplayNumber(it.first,m.displayDigits)} ~ ${graphDisplayNumber(it.second,m.displayDigits)}"} ?: ""),Modifier.weight(1f),fontSize=11.sp,color=c.muted)
             }
             Row(Modifier.fillMaxWidth().height(38.dp).padding(horizontal=14.dp),verticalAlignment=Alignment.CenterVertically) {
-                Text(tr("Rotate"),fontSize=11.sp,color=c.muted);CompactSlider(surfaceRotation,{surfaceRotation=it},Modifier.weight(1f),valueRange=0f..360f);Text("${surfaceRotation.toInt()}°",fontSize=11.sp,color=c.muted)
+                Text(tr("Rotate"),fontSize=11.sp,color=c.muted);CompactSlider(surfaceRotation,{surfaceRotation=it},Modifier.weight(1f),valueRange=0f..360f);Text("${graphDisplayNumber(surfaceRotation.toString(),m.displayDigits)}°",fontSize=11.sp,color=c.muted)
             }
             Row(Modifier.fillMaxWidth().height(38.dp).padding(horizontal=14.dp),verticalAlignment=Alignment.CenterVertically) {
-                Text(tr("Tilt"),fontSize=11.sp,color=c.muted);CompactSlider(surfaceElevation,{surfaceElevation=it},Modifier.weight(1f),valueRange=-90f..90f);Text("${surfaceElevation.toInt()}°",fontSize=11.sp,color=c.muted)
+                Text(tr("Tilt"),fontSize=11.sp,color=c.muted);CompactSlider(surfaceElevation,{surfaceElevation=it},Modifier.weight(1f),valueRange=-90f..90f);Text("${graphDisplayNumber(surfaceElevation.toString(),m.displayDigits)}°",fontSize=11.sp,color=c.muted)
             }
             Row(Modifier.fillMaxWidth().height(38.dp).padding(horizontal=14.dp),verticalAlignment=Alignment.CenterVertically) {
                 Text(tr("Zoom"),fontSize=11.sp,color=c.muted)
                 CompactSlider(m.surfaceZoom,{m.surfaceZoom=it},Modifier.weight(1f),valueRange=.4f..3f,onValueChangeFinished={m.save()})
-                Text("${(m.surfaceZoom*100).toInt()}%",fontSize=11.sp,color=c.muted)
+                Text("${graphDisplayNumber((m.surfaceZoom*100).toString(),m.displayDigits)}%",fontSize=11.sp,color=c.muted)
                 Text(tr("Reset"),Modifier.padding(start=4.dp).background(c.scientific,RoundedCornerShape(8.dp)).clickable {
                     m.xMin=-3.0;m.xMax=3.0;m.yMin=-3.0;m.yMax=3.0;m.zMin=null;m.zMax=null
                     surfaceRotation=35f;surfaceElevation=32f;m.surfaceZoom=1f;m.save();m.plot()
@@ -302,14 +302,14 @@ import kotlin.math.*
                     val x=firstX+index*sx
                     if(!x.isFinite() || x>xhi)break
                     drawLine(c.grid,Offset(px(x),0f),Offset(px(x),size.height))
-                    drawContext.canvas.nativeCanvas.drawText(if(m.radianAxis)PiAxis.label(x) else "%.3g".format(x),px(x)+3,size.height-8,paint)
+                    drawContext.canvas.nativeCanvas.drawText(if(m.radianAxis)PiAxis.label(x){graphDisplayNumber(it,m.displayDigits)} else graphDisplayNumber(x,m.displayDigits),px(x)+3,size.height-8,paint)
                 }
                 val firstY=ceil(m.yMin/sy)*sy
                 for(index in 0..64) {
                     val y=firstY+index*sy
                     if(!y.isFinite() || y>m.yMax)break
                     drawLine(c.grid,Offset(0f,py(y)),Offset(size.width,py(y)))
-                    drawContext.canvas.nativeCanvas.drawText("%.3g".format(y),4f,py(y)-3,paint)
+                    drawContext.canvas.nativeCanvas.drawText(graphDisplayNumber(y,m.displayDigits),4f,py(y)-3,paint)
                 }
                 drawLine(c.muted,Offset(px(0.0),0f),Offset(px(0.0),size.height),2f)
                 drawLine(c.muted,Offset(0f,py(0.0)),Offset(size.width,py(0.0)),2f)
@@ -385,12 +385,12 @@ import kotlin.math.*
                 m.trace=null;m.save()
             }
         }
-        if(m.graphKind!="surface")Text(if(m.graphBusy&&!m.graphAnimating) {if(isKorean())"그래프 계산 중…" else "Sampling locally…"} else m.trace?.let { "Trace ≈ x: %.7g   y: %.7g".format(it.first,it.second) } ?: if(isKorean()) {if(m.graphKind=="differential")"방향장 · 해를 눌러 추적 · 드래그/확대로 탐색" else "눌러 추적 · 드래그하여 이동 · 두 손가락으로 확대"} else if(m.graphKind=="differential")"Direction field · tap a solution to trace · drag/pinch to explore" else "Tap to trace · drag to pan · pinch to zoom",Modifier.padding(horizontal=14.dp,vertical=5.dp),fontSize=11.sp,color=c.muted)
+        if(m.graphKind!="surface")Text(if(m.graphBusy&&!m.graphAnimating) {if(isKorean())"그래프 계산 중…" else "Sampling locally…"} else m.trace?.let { "Trace ≈ x: ${graphDisplayNumber(it.first,m.displayDigits)}   y: ${graphDisplayNumber(it.second,m.displayDigits)}" } ?: if(isKorean()) {if(m.graphKind=="differential")"방향장 · 해를 눌러 추적 · 드래그/확대로 탐색" else "눌러 추적 · 드래그하여 이동 · 두 손가락으로 확대"} else if(m.graphKind=="differential")"Direction field · tap a solution to trace · drag/pinch to explore" else "Tap to trace · drag to pan · pinch to zoom",Modifier.padding(horizontal=14.dp,vertical=5.dp),fontSize=11.sp,color=c.muted)
         }
-        if(showTable && m.graphKind!="surface") Box(Modifier.bringIntoViewRequester(tableRequester)) {GraphValueTable(curves,selected,{m.trace=it},m.graphKind)}
+        if(showTable && m.graphKind!="surface") Box(Modifier.bringIntoViewRequester(tableRequester)) {GraphValueTable(curves,selected,{m.trace=it},m.graphKind,m.displayDigits)}
         if(analysis && m.graphKind in listOf("cartesian","parametric","polar")) Column(Modifier.padding(horizontal=10.dp)) {
             Text(if(isKorean())"${if(m.graphKind=="cartesian")"직교좌표 곡선" else "선택한 곡선"} 분석 · ${if(m.graphKind=="cartesian")"x" else "t"} 구간" else "Analyze ${if(m.graphKind=="cartesian")"Cartesian curves" else "the selected curve"} · ${if(m.graphKind=="cartesian")"x" else "t"} interval",fontSize=12.sp,color=c.muted)
-            Row(horizontalArrangement=Arrangement.spacedBy(6.dp)) { GraphNumberField(first,"a",Modifier.weight(1f)) {first=it};GraphNumberField(second,"b",Modifier.weight(1f)) {second=it} }
+            Row(horizontalArrangement=Arrangement.spacedBy(6.dp)) { GraphNumberField(first,"a",m.displayDigits,Modifier.weight(1f)) {first=it};GraphNumberField(second,"b",m.displayDigits,Modifier.weight(1f)) {second=it} }
             val sliderMin=if(m.graphKind=="cartesian")m.xMin else m.parameterMin
             val sliderMax=if(m.graphKind=="cartesian")m.xMax else m.parameterMax
             val sliderSpan=sliderMax-sliderMin
@@ -431,7 +431,7 @@ import kotlin.math.*
             }
             if(tangentPositionOpen) {
                 Text(if(isKorean())"접선 위치 (${if(m.graphKind=="cartesian")"x" else "t"})" else "Tangent position (${if(m.graphKind=="cartesian")"x" else "t"})",fontSize=12.sp,color=c.muted)
-                GraphNumberField(pointAt,if(m.graphKind=="cartesian")"x" else "t",Modifier.fillMaxWidth()) {pointAt=it}
+                GraphNumberField(pointAt,if(m.graphKind=="cartesian")"x" else "t",m.displayDigits,Modifier.fillMaxWidth()) {pointAt=it}
                 if(sliderMin.isFinite() && sliderMax.isFinite() && sliderSpan.isFinite() && sliderSpan>0.0) {
                     val position=((pointAt.toDoubleOrNull()?.takeIf(Double::isFinite) ?: sliderMin)-sliderMin).div(sliderSpan).coerceIn(0.0,1.0).toFloat()
                     CompactSlider(position,{pointAt=(sliderMin+it*sliderSpan).toString()},Modifier.fillMaxWidth(),onValueChangeFinished={
@@ -443,10 +443,10 @@ import kotlin.math.*
             if(m.graphAnalysisBusy)Text(if(isKorean())"분석 중…" else "Analyzing…",fontSize=12.sp,color=c.muted)
             m.graphAnalysis?.let {result->
                 val name=when(result.optString("analysis")){"arclength"->"Arc length";"inflection"->"Inflection";"tangent"->"Tangent slope";"intersection"->"Intersection";"minimum"->"Minimum";"maximum"->"Maximum";"integral"->"Integral";else->result.optString("analysis").replaceFirstChar {it.uppercase()}}
-                if(result.has("value"))Text("$name = %.9g".format(result.optDouble("value")),fontSize=16.sp)
+                if(result.has("value"))Text("$name = ${graphDisplayNumber(result.optDouble("value"),m.displayDigits)}",fontSize=16.sp)
                 else if(result.optBoolean("vertical"))Text("$name · vertical tangent",fontSize=13.sp)
                 else Text("$name · ${result.optInt("count")} point(s)${if(result.optBoolean("truncated"))" · first 80 shown" else ""}",fontSize=13.sp)
-                markers.forEachIndexed {i,p->SmallAction("${i+1}. (%.7g, %.7g)".format(p.first,p.second)) {
+                markers.forEachIndexed {i,p->SmallAction("${i+1}. (${graphDisplayNumber(p.first,m.displayDigits)}, ${graphDisplayNumber(p.second,m.displayDigits)})") {
                     m.trace=p
                     if(p.first !in m.xMin..m.xMax) {val half=(m.xMax-m.xMin)/2;m.xMin=p.first-half;m.xMax=p.first+half}
                     if(p.second !in m.yMin..m.yMax) {val half=(m.yMax-m.yMin)/2;m.yMin=p.second-half;m.yMax=p.second+half}
@@ -465,17 +465,17 @@ import kotlin.math.*
         var zmax by remember {mutableStateOf((m.zMax ?: sampledRange.second).toString())}
         var autoZ by remember {mutableStateOf(m.zMin==null || m.zMax==null)}
         AlertDialog(onDismissRequest={rangeDialog=false},title={Text(tr("Graph range"))},text={Column(Modifier.verticalScroll(rememberScrollState())) {
-            RangeAxisEditor(if(m.graphKind=="sequence")"n" else "x",xmin,xmax,m.xMin,m.xMax,{xmin=it},{xmax=it})
-            RangeAxisEditor("y",ymin,ymax,m.yMin,m.yMax,{ymin=it},{ymax=it})
+            RangeAxisEditor(if(m.graphKind=="sequence")"n" else "x",xmin,xmax,m.xMin,m.xMax,m.displayDigits,{xmin=it},{xmax=it})
+            RangeAxisEditor("y",ymin,ymax,m.yMin,m.yMax,m.displayDigits,{ymin=it},{ymax=it})
             if(m.graphKind=="surface") {
                 SmallAction("Reset ranges") {
                     xmin="-3.0";xmax="3.0";ymin="-3.0";ymax="3.0";autoZ=true
                     m.resetSurfaceRanges()
                 }
                 Row(verticalAlignment=Alignment.CenterVertically) {Checkbox(autoZ,{autoZ=it});Text(tr("Automatic z range"))}
-                if(!autoZ)RangeAxisEditor("z",zmin,zmax,zmin.toDoubleOrNull() ?: -1.0,zmax.toDoubleOrNull() ?: 1.0,{zmin=it},{zmax=it})
+                if(!autoZ)RangeAxisEditor("z",zmin,zmax,zmin.toDoubleOrNull() ?: -1.0,zmax.toDoubleOrNull() ?: 1.0,m.displayDigits,{zmin=it},{zmax=it})
             }
-            if(m.graphKind in listOf("parametric","polar","differential"))RangeAxisEditor("t",tmin,tmax,m.parameterMin,m.parameterMax,{tmin=it},{tmax=it})
+            if(m.graphKind in listOf("parametric","polar","differential"))RangeAxisEditor("t",tmin,tmax,m.parameterMin,m.parameterMax,m.displayDigits,{tmin=it},{tmax=it})
         }},confirmButton={TextButton(onClick={
             val values=listOf(xmin,xmax,ymin,ymax).map {it.toDoubleOrNull()}
             val ta=tmin.toDoubleOrNull();val tb=tmax.toDoubleOrNull()
@@ -497,7 +497,7 @@ import kotlin.math.*
             var low by remember(name){mutableStateOf(spec.min.toString())}
             var high by remember(name){mutableStateOf(spec.max.toString())}
             AlertDialog(onDismissRequest={rangeParameter=null},title={Text(if(isKorean())"$name 슬라이더 범위" else "$name slider range")},text={Column{
-                RangeAxisEditor(name,low,high,spec.min,spec.max,{low=it},{high=it})
+                RangeAxisEditor(name,low,high,spec.min,spec.max,m.displayDigits,{low=it},{high=it})
             }},confirmButton={TextButton(onClick={
                 val start=low.toDoubleOrNull();val end=high.toDoubleOrNull()
                 if(start==null||end==null||!start.isFinite()||!end.isFinite()||start>=end||abs(start)>1e9||abs(end)>1e9)m.error="Enter finite values with minimum < maximum"
@@ -619,7 +619,7 @@ internal fun graphShadeFormula(source:String,displayDigits:Int?=null):GraphShade
     }
 }
 
-@Composable private fun GraphParameterValueField(name:String,value:Double,onApply:(Double)->Unit,onError:(String)->Unit) {
+@Composable private fun GraphParameterValueField(name:String,value:Double,displayDigits:Int,onApply:(Double)->Unit,onError:(String)->Unit) {
     val c=LocalInstrument.current
     val korean=isKorean()
     val focusManager=LocalFocusManager.current
@@ -628,7 +628,7 @@ internal fun graphShadeFormula(source:String,displayDigits:Int?=null):GraphShade
     var invalid by remember {mutableStateOf(false)}
     LaunchedEffect(value) {if(!focused){draft=value.toString();invalid=false}}
     val shape=RoundedCornerShape(6.dp)
-    BasicTextField(draft,{draft=it;invalid=false},Modifier.width(82.dp).height(32.dp).padding(horizontal=3.dp)
+    BasicTextField(if(focused)draft else graphDisplayNumber(draft,displayDigits),{draft=it;invalid=false},Modifier.width(82.dp).height(32.dp).padding(horizontal=3.dp)
         .background(c.display,shape).border(1.dp,if(invalid)MaterialTheme.colorScheme.error else c.grid,shape)
         .onFocusChanged {state->
             val wasFocused=focused;focused=state.isFocused
@@ -645,10 +645,11 @@ internal fun graphShadeFormula(source:String,displayDigits:Int?=null):GraphShade
         decorationBox={inner->Box(Modifier.fillMaxSize().padding(horizontal=5.dp),contentAlignment=Alignment.CenterStart){inner()}})
 }
 
-@Composable private fun GraphNumberField(value:String,label:String,modifier:Modifier=Modifier,onValue:(String)->Unit) {
+@Composable private fun GraphNumberField(value:String,label:String,displayDigits:Int,modifier:Modifier=Modifier,onValue:(String)->Unit) {
     val c=LocalInstrument.current
     val shape=RoundedCornerShape(7.dp)
-    BasicTextField(value,onValue,modifier.height(40.dp).background(c.display,shape).border(1.dp,c.grid,shape).semantics {contentDescription=label},
+    var focused by remember {mutableStateOf(false)}
+    BasicTextField(if(focused)value else graphDisplayNumber(value,displayDigits),onValue,modifier.height(40.dp).background(c.display,shape).border(1.dp,c.grid,shape).onFocusChanged {focused=it.isFocused}.semantics {contentDescription=label},
         textStyle=MaterialTheme.typography.bodyMedium.copy(fontSize=14.sp,color=c.ink),singleLine=true,cursorBrush=SolidColor(c.accent),
         decorationBox={inner->Row(Modifier.fillMaxSize().padding(horizontal=10.dp),verticalAlignment=Alignment.CenterVertically) {
             Text(label,fontSize=11.sp,color=c.muted)
@@ -657,7 +658,7 @@ internal fun graphShadeFormula(source:String,displayDigits:Int?=null):GraphShade
         }})
 }
 
-@Composable private fun RangeAxisEditor(axis:String,minimum:String,maximum:String,initialMin:Double,initialMax:Double,onMin:(String)->Unit,onMax:(String)->Unit) {
+@Composable private fun RangeAxisEditor(axis:String,minimum:String,maximum:String,initialMin:Double,initialMax:Double,displayDigits:Int,onMin:(String)->Unit,onMax:(String)->Unit) {
     val bounds=remember(axis) {
         val span=(initialMax-initialMin).takeIf {it.isFinite()&&it>0.0} ?: 2.0
         val start=initialMin-2*span;val end=initialMax+2*span
@@ -666,8 +667,8 @@ internal fun graphShadeFormula(source:String,displayDigits:Int?=null):GraphShade
     val range=bounds.second-bounds.first
     Text("$axis range",fontSize=12.sp,color=LocalInstrument.current.muted)
     Row(horizontalArrangement=Arrangement.spacedBy(6.dp)) {
-        Field(minimum,"$axis minimum",Modifier.weight(1f)){onMin(it)}
-        Field(maximum,"$axis maximum",Modifier.weight(1f)){onMax(it)}
+        GraphNumberField(minimum,"$axis minimum",displayDigits,Modifier.weight(1f)){onMin(it)}
+        GraphNumberField(maximum,"$axis maximum",displayDigits,Modifier.weight(1f)){onMax(it)}
     }
     val low=(((minimum.toDoubleOrNull()?.takeIf(Double::isFinite) ?: bounds.first)-bounds.first)/range).coerceIn(0.0,1.0).toFloat()
     val high=(((maximum.toDoubleOrNull()?.takeIf(Double::isFinite) ?: bounds.second)-bounds.first)/range).coerceIn(0.0,1.0).toFloat()
@@ -681,7 +682,8 @@ internal fun graphShadeFormula(source:String,displayDigits:Int?=null):GraphShade
     curves:List<List<Pair<Double,Double>?>>,
     selected:Int,
     onTrace:(Pair<Double,Double>)->Unit,
-    kind:String
+    kind:String,
+    displayDigits:Int
 ) {
     val c=LocalInstrument.current
     val count=curves.maxOfOrNull { it.size } ?: 0
@@ -696,8 +698,8 @@ internal fun graphShadeFormula(source:String,displayDigits:Int?=null):GraphShade
             val anchor=curves.getOrNull(selected)?.getOrNull(index)
                 ?: curves.firstNotNullOfOrNull { it.getOrNull(index) }
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).clickable(enabled=anchor!=null) { anchor?.let(onTrace) }.padding(vertical=3.dp)) {
-                Text(anchor?.first?.let { "%.5g".format(it) } ?: "—",Modifier.width(72.dp),fontSize=11.sp,color=c.ink)
-                curves.forEach { curve->Text(curve.getOrNull(index)?.second?.let { "%.6g".format(it) } ?: "—",Modifier.width(92.dp),fontSize=11.sp,color=c.ink) }
+                Text(anchor?.first?.let { graphDisplayNumber(it,displayDigits) } ?: "—",Modifier.width(72.dp),fontSize=11.sp,color=c.ink)
+                curves.forEach { curve->Text(curve.getOrNull(index)?.second?.let { graphDisplayNumber(it,displayDigits) } ?: "—",Modifier.width(92.dp),fontSize=11.sp,color=c.ink) }
             }
             HorizontalDivider(color=c.grid)
         }
@@ -809,21 +811,21 @@ internal fun graphShadeFormula(source:String,displayDigits:Int?=null):GraphShade
             while(tick<=xmax+1e-12&&guard++<12) {
                 val p=project(doubleArrayOf(tick,ymin,zmin))
                 drawCircle(c.muted,3.dp.toPx()/2,p)
-                drawContext.canvas.nativeCanvas.drawText("%.3g".format(tick),p.x+3f,p.y+12.sp.toPx(),axisPaint)
+                drawContext.canvas.nativeCanvas.drawText(graphDisplayNumber(tick,m.displayDigits),p.x+3f,p.y+12.sp.toPx(),axisPaint)
                 tick+=xStep
             }
             tick=ceil(ymin/yStep)*yStep;guard=0
             while(tick<=ymax+1e-12&&guard++<12) {
                 val p=project(doubleArrayOf(xmin,tick,zmin))
                 drawCircle(c.muted,3.dp.toPx()/2,p)
-                drawContext.canvas.nativeCanvas.drawText("%.3g".format(tick),p.x+3f,p.y+12.sp.toPx(),axisPaint)
+                drawContext.canvas.nativeCanvas.drawText(graphDisplayNumber(tick,m.displayDigits),p.x+3f,p.y+12.sp.toPx(),axisPaint)
                 tick+=yStep
             }
             tick=ceil(zmin/zStep)*zStep;guard=0
             while(tick<=zmax+1e-12&&guard++<12) {
                 val p=project(doubleArrayOf(xmin,ymin,tick))
                 drawCircle(c.muted,3.dp.toPx()/2,p)
-                drawContext.canvas.nativeCanvas.drawText("%.3g".format(tick),p.x+4f,p.y-4f,axisPaint)
+                drawContext.canvas.nativeCanvas.drawText(graphDisplayNumber(tick,m.displayDigits),p.x+4f,p.y-4f,axisPaint)
                 tick+=zStep
             }
             drawContext.canvas.nativeCanvas.drawText("x",project(x1).x+6f,project(x1).y+4f,labelPaint)

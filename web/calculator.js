@@ -13,7 +13,7 @@ import {requiresExplicitEvaluation} from './evaluation-policy.js';
 import {graphExpressionTarget} from './graph-workspace.js';
 import {$,value,element,control} from './app-ui.js';
 
-export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist,requestOptions,error,changeMode,updateButtons,pressKey,modeDialog,variablesDialog,matrixInsertDialog}) {
+export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist,requestOptions,error,changeMode,updateButtons,pressKey,modeDialog,variablesDialog,matrixInsertDialog,graphs}) {
   const {toast,openDialog,clipboard}=ui;
   let lastResult=null,decimal=false,typing=false,overwrite=false,committed=false,screenExpanded=false,grouping=false,mixed=false,lastResultSource='';
   let calcSession=null,activeHistoryEntry=null,inputAnswer=null,tapeRows=null,tapeFormat='';
@@ -270,9 +270,8 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
     else if(input==='MATRIX_SIZE')matrixInsertDialog();
     else if(input==='TO_GRAPH'){
       const original=value('expression')||'x';let source=original,graphKind='cartesian';
-      try{const target=graphExpressionTarget(original);source=target.source;graphKind=target.kind;}catch(exc){error(exc.message);return;}
-      if($('graph-kind').value!==graphKind){$('graph-kind').value=graphKind;$('graph-kind').dispatchEvent(new window.Event('change'));}
-      $('graph-source').value=source;$('graph-source').dispatchEvent(new window.Event('input'));changeMode('graph');
+      try{const target=graphExpressionTarget(original);source=target.source;graphKind=target.kind;graphs.addExpression(source,graphKind);}catch(exc){error(exc.message);return;}
+      changeMode('graph');
     }
     else if(jumps[input])changeMode(jumps[input]);
     else if(input==='M+'||input==='M−'){
