@@ -23,7 +23,7 @@ export function createWorkspaces({state,engine,ui,persist,restoreSelect,requestO
   $('tip-method').onchange=tipMethodControls;tipMethodControls();
 
   function refreshWorkspaceMath(){
-    const targets=[['equation-source',()=>equationSource().split(/\r?\n/)],['function-body',()=>[`${value('function-name')}(${value('function-parameters')})=${value('function-body')}`]],['distribution-math',()=>[statistics.distributionExpression()]],['matrix-grid',()=>[matrix.expression()]],['vector-other',()=>[value('vector-other')]],['unit-value',()=>[`convert(${value('unit-value')},${value('unit-from')},${value('unit-to')})`]]];
+    const targets=[['equation-source',()=>equationSource().split(/\r?\n/)],['function-body',()=>[`${value('function-name')}(${value('function-parameters')})=${value('function-body')}`]],['distribution-math',()=>[statistics.distributionExpression()]],['matrix-grid',()=>[matrix.expression()]],['vector-other',()=>[matrix.operandExpression()]]];
     for(const [id,sources] of targets){const input=$(id);let preview=id==='distribution-math'?input:$(id+'-math');if(!preview){preview=element('div','','formula-preview');preview.id=id+'-math';input.closest('label')?.insertAdjacentElement('afterend',preview)||input.insertAdjacentElement('afterend',preview);}try{renderFormulas(preview,sources(),{digits:state.digits});}catch{preview.replaceChildren();preview.hidden=true;}}
   }
   for(const field of document.querySelectorAll('main input,main textarea,main select'))if(field.id!=='expression'&&!field.id.startsWith('graph-')&&!field.id.startsWith('python-'))for(const name of ['input','change'])field.addEventListener(name,refreshWorkspaceMath);
@@ -77,7 +77,7 @@ export function createWorkspaces({state,engine,ui,persist,restoreSelect,requestO
   function initialize() {
     const units='m km cm mm in inch ft yd mi m2 cm2 km2 ha acre m3 L mL galUS kg g mg lb oz K degC degF s sec min h hr day ms mps kph mph knot mps2 g0 Pa kPa bar atm N kN lbf J kJ cal kWh eV W kW Hz kHz MHz A amp ampere mA uA C coulomb mC uC V volt mV kV ohm Ω kohm kΩ Mohm MΩ S siemens mS F farad uF nF pF H henry mH uH Wb weber Vs T tesla mT uT mol mole mmol umol bit byte kB KiB MB MiB GB rad deg grad'.split(' ');
     for(const id of ['unit-from','unit-to']){units.forEach(unit=>{const option=element('option',unit);option.value=unit;$(id).append(option);});$(id).value=id==='unit-from'?'degF':'degC';restoreSelect(id);}
-    for(const group of Object.keys(unitGroups)){const option=element('option',group);option.value=group;$('unit-category').append(option);}restoreSelect('unit-category');$('unit-category').onchange();
+    for(const group of Object.keys(unitGroups)){const option=element('option',group==='Amount'?'amount':group);option.value=group;$('unit-category').append(option);}restoreSelect('unit-category');$('unit-category').onchange();
     statistics.datasetsList();functions.render();equationControls();statistics.distributionControls();refreshWorkspaceMath();
   }
   function render(){refreshWorkspaceMath();statistics.render();}

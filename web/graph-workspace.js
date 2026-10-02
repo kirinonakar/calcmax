@@ -304,7 +304,11 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
   for(const id of ['graph-zmin','graph-zmax'])$(id).onchange=()=>{try{zRange();render();$('graph-status').textContent='';persist();}catch(error){onError(error.message);}};
   $('graph-reset-parameters').onclick=()=>{for(const name of Object.keys(parameters)){const [a,b]=parameterRanges[name]||[-5,5];parameters[name]=Math.max(a,Math.min(b,1));}parameterControls(Object.keys(parameters),true);parameterChanged();};
   function parameterPhase(name){const [a,b]=parameterRanges[name]||[-5,5];return Math.asin(Math.max(-1,Math.min(1,2*(parameters[name]-a)/(b-a)-1)));}
-  function stopAnimation(refine=true){if(!animation)return;if(animation.frame!==null)cancelFrame(animation.frame);animation=null;setText($('graph-animate'),'Animate');if(refine){render();persist();run();}}
+  function updateButtons(){
+    const disabled=!!animation||isBusy()||!isReady();
+    for(const button of [document.querySelector('[data-run="graph"]'),$('graph-analysis-run')])if(button.disabled!==disabled)button.disabled=disabled;
+  }
+  function stopAnimation(refine=true){if(!animation)return;if(animation.frame!==null)cancelFrame(animation.frame);animation=null;setText($('graph-animate'),'Animate');if(refine){render();persist();run();}updateButtons();}
   function animateFrame(timestamp){
     const state=animation;if(!state)return;state.frame=null;
     const now=Number.isFinite(timestamp)?timestamp:window.performance.now();
@@ -316,7 +320,7 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
     }
     state.frame=requestFrame(animateFrame);
   }
-  $('graph-animate').onclick=()=>{if(animation){stopAnimation();return;}clearTimeout(timer);timer=null;analysis=null;trace=null;integral=null;render();animation={frame:null,previous:null,updated:-Infinity,phase:0,phases:Object.fromEntries(Object.keys(parameters).map(name=>[name,parameterPhase(name)]))};setText($('graph-animate'),'Stop');animation.frame=requestFrame(animateFrame);};
+  $('graph-animate').onclick=()=>{if(animation){stopAnimation();return;}clearTimeout(timer);timer=null;analysis=null;trace=null;integral=null;render();animation={frame:null,previous:null,updated:-Infinity,phase:0,phases:Object.fromEntries(Object.keys(parameters).map(name=>[name,parameterPhase(name)]))};setText($('graph-animate'),'Stop');updateButtons();animation.frame=requestFrame(animateFrame);};
   function typeControls(){$('graph-cartesian-help').hidden=kind()!=='cartesian';$('graph-reset-ranges').hidden=kind()!=='surface';$('graph-viewport-ranges').hidden=['cartesian','implicit','surface'].includes(kind());$('graph-surface-controls').hidden=kind()!=='surface';setText($('graph-fit'),kind()==='surface'?'Fit Z':'Fit Y');setText($('graph-analysis-visible-range'),kind()==='cartesian'?'Use visible x range':'Use visible t range');$('graph-analysis').hidden=!['cartesian','parametric','polar'].includes(kind());$('graph-derivative').closest('label').hidden=kind()!=='cartesian';$('graph-initial').closest('label').hidden=!['sequence','differential'].includes(kind());$('graph-t0').closest('label').hidden=kind()!=='differential';$('graph-analysis-action').querySelector('[value="intersection"]').disabled=kind()!=='cartesian';analysisControls();}
   $('graph-kind').onchange=()=>{
     pendingAnalysis=null;
@@ -358,5 +362,5 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
     if(kind()!==graphKind){$('graph-kind').value=graphKind;$('graph-kind').onchange();}
     $('graph-source').value=next;$('graph-source').oninput();persist();
   }
-  return {addExpression,run,render,flush,snapshot:()=>({sources:{...sourceDrafts,[kind()]:value('graph-source')},parameters:{...parameters},parameterRanges,parametersOpen,rangesOpen:$('graph-ranges').open,helpOpen:$('graph-help').open,animationEnabled:{...animationEnabled},heightScale,halfHeight:heightScale===.5,radianAxis,surface:{...surface},ranges:Object.fromEntries(rangeIds.filter(id=>!(surface.autoZ&&id.startsWith('graph-z'))&&value(id)!==''&&Number.isFinite(numeric(id))).map(id=>[id,numeric(id)]))}),updateButtons(){ $('graph-analysis-run').disabled=isBusy()||!isReady();},activate(value){active=value;if(active&&(!result||pending))queue();if(!active){pendingAnalysis=null;clearTimeout(timer);timer=null;stopAnimation(false);}},dispose(){pendingAnalysis=null;active=false;disposeGestures();resizeObserver?.disconnect();if(frame!==null)cancelFrame(frame);clearTimeout(timer);stopAnimation(false);revision++;analysisRevision++;}};
+  return {addExpression,run,render,flush,snapshot:()=>({sources:{...sourceDrafts,[kind()]:value('graph-source')},parameters:{...parameters},parameterRanges,parametersOpen,rangesOpen:$('graph-ranges').open,helpOpen:$('graph-help').open,animationEnabled:{...animationEnabled},heightScale,halfHeight:heightScale===.5,radianAxis,surface:{...surface},ranges:Object.fromEntries(rangeIds.filter(id=>!(surface.autoZ&&id.startsWith('graph-z'))&&value(id)!==''&&Number.isFinite(numeric(id))).map(id=>[id,numeric(id)]))}),updateButtons,activate(value){active=value;if(active&&(!result||pending))queue();if(!active){pendingAnalysis=null;clearTimeout(timer);timer=null;stopAnimation(false);}},dispose(){pendingAnalysis=null;active=false;disposeGestures();resizeObserver?.disconnect();if(frame!==null)cancelFrame(frame);clearTimeout(timer);stopAnimation(false);revision++;analysisRevision++;}};
 }

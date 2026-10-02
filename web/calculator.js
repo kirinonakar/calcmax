@@ -137,7 +137,18 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
     },100);
   }
   function renderInputCursor(){displaySizing.refresh();const field=$('expression'),display=$('expression-preview'),math=display.querySelector('.input-flow,math');if(inputBoundary&&(inputBoundary.source!==field.value||inputBoundary.position!==field.selectionStart||field.selectionStart!==field.selectionEnd))inputBoundary=null;if(math){const marker=markInputCursor(math,field.value,field.selectionStart,field.selectionEnd,{boundary:inputBoundary?.edge,structure:inputBoundary});if(!typing)followInputCursor(display,marker||display.querySelector('.selected'),12,state.wordWrap);}else if(!field.value&&!display.querySelector('.text-caret')){const cursor=element('span','│','text-caret');display.append(cursor);}if(typing&&!state.wordWrap)followTextCursor(field);}
-  $('expression-preview').onclick=event=>{inputBoundary=null;const target=event.target.closest('[data-source-start]');if(target){const field=$('expression'),start=Number(target.getAttribute('data-source-start')),end=Number(target.getAttribute('data-source-end'));if(target.classList.contains('selected')||field.selectionStart===field.selectionEnd&&field.selectionStart>=start&&field.selectionStart<=end){const at=inputPointPosition(target,field.value,event.clientX,event.clientY);field.setSelectionRange(at,at);}else field.setSelectionRange(start,end);}else{$('expression').setSelectionRange(value('expression').length,value('expression').length);}preview();};
+  $('expression-preview').onclick=event=>{
+    inputBoundary=null;
+    if(committed&&!isBusy()){
+      // Explicit cursor placement edits the original formula with its original Ans.
+      inputAnswer=activeHistoryEntry?.inputAns||inputAnswer;
+      committed=false;$('commit-indicator').textContent='';
+      if(engineeringConversion)exitEngineering();else renderResult();
+    }
+    const target=event.target.closest('[data-source-start]');
+    if(target){const field=$('expression'),start=Number(target.getAttribute('data-source-start')),end=Number(target.getAttribute('data-source-end'));if(target.classList.contains('selected')||field.selectionStart===field.selectionEnd&&field.selectionStart>=start&&field.selectionStart<=end){const at=inputPointPosition(target,field.value,event.clientX,event.clientY);field.setSelectionRange(at,at);}else field.setSelectionRange(start,end);}else{$('expression').setSelectionRange(value('expression').length,value('expression').length);}
+    preview();
+  };
   function insert(text,cursor=null,{factor=false,fraction=false}={}) {
     if(isBusy())return;
     if(engineeringConversion)exitEngineering();
