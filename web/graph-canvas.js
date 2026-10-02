@@ -3,6 +3,7 @@ import {integralPolygons} from './graph-integral.js';
 import {clipSurfaceSegment,surfaceFaces,surfaceProjection,surfaceZRange} from './surface-geometry.js';
 
 const colors=['#007b68','#a04c75','#3b70bd','#b17d00','#6b5ec2','#a34629'];
+export const graphCurveColor=index=>colors[index%colors.length];
 const w=800,pad=42;
 const finite=point=>point&&point.every(Number.isFinite);
 
@@ -98,7 +99,7 @@ export function plotGraph(container,result,bounds,{digits=10,dots=false,selected
   if(integral)for(const points of analysis?.integralFill||integralPolygons(result.curves?.[selected]||[],integral))polygon(points.map(project),colors[selected%colors.length],.18);
   if(analysis?.line?.length===2){ctx.setLineDash([6,4]);line(...analysis.line.map(project),accent,2);ctx.setLineDash([]);}
   for(const point of analysis?.points||[])if(finite(point))circle(project(point),5,accent);
-  if(finite(trace)){ctx.setLineDash([3,3]);line([x(trace[0]),pad],[x(trace[0]),h-pad]);ctx.setLineDash([]);circle(project(trace),6,accent);}
+  if(finite(trace)){ctx.setLineDash([3,3]);line([x(trace[0]),pad],[x(trace[0]),h-pad]);ctx.setLineDash([]);circle(project(trace),6,colors[selected%colors.length]);}
   ctx.restore();return canvas;
 }
 

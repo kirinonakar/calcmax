@@ -21,20 +21,31 @@ export function nearestPoint(result,bounds,position,selected=0){
   }
   return best;
 }
-export function curvePointAtX(curve,x,referenceY=null){
+export function curvePointAtX(curve,x,referenceY=null,{fallbackToNearest=true}={}){
   if(!Number.isFinite(x))return null;
   const finite=point=>point?.length>=2&&point.every(Number.isFinite);
   let best=null,score=Infinity,nearest=null,distance=Infinity;
+  const consider=point=>{
+    if(!finite(point))return;
+    const nextScore=Number.isFinite(referenceY)?Math.abs(point[1]-referenceY):-point[1];
+    if(!best||nextScore<score){best=point;score=nextScore;}
+  };
   for(let i=0;i<curve.length;i++){
     const point=curve[i];if(!finite(point))continue;
     const dx=Math.abs(point[0]-x);
-    if(dx<distance||(dx===distance&&point[1]>nearest[1])){nearest=point;distance=dx;}
-    const previous=curve[i-1];if(!finite(previous)||previous[0]===point[0])continue;
-    const at=(x-previous[0])/(point[0]-previous[0]);if(at<0||at>1)continue;
-    const y=previous[1]+at*(point[1]-previous[1]),nextScore=Number.isFinite(referenceY)?Math.abs(y-referenceY):-y;
-    if(nextScore<score){best=[x,y];score=nextScore;}
+    if(!nearest||dx<distance||(dx===distance&&point[1]>nearest[1])){nearest=point;distance=dx;}
+    if(point[0]===x)consider([x,point[1]]);
+    const previous=curve[i-1];if(!finite(previous))continue;
+    if(previous[0]===point[0]){
+      if(point[0]===x)consider([x,Number.isFinite(referenceY)?clamp(referenceY,Math.min(previous[1],point[1]),Math.max(previous[1],point[1])):Math.max(previous[1],point[1])]);
+      continue;
+    }
+    const at=(x-previous[0])/(point[0]-previous[0]),epsilon=16*Number.EPSILON;
+    if(!Number.isFinite(at)||at<-epsilon||at>1+epsilon)continue;
+    const fraction=clamp(at,0,1);
+    consider([x,previous[1]*(1-fraction)+point[1]*fraction]);
   }
-  return best||nearest;
+  return best||(fallbackToNearest?nearest:null);
 }
 // Bind to the container: the SVG can be redrawn without losing pointer capture.
 export function bindGraphGestures(container,{getBounds,onView,onTrace,isSurface=()=>false,onSurface=()=>{}}){

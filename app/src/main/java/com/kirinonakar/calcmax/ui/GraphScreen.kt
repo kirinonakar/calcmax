@@ -256,16 +256,19 @@ import kotlin.math.*
             if(xSpan<=0.0 || ySpan<=0.0)return@detectTapGestures
             if(m.graphAnalysis?.optString("analysis")=="tangent" && m.graphAnalysis?.optJSONArray("line")!=null) {
                 var nearestCurve=-1;var nearestIndex=-1;var nearestDistance=Double.POSITIVE_INFINITY
-                latestCurves.forEachIndexed {curveIndex,curve->curve.forEachIndexed {pointIndex,point->
-                    if(point!=null) {
-                        val dx=(point.first-target)/xSpan*size.width
-                        val dy=(point.second-targetY)/ySpan*size.height
-                        val distance=hypot(dx,dy)
-                        if(distance<nearestDistance) {nearestCurve=curveIndex;nearestIndex=pointIndex;nearestDistance=distance}
-                    }
-                }}
-                if(nearestCurve>=0 && nearestDistance<=40.dp.toPx()) {
-                    val point=latestCurves[nearestCurve][nearestIndex]!!
+                var nearestPoint:Pair<Double,Double>?=null
+                fun considerPoint(curveIndex:Int,pointIndex:Int,point:Pair<Double,Double>) {
+                    val dx=(point.first-target)/xSpan*size.width
+                    val dy=(point.second-targetY)/ySpan*size.height
+                    val distance=hypot(dx,dy)
+                    if(distance<nearestDistance) {nearestCurve=curveIndex;nearestIndex=pointIndex;nearestDistance=distance;nearestPoint=point}
+                }
+                latestCurves.forEachIndexed {curveIndex,curve->
+                    if(m.graphKind=="cartesian")graphTracePointAtX(curve,target,targetY)?.let {considerPoint(curveIndex,-1,it)}
+                    else curve.forEachIndexed {pointIndex,point->point?.let {considerPoint(curveIndex,pointIndex,it)}}
+                }
+                val point=nearestPoint
+                if(nearestCurve>=0 && point!=null && nearestDistance<=40.dp.toPx()) {
                     val at=if(m.graphKind=="cartesian")point.first else m.graphData?.optJSONArray("curveParameters")?.optJSONArray(nearestCurve)?.optDouble(nearestIndex,Double.NaN)
                     if(at!=null && at.isFinite()) {
                         selected=nearestCurve
@@ -276,7 +279,9 @@ import kotlin.math.*
                     }
                 }
             }
-            m.trace=latestCurves.getOrNull(selected)?.filterNotNull()?.minByOrNull { ((it.first-target)/xSpan).pow(2)+((it.second-targetY)/ySpan).pow(2) }
+            val curve=latestCurves.getOrNull(selected)
+            m.trace=if(m.graphKind=="cartesian")curve?.let {graphTracePointAtX(it,target,targetY)}
+                else curve?.filterNotNull()?.minByOrNull { ((it.first-target)/xSpan).pow(2)+((it.second-targetY)/ySpan).pow(2) }
         } }.semantics { contentDescription="Graph with ${curves.size} curves. Pinch to zoom, drag to pan, tap to trace${if(m.graphAnalysis?.optString("analysis")=="tangent")" or move the tangent" else ""}. Use Range and Analyze for accessible controls." }) {
             val xlo=m.xMin;val xhi=m.xMax
             fun px(x:Double)=((x-xlo)/(xhi-xlo)*size.width).toFloat()
@@ -364,7 +369,12 @@ import kotlin.math.*
                 tangent?.let { line->
                     drawLine(c.accent.copy(alpha=.75f),Offset(px(line[0].first),py(line[0].second)),Offset(px(line[1].first),py(line[1].second)),1.5.dp.toPx(),pathEffect=PathEffect.dashPathEffect(floatArrayOf(16f,8f)))
                 }
-                m.trace?.let { p -> val at=Offset(px(p.first),py(p.second));drawLine(c.muted,Offset(at.x,0f),Offset(at.x,size.height),1f);drawCircle(c.accent,6f,at) }
+                m.trace?.let { p ->
+                    val at=Offset(px(p.first),py(p.second))
+                    drawLine(c.muted,Offset(at.x,0f),Offset(at.x,size.height),1.dp.toPx(),pathEffect=PathEffect.dashPathEffect(floatArrayOf(3.dp.toPx(),3.dp.toPx())))
+                    drawCircle(c.display,8.dp.toPx(),at)
+                    drawCircle(c.curves[selected%c.curves.size],6.dp.toPx(),at)
+                }
             }
         }
         GraphHeightToggle(halfGraphHeight,{halfGraphHeight=!halfGraphHeight},Modifier.align(Alignment.TopEnd))

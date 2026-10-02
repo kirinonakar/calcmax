@@ -6,7 +6,7 @@ import {plotGraph} from '../graph-canvas.js';
 import {createGraphWorkspace} from '../graph-workspace.js';
 import {surfaceProjection,surfaceFaces} from '../surface-geometry.js';
 import {bindGraphGestures} from '../graph-view.js';
-import {installCanvas,surfaceFills} from './canvas-context.mjs';
+import {installCanvas,surfaceFills,curveStrokes} from './canvas-context.mjs';
 
 const bounds={xmin:-2,xmax:2,ymin:-2,ymax:2};
 function setup(html='<div id="plot"></div>'){
@@ -14,6 +14,52 @@ function setup(html='<div id="plot"></div>'){
 }
 const page=()=>readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const options=()=>({displayDigits:10});
+
+test('curve buttons form a horizontal row below the plot and selection still updates the graph',async()=>{
+  const dom=setup(page()),$=id=>document.getElementById(id),style=document.createElement('style');
+  style.textContent=readFileSync(new URL('../calculator.css',import.meta.url),'utf8');document.head.append(style);
+  const workspace=createGraphWorkspace({execute:async()=>({ok:true,curves:[[[0,0],[1,1]],[[0,0],[1,-1]]],parameters:[]}),options,onError:assert.fail,persist:()=>{},isBusy:()=>false});
+  try{
+    await workspace.run();const picker=$('graph-formulas'),css=dom.window.getComputedStyle(picker);
+    assert.ok($('graph-plot').compareDocumentPosition(picker)&dom.window.Node.DOCUMENT_POSITION_FOLLOWING);
+    assert.equal(css.display,'flex');assert.equal(css.flexWrap,'nowrap');assert.equal(css.overflowX,'auto');
+    assert.equal($('graph-selected').closest('label').hidden,true);
+    assert.equal(picker.children[0].getAttribute('aria-pressed'),'true');
+    picker.children[1].click();assert.equal($('graph-selected').value,'1');
+    assert.equal(picker.children[1].getAttribute('aria-pressed'),'true');assert.equal(picker.children[0].getAttribute('aria-pressed'),'false');
+    assert.equal(picker.children[1].style.getPropertyValue('--curve-color'),curveStrokes($('graph-plot')).find(c=>c.lineWidth===4).strokeStyle);
+    picker.children[0].dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Enter',cancelable:true}));
+    assert.equal($('graph-selected').value,'0');assert.equal(picker.children[0].getAttribute('aria-pressed'),'true');
+  }finally{workspace.dispose();dom.window.close();}
+});
+
+test('Cartesian clicks trace 2x-5 at the clicked x and keep the selected curve color',async()=>{
+  const dom=setup(page()),$=id=>document.getElementById(id),container=$('graph-plot');
+  container.getBoundingClientRect=()=>({left:0,top:0,width:800,height:460});
+  container.style.setProperty('--accent','#ff0000');
+  const curves=[Array.from({length:21},(_,i)=>[i-10,2*(i-10)-5]),Array.from({length:21},(_,i)=>[i-10,10-i])];
+  const workspace=createGraphWorkspace({execute:async()=>({ok:true,curves,parameters:[]}),options,onError:assert.fail,persist:()=>{},isBusy:()=>false});
+  try{
+    $('graph-source').value='2x-5\n-x';await workspace.run();
+    for(const selected of [0,1]){
+      $('graph-selected').value=String(selected);$('graph-selected').onchange();
+      const canvas=container.querySelector('canvas'),left=Number(canvas.dataset.plotLeft),width=Number(canvas.dataset.plotWidth);
+      const clientX=left+width*(2.25+10)/20,clientY=42+(460-84)*.1;
+      for(const type of ['pointerdown','pointerup']){
+        const event=new dom.window.MouseEvent(type,{clientX,clientY,button:0,cancelable:true});
+        Object.defineProperty(event,'pointerId',{value:1});container.dispatchEvent(event);
+      }
+      const ctx=canvas.getContext('2d'),dot=ctx.commands.find(c=>c.op==='fill'&&c.path.some(p=>p.op==='arc'&&p.args[2]===6));
+      const arc=dot?.path.find(p=>p.op==='arc'),expectedY=selected===0?-.5:-2.25;
+      assert.ok(dot,'a click displays a trace dot');
+      assert.ok(Math.abs(arc.args[0]-clientX)<1e-10,'tracing must not jump sideways on sloping curves');
+      assert.ok(Math.abs(arc.args[1]-(42+(5-expectedY)/10*(460-84)))<1e-10,'the dot lies on the curve at the clicked x');
+      const curve=ctx.commands.find(c=>c.op==='stroke'&&c.lineWidth===4&&!c.lineDash.length);
+      assert.equal(dot.fillStyle,curve.strokeStyle,'trace dots match the selected curve rather than the theme accent');
+      assert.match($('graph-trace').textContent,/2\.25/);
+    }
+  }finally{workspace.dispose();dom.window.close();}
+});
 
 test('axis labels scale within readable CSS pixel limits and long decimal labels fit at every height',()=>{
   const dom=setup(),container=document.getElementById('plot');
@@ -224,7 +270,7 @@ test('height cycles 1x to half to 2x, persists scale, and tracing uses the curre
   try{
     await workspace.run();const canvas=$('graph-plot').firstChild,fullHeight=canvas.height,range=workspace.snapshot().ranges;
     $('graph-height-toggle').click();assert.equal(canvas.height,fullHeight/2);assert.equal($('graph-height-toggle').getAttribute('aria-pressed'),'true');assert.equal($('graph-height-toggle').getAttribute('aria-label'),'Double height');assert.deepEqual(workspace.snapshot().ranges,range);assert.equal(requests.length,1);
-    const xmin=Number($('graph-min').value),xmax=Number($('graph-max').value),ymin=Number($('graph-ymin').value),ymax=Number($('graph-ymax').value),x=42+(0-xmin)/(xmax-xmin)*716,y=230-42-(1-ymin)/(ymax-ymin)*146;
+    const xmin=Number($('graph-min').value),xmax=Number($('graph-max').value),ymin=Number($('graph-ymin').value),ymax=Number($('graph-ymax').value),x=Number(canvas.dataset.plotLeft)+(0-xmin)/(xmax-xmin)*Number(canvas.dataset.plotWidth),y=230-42-(1-ymin)/(ymax-ymin)*146;
     for(const type of ['pointerdown','pointerup']){const event=new dom.window.MouseEvent(type,{clientX:x,clientY:y,button:0,cancelable:true});Object.defineProperty(event,'pointerId',{value:1});$('graph-plot').dispatchEvent(event);}
     assert.ok($('graph-trace').textContent.includes('1'));
     const saved=workspace.snapshot();workspace.dispose();workspace=create(saved);await workspace.run();assert.equal(canvas.height,fullHeight/2);assert.equal(workspace.snapshot().halfHeight,true);

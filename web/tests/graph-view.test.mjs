@@ -8,6 +8,7 @@ import {readFileSync} from 'node:fs';
 import {plot} from '../plot.js';
 import {expressionDisplay} from '../expression-display.js';
 import {markInputCursor} from '../input-cursor.js';
+import {setLanguage} from '../i18n.js';
 
 test('pan and zoom preserve the cursor anchor, limit spans, and lock pinch axes as Android does',()=>{
   const bounds={xmin:-10,xmax:10,ymin:-5,ymax:5};
@@ -104,12 +105,50 @@ test('shared range sliders restore saved endpoints outside the default slider do
     for(const [id,number] of Object.entries(ranges))assert.equal(workspace.snapshot().ranges[id],number);
   }finally{workspace.dispose();dom.window.close();}
 });
+
+test('visible analysis range copies the panned viewport at full precision and uses t for parametric graphs',async()=>{
+  const dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));globalThis.document=dom.window.document;installCanvas(dom);
+  const $=id=>document.getElementById(id),requests=[];let saves=0;
+  const workspace=createGraphWorkspace({execute:async request=>{requests.push(request);return request.action==='graphAnalysis'?{ok:true,analysis:request.analysis,value:1}:{ok:true,curves:[[[0,0],[1,1]]],parameters:[]};},options:()=>({displayDigits:3}),onError:assert.fail,persist:()=>saves++,isBusy:()=>false,saved:{ranges:{'graph-min':-123.456789,'graph-max':234.567891}}});
+  try{
+    const button=$('graph-analysis-visible-range');
+    button.click();assert.equal(workspace.snapshot().ranges['graph-analysis-a'],-123.456789,'works before the first plot');
+    await workspace.run();$('graph-zoom-in').click();$('graph-right').click();
+    const before=workspace.snapshot().ranges,count=requests.length,savedCount=saves;
+    button.click();const after=workspace.snapshot().ranges;
+    assert.equal(after['graph-analysis-a'],before['graph-min']);assert.equal(after['graph-analysis-b'],before['graph-max']);
+    assert.equal(after['graph-min'],before['graph-min']);assert.equal(after['graph-max'],before['graph-max']);
+    assert.equal(Number($('graph-analysis-a-slider').value),before['graph-min']);assert.equal(Number($('graph-analysis-b-slider').value),before['graph-max']);
+    assert.equal(saves,savedCount+1);assert.equal(requests.length,count,'copying the interval does not run an analysis');
+    $('graph-analysis-action').value='integral';await $('graph-analysis-run').onclick();
+    assert.equal(requests.at(-1).a,before['graph-min']);assert.equal(requests.at(-1).b,before['graph-max']);
+    setLanguage('ko');
+    for(const kind of ['parametric','polar']){
+      $('graph-kind').value=kind;$('graph-kind').onchange();
+      $('graph-min').value='1.23456789';$('graph-max').value='2.34567891';
+      $('graph-min').dispatchEvent(new dom.window.Event('change'));$('graph-max').dispatchEvent(new dom.window.Event('change'));
+      button.click();const ranges=workspace.snapshot().ranges;
+      assert.equal(button.textContent,'보이는 t 범위 사용');
+      assert.equal(ranges['graph-analysis-a'],1.23456789);assert.equal(ranges['graph-analysis-b'],2.34567891);
+    }
+    $('graph-kind').value='cartesian';$('graph-kind').onchange();assert.equal(button.textContent,'보이는 x 범위 사용');
+  }finally{setLanguage('en');workspace.dispose();dom.window.close();}
+});
 test('implicit branch selection interpolates at x and uses the upper branch unless a lower point was selected',()=>{
   const curve=[[-2,1],[0,Math.sqrt(5)],[2,1],null,[-2,-1],[0,-Math.sqrt(5)],[2,-1]];
   assert.deepEqual(curvePointAtX(curve,0),[0,Math.sqrt(5)]);
   assert.deepEqual(curvePointAtX(curve,0,-2),[0,-Math.sqrt(5)]);
   assert.equal(curvePointAtX(curve,1)[0],1);assert.ok(curvePointAtX(curve,1)[1]>0);
   assert.equal(curvePointAtX([],0),null);assert.equal(curvePointAtX(curve,NaN),null);
+});
+
+test('click tracing preserves vertical branches and never interpolates across missing samples',()=>{
+  const strict={fallbackToNearest:false};
+  assert.deepEqual(curvePointAtX([[0,-2],[0,2]],0,.5,strict),[0,.5]);
+  for(const gap of [null,[0,NaN],[Infinity,0]])assert.equal(curvePointAtX([[-1,-1],gap,[1,1]],0,0,strict),null);
+  assert.equal(curvePointAtX([[0,0],[1,1]],2,0,strict),null);
+  assert.deepEqual(curvePointAtX([[1,1]],1,0,strict),[1,1]);
+  assert.deepEqual(curvePointAtX([[0,1],[1,0]],-Number.EPSILON,1,strict),[-Number.EPSILON,1]);
 });
 test('web implicit tangents work without a prior trace and a first graph click selects and analyzes the lower branch',async()=>{
   const dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));globalThis.document=dom.window.document;installCanvas(dom);
@@ -243,6 +282,10 @@ test('SVG redraw retains discontinuities and draws trace, tangent, integration s
   const dom=new JSDOM('<div id="plot"></div>');globalThis.document=dom.window.document;installCanvas(dom);const container=document.getElementById('plot'),bounds={xmin:-2,xmax:2,ymin:-2,ymax:2};
   plot(container,{curves:[[[-1,-1],null,[0,0],[1,1]]]},bounds,{trace:[1,1],analysis:{line:[[-2,-2],[2,2]],points:[[0,0]]},integral:[0,1],digits:2});
   assert.equal(container.querySelector('path').getAttribute('d').match(/M/g).length,2);assert.ok(container.querySelector('[data-trace]'));assert.ok(container.querySelector('[data-tangent]'));assert.ok(container.querySelector('[data-integral]'));
+  for(const selected of [0,1]){
+    plot(container,{curves:[[[0,0],[1,1]],[[0,0],[1,-1]]]},bounds,{selected,trace:[1,selected===0?1:-1]});
+    assert.equal(container.querySelector('[data-trace]').getAttribute('fill'),container.querySelector(`[data-curve="${selected}"]`).getAttribute('stroke'));
+  }
   const result={surface:[[[-1,-1,0],[1,-1,1]],[[-1,1,1],[1,1,0]]],zMin:0,zMax:1};plot(container,result,bounds);const before=container.querySelector('path').getAttribute('d');plot(container,result,bounds,{surfaceView:{rotation:90,elevation:70,zoom:2}});assert.notEqual(container.querySelector('path').getAttribute('d'),before);dom.window.close();
 });
 

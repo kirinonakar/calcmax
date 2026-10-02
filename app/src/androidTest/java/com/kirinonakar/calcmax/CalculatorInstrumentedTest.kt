@@ -608,6 +608,68 @@ class CalculatorInstrumentedTest {
         compose.onNodeWithText("Save function").assertIsDisplayed()
         compose.runOnIdle {(1..12).forEach{index->model().removeVariable("f$index")}}
     }
+    @Test fun graphTouchTracesWithoutChangingTheViewport() {
+        compose.runOnIdle {
+            model().language="en";model().theme="Light";model().poweredOn=true;model().mode="Graph"
+            model().changeGraphKind("cartesian");model().updateGraphSource("x")
+            model().xMin=-10.0;model().xMax=10.0;model().yMin=-5.0;model().yMax=5.0
+            model().plot()
+        }
+        compose.waitUntil(30000) {!model().graphBusy && model().graphData!=null}
+        val graph=compose.onNode(hasContentDescription("Graph with",substring=true))
+        graph.performTouchInput {click(center)}
+        compose.runOnIdle {
+            assertNotNull("A graph tap must set the trace point",model().trace)
+            assertEquals(0.0,model().trace!!.first,.05)
+            assertEquals(model().trace!!.first,model().trace!!.second,.001)
+            model().trace=null
+        }
+        graph.performTouchInput {
+            down(center);moveTo(center+androidx.compose.ui.geometry.Offset(1f,1f));up()
+        }
+        compose.runOnIdle {
+            assertNotNull("Small finger movement must still trace",model().trace)
+            assertEquals(-10.0,model().xMin,0.0);assertEquals(10.0,model().xMax,0.0)
+            assertEquals(-5.0,model().yMin,0.0);assertEquals(5.0,model().yMax,0.0)
+        }
+        // The finger's y is far from y=x. Tracing must keep the touched x,
+        // rather than jumping sideways to the closest sampled point.
+        graph.performTouchInput {click(androidx.compose.ui.geometry.Offset(width*.6f,height*.9f))}
+        compose.runOnIdle {
+            assertEquals(2.0,model().trace!!.first,.001)
+            assertEquals(2.0,model().trace!!.second,.001)
+        }
+        val bitmap=graph.captureToImage().asAndroidBitmap()
+        val markerRadius=5*compose.activity.resources.displayMetrics.density
+        val markerX=bitmap.width*.6f
+        val markerY=bitmap.height*.3f
+        for(side in listOf(-1,1)) {
+            assertEquals("Trace dot must stay visible at Android display density",0xFF006D5B.toInt(),
+                bitmap.getPixel((markerX+side*markerRadius).toInt(),markerY.toInt()))
+        }
+        compose.runOnIdle {model().analyzeGraph("tangent","0","0",0,1)}
+        compose.waitUntil(30000) {model().graphAnalysis?.optString("analysis")=="tangent"}
+        graph.performTouchInput {click(androidx.compose.ui.geometry.Offset(width*.6f,height*.25f))}
+        compose.waitUntil(30000) {
+            val x=model().graphAnalysis?.optJSONArray("points")?.optJSONArray(0)?.optDouble(0)
+            x!=null && kotlin.math.abs(x-2.0)<.001
+        }
+        compose.runOnIdle {
+            assertEquals("Moving a tangent must keep the touched x",2.0,model().trace!!.first,.001)
+            model().clearGraphTangent()
+            model().updateGraphSource("x\n-x");model().plot()
+        }
+        compose.waitUntil(30000) {!model().graphBusy && model().graphData?.optJSONArray("curves")?.length()==2}
+        compose.onNodeWithContentDescription("Select curve 2").performScrollTo().performClick()
+        graph.performScrollTo().performTouchInput {click(androidx.compose.ui.geometry.Offset(width*.6f,height*.7f))}
+        compose.runOnIdle {
+            assertEquals(2.0,model().trace!!.first,.001)
+            assertEquals(-2.0,model().trace!!.second,.001)
+        }
+        val secondBitmap=graph.captureToImage().asAndroidBitmap()
+        assertEquals("Trace dot must use the selected curve's color",0xFFB7521E.toInt(),
+            secondBitmap.getPixel((secondBitmap.width*.6f).toInt(),(secondBitmap.height*.7f).toInt()))
+    }
     @Test fun directionalGraphPinches() {
         compose.runOnIdle{model().mode="Graph";model().xMin=-10.0;model().xMax=10.0;model().yMin=-5.0;model().yMax=5.0}
         val graph=compose.onNode(hasContentDescription("Graph with",substring=true))

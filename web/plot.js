@@ -57,7 +57,7 @@ export function plot(container,result,bounds,{dots=false,scatterCurves=[],digits
     if(integral)for(const points of analysis?.integralFill||integralPolygons(result.curves?.[selected]||[],integral))group.append(svgElement('polygon',{points:points.map(p=>`${x(p[0])},${y(p[1])}`).join(' '),fill:colors[selected%colors.length],opacity:.18,'data-integral':'true'}));
     if(analysis?.line?.length===2){const line=analysis.line;group.append(svgElement('line',{x1:x(line[0][0]),y1:y(line[0][1]),x2:x(line[1][0]),y2:y(line[1][1]),stroke:'var(--accent)','stroke-width':2,'stroke-dasharray':'6 4','data-tangent':'true'}));}
     for(const point of analysis?.points||[])group.append(svgElement('circle',{cx:x(point[0]),cy:y(point[1]),r:5,fill:'var(--accent)','data-analysis-point':'true'}));
-    if(trace){group.append(svgElement('line',{x1:x(trace[0]),x2:x(trace[0]),y1:pad,y2:h-pad,stroke:'var(--muted)','stroke-dasharray':'3 3'}),svgElement('circle',{cx:x(trace[0]),cy:y(trace[1]),r:6,fill:'var(--accent)','data-trace':'true'}));}
+    if(trace){group.append(svgElement('line',{x1:x(trace[0]),x2:x(trace[0]),y1:pad,y2:h-pad,stroke:'var(--muted)','stroke-dasharray':'3 3'}),svgElement('circle',{cx:x(trace[0]),cy:y(trace[1]),r:6,fill:colors[selected%colors.length],'data-trace':'true'}));}
   }
   svg.append(group); container.replaceChildren(svg);return svg;
 }
