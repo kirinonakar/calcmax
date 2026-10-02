@@ -123,7 +123,7 @@ input:disabled,select:disabled{opacity:.45;cursor:default}
 .interactive-plot{touch-action:none;user-select:none;cursor:grab}.interactive-plot:active{cursor:grabbing}.interactive-plot svg{display:block;aspect-ratio:800/460;width:100%;height:auto;max-height:none}.interactive-plot canvas{display:block;aspect-ratio:800/460;width:100%;height:auto;max-height:none}
 #graph-formulas .formula-line{border-left:3px solid var(--accent);padding-left:8px}.analysis-point{display:inline-block;margin:4px;background:var(--bar)}
 #graph-parameters label{min-width:200px}#graph-analysis{padding:12px 0}#graph-table tr[tabindex]{cursor:pointer}#graph-table tr[tabindex]:hover{background:var(--bar)}
-#graph-parameters-toggle::after{content:' ▾'}#graph-parameters-toggle[aria-expanded="false"]::after{content:' ▸'}
+#graph-parameters-toggle::after,#graph-ranges-toggle::after{content:' ▾'}#graph-parameters-toggle[aria-expanded="false"]::after,#graph-ranges-toggle[aria-expanded="false"]::after{content:' ▸'}
 #graph-cartesian-help{font-size:12px;color:var(--muted);margin:0 0 12px}
 #graph-parameters .graph-parameter-value{flex-direction:row;align-items:center;justify-content:space-between;gap:10px}#graph-parameters .graph-parameter-value span{overflow-wrap:anywhere}#graph-parameters .graph-parameter-value input{width:120px;flex-shrink:0;padding:7px 9px}#graph-parameters input[aria-invalid="true"]{border-color:#b33724}
 .graph-range-pair{flex:1 1 240px;min-width:0}.graph-range-fields{display:flex;gap:12px}.graph-range-fields label{min-width:0!important;flex:1}.graph-range-fields output{font-variant-numeric:tabular-nums}
@@ -220,3 +220,4 @@ input:disabled,select:disabled{opacity:.45;cursor:default}
 .graph-plot-frame{position:relative;margin:18px 0}.graph-plot-frame .plot{margin:0}.graph-plot-frame:has(.plot:empty){display:none}#graph-height-toggle{position:absolute;top:6px;right:6px;width:32px;height:32px;padding:0;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--ink);font-size:19px;line-height:1}#graph-height-toggle[aria-pressed="true"]{color:var(--accent)}
 
 .graph-range-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+#graph-ranges-toggle{font:inherit;background:var(--bar)}
