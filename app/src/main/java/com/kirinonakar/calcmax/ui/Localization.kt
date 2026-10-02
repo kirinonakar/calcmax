@@ -77,6 +77,7 @@ private val korean = mapOf(
     "Enter an equation F(x,y)=0" to "F(x,y)=0 형태의 방정식을 입력하세요.",
     "Equation is true everywhere; enter a curve equation" to "모든 점에서 참인 식입니다. 곡선을 정의하는 방정식을 입력하세요.",
     "f(x) · one per line · [shade] y<f(x) or f, g" to "f(x) · 한 줄에 하나 · 음영: [shade] y<f(x) 또는 f, g",
+    "One curve per line · [shade] y<f(x) · between functions: [shade] f, g" to "한 줄에 하나 · [shade] y<f(x) · 두 함수 사이: [shade] f, g",
     "Initial values at n=0 · comma separated" to "n=0의 초깃값 · 쉼표로 구분",
     "Initial time t₀" to "초기 시각 t₀", "Initial y values · comma separated" to "y 초깃값 · 쉼표로 구분",
     "Vector workspace" to "벡터 작업 공간", "Matrix workspace" to "행렬 작업 공간",
