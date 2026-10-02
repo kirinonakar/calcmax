@@ -190,6 +190,7 @@ export const nativeKorean = {
   "Clear regression": "회귀선 지우기",
   "Graph fitted expression": "적합식 그래프로 보기",
   "Initial values and bounds (optional)": "시작값과 범위 (선택)",
+  "Custom fitting did not converge to identifiable parameters. Try initial values or bounds, or simplify the model.": "매개변수를 결정할 수 있는 해로 피팅이 수렴하지 않았습니다. 시작값이나 범위를 지정하거나 모델을 단순하게 바꿔 주세요.",
   "Fit custom model": "사용자 수식 피팅",
   "ADC example": "ADC 예제",
   "IVIM example": "IVIM 예제",

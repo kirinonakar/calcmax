@@ -93,6 +93,7 @@ private val korean = mapOf(
     "Correlation coefficient (r)" to "상관계수 (r)",
     "Clear regression" to "회귀선 지우기", "Graph fitted expression" to "적합식 그래프로 보기",
     "Independent variable" to "독립변수", "Initial values and bounds (optional)" to "시작값과 범위 (선택)",
+    "Custom fitting did not converge to identifiable parameters. Try initial values or bounds, or simplify the model." to "매개변수를 결정할 수 있는 해로 피팅이 수렴하지 않았습니다. 시작값이나 범위를 지정하거나 모델을 단순하게 바꿔 주세요.",
     "Fit custom model" to "사용자 수식 피팅", "ADC example" to "ADC 예제", "IVIM example" to "IVIM 예제", "Exponential decay example" to "지수 감쇠 예제", "Model y =" to "모델 y =", "Fitted parameters" to "피팅 매개변수",
     "Query" to "질의", "Degrees of freedom" to "자유도",
     "Trials n" to "시행 횟수 n", "Success probability p" to "성공 확률 p",

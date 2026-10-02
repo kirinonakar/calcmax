@@ -42,6 +42,40 @@ test('actual CPython WASM reuses the Android engine across workspaces',async()=>
   assert.match(evaluate(statisticsCommand('A,1\nA,2\nA,3\nB,2\nB,4\nB,6',{op:'ztest2',grouping:'groups',sigma:'1',sigmaY:'2',tail:'left'})).exact,/p value/);
   assert.match(evaluate(statisticsCommand('A,yes\nA,no\nB,yes\nB,no',{op:'chi2independence'})).exact,/chi-square/);
   const fit=evaluate(statisticsCommand('0,1\n1,3\n2,5\n3,7',{op:'regression',regression:'custom',formula:'a*x+b',initials:'[[a,1],[b,0]]'}));assert.equal(fit.parameters.length,2);assert.ok(fit.curve.length>10);
+  const decayRows=[[20,.818731],[40,.670320],[60,.548812],[80,.449329],[100,.367879],[150,.223130],[200,.135335],[300,.049787],[400,.018316]];
+  const decayData=decayRows.map(row=>row.join(',')).join('\n');
+  for(const formula of ['A*e^(-x/T2)+C','e^(-x/T2)+C']){
+    const result=evaluate(statisticsCommand(decayData,{op:'regression',regression:'custom',formula}));
+    const parameters=Object.fromEntries(result.parameters.map(([name,value])=>[name,Number(value)]));
+    assert.ok(Math.abs(parameters.T2-100)<.001);
+    assert.ok(Math.abs(parameters.C)<1e-6);
+    if('A' in parameters)assert.ok(Math.abs(parameters.A-1)<1e-6);
+    assert.ok(result.resultAst&&result.curve.length>100);
+    assert.ok(decayRows.reduce((sum,[x,y])=>sum+(('A' in parameters?parameters.A:1)*Math.exp(-x/parameters.T2)+parameters.C-y)**2,0)<1e-12);
+  }
+  for(const [xScale,yScale] of [[1e-6,1e12],[1e6,1e-12]]){
+    const data=decayRows.map(([x])=>`${x*xScale},${yScale*(3*Math.exp(-x/100)+.6)}`).join('\n');
+    const result=evaluate(statisticsCommand(data,{op:'regression',regression:'custom',formula:'gain*exp(-x/lifetime)+baseline'}));
+    const parameters=Object.fromEntries(result.parameters.map(([name,value])=>[name,Number(value)]));
+    assert.ok(Math.abs(parameters.gain/(3*yScale)-1)<1e-10);
+    assert.ok(Math.abs(parameters.lifetime/(100*xScale)-1)<1e-10);
+    assert.ok(Math.abs(parameters.baseline/(.6*yScale)-1)<1e-10);
+  }
+  const boundedData=decayRows.map(([x])=>`${x},${3*Math.exp(-x/100)+.6}`).join('\n');
+  const bounded=evaluate(statisticsCommand(boundedData,{op:'regression',regression:'custom',formula:'A*exp(-x/T2)+C',initials:'[[A,1,0,2],[T2,1,1,300],[C,0,0,1]]'}));
+  const boundedParameters=Object.fromEntries(bounded.parameters.map(([name,value])=>[name,Number(value)]));
+  assert.equal(boundedParameters.A,2);
+  assert.ok(Math.abs(boundedParameters.T2-112.87003710820569)<1e-8);
+  for(const [formula,initials] of [['A*B*x+C',''],['A*exp(-x/T2)+C','[[T2,.01,.001,.1]]']]){
+    const result=run({tree:parse(statisticsCommand(decayData,{op:'regression',regression:'custom',formula,initials}))});
+    assert.equal(result.ok,false,'undetermined/flat parameters must not look like a successful fit');
+    assert.match(result.error,/did not converge to identifiable/);
+  }
+  const customPoints=Array.from({length:300},(_,i)=>`${i+1},${2.3*Math.exp(-(i+1)/70)+.4}`).join('\n');
+  const customStarted=performance.now();
+  const customLarge=evaluate(statisticsCommand(customPoints,{op:'regression',regression:'custom',formula:'A*exp(-x/T2)+C'}));
+  assert.ok(Math.abs(Number(Object.fromEntries(customLarge.parameters).T2)-70)<1e-8);
+  console.log(`WASM custom decay regression: 300 points in ${(performance.now()-customStarted).toFixed(0)} ms`);
   const constantData=Array.from({length:5},(_,x)=>`${x},${2*Math.PI*x+3*Math.exp(-x)}`).join('\n');
   const constantFit=evaluate(statisticsCommand(constantData,{op:'regression',regression:'custom',formula:'a*pi*x+b*e^(-x)',initials:'[[a,pi/pi],[b,e/e]]'}));
   assert.deepEqual(constantFit.parameters.map(([name])=>name),['a','b']);

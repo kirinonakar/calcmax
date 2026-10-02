@@ -696,11 +696,153 @@ def _fit_transformed_regression(engine, xs, ys, mode):
     if mode == "exponential": return a*s.exp(b*x)
     return a*x**b
 
+def _regression_qr(design, target, damping=0.0):
+    """Column-scaled least squares, with reorthogonalization and optional LM rows.
+
+    Avoid forming J.T*J: that squares the condition number and loses small
+    parameter directions when, for example, amplitude and lifetime have very
+    different units. Only standard Python is needed by Android and Pyodide.
+    """
+    count = len(design[0])
+    columns = [[row[i] for row in design] for i in range(count)]
+    scales = [math.hypot(*column) for column in columns]
+    if any(not math.isfinite(scale) or scale == 0 for scale in scales): return None
+    columns = [[v/scale for v in column] for column, scale in zip(columns, scales)]
+    if damping:
+        root = math.sqrt(damping)
+        columns = [column + [root if i == j else 0.0 for j in range(count)]
+                   for i, column in enumerate(columns)]
+        target = target + [0.0]*count
+    orthogonal = []
+    triangular = [[0.0]*count for _ in range(count)]
+    for j, column in enumerate(columns):
+        for _ in range(2):
+            for i, basis in enumerate(orthogonal):
+                projection = math.fsum(a*b for a, b in zip(basis, column))
+                triangular[i][j] += projection
+                column = [a - projection*b for a, b in zip(column, basis)]
+        norm = math.hypot(*column)
+        if norm < 1e-12: return None
+        triangular[j][j] = norm
+        orthogonal.append([v/norm for v in column])
+    rhs = [math.fsum(a*b for a, b in zip(column, target)) for column in orthogonal]
+    solution = [0.0]*count
+    for i in reversed(range(count)):
+        solution[i] = (rhs[i] - math.fsum(triangular[i][j]*solution[j]
+                                         for j in range(i+1, count)))/triangular[i][i]
+    result = [v/scale for v, scale in zip(solution, scales)]
+    return result if all(math.isfinite(v) for v in result) else None
+
+
+def _regression_starts(expression, independent, parameters, xs, ys, start, limits,
+                       evaluate):
+    """A bounded deterministic search over starting scales, not parameter names."""
+    # Jointly affine parameters (e.g. A and C) can be initialized by linear
+    # least squares for each nonlinear seed. Exclude products such as A*B.
+    affine = []
+    symbolic_derivatives = [s.diff(expression, p) for p in parameters]
+    for i, parameter in enumerate(parameters):
+        derivative = symbolic_derivatives[i]
+        if not derivative.has(parameter) and all(not derivative.has(parameters[j]) for j in affine):
+            affine.append(i)
+    nonlinear = [i for i in range(len(parameters)) if i not in affine]
+    x_scale = max(max(xs)-min(xs), max(abs(x) for x in xs))
+    natural = start[:]
+    # Recognize both exp(-k*x) and exp(-x/tau), including renamed parameters
+    # and constant unit factors. Bounds, rather than guessed names, set domains.
+    for exponential in sorted(expression.atoms(s.exp), key=str):
+        coefficient = s.diff(exponential.args[0], independent)
+        for i in nonlinear:
+            parameter = parameters[i]
+            if coefficient.free_symbols != {parameter}: continue
+            power = s.cancel(parameter*s.diff(coefficient, parameter)/coefficient)
+            if power not in (s.Integer(1), s.Integer(-1)): continue
+            factor = float(coefficient.subs(parameter, 1))
+            if not math.isfinite(factor) or factor == 0: continue
+            natural[i] = (1/(abs(factor)*x_scale) if power == 1 else abs(factor)*x_scale)
+
+    def prepare(seed):
+        seed = [min(max(value, lower), upper) for value, (lower, upper) in zip(seed, limits)]
+        if not affine: return seed
+        zeroed = seed[:]
+        for i in affine: zeroed[i] = 0.0
+        current = evaluate(zeroed, True)
+        if current is not None:
+            _, residual, jacobian = current
+            solution = _regression_qr([[row[i] for i in affine] for row in jacobian], residual)
+            if solution is not None:
+                for i, value in zip(affine, solution):
+                    seed[i] = min(max(value, limits[i][0]), limits[i][1])
+        return seed
+
+    candidates = []
+    seen = set()
+    def add(seed):
+        seed = prepare(seed)
+        key = tuple(seed)
+        if key in seen: return
+        seen.add(key)
+        current = evaluate(seed, True)
+        if current is not None: candidates.append((current[0], seed, current))
+
+    add(start)
+    add(natural)
+    # A small beam limits work even for models with several nonlinear
+    # parameters, while combining useful scales instead of changing one seed.
+    for i in nonlinear:
+        bases = [item[1] for item in sorted(candidates, key=lambda item: item[0])[:3]] or [natural]
+        base = natural[i] or 1.0
+        guesses = [base*factor for factor in (0.01, 0.1, 1.0, 10.0, 100.0, -0.1, -1.0, -10.0)]
+        lower, upper = limits[i]
+        if math.isfinite(lower) and math.isfinite(upper):
+            guesses += [lower + (upper-lower)*fraction for fraction in (0.1, 0.5, 0.9)]
+        for seed in bases:
+            for guess in guesses:
+                trial = seed[:]
+                trial[i] = guess
+                add(trial)
+        candidates = sorted(candidates, key=lambda item: item[0])[:8]
+    return sorted(candidates, key=lambda item: item[0])[:6]
+
+
+def _regression_optimize(seed, current, limits, evaluate):
+    """Scaled LM with projected gradients and explicit convergence status."""
+    values = seed[:]
+    damping = 1e-3
+    for _ in range(160):
+        cost, residual, jacobian = current
+        if cost <= 1e-26: return values, current, True
+        norms = [math.hypot(*(row[i] for row in jacobian)) for i in range(len(values))]
+        gradient = [math.fsum(row[i]*r for row, r in zip(jacobian, residual)) for i in range(len(values))]
+        active = [i for i, (value, (lower, upper)) in enumerate(zip(values, limits))
+                  if not (value <= lower and gradient[i] <= 0 or value >= upper and gradient[i] >= 0)]
+        if any(norms[i] == 0 for i in active): return values, current, False
+        if not active or max(abs(gradient[i])/norms[i] for i in active) <= 1e-8*math.sqrt(cost) + 1e-14*math.sqrt(len(residual)):
+            return values, current, True
+        design = [[row[i] for i in active] for row in jacobian]
+        improved = False
+        for _ in range(16):
+            step = _regression_qr(design, residual, damping)
+            if step is None: return values, current, False
+            trial = values[:]
+            for i, delta in zip(active, step):
+                trial[i] = min(max(values[i]+delta, limits[i][0]), limits[i][1])
+            candidate = evaluate(trial, True)
+            if candidate is not None and candidate[0] < cost:
+                values, current = trial, candidate
+                damping = max(damping/3, 1e-12)
+                improved = True
+                break
+            damping *= 10
+        if not improved: return values, current, False
+    return values, current, False
+
+
 def fit_custom_regression(engine, rows, expression, independent, options=None):
     """Fit an arbitrary real y(x) with damped nonlinear least squares.
 
     options is a list of [parameter, initial, lower?, upper?] rows. Omitted
-    initials use scale-aware defaults; omitted bounds are unbounded.
+    initials use a scale-aware multi-start search; omitted bounds are unbounded.
     """
     require(isinstance(independent, s.Symbol), "Choose an independent variable")
     require(isinstance(expression, s.Expr) and not isinstance(expression, Relational),
@@ -718,7 +860,7 @@ def fit_custom_regression(engine, rows, expression, independent, options=None):
     except (TypeError, ValueError, OverflowError):
         raise MathError("Regression data must be real numbers")
     span = max(xs) - min(xs)
-    require(span > 0 and len(set(xs)) >= len(parameters) + 1, "Use more distinct x values")
+    require(math.isfinite(span) and span > 0 and len(set(xs)) >= len(parameters) + 1, "Use more distinct x values")
     scale = max(abs(v) for v in ys) or 1.0
     start = []
     limits = []
@@ -765,25 +907,40 @@ def fit_custom_regression(engine, rows, expression, independent, options=None):
         try:
             predicted = [float(model(x, *values)) for x in xs]
             if not all(math.isfinite(v) for v in predicted): return None
-            residual = [y - predicted[i] for i, y in enumerate(ys)]
-            cost = sum(v*v for v in residual)
+            residual = [y/scale - predicted[i]/scale for i, y in enumerate(ys)]
+            cost = math.fsum(v*v for v in residual)
             if not math.isfinite(cost): return None
             if not with_jacobian: return cost
-            jacobian = [[float(derivative(x, *values)) for derivative in derivatives] for x in xs]
+            jacobian = [[float(derivative(x, *values))/scale for derivative in derivatives] for x in xs]
             if not all(math.isfinite(v) for row in jacobian for v in row): return None
             return cost, residual, jacobian
         except (ArithmeticError, TypeError, ValueError, OverflowError):
             return None
 
-    values = start[:]
-    current = evaluate(values, True)
-    require(current is not None, "Initial values are outside the model domain")
+    starts = _regression_starts(expression, independent, parameters, xs, ys, start, limits,
+                                evaluate)
+    require(starts, "Initial values are outside the model domain")
+    best = None
+    for _, seed, candidate in starts:
+        fitted_values, fitted_current, converged = _regression_optimize(seed, candidate, limits, evaluate)
+        if not converged: continue
+        # A plateau with zero/rank-deficient sensitivities does not determine
+        # all requested parameters, even if its residual happens to be small.
+        if _regression_qr(fitted_current[2], fitted_current[1]) is None: continue
+        if best is None or fitted_current[0] < best[1][0]: best = fitted_values, fitted_current
+        if best[1][0] <= 1e-26: break
+    require(best is not None, "Custom fitting did not converge to identifiable parameters. Try initial values or bounds, or simplify the model.")
+    values, current = best
     def fitted_expression():
         # The float fit finds a basin quickly. Refine against the original data so
         # parameter values and the fitted expression use internal precision.
-        with mp.workdps(engine.precision + 12):
+        # Near a nonzero least-squares minimum, objective improvements are
+        # quadratic in the parameter error. Extra working digits keep those
+        # improvements visible through the requested parameter precision.
+        with mp.workdps(2*engine.precision + 12):
             mp_xs = [_mpf(row[0], engine.precision) for row in rows]
-            mp_ys = [_mpf(row[1], engine.precision) for row in rows]
+            mp_scale = _mpf(s.Float(repr(scale)), engine.precision)
+            mp_ys = [_mpf(row[1], engine.precision)/mp_scale for row in rows]
             mp_limits = [(None if lower == -s.oo else _mpf(lower, engine.precision),
                           None if upper == s.oo else _mpf(upper, engine.precision))
                          for lower, upper in precise_limits]
@@ -794,9 +951,9 @@ def fit_custom_regression(engine, rows, expression, independent, options=None):
 
             def evaluate_precise(coefficients):
                 try:
-                    predicted = [mp.mpf(mp_model(x, *coefficients)) for x in mp_xs]
+                    predicted = [mp.mpf(mp_model(x, *coefficients))/mp_scale for x in mp_xs]
                     residual = [y - p for y, p in zip(mp_ys, predicted)]
-                    jacobian = [[mp.mpf(derivative(x, *coefficients)) for derivative in mp_derivatives]
+                    jacobian = [[mp.mpf(derivative(x, *coefficients))/mp_scale for derivative in mp_derivatives]
                                 for x in mp_xs]
                     if not all(mp.isfinite(v) for v in predicted + residual + [v for row in jacobian for v in row]):
                         return None
@@ -808,60 +965,46 @@ def fit_custom_regression(engine, rows, expression, independent, options=None):
             require(current_precise is not None, "Numerical fitting failed")
             damping_precise = mp.mpf("0.001")
             tolerance = mp.power(10, -engine.precision - 2)
-            for _ in range(max(30, engine.precision // 3)):
+            for _ in range(max(60, 2*engine.precision)):
                 cost, residual, jacobian = current_precise
                 if cost == 0: break
-                normal = mp.matrix([[mp.fsum(row[i]*row[j] for row in jacobian)
-                                     for j in range(len(parameters))] for i in range(len(parameters))])
-                gradient = mp.matrix([mp.fsum(row[i]*r for row, r in zip(jacobian, residual))
-                                      for i in range(len(parameters))])
+                raw_gradient = [mp.fsum(row[i]*r for row, r in zip(jacobian, residual))
+                                for i in range(len(parameters))]
+                active = [i for i, (value, (lower, upper)) in enumerate(zip(refined, mp_limits))
+                          if not (lower is not None and value <= lower and raw_gradient[i] <= 0
+                                  or upper is not None and value >= upper and raw_gradient[i] >= 0)]
+                if not active: break
+                column_scales = [mp.sqrt(mp.fsum(row[i]**2 for row in jacobian)) for i in active]
+                if any(value == 0 for value in column_scales): break
+                scaled_jacobian = [[row[i]/scale for i, scale in zip(active, column_scales)] for row in jacobian]
+                normal = mp.matrix([[mp.fsum(row[i]*row[j] for row in scaled_jacobian)
+                                     for j in range(len(active))] for i in range(len(active))])
+                gradient = mp.matrix([mp.fsum(row[i]*r for row, r in zip(scaled_jacobian, residual))
+                                      for i in range(len(active))])
                 improved = False
                 for _ in range(12):
                     matrix = normal.copy()
-                    for i in range(len(parameters)):
-                        matrix[i, i] += damping_precise * max(normal[i, i], tolerance)
+                    for i in range(len(active)):
+                        matrix[i, i] += damping_precise
                     try: step = mp.lu_solve(matrix, gradient)
                     except (ValueError, ZeroDivisionError): break
-                    trial = [refined[i] + step[i] for i in range(len(parameters))]
+                    trial = refined[:]
+                    for j, i in enumerate(active): trial[i] += step[j]/column_scales[j]
                     trial = [max(lower, value) if lower is not None else value
                              for value, (lower, _) in zip(trial, mp_limits)]
                     trial = [min(upper, value) if upper is not None else value
                              for value, (_, upper) in zip(trial, mp_limits)]
                     candidate = evaluate_precise(trial)
                     if candidate is not None and candidate[0] < cost:
-                        change = max(abs(a-b) for a, b in zip(trial, refined))
+                        change = max(abs(a-b)/max(abs(a), abs(b), mp.mpf("1e-100")) for a, b in zip(trial, refined))
                         refined, current_precise = trial, candidate
                         damping_precise = max(damping_precise/3, tolerance)
                         improved = True
                         break
                     damping_precise *= 10
-                if not improved or change < tolerance * max(1, *(abs(v) for v in refined)): break
+                if not improved or change < tolerance: break
             fitted = [s.Float(str(value), engine.precision) for value in refined]
         engine.regression_parameters = [[str(parameter), str(value)]
                                         for parameter, value in zip(parameters, fitted)]
         return expression.subs(dict(zip(parameters, fitted)))
-    damping = 1e-3
-    for _ in range(100):
-        cost, residual, jacobian = current
-        if cost <= 1e-24 * max(1.0, sum(y*y for y in ys)): break
-        normal = [[sum(row[i]*row[j] for row in jacobian) for j in range(len(parameters))] for i in range(len(parameters))]
-        gradient = [sum(row[i]*r for row, r in zip(jacobian, residual)) for i in range(len(parameters))]
-        diagonal = [max(normal[i][i], 1e-12) for i in range(len(parameters))]
-        improved = False
-        for _ in range(12):
-            matrix = s.Matrix([[normal[i][j] + (damping*diagonal[i] if i == j else 0) for j in range(len(parameters))] for i in range(len(parameters))])
-            try: step = [float(v) for v in matrix.LUsolve(s.Matrix(gradient))]
-            except Exception: break
-            trial = [min(max(value + delta, limits[i][0]), limits[i][1]) for i, (value, delta) in enumerate(zip(values, step))]
-            candidate = evaluate(trial, True)
-            if candidate is not None and candidate[0] < cost:
-                change = max(abs(a-b) for a, b in zip(trial, values))
-                values, current = trial, candidate
-                damping = max(damping/3, 1e-12)
-                improved = True
-                if change < 1e-12 * max(1.0, max(abs(v) for v in values)): return fitted_expression()
-                break
-            damping *= 10
-        if not improved: break
-    require(math.isfinite(current[0]), "Numerical fitting failed")
     return fitted_expression()
