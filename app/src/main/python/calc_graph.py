@@ -16,7 +16,8 @@ def graph_expressions(engine, trees, axes):
     context = {"trees": trees, "axes": axes, "precision": engine.precision,
                "displayDigits": engine.display_digits, "angle": engine.angle,
                "variables": engine.variables, "functions": engine.functions,
-               "assumptions": engine.assumptions, "sequence": engine.allow_sequence_calls}
+               "assumptions": engine.assumptions, "sequence": engine.allow_sequence_calls,
+               "bindings": {name:s.srepr(value) for name,value in engine.bindings.items()}}
     key = json.dumps(context, sort_keys=True, separators=(",", ":"))
     # Random calls must run anew, including those inside stored definitions.
     cacheable = not any('"value":"'+name+'"' in key for name in ("rnd", "rand", "randInt"))
@@ -78,13 +79,20 @@ def regression_samples(engine, value, rows, request):
         if math.isfinite(y) and abs(y)<1e100: curve.append([at,y])
     return curve
 
+def bind_graph_parameters(engine, request):
+    # A visible graph parameter takes precedence over a separately stored variable.
+    for name in request.get("parameters",{}): engine.bindings[str(name)]=engine.symbol(str(name))
+
 def graph(engine, request):
+    bind_graph_parameters(engine,request)
     kind = request.get("graphKind","cartesian")
     trees = request.get("trees",[])
     start,end = float(request.get("min",-10)),float(request.get("max",10))
     require(math.isfinite(start) and math.isfinite(end) and end>start,"Invalid graph range")
     if kind == "implicit":
         return graph_implicit(engine, request, trees, start, end)
+    if kind == "cartesian":
+        return graph_cartesian(engine, request, trees, start, end)
     if kind == "sequence":
         return graph_sequence(engine, request, trees, start, end)
     if kind == "surface":
@@ -116,6 +124,90 @@ def graph(engine, request):
         result["shadings"] = graph_shading(engine, request, shade_items, shade_expressions, sliders, start, end)
     return result
 
+@lru_cache(maxsize=128)
+def cartesian_curve(expression, x, y):
+    """A bare f(x) means y=f(x); equations and expressions using y define contours."""
+    if isinstance(expression, s.Equality):
+        residual = expression.lhs-expression.rhs
+    else:
+        require(isinstance(expression, s.Expr), "Enter a function y=f(x) or an equation F(x,y)=0")
+        if not expression.has(y): return expression, y-expression
+        residual = expression
+    require(isinstance(residual, s.Expr) and residual != 0, "Equation is true everywhere; enter a curve equation")
+    # Keep ordinary equations on the fast function sampler and analysis path.
+    try:
+        polynomial = s.Poly(residual, y)
+        if polynomial.degree() == 1:
+            coefficient, constant = polynomial.all_coeffs()
+            return -constant/coefficient, residual
+    except s.PolynomialError: pass
+    return None, residual
+
+@lru_cache(maxsize=64)
+def cartesian_branches(residual, y):
+    try:
+        return tuple(branch for branch in s.solve(residual, y) if isinstance(branch, s.Expr) and not branch.has(y))
+    except (NotImplementedError, ValueError, TypeError): return ()
+
+def contour_curve(expression, x, y, sliders, xmin, xmax, ymin, ymax, count):
+    numeric = substitute_parameters(expression, sliders)
+    require(numeric != 0, "Equation is true everywhere; enter a curve equation")
+    program = _square_free_graph(expression, x, y)
+    bound = substitute_parameters(program, sliders)
+    if bound.is_polynomial(x, y):
+        polynomial = s.Poly(bound, x, y)
+        if polynomial.total_degree() <= 12:
+            square_free = polynomial.sqf_part()
+            if square_free.total_degree() != polynomial.total_degree():
+                program, sliders = square_free.as_expr(), None
+    return implicit_samples(graph_function(program, (x, y), sliders), xmin, xmax, ymin, ymax, count)
+
+def graph_cartesian(engine, request, trees, xmin, xmax):
+    x, y = engine.symbol("x"), engine.symbol("y")
+    engine.bindings.update({"x": x, "y": y})
+    raw = graph_expressions(engine, trees, ("x", "y"))
+    curvespecs = [cartesian_curve(expression, x, y) for expression in raw]
+    shade_items = request.get("shadings") or []
+    shade_expressions = [graph_expressions(engine, item.get("trees") or [], ("x", "y")) for item in shade_items]
+    all_expressions = [residual for _, residual in curvespecs]+[expression for group in shade_expressions for expression in group]
+    names = parameter_names(all_expressions, {"x", "y"})
+    sliders = {symbol: value for symbol, value in resolved_parameters(engine, request, all_expressions, {"x", "y"}).items() if symbol not in (x, y)}
+    count = min(1600, max(100, int(request.get("samples", 500))))
+    contour_count = min(240, max(80, int(math.sqrt(count))*8))
+    ymin, ymax = float(request.get("yMin", -5)), float(request.get("yMax", 5))
+    require(math.isfinite(ymin) and math.isfinite(ymax) and ymax > ymin, "Invalid implicit y range")
+    curves, implicit = [], []
+    def sample(expression):
+        points, parameters = adaptive_samples(graph_function(expression, (x,), sliders), xmin, xmax, count, "cartesian")
+        return simplify_samples(points, parameters, request, xmin, xmax)[0]
+    for function, residual in curvespecs:
+        # A parameter may make a linear equation degenerate (e.g. a*y=x at a=0).
+        if function is not None and not substitute_parameters(function, sliders).has(s.zoo, s.nan, s.oo, -s.oo):
+            curves.append(sample(function)); implicit.append(False)
+        else:
+            curves.append(contour_curve(residual, x, y, sliders, xmin, xmax, ymin, ymax, contour_count)); implicit.append(True)
+    result = {"curves": curves, "parameters": sorted(names), "implicitCurves": implicit}
+    selected = request.get("derivativeSelected")
+    if isinstance(selected, int) and 0 <= selected < len(curvespecs):
+        function, residual = curvespecs[selected]
+        branches = (function,) if function is not None else cartesian_branches(residual, y)
+        require(branches, "Derivative graph requires branches expressible as y=f(x)")
+        derivatives = tuple(s.diff(branch, x) for branch in branches)
+        points = []
+        for derivative in derivatives:
+            if points: points.append(None)
+            points.extend(sample(derivative))
+        result.update(derivativeCurveIndex=len(curves), derivativeSelected=selected,
+                      derivativeExpression=readable(derivatives[0] if len(derivatives)==1 else s.Tuple(*derivatives)))
+        curves.append(points)
+    else:
+        index = request.get("derivativeCurveIndex")
+        if isinstance(index, int) and 0 <= index < len(curvespecs):
+            result["derivativeExpression"] = readable(curvespecs[index][0])
+    if shade_items:
+        result["shadings"] = graph_shading(engine, request, shade_items, shade_expressions, sliders, xmin, xmax)
+    return result
+
 def graph_implicit(engine, request, trees, xmin, xmax):
     """Contour F(x,y)=0 with finite, independently separated line segments."""
     ymin, ymax = float(request.get("yMin", -3)), float(request.get("yMax", 3))
@@ -136,23 +228,7 @@ def graph_implicit(engine, request, trees, xmin, xmax):
     count = min(240, max(80, int(math.sqrt(max(1, int(request.get("samples", 500))))*8)))
     curves = []
     for expression in expressions:
-        numeric = substitute_parameters(expression, sliders)
-        require(numeric != 0, "Equation is true everywhere; enter a curve equation")
-        # Keep parameters in the compiled program. Normalize repeated factors
-        # once, checking for new multiplicities at special slider values.
-        program = _square_free_graph(expression, x, y)
-        bound = substitute_parameters(program, sliders)
-        if bound.is_polynomial(x, y):
-            polynomial = s.Poly(bound, x, y)
-            if polynomial.total_degree() <= 12:
-                square_free = polynomial.sqf_part()
-                if square_free.total_degree() != polynomial.total_degree():
-                    program, sliders_for_curve = square_free.as_expr(), None
-                else: sliders_for_curve = sliders
-            else: sliders_for_curve = sliders
-        else: sliders_for_curve = sliders
-        function = graph_function(program, (x, y), sliders_for_curve)
-        curves.append(implicit_samples(function, xmin, xmax, ymin, ymax, count))
+        curves.append(contour_curve(expression, x, y, sliders, xmin, xmax, ymin, ymax, count))
     return {"curves": curves, "implicit": True, "parameters": sorted(names)}
 
 def implicit_samples(function, xmin, xmax, ymin, ymax, count):
@@ -593,16 +669,140 @@ def graph_differential(engine, request, trees, start, end):
             if dy is not None: fields.append([at,value,dy])
     return {"curves":curves,"fields":fields,"differential":True,"parameters":sorted(names)}
 
-def graph_analysis(engine, request):
+def integral_fill(expression, variable, a, b):
+    """Sample the integration interval independently of the simplified viewport curve."""
+    points, _ = adaptive_samples(graph_function(expression,(variable,)),a,b,400,"cartesian")
+    polygons, segment = [], []
+    def flush():
+        if len(segment)>1: polygons.append([[segment[0][0],0.0],*segment,[segment[-1][0],0.0]])
+        segment.clear()
+    for point in points:
+        if point is None: flush()
+        else: segment.append(point)
+    flush()
+    return polygons
+
+def polynomial_real_roots(expression, variable):
+    """Isolate real roots numerically without constructing quartic radical formulas.
+
+    Exact rational coefficients retain repeated/tangent roots and avoid nroots'
+    convergence failures at multiple roots. None means a non-polynomial target.
+    """
+    try:
+        numerator = s.together(expression).as_numer_denom()[0]
+        polynomial = s.Poly(numerator, variable)
+        if polynomial.degree()>32 or any(coefficient.free_symbols for coefficient in polynomial.all_coeffs()): return None
+        require(not polynomial.is_zero, "Select two different curves")
+        return [float((low+high)/2) for (low,high),_ in polynomial.to_exact().intervals(eps=s.Rational(1,10**20))]
+    except (s.PolynomialError, s.polys.polyerrors.DomainError, NotImplementedError): return None
+
+def implicit_analysis(engine, request, curves, x, y, numeric, zeroes, tangent_point):
+    """Analyze all branches for searches; use the traced point for a local branch."""
+    selected, other = int(request.get("selected", 0)), int(request.get("other", 1))
+    action = request.get("analysis", "root")
+    a, b = float(request.get("a", -10)), float(request.get("b", 10))
+    function, residual = curves[selected]
+    residual = _square_free_graph(residual, x, y)
+    def finite(expression):
+        try: return _finite_real(expression.evalf(engine.precision))
+        except (TypeError, ValueError, OverflowError): return None
+    def solutions(expression, variable):
+        try: return s.solve(expression, variable)
+        except (NotImplementedError, ValueError, TypeError): return []
+    def valid(px, py, expressions=(residual,)):
+        for expression in expressions:
+            value = finite(expression.subs({x: px, y: py}))
+            if value is None or abs(value)>1e-6: return False
+        return True
+    def collect(points):
+        found = []
+        for point in sorted(points):
+            if all(math.hypot(point[0]-old[0], point[1]-old[1])>1e-6 for old in found): found.append(point)
+        return {"analysis": action, "points": found[:80], "count": min(80,len(found)), "truncated": len(found)>80, "implicit": True}
+    if action == "root":
+        target = residual.subs(y, 0)
+        require(target != 0, "The curve lies on the x axis; roots are not isolated")
+        positions = zeroes(numeric(target, x))
+        positions += [value for value in (finite(root) for root in solutions(target, x)) if value is not None and a-1e-9 <= value <= b+1e-9]
+        return collect([[px, 0.0] for px in positions if valid(px, 0)])
+    if action == "intersection":
+        target = curves[other][1]
+        # Substitute a known function first: a parabola against a circle becomes
+        # one quartic whose real roots can be isolated quickly at current sliders.
+        explicit = function if function is not None else curves[other][0]
+        if explicit is not None:
+            reduced = (target if function is not None else residual).subs(y,explicit)
+            positions = polynomial_real_roots(reduced,x)
+            if positions is not None:
+                value=numeric(explicit,x)
+                return collect([[px,py] for px in positions for py in [value(px)] if py is not None and a-1e-9 <= px <= b+1e-9 and valid(px,py,(residual,target))])
+        require(residual-target != 0, "Select two different curves")
+        try: pairs = s.solve((residual, target), (x, y), dict=True)
+        except (NotImplementedError, ValueError, TypeError): pairs = []
+        points = []
+        for pair in pairs:
+            px, py = finite(pair.get(x,s.nan)), finite(pair.get(y,s.nan))
+            if px is not None and py is not None and a-1e-9 <= px <= b+1e-9 and valid(px,py,(residual,target)): points.append([px,py])
+        if points: return collect(points)
+        # Numerical branch searches also cover transcendental intersections.
+        first = (function,) if function is not None else cartesian_branches(residual, y)
+        second = (curves[other][0],) if curves[other][0] is not None else cartesian_branches(target, y)
+        require(first and second or pairs, "These curves cannot be analyzed as y=f(x) branches")
+        for left in first:
+            for right in second:
+                response = graph_analysis(engine, {**request,"selected":0,"other":1}, (left,right))
+                points.extend(point for point in response["points"] if valid(*point,(residual,target)))
+        return collect(points)
+    if action in ("derivative", "tangent"):
+        ordinates = [value for value in (finite(root) for root in solutions(residual.subs(x,s.Float(a)), y)) if value is not None and valid(a,value)]
+        require(ordinates, "Curve is undefined at this x coordinate")
+        hint = request.get("tracePoint")
+        require(len(ordinates)==1 or isinstance(hint,(list,tuple)) and len(hint)==2, "Tap a point on the curve to choose a branch")
+        py = min(ordinates, key=lambda value:abs(value-float(hint[1]))) if hint else ordinates[0]
+        horizontal, vertical = finite(s.diff(residual,x).subs({x:a,y:py})), finite(s.diff(residual,y).subs({x:a,y:py}))
+        require(horizontal is not None and vertical is not None and math.hypot(horizontal,vertical)>1e-12, "Tangent is undefined at this point")
+        slope = -horizontal/vertical if abs(vertical)>1e-12 else None
+        if action == "tangent": return {**tangent_point(a,py,slope,(vertical,-horizontal)),"implicit":True}
+        payload = {"analysis":action,"points":[[a,py]],"implicit":True}
+        if slope is None: payload["vertical"]=True
+        else: payload["value"]=slope
+        return payload
+    branches = (function,) if function is not None else cartesian_branches(residual, y)
+    require(branches, "This curve cannot be analyzed as y=f(x) branches")
+    if action in ("integral", "arclength"):
+        hint = request.get("tracePoint")
+        if len(branches)>1:
+            require(isinstance(hint,(list,tuple)) and len(hint)==2, "Tap a point on the curve to choose a branch")
+            candidates = [(abs(value-float(hint[1])),branch) for branch in branches for value in [finite(branch.subs(x,float(hint[0])))] if value is not None]
+            require(candidates, "Curve is undefined at this x coordinate")
+            branches = (min(candidates,key=lambda pair:pair[0])[1],)
+        return {**graph_analysis(engine,{**request,"selected":0},branches),"implicit":True}
+    points = []
+    for branch in branches:
+        try:
+            response = graph_analysis(engine,{**request,"selected":0},(branch,))
+            points.extend(point for point in response["points"] if valid(*point))
+        except MathError:
+            # A branch may have no real values inside the requested interval.
+            continue
+    if action in ("minimum", "maximum"):
+        require(points, "No finite values in this range")
+        limit = (min if action=="minimum" else max)(py for _,py in points)
+        points = [point for point in points if abs(point[1]-limit)<=max(1e-8,abs(limit)*1e-8)]
+    return collect(points)
+
+def graph_analysis(engine, request, _expressions=None):
+    bind_graph_parameters(engine,request)
     kind = request.get("graphKind","cartesian")
     trees = request.get("trees",[])
     require(kind in ("cartesian","parametric","polar"), "Analysis supports Cartesian, parametric and polar curves")
     selected = int(request.get("selected", 0)); other = int(request.get("other", 1))
-    require(0 <= selected < len(trees), "Select a function")
+    size = len(trees) if _expressions is None else len(_expressions)
+    require(0 <= selected < size, "Select a function")
     action = request.get("analysis", "root")
     require(action in ("root","intersection","minimum","maximum","inflection","derivative","tangent","integral","arclength"), "Unknown graph analysis")
     require(action != "intersection" or kind == "cartesian", "Intersections need two Cartesian functions")
-    if action == "intersection": require(0 <= other < len(trees) and other != selected, "Select two different functions")
+    if action == "intersection": require(0 <= other < size and other != selected, "Select two different functions")
     a = float(request.get("a", -10)); b = float(request.get("b", 10))
     singled = action in ("derivative", "tangent")
     require(math.isfinite(a) and math.isfinite(b) and (singled or a < b) and abs(b-a) <= 1e9, "Invalid analysis range")
@@ -655,11 +855,14 @@ def graph_analysis(engine, request):
             payload["line"] = [[xmin,py+slope*(xmin-px)],[xmax,py+slope*(xmax-px)]]
         return payload
     if kind == "cartesian":
-        x = engine.symbol("x"); engine.bindings["x"] = x
-        raw = [engine.build(tree) for tree in trees]
-        sliders = resolved_parameters(engine, request, raw, {"x"})
-        expressions = [substitute_parameters(expression, sliders) for expression in raw]
-        require(all(isinstance(expression, s.Expr) for expression in expressions), "Enter Cartesian functions")
+        x, y = engine.symbol("x"), engine.symbol("y")
+        engine.bindings.update({"x":x,"y":y})
+        raw = graph_expressions(engine, trees, ("x","y")) if _expressions is None else _expressions
+        sliders = {symbol:value for symbol,value in resolved_parameters(engine,request,raw,{"x","y"}).items() if symbol not in (x,y)}
+        curves = [cartesian_curve(substitute_parameters(expression,sliders),x,y) for expression in raw]
+        if curves[selected][0] is None or action=="intersection" and curves[other][0] is None:
+            return implicit_analysis(engine,request,curves,x,y,numeric,zeroes,tangent_point)
+        expressions = [function for function,_ in curves]
         expression = expressions[selected]
         target = expression-expressions[other] if action == "intersection" else expression
         value = numeric(expression, x)
@@ -687,7 +890,7 @@ def graph_analysis(engine, request):
         if action == "integral":
             result = s.Integral(expression, (x, s.Float(a), s.Float(b))).evalf(engine.precision, strict=True)
             require(result.is_real and result.is_finite, "Numerical convergence failed")
-            return {"analysis":action,"points":[],"value":float(result)}
+            return {"analysis":action,"points":[],"value":float(result),"integralFill":integral_fill(expression,x,a,b)}
         tested = numeric(target, x)
         if action in ("root", "intersection"):
             positions = zeroes(tested)

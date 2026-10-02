@@ -14,10 +14,16 @@ export function createAppState(saved={},browserLanguage='en') {
     recent:Array.isArray(saved.recent)?saved.recent:[],
     precision:Math.max(3,Math.min(200,Number(saved.precision)||30)),
     digits:Math.max(2,Math.min(200,Number(saved.precision)||30,Number(saved.digits)||10)),
-    fields:objectOrEmpty(saved.fields),
+    fields:{...objectOrEmpty(saved.fields)},
+    graph:{...objectOrEmpty(saved.graph)},
     matrixCells:objectOrEmpty(saved.matrixCells),
     rates:objectOrEmpty(saved.rates)
   };
+  if(state.fields['graph-kind']==='implicit'){
+    const source=state.fields['graph-source']||state.graph.sources?.implicit||'x^2+y^2=1';
+    state.fields['graph-kind']='cartesian';state.fields['graph-source']=source;
+    state.graph.sources={...objectOrEmpty(state.graph.sources),cartesian:source};
+  }
   state.language=initialLanguage(saved,browserLanguage);
   state.languageChosen=saved.languageChosen===true;
   state.theme=['system','light','dark'].includes(saved.theme)?saved.theme:'system';

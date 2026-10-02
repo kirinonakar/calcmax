@@ -42,6 +42,12 @@ test('field restoration keeps valid choices and restores options populated after
   restoreSelect(state,'dynamic');assert.equal($('dynamic').value,'2');
   state.fields.mode='matrix';restoreSelect(state,'mode');assert.equal($('mode').value,'matrix');
 });
+test('legacy implicit workspace migrates to Cartesian with its equation and saved bounds',()=>{
+  const saved={fields:{'graph-kind':'implicit','graph-source':'y^2+x^2=1'},graph:{sources:{implicit:'y^2+x^2=1',cartesian:'x+1'},ranges:{'graph-min':-2,'graph-max':2}}};
+  const state=createAppState(saved);
+  assert.equal(state.fields['graph-kind'],'cartesian');assert.equal(state.graph.sources.cartesian,'y^2+x^2=1');assert.deepEqual(state.graph.ranges,saved.graph.ranges);
+  assert.equal(saved.fields['graph-kind'],'implicit');assert.equal(saved.graph.sources.cartesian,'x+1','migration leaves the input backup intact');
+});
 
 test('persistence saves the CALC formula and graph draft while disabled history stays in memory',t=>{
   const $=page(t),history=[{source:'1+1',exact:'2'}],state=createAppState({history,persistHistory:false});

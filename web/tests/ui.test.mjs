@@ -1,4 +1,4 @@
-import {installCanvas,curveStrokes} from './canvas-context.mjs';
+import {installCanvas,curveStrokes,surfaceFills} from './canvas-context.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
@@ -9,7 +9,7 @@ import {appVersion} from '../app-version.js';
 
 async function waitFor(check,message,timeout=15000) {
   const deadline=Date.now()+timeout;
-  while(!check()){if(Date.now()>deadline)throw new Error(`Timeout: ${message}; answer=${globalThis.document?.getElementById('answer')?.textContent}; status=${globalThis.document?.getElementById('status')?.textContent}`);await new Promise(resolve=>setTimeout(resolve,25));}
+  while(!check()){if(Date.now()>deadline)throw new Error(`Timeout: ${message}; answer=${globalThis.document?.getElementById('answer')?.textContent}; status=${globalThis.document?.getElementById('status')?.textContent}; graph=${globalThis.document?.getElementById('graph-status')?.textContent}; analysis=${globalThis.document?.getElementById('graph-analysis-result')?.textContent}`);await new Promise(resolve=>setTimeout(resolve,25));}
 }
 test('DOM workflows use the production Worker, real WASM, both languages, and themes',async t=>{
   const dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'),{url:'http://localhost/',pretendToBeVisual:true});
@@ -665,6 +665,11 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
     change('graph-analysis-action','tangent');$('graph-analysis-a').value='1';$('graph-analysis-run').click();await waitFor(()=>$('graph-plot').querySelector('canvas').getContext('2d').commands.some(c=>c.op==='stroke'&&c.lineDash[0]===6),'tangent overlay');assert.equal(Array.from($('graph-analysis').querySelectorAll('input[type="range"]')).filter(input=>!input.closest('[hidden]')).length,1,'only one tangent slider is visible');
     $('graph-tangent-slider').value='.5';$('graph-tangent-slider').dispatchEvent(new window.Event('input'));$('graph-tangent-slider').dispatchEvent(new window.Event('change'));await waitFor(()=>$('graph-analysis-result').textContent.includes('0.5')&&!$('graph-analysis-run').disabled,'moving tangent');
     for(const action of ['derivative','integral','arclength']){change('graph-analysis-action',action);$('graph-analysis-a').value='0';$('graph-analysis-b').value='1';$('graph-analysis-run').click();await waitFor(()=>$('graph-analysis-result').firstChild?.textContent==={derivative:'Derivative',integral:'Integral',arclength:'Arc length'}[action]&&!$('graph-analysis-run').disabled,action);assert.ok($('graph-analysis-result').querySelector('math'));}
+    $('graph-source').value='x+3';$('graph-source').dispatchEvent(new window.Event('input'));document.querySelector('[data-run="graph"]').click();await waitFor(()=>!$('graph-analysis-run').disabled,'linear integral source');
+    change('graph-analysis-action','integral');$('graph-analysis-a').value='0';$('graph-analysis-b').value='1';$('graph-analysis-run').click();
+    await waitFor(()=>$('graph-analysis-result').firstChild?.textContent==='Integral'&&!$('graph-analysis-run').disabled,'linear integral');
+    assert.ok(surfaceFills($('graph-plot')).some(fill=>fill.globalAlpha===.18&&fill.path.filter(p=>p.op==='lineTo').length>100),'linear integral has a continuous filled area');
+    $('graph-source').value='x^2-1\nx';$('graph-source').dispatchEvent(new window.Event('input'));document.querySelector('[data-run="graph"]').click();await waitFor(()=>curveStrokes($('graph-plot')).length===2&&!$('graph-analysis-run').disabled,'restored source after integral shading');
     $('graph-derivative').checked=true;$('graph-derivative').dispatchEvent(new window.Event('change'));await waitFor(()=>curveStrokes($('graph-plot')).length===3,'derivative curve');
     const before=Number($('graph-max').value)-Number($('graph-min').value);$('graph-zoom-in').click();assert.ok(Number($('graph-max').value)-Number($('graph-min').value)<before);await waitFor(()=>!$('graph-analysis-run').disabled,'zoom sampling');
     for(const cell of $('graph-table').querySelectorAll('td')){const match=/\.([0-9]+)(?:e|$)/i.exec(cell.textContent);if(match)assert.ok(match[1].length<=3,cell.textContent);}
@@ -673,9 +678,10 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
     $('graph-source').value='[2*cos(t),sin(t)]';$('graph-source').dispatchEvent(new window.Event('input'));change('graph-kind','cartesian');assert.equal($('graph-source').value,'x^3');change('graph-kind','parametric');assert.equal($('graph-source').value,'[2*cos(t),sin(t)]');change('graph-kind','cartesian');await waitFor(()=>!$('graph-analysis-run').disabled,'restored Cartesian sampling');
     change('mode','scientific');
   });
-  await t.test('Implicit Graph plots equations with the real Worker, slider updates, and calculator transfer',async()=>{
-    change('mode','graph');change('graph-kind','implicit');
-    assert.equal($('graph-source').value,'x^2+y^2=1');assert.equal($('graph-analysis').hidden,true);
+  await t.test('Cartesian plots and analyzes functions and implicit equations with the real Worker',async()=>{
+    change('mode','graph');change('graph-kind','cartesian');
+    $('graph-source').value='x^2+y^2=1';$('graph-source').dispatchEvent(new window.Event('input'));
+    assert.equal($('graph-analysis').hidden,false);assert.equal($('graph-cartesian-help').hidden,false);
     const plotted=()=>!$('graph-analysis-run').disabled&&curveStrokes($('graph-plot')).some(c=>c.path.length>1);
     await waitFor(plotted,'implicit unit circle');assert.equal($('graph-parameters').children.length,0);
     $('graph-source').value='x^2+y^2=a\nx=.3';$('graph-source').dispatchEvent(new window.Event('input'));
@@ -683,11 +689,37 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
     const before=JSON.stringify(curveStrokes($('graph-plot')).find(c=>c.strokeStyle==='#007b68')?.path),slider=$('graph-parameters').querySelector('input[type="range"]');slider.value='4';slider.dispatchEvent(new window.Event('input'));
     await waitFor(()=>plotted()&&JSON.stringify(curveStrokes($('graph-plot')).find(c=>c.strokeStyle==='#007b68')?.path)!==before,'implicit parameter update');
     assert.equal($('graph-formulas').textContent.includes('f1'),false);
-    change('language','ko');assert.equal($('graph-kind').selectedOptions[0].textContent,'Implicit Graph(음함수 그래프)');change('language','en');
+    change('language','ko');assert.equal($('graph-kind').selectedOptions[0].textContent,'카테시안');change('language','en');
     change('mode','scientific');edit('x^2+y^2=1');if(!key('TO_GRAPH'))key('SECOND').click();key('TO_GRAPH').click();
-    assert.equal($('mode').value,'graph');assert.equal($('graph-kind').value,'implicit');assert.equal($('graph-source').value,'x^2+y^2=1');
+    assert.equal($('mode').value,'graph');assert.equal($('graph-kind').value,'cartesian');assert.equal($('graph-source').value,'x^2+y^2=1');
     await waitFor(()=>plotted()&&$('graph-parameters').children.length===0,'calculator equation transfer');
-    assert.equal(JSON.parse(localStorage.getItem('calcmax-web-v1')).graph.sources.implicit,'x^2+y^2=1');
+    assert.equal(JSON.parse(localStorage.getItem('calcmax-web-v1')).graph.sources.cartesian,'x^2+y^2=1');
+    for(const [action,expected] of [['root',2],['minimum',1],['maximum',1]]){
+      change('graph-analysis-action',action);$('graph-analysis-a').value='-2';$('graph-analysis-b').value='2';$('graph-analysis-run').click();
+      await waitFor(()=>$('graph-analysis-result').firstChild?.textContent==={root:'Root',minimum:'Minimum',maximum:'Maximum'}[action]&&!$('graph-analysis-run').disabled,`circle ${action}`);
+      assert.equal($('graph-analysis-result').querySelectorAll('.analysis-point').length,expected);
+    }
+    $('graph-source').value='x+1\ny=x+1\ny^2+x^2=1';$('graph-source').dispatchEvent(new window.Event('input'));
+    await waitFor(()=>plotted()&&curveStrokes($('graph-plot')).length===3,'mixed function and equation plot');
+    for(const selected of ['0','1']){
+      change('graph-selected',selected);change('graph-analysis-action','derivative');$('graph-analysis-a').value='.5';$('graph-analysis-run').click();
+      await waitFor(()=>$('graph-analysis-result').firstChild?.textContent==='Derivative'&&!$('graph-analysis-run').disabled,`line ${selected} derivative`);
+      assert.equal($('graph-analysis-result').querySelector('math').textContent,'1');
+    }
+    $('graph-source').value='a*x^2+b*x+c\nx^2+y^2=5';$('graph-source').dispatchEvent(new window.Event('input'));
+    await waitFor(()=>plotted()&&$('graph-parameters').querySelectorAll('[data-parameter-value]').length===3,'quadratic parameter controls');
+    const setParameters=values=>{for(const [name,value] of Object.entries(values)){const input=$('graph-parameters').querySelector(`[data-parameter-value="${name}"]`);input.value=String(value);input.dispatchEvent(new window.Event('change'));}};
+    setParameters({a:0,b:0,c:1});
+    await waitFor(()=>plotted()&&requests.findLast(item=>item.request?.action==='graph')?.request.parameters.a===0,'current quadratic values plotted');
+    change('graph-selected','0');change('graph-other','1');change('graph-analysis-action','intersection');$('graph-analysis-a').value='-3';$('graph-analysis-b').value='3';$('graph-analysis-run').click();
+    await waitFor(()=>$('graph-analysis-result').firstChild?.textContent==='Intersection'&&!$('graph-analysis-run').disabled,'quadratic circle intersection at current values');
+    assert.equal($('graph-analysis-result').querySelectorAll('.analysis-point').length,2);
+    const firstIntersections=$('graph-analysis-result').textContent;
+    assert.deepEqual(requests.findLast(item=>item.request?.action==='graphAnalysis').request.parameters,{a:0,b:0,c:1});
+    setParameters({a:1,b:0,c:0});
+    await waitFor(()=>plotted()&&requests.findLast(item=>item.request?.action==='graph')?.request.parameters.c===0,'updated quadratic plotted');
+    $('graph-analysis-run').click();await waitFor(()=>$('graph-analysis-result').firstChild?.textContent==='Intersection'&&!$('graph-analysis-run').disabled,'updated quadratic circle intersections');
+    assert.equal($('graph-analysis-result').querySelectorAll('.analysis-point').length,2);assert.notEqual($('graph-analysis-result').textContent,firstIntersections);
     change('graph-kind','cartesian');change('mode','scientific');if($('keypad').dataset.page==='2')key('SECOND').click();
   });
   await t.test('tip has answers only, no extra rows, and the allocated amounts add up to Total',async()=>{

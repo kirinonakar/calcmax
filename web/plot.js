@@ -1,5 +1,6 @@
 // SVG only: no network chart library, and discontinuities retain null breaks.
 import {displayNumber} from './display-format.js';
+import {integralPolygons} from './graph-integral.js';
 import {plotSurface} from './surface-plot.js';
 const NS = 'http://www.w3.org/2000/svg';
 const colors = ['#007b68','#a04c75','#3b70bd','#b17d00','#6b5ec2','#a34629'];
@@ -53,7 +54,7 @@ export function plot(container,result,bounds,{dots=false,scatterCurves=[],digits
   (result.curves || []).forEach((curve,i)=>{if(i!==selected)path(curve,colors[i%colors.length],i);});
   if(result.curves?.[selected])path(result.curves[selected],colors[selected%colors.length],selected);
   if(!result.surface){
-    if(integral){let segment=[];const flush=()=>{if(segment.length>1)group.append(svgElement('polygon',{points:[[segment[0][0],0],...segment,[segment.at(-1)[0],0]].map(p=>`${x(p[0])},${y(p[1])}`).join(' '),fill:colors[selected%colors.length],opacity:.18,'data-integral':'true'}));segment=[];};for(const point of result.curves?.[selected]||[]){if(point&&point[0]>=integral[0]&&point[0]<=integral[1])segment.push(point);else flush();}flush();}
+    if(integral)for(const points of analysis?.integralFill||integralPolygons(result.curves?.[selected]||[],integral))group.append(svgElement('polygon',{points:points.map(p=>`${x(p[0])},${y(p[1])}`).join(' '),fill:colors[selected%colors.length],opacity:.18,'data-integral':'true'}));
     if(analysis?.line?.length===2){const line=analysis.line;group.append(svgElement('line',{x1:x(line[0][0]),y1:y(line[0][1]),x2:x(line[1][0]),y2:y(line[1][1]),stroke:'var(--accent)','stroke-width':2,'stroke-dasharray':'6 4','data-tangent':'true'}));}
     for(const point of analysis?.points||[])group.append(svgElement('circle',{cx:x(point[0]),cy:y(point[1]),r:5,fill:'var(--accent)','data-analysis-point':'true'}));
     if(trace){group.append(svgElement('line',{x1:x(trace[0]),x2:x(trace[0]),y1:pad,y2:h-pad,stroke:'var(--muted)','stroke-dasharray':'3 3'}),svgElement('circle',{cx:x(trace[0]),cy:y(trace[1]),r:6,fill:'var(--accent)','data-trace':'true'}));}

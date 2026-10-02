@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {JSDOM} from 'jsdom';
 import {transformBounds,pinchFactors,nearestPoint,bindGraphGestures} from '../graph-view.js';
-import {graphExpressions,graphShadings,implicitFormula,createGraphWorkspace} from '../graph-workspace.js';
+import {graphExpressions,graphShadings,implicitFormula,cartesianFormula,graphExpressionTarget,createGraphWorkspace} from '../graph-workspace.js';
 import {readFileSync} from 'node:fs';
 import {plot} from '../plot.js';
 import {expressionDisplay} from '../expression-display.js';
@@ -29,7 +29,7 @@ test('pointer pan commits once after dragging, taps trace, wheel zooms, and disp
   dispose();event('pointerdown',400,230);event('pointerup',400,230);assert.equal(traces,1);dom.window.close();
 });
 test('graph formulas strip prefixes and shading preserves commas nested in function arguments',()=>{
-  assert.deepEqual(graphExpressions('y=sqrt(x)\n[shade] y<x^2','cartesian'),['sqrt(x)']);
+  assert.deepEqual(graphExpressions('y=sqrt(x)\n[shade] y<x^2','cartesian'),['y=sqrt(x)']);
   assert.equal(graphShadings('[shade] log(x,2), sqrt(x), 0..4','cartesian')[0].trees.length,2);
   assert.equal(graphShadings('[shade] x^2>y','cartesian')[0].side,'below');
 });
@@ -46,20 +46,21 @@ test('implicit equations preserve both sides and separate contour segments in th
   assert.notEqual(paths[0].getAttribute('stroke'),paths[1].getAttribute('stroke'));dom.window.close();
 });
 
-test('implicit workspace sends x and y bounds, hides function analysis, and saves its draft',async()=>{
+test('Cartesian accepts implicit equations, exposes analysis, preserves both sides and saves its draft',async()=>{
   const dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));globalThis.document=dom.window.document;installCanvas(dom);
   const $=id=>document.getElementById(id),requests=[];
   const workspace=createGraphWorkspace({execute:async request=>{requests.push(request);return {ok:true,implicit:true,curves:[[[0,1],[1,0],null]],parameters:[]};},options:()=>({displayDigits:10}),onError:message=>assert.fail(message),persist:()=>{},isBusy:()=>false});
-  $('graph-kind').value='implicit';$('graph-kind').onchange();
+  $('graph-source').value='x^2+y^2=1';$('graph-source').dispatchEvent(new dom.window.Event('input'));
   assert.equal($('graph-source').value,'x^2+y^2=1');
-  assert.equal($('graph-analysis').hidden,true);assert.equal($('graph-viewport-ranges').hidden,true);
+  assert.equal($('graph-analysis').hidden,false);assert.equal($('graph-viewport-ranges').hidden,true);
+  assert.equal($('graph-cartesian-help').hidden,false);assert.match($('graph-cartesian-help').textContent,/Function \/ y=f\(x\).*Implicit \/ F\(x,y\)=0/);
   $('graph-min').value='-.5';$('graph-max').value='.5';$('graph-ymin').value='-1.5';$('graph-ymax').value='1.5';
-  await workspace.run();assert.equal(requests[0].graphKind,'implicit');assert.equal(requests[0].variable,'x');
+  await workspace.run();assert.equal(requests[0].graphKind,'cartesian');assert.equal(requests[0].variable,'x');
   assert.equal(requests[0].min,-.5);assert.equal(requests[0].max,.5);assert.equal(requests[0].yMin,-1.5);assert.equal(requests[0].yMax,1.5);
   assert.equal(requests[0].trees[0].kind,'relation');assert.equal($('graph-formulas').textContent.includes('f1'),false);
-  assert.equal(workspace.snapshot().sources.implicit,'x^2+y^2=1');
-  $('graph-kind').value='cartesian';$('graph-kind').onchange();assert.equal($('graph-source').value,'sin(x)\ncos(x)');
-  $('graph-kind').value='implicit';$('graph-kind').onchange();assert.equal($('graph-source').value,'x^2+y^2=1');
+  assert.equal(workspace.snapshot().sources.cartesian,'x^2+y^2=1');
+  $('graph-kind').value='parametric';$('graph-kind').onchange();assert.equal($('graph-cartesian-help').hidden,true);
+  $('graph-kind').value='cartesian';$('graph-kind').onchange();assert.equal($('graph-source').value,'x^2+y^2=1');
   workspace.dispose();dom.window.close();
 });
 
@@ -103,6 +104,13 @@ test('shared range sliders restore saved endpoints outside the default slider do
     for(const [id,number] of Object.entries(ranges))assert.equal(workspace.snapshot().ranges[id],number);
   }finally{workspace.dispose();dom.window.close();}
 });
+test('Cartesian formulas and calculator transfers keep equations and distinguish explicit 3D surfaces',()=>{
+  for(const source of ['x+1','y=x+1','y^2+x^2=1','x*y-1','x=2'])assert.deepEqual(graphExpressionTarget(source),{kind:'cartesian',source});
+  assert.deepEqual(graphExpressionTarget('z=x^2+y^2'),{kind:'surface',source:'x^2+y^2'});
+  assert.throws(()=>graphExpressionTarget('x<y'),/Graph an expression/);
+  assert.equal(cartesianFormula('x+1'),'f1(x)=x+1');assert.equal(cartesianFormula('y=x+1'),'y=x+1');
+  assert.equal(cartesianFormula('y^2+x^2=1'),'y^2+x^2=1');assert.equal(cartesianFormula('x*y-1'),'x*y-1=0');
+});
 test('typed graph parameters keep exact values, expand slider ranges, plot and restore',async()=>{
   const dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));globalThis.document=dom.window.document;installCanvas(dom);
   const requests=[];let saves=0;
@@ -139,6 +147,31 @@ test('graph parameter drafts survive redraw and invalid input never changes the 
     assert.equal(input.value,'1.23456789');assert.equal(input.hasAttribute('aria-invalid'),false);
     input.value='0';input.dispatchEvent(new dom.window.Event('change'));assert.equal(workspace.snapshot().parameters.a,0);
     input.blur();workspace.render();assert.equal(input.value,'0');
+  }finally{workspace.dispose();dom.window.close();}
+});
+test('analysis captures current parameter values and discards a result after those values change',async()=>{
+  const dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));globalThis.document=dom.window.document;installCanvas(dom);
+  const requests=[],resolvers=[],$=id=>document.getElementById(id);
+  const workspace=createGraphWorkspace({execute:async request=>{requests.push(request);return request.action==='graphAnalysis'?new Promise(resolve=>resolvers.push(resolve)):{ok:true,curves:[],parameters:['a']};},options:()=>({displayDigits:3}),onError:assert.fail,persist:()=>{},isBusy:()=>false,saved:{parameters:{a:2}}});
+  try{
+    $('graph-source').value='a*x';await workspace.run();const first=$('graph-analysis-run').onclick();
+    assert.deepEqual(requests.at(-1).parameters,{a:2});
+    const input=document.querySelector('[data-parameter-value="a"]');input.value='5';input.dispatchEvent(new dom.window.Event('change'));
+    assert.deepEqual(requests.at(-1).parameters,{a:2},'an in-flight request retains its original values');
+    resolvers.shift()({ok:true,analysis:'root',points:[[0,2]]});await first;assert.equal($('graph-analysis-result').textContent,'');
+    const latest=$('graph-analysis-run').onclick();assert.deepEqual(requests.at(-1).parameters,{a:5});
+    resolvers.shift()({ok:true,analysis:'root',points:[[0,5]]});await latest;assert.match($('graph-analysis-result').textContent,/5/);
+  }finally{workspace.dispose();dom.window.close();}
+});
+test('moving a tangent while the engine is sampling queues the latest position instead of losing it',async()=>{
+  const dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));globalThis.document=dom.window.document;installCanvas(dom);
+  let busy=false;const requests=[],$=id=>document.getElementById(id);
+  const workspace=createGraphWorkspace({execute:async request=>{requests.push(request);return request.action==='graphAnalysis'?{ok:true,analysis:'tangent',points:[[request.a,request.a**2]],value:2*request.a}:{ok:true,curves:[],parameters:[]};},options:()=>({displayDigits:3}),onError:assert.fail,persist:()=>{},isBusy:()=>busy});
+  try{
+    $('graph-source').value='x^2';await workspace.run();busy=true;
+    for(const value of ['.25','.5']){$('graph-tangent-slider').value=value;$('graph-tangent-slider').dispatchEvent(new dom.window.Event('input'));$('graph-tangent-slider').dispatchEvent(new dom.window.Event('change'));}
+    assert.equal(requests.length,1);busy=false;workspace.flush();await Promise.resolve();await Promise.resolve();
+    assert.equal(requests.length,2);assert.equal(requests[1].a,.5);assert.match($('graph-analysis-result').textContent,/0.5/);
   }finally{workspace.dispose();dom.window.close();}
 });
 test('MathML cursor is visible inside root and fractional tokens without losing empty-slot styling',()=>{

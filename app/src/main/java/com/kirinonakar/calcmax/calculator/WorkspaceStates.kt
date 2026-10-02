@@ -18,8 +18,9 @@ internal class GraphState(private val prefs:SharedPreferences) {
     var sequenceInitials by mutableStateOf(prefs.getString("sequenceInitials","0,1") ?: "0,1")
     var differentialInitials by mutableStateOf(prefs.getString("differentialInitials","1") ?: "1")
     var differentialT0 by mutableStateOf(prefs.getString("differentialT0","0") ?: "0")
-    var graphKind by mutableStateOf(prefs.getString("graphKind","cartesian") ?: "cartesian")
-    var graphSource by mutableStateOf(sources.optString(graphKind,prefs.getString("graphSource","sin(x)\ncos(x)") ?: "sin(x)\ncos(x)"))
+    private val restoredKind=prefs.getString("graphKind","cartesian") ?: "cartesian"
+    var graphKind by mutableStateOf(if(restoredKind=="implicit")"cartesian" else restoredKind)
+    var graphSource by mutableStateOf(sources.optString(restoredKind,prefs.getString("graphSource","sin(x)\ncos(x)") ?: "sin(x)\ncos(x)"))
     var xMin by mutableDoubleStateOf(prefs.getString("xMin","-10")?.toDoubleOrNull()?.takeIf(Double::isFinite) ?: -10.0)
     var xMax by mutableDoubleStateOf(prefs.getString("xMax","10")?.toDoubleOrNull()?.takeIf(Double::isFinite) ?: 10.0)
     var yMin by mutableDoubleStateOf(prefs.getString("yMin","-5")?.toDoubleOrNull()?.takeIf(Double::isFinite) ?: -5.0)
@@ -66,6 +67,7 @@ internal class GraphState(private val prefs:SharedPreferences) {
     }
 
     fun changeKind(kind:String):Boolean {
+        if(kind=="implicit")return changeKind("cartesian")
         if(kind==graphKind)return false
         sources.put(graphKind,graphSource)
         graphKind=kind
@@ -119,7 +121,10 @@ internal class GraphState(private val prefs:SharedPreferences) {
         if(!value.isFinite() || (expandRange && abs(value)>1e9))return
         val next=if(expandRange)spec.copy(value=value,min=minOf(spec.min,value),max=maxOf(spec.max,value))
             else spec.copy(value=value.coerceIn(spec.min,spec.max))
-        if(next!=spec)graphParameters=graphParameters+(name to next)
+        if(next!=spec) {
+            graphParameters=graphParameters+(name to next)
+            invalidateParameterAnalysis()
+        }
         if(graphAnimating)alignAnimation(name)
     }
 
@@ -127,13 +132,16 @@ internal class GraphState(private val prefs:SharedPreferences) {
         val spec=graphParameters[name] ?: return false
         if(!low.isFinite()||!high.isFinite()||low>=high||abs(low)>1e9||abs(high)>1e9)return false
         graphParameters=graphParameters+(name to spec.copy(min=low,max=high,value=spec.value.coerceIn(low,high)))
+        invalidateParameterAnalysis()
         if(graphAnimating)alignAnimation(name)
         return true
     }
 
     fun resetParameters() {
         graphParameters=graphParameters.mapValues {(_,spec)->spec.copy(value=if(spec.min<=1.0&&1.0<=spec.max)1.0 else (spec.min+spec.max)/2)}
+        invalidateParameterAnalysis()
     }
+    private fun invalidateParameterAnalysis() {graphAnalysis=null;trace=null;shadedInterval=null}
 
     fun setParameterAnimation(name:String,enabled:Boolean) {
         val spec=graphParameters[name] ?: return

@@ -4,6 +4,10 @@ CalcMax's existing Python/SymPy engine runs in the browser through CPython WebAs
 
 기존 Python/SymPy 계산 엔진을 브라우저의 WebAssembly 런타임에서 실행합니다. 계산 서버 없이 정적 웹 호스팅으로 배포할 수 있습니다.
 
+Cartesian supports both **Function / y=f(x)** and **Implicit / F(x,y)=0**. Enter `x+1`, `y=x+1`, or `y^2+x^2=1`, one curve per line, to plot and analyze them together. Tap a point on a curve with several y branches to select the branch for a derivative, tangent, integral or arc length.
+
+카테시안에서 **Function / y=f(x)**와 **Implicit / F(x,y)=0**을 모두 지원합니다. `x+1`, `y=x+1`, `y^2+x^2=1`을 한 줄에 하나씩 입력해 함께 그리고 분석할 수 있습니다. 여러 y 가지가 있는 곡선은 그래프의 점을 눌러 미분·접선·적분·호 길이에 사용할 가지를 선택하세요.
+
 ## Build and run / 빌드 및 실행
 
 ### GitHub Pages — open index.html / GitHub에서 바로 실행

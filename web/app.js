@@ -23,7 +23,7 @@ const {persist,schedulePersist}=persistence;
 const requestOptions=()=>({angle:value('angle'),precision:state.precision,displayDigits:state.digits,variables:state.variables,functions:state.functions,assumptions:state.assumptions});
 const engine=new EngineClient();
 const runtime=createEngineUI({engine,onChange:updateButtons,onReady:()=>calculator.resetPreview(),cancelPreview:()=>calculator.cancelPreview()});
-graphs=createGraphWorkspace({execute:request=>engine.execute(request),options:requestOptions,onError:error,persist,isBusy:()=>runtime.busy,isReady:()=>engine.ready,saved:saved.graph});
+graphs=createGraphWorkspace({execute:request=>engine.execute(request),options:requestOptions,onError:error,persist,isBusy:()=>runtime.busy,isReady:()=>engine.ready,saved:state.graph});
 calculator=createCalculator({state,engine,isBusy:()=>runtime.busy,ui,persist,schedulePersist,requestOptions,error,changeMode,updateButtons,
   pressKey:input=>keypad.press(input),modeDialog:()=>dialogs.mode(),variablesDialog:()=>dialogs.variables(),matrixInsertDialog:()=>dialogs.matrixInsert()});
 keypad=createCalculatorKeypad({state,persist,isCalcActive:()=>calculator.calcActive,isBusy:()=>runtime.busy,handleKey:calculator.handleKey,updateButtons});

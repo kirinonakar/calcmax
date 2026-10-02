@@ -8,6 +8,16 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class WorkspaceStatesTest {
+    @Test fun legacyImplicitWorkspaceRestoresAsCartesianWithoutLosingItsEquationOrBounds() {
+        val prefs=MemoryPreferences(mapOf("graphKind" to "implicit","graphSources" to "{\"implicit\":\"y^2+x^2=1\",\"cartesian\":\"x+1\"}","xMin" to "-2","xMax" to "2"))
+        val state=GraphState(prefs)
+        assertEquals("cartesian",state.graphKind);assertEquals("y^2+x^2=1",state.graphSource)
+        assertEquals(-2.0,state.xMin,0.0);assertEquals(2.0,state.xMax,0.0)
+        state.changeKind("polar");state.changeKind("cartesian")
+        assertEquals("y^2+x^2=1",state.graphSource)
+        val editor=prefs.edit();state.writeTo(editor);editor.apply()
+        assertEquals("y^2+x^2=1",GraphState(prefs).graphSource)
+    }
     @Test fun typedParametersPreservePrecisionExpandRangesAndPersist() {
         val prefs=MemoryPreferences(mapOf("graphParameters" to "{\"a\":{\"value\":1,\"min\":-5,\"max\":5,\"animate\":false}}"))
         val state=GraphState(prefs)
@@ -186,18 +196,16 @@ class WorkspaceStatesTest {
         assertTrue(graph.changeKind("cartesian"))
         assertEquals("x^2",graph.graphSource)
         assertFalse(graph.changeKind("cartesian"))
-        assertTrue(graph.changeKind("implicit"))
-        assertEquals("x^2+y^2=1",graph.graphSource)
-        assertEquals(-3.0,graph.xMin,0.0)
-        assertEquals(3.0,graph.yMax,0.0)
+        assertFalse(graph.changeKind("implicit"))
+        assertEquals("cartesian",graph.graphKind)
         graph.updateSource("x*y=1")
+        assertTrue(graph.changeKind("polar"))
         assertTrue(graph.changeKind("cartesian"))
-        assertTrue(graph.changeKind("implicit"))
         assertEquals("x*y=1",graph.graphSource)
         val editor=prefs.edit()
         graph.writeTo(editor);editor.apply()
         val restored=GraphState(prefs)
-        assertEquals("implicit",restored.graphKind)
+        assertEquals("cartesian",restored.graphKind)
         assertEquals("x*y=1",restored.graphSource)
     }
 

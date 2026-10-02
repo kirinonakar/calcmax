@@ -4,12 +4,22 @@ import com.kirinonakar.calcmax.ui.graphEquationTree
 import com.kirinonakar.calcmax.ui.graphShadeFormula
 import com.kirinonakar.calcmax.ui.regressionFormulaGraphSource
 import com.kirinonakar.calcmax.math.Parser
+import com.kirinonakar.calcmax.calculator.graphExpressionTarget
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class GraphFormulaTest {
+    @Test fun cartesianTransfersAndCaptionsPreserveFunctionsAndImplicitEquations() {
+        for(source in listOf("x+1","y=x+1","y^2+x^2=1","x*y-1","x=2")) {
+            assertEquals("cartesian" to source,graphExpressionTarget(source))
+            assertNotNull(graphEquationTree("cartesian",source,0))
+        }
+        assertEquals("surface" to "x^2+y^2",graphExpressionTarget("z=x^2+y^2"))
+        assertEquals("0",graphEquationTree("cartesian","x*y-1",0)!!.getJSONArray("args").getJSONObject(1).getString("value"))
+        assertEquals("y",graphEquationTree("cartesian","y=x+1",0)!!.getJSONArray("args").getJSONObject(0).getString("value"))
+    }
     @Test fun implicitFormulasPreserveEquationsAndAppendZeroToBareExpressions() {
         val equation=graphEquationTree("implicit","x^2+y^2=1",0)!!
         assertEquals("relation",equation.getString("kind"))

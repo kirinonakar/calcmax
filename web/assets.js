@@ -1,4 +1,4 @@
-self.CALCMAX_CACHE = 'calcmax-static-b7bdeb4a10554aad';
+self.CALCMAX_CACHE = 'calcmax-static-0dbc4b4831c82230';
 self.CALCMAX_ASSETS = [
   "./",
   "./app-dialogs.js",
@@ -33,6 +33,7 @@ self.CALCMAX_ASSETS = [
   "./function-transfer.js",
   "./functions-workspace.js",
   "./graph-canvas.js",
+  "./graph-integral.js",
   "./graph-view.js",
   "./graph-workspace.js",
   "./i18n.js",

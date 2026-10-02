@@ -10,6 +10,18 @@ import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.coroutines.resume
 
+internal fun graphExpressionTarget(source:String):Pair<String,String> {
+    val tree=Parser(source).parse()
+    if(tree.kind=="relation") {
+        require(tree.value in listOf("=","==")) {"Graph an expression, y = f(x), or an equation F(x,y)=0"}
+        if(tree.args[0].kind=="symbol" && tree.args[0].value=="z") {
+            val rhs=tree.args[1]
+            return "surface" to source.substring(rhs.start,rhs.end)
+        }
+    }
+    return "cartesian" to source
+}
+
 internal object CalculatorGraphActions {
     private suspend fun nextAnimationFrame():Long = suspendCancellableCoroutine {continuation->
         val clock=Choreographer.getInstance()
@@ -22,7 +34,6 @@ internal object CalculatorGraphActions {
         // Coalesce animation ticks before reparsing or allocating another request.
         if(graphAnimating && graphJob?.isActive==true) {graphPendingPlot={performPlot(auto)};return}
         val trees=mutableListOf<JSONObject>()
-        val curveSources=mutableListOf<String>()
         val shadings=JSONArray()
         try {
             graphSource.lines().filter { it.isNotBlank() }.take(if(graphKind in listOf("surface","differential")) 1 else 8).forEach { raw->
@@ -32,25 +43,18 @@ internal object CalculatorGraphActions {
                     if(shadings.length()<4)shadings.put(shadeEntry(line.removePrefix("[shade]").trim()))
                     return@forEach
                 }
-                if(trees.size<limit) {trees+=JSONObject(Parser(line).parse().json());curveSources+=line}
+                if(trees.size<limit) trees+=JSONObject(Parser(line).parse().json())
             }
         } catch(e:Exception) { error=e.message ?: "Syntax ERROR"; return }
         if(trees.isEmpty() && shadings.length()==0) { error="Enter a function"; return }
         val derivativeSelected=graphDerivativeSelected?.takeIf {graphKind=="cartesian" && it in trees.indices}
-        if(derivativeSelected!=null) {
-            val source=curveSources.getOrNull(derivativeSelected)
-            if(source!=null) {
-                try {trees+=JSONObject(Parser("diff(($source),x)").parse().json())}
-                catch(e:Exception) {error=e.message ?: "Syntax ERROR";return}
-            }
-        }
         val source=graphSource;val kind=graphKind;val min=if(kind in listOf("cartesian","implicit","surface"))xMin else parameterMin;val max=if(kind in listOf("cartesian","implicit","surface"))xMax else parameterMax
         val viewYMin=yMin;val viewYMax=yMax;val parameters=graphState.parameterPayload()
         val request=request("graph").put("angle","RAD").put("trees",JSONArray(trees)).put("graphKind",kind)
             .put("variable",when(kind){"cartesian","implicit","surface"->"x";"sequence"->"n";else->"t"})
             .put("min",min).put("max",max).put("samples",if(graphAnimating)200 else 500).put("xMin",xMin).put("xMax",xMax).put("yMin",viewYMin).put("yMax",viewYMax)
             .put("parameters",parameters)
-        if(derivativeSelected!=null)request.put("derivativeCurveIndex",trees.lastIndex)
+        if(derivativeSelected!=null)request.put("derivativeSelected",derivativeSelected)
         if(shadings.length()>0)request.put("shadings",shadings)
         if(kind=="surface") {
             val density=SurfaceMesh.sampleCount(xMin,xMax,yMin,yMax,surfaceSamples,surfaceAutoDensity,surfaceZoom.toDouble())
@@ -85,7 +89,6 @@ internal object CalculatorGraphActions {
                 val response=engine.execute(request)
                 if(source==graphSource && kind==graphKind && derivativeSelected==graphDerivativeSelected && min==(if(kind in listOf("cartesian","implicit","surface"))xMin else parameterMin) && max==(if(kind in listOf("cartesian","implicit","surface"))xMax else parameterMax) && viewYMin==yMin && viewYMax==yMax && (graphAnimating || parameters.toString()==graphState.parameterPayload().toString())) {
                     if(response.optBoolean("ok")) {
-                        if(derivativeSelected!=null)response.put("derivativeSelected",derivativeSelected).put("derivativeCurveIndex",trees.lastIndex)
                     } else error=response.optString("error")
                     graphState.applyPlotResponse(response,signature)
                 }
@@ -191,34 +194,9 @@ internal object CalculatorGraphActions {
     fun CalculatorModel.performSendExpressionToGraph() {
         val source=editor.source.trim()
         if(source.isEmpty()) {error="Enter an expression to graph";return}
-        val tree=try {Parser(source).parse()} catch(e:Exception) {error=e.message ?: "Syntax ERROR";return}
-        val implicit=tree.kind=="relation" && tree.value in listOf("=","==") &&
-            !(tree.args[0].kind=="symbol" && tree.args[0].value=="z") &&
-            !(tree.args[0].kind=="symbol" && tree.args[0].value=="y" && tree.args[1].nodes().none {it.kind=="symbol" && it.value=="y"})
-        if(implicit) {
-            changeGraphKind("implicit")
-            updateGraphSource(source)
-            error="";mode="Graph"
-            return
-        }
-        var lhsVar:String?=null
-        var rhsTree=tree
-        var rhsSource=source
-        if(tree.kind=="relation" && tree.value=="=" && tree.args.size==2 && tree.args[0].kind=="symbol" && tree.args[0].value in listOf("y","z")) {
-            lhsVar=tree.args[0].value
-            rhsTree=tree.args[1]
-            rhsSource=source.substring(rhsTree.start,rhsTree.end)
-        } else if(tree.kind=="relation") {error="Graph an expression, y = f(x), or z = f(x,y)";return}
-        val symbols=rhsTree.nodes().filter {it.kind=="symbol"}.map {it.value}.toSet()
-        val wantSurface=(lhsVar=="z")||("x" in symbols && "y" in symbols)
-        if(wantSurface) {
-            try {Parser(rhsSource).parse()} catch(e:Exception) {error=e.message ?: "Syntax ERROR";return}
-            changeGraphKind("surface")
-            updateGraphSource(rhsSource)
-        } else {
-            changeGraphKind("cartesian")
-            updateGraphSource(rhsSource)
-        }
+        val target=try {graphExpressionTarget(source)} catch(e:Exception) {error=e.message ?: "Syntax ERROR";return}
+        changeGraphKind(target.first)
+        updateGraphSource(target.second)
         error="";mode="Graph"
     }
     fun CalculatorModel.performChangeGraphKind(kind:String) {
@@ -236,11 +214,15 @@ internal object CalculatorGraphActions {
         val trees=try {JSONArray(sources.map {JSONObject(Parser(it).parse().json())})} catch(e:Exception) {error=e.message ?: "Syntax ERROR";return}
         analysisJob?.cancel()
         val source=graphSource
+        val kind=graphKind
+        val parameters=graphState.parameterPayload()
+        val analysisRequest=request("graphAnalysis").put("angle","RAD").put("trees",trees).put("graphKind",kind).put("analysis",action).put("a",a).put("b",b).put("selected",selected).put("other",other).put("variable",if(kind=="cartesian")"x" else "t").put("parameters",parameters).put("xMin",xMin).put("xMax",xMax).put("yMin",yMin).put("yMax",yMax)
+        trace?.let {analysisRequest.put("tracePoint",JSONArray(listOf(it.first,it.second)))}
         analysisJob=viewModelScope.launch {
             graphState.graphAnalysisBusy=true;error="";graphState.graphAnalysis=null
             try {
-                val response=engine.execute(request("graphAnalysis").put("angle","RAD").put("trees",trees).put("graphKind",graphKind).put("analysis",action).put("a",a).put("b",b).put("selected",selected).put("other",other).put("variable",if(graphKind=="cartesian")"x" else "t").put("parameters",graphState.parameterPayload()).put("xMin",xMin).put("xMax",xMax).put("yMin",yMin).put("yMax",yMax))
-                if(source==graphSource && graphKind in listOf("cartesian","parametric","polar")) {
+                val response=engine.execute(analysisRequest)
+                if(source==graphSource && kind==graphKind && parameters.toString()==graphState.parameterPayload().toString()) {
                     if(response.optBoolean("ok")) {
                         graphState.graphAnalysis=response
                         shadedInterval=if(action=="integral" && graphKind=="cartesian")a to b else null

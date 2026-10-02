@@ -84,10 +84,10 @@ import kotlin.math.*
     val plotHeight=if(halfGraphHeight)graphHeight*0.5f else graphHeight
     Column(Modifier.fillMaxSize().verticalScroll(graphScrollState)) {
     Column(Modifier.fillMaxWidth().zIndex(1f)) {
-        OutlinedTextField(m.graphSource,{m.updateGraphSource(it)},Modifier.fillMaxWidth().padding(start=10.dp,end=10.dp,top=8.dp),label={Text(tr(when(m.graphKind){"implicit"->"F(x,y)=0 · e.g. x^2+y^2=1";"parametric"->"One [x(t),y(t)] pair per line";"polar"->"r(t) · radians · one curve per line";"sequence"->"u(n) · use u(n−1) for recurrences";"surface"->"z = f(x,y)";"differential"->"dy/dt = f(t,y)";else->"f(x) · one per line · [shade] y<f(x) or f, g"}))},minLines=if(m.graphKind in listOf("surface","differential"))1 else 2,maxLines=4)
+        OutlinedTextField(m.graphSource,{m.updateGraphSource(it)},Modifier.fillMaxWidth().padding(start=10.dp,end=10.dp,top=8.dp),label={Text(tr(when(m.graphKind){"parametric"->"One [x(t),y(t)] pair per line";"polar"->"r(t) · radians · one curve per line";"sequence"->"u(n) · use u(n−1) for recurrences";"surface"->"z = f(x,y)";"differential"->"dy/dt = f(t,y)";else->"Function / y=f(x) · Implicit / F(x,y)=0"}))},placeholder={if(m.graphKind=="cartesian")Text("x+1\ny=x+1\ny^2+x^2=1")},minLines=if(m.graphKind in listOf("surface","differential"))1 else 2,maxLines=4)
         Column(Modifier.fillMaxWidth().zIndex(1f).background(c.body)) {
             Row(Modifier.fillMaxWidth().zIndex(2f).padding(top=2.dp,bottom=1.dp).horizontalScroll(rememberScrollState()).semantics { contentDescription="Graph types" },horizontalArrangement=Arrangement.spacedBy(6.dp)) {
-                listOf("cartesian" to "Cartesian","implicit" to "Implicit Graph","parametric" to "Parametric","polar" to "Polar","sequence" to "Sequence","surface" to "3D surface","differential" to "Diff eq").forEach {(kind,label)->
+                listOf("cartesian" to "Cartesian","parametric" to "Parametric","polar" to "Polar","sequence" to "Sequence","surface" to "3D surface","differential" to "Diff eq").forEach {(kind,label)->
                     SmallAction(label,active=if(m.graphKind==kind)true else null,shaded=m.graphKind==kind) {m.changeGraphKind(kind)}
                 }
             }
@@ -137,6 +137,13 @@ import kotlin.math.*
         val derivativeCurve=allCurves.getOrNull(derivativeIndex)?.takeIf {derivativeSelected==m.graphData?.optInt("derivativeSelected",-1)}
         val derivativeExpression=if(derivativeCurve!=null)m.graphData?.optString("derivativeExpression").orEmpty() else ""
         val latestCurves by rememberUpdatedState(curves)
+        val integralFill=remember(m.graphAnalysis) {
+            val polygons=m.graphAnalysis?.optJSONArray("integralFill")
+            (0 until (polygons?.length() ?: 0)).map {index->
+                val polygon=polygons!!.getJSONArray(index)
+                (0 until polygon.length()).mapNotNull {i->polygon.optJSONArray(i)?.let {it.getDouble(0) to it.getDouble(1)}}
+            }
+        }
         val shadings=remember(m.graphData) {
             val array=m.graphData?.optJSONArray("shadings")
             (0 until (array?.length() ?: 0)).mapNotNull { index->
@@ -319,13 +326,17 @@ import kotlin.math.*
                         drawPath(curvePath(line),shadeColor.copy(alpha=.85f),style=Stroke(1.6.dp.toPx()))
                     }
                 }
+                integralFill.forEach {polygon->
+                    if(polygon.size>=3) {
+                        val path=Path()
+                        polygon.forEachIndexed {i,point->if(i==0)path.moveTo(px(point.first),py(point.second)) else path.lineTo(px(point.first),py(point.second))}
+                        path.close()
+                        drawPath(path,c.curves[selected%c.curves.size].copy(alpha=.18f))
+                    }
+                }
                 curves.forEachIndexed { ci,points ->
                     val color=c.curves[ci%c.curves.size]
                     drawPath(curvePath(points),color,style=Stroke(if(ci==selected)4.dp.toPx() else 1.5.dp.toPx()))
-                    if(ci==selected&&m.shadedInterval!=null)points.forEach {point->
-                        if(point!=null&&m.shadedInterval?.let {point.first in min(it.first,it.second)..max(it.first,it.second)}==true)
-                            drawLine(color.copy(alpha=.2f),Offset(px(point.first),py(0.0)),Offset(px(point.first),py(point.second)),3f)
-                    }
                 }
                 derivativeCurve?.let {points->
                     drawPath(curvePath(points),c.accent,style=Stroke(2.5.dp.toPx(),pathEffect=derivativeDash))
@@ -358,7 +369,7 @@ import kotlin.math.*
         GraphHeightToggle(halfGraphHeight,{halfGraphHeight=!halfGraphHeight},Modifier.align(Alignment.TopEnd))
         }
         Column(Modifier.fillMaxWidth()) {
-        if(m.graphKind!="surface")GraphFormulas(m.graphKind,sources,selected,derivativeSelected,derivativeExpression,shadeSources,{i->selected=i;if(other==selected)other=(i+1)%sources.size},{m.toggleGraphDerivative(selected)},m.displayDigits)
+        if(m.graphKind!="surface")GraphFormulas(m.graphKind,sources,selected,derivativeSelected,derivativeExpression,shadeSources,{i->m.clearGraphTangent();selected=i;if(other==selected)other=(i+1)%sources.size},{m.toggleGraphDerivative(selected)},m.displayDigits)
         if(m.graphKind!="surface" && (curves.isNotEmpty()||shadeSources.isNotEmpty()))Row(Modifier.horizontalScroll(rememberScrollState()),verticalAlignment=Alignment.CenterVertically) {
             SmallAction("−") { val cx=(m.xMin+m.xMax)/2;val cy=(m.yMin+m.yMax)/2;val halfX=(m.xMax-m.xMin);val halfY=(m.yMax-m.yMin);m.xMin=cx-halfX;m.xMax=cx+halfX;m.yMin=cy-halfY;m.yMax=cy+halfY }
             SmallAction("+") { val cx=(m.xMin+m.xMax)/2;val cy=(m.yMin+m.yMax)/2;val halfX=(m.xMax-m.xMin)/4;val halfY=(m.yMax-m.yMin)/4;m.xMin=cx-halfX;m.xMax=cx+halfX;m.yMin=cy-halfY;m.yMax=cy+halfY }
@@ -406,6 +417,7 @@ import kotlin.math.*
                     val key=action.lowercase().replace(" ","")
                     val isTangent=key=="tangent"
                     SmallAction(action,active=if(isTangent&&tangentPositionOpen)true else null,shaded=isTangent&&tangentPositionOpen) {
+                        focusManager.clearFocus()
                         if(isTangent&&tangentPositionOpen) {
                             tangentPositionOpen=false
                             m.clearGraphTangent()
@@ -504,7 +516,7 @@ internal fun graphEquationTree(kind:String,source:String,index:Int,displayDigits
         else->"f${index+1}(x)"
     }
     val parsed=runCatching {Parser(source).parse()}.getOrNull()
-    val equation=if(parsed?.kind=="relation")source else if(kind=="implicit")"$source=0" else "$left=$source"
+    val equation=if(parsed?.kind=="relation")source else if(kind=="implicit" || kind=="cartesian" && parsed?.nodes()?.any {it.kind=="symbol" && it.value=="y"}==true)"$source=0" else "$left=$source"
     return if(displayDigits==null)decimalFractionFormulaTree(equation) else regressionFormulaDisplayTree(equation,displayDigits)
 }
 

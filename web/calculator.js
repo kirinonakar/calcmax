@@ -10,6 +10,7 @@ import {moveMathCursor,mathStructureExit,emptyCallDeletion,emptyPowerDeletion,em
 import {createDisplaySizing} from './display-sizing.js';
 import {fractionInput} from './fraction-input.js';
 import {requiresExplicitEvaluation} from './evaluation-policy.js';
+import {graphExpressionTarget} from './graph-workspace.js';
 import {$,value,element,control} from './app-ui.js';
 
 export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist,requestOptions,error,changeMode,updateButtons,pressKey,modeDialog,variablesDialog,matrixInsertDialog}) {
@@ -268,8 +269,8 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
     else if(input==='MATRIX_INPUT')insert('[[,],[,]]',2);
     else if(input==='MATRIX_SIZE')matrixInsertDialog();
     else if(input==='TO_GRAPH'){
-      const source=value('expression')||'x';let graphKind='cartesian';
-      try{const tree=parse(latexInput(source));if(tree.kind==='relation'&&['=','=='].includes(tree.value))graphKind='implicit';}catch{}
+      const original=value('expression')||'x';let source=original,graphKind='cartesian';
+      try{const target=graphExpressionTarget(original);source=target.source;graphKind=target.kind;}catch(exc){error(exc.message);return;}
       if($('graph-kind').value!==graphKind){$('graph-kind').value=graphKind;$('graph-kind').dispatchEvent(new window.Event('change'));}
       $('graph-source').value=source;$('graph-source').dispatchEvent(new window.Event('input'));changeMode('graph');
     }
