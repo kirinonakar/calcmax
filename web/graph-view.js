@@ -26,7 +26,7 @@ export function bindGraphGestures(container,{getBounds,onView,onTrace,isSurface=
   const pointers=new Map();let moved=false,axis=null,start=null;
   function position(event){const rect=container.getBoundingClientRect();return {x:(event.clientX-rect.left)/rect.width,y:(event.clientY-rect.top)/rect.height};}
   function frame(){const values=[...pointers.values()],center=values.reduce((sum,p)=>({x:sum.x+p.x/values.length,y:sum.y+p.y/values.length}),{x:0,y:0});return {center,span:values.length>1?{x:values[1].x-values[0].x,y:values[1].y-values[0].y}:null};}
-  function viewport(p){const height=Number(container.querySelector('canvas')?.dataset.plotHeight)||460;return {x:(p.x*800-42)/716,y:(p.y*height-42)/(height-84)};}
+  function viewport(p){const canvas=container.querySelector('canvas'),height=Number(canvas?.dataset.plotHeight)||460,left=Number(canvas?.dataset.plotLeft)||42,width=Number(canvas?.dataset.plotWidth)||716;return {x:(p.x*800-left)/width,y:(p.y*height-42)/(height-84)};}
   const down=event=>{if(event.button>0||!getBounds())return;container.setPointerCapture?.(event.pointerId);pointers.set(event.pointerId,position(event));if(pointers.size===1){moved=false;start=position(event);}else moved=true;axis=null;};
   const move=event=>{
     if(!pointers.has(event.pointerId))return;

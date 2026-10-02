@@ -44,6 +44,7 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
   const onError=message=>{setText($('graph-status'),message);$('graph-status').classList.add('error');reportError(message);};
   let result=null,bounds=null,analysis=null,trace=null,integral=null,parameters={...(saved.parameters||{})},parameterRanges={...(saved.parameterRanges||{})},derivative=null,radianAxis=!!saved.radianAxis,active=false,pending=false,timer=null,animation=null,revision=0,analysisRevision=0,signature='';
   let animationEnabled={...(saved.animationEnabled||{})},heightScale=[1,.5,2].includes(saved.heightScale)?saved.heightScale:saved.halfHeight?.5:1,running=false,frame=null,formulaSignature='',tableResult=null,tableDigits=null,tableLanguage=null;
+  let parametersOpen=saved.parametersOpen!==false;
   const window=$('graph-plot').ownerDocument.defaultView;
   const requestFrame=callback=>window.requestAnimationFrame?window.requestAnimationFrame(callback):window.setTimeout(callback,16);
   const cancelFrame=id=>window.cancelAnimationFrame?window.cancelAnimationFrame(id):window.clearTimeout(id);
@@ -121,7 +122,7 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
     });
   }
   function render(){
-    heightControls();densityControls();formulas();renderRangeNumbers();for(const caption of $('graph-parameters').querySelectorAll('[data-parameter]'))caption.textContent=`${caption.dataset.parameter} = ${displayNumber(parameters[caption.dataset.parameter],options().displayDigits)}`;if(!result||!bounds)return;
+    heightControls();densityControls();parameterVisibility();formulas();renderRangeNumbers();for(const caption of $('graph-parameters').querySelectorAll('[data-parameter]'))caption.textContent=`${caption.dataset.parameter} = ${displayNumber(parameters[caption.dataset.parameter],options().displayDigits)}`;if(!result||!bounds)return;
     for(const [id,number,suffix] of [['graph-rotation',surface.rotation,'°'],['graph-elevation',surface.elevation,'°'],['graph-surface-zoom',surface.zoom*100,'%']]){let output=$(id+'-value');if(!output){output=document.createElement('output');output.id=id+'-value';$(id).insertAdjacentElement('afterend',output);}output.textContent=displayNumber(number,options().displayDigits)+suffix;}
     let shown=result;
     if(result.surface){
@@ -139,10 +140,17 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
     for(const name of ['Curve','x / n','y',...(result.curveParameters?['t']:result.surface?['z']:[])]){const th=document.createElement('th');th.textContent=t(name);header.append(th);}head.append(header);table.append(head);const body=document.createElement('tbody');
     (result.curves||result.surface||[]).forEach((curve,i)=>curve.forEach((point,index)=>{if(!point||index%Math.max(1,Math.floor(curve.length/60))!==0)return;const row=document.createElement('tr');for(const number of [i+1,...point,...(result.curveParameters?[result.curveParameters[i]?.[index]]:[])]){const td=document.createElement('td');td.textContent=displayNumber(number,options().displayDigits);row.append(td);}if(!result.surface){row.tabIndex=0;const pick=()=>{trace=point;render();};row.onclick=pick;row.onkeydown=e=>{if(['Enter',' '].includes(e.key)){e.preventDefault();pick();}};}body.append(row);}));table.append(body);$('graph-table').replaceChildren(table);
   }
+  function parameterVisibility(){
+    const hasParameters=$('graph-parameters').children.length>0;
+    $('graph-parameter-actions').hidden=!hasParameters;
+    $('graph-parameters').hidden=!hasParameters||!parametersOpen;
+    $('graph-parameters-toggle').setAttribute('aria-expanded',String(parametersOpen));
+  }
+  $('graph-parameters-toggle').onclick=()=>{parametersOpen=!parametersOpen;parameterVisibility();persist();};
   function parameterControls(names=[],force=false){
     if(!force&&$('graph-parameters').dataset.names===JSON.stringify(names)){for(const caption of $('graph-parameters').querySelectorAll('[data-parameter]')){caption.textContent=`${caption.dataset.parameter} = ${displayNumber(parameters[caption.dataset.parameter],options().displayDigits)}`;caption.nextElementSibling.value=String(parameters[caption.dataset.parameter]);}return;}
     $('graph-parameters').dataset.names=JSON.stringify(names);
-    $('graph-parameters').replaceChildren();$('graph-parameter-actions').hidden=!names.length;
+    $('graph-parameters').replaceChildren();
     for(const name of names){if(!(name in parameters))parameters[name]=1;const limits=parameterRanges[name]||[-5,5],label=document.createElement('label'),caption=document.createElement('span'),input=document.createElement('input'),ranges=document.createElement('div'),low=document.createElement('input'),high=document.createElement('input');
       const toggleLabel=document.createElement('label'),toggle=document.createElement('input');toggleLabel.className='check';toggle.type='checkbox';toggle.checked=animationEnabled[name]!==false;toggle.dataset.animateParameter=name;toggle.setAttribute('aria-label',`${t('Animate')}: ${name}`);toggle.onchange=()=>{animationEnabled[name]=toggle.checked;if(animation&&toggle.checked)animation.phases[name]=parameterPhase(name)-animation.phase;persist();};toggleLabel.append(toggle,document.createTextNode(`${t('Animate')} ${name}`));
       input.type='range';input.min=String(limits[0]);input.max=String(limits[1]);input.step='any';input.value=String(parameters[name]);caption.dataset.parameter=name;caption.textContent=`${name} = ${displayNumber(parameters[name],options().displayDigits)}`;
@@ -150,6 +158,7 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
       for(const [field,number,labelText] of [[low,limits[0],'Slider minimum'],[high,limits[1],'Slider maximum']]){field.type='number';field.step='any';field.value=String(number);field.setAttribute('aria-label',`${t(labelText)}: ${name}`);field.onchange=()=>{const a=Number(low.value),b=Number(high.value);if(!Number.isFinite(a)||!Number.isFinite(b)||a>=b){onError(t('Enter finite values with minimum < maximum'));return;}parameterRanges[name]=[a,b];parameters[name]=Math.max(a,Math.min(b,parameters[name]));if(animation)animation.phases[name]=parameterPhase(name)-animation.phase;parameterControls(names,true);queue();};}
       ranges.className='form-row';ranges.append(low,high);label.append(caption,input,ranges);const group=document.createElement('div');group.append(label,toggleLabel);$('graph-parameters').append(group);
     }
+    parameterVisibility();
   }
   async function run(){
     clearTimeout(timer);timer=null;if(running||isBusy()||!isReady()){pending=true;return;}pending=false;running=true;
@@ -249,6 +258,6 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
   selections();formulas();typeControls();setText($('graph-axis'),radianAxis?'x: π rad':'x: decimal');for(const [id,name] of [['graph-rotation','rotation'],['graph-elevation','elevation'],['graph-surface-zoom','zoom']])$(id).value=String(surface[name]);
   $('graph-surface-render').value=surface.renderMode;$('graph-auto-z').checked=surface.autoZ;zControls();
   $('graph-surface-color').value=surface.color;densityControls();
-  renderRangeNumbers();
-  return {run,render,flush,snapshot:()=>({sources:{...sourceDrafts,[kind()]:value('graph-source')},parameters:{...parameters},parameterRanges,animationEnabled:{...animationEnabled},heightScale,halfHeight:heightScale===.5,radianAxis,surface:{...surface},ranges:Object.fromEntries(rangeIds.filter(id=>!(surface.autoZ&&id.startsWith('graph-z'))&&value(id)!==''&&Number.isFinite(numeric(id))).map(id=>[id,numeric(id)]))}),updateButtons(){ $('graph-analysis-run').disabled=isBusy()||!isReady();},activate(value){active=value;if(active&&(!result||pending))queue();if(!active){clearTimeout(timer);timer=null;stopAnimation(false);}},dispose(){active=false;disposeGestures();resizeObserver?.disconnect();if(frame!==null)cancelFrame(frame);clearTimeout(timer);stopAnimation(false);revision++;analysisRevision++;}};
+  renderRangeNumbers();parameterVisibility();
+  return {run,render,flush,snapshot:()=>({sources:{...sourceDrafts,[kind()]:value('graph-source')},parameters:{...parameters},parameterRanges,parametersOpen,animationEnabled:{...animationEnabled},heightScale,halfHeight:heightScale===.5,radianAxis,surface:{...surface},ranges:Object.fromEntries(rangeIds.filter(id=>!(surface.autoZ&&id.startsWith('graph-z'))&&value(id)!==''&&Number.isFinite(numeric(id))).map(id=>[id,numeric(id)]))}),updateButtons(){ $('graph-analysis-run').disabled=isBusy()||!isReady();},activate(value){active=value;if(active&&(!result||pending))queue();if(!active){clearTimeout(timer);timer=null;stopAnimation(false);}},dispose(){active=false;disposeGestures();resizeObserver?.disconnect();if(frame!==null)cancelFrame(frame);clearTimeout(timer);stopAnimation(false);revision++;analysisRevision++;}};
 }

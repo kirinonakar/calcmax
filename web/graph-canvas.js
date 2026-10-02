@@ -9,7 +9,7 @@ const finite=point=>point&&point.every(Number.isFinite);
 // actual CSS width and device pixel ratio. Geometry uses the gesture viewBox.
 export function plotGraph(container,result,bounds,{digits=10,dots=false,selected=0,analysis=null,trace=null,integral=null,radianAxis=false,halfHeight=false,heightScale=halfHeight?.5:1,surfaceView={}}={}){
   const scale=[1,.5,2].includes(heightScale)?heightScale:1;
-  const h=460*scale,iw=w-2*pad,ih=h-2*pad;
+  const h=460*scale,ih=h-2*pad;
   const {xmin,xmax,ymin,ymax}=bounds;
   if(![xmin,xmax,ymin,ymax].every(Number.isFinite)||xmax<=xmin||ymax<=ymin)throw new Error('Enter finite values with minimum < maximum');
   let canvas=container.querySelector('canvas');
@@ -24,7 +24,13 @@ export function plotGraph(container,result,bounds,{digits=10,dots=false,selected
   const ctx=canvas.getContext('2d');if(!ctx)return canvas;
   ctx.setTransform(canvas.width/w,0,0,canvas.height/h,0,0);ctx.clearRect(0,0,w,h);
   const style=window.getComputedStyle(container),muted=style.getPropertyValue('--muted').trim()||'#738a7c',ink=style.getPropertyValue('--ink').trim()||'#20392f',accent=style.getPropertyValue('--accent').trim()||colors[0];
-  ctx.lineJoin='round';ctx.lineCap='round';ctx.font='12px system-ui';ctx.fillStyle=muted;
+  // Size in CSS pixels: readable on mobile without growing too large on desktop.
+  const labelSize=Math.max(10,Math.min(12,cssWidth/100+6));
+  ctx.lineJoin='round';ctx.lineCap='round';ctx.font=`${labelSize*w/cssWidth}px system-ui`;ctx.fillStyle=muted;
+  const yLabels=Array.from({length:9},(_,i)=>displayNumber(ymax-(ymax-ymin)*i/8,digits));
+  const left=result.surface?pad:Math.max(pad,Math.ceil(Math.max(...yLabels.filter((_,i)=>i%2===0).map(label=>ctx.measureText(label).width)))+16),iw=w-left-pad;
+  // Gestures must use the same plot rectangle as the rendered curves.
+  canvas.dataset.plotLeft=String(left);canvas.dataset.plotWidth=String(iw);
   const line=(a,b,color=muted,width=1)=>{ctx.beginPath();ctx.moveTo(...a);ctx.lineTo(...b);ctx.strokeStyle=color;ctx.lineWidth=width;ctx.stroke();};
   const circle=(point,radius,color)=>{ctx.beginPath();ctx.arc(...point,radius,0,2*Math.PI);ctx.fillStyle=color;ctx.fill();};
   const polygon=(points,color,alpha=1,stroke=null,width=1)=>{
@@ -32,7 +38,7 @@ export function plotGraph(container,result,bounds,{digits=10,dots=false,selected
     ctx.beginPath();ctx.moveTo(...points[0]);for(const point of points.slice(1))ctx.lineTo(...point);ctx.closePath();
     ctx.globalAlpha=alpha;ctx.fillStyle=color;ctx.fill();if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=width;ctx.stroke();}ctx.globalAlpha=1;
   };
-  const clip=()=>{ctx.save();ctx.beginPath();ctx.rect(pad,pad,iw,ih);ctx.clip();};
+  const clip=()=>{ctx.save();ctx.beginPath();ctx.rect(left,pad,iw,ih);ctx.clip();};
   if(result.surface){
     const {rotation=35,elevation=32,zoom=1,renderMode='wireframe'}=surfaceView;
     const color=/^#[0-9a-f]{6}$/i.test(surfaceView.color||'')?surfaceView.color:colors[0],rgb=[1,3,5].map(i=>parseInt(color.slice(i,i+2),16));
@@ -66,19 +72,19 @@ export function plotGraph(container,result,bounds,{digits=10,dots=false,selected
     }
     return canvas;
   }
-  const x=v=>pad+(v-xmin)/(xmax-xmin)*iw,y=v=>h-pad-(v-ymin)/(ymax-ymin)*ih,project=p=>[x(p[0]),y(p[1])];
+  const x=v=>left+(v-xmin)/(xmax-xmin)*iw,y=v=>h-pad-(v-ymin)/(ymax-ymin)*ih,project=p=>[x(p[0]),y(p[1])];
   let ticks=Array.from({length:11},(_,i)=>xmin+(xmax-xmin)*i/10);
   if(radianAxis){const step=Math.PI*2**Math.ceil(Math.log2((xmax-xmin)/Math.PI/8)),first=Math.ceil(xmin/step);ticks=Array.from({length:Math.min(9,Math.max(0,Math.floor(xmax/step)-first+1))},(_,i)=>(first+i)*step);}
   ctx.textAlign='center';
   for(const [i,n] of ticks.entries()){
     ctx.globalAlpha=.25;line([x(n),pad],[x(n),h-pad],'#a4b8ab');ctx.globalAlpha=1;
-    if(radianAxis||i%2===0)ctx.fillText(radianAxis?piLabel(n,digits):displayNumber(n,digits),x(n),h-14);
+    if(radianAxis||i%2===0){const label=radianAxis?piLabel(n,digits):displayNumber(n,digits),half=ctx.measureText(label).width/2;ctx.fillText(label,Math.max(half+8,Math.min(w-half-8,x(n))),h-14);}
   }
   ctx.textAlign='right';
-  for(let i=0;i<=8;i++){const at=pad+ih*i/8;ctx.globalAlpha=.25;line([pad,at],[w-pad,at],'#a4b8ab');ctx.globalAlpha=1;if(i%2===0)ctx.fillText(displayNumber(ymax-(ymax-ymin)*i/8,digits),pad-8,at+4);}
+  for(let i=0;i<=8;i++){const at=pad+ih*i/8;ctx.globalAlpha=.25;line([left,at],[w-pad,at],'#a4b8ab');ctx.globalAlpha=1;if(i%2===0)ctx.fillText(yLabels[i],left-8,at+4);}
   clip();
   if(xmin<=0&&xmax>=0)line([x(0),pad],[x(0),h-pad]);
-  if(ymin<=0&&ymax>=0)line([pad,y(0)],[w-pad,y(0)]);
+  if(ymin<=0&&ymax>=0)line([left,y(0)],[w-pad,y(0)]);
   for(const [i,shade] of (result.shadings||[]).entries())for(const points of shade.fill||[])polygon(points.map(project),colors[i%colors.length],.16);
   ctx.beginPath();for(const [at,value,slope] of result.fields||[]){const angle=Math.atan(slope*(xmax-xmin)/(ymax-ymin)*ih/iw),dx=7*Math.cos(angle),dy=-7*Math.sin(angle);ctx.moveTo(x(at)-dx,y(value)-dy);ctx.lineTo(x(at)+dx,y(value)+dy);}ctx.strokeStyle=muted;ctx.globalAlpha=.6;ctx.lineWidth=1;ctx.stroke();ctx.globalAlpha=1;
   const path=(points,i)=>{

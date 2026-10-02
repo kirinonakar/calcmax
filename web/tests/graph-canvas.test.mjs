@@ -5,6 +5,7 @@ import {JSDOM} from 'jsdom';
 import {plotGraph} from '../graph-canvas.js';
 import {createGraphWorkspace} from '../graph-workspace.js';
 import {surfaceProjection,surfaceFaces} from '../surface-geometry.js';
+import {bindGraphGestures} from '../graph-view.js';
 import {installCanvas,surfaceFills} from './canvas-context.mjs';
 
 const bounds={xmin:-2,xmax:2,ymin:-2,ymax:2};
@@ -13,6 +14,48 @@ function setup(html='<div id="plot"></div>'){
 }
 const page=()=>readFileSync(new URL('../index.html',import.meta.url),'utf8');
 const options=()=>({displayDigits:10});
+
+test('axis labels scale within readable CSS pixel limits and long decimal labels fit at every height',()=>{
+  const dom=setup(),container=document.getElementById('plot');
+  const longBounds={xmin:-123456789.123456,xmax:123456789.123456,ymin:-123456789.123456,ymax:123456789.123456};
+  try{
+    for(const width of [320,400,500,800,1600])for(const heightScale of [.5,1,2]){
+      container.getBoundingClientRect=()=>({width});
+      const canvas=plotGraph(container,{curves:[]},longBounds,{heightScale}),ctx=canvas.getContext('2d');
+      const labels=ctx.commands.filter(c=>c.op==='fillText');
+      assert.equal(parseFloat(ctx.font)*width/800,width<=400?10:width===500?11:12);
+      assert.ok(Number(canvas.dataset.plotLeft)>42);
+      for(const label of labels){
+        const textWidth=ctx.measureText(label.args[0]).width,x=label.args[1];
+        const left=x-(label.textAlign==='right'?textWidth:textWidth/2),right=label.textAlign==='right'?x:x+textWidth/2;
+        assert.ok(left>=8-1e-8,`${label.args[0]} starts inside the canvas`);
+        assert.ok(right<=792+1e-8,`${label.args[0]} ends inside the canvas`);
+      }
+      const clip=ctx.commands.find(c=>c.op==='clip').path.find(p=>p.op==='rect').args;
+      assert.equal(clip[0],Number(canvas.dataset.plotLeft));assert.equal(clip[2],Number(canvas.dataset.plotWidth));
+    }
+    plotGraph(container,{curves:[]},bounds);
+    assert.equal(Number(container.firstChild.dataset.plotLeft),42,'short labels restore the usual margin');
+  }finally{dom.window.close();}
+});
+
+test('tracing and wheel zoom use the widened axis margin in the rendered plot',()=>{
+  const dom=setup(),container=document.getElementById('plot');
+  container.getBoundingClientRect=()=>({left:0,top:0,width:800,height:460});
+  let current={...bounds,ymin:-123456789.123456,ymax:123456789.123456},traced;
+  const canvas=plotGraph(container,{curves:[]},current),left=Number(canvas.dataset.plotLeft),width=Number(canvas.dataset.plotWidth);
+  const dispose=bindGraphGestures(container,{getBounds:()=>current,onView:next=>{current=next;},onTrace:at=>{traced=at;}});
+  try{
+    const clientX=left+width*.25,clientY=230;
+    for(const type of ['pointerdown','pointerup']){
+      const event=new dom.window.MouseEvent(type,{clientX,clientY,button:0,cancelable:true});Object.defineProperty(event,'pointerId',{value:1});container.dispatchEvent(event);
+    }
+    assert.equal(traced.x,.25);assert.equal(traced.y,.5);
+    const anchor=current.xmin+(current.xmax-current.xmin)*.25;
+    container.dispatchEvent(new dom.window.WheelEvent('wheel',{clientX,clientY,deltaY:-100,cancelable:true}));
+    assert.ok(Math.abs(current.xmin+(current.xmax-current.xmin)*.25-anchor)<1e-10);
+  }finally{dispose();dom.window.close();}
+});
 
 test('Canvas reuses one element, scales for DPR, clips paths and preserves null breaks and overlays',()=>{
   const dom=setup(),container=document.getElementById('plot');
@@ -68,6 +111,27 @@ test('drag events draw once per frame and reuse formula and coordinate-table DOM
     pointer('pointerdown',400,230);pointer('pointermove',430,230);pointer('pointermove',460,230);pointer('pointermove',490,230);
     assert.equal(ctx.frames,initial);assert.equal(frames.length,1);frames.shift()();assert.equal(ctx.frames,initial+1);
     pointer('pointerup',490,230);assert.equal($('graph-table').firstChild,table);assert.equal($('graph-formulas').firstChild,formula);
+  }finally{workspace.dispose();dom.window.close();}
+});
+
+test('Parameters collapse preserves slider values, keeps actions accessible, and restores the saved choice',async()=>{
+  const dom=setup(page()),$=id=>document.getElementById(id);let names=['a'],saves=0;
+  document.querySelector('[data-mode="graph"]').hidden=false;
+  const create=saved=>createGraphWorkspace({execute:async()=>({ok:true,curves:[],parameters:names}),options,onError:assert.fail,persist:()=>saves++,isBusy:()=>false,saved});
+  let workspace=create({parameters:{a:3}});
+  try{
+    assert.equal($('graph-parameter-actions').hidden,true);
+    await workspace.run();
+    const panel=$('graph-parameters'),toggle=$('graph-parameters-toggle'),slider=panel.querySelector('input[type="range"]');
+    assert.equal(panel.hidden,false);assert.equal(toggle.getAttribute('aria-controls'),panel.id);assert.equal(toggle.getAttribute('aria-expanded'),'true');
+    const initialSaves=saves;
+    toggle.click();assert.equal(panel.hidden,true);assert.equal(toggle.getAttribute('aria-expanded'),'false');assert.equal(saves,initialSaves+1);
+    assert.equal($('graph-parameter-actions').hidden,false);assert.equal($('graph-animate').closest('[hidden]'),null);assert.equal($('graph-reset-parameters').closest('[hidden]'),null);
+    workspace.render();await workspace.run();assert.equal(panel.hidden,true);assert.equal(panel.querySelector('input[type="range"]'),slider);assert.equal(slider.value,'3');assert.equal(workspace.snapshot().parameters.a,3);
+    const saved=workspace.snapshot();workspace.dispose();workspace=create(saved);await workspace.run();assert.equal(panel.hidden,true);assert.equal(toggle.getAttribute('aria-expanded'),'false');assert.equal(workspace.snapshot().parameters.a,3);
+    names=[];await workspace.run();assert.equal($('graph-parameter-actions').hidden,true);assert.equal(panel.hidden,true);
+    names=['a'];await workspace.run();assert.equal($('graph-parameter-actions').hidden,false);assert.equal(panel.hidden,true);
+    toggle.click();assert.equal(panel.hidden,false);assert.equal(toggle.getAttribute('aria-expanded'),'true');assert.equal(panel.querySelector('input[type="range"]').value,'3');
   }finally{workspace.dispose();dom.window.close();}
 });
 
