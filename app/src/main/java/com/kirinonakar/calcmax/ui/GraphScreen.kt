@@ -661,18 +661,22 @@ internal fun graphShadeFormula(source:String,displayDigits:Int?=null):GraphShade
 @Composable private fun SurfaceAppearanceControls(m:CalculatorModel) {
     val c=LocalInstrument.current
     val korean=isKorean()
-    var hex by remember(m.surfaceColor) {mutableStateOf(m.surfaceColor)}
+    var colorPickerOpen by rememberSaveable {mutableStateOf(false)}
     Row(Modifier.fillMaxWidth().padding(horizontal=14.dp,vertical=2.dp),horizontalArrangement=Arrangement.spacedBy(6.dp),verticalAlignment=Alignment.CenterVertically) {
-        listOf("#007b68","#3b70bd","#a04c75","#b17d00").forEach { color->
+        listOf("#007b68","#3b70bd","#a04c75","#b17d00","#ff0000").forEach { color->
             Box(Modifier.size(28.dp).background(Color(android.graphics.Color.parseColor(color)),RoundedCornerShape(6.dp))
                 .border(if(m.surfaceColor.equals(color,true))2.dp else 0.dp,c.ink,RoundedCornerShape(6.dp))
                 .clickable {m.surfaceColor=color;m.save()}.semantics {contentDescription=(if(korean)"표면 색상 " else "Surface color ")+color;selected=m.surfaceColor.equals(color,true)})
         }
-        Field(hex,if(isKorean())"색상 #RRGGBB" else "Color #RRGGBB",Modifier.weight(1f),translate=false) {
-            hex=it
-            if(it.matches(Regex("#[0-9a-fA-F]{6}"))) {m.surfaceColor=it;m.save()}
+        TextButton(onClick={colorPickerOpen=true}) {
+            Box(Modifier.size(18.dp).background(Color(android.graphics.Color.parseColor(m.surfaceColor)),RoundedCornerShape(4.dp)).border(1.dp,c.grid,RoundedCornerShape(4.dp)))
+            Spacer(Modifier.width(6.dp))
+            Text(if(korean)"커스텀" else "Custom")
         }
     }
+    if(colorPickerOpen)SurfaceColorPickerDialog(m.surfaceColor,onDismiss={colorPickerOpen=false},onConfirm={color->
+        m.surfaceColor=color;m.save();colorPickerOpen=false
+    })
     Row(Modifier.fillMaxWidth().height(38.dp).padding(horizontal=14.dp),verticalAlignment=Alignment.CenterVertically) {
         Text(if(isKorean())"격자 밀도" else "Mesh density",fontSize=11.sp,color=c.muted)
         val count=SurfaceMesh.sampleCount(m.xMin,m.xMax,m.yMin,m.yMax,m.surfaceSamples,m.surfaceAutoDensity,m.surfaceZoom.toDouble())
