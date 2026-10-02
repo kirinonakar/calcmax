@@ -232,7 +232,6 @@ import kotlin.math.*
             if(m.error.isNotBlank())Text(m.error,Modifier.padding(horizontal=14.dp,vertical=2.dp),fontSize=12.sp,color=MaterialTheme.colorScheme.error)
             }
         } else Box(Modifier.fillMaxWidth().height(plotHeight).clipToBounds()) {
-        val curveDash=remember {PathEffect.dashPathEffect(floatArrayOf(12f,5f))}
         val derivativeDash=remember {PathEffect.dashPathEffect(floatArrayOf(10f,6f))}
         Canvas(Modifier.fillMaxSize().clipToBounds().background(c.display).then(transform).pointerInput(m.graphKind,selected) { detectTapGestures { p ->
             val target=m.xMin+(m.xMax-m.xMin)*p.x/size.width
@@ -314,7 +313,7 @@ import kotlin.math.*
                 }
                 curves.forEachIndexed { ci,points ->
                     val color=c.curves[ci%c.curves.size]
-                    drawPath(curvePath(points),color,style=Stroke(if(ci==selected)4.dp.toPx() else 1.5.dp.toPx(),pathEffect=if(ci%2==1)curveDash else null))
+                    drawPath(curvePath(points),color,style=Stroke(if(ci==selected)4.dp.toPx() else 1.5.dp.toPx()))
                     if(ci==selected&&m.shadedInterval!=null)points.forEach {point->
                         if(point!=null&&m.shadedInterval?.let {point.first in min(it.first,it.second)..max(it.first,it.second)}==true)
                             drawLine(color.copy(alpha=.2f),Offset(px(point.first),py(0.0)),Offset(px(point.first),py(point.second)),3f)
