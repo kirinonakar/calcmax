@@ -1,16 +1,26 @@
 package com.kirinonakar.calcmax.calculator
 
 import androidx.lifecycle.viewModelScope
+import android.os.Handler
+import android.os.Looper
+import android.view.Choreographer
 import com.kirinonakar.calcmax.math.*
 import kotlinx.coroutines.*
 import org.json.JSONArray
 import org.json.JSONObject
-import kotlin.math.PI
-import kotlin.math.sin
+import kotlin.coroutines.resume
 
 internal object CalculatorGraphActions {
+    private suspend fun nextAnimationFrame():Long = suspendCancellableCoroutine {continuation->
+        val clock=Choreographer.getInstance()
+        val callback=Choreographer.FrameCallback {time->if(continuation.isActive)continuation.resume(time)}
+        clock.postFrameCallback(callback)
+        continuation.invokeOnCancellation {Handler(Looper.getMainLooper()).post {clock.removeFrameCallback(callback)}}
+    }
     fun CalculatorModel.performPlot(auto: Boolean = false) {
         val limit=if(graphKind in listOf("surface","differential")) 1 else 6
+        // Coalesce animation ticks before reparsing or allocating another request.
+        if(graphAnimating && graphJob?.isActive==true) {graphPendingPlot={performPlot(auto)};return}
         val trees=mutableListOf<JSONObject>()
         val curveSources=mutableListOf<String>()
         val shadings=JSONArray()
@@ -38,11 +48,14 @@ internal object CalculatorGraphActions {
         val viewYMin=yMin;val viewYMax=yMax;val parameters=graphState.parameterPayload()
         val request=request("graph").put("angle","RAD").put("trees",JSONArray(trees)).put("graphKind",kind)
             .put("variable",when(kind){"cartesian","implicit","surface"->"x";"sequence"->"n";else->"t"})
-            .put("min",min).put("max",max).put("samples",500).put("xMin",xMin).put("xMax",xMax).put("yMin",viewYMin).put("yMax",viewYMax)
+            .put("min",min).put("max",max).put("samples",if(graphAnimating)200 else 500).put("xMin",xMin).put("xMax",xMax).put("yMin",viewYMin).put("yMax",viewYMax)
             .put("parameters",parameters)
         if(derivativeSelected!=null)request.put("derivativeCurveIndex",trees.lastIndex)
         if(shadings.length()>0)request.put("shadings",shadings)
-        if(kind=="surface")request.put("surfaceYMin",yMin).put("surfaceYMax",yMax).put("surfaceSamples",SurfaceMesh.sampleCount(xMin,xMax,yMin,yMax,surfaceSamples,surfaceAutoDensity,surfaceZoom.toDouble()))
+        if(kind=="surface") {
+            val density=SurfaceMesh.sampleCount(xMin,xMax,yMin,yMax,surfaceSamples,surfaceAutoDensity,surfaceZoom.toDouble())
+            request.put("surfaceYMin",yMin).put("surfaceYMax",yMax).put("surfaceSamples",if(graphAnimating)minOf(density,32) else density)
+        }
         if(kind=="sequence") {
             try {
                 val seeds=sequenceInitials.split(',').map(String::trim).filter(String::isNotEmpty).map { JSONObject(Parser(it).parse().json()) }
@@ -103,20 +116,23 @@ internal object CalculatorGraphActions {
             animationJob?.cancel()
             animationJob=null
             save()
+            plot()
             return
         }
         if(graphState.graphParameters.isEmpty())return
         animationJob?.cancel()
         graphState.graphAnimating=true
-        animationPhase=0.0
-        var ticks=0
+        graphState.beginAnimation()
         animationJob=viewModelScope.launch {
+            var previous=0L
             while(isActive&&graphState.graphAnimating) {
-                delay(50)
-                animationPhase+=0.05
-                if(animationPhase>2*PI)animationPhase-=2*PI
-                val swing=(sin(animationPhase)+1.0)/2.0
-                if(graphState.animateParameters(swing)&&++ticks>=4) {ticks=0;plot()}
+                val now=nextAnimationFrame()
+                if(mode!="Graph") {graphState.graphAnimating=false;animationJob=null;save();break}
+                // Match display frames, capped at 60 updates on high-refresh screens.
+                if(previous!=0L&&now-previous<16_666_666L)continue
+                val seconds=if(previous==0L)0.0 else (now-previous)/1_000_000_000.0
+                previous=now
+                if(graphState.advanceAnimation(seconds))plot()
             }
         }
     }

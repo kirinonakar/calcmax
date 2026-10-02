@@ -70,7 +70,7 @@ import kotlin.math.*
         scrollToSection=null
     }
     val parameterSignature=m.graphParameters.entries.joinToString(","){"${it.key}=${it.value.value}"}
-    LaunchedEffect(m.graphSource,m.graphDerivativeSelected,m.xMin,m.xMax,m.yMin,m.yMax,m.graphKind,m.parameterMin,m.parameterMax,m.sequenceInitials,m.differentialInitials,m.differentialT0,parameterSignature,m.surfaceSamples,m.surfaceAutoDensity,if(m.surfaceAutoDensity)m.surfaceZoom else 1f) { delay(350);m.plot(auto=true) }
+    LaunchedEffect(m.graphSource,m.graphDerivativeSelected,m.xMin,m.xMax,m.yMin,m.yMax,m.graphKind,m.parameterMin,m.parameterMax,m.sequenceInitials,m.differentialInitials,m.differentialT0,if(m.graphAnimating)"animation" else parameterSignature,m.surfaceSamples,m.surfaceAutoDensity,if(m.surfaceAutoDensity)m.surfaceZoom else 1f) { if(!m.graphAnimating){delay(350);m.plot(auto=true)} }
     BoxWithConstraints(Modifier.fillMaxSize()) {
     // Cartesian and every other graph use the same viewport height. Expression
     // rows, sliders, and settings scroll with the plot instead of resizing it.

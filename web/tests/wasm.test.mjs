@@ -16,6 +16,17 @@ test('actual CPython WASM reuses the Android engine across workspaces',async()=>
     return JSON.parse(py.runPython('calc_engine.dispatch(payload)'));
   }
   function evaluate(source,options={}) { const result=run({tree:parse(source),...options}); assert.equal(result.ok,true,`${source}: ${result.error}`); return result; }
+  const animationRequest={action:'graph',trees:[parse('a*sin(x)')],min:-10,max:10,yMin:-5,yMax:5};
+  for(const samples of [500,200]){
+    run({...animationRequest,samples,parameters:{a:1}});
+    const started=performance.now();
+    for(let frame=0;frame<30;frame++){
+      const value=1+frame/100,result=run({...animationRequest,samples,parameters:{a:value}});
+      assert.equal(result.ok,true,result.error);
+      for(const point of result.curves[0])if(point)assert.ok(Math.abs(point[1]-value*Math.sin(point[0]))<1e-10);
+    }
+    console.log(`WASM graph ${samples===200?'interactive':'full precision'}: ${((performance.now()-started)/30).toFixed(1)} ms/frame`);
+  }
   assert.equal(evaluate('1/3+1/6').exact,'1/2');
   assert.equal(evaluate('0.1+0.2').exact,'3/10');
   assert.equal(evaluate('-2^2').exact,'-4');

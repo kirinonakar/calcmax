@@ -19,6 +19,16 @@ circle = equation(binary("+", x2, y2), number(1))
 
 
 class ImplicitGraphTests(unittest.TestCase):
+    def test_slider_frames_reuse_compiled_contour_and_keep_degenerate_repeated_factors(self):
+        from calc_graph import _compiled_graph
+        _compiled_graph.cache_clear()
+        radius=equation(binary("+",x2,y2),symbol("a"))
+        for value in (1,1.1,1.2):
+            self.assertGreater(len(self.points(self.graph(radius,parameters={"a":value},samples=200))),100)
+        self.assertEqual(1,_compiled_graph.cache_info().misses)
+        points=self.points(self.graph(equation(y2,symbol("a")),parameters={"a":0}))
+        self.assertGreater(len(points),100)
+        self.assertTrue(all(abs(point[1])<1e-6 for point in points))
     def graph(self, *trees, **options):
         return json.loads(calc_engine.dispatch(json.dumps({
             "action": "graph", "graphKind": "implicit", "angle": "RAD", "trees": trees,

@@ -71,21 +71,21 @@ test('drag events draw once per frame and reuse formula and coordinate-table DOM
   }finally{workspace.dispose();dom.window.close();}
 });
 
-test('Animate moves only enabled parameters, handles all-off, and restores choices',async()=>{
-  const dom=setup(page()),$=id=>document.getElementById(id);let tick;
-  const originalInterval=globalThis.setInterval,originalClear=globalThis.clearInterval;
-  globalThis.setInterval=callback=>{tick=callback;return 1;};globalThis.clearInterval=()=>{};
-  let saved;
+test('Animate follows frame time, holds disabled values, and restores choices',async()=>{
+  const dom=setup(page()),$=id=>document.getElementById(id),callbacks=new Map();let id=0,now=0;
+  dom.window.requestAnimationFrame=callback=>{callbacks.set(++id,callback);return id;};dom.window.cancelAnimationFrame=id=>callbacks.delete(id);
+  const tick=(milliseconds=34)=>{now+=milliseconds;const batch=[...callbacks.values()];callbacks.clear();for(const callback of batch)callback(now);};
   const create=snapshot=>createGraphWorkspace({execute:async()=>({ok:true,curves:[],parameters:['a','b']}),options,onError:assert.fail,persist:()=>{},isBusy:()=>false,saved:snapshot});
   let workspace=create({parameters:{a:2,b:3}});
   try{
     await workspace.run();const toggle=name=>document.querySelector(`[data-animate-parameter="${name}"]`);
-    assert.equal(toggle('a').checked,true);toggle('a').checked=false;toggle('a').onchange();$('graph-animate').click();tick();
+    assert.equal(toggle('a').checked,true);toggle('a').checked=false;toggle('a').onchange();$('graph-animate').click();tick();tick();
     assert.equal(workspace.snapshot().parameters.a,2);assert.notEqual(workspace.snapshot().parameters.b,3);
+    assert.ok(Math.abs(workspace.snapshot().parameters.b-3)<.2,'start from the current slider instead of jumping to its midpoint');
     toggle('b').checked=false;toggle('b').onchange();const held=workspace.snapshot().parameters;tick();assert.deepEqual(workspace.snapshot().parameters,held);
     toggle('a').checked=true;toggle('a').onchange();tick();assert.notEqual(workspace.snapshot().parameters.a,2);assert.equal(workspace.snapshot().parameters.b,held.b);
-    saved=workspace.snapshot();workspace.dispose();workspace=create(saved);await workspace.run();assert.equal(toggle('a').checked,true);assert.equal(toggle('b').checked,false);
-  }finally{workspace.dispose();globalThis.setInterval=originalInterval;globalThis.clearInterval=originalClear;dom.window.close();}
+    const saved=workspace.snapshot();workspace.dispose();workspace=create(saved);await workspace.run();assert.equal(toggle('a').checked,true);assert.equal(toggle('b').checked,false);
+  }finally{workspace.dispose();dom.window.close();}
 });
 
 test('graph requests are serialized and the next request captures the latest viewport',async()=>{
@@ -95,6 +95,34 @@ test('graph requests are serialized and the next request captures the latest vie
     const first=workspace.run();$('graph-ymin').value='-20';await workspace.run();$('graph-ymin').value='-30';await workspace.run();assert.equal(requests.length,1);
     resolvers.shift()({ok:true,curves:[],parameters:[]});await first;
     const latest=workspace.run();assert.equal(requests.length,2);assert.equal(requests[1].yMin,-30);resolvers.shift()({ok:true,curves:[],parameters:[]});await latest;
+  }finally{workspace.dispose();dom.window.close();}
+});
+
+test('Animate runs at 60 updates per second without debounce, reuses tables, and refines on Stop',async()=>{
+  const dom=setup(page()),$=id=>document.getElementById(id),callbacks=new Map(),requests=[];let id=0,saves=0;
+  dom.window.requestAnimationFrame=callback=>{callbacks.set(++id,callback);return id;};dom.window.cancelAnimationFrame=id=>callbacks.delete(id);
+  const step=async time=>{const batch=[...callbacks.values()];callbacks.clear();for(const callback of batch)callback(time);for(let i=0;i<4;i++)await Promise.resolve();};
+  const workspace=createGraphWorkspace({execute:async request=>{requests.push(request);return {ok:true,curves:[[[0,request.parameters.a],[1,1]]],parameters:['a']};},options,onError:assert.fail,persist:()=>saves++,isBusy:()=>false,saved:{parameters:{a:1}}});
+  try{
+    await workspace.run();const table=$('graph-table').firstChild,selection=$('graph-selected').firstChild,startSaves=saves;
+    $('graph-animate').click();
+    for(let frame=0;frame<60;frame++)await step(frame*1000/60);
+    const animated=requests.filter(r=>r.samples===200);assert.ok(animated.length>=59&&animated.length<=61,`expected 60 updates, got ${animated.length}`);
+    assert.equal($('graph-table').firstChild,table);assert.equal($('graph-selected').firstChild,selection);assert.equal(saves,startSaves,'animation does not write local storage for every frame');
+    $('graph-animate').click();for(let i=0;i<4;i++)await Promise.resolve();assert.equal(requests.at(-1).samples,500);assert.notEqual($('graph-table').firstChild,table);
+    const stopped=requests.length;await step(1200);assert.equal(requests.length,stopped);
+  }finally{workspace.dispose();dom.window.close();}
+});
+
+test('slow Animate computations are serialized and the next frame uses current parameters',async()=>{
+  const dom=setup(page()),$=id=>document.getElementById(id),callbacks=new Map(),requests=[],resolvers=[];let id=0;
+  dom.window.requestAnimationFrame=callback=>{callbacks.set(++id,callback);return id;};dom.window.cancelAnimationFrame=id=>callbacks.delete(id);
+  const step=async time=>{const batch=[...callbacks.values()];callbacks.clear();for(const callback of batch)callback(time);for(let i=0;i<4;i++)await Promise.resolve();};
+  const workspace=createGraphWorkspace({execute:request=>{requests.push(request);return request.samples===500?Promise.resolve({ok:true,curves:[],parameters:['a']}):new Promise(resolve=>resolvers.push(resolve));},options,onError:assert.fail,persist:()=>{},isBusy:()=>false,saved:{parameters:{a:1}}});
+  try{
+    await workspace.run();$('graph-animate').click();await step(0);await step(34);await step(68);await step(102);assert.equal(requests.length,2);
+    resolvers.shift()({ok:true,curves:[],parameters:['a']});for(let i=0;i<4;i++)await Promise.resolve();await step(136);assert.equal(requests.length,3);assert.equal(requests.at(-1).parameters.a,workspace.snapshot().parameters.a);
+    assert.notEqual(requests.at(-1).parameters.a,requests[1].parameters.a);
   }finally{workspace.dispose();dom.window.close();}
 });
 

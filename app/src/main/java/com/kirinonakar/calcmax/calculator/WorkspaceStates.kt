@@ -5,6 +5,9 @@ import androidx.compose.runtime.*
 import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.math.abs
+import kotlin.math.asin
+import kotlin.math.sin
+import kotlin.math.PI
 
 private fun SharedPreferences.jsonObject(key:String):JSONObject =
     runCatching {JSONObject(getString(key,"{}") ?: "{}")}.getOrDefault(JSONObject())
@@ -41,6 +44,7 @@ internal class GraphState(private val prefs:SharedPreferences) {
     var graphParameters by mutableStateOf(loadParameters())
     var graphAnimating by mutableStateOf(false)
     var animationPhase=0.0
+    private val animationOffsets=mutableMapOf<String,Double>()
     var radianAxis by mutableStateOf(prefs.getBoolean("radianAxis",false))
 
     private fun loadParameters():Map<String,GraphParameter> = runCatching {
@@ -115,12 +119,14 @@ internal class GraphState(private val prefs:SharedPreferences) {
         if(!value.isFinite())return
         val clamped=value.coerceIn(spec.min,spec.max)
         if(clamped!=spec.value)graphParameters=graphParameters+(name to spec.copy(value=clamped))
+        if(graphAnimating)alignAnimation(name)
     }
 
     fun setParameterRange(name:String,low:Double,high:Double):Boolean {
         val spec=graphParameters[name] ?: return false
         if(!low.isFinite()||!high.isFinite()||low>=high||abs(low)>1e9||abs(high)>1e9)return false
         graphParameters=graphParameters+(name to spec.copy(min=low,max=high,value=spec.value.coerceIn(low,high)))
+        if(graphAnimating)alignAnimation(name)
         return true
     }
 
@@ -131,6 +137,30 @@ internal class GraphState(private val prefs:SharedPreferences) {
     fun setParameterAnimation(name:String,enabled:Boolean) {
         val spec=graphParameters[name] ?: return
         graphParameters=graphParameters+(name to spec.copy(animate=enabled))
+        if(graphAnimating&&enabled)alignAnimation(name)
+    }
+
+    private fun alignAnimation(name:String) {
+        val spec=graphParameters[name] ?: return
+        animationOffsets[name]=asin((2*(spec.value-spec.min)/(spec.max-spec.min)-1).coerceIn(-1.0,1.0))-animationPhase
+    }
+
+    fun beginAnimation() {
+        animationPhase=0.0;animationOffsets.clear()
+        graphParameters.keys.forEach(::alignAnimation)
+    }
+
+    fun advanceAnimation(seconds:Double):Boolean {
+        animationPhase=(animationPhase+seconds.coerceIn(0.0,.1))%(2*PI)
+        if(graphParameters.values.none {it.animate})return false
+        graphParameters=graphParameters.mapValues {(name,spec)->
+            if(!spec.animate)spec else {
+                if(name !in animationOffsets)alignAnimation(name)
+                val swing=(sin(animationPhase+animationOffsets.getValue(name))+1)/2
+                spec.copy(value=spec.min+(spec.max-spec.min)*swing)
+            }
+        }
+        return true
     }
 
     fun animateParameters(swing:Double):Boolean {

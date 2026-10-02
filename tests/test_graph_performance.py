@@ -2,13 +2,36 @@ import math
 import pathlib
 import sys
 import unittest
+from unittest.mock import patch
 import sympy as s
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "app/src/main/python"))
-from calc_graph import _compiled_graph, graph_function, implicit_samples, simplify_samples, adaptive_samples
+from calc_graph import _compiled_graph, graph_function, implicit_samples, simplify_samples, adaptive_samples, graph_expressions, _graph_programs
+from calc_evaluator import Engine
 
 
 class GraphPerformanceTests(unittest.TestCase):
+    def test_symbolic_programs_reuse_builds_and_invalidate_saved_context(self):
+        _graph_programs.clear()
+        tree={"kind":"symbol","value":"a"}
+        def engine(value):return Engine({"variables":{"a":{"kind":"number","value":str(value)}}})
+        self.assertEqual((s.Integer(2),),graph_expressions(engine(2),[tree],("x",)))
+        reused=engine(2)
+        with patch.object(reused,"build",side_effect=AssertionError("symbolic program rebuilt")):
+            self.assertEqual((s.Integer(2),),graph_expressions(reused,[tree],("x",)))
+        self.assertEqual((s.Integer(3),),graph_expressions(engine(3),[tree],("x",)))
+        for value in range(50):graph_expressions(engine(value),[tree],("x",))
+        self.assertLessEqual(len(_graph_programs),32)
+
+    def test_program_cache_does_not_freeze_random_calls_in_stored_definitions(self):
+        _graph_programs.clear()
+        tree={"kind":"symbol","value":"a"}
+        engine=Engine({"variables":{"a":{"kind":"call","value":"rnd","args":[]}}})
+        with patch("calc_evaluator.random.random",side_effect=[.25,.75]):
+            self.assertAlmostEqual(.25,float(graph_expressions(engine,[tree],("x",))[0]))
+            self.assertAlmostEqual(.75,float(graph_expressions(engine,[tree],("x",))[0]))
+        self.assertEqual(0,len(_graph_programs))
+
     def test_compilation_reused_across_slider_values_and_bounded(self):
         x, a = s.symbols("x a")
         _compiled_graph.cache_clear()

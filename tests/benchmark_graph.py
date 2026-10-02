@@ -37,6 +37,11 @@ def benchmark():
         response = json.loads(calc_engine.dispatch(json.dumps({**request, "parameters": {"a": 1+index/50}})))
         assert response["ok"], response
     print(f"50 slider updates: {1000*(time.perf_counter()-start):.1f} ms, {len(response['curves'][0])} points in last curve")
+    start = time.perf_counter()
+    for index in range(50):
+        response = json.loads(calc_engine.dispatch(json.dumps({**request, "samples":200,"parameters":{"a":1+index/50}})))
+        assert response["ok"], response
+    print(f"50 interactive animation updates: {1000*(time.perf_counter()-start):.1f} ms, {len(response['curves'][0])} points in last curve")
 
 
 if __name__ == "__main__":

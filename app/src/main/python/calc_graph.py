@@ -1,16 +1,49 @@
 """Graph sampling, parameters, shading, and curve analysis."""
 import math
+import json
+from collections import OrderedDict
 from functools import lru_cache
 import sympy as s
 from sympy.core.function import AppliedUndef
 from calc_shared import MathError, require
 from calc_display import readable
 
+_graph_programs = OrderedDict()
+
+
+def graph_expressions(engine, trees, axes):
+    """Reuse symbolic programs across frames; all evaluation context is in the key."""
+    context = {"trees": trees, "axes": axes, "precision": engine.precision,
+               "displayDigits": engine.display_digits, "angle": engine.angle,
+               "variables": engine.variables, "functions": engine.functions,
+               "assumptions": engine.assumptions, "sequence": engine.allow_sequence_calls}
+    key = json.dumps(context, sort_keys=True, separators=(",", ":"))
+    # Random calls must run anew, including those inside stored definitions.
+    cacheable = not any('"value":"'+name+'"' in key for name in ("rnd", "rand", "randInt"))
+    if cacheable and key in _graph_programs:
+        _graph_programs.move_to_end(key)
+        return _graph_programs[key]
+    def freeze(value):
+        return tuple(freeze(item) for item in value) if isinstance(value, (list, tuple)) else value
+    expressions = tuple(freeze(engine.build(tree)) for tree in trees)
+    if cacheable:
+        _graph_programs[key] = expressions
+        if len(_graph_programs) > 32: _graph_programs.popitem(last=False)
+    return expressions
+
 
 @lru_cache(maxsize=64)
 def _compiled_graph(axes, expression):
     """Bounded cache of immutable symbolic programs, never engine/request state."""
     return s.lambdify(axes, expression, modules="math", cse=True, docstring_limit=0)
+
+
+@lru_cache(maxsize=64)
+def _square_free_graph(expression, x, y):
+    if expression.is_polynomial(x, y):
+        polynomial = s.Poly(expression, x, y)
+        if polynomial.total_degree() <= 12: return polynomial.sqf_part().as_expr()
+    return expression
 
 
 def graph_function(expression, axes, sliders=None):
@@ -59,10 +92,10 @@ def graph(engine, request):
     if kind == "differential":
         return graph_differential(engine, request, trees, start, end)
     var = engine.symbol(request.get("variable","x")); engine.bindings[str(var)] = var
-    expressions = [engine.build(t) for t in trees]
+    expressions = graph_expressions(engine, trees, (str(var),))
     shade_items = (request.get("shadings") or []) if kind == "cartesian" else []
-    shade_expressions = [[engine.build(t) for t in (item.get("trees") or [])] for item in shade_items]
-    all_expressions = expressions+[expression for group in shade_expressions for expression in group]
+    shade_expressions = [graph_expressions(engine, item.get("trees") or [], (str(var),)) for item in shade_items]
+    all_expressions = list(expressions)+[expression for group in shade_expressions for expression in group]
     names = parameter_names(all_expressions, {str(var)})
     sliders = resolved_parameters(engine, request, all_expressions, {str(var)})
     count = min(1600,max(100,int(request.get("samples",500))))
@@ -91,8 +124,7 @@ def graph_implicit(engine, request, trees, xmin, xmax):
     x, y = engine.symbol("x"), engine.symbol("y")
     engine.bindings.update({"x": x, "y": y})
     expressions = []
-    for tree in trees:
-        expression = engine.build(tree)
+    for expression in graph_expressions(engine, trees, ("x", "y")):
         if isinstance(expression, s.Equality):
             expression = expression.lhs-expression.rhs
         require(isinstance(expression, s.Expr), "Enter an equation F(x,y)=0")
@@ -104,14 +136,22 @@ def graph_implicit(engine, request, trees, xmin, xmax):
     count = min(240, max(80, int(math.sqrt(max(1, int(request.get("samples", 500))))*8)))
     curves = []
     for expression in expressions:
-        expression = substitute_parameters(expression, sliders)
-        require(expression != 0, "Equation is true everywhere; enter a curve equation")
-        # Repeated polynomial factors have the same zero set but no sign change.
-        if expression.is_polynomial(x, y):
-            polynomial = s.Poly(expression, x, y)
+        numeric = substitute_parameters(expression, sliders)
+        require(numeric != 0, "Equation is true everywhere; enter a curve equation")
+        # Keep parameters in the compiled program. Normalize repeated factors
+        # once, checking for new multiplicities at special slider values.
+        program = _square_free_graph(expression, x, y)
+        bound = substitute_parameters(program, sliders)
+        if bound.is_polynomial(x, y):
+            polynomial = s.Poly(bound, x, y)
             if polynomial.total_degree() <= 12:
-                expression = polynomial.sqf_part().as_expr()
-        function = graph_function(expression, (x, y))
+                square_free = polynomial.sqf_part()
+                if square_free.total_degree() != polynomial.total_degree():
+                    program, sliders_for_curve = square_free.as_expr(), None
+                else: sliders_for_curve = sliders
+            else: sliders_for_curve = sliders
+        else: sliders_for_curve = sliders
+        function = graph_function(program, (x, y), sliders_for_curve)
         curves.append(implicit_samples(function, xmin, xmax, ymin, ymax, count))
     return {"curves": curves, "implicit": True, "parameters": sorted(names)}
 
@@ -432,10 +472,9 @@ def graph_sequence(engine, request, trees, start, end):
     require(last >= first and last-first <= 1200, "Sequence range is too large")
     n = engine.symbol("n"); engine.bindings["n"] = n
     engine.allow_sequence_calls = True
-    expressions = [engine.build(tree) for tree in trees]
+    expressions = graph_expressions(engine, trees, ("n",))
     names = parameter_names(expressions, {"n"})
     sliders = resolved_parameters(engine, request, expressions, {"n"})
-    expressions = [substitute_parameters(expression,sliders) for expression in expressions]
     seed_trees = request.get("initialTrees", [])
     seeds = []
     for tree in seed_trees[:20]:
@@ -446,6 +485,17 @@ def graph_sequence(engine, request, trees, start, end):
     require(expressions, "Enter a sequence rule")
     curves = []
     for curve_index, expression in enumerate(expressions):
+        if not expression.atoms(AppliedUndef):
+            function = graph_function(expression, (n,), sliders)
+            curve = []
+            for index in range(last+1):
+                try: value = _finite_real(function(index))
+                except (TypeError, ValueError, ZeroDivisionError, OverflowError): value = None
+                require(value is not None, "Sequence rule did not produce a finite real value")
+                if index >= first: curve.append([index, value])
+            curves.append(curve)
+            continue
+        expression = substitute_parameters(expression, sliders)
         function_name = "u" if len(expressions) == 1 else "u%d" % (curve_index+1)
         sequence = {}
         recursive_calls = expression.atoms(AppliedUndef)
@@ -476,7 +526,7 @@ def graph_surface(engine, request, trees, xmin, xmax):
     require(math.isfinite(ymin) and math.isfinite(ymax) and ymax > ymin, "Invalid surface y range")
     x, y = engine.symbol("x"), engine.symbol("y")
     engine.bindings.update({"x":x, "y":y})
-    expression = engine.build(trees[0])
+    expression = graph_expressions(engine, trees, ("x", "y"))[0]
     names = parameter_names([expression], {"x","y"})
     fn = graph_function(expression, (x,y), resolved_parameters(engine, request, [expression], {"x","y"}))
     count = min(96, max(12, int(request.get("surfaceSamples", 26))))
@@ -498,7 +548,7 @@ def graph_differential(engine, request, trees, start, end):
     require(len(trees) == 1, "Enter one derivative rule dy/dt=f(t,y)")
     t, y = engine.symbol("t"), engine.symbol("y")
     engine.bindings.update({"t":t, "y":y})
-    expression = engine.build(trees[0])
+    expression = graph_expressions(engine, trees, ("t", "y"))[0]
     names = parameter_names([expression], {"t","y"})
     fn = graph_function(expression, (t,y), resolved_parameters(engine, request, [expression], {"t","y"}))
     ymin, ymax = float(request.get("yMin", -5)), float(request.get("yMax", 5))

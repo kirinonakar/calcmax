@@ -8,6 +8,23 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class WorkspaceStatesTest {
+    @Test fun animationStartsAtCurrentValuesAndElapsedTimeIsIndependentOfTickRate() {
+        val prefs=MemoryPreferences(mapOf("graphParameters" to "{\"a\":{\"value\":2,\"min\":-5,\"max\":5},\"b\":{\"value\":-1,\"min\":-5,\"max\":5,\"animate\":false}}"))
+        val fast=GraphState(prefs);val slow=GraphState(prefs)
+        fast.graphAnimating=true;slow.graphAnimating=true;fast.beginAnimation();slow.beginAnimation()
+        fast.advanceAnimation(0.0)
+        assertEquals(2.0,fast.graphParameters.getValue("a").value,1e-12)
+        repeat(60){fast.advanceAnimation(1.0/60)}
+        repeat(30){slow.advanceAnimation(1.0/30)}
+        assertEquals(fast.graphParameters.getValue("a").value,slow.graphParameters.getValue("a").value,1e-12)
+        assertEquals(-1.0,fast.graphParameters.getValue("b").value,0.0)
+        fast.setParameterAnimation("b",true);fast.advanceAnimation(0.0)
+        assertEquals(-1.0,fast.graphParameters.getValue("b").value,1e-12)
+        fast.setParameter("a",3.0);fast.advanceAnimation(0.0)
+        assertEquals(3.0,fast.graphParameters.getValue("a").value,1e-12)
+        val phase=fast.animationPhase;fast.advanceAnimation(10.0)
+        assertEquals(.1,fast.animationPhase-phase,1e-12)
+    }
     @Test fun surfaceRecalculationFailuresRetainTheLastMeshAndCanBeRetried() {
         val state=GraphState(MemoryPreferences());state.changeKind("surface")
         val first=org.json.JSONObject("{\"ok\":true,\"surface\":[[[0,0,1],[1,0,2]],[[0,1,2],[1,1,3]]],\"parameters\":[]}")
