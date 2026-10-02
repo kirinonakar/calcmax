@@ -122,7 +122,7 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
     });
   }
   function render(){
-    heightControls();densityControls();parameterVisibility();formulas();renderRangeNumbers();for(const caption of $('graph-parameters').querySelectorAll('[data-parameter]'))caption.textContent=`${caption.dataset.parameter} = ${displayNumber(parameters[caption.dataset.parameter],options().displayDigits)}`;if(!result||!bounds)return;
+    heightControls();densityControls();parameterVisibility();formulas();renderRangeNumbers();syncParameterControls();if(!result||!bounds)return;
     for(const [id,number,suffix] of [['graph-rotation',surface.rotation,'°'],['graph-elevation',surface.elevation,'°'],['graph-surface-zoom',surface.zoom*100,'%']]){let output=$(id+'-value');if(!output){output=document.createElement('output');output.id=id+'-value';$(id).insertAdjacentElement('afterend',output);}output.textContent=displayNumber(number,options().displayDigits)+suffix;}
     let shown=result;
     if(result.surface){
@@ -147,16 +147,38 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
     $('graph-parameters-toggle').setAttribute('aria-expanded',String(parametersOpen));
   }
   $('graph-parameters-toggle').onclick=()=>{parametersOpen=!parametersOpen;parameterVisibility();persist();};
+  function syncParameterControls(){
+    for(const caption of $('graph-parameters').querySelectorAll('[data-parameter]')){
+      const name=caption.dataset.parameter,group=caption.closest('.graph-parameter'),number=parameters[name],limits=parameterRanges[name]||[-5,5];
+      caption.textContent=`${name} = ${displayNumber(number,options().displayDigits)}`;
+      const slider=group.querySelector('input[type="range"]'),field=group.querySelector('[data-parameter-value]');
+      slider.min=String(limits[0]);slider.max=String(limits[1]);slider.value=String(number);
+      if(document.activeElement!==field){field.value=String(number);field.removeAttribute('aria-invalid');}
+      for(const bound of group.querySelectorAll('[data-parameter-bound]'))if(document.activeElement!==bound)bound.value=String(limits[Number(bound.dataset.parameterBound)]);
+    }
+  }
   function parameterControls(names=[],force=false){
-    if(!force&&$('graph-parameters').dataset.names===JSON.stringify(names)){for(const caption of $('graph-parameters').querySelectorAll('[data-parameter]')){caption.textContent=`${caption.dataset.parameter} = ${displayNumber(parameters[caption.dataset.parameter],options().displayDigits)}`;caption.nextElementSibling.value=String(parameters[caption.dataset.parameter]);}return;}
+    if(!force&&$('graph-parameters').dataset.names===JSON.stringify(names)){syncParameterControls();return;}
     $('graph-parameters').dataset.names=JSON.stringify(names);
     $('graph-parameters').replaceChildren();
-    for(const name of names){if(!(name in parameters))parameters[name]=1;const limits=parameterRanges[name]||[-5,5],label=document.createElement('label'),caption=document.createElement('span'),input=document.createElement('input'),ranges=document.createElement('div'),low=document.createElement('input'),high=document.createElement('input');
+    for(const name of names){if(!(name in parameters))parameters[name]=1;const limits=parameterRanges[name]||[-5,5],label=document.createElement('label'),caption=document.createElement('span'),input=document.createElement('input'),valueInput=document.createElement('input'),ranges=document.createElement('div'),low=document.createElement('input'),high=document.createElement('input');
       const toggleLabel=document.createElement('label'),toggle=document.createElement('input');toggleLabel.className='check';toggle.type='checkbox';toggle.checked=animationEnabled[name]!==false;toggle.dataset.animateParameter=name;toggle.setAttribute('aria-label',`${t('Animate')}: ${name}`);toggle.onchange=()=>{animationEnabled[name]=toggle.checked;if(animation&&toggle.checked)animation.phases[name]=parameterPhase(name)-animation.phase;persist();};toggleLabel.append(toggle,document.createTextNode(`${t('Animate')} ${name}`));
       input.type='range';input.min=String(limits[0]);input.max=String(limits[1]);input.step='any';input.value=String(parameters[name]);caption.dataset.parameter=name;caption.textContent=`${name} = ${displayNumber(parameters[name],options().displayDigits)}`;
-      input.oninput=()=>{parameters[name]=Number(input.value);if(animation)animation.phases[name]=parameterPhase(name)-animation.phase;caption.textContent=`${name} = ${displayNumber(parameters[name],options().displayDigits)}`;analysis=null;queue();};
-      for(const [field,number,labelText] of [[low,limits[0],'Slider minimum'],[high,limits[1],'Slider maximum']]){field.type='number';field.step='any';field.value=String(number);field.setAttribute('aria-label',`${t(labelText)}: ${name}`);field.onchange=()=>{const a=Number(low.value),b=Number(high.value);if(!Number.isFinite(a)||!Number.isFinite(b)||a>=b){onError(t('Enter finite values with minimum < maximum'));return;}parameterRanges[name]=[a,b];parameters[name]=Math.max(a,Math.min(b,parameters[name]));if(animation)animation.phases[name]=parameterPhase(name)-animation.phase;parameterControls(names,true);queue();};}
-      ranges.className='form-row';ranges.append(low,high);label.append(caption,input,ranges);const group=document.createElement('div');group.append(label,toggleLabel);$('graph-parameters').append(group);
+      input.setAttribute('aria-label',`${t('Parameter value')}: ${name}`);
+      input.oninput=()=>{parameters[name]=Number(input.value);if(animation)animation.phases[name]=parameterPhase(name)-animation.phase;syncParameterControls();analysis=null;queue();};
+      valueInput.type='number';valueInput.step='any';valueInput.value=String(parameters[name]);valueInput.dataset.parameterValue=name;valueInput.setAttribute('aria-label',`${t('Parameter value')}: ${name}`);
+      const applyValue=()=>{
+        const number=valueInput.value.trim()===''?NaN:Number(valueInput.value);
+        if(!Number.isFinite(number)||Math.abs(number)>1e9){valueInput.setAttribute('aria-invalid','true');onError(t('Enter a finite value between -1e9 and 1e9'));return;}
+        const [a,b]=parameterRanges[name]||[-5,5];
+        parameterRanges[name]=[Math.min(a,number),Math.max(b,number)];parameters[name]=number;
+        if(animation)animation.phases[name]=parameterPhase(name)-animation.phase;
+        valueInput.removeAttribute('aria-invalid');$('graph-status').textContent='';syncParameterControls();analysis=null;persist();queue();
+      };
+      valueInput.oninput=()=>valueInput.removeAttribute('aria-invalid');valueInput.onchange=applyValue;
+      valueInput.onkeydown=event=>{if(event.key==='Enter'){event.preventDefault();applyValue();}else if(event.key==='Escape'){event.preventDefault();valueInput.value=String(parameters[name]);valueInput.removeAttribute('aria-invalid');}};
+      for(const [index,[field,number,labelText]] of [[low,limits[0],'Slider minimum'],[high,limits[1],'Slider maximum']].entries()){field.type='number';field.step='any';field.value=String(number);field.dataset.parameterBound=String(index);field.setAttribute('aria-label',`${t(labelText)}: ${name}`);field.onchange=()=>{const a=low.value.trim()===''?NaN:Number(low.value),b=high.value.trim()===''?NaN:Number(high.value);if(!Number.isFinite(a)||!Number.isFinite(b)||a>=b){onError(t('Enter finite values with minimum < maximum'));return;}parameterRanges[name]=[a,b];parameters[name]=Math.max(a,Math.min(b,parameters[name]));if(animation)animation.phases[name]=parameterPhase(name)-animation.phase;parameterControls(names,true);queue();};}
+      label.className='graph-parameter-value';label.append(caption,valueInput);ranges.className='form-row';ranges.append(low,high);const group=document.createElement('div');group.className='graph-parameter';group.append(label,input,ranges,toggleLabel);$('graph-parameters').append(group);
     }
     parameterVisibility();
   }
@@ -258,6 +280,6 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
   selections();formulas();typeControls();setText($('graph-axis'),radianAxis?'x: π rad':'x: decimal');for(const [id,name] of [['graph-rotation','rotation'],['graph-elevation','elevation'],['graph-surface-zoom','zoom']])$(id).value=String(surface[name]);
   $('graph-surface-render').value=surface.renderMode;$('graph-auto-z').checked=surface.autoZ;zControls();
   $('graph-surface-color').value=surface.color;densityControls();
-  renderRangeNumbers();parameterVisibility();
+  renderRangeNumbers();parameterControls([],true);
   return {run,render,flush,snapshot:()=>({sources:{...sourceDrafts,[kind()]:value('graph-source')},parameters:{...parameters},parameterRanges,parametersOpen,animationEnabled:{...animationEnabled},heightScale,halfHeight:heightScale===.5,radianAxis,surface:{...surface},ranges:Object.fromEntries(rangeIds.filter(id=>!(surface.autoZ&&id.startsWith('graph-z'))&&value(id)!==''&&Number.isFinite(numeric(id))).map(id=>[id,numeric(id)]))}),updateButtons(){ $('graph-analysis-run').disabled=isBusy()||!isReady();},activate(value){active=value;if(active&&(!result||pending))queue();if(!active){clearTimeout(timer);timer=null;stopAnimation(false);}},dispose(){active=false;disposeGestures();resizeObserver?.disconnect();if(frame!==null)cancelFrame(frame);clearTimeout(timer);stopAnimation(false);revision++;analysisRevision++;}};
 }

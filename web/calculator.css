@@ -124,6 +124,7 @@ input:disabled,select:disabled{opacity:.45;cursor:default}
 #graph-formulas .formula-line{border-left:3px solid var(--accent);padding-left:8px}.analysis-point{display:inline-block;margin:4px;background:var(--bar)}
 #graph-parameters label{min-width:200px}#graph-analysis{padding:12px 0}#graph-table tr[tabindex]{cursor:pointer}#graph-table tr[tabindex]:hover{background:var(--bar)}
 #graph-parameters-toggle::after{content:' ▾'}#graph-parameters-toggle[aria-expanded="false"]::after{content:' ▸'}
+#graph-parameters .graph-parameter-value{flex-direction:row;align-items:center;justify-content:space-between;gap:10px}#graph-parameters .graph-parameter-value span{overflow-wrap:anywhere}#graph-parameters .graph-parameter-value input{width:120px;flex-shrink:0;padding:7px 9px}#graph-parameters input[aria-invalid="true"]{border-color:#b33724}
 .graph-range-pair{flex:1 1 240px;min-width:0}.graph-range-fields{display:flex;gap:12px}.graph-range-fields label{min-width:0!important;flex:1}.graph-range-fields output{font-variant-numeric:tabular-nums}
 .graph-range-slider{position:relative;height:36px;margin:4px 0 8px;isolation:isolate}
 .graph-range-slider::before{content:"";position:absolute;left:10px;right:10px;top:16px;height:4px;border-radius:2px;background:linear-gradient(to right,var(--line) 0 var(--range-start),var(--accent) var(--range-start) var(--range-end),var(--line) var(--range-end) 100%)}

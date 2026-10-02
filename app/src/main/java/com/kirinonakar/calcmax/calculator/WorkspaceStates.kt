@@ -114,11 +114,12 @@ internal class GraphState(private val prefs:SharedPreferences) {
         if(next!=graphParameters)graphParameters=next
     }
 
-    fun setParameter(name:String,value:Double) {
+    fun setParameter(name:String,value:Double,expandRange:Boolean=false) {
         val spec=graphParameters[name] ?: return
-        if(!value.isFinite())return
-        val clamped=value.coerceIn(spec.min,spec.max)
-        if(clamped!=spec.value)graphParameters=graphParameters+(name to spec.copy(value=clamped))
+        if(!value.isFinite() || (expandRange && abs(value)>1e9))return
+        val next=if(expandRange)spec.copy(value=value,min=minOf(spec.min,value),max=maxOf(spec.max,value))
+            else spec.copy(value=value.coerceIn(spec.min,spec.max))
+        if(next!=spec)graphParameters=graphParameters+(name to next)
         if(graphAnimating)alignAnimation(name)
     }
 

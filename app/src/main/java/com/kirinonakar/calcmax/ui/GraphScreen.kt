@@ -8,6 +8,8 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.layout.*
@@ -17,12 +19,15 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.*
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.*
 import com.kirinonakar.calcmax.calculator.CalculatorModel
 import com.kirinonakar.calcmax.math.PiAxis
@@ -38,6 +43,7 @@ import kotlin.math.*
 
 @Composable fun GraphScreen(m: CalculatorModel) {
     val c=LocalInstrument.current
+    val focusManager=LocalFocusManager.current
     var rangeDialog by remember { mutableStateOf(false) }
     var analysis by remember { mutableStateOf(false) }
     var showTable by rememberSaveable { mutableStateOf(false) }
@@ -90,28 +96,30 @@ import kotlin.math.*
                 Row(horizontalArrangement=Arrangement.spacedBy(6.dp)) {Field(m.differentialT0,"Initial time t₀",Modifier.weight(1f)){m.differentialT0=it;m.save()};Field(m.differentialInitials,"Initial y values · comma separated",Modifier.weight(2f)){m.differentialInitials=it;m.save()} }
             }
             Row(Modifier.horizontalScroll(rememberScrollState())) {
-                SmallAction("Plot") {m.plot()};SmallAction("Range") {rangeDialog=true}
+                SmallAction("Plot") {focusManager.clearFocus();m.plot()};SmallAction("Range") {rangeDialog=true}
                 if(m.graphKind in listOf("cartesian","parametric","polar"))SmallAction("Analyze",active=if(analysis)true else null,shaded=analysis) {analysis=!analysis;if(analysis)scrollToSection="analysis"}
                 if(m.graphKind!="surface")SmallAction("Table",active=if(showTable)true else null,shaded=showTable) {showTable=!showTable;if(showTable)scrollToSection="table"}
                 if(m.graphKind in listOf("cartesian","parametric","polar"))SmallAction(if(m.radianAxis)"x: π rad" else "x: decimal"){m.radianAxis=!m.radianAxis;m.save()}
             }
             if(m.graphParameters.isNotEmpty()) {
                 Row(Modifier.fillMaxWidth().padding(horizontal=10.dp).horizontalScroll(rememberScrollState()),verticalAlignment=Alignment.CenterVertically) {
-                    SmallAction(if(parametersOpen)"Parameters ▾" else "Parameters ▸"){parametersOpen=!parametersOpen}
-                    SmallAction(if(m.graphAnimating)"Stop" else "Animate",active=if(m.graphAnimating)true else null,shaded=m.graphAnimating){m.toggleGraphAnimation()}
-                    SmallAction("Reset sliders"){m.resetGraphParameters()}
+                    SmallAction(if(parametersOpen)"Parameters ▾" else "Parameters ▸"){focusManager.clearFocus();parametersOpen=!parametersOpen}
+                    SmallAction(if(m.graphAnimating)"Stop" else "Animate",active=if(m.graphAnimating)true else null,shaded=m.graphAnimating){focusManager.clearFocus();m.toggleGraphAnimation()}
+                    SmallAction("Reset sliders"){focusManager.clearFocus();m.resetGraphParameters()}
                 }
                 if(parametersOpen)Column(Modifier.fillMaxWidth().heightIn(max=150.dp).verticalScroll(rememberScrollState())) {
                     m.graphParameters.entries.forEach { (name,spec)->
-                        val animateLabel="${tr("Animate")}: $name"
-                        val low=spec.min.toFloat();val high=spec.max.toFloat()
-                        Row(Modifier.fillMaxWidth().height(38.dp).padding(horizontal=12.dp),verticalAlignment=Alignment.CenterVertically) {
-                            Checkbox(spec.animate,{m.setGraphParameterAnimation(name,it)},Modifier.size(32.dp).semantics {contentDescription=animateLabel})
-                            Text(name,Modifier.width(24.dp),fontSize=13.sp,color=c.accent,fontWeight=FontWeight.SemiBold)
-                            CompactSlider(spec.value.toFloat(),{m.setGraphParameter(name,it.toDouble())},Modifier.weight(1f),valueRange=(if(low<high)low else low-1f)..(if(high>low)high else low+1f))
-                            Text("%.3g".format(spec.value),Modifier.width(52.dp),fontSize=12.sp,color=c.ink)
-                            Box(Modifier.size(30.dp).background(c.scientific,RoundedCornerShape(8.dp)).clickable{rangeParameter=name}.semantics {contentDescription="Set $name slider range"},contentAlignment=Alignment.Center) {
-                                Text("±",fontSize=16.sp,color=c.accent)
+                        key(name) {
+                            val animateLabel="${tr("Animate")}: $name"
+                            val low=spec.min.toFloat();val high=spec.max.toFloat()
+                            Row(Modifier.fillMaxWidth().height(38.dp).padding(horizontal=12.dp),verticalAlignment=Alignment.CenterVertically) {
+                                Checkbox(spec.animate,{m.setGraphParameterAnimation(name,it)},Modifier.size(32.dp).semantics {contentDescription=animateLabel})
+                                Text(name,Modifier.width(24.dp),fontSize=13.sp,color=c.accent,fontWeight=FontWeight.SemiBold)
+                                CompactSlider(spec.value.toFloat(),{focusManager.clearFocus();m.setGraphParameter(name,it.toDouble())},Modifier.weight(1f),valueRange=(if(low<high)low else low-1f)..(if(high>low)high else low+1f))
+                                GraphParameterValueField(name,spec.value,{value->m.setGraphParameter(name,value,expandRange=true);m.error="";m.save()},{m.error=it})
+                                Box(Modifier.size(30.dp).background(c.scientific,RoundedCornerShape(8.dp)).clickable{focusManager.clearFocus();rangeParameter=name}.semantics {contentDescription="Set $name slider range"},contentAlignment=Alignment.Center) {
+                                    Text("±",fontSize=16.sp,color=c.accent)
+                                }
                             }
                         }
                     }
@@ -596,6 +604,32 @@ internal fun graphShadeFormula(source:String,displayDigits:Int?=null):GraphShade
             }
         }
     }
+}
+
+@Composable private fun GraphParameterValueField(name:String,value:Double,onApply:(Double)->Unit,onError:(String)->Unit) {
+    val c=LocalInstrument.current
+    val korean=isKorean()
+    val focusManager=LocalFocusManager.current
+    var draft by rememberSaveable(name) {mutableStateOf(value.toString())}
+    var focused by remember {mutableStateOf(false)}
+    var invalid by remember {mutableStateOf(false)}
+    LaunchedEffect(value) {if(!focused){draft=value.toString();invalid=false}}
+    val shape=RoundedCornerShape(6.dp)
+    BasicTextField(draft,{draft=it;invalid=false},Modifier.width(82.dp).height(32.dp).padding(horizontal=3.dp)
+        .background(c.display,shape).border(1.dp,if(invalid)MaterialTheme.colorScheme.error else c.grid,shape)
+        .onFocusChanged {state->
+            val wasFocused=focused;focused=state.isFocused
+            if(wasFocused&&!focused) {
+                val number=draft.trim().toDoubleOrNull()
+                if(number==null||!number.isFinite()||abs(number)>1e9) {
+                    invalid=true
+                    onError(if(korean)"-1e9부터 1e9 사이의 유한한 값을 입력하세요." else "Enter a finite value between -1e9 and 1e9")
+                } else {invalid=false;onApply(number)}
+            }
+        }.semantics {contentDescription=if(korean)"매개변수 값: $name" else "Parameter value: $name"},
+        textStyle=MaterialTheme.typography.bodySmall.copy(fontSize=12.sp,color=c.ink),singleLine=true,cursorBrush=SolidColor(c.accent),
+        keyboardOptions=KeyboardOptions(imeAction=ImeAction.Done),keyboardActions=KeyboardActions(onDone={focusManager.clearFocus()}),
+        decorationBox={inner->Box(Modifier.fillMaxSize().padding(horizontal=5.dp),contentAlignment=Alignment.CenterStart){inner()}})
 }
 
 @Composable private fun GraphNumberField(value:String,label:String,modifier:Modifier=Modifier,onValue:(String)->Unit) {

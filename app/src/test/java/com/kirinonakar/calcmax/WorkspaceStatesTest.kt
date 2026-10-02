@@ -8,6 +8,32 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class WorkspaceStatesTest {
+    @Test fun typedParametersPreservePrecisionExpandRangesAndPersist() {
+        val prefs=MemoryPreferences(mapOf("graphParameters" to "{\"a\":{\"value\":1,\"min\":-5,\"max\":5,\"animate\":false}}"))
+        val state=GraphState(prefs)
+        state.setParameter("a",12.345678901,expandRange=true)
+        assertEquals(12.345678901,state.parameterPayload().getDouble("a"),0.0)
+        assertEquals(12.345678901,state.graphParameters.getValue("a").max,0.0)
+        state.setParameter("a",-20.125,expandRange=true)
+        assertEquals(-20.125,state.graphParameters.getValue("a").min,0.0)
+        assertFalse(state.graphParameters.getValue("a").animate)
+        val before=state.graphParameters
+        for(value in listOf(Double.NaN,Double.POSITIVE_INFINITY,Double.NEGATIVE_INFINITY,1e10))state.setParameter("a",value,expandRange=true)
+        assertEquals(before,state.graphParameters)
+        val editor=prefs.edit();state.writeTo(editor);editor.apply()
+        assertEquals(state.graphParameters,GraphState(prefs).graphParameters)
+        state.setParameter("a",100.0)
+        assertEquals(12.345678901,state.graphParameters.getValue("a").value,0.0)
+    }
+    @Test fun typedParameterUpdatesRealignRunningAnimation() {
+        val state=GraphState(MemoryPreferences(mapOf("graphParameters" to "{\"a\":{\"value\":1,\"min\":-5,\"max\":5}}")))
+        state.graphAnimating=true;state.beginAnimation();state.advanceAnimation(.1)
+        state.setParameter("a",-12.3456789,expandRange=true);state.advanceAnimation(0.0)
+        assertEquals(-12.3456789,state.graphParameters.getValue("a").value,1e-12)
+        state.advanceAnimation(.01)
+        val spec=state.graphParameters.getValue("a")
+        assertTrue(spec.value in spec.min..spec.max)
+    }
     @Test fun animationStartsAtCurrentValuesAndElapsedTimeIsIndependentOfTickRate() {
         val prefs=MemoryPreferences(mapOf("graphParameters" to "{\"a\":{\"value\":2,\"min\":-5,\"max\":5},\"b\":{\"value\":-1,\"min\":-5,\"max\":5,\"animate\":false}}"))
         val fast=GraphState(prefs);val slow=GraphState(prefs)

@@ -103,6 +103,44 @@ test('shared range sliders restore saved endpoints outside the default slider do
     for(const [id,number] of Object.entries(ranges))assert.equal(workspace.snapshot().ranges[id],number);
   }finally{workspace.dispose();dom.window.close();}
 });
+test('typed graph parameters keep exact values, expand slider ranges, plot and restore',async()=>{
+  const dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));globalThis.document=dom.window.document;installCanvas(dom);
+  const requests=[];let saves=0;
+  const create=saved=>createGraphWorkspace({execute:async request=>{requests.push(request);return {ok:true,curves:[],parameters:['a','b']};},options:()=>({displayDigits:3}),onError:assert.fail,persist:()=>saves++,isBusy:()=>false,saved});
+  let workspace=create({parameters:{a:1,b:2},animationEnabled:{a:false}});
+  const field=name=>document.querySelector(`[data-parameter-value="${name}"]`),slider=()=>document.querySelector('#graph-parameters input[type="range"]');
+  try{
+    await workspace.run();const input=field('a');assert.match(input.getAttribute('aria-label'),/a/);
+    input.value='12.345678901';input.dispatchEvent(new dom.window.Event('change'));
+    assert.equal(workspace.snapshot().parameters.a,12.345678901);assert.deepEqual(workspace.snapshot().parameterRanges.a,[-5,12.345678901]);
+    assert.equal(Number(slider().value),12.345678901);assert.equal(Number(slider().max),12.345678901);assert.ok(saves>=2);
+    await workspace.run();assert.equal(requests.at(-1).parameters.a,12.345678901);assert.equal(field('a'),input);assert.equal(input.value,'12.345678901','editing uses full precision despite rounded captions');
+    input.value='-2e1';input.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Enter',cancelable:true}));
+    assert.equal(workspace.snapshot().parameters.a,-20);assert.deepEqual(workspace.snapshot().parameterRanges.a,[-20,12.345678901]);
+    slider().value='0.123456789';slider().dispatchEvent(new dom.window.Event('input'));assert.equal(input.value,'0.123456789');
+    const saved=workspace.snapshot();workspace.dispose();workspace=create(saved);await workspace.run();
+    assert.equal(field('a').value,'0.123456789');assert.equal(Number(slider().min),-20);assert.equal(Number(slider().max),12.345678901);assert.equal(workspace.snapshot().animationEnabled.a,false);
+    document.querySelector('[data-parameter-bound="1"]').value='-10';document.querySelector('[data-parameter-bound="1"]').dispatchEvent(new dom.window.Event('change'));
+    assert.equal(field('a').value,'-10');assert.equal(workspace.snapshot().parameters.a,-10);
+  }finally{workspace.dispose();dom.window.close();}
+});
+test('graph parameter drafts survive redraw and invalid input never changes the plotted value',async()=>{
+  const dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));globalThis.document=dom.window.document;installCanvas(dom);
+  const errors=[];
+  const workspace=createGraphWorkspace({execute:async()=>({ok:true,curves:[],parameters:['a']}),options:()=>({displayDigits:3}),onError:message=>errors.push(message),persist:()=>{},isBusy:()=>false,saved:{parameters:{a:1.23456789}}});
+  try{
+    await workspace.run();const input=document.querySelector('[data-parameter-value="a"]');input.focus();input.value='-';workspace.render();await workspace.run();
+    assert.equal(document.activeElement,input);assert.equal(input.value,'','number input retains its unfinished draft instead of being overwritten');
+    for(const invalid of ['', 'NaN', 'Infinity', '1e999', '1e10']){
+      input.value=invalid;input.dispatchEvent(new dom.window.Event('change'));
+      assert.equal(workspace.snapshot().parameters.a,1.23456789);assert.equal(input.getAttribute('aria-invalid'),'true');
+    }
+    assert.equal(errors.length,5);input.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape',cancelable:true}));
+    assert.equal(input.value,'1.23456789');assert.equal(input.hasAttribute('aria-invalid'),false);
+    input.value='0';input.dispatchEvent(new dom.window.Event('change'));assert.equal(workspace.snapshot().parameters.a,0);
+    input.blur();workspace.render();assert.equal(input.value,'0');
+  }finally{workspace.dispose();dom.window.close();}
+});
 test('MathML cursor is visible inside root and fractional tokens without losing empty-slot styling',()=>{
   const dom=new JSDOM();globalThis.document=dom.window.document;installCanvas(dom);
   const math=expressionDisplay('sqrt(123)');markInputCursor(math,'sqrt(123)',6);assert.equal(math.parentElement.querySelector('.input-caret').getAttribute('data-source-start'),'6');assert.equal(math.textContent,'123');

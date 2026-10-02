@@ -73,6 +73,8 @@ Object.assign(korean,nativeKorean,{
   "a / point": "a / 지점",
   "Clear analysis": "분석 지우기",
   "Slider minimum": "슬라이더 최솟값",
+  "Parameter value": "매개변수 값",
+  "Enter a finite value between -1e9 and 1e9": "-1e9부터 1e9 사이의 유한한 값을 입력하세요.",
   "Slider maximum": "슬라이더 최댓값",
   "Vertical tangent": "수직 접선",
   "No points found in this interval": "이 구간에서 찾은 점이 없습니다.",

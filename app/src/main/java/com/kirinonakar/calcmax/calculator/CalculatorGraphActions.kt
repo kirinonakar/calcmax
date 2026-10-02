@@ -98,8 +98,8 @@ internal object CalculatorGraphActions {
             }
         }
     }
-    fun CalculatorModel.performSetGraphParameter(name:String,value:Double) {
-        graphState.setParameter(name,value)
+    fun CalculatorModel.performSetGraphParameter(name:String,value:Double,expandRange:Boolean=false) {
+        graphState.setParameter(name,value,expandRange)
     }
     fun CalculatorModel.performSetGraphParameterRange(name:String,low:Double,high:Double) {
         if(name !in graphState.graphParameters)return
