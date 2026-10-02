@@ -84,7 +84,7 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
   let sourceKind=kind();sourceDrafts[sourceKind]=value('graph-source');
   const rangeIds=['graph-min','graph-max','graph-ymin','graph-ymax','graph-xmin','graph-xmax','graph-analysis-a','graph-analysis-b','graph-t0','graph-zmin','graph-zmax'];
   const sliderIds=rangeIds.filter(id=>id!=='graph-t0');
-  const rangePairs=[['graph-min','graph-max'],['graph-ymin','graph-ymax'],['graph-xmin','graph-xmax'],['graph-zmin','graph-zmax']];
+  const rangePairs=[['graph-min','graph-max'],['graph-ymin','graph-ymax'],['graph-xmin','graph-xmax'],['graph-zmin','graph-zmax'],['graph-analysis-a','graph-analysis-b']];
   const pairedSliders=new Map();
   function fieldNumber(input){return input.value.trim()===''?NaN:Number(input.dataset.displayValue===input.value?input.dataset.fullValue:input.value);}
   function numeric(id){return fieldNumber($(id));}
@@ -94,7 +94,7 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
     const numbers=pair.ids.map(numeric);if(!numbers.every(Number.isFinite))return;
     const sliders=pair.ids.map(id=>$(id+'-slider')),low=Math.min(...sliders.map(slider=>Number(slider.min)),...numbers),high=Math.max(...sliders.map(slider=>Number(slider.max)),...numbers);
     sliders.forEach((slider,index)=>{slider.min=String(low);slider.max=String(high);slider.value=String(numbers[index]);slider.setAttribute('aria-valuetext',displayNumber(numbers[index],options().displayDigits));});
-    pair.track.style.setProperty('--range-start',`${100*(numbers[0]-low)/(high-low)}%`);pair.track.style.setProperty('--range-end',`${100*(numbers[1]-low)/(high-low)}%`);
+    pair.track.style.setProperty('--range-start',`${100*(numbers[0]-low)/(high-low)}%`);pair.track.style.setProperty('--range-end',`${100*((sliders[1].hidden?numbers[0]:numbers[1])-low)/(high-low)}%`);
   }
   function resetRangeDomain(pair){
     const [min,max]=pair.ids.map(numeric),span=max-min;if(!Number.isFinite(span)||span<=0)return;
@@ -285,7 +285,14 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
     showNumber('graph-analysis-a',low);showNumber('graph-analysis-b',high);analysisControls();
     $('graph-tangent-slider').value=String(low);persist();
   };
-  function analysisControls(){const action=value('graph-analysis-action');$('graph-other').closest('label').hidden=action!=='intersection';$('graph-analysis-b').closest('label').hidden=['derivative','tangent'].includes(action);$('graph-tangent-position').hidden=action!=='tangent';$('graph-analysis-a-slider').hidden=action==='tangent';$('graph-analysis-a-value').hidden=action==='tangent';$('graph-tangent-slider').min=String(numeric('graph-min'));$('graph-tangent-slider').max=String(numeric('graph-max'));}
+  function analysisControls(){
+    const action=value('graph-analysis-action'),point=['derivative','tangent'].includes(action),tangent=action==='tangent';
+    $('graph-other').closest('label').hidden=action!=='intersection';$('graph-analysis-b').closest('label').hidden=point;
+    $('graph-tangent-position').hidden=!tangent;$('graph-analysis-a-slider').hidden=tangent;$('graph-analysis-b-slider').hidden=point;
+    $('graph-analysis-a-value').hidden=tangent;
+    const pair=pairedSliders.get('graph-analysis-a');if(pair){pair.track.hidden=tangent;syncRangePair(pair);}
+    $('graph-tangent-slider').min=String(numeric('graph-min'));$('graph-tangent-slider').max=String(numeric('graph-max'));
+  }
   $('graph-analysis-action').onchange=analysisControls;$('graph-tangent-slider').oninput=()=>{showNumber('graph-analysis-a',Number(value('graph-tangent-slider')));};$('graph-tangent-slider').onchange=()=>analyze('tangent');
   for(const id of ['graph-rotation','graph-elevation','graph-surface-zoom'])$(id).oninput=()=>{const previousCount=surfaceSampleCount(currentBounds(),surface.samples,surface.autoDensity,surface.zoom);surface.rotation=Number(value('graph-rotation'));surface.elevation=Number(value('graph-elevation'));surface.zoom=Number(value('graph-surface-zoom'));render();persist();if(surface.autoDensity&&previousCount!==surfaceSampleCount(currentBounds(),surface.samples,true,surface.zoom))queue();};
   $('graph-surface-render').onchange=()=>{surface.renderMode=value('graph-surface-render');render();persist();};
@@ -325,7 +332,12 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
   for(const id of ['graph-min','graph-max','graph-ymin','graph-ymax','graph-xmin','graph-xmax','graph-initial','graph-t0'])$(id).onchange=()=>{analysisControls();queue();};
   for(const id of rangeIds){const field=$(id);editField(field);for(const name of ['input','change'])field.addEventListener(name,()=>{if(field.dataset.displayValue!==field.value)delete field.dataset.displayValue;const pair=pairedSliders.get(id);if(pair)syncRangePair(pair);});}
   for(const id of sliderIds){const field=$(id),slider=document.createElement('input'),output=document.createElement('output'),current=numeric(id);slider.type='range';slider.id=id+'-slider';slider.min=String(Math.min(-30,current-20));slider.max=String(Math.max(30,current+20));slider.step='any';slider.value=String(current);slider.setAttribute('aria-label',field.closest('label').firstChild.textContent.trim());output.id=id+'-value';output.textContent=displayNumber(current,options().displayDigits);field.insertAdjacentElement('afterend',output);output.insertAdjacentElement('afterend',slider);
-    slider.oninput=()=>{const number=Number(slider.value),partner=id.endsWith('min')?id.replace(/min$/,'max'):id.endsWith('max')?id.replace(/max$/,'min'):null;let bounded=number;if(partner){const limit=numeric(partner),gap=Math.max(2e-7,Math.abs(limit)*1e-10);bounded=id.endsWith('min')?Math.min(number,limit-gap):Math.max(number,limit+gap);}showNumber(id,bounded);if(!id.startsWith('graph-analysis')){bounds=currentBounds();render();}else renderRangeNumbers();};
+    slider.oninput=()=>{
+      const number=Number(slider.value),pair=pairedSliders.get(id),partner=pair&&!pair.ids.some(key=>$(key+'-slider').hidden)?pair.ids.find(key=>key!==id):null;
+      let bounded=number;
+      if(partner&&Number.isFinite(numeric(partner))){const limit=numeric(partner),gap=Math.max(2e-7,Math.abs(limit)*1e-10);bounded=id===pair.ids[0]?Math.min(number,limit-gap):Math.max(number,limit+gap);}
+      showNumber(id,bounded);if(!id.startsWith('graph-analysis')){bounds=currentBounds();render();}else renderRangeNumbers();
+    };
     slider.onchange=()=>{persist();if(id.startsWith('graph-analysis'))analysisControls();else if(!id.startsWith('graph-z'))queue();};
   }
   for(const ids of rangePairs){
