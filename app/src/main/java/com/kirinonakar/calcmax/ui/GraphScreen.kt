@@ -667,8 +667,8 @@ internal fun graphShadeFormula(source:String,displayDigits:Int?=null):GraphShade
     val range=bounds.second-bounds.first
     Text("$axis range",fontSize=12.sp,color=LocalInstrument.current.muted)
     Row(horizontalArrangement=Arrangement.spacedBy(6.dp)) {
-        GraphNumberField(minimum,"$axis minimum",displayDigits,Modifier.weight(1f)){onMin(it)}
-        GraphNumberField(maximum,"$axis maximum",displayDigits,Modifier.weight(1f)){onMax(it)}
+        GraphNumberField(minimum,"$axis min",displayDigits,Modifier.weight(1f)){onMin(it)}
+        GraphNumberField(maximum,"$axis max",displayDigits,Modifier.weight(1f)){onMax(it)}
     }
     val low=(((minimum.toDoubleOrNull()?.takeIf(Double::isFinite) ?: bounds.first)-bounds.first)/range).coerceIn(0.0,1.0).toFloat()
     val high=(((maximum.toDoubleOrNull()?.takeIf(Double::isFinite) ?: bounds.second)-bounds.first)/range).coerceIn(0.0,1.0).toFloat()

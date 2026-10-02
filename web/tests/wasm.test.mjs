@@ -42,6 +42,19 @@ test('actual CPython WASM reuses the Android engine across workspaces',async()=>
   assert.match(evaluate(statisticsCommand('A,1\nA,2\nA,3\nB,2\nB,4\nB,6',{op:'ztest2',grouping:'groups',sigma:'1',sigmaY:'2',tail:'left'})).exact,/p value/);
   assert.match(evaluate(statisticsCommand('A,yes\nA,no\nB,yes\nB,no',{op:'chi2independence'})).exact,/chi-square/);
   const fit=evaluate(statisticsCommand('0,1\n1,3\n2,5\n3,7',{op:'regression',regression:'custom',formula:'a*x+b',initials:'[[a,1],[b,0]]'}));assert.equal(fit.parameters.length,2);assert.ok(fit.curve.length>10);
+  const constantData=Array.from({length:5},(_,x)=>`${x},${2*Math.PI*x+3*Math.exp(-x)}`).join('\n');
+  const constantFit=evaluate(statisticsCommand(constantData,{op:'regression',regression:'custom',formula:'a*pi*x+b*e^(-x)',initials:'[[a,pi/pi],[b,e/e]]'}));
+  assert.deepEqual(constantFit.parameters.map(([name])=>name),['a','b']);
+  assert.ok(Math.abs(Number(constantFit.parameters[0][1])-2)<1e-8);
+  assert.ok(Math.abs(Number(constantFit.parameters[1][1])-3)<1e-8);
+  assert.ok(constantFit.exact.includes('pi')&&constantFit.exact.includes('exp(-x)'));
+  for(const [x,y] of constantFit.curve)assert.ok(Math.abs(y-(2*Math.PI*x+3*Math.exp(-x)))<1e-7);
+  for(const imaginary of ['i','I']){
+    const imaginaryFit=evaluate(statisticsCommand('0,0\n1,-2\n2,-4',{op:'regression',regression:'custom',formula:`a*${imaginary}^2*x`}));
+    assert.deepEqual(imaginaryFit.parameters.map(([name])=>name),['a']);
+    assert.ok(Math.abs(Number(imaginaryFit.parameters[0][1])-2)<1e-8);
+    for(const [x,y] of imaginaryFit.curve)assert.ok(Math.abs(y+2*x)<1e-8);
+  }
   for(const regression of ['exponential','power']){
     const model=x=>regression==='power'?2*x**1.5:2*Math.exp(.01*x);
     const data=Array.from({length:300},(_,i)=>`${i+1},${model(i+1)}`).join('\n');

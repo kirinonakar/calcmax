@@ -67,7 +67,7 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
   const onError=message=>{setText($('graph-status'),message);$('graph-status').classList.add('error');reportError(message);};
   let result=null,bounds=null,analysis=null,trace=null,integral=null,parameters={...(saved.parameters||{})},parameterRanges={...(saved.parameterRanges||{})},derivative=null,radianAxis=!!saved.radianAxis,active=false,pending=false,timer=null,animation=null,revision=0,analysisRevision=0,signature='';
   let animationEnabled={...(saved.animationEnabled||{})},heightScale=[1,.5,2].includes(saved.heightScale)?saved.heightScale:saved.halfHeight?.5:1,running=false,frame=null,formulaSignature='',tableResult=null,tableDigits=null,tableLanguage=null;
-  let parametersOpen=saved.parametersOpen!==false,rangesOpen=saved.rangesOpen!==false,pendingAnalysis=null;
+  let parametersOpen=saved.parametersOpen!==false,pendingAnalysis=null;
   const window=$('graph-plot').ownerDocument.defaultView;
   const requestFrame=callback=>window.requestAnimationFrame?window.requestAnimationFrame(callback):window.setTimeout(callback,16);
   const cancelFrame=id=>window.cancelAnimationFrame?window.cancelAnimationFrame(id):window.clearTimeout(id);
@@ -176,11 +176,10 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
     $('graph-parameters-toggle').setAttribute('aria-expanded',String(parametersOpen));
   }
   $('graph-parameters-toggle').onclick=()=>{parametersOpen=!parametersOpen;parameterVisibility();persist();};
-  function rangeVisibility(){
-    $('graph-range-controls').hidden=!rangesOpen;
-    $('graph-ranges-toggle').setAttribute('aria-expanded',String(rangesOpen));
+  for(const [id,preference] of [['graph-ranges','rangesOpen'],['graph-help','helpOpen']]){
+    $(id).open=saved[preference]!==false;
+    $(id).addEventListener('toggle',persist);
   }
-  $('graph-ranges-toggle').onclick=()=>{rangesOpen=!rangesOpen;rangeVisibility();persist();};
   function parameterChanged(){analysisRevision++;analysis=null;trace=null;integral=null;queueDraw();queue();}
   function syncParameterControls(){
     for(const caption of $('graph-parameters').querySelectorAll('[data-parameter]')){
@@ -327,11 +326,11 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
   selections();formulas();typeControls();setText($('graph-axis'),radianAxis?'x: π rad':'x: decimal');for(const [id,name] of [['graph-rotation','rotation'],['graph-elevation','elevation'],['graph-surface-zoom','zoom']])$(id).value=String(surface[name]);
   $('graph-surface-render').value=surface.renderMode;$('graph-auto-z').checked=surface.autoZ;zControls();
   $('graph-surface-color').value=surface.color;densityControls();
-  renderRangeNumbers();parameterControls([],true);rangeVisibility();
+  renderRangeNumbers();parameterControls([],true);
   function addExpression(source,graphKind){
     const next=appendGraphSource(kind()===graphKind?value('graph-source'):sourceDrafts[graphKind]||'',source,graphKind);
     if(kind()!==graphKind){$('graph-kind').value=graphKind;$('graph-kind').onchange();}
     $('graph-source').value=next;$('graph-source').oninput();persist();
   }
-  return {addExpression,run,render,flush,snapshot:()=>({sources:{...sourceDrafts,[kind()]:value('graph-source')},parameters:{...parameters},parameterRanges,parametersOpen,rangesOpen,animationEnabled:{...animationEnabled},heightScale,halfHeight:heightScale===.5,radianAxis,surface:{...surface},ranges:Object.fromEntries(rangeIds.filter(id=>!(surface.autoZ&&id.startsWith('graph-z'))&&value(id)!==''&&Number.isFinite(numeric(id))).map(id=>[id,numeric(id)]))}),updateButtons(){ $('graph-analysis-run').disabled=isBusy()||!isReady();},activate(value){active=value;if(active&&(!result||pending))queue();if(!active){pendingAnalysis=null;clearTimeout(timer);timer=null;stopAnimation(false);}},dispose(){pendingAnalysis=null;active=false;disposeGestures();resizeObserver?.disconnect();if(frame!==null)cancelFrame(frame);clearTimeout(timer);stopAnimation(false);revision++;analysisRevision++;}};
+  return {addExpression,run,render,flush,snapshot:()=>({sources:{...sourceDrafts,[kind()]:value('graph-source')},parameters:{...parameters},parameterRanges,parametersOpen,rangesOpen:$('graph-ranges').open,helpOpen:$('graph-help').open,animationEnabled:{...animationEnabled},heightScale,halfHeight:heightScale===.5,radianAxis,surface:{...surface},ranges:Object.fromEntries(rangeIds.filter(id=>!(surface.autoZ&&id.startsWith('graph-z'))&&value(id)!==''&&Number.isFinite(numeric(id))).map(id=>[id,numeric(id)]))}),updateButtons(){ $('graph-analysis-run').disabled=isBusy()||!isReady();},activate(value){active=value;if(active&&(!result||pending))queue();if(!active){pendingAnalysis=null;clearTimeout(timer);timer=null;stopAnimation(false);}},dispose(){pendingAnalysis=null;active=false;disposeGestures();resizeObserver?.disconnect();if(frame!==null)cancelFrame(frame);clearTimeout(timer);stopAnimation(false);revision++;analysisRevision++;}};
 }

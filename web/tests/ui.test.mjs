@@ -40,7 +40,7 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
   window.HTMLDialogElement.prototype.close=function(){this.open=false;};
   for(const key of ['window','document','localStorage','location','NodeFilter','CustomEvent','EventTarget'])Object.defineProperty(globalThis,key,{value:key==='window'?window:window[key],configurable:true,writable:true});
   Object.defineProperty(globalThis,'navigator',{value:window.navigator,configurable:true});
-  localStorage.setItem('calcmax-web-v1',JSON.stringify({language:'ko',fields:{}}));
+  localStorage.setItem('calcmax-web-v1',JSON.stringify({language:'ko',fields:{},graph:{rangesOpen:false,helpOpen:false}}));
   globalThis.Worker=BrowserWorker;
   globalThis.fetch=async path=>new Response(readFileSync(new URL(path.replace('./','../'),import.meta.url),'utf8'));
   const $=id=>window.document.getElementById(id);
@@ -651,6 +651,25 @@ test('DOM workflows use the production Worker, real WASM, both languages, and th
     change('mode','matrix');$('matrix-name').value='B';$('matrix-store').click();await waitFor(()=>JSON.parse(localStorage.getItem('calcmax-web-v1')).variables.B?.kind==='list','matrix storage replaces the numeric variable');$('matrix-clear').click();$('matrix-load').click();assert.equal($('matrix-grid').querySelector('input').value,'1');
   });
   await t.test('graph controls connect all Android analysis operations and ranges/sliders stay below the plot',async()=>{
+    assert.equal($('graph-ranges').open,false,'restores the collapsed range preference');
+    assert.equal($('graph-help').open,false,'restores the collapsed explanation preference');
+    assert.equal($('graph-cartesian-help').closest('details'),$('graph-help'));
+    assert.ok($('graph-help').textContent.includes('Use [shade]'));
+    assert.ok($('graph-source').closest('label').compareDocumentPosition($('graph-help'))&window.Node.DOCUMENT_POSITION_FOLLOWING);
+    for(const id of ['graph-ranges','graph-analysis','graph-coordinates']){
+      const section=$(id),summary=section.querySelector(':scope > summary');
+      assert.equal(section.tagName,'DETAILS');
+      assert.equal(window.getComputedStyle(summary).fontSize,'17px','all three headings share the slightly larger type');
+      assert.equal(window.getComputedStyle(summary).cursor,'pointer');
+    }
+    for(const [id,preference] of [['graph-ranges','rangesOpen'],['graph-help','helpOpen']]){
+      const section=$(id),summary=section.querySelector('summary');
+      summary.click();assert.equal(section.open,true);
+      await waitFor(()=>JSON.parse(localStorage.getItem('calcmax-web-v1')).graph[preference]===true,`${id}: save expanded state`);
+      summary.click();assert.equal(section.open,false);
+      await waitFor(()=>JSON.parse(localStorage.getItem('calcmax-web-v1')).graph[preference]===false,`${id}: save collapsed state`);
+      summary.click();await waitFor(()=>JSON.parse(localStorage.getItem('calcmax-web-v1')).graph[preference]===true,`${id}: expand again`);
+    }
     change('mode','graph');$('graph-source').value='x^2-1\nx';$('graph-source').dispatchEvent(new window.Event('input'));for(const [id,number] of [['graph-min','-2'],['graph-max','2'],['graph-ymin','-2'],['graph-ymax','4']]){$(id).value=number;$(id).dispatchEvent(new window.Event('change'));}
     document.querySelector('[data-run="graph"]').click();await waitFor(()=>curveStrokes($('graph-plot')).length===2&&!$('graph-analysis-run').disabled,'two Cartesian curves');
     const axisLabels=()=>$('graph-plot').querySelector('canvas').getContext('2d').commands.filter(c=>c.op==='fillText'&&c.args[2]===Number($('graph-plot').querySelector('canvas').dataset.plotHeight)-14).map(c=>c.args[0]),decimalLabels=axisLabels(),curve=JSON.stringify(curveStrokes($('graph-plot'))[0]?.path);

@@ -9,13 +9,8 @@ self.addEventListener('activate',event=>{
     const previous=(await caches.keys()).filter(key=>key.startsWith('calcmax-static-')&&key!==CACHE);
     for(const key of previous)await caches.delete(key);
     await self.clients.claim();
-    // Refresh old bootstraps once on upgrade; pagehide saves their drafts.
-    // Do not await navigation inside activate.waitUntil: its fetch event is
-    // held until activation finishes, so waiting here deadlocks page loading.
-    // A closed tab or cancelled navigation must not fail activation either.
-    if(previous.length)for(const client of await self.clients.matchAll({type:'window'})){
-      if(client.url.startsWith(self.registration.scope))void client.navigate(client.url).catch(()=>{});
-    }
+    // Registration happens after WASM/SymPy is ready. Keep that running page
+    // intact; the next navigation fetches the current shell from the network.
   })());
 });
 self.addEventListener('fetch',event=>{

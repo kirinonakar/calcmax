@@ -22,6 +22,59 @@ def request(rows, mode, **options):
 
 
 class RegressionTests(unittest.TestCase):
+    def test_custom_pi_and_e_are_constants_in_model_and_initial_values(self):
+        import math
+        def symbol(name): return {"kind": "symbol", "value": name}
+        def number(value): return {"kind": "number", "value": str(value)}
+        def binary(op, left, right): return {"kind": "binary", "value": op, "args": [left, right]}
+        def listing(items): return {"kind": "list", "args": items}
+        x = symbol("x")
+        model = binary("+", binary("*", binary("*", symbol("A"), symbol("pi")), x),
+                       binary("*", symbol("B"), binary("^", symbol("e"), binary("*", number(-1), x))))
+        table = listing([listing([number(i), number(2*math.pi*i + 3*math.exp(-i))]) for i in range(5)])
+        initials = listing([listing([symbol(name), binary("/", symbol(constant), symbol(constant))])
+                            for name, constant in (("A", "pi"), ("B", "e"))])
+        for with_initials in (False, True):
+            with self.subTest(with_initials=with_initials):
+                args = [table, symbol("custom"), model, x] + ([initials] if with_initials else [])
+                result = json.loads(calc_engine.dispatch(json.dumps({"tree": {"kind": "call", "value": "regression", "args": args},
+                     "variables": {name: number(99) for name in ("A", "B", "pi", "e")}})))
+                self.assertTrue(result["ok"], result)
+                parameters = dict(result["parameters"])
+                self.assertEqual(set(parameters), {"A", "B"})
+                self.assertAlmostEqual(float(parameters["A"]), 2, places=8)
+                self.assertAlmostEqual(float(parameters["B"]), 3, places=8)
+                self.assertIn("pi", result["exact"])
+                self.assertIn("exp(-x)", result["exact"])
+                self.assertGreater(len(result["curve"]), 100)
+                for at, predicted in result["curve"]:
+                    self.assertAlmostEqual(predicted, 2*math.pi*at + 3*math.exp(-at), places=7)
+        for independent in ("pi", "e", "i", "I"):
+            result = json.loads(calc_engine.dispatch(json.dumps({"tree": {"kind": "call", "value": "regression",
+                "args": [table, symbol("custom"), model, symbol(independent)]}})))
+            self.assertEqual(result["error"], "Choose an independent variable")
+
+    def test_custom_i_is_the_imaginary_unit_instead_of_a_parameter(self):
+        def symbol(name): return {"kind": "symbol", "value": name}
+        def number(value): return {"kind": "number", "value": str(value)}
+        def binary(op, left, right): return {"kind": "binary", "value": op, "args": [left, right]}
+        table = {"kind": "list", "args": [{"kind": "list", "args": [number(x), number(-2*x)]} for x in range(3)]}
+        def fit(formula):
+            return json.loads(calc_engine.dispatch(json.dumps({"tree": {"kind": "call", "value": "regression",
+                "args": [table, symbol("custom"), formula, symbol("x")]},
+                "variables": {name: number(99) for name in ("i", "I")}})))
+        for imaginary in ("i", "I"):
+            with self.subTest(imaginary=imaginary):
+                formula = binary("*", binary("*", symbol("A"), binary("^", symbol(imaginary), number(2))), symbol("x"))
+                result = fit(formula)
+                self.assertTrue(result["ok"], result)
+                self.assertEqual([name for name, _ in result["parameters"]], ["A"])
+                self.assertAlmostEqual(float(result["parameters"][0][1]), 2, places=8)
+                for x, y in result["curve"]:
+                    self.assertAlmostEqual(y, -2*x, places=8)
+                complex_model = binary("*", binary("*", symbol("A"), symbol(imaginary)), symbol("x"))
+                self.assertEqual(fit(complex_model)["error"], "Custom model must be real and finite")
+
     def test_transformed_fits_match_log_linear_least_squares(self):
         rows = [(s.Integer(x), s.Integer(y)) for x, y in [(1, 8), (2, 11), (4, 17), (7, 25), (11, 41)]]
         engine = Engine({"precision": 70})

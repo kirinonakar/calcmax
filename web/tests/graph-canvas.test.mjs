@@ -208,7 +208,7 @@ test('3D range reset restores x/y and automatic z, resamples and preserves the c
   const workspace=createGraphWorkspace({execute:async request=>{requests.push(request);return {ok:true,surface:[[[-1,-1,0],[1,-1,1]],[[-1,1,1],[1,1,0]]],zMin:0,zMax:1,parameters:[]};},options,onError:assert.fail,persist:()=>{},isBusy:()=>false,saved:{surface:{rotation:123,elevation:-45,zoom:2,autoZ:false},ranges:{'graph-min':100,'graph-max':101,'graph-ymin':200,'graph-ymax':201,'graph-zmin':3,'graph-zmax':4}}});
   try{
     await workspace.run();const camera=workspace.snapshot().surface;
-    assert.equal($('graph-reset-ranges').hidden,false);assert.equal($('graph-reset-ranges').parentElement.querySelector('h2').textContent,'Range');
+    assert.equal($('graph-reset-ranges').hidden,false);assert.equal($('graph-reset-ranges').closest('details').querySelector(':scope > summary').textContent,'Range');
     $('graph-reset-ranges').click();let saved=workspace.snapshot();assert.equal(saved.ranges['graph-min'],-3);assert.equal(saved.ranges['graph-max'],3);assert.equal(saved.ranges['graph-ymin'],-3);assert.equal(saved.ranges['graph-ymax'],3);assert.equal(saved.surface.autoZ,true);
     assert.equal(saved.surface.rotation,camera.rotation);assert.equal(saved.surface.elevation,camera.elevation);assert.equal(saved.surface.zoom,camera.zoom);
     assert.equal($('graph-auto-z').checked,true);assert.equal($('graph-zmin').disabled,true);assert.equal(saved.ranges['graph-zmin'],undefined);

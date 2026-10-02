@@ -191,11 +191,14 @@ class Engine:
         try:
             if value == "regression" and len(args) > 1 and args[1].get("kind") == "symbol" and args[1].get("value") == "custom":
                 require(len(args) in (4, 5), "Use regression(data,custom,model,x,initials)")
-                require(args[3].get("kind") == "symbol", "Choose an independent variable")
+                constants = {"pi": s.pi, "e": s.E, "i": s.I, "I": s.I}
+                require(args[3].get("kind") == "symbol" and args[3].get("value") not in constants,
+                        "Choose an independent variable")
                 rows = build(args[0])
                 independent = self.symbol(args[3]["value"])
                 names = {n["value"] for root in (args[2], *args[4:]) for n in _ast_symbols(root)}
-                for name in names: self.bindings[name] = self.symbol(name)
+                for name in names:
+                    self.bindings[name] = constants[name] if name in constants else self.symbol(name)
                 expression = build(args[2])
                 options = build(args[4]) if len(args) == 5 else None
                 return fit_custom_regression(self, rows, expression, independent, options)
