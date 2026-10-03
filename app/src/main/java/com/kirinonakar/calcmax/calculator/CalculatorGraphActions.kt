@@ -30,6 +30,14 @@ internal fun appendGraphSource(existing:String,source:String,kind:String="cartes
     return existing.trimEnd()+(if(lines.isEmpty())"" else "\n")+source
 }
 
+internal fun removeGraphSource(existing:String,index:Int,kind:String="cartesian",shading:Boolean=false):String {
+    val lines=existing.lines()
+    val visible=lines.withIndex().filter {it.value.isNotBlank()}.take(if(kind in listOf("surface","differential"))1 else 8)
+    val target=visible.filter {it.value.trim().startsWith("[shade]")==shading}
+        .take(if(shading)4 else if(kind in listOf("surface","differential"))1 else 6).getOrNull(index) ?: return existing
+    return lines.filterIndexed {i,_->i!=target.index}.joinToString("\n")
+}
+
 internal object CalculatorGraphActions {
     private suspend fun nextAnimationFrame():Long = suspendCancellableCoroutine {continuation->
         val clock=Choreographer.getInstance()
@@ -54,7 +62,7 @@ internal object CalculatorGraphActions {
                 if(trees.size<limit) trees+=JSONObject(Parser(line).parse().json())
             }
         } catch(e:Exception) { error=e.message ?: "Syntax ERROR"; return }
-        if(trees.isEmpty() && shadings.length()==0) { error="Enter a function"; return }
+        if(trees.isEmpty() && shadings.length()==0) { if(!auto)error="Enter a function"; return }
         val derivativeSelected=graphDerivativeSelected?.takeIf {graphKind=="cartesian" && it in trees.indices}
         val source=graphSource;val kind=graphKind;val min=if(kind in listOf("cartesian","implicit","surface"))xMin else parameterMin;val max=if(kind in listOf("cartesian","implicit","surface"))xMax else parameterMax
         val viewYMin=yMin;val viewYMax=yMax;val parameters=graphState.parameterPayload()
@@ -190,6 +198,16 @@ internal object CalculatorGraphActions {
     }
     fun CalculatorModel.performUpdateGraphSource(source:String) {
         graphState.updateSource(source)
+        save()
+    }
+    fun CalculatorModel.performRemoveGraphSource(index:Int,shading:Boolean) {
+        val next=removeGraphSource(graphSource,index,graphKind,shading)
+        if(next==graphSource)return
+        graphState.graphAnimating=false;animationJob?.cancel();animationJob=null;graphPendingPlot=null
+        clearGraphTangent()
+        updateGraphSource(next)
+        graphData=null;graphState.graphResultSignature=null;error=""
+        if(next.isBlank())graphState.graphParameters=emptyMap()
         save()
     }
     fun CalculatorModel.performToggleGraphDerivative(selected:Int) {

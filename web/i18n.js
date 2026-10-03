@@ -18,6 +18,7 @@ const english={
   'CalcMax WebAssembly 과학·CAS·그래프·Python 계산기':'CalcMax WebAssembly scientific, CAS, graphing, and Python calculator'
 };
 const korean={
+  'Delete graph':'그래프 삭제','Delete derivative curve':'도함수 그래프 삭제','Delete shading':'음영 삭제',
   'Use [shade] y < f(x) to shade below a function, or [shade] f, g to shade between two functions. Example: [shade] sin(x), cos(x), 0..pi.':'[shade] y < f(x)는 함수 아래의 영역을, [shade] f, g는 두 함수 사이의 영역을 표시합니다. 예: [shade] sin(x), cos(x), 0..pi.',
   'Double height':'높이 2배',
   'Implicit Graph':'Implicit Graph(음함수 그래프)','Implicit Graph: x^2+y^2=1':'음함수 그래프: x^2+y^2=1',History:'기록',Catalog:'함수 목록',Setup:'설정',Undo:'실행 취소',Copy:'복사',Paste:'붙여넣기',New:'새 파일','Open .py':'.py 열기','Save .py':'.py 저장',Recent:'최근',Favorites:'즐겨찾기',Custom:'사용자 함수',Scientific:'과학',Symbolic:'기호','Complex':'복소수','ODE & transforms':'미분방정식 & 변환','Vector calculus':'벡터 미적분','Matrix & vector':'행렬 & 벡터','Data & units':'데이터 & 단위',Distributions:'확률 분포','Tests & intervals':'검정 & 구간',Finance:'금융',Signed:'부호 있음','SCIENTIFIC / CAS':'과학 / CAS',

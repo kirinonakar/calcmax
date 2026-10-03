@@ -170,6 +170,16 @@ import kotlin.math.*
         val visibleSources=m.graphSource.lines().filter(String::isNotBlank).take(if(m.graphKind in listOf("surface","differential"))1 else 8)
         val sources=visibleSources.filter {!(m.graphKind=="cartesian" && it.trim().startsWith("[shade]"))}.take(if(m.graphKind in listOf("surface","differential"))1 else 6)
         val shadeSources=visibleSources.map(String::trim).filter {m.graphKind=="cartesian" && it.startsWith("[shade]")}.take(4)
+        val removeSource:(Int,Boolean)->Unit={index,shading->
+            focusManager.clearFocus()
+            if(!shading) {
+                val last=(sources.size-2).coerceAtLeast(0)
+                selected=(if(selected>index)selected-1 else selected).coerceIn(0,last)
+                other=(if(other>index)other-1 else other).coerceIn(0,last)
+                if(last>0 && other==selected)other=(selected+1)%(last+1)
+            }
+            m.removeGraphSource(index,shading)
+        }
         val markers=remember(m.graphAnalysis) {
             val array=m.graphAnalysis?.optJSONArray("points")
             (0 until (array?.length() ?: 0)).mapNotNull {i->array?.optJSONArray(i)?.let {it.getDouble(0) to it.getDouble(1)}}
@@ -219,7 +229,7 @@ import kotlin.math.*
             }
             val surfaceZRange=m.graphData?.let {SurfaceMesh.zRange(m.zMin ?: it.optDouble("zMin",-1.0),m.zMax ?: it.optDouble("zMax",1.0))}
             Column(Modifier.fillMaxWidth()) {
-            GraphFormulas(m.graphKind,sources,0,null,"",shadeSources,null,{},m.displayDigits,c.curves)
+            GraphFormulas(m.graphKind,sources,0,null,"",shadeSources,null,{},removeSource,m.displayDigits,c.curves)
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal=14.dp),horizontalArrangement=Arrangement.spacedBy(6.dp),verticalAlignment=Alignment.CenterVertically) {
                 Text(if(isKorean())"렌더링" else "Rendering",fontSize=11.sp,color=c.muted)
                 listOf("wireframe" to (if(isKorean())"와이어프레임" else "Wireframe"),"surface" to (if(isKorean())"표면" else "Surface"),"surface-wireframe" to (if(isKorean())"표면+격자" else "Surface + mesh")).forEach { (mode,label)->
@@ -381,7 +391,7 @@ import kotlin.math.*
         GraphHeightToggle(halfGraphHeight,{halfGraphHeight=!halfGraphHeight},Modifier.align(Alignment.TopEnd))
         }
         Column(Modifier.fillMaxWidth()) {
-        if(m.graphKind!="surface")GraphFormulas(m.graphKind,sources,selected,derivativeSelected,derivativeExpression,shadeSources,{i->m.clearGraphTangent();selected=i;if(other==selected)other=(i+1)%sources.size},{m.toggleGraphDerivative(selected)},m.displayDigits,c.curves)
+        if(m.graphKind!="surface")GraphFormulas(m.graphKind,sources,selected,derivativeSelected,derivativeExpression,shadeSources,{i->m.clearGraphTangent();selected=i;if(other==selected)other=(i+1)%sources.size},{m.toggleGraphDerivative(selected)},removeSource,m.displayDigits,c.curves)
         if(m.graphKind!="surface" && (curves.isNotEmpty()||shadeSources.isNotEmpty()))Row(Modifier.horizontalScroll(rememberScrollState()),verticalAlignment=Alignment.CenterVertically) {
             SmallAction("−") { val cx=(m.xMin+m.xMax)/2;val cy=(m.yMin+m.yMax)/2;val halfX=(m.xMax-m.xMin);val halfY=(m.yMax-m.yMin);m.xMin=cx-halfX;m.xMax=cx+halfX;m.yMin=cy-halfY;m.yMax=cy+halfY }
             SmallAction("+") { val cx=(m.xMin+m.xMax)/2;val cy=(m.yMin+m.yMax)/2;val halfX=(m.xMax-m.xMin)/4;val halfY=(m.yMax-m.yMin)/4;m.xMin=cx-halfX;m.xMax=cx+halfX;m.yMin=cy-halfY;m.yMax=cy+halfY }
@@ -563,14 +573,14 @@ internal fun graphShadeFormula(source:String,displayDigits:Int?=null):GraphShade
     GraphShadeFormula(expressions,range).takeIf {it.expressions.isNotEmpty()}
 }.getOrNull()
 
-@Composable private fun GraphFormulas(kind:String,sources:List<String>,selected:Int,derivativeSelected:Int?,derivativeExpression:String,shadeSources:List<String>,onSelect:((Int)->Unit)?,onDerivative:()->Unit,displayDigits:Int,colors:List<Color>) {
+@Composable private fun GraphFormulas(kind:String,sources:List<String>,selected:Int,derivativeSelected:Int?,derivativeExpression:String,shadeSources:List<String>,onSelect:((Int)->Unit)?,onDerivative:()->Unit,onRemove:(Int,Boolean)->Unit,displayDigits:Int,colors:List<Color>) {
     val c=LocalInstrument.current
     val equations=remember(kind,sources,displayDigits) {sources.mapIndexed {index,source->graphEquationTree(kind,source,index,displayDigits)}}
     val derivative=remember(derivativeSelected,derivativeExpression,displayDigits) {
         if(derivativeSelected==null || derivativeExpression.isBlank())null
         else regressionFormulaDisplayTree("diff(f${derivativeSelected+1}(x),x)=$derivativeExpression",displayDigits)
     }
-    val shades=remember(shadeSources,displayDigits) {shadeSources.mapNotNull {graphShadeFormula(it,displayDigits)}}
+    val shades=remember(shadeSources,displayDigits) {shadeSources.mapIndexedNotNull {index,source->graphShadeFormula(source,displayDigits)?.let {index to it}}}
     if(equations.all {it==null} && derivative==null && shades.isEmpty())return
     CompositionLocalProvider(LocalMathMinimumSize provides 8f) {
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal=10.dp,vertical=3.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
@@ -580,14 +590,16 @@ internal fun graphShadeFormula(source:String,displayDigits:Int?=null):GraphShade
                 .padding(horizontal=7.dp,vertical=3.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(5.dp)) {
                 MathText(if(index==selected)"●" else "○",11f,Modifier.alignBy(MathAxis),tint=colors[index%colors.size])
                 Box(Modifier.alignBy(MathAxis)){MathNode(tree,12f)}
+                GraphRemoveButton((if(isKorean())"그래프 삭제" else "Delete graph")+": f${index+1}") {onRemove(index,false)}
             }
         }
         if(derivative!=null)Row(Modifier.background(c.accent.copy(alpha=.16f),RoundedCornerShape(8.dp)).clickable(onClick=onDerivative)
             .padding(horizontal=7.dp,vertical=3.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(5.dp)) {
             MathText("●",11f,Modifier.alignBy(MathAxis),tint=c.accent)
             Box(Modifier.alignBy(MathAxis)){MathNode(derivative,12f)}
+            GraphRemoveButton(if(isKorean())"도함수 그래프 삭제" else "Delete derivative curve",onDerivative)
         }
-        shades.forEach {shade->
+        shades.forEach {(index,shade)->
             Row(Modifier.background(c.scientific,RoundedCornerShape(8.dp)).padding(horizontal=7.dp,vertical=3.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(4.dp)) {
                 MathText("▨",11f,Modifier.alignBy(MathAxis),tint=c.muted)
                 shade.expressions.forEachIndexed {index,tree->
@@ -601,10 +613,20 @@ internal fun graphShadeFormula(source:String,displayDigits:Int?=null):GraphShade
                     Box(Modifier.alignBy(MathAxis)){MathNode(high,12f)}
                     MathText(")",12f,Modifier.alignBy(MathAxis))
                 }
+                GraphRemoveButton((if(isKorean())"음영 삭제" else "Delete shading")+": ${index+1}") {onRemove(index,true)}
             }
         }
     }
     }
+}
+
+@Composable private fun RowScope.GraphRemoveButton(label:String,onRemove:()->Unit) {
+    MathText("×",14f,
+        modifier=Modifier.alignBy(MathAxis)
+            .clickable(role=Role.Button,onClick=onRemove)
+            .semantics {contentDescription=label}
+            .padding(horizontal=5.dp,vertical=3.dp),
+        tint=LocalInstrument.current.muted)
 }
 
 @Composable private fun GraphHeightToggle(halfHeight:Boolean,onToggle:()->Unit,modifier:Modifier=Modifier) {

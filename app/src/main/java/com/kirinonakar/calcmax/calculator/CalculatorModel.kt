@@ -767,6 +767,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     fun submitPythonInput(value:String) = with(CalculatorPythonActions) { performSubmitPythonInput(value) }
     fun stopPython() = with(CalculatorPythonActions) { performStopPython() }
     fun updateGraphSource(source:String) = with(CalculatorGraphActions) { performUpdateGraphSource(source) }
+    fun removeGraphSource(index:Int,shading:Boolean=false) = with(CalculatorGraphActions) { performRemoveGraphSource(index,shading) }
     fun toggleGraphDerivative(selected:Int) = with(CalculatorGraphActions) { performToggleGraphDerivative(selected) }
     fun sendExpressionToGraph() = with(CalculatorGraphActions) { performSendExpressionToGraph() }
     fun changeGraphKind(kind:String) = with(CalculatorGraphActions) { performChangeGraphKind(kind) }

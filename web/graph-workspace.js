@@ -45,6 +45,11 @@ export function appendGraphSource(existing,source,kind='cartesian'){
   if(lines.length>=8||lines.filter(line=>!line.trim().startsWith('[shade]')).length>=limit)throw new Error('Graph limit reached. Remove a function before adding another.');
   return existing.trimEnd()+(lines.length?'\n':'')+source;
 }
+export function removeGraphSource(existing,index,kind='cartesian',shading=false){
+  const lines=existing.split(/\r?\n/),visible=lines.map((source,index)=>({source,index})).filter(line=>line.source.trim()).slice(0,['surface','differential'].includes(kind)?1:8);
+  const target=visible.filter(line=>line.source.trim().startsWith('[shade]')===shading).slice(0,shading?4:['surface','differential'].includes(kind)?1:6)[index];
+  return target?lines.filter((_,i)=>i!==target.index).join('\n'):existing;
+}
 export function graphShadings(source,kind){
   return graphSources(source,kind).filter(s=>s.startsWith('[shade]')).slice(0,4).map(line=>{
     if(kind!=='cartesian')throw new Error('Shading requires a Cartesian graph');
@@ -145,12 +150,35 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
     if(derivative!==null&&kind()==='cartesian'&&expressions()[derivative])labels.push(`diff(f${derivative+1}(x),x)`+(result?.derivativeSelected===derivative&&result?.derivativeExpression?`=${result.derivativeExpression}`:''));
     for(const line of graphSources(value('graph-source'),kind()).filter(s=>s.startsWith('[shade]')))labels.push(line.slice(7).split(';')[0].trim());
     renderFormulas($('graph-formulas'),labels,{digits:options().displayDigits});
-    [...$('graph-formulas').children].slice(0,expressions().length).forEach((line,i)=>{
-      line.classList.toggle('selected-curve',i===selected());line.tabIndex=0;line.setAttribute('role','button');line.setAttribute('aria-pressed',String(i===selected()));
+    const lines=[...$('graph-formulas').children],count=expressions().length;
+    function removeButton(line,label,remove){
+      const button=document.createElement('button');button.type='button';button.className='graph-formula-remove';button.textContent='×';button.setAttribute('aria-label',label);button.title=label;button.onclick=remove;line.append(button);
+    }
+    lines.slice(0,count).forEach((line,i)=>{
+      line.classList.toggle('selected-curve',i===selected());
       line.style.setProperty('--curve-color',graphCurveColor(i,getColors()));
+      const button=document.createElement('button');button.type='button';button.className='graph-formula-select';button.setAttribute('aria-pressed',String(i===selected()));button.append(...line.childNodes);line.append(button);
       const pick=()=>{$('graph-selected').value=String(i);$('graph-selected').onchange();};
-      line.onclick=pick;line.onkeydown=event=>{if(['Enter',' '].includes(event.key)){event.preventDefault();pick();}};
+      button.onclick=pick;
+      removeButton(line,`${t('Delete graph')}: f${i+1}`,()=>removeSource(i));
     });
+    const hasDerivative=derivative!==null&&kind()==='cartesian'&&expressions()[derivative];
+    if(hasDerivative)removeButton(lines[count],t('Delete derivative curve'),()=>{derivative=null;$('graph-derivative').checked=false;clearPlot();formulas();queue();persist();});
+    lines.slice(count+(hasDerivative?1:0)).forEach((line,i)=>removeButton(line,`${t('Delete shading')}: ${i+1}`,()=>removeSource(i,true)));
+  }
+  function clearPlot(){
+    result=null;analysis=null;trace=null;integral=null;pendingAnalysis=null;revision++;analysisRevision++;
+    for(const id of ['graph-plot','graph-table','graph-trace','graph-analysis-result'])$(id).replaceChildren();
+    $('graph-status').textContent='';$('graph-status').classList.remove('error');
+  }
+  function removeSource(index,shading=false){
+    const next=removeGraphSource(value('graph-source'),index,kind(),shading),before=selected(),other=Number(value('graph-other'));
+    stopAnimation(false);clearPlot();$('graph-source').value=next;
+    const count=expressions().length,adjust=i=>Math.max(0,Math.min(i>index?i-1:i,count-1));
+    selections();
+    if(!shading){$('graph-selected').value=String(adjust(before));$('graph-other').value=String(adjust(other));}
+    if(count>1&&value('graph-other')===value('graph-selected'))$('graph-other').value=String((selected()+1)%count);
+    $('graph-source').oninput();persist();
   }
   function render(){
     heightControls();densityControls();parameterVisibility();formulas();renderRangeNumbers();syncParameterControls();if(!result||!bounds)return;
@@ -221,6 +249,7 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
   async function run(){
     clearTimeout(timer);timer=null;if(running||isBusy()||!isReady()){pending=true;return;}pending=false;running=true;
     try{
+      if(!value('graph-source').trim()){clearPlot();parameterControls([],true);selections();render();persist();return;}
       const request=makeRequest(),token=++revision,source=value('graph-source'),graphKind=kind(),view=currentBounds();
       const nextSignature=JSON.stringify([source,graphKind,parameters,derivative]);if(nextSignature!==signature){analysis=null;trace=null;integral=null;analysisRevision++;signature=nextSignature;}
       const response=await execute(request);if(token!==revision||source!==value('graph-source')||graphKind!==kind())return;
