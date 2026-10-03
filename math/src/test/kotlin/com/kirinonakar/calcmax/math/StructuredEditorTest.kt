@@ -2,6 +2,31 @@ package com.kirinonakar.calcmax.math
 import org.junit.Assert.*
 import org.junit.Test
 class StructuredEditorTest {
+    @Test fun rightClosesAnUnclosedFunctionAndMovesOutside() {
+        for(name in listOf("sin","cos","tan","asin","sinh","sqrt","f")) {
+            val input=Editor("$name(").insert("9").move(1)
+            assertEquals("$name(9)",input.source)
+            assertEquals(input.source.length,input.cursor)
+            assertEquals("$name(9)+1",input.insert("+1").source)
+            assertEquals("$name(9)*2",input.insert("2").source)
+            assertEquals(input,input.move(1))
+        }
+        val inner=Editor("sin(cos(9").move(1)
+        assertEquals("sin(cos(9)",inner.source)
+        assertEquals("sin(cos(9)+1",inner.insert("+1").source)
+        assertEquals("sin(cos(9))",inner.move(1).source)
+        assertEquals("1+sin(9)+2",Editor("1+sin(9").move(1).insert("+2").source)
+    }
+    @Test fun rightKeepsClosedFunctionsAndIncompleteArgumentsIntact() {
+        val input=Editor().insert("sin()",4).insert("9").move(1)
+        assertEquals("sin(9)",input.source)
+        assertEquals(input.source.length,input.cursor)
+        assertEquals("sin(9)+1",input.insert("+1").source)
+        for(source in listOf("sin(","sin(9+","log(,9"))
+            assertEquals(source,Editor(source).move(1).source)
+        assertEquals(5,Editor("sin(99",4).move(1).cursor)
+        assertEquals("sin(99",Editor("sin(99",4).move(1).source)
+    }
     @Test fun equalInputFinishesFormulaCallsAfterRightArrow() {
         val input=Editor("diff(,x)",5).insert("x").move(1).insert("=").insert("a")
         assertEquals("diff(x,x)=a",input.source)

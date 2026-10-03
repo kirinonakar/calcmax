@@ -301,6 +301,18 @@ data class Editor(val source: String = "", val cursor: Int = source.length, val 
             val power=tree()?.nodes()?.filter{it.kind=="binary"&&it.value=="^"&&it.end==cursor&&it.args[1].kind!="group"}?.minByOrNull{it.end-it.start}
             if(power!=null)return Editor(source,cursor,exponent=power.args[1].let{it.start..it.end})
         }
+        if(delta>0 && cursor==source.length) {
+            // The parser accepts an omitted closing delimiter while editing. Give Right a
+            // real position outside the innermost completed call instead of clamping at EOF.
+            val call=tree()?.nodes()?.filter {node->
+                node.kind=="call" && node.end==cursor && node.args.isNotEmpty() &&
+                    node.args.none {arg->arg.nodes().any {it.kind=="hole"}} &&
+                    Lexer.scan(source.substring(node.start,node.end)).sumOf {token->
+                        when(token.text){"("->1;")"->-1;else->0}
+                    }>0
+            }?.minByOrNull {it.end-it.start}
+            if(call!=null)return Editor(source+")",cursor+1)
+        }
         val position=(cursor+delta).coerceIn(0,source.length)
         if(delta>0&&cursor<source.length&&source[cursor]==')') {
             val container=tree()?.nodes()?.filter {it.kind=="binary"&&it.value in listOf("/","^")&&it.args[1].kind=="group"&&it.args[1].end==position}?.minByOrNull{it.end-it.start}
