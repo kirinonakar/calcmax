@@ -6,17 +6,31 @@ const SVG='http://www.w3.org/2000/svg';
 const tracked=new Map();
 let resizeObserver,mutationObserver,scheduled=false;
 
-function rootPaths({left,top,right,bottom},base,fontSize){
+export function rootPath({left,top,right,bottom},base,fontSize){
   const width=Math.min(.75*fontSize,base.left-left),x=base.left-width;
   const roof=Math.max(top+.022*fontSize,base.top-.12*fontSize),foot=Math.min(bottom-.022*fontSize,base.bottom-.08*fontSize);
-  // Keep the lead-in and roof at the same weight; reinforce only the downstroke.
-  const hook=`M ${x} ${foot-.25*fontSize} L ${x+.2*width} ${foot-.34*fontSize} L ${x+.44*width} ${foot}`;
-  const downstroke=`M ${x+.2*width} ${foot-.34*fontSize} L ${x+.44*width} ${foot}`;
-  return {contour:`${hook} L ${base.left-.08*fontSize} ${roof} H ${right}`,downstroke};
-}
-
-export function rootPath(rect,base,fontSize){
-  return rootPaths(rect,base,fontSize).contour;
+  const points=[[x,foot-.25*fontSize],[x+.2*width,foot-.34*fontSize],[x+.44*width,foot],[base.left-.08*fontSize,roof],[right,roof]];
+  // Intersect adjacent offset edges to join different weights cleanly. One
+  // filled outline avoids the protruding caps of overlapping stroked paths.
+  const segments=points.slice(1).map((end,i)=>{
+    const dx=end[0]-points[i][0],dy=end[1]-points[i][1],length=Math.hypot(dx,dy);
+    const half=.022*fontSize*(i===1?2:1);
+    return {direction:[dx/length,dy/length],normal:[-dy/length*half,dx/length*half]};
+  });
+  const offset=(point,normal,side)=>point.map((value,i)=>value+side*normal[i]);
+  const cross=(a,b)=>a[0]*b[1]-a[1]*b[0];
+  const edge=side=>points.map((point,i)=>{
+    if(i===0)return offset(point,segments[0].normal,side);
+    if(i===points.length-1)return offset(point,segments.at(-1).normal,side);
+    const previous=segments[i-1],next=segments[i];
+    const a=offset(point,previous.normal,side),b=offset(point,next.normal,side);
+    const turn=cross(previous.direction,next.direction);
+    if(Math.abs(turn)<1e-8)return a.map((value,j)=>(value+b[j])/2);
+    const distance=cross(b.map((value,j)=>value-a[j]),next.direction)/turn;
+    return a.map((value,j)=>value+distance*previous.direction[j]);
+  });
+  const outline=[...edge(1),...edge(-1).reverse()];
+  return outline.map(([x,y],i)=>`${i?'L':'M'} ${x} ${y}`).join(' ')+' Z';
 }
 
 export function paintMathRoots(math){
@@ -46,16 +60,10 @@ export function paintMathRoots(math){
   for(const root of roots){
     const base=root.firstElementChild,box=base.getBoundingClientRect(),fontSize=parseFloat(view.getComputedStyle(root).fontSize);
     if(!box.width||!box.height||!Number.isFinite(fontSize)){root.classList.remove('math-root-painted');continue;}
-    const {contour,downstroke}=rootPaths(relative(root.getBoundingClientRect()),relative(box),fontSize);
-    const stroke=.044*fontSize;
-    for(const [d,thickness] of [[contour,stroke],[downstroke,stroke*2]]){
-      const path=document.createElementNS(SVG,'path');
-      path.setAttribute('d',d);
-      path.setAttribute('fill','none');path.setAttribute('stroke','currentColor');
-      path.setAttribute('stroke-width',String(thickness));path.setAttribute('stroke-linejoin','round');
-      if(d===downstroke)path.setAttribute('stroke-linecap','round');
-      paths.push(path);
-    }
+    const path=document.createElementNS(SVG,'path');
+    path.setAttribute('d',rootPath(relative(root.getBoundingClientRect()),relative(box),fontSize));
+    path.setAttribute('fill','currentColor');path.setAttribute('stroke','none');
+    paths.push(path);
     root.classList.add('math-root-painted');
   }
   overlay.replaceChildren(...paths);

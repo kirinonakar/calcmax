@@ -81,5 +81,5 @@ export function createWorkspaces({state,engine,ui,persist,restoreSelect,requestO
     statistics.datasetsList();functions.render();equationControls();statistics.distributionControls();refreshWorkspaceMath();
   }
   function render(){refreshWorkspaceMath();statistics.render();}
-  return {initialize,render,refreshMath:refreshWorkspaceMath,renderMatrix:matrix.render,equationSource};
+  return {initialize,render,refreshMath:refreshWorkspaceMath,renderMatrix:matrix.render,renderFunctions:functions.render,equationSource};
 }

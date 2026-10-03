@@ -7,16 +7,27 @@ import {paintMathRoots,rootPath} from '../math-roots.js';
 import {markInputCursor} from '../input-cursor.js';
 
 const box=(left,top,width,height)=>({left,top,right:left+width,bottom:top+height,width,height});
-test('radical hook and roof stay connected across sizes and fractional pixel positions',()=>{
+const vertices=path=>path.match(/-?\d+(?:\.\d+)?(?:e[+-]?\d+)?/gi).map(Number).reduce((points,value,i)=>{
+  if(i%2)points.at(-1).push(value);else points.push([value]);return points;
+},[]);
+test('radical outline joins unequal weights without caps across sizes and fractional pixel positions',()=>{
   for(const font of [12,16,24,30,48])for(const height of [font,2*font,5*font])for(const offset of [0,.25,.5,.75]){
     const root=box(offset,offset,8*font,height+.5*font),base=box(offset+.8*font,offset+.2*font,7.2*font,height);
     const path=rootPath(root,base,font);
     assert.equal((path.match(/M/g)||[]).length,1,'one connected contour');
-    assert.match(path,/ L [\d.]+ [\d.]+ H [\d.]+$/,'roof extends directly from the hook endpoint');
-    const coordinates=path.match(/-?\d+(?:\.\d+)?/g).map(Number);
-    assert.ok(coordinates.every(Number.isFinite));assert.equal(coordinates.at(-1),root.right);
-    assert.ok(coordinates[7]>=root.top&&coordinates[7]<base.top,'roof clears the full radicand');
-    assert.ok(coordinates[5]>base.top&&coordinates[5]<root.bottom,'hook covers tall radicands');
+    assert.match(path,/ Z$/,'the filled contour closes without overlapping line caps');
+    const points=vertices(path);
+    assert.equal(points.length,10,'each join has one vertex on each edge');
+    assert.ok(points.flat().every(Number.isFinite));
+    assert.equal(points[4][0],root.right);assert.equal(points[5][0],root.right);
+    assert.ok(points[5][1]>=root.top&&points[4][1]<base.top,'roof clears the full radicand');
+    assert.ok(points[2][1]>base.top&&points[2][1]<root.bottom,'hook covers tall radicands');
+    for(let i=0;i<4;i++){
+      const [x,y]=points[i],dx=points[i+1][0]-x,dy=points[i+1][1]-y;
+      const opposite=points[9-i];
+      const thickness=Math.abs(dx*(opposite[1]-y)-dy*(opposite[0]-x))/Math.hypot(dx,dy);
+      assert.ok(Math.abs(thickness-.044*font*(i===1?2:1))<1e-8,'only the downstroke is twice the roof thickness');
+    }
   }
 });
 
@@ -37,18 +48,12 @@ test('root overlays retain MathML semantics, have bounded dimensions, and follow
   const overlay=paintMathRoots(math);
   assert.equal(overlay.parentElement,frame);assert.equal(overlay.getAttribute('width'),'160');assert.equal(overlay.getAttribute('height'),'90');
   assert.equal(overlay.getAttribute('aria-hidden'),'true');assert.equal(overlay.getAttribute('focusable'),'false');
-  assert.equal(overlay.querySelectorAll('path').length,4);assert.equal(math.querySelectorAll('svg').length,0,'no SVG participates in MathML sizing');
+  assert.equal(overlay.querySelectorAll('path').length,2);assert.equal(math.querySelectorAll('svg').length,0,'no SVG participates in MathML sizing');
   const paths=[...overlay.querySelectorAll('path')];
-  for(let i=0;i<paths.length;i+=2){
-    const contour=paths[i],downstroke=paths[i+1];
-    const coordinates=path=>path.getAttribute('d').match(/-?\d+(?:\.\d+)?/g).map(Number);
-    assert.deepEqual(coordinates(downstroke),coordinates(contour).slice(2,6),'the thick downstroke shares the connected contour coordinates and excludes the left lead-in');
-    assert.equal((downstroke.getAttribute('d').match(/L/g)||[]).length,1,'only the descending diagonal is reinforced');
-    assert.ok(!downstroke.getAttribute('d').includes('H'),'the roof keeps its original thickness');
-    assert.equal(Number(contour.getAttribute('stroke-width')),.044*24);
-    assert.equal(Number(downstroke.getAttribute('stroke-width')),Number(contour.getAttribute('stroke-width'))*2);
-    assert.equal(downstroke.getAttribute('stroke-linejoin'),'round');assert.equal(downstroke.getAttribute('stroke-linecap'),'round');
-    assert.equal(downstroke.getAttribute('stroke'),'currentColor');
+  for(const path of paths){
+    assert.equal(path.getAttribute('fill'),'currentColor');assert.equal(path.getAttribute('stroke'),'none');
+    assert.match(path.getAttribute('d'),/ Z$/,'the radical uses a single filled outline');
+    assert.equal(path.getAttribute('stroke-linecap'),null,'no rounded caps protrude at the joins');
   }
   assert.equal(math.querySelectorAll('mroot').length,1);assert.equal(math.querySelectorAll('msqrt').length,1);assert.equal(math.querySelectorAll('mfrac').length,1);
   assert.equal(math.textContent,'123','accessible math text is unchanged');
@@ -86,7 +91,7 @@ test('resize notifications repaint roots and removed formulas release their obse
   await Promise.resolve();
   const overlay=frame.querySelector('.math-root-overlay');assert.ok(overlay);assert.equal(observed.size,2);
   size=200;onResize();while(frames.length)frames.shift()();
-  assert.equal(overlay.getAttribute('width'),'200');assert.match(overlay.firstElementChild.getAttribute('d'),/H 200$/);
+  assert.equal(overlay.getAttribute('width'),'200');assert.equal(vertices(overlay.firstElementChild.getAttribute('d'))[4][0],200);
   frame.remove();await Promise.resolve();while(frames.length)frames.shift()();
   assert.equal(observed.size,0,'detached formulas cannot accumulate resize observers');
 });

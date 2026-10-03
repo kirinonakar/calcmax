@@ -11,9 +11,10 @@ import {createDisplaySizing} from './display-sizing.js';
 import {fractionInput} from './fraction-input.js';
 import {requiresExplicitEvaluation} from './evaluation-policy.js';
 import {graphExpressionTarget} from './graph-workspace.js';
+import {defineFunction} from './function-transfer.js';
 import {$,value,element,control} from './app-ui.js';
 
-export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist,requestOptions,error,changeMode,updateButtons,pressKey,modeDialog,variablesDialog,matrixInsertDialog,graphs}) {
+export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist,requestOptions,error,changeMode,updateButtons,pressKey,modeDialog,variablesDialog,matrixInsertDialog,graphs,onFunctionsChanged=()=>{}}) {
   const {toast,openDialog,clipboard}=ui;
   let lastResult=null,decimal=false,typing=false,overwrite=false,committed=false,screenExpanded=false,grouping=false,mixed=false,lastResultSource='';
   let calcSession=null,activeHistoryEntry=null,inputAnswer=null,tapeRows=null,tapeFormat='';
@@ -77,6 +78,15 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
     try {
       const converted=latexInput(state.autoCloseBrackets?closeInputBrackets(source):source);
       if(source===value('expression')&&converted!==source){$('expression').value=converted;preview();}
+      const inputTree=parse(converted),[left,right]=inputTree.args;
+      if(['=',':='].includes(inputTree.value)&&left?.kind==='call'&&left.args.every(arg=>arg.kind==='symbol')){
+        const definition=defineFunction(left.value,left.args.map(arg=>arg.value),converted.slice(right.start,right.end));
+        state.functions[left.value]=definition;
+        const message=`${t('함수를 저장했습니다.')} ${left.value}(${definition.parameters.join(',')})`;
+        showResult({ok:true,assignment:true,exact:message,decimal:message,tree:{kind:'text',value:message}},converted);
+        onFunctionsChanged();
+        return;
+      }
       const assignment=converted.match(/^\s*([A-Za-z][A-Za-z0-9_]*)\s*=(?!=)([\s\S]+)$/);
       if(assignment&&['pi','e','i','I','oo','Ans','c0','hP','hbar','G','qe','NA','kB0','me','mp0'].includes(assignment[1]))throw new Error('Reserved constant or answer name');
       const tree=evaluationTree(assignment?assignment[2]:converted);
