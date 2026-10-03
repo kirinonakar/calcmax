@@ -1,4 +1,4 @@
-self.CALCMAX_CACHE = 'calcmax-static-52e235801b0652b3';
+self.CALCMAX_CACHE = 'calcmax-static-36502331f1f0683a';
 self.CALCMAX_ASSETS = [
   "./",
   "./app-dialogs.js",
@@ -8,6 +8,7 @@ self.CALCMAX_ASSETS = [
   "./app-version.js",
   "./app.js",
   "./ast-source.js",
+  "./bootstrap.js",
   "./calc-session.js",
   "./calculation-tape.js",
   "./calculator-keypad.js",

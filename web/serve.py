@@ -8,6 +8,19 @@ WEB = pathlib.Path(__file__).resolve().parent
 
 
 class StaticHandler(http.server.SimpleHTTPRequestHandler):
+    def end_headers(self):
+        # Development modules must all come from the current checkout. A cached
+        # dependency can lack exports required by a newly edited importer.
+        self.send_header("Cache-Control", "no-store")
+        super().end_headers()
+
+    def send_head(self):
+        # File timestamps have second precision in HTTP. Two edits in the same
+        # second must not produce a 304 with an older module body.
+        if "If-Modified-Since" in self.headers:
+            del self.headers["If-Modified-Since"]
+        return super().send_head()
+
     # Windows registry MIME mappings can otherwise serve .mjs as text/plain,
     # which browsers reject when the Pyodide loader imports its WASM bootstrap.
     extensions_map = {

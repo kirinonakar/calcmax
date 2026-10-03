@@ -33,6 +33,15 @@ export function plotGraph(container,result,bounds,{colors=defaultGraphColors,dig
   const left=result.surface?pad:Math.max(pad,Math.ceil(Math.max(...yLabels.filter((_,i)=>i%2===0).map(label=>ctx.measureText(label).width)))+16),iw=w-left-pad;
   // Gestures must use the same plot rectangle as the rendered curves.
   canvas.dataset.plotLeft=String(left);canvas.dataset.plotWidth=String(iw);
+  // Share the actual axis insets, including the plot border, with analysis tracks.
+  const workspace=container.closest('[data-mode="graph"]');
+  if(workspace){
+    const borderLeft=parseFloat(style.borderLeftWidth)||0,borderRight=parseFloat(style.borderRightWidth)||0;
+    for(const [name,inset,border] of [['left',left,borderLeft],['right',pad,borderRight]]){
+      const fraction=inset/w;
+      workspace.style.setProperty(`--graph-axis-${name}`,`calc(${fraction*100}% + ${border-(borderLeft+borderRight)*fraction}px)`);
+    }
+  }
   const line=(a,b,color=muted,width=1)=>{ctx.beginPath();ctx.moveTo(...a);ctx.lineTo(...b);ctx.strokeStyle=color;ctx.lineWidth=width;ctx.stroke();};
   const circle=(point,radius,color)=>{ctx.beginPath();ctx.arc(...point,radius,0,2*Math.PI);ctx.fillStyle=color;ctx.fill();};
   const polygon=(points,color,alpha=1,stroke=null,width=1)=>{

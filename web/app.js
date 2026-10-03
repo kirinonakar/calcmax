@@ -73,4 +73,4 @@ async function initialize() {
   $('expression').readOnly=true;calculator.preview();$('digits-indicator').textContent=`≤ ${state.digits} digits`;translateDOM();
   if(location.protocol==='file:')error('WebAssembly는 정적 HTTP 서버가 필요합니다. python web/serve.py를 실행하고 http://localhost:8080을 여세요.');
 }
-initialize();
+await initialize();

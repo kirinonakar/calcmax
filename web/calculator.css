@@ -139,7 +139,7 @@ input:disabled,select:disabled{opacity:.45;cursor:default}
 .graph-range-slider input[type="range"]::-webkit-slider-runnable-track{height:4px;background:transparent}
 .graph-range-slider input[type="range"]::-moz-range-track{height:4px;background:transparent}
 .graph-range-slider input[type="range"]::-moz-range-progress{background:transparent}
-.graph-range-slider input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:20px;height:20px;margin-top:-8px;border:2px solid var(--accent);border-radius:50%;background:var(--number);pointer-events:auto;cursor:ew-resize}
+.graph-range-slider input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;box-sizing:border-box;width:20px;height:20px;margin-top:-8px;border:2px solid var(--accent);border-radius:50%;background:var(--number);pointer-events:auto;cursor:ew-resize}
 .graph-range-slider input[type="range"]::-moz-range-thumb{box-sizing:border-box;width:20px;height:20px;border:2px solid var(--accent);border-radius:50%;background:var(--number);pointer-events:auto;cursor:ew-resize}
 .graph-range-slider input[type="range"]:focus-visible{outline:none;z-index:1}
 .graph-range-slider input[type="range"]:focus-visible::-webkit-slider-thumb{outline:2px solid var(--accent);outline-offset:3px}
@@ -147,6 +147,11 @@ input:disabled,select:disabled{opacity:.45;cursor:default}
 .graph-range-slider:has(input:disabled){opacity:.45}
 .graph-range-slider input[type="range"]:disabled::-webkit-slider-thumb{pointer-events:none;cursor:default}
 .graph-range-slider input[type="range"]:disabled::-moz-range-thumb{pointer-events:none;cursor:default}
+#graph-analysis-sliders{width:100%;min-width:0;padding-left:var(--graph-axis-left,5.25%);padding-right:var(--graph-axis-right,5.25%)}
+/* Range inputs travel by their width minus the 20px thumb. Align thumb centers
+   and the painted track with the canvas x axis, including its dynamic y labels. */
+.graph-axis-slider{margin-left:-10px;margin-right:-10px}
+.graph-axis-slider:has(#graph-tangent-slider)::before{background:var(--line)}
 .graph-surface-panel{display:grid;gap:16px;padding:16px;margin:12px 0;border:1px solid var(--line);border-radius:8px;background:var(--number)}
 .graph-surface-appearance,.graph-surface-camera{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:start}
 .graph-surface-panel label{margin:0;min-width:0;gap:6px}.graph-surface-panel label>span{line-height:20px}

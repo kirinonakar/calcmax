@@ -102,13 +102,18 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
   function numeric(id){return fieldNumber($(id));}
   function displayField(input,number){input.dataset.fullValue=String(number);input.value=displayNumber(number,options().displayDigits);input.dataset.displayValue=input.value;}
   function editField(input){input.onfocus=()=>{if(input.dataset.displayValue===input.value){input.value=input.dataset.fullValue;input.dataset.displayValue=input.value;}};input.onblur=()=>{const number=fieldNumber(input);if(Number.isFinite(number)&&!input.hasAttribute('aria-invalid'))displayField(input,number);};}
+  function analysisRange(){return [numeric('graph-min'),numeric('graph-max')];}
   function syncRangePair(pair){
     const numbers=pair.ids.map(numeric);if(!numbers.every(Number.isFinite))return;
-    const sliders=pair.ids.map(id=>$(id+'-slider')),low=Math.min(...sliders.map(slider=>Number(slider.min)),...numbers),high=Math.max(...sliders.map(slider=>Number(slider.max)),...numbers);
-    sliders.forEach((slider,index)=>{slider.min=String(low);slider.max=String(high);slider.value=String(numbers[index]);slider.setAttribute('aria-valuetext',displayNumber(numbers[index],options().displayDigits));});
-    pair.track.style.setProperty('--range-start',`${100*(numbers[0]-low)/(high-low)}%`);pair.track.style.setProperty('--range-end',`${100*((sliders[1].hidden?numbers[0]:numbers[1])-low)/(high-low)}%`);
+    const sliders=pair.ids.map(id=>$(id+'-slider')),linked=pair.ids[0]==='graph-analysis-a';
+    const [low,high]=linked?analysisRange():[Math.min(...sliders.map(slider=>Number(slider.min)),...numbers),Math.max(...sliders.map(slider=>Number(slider.max)),...numbers)];
+    if(!Number.isFinite(high-low)||high<=low)return;
+    const positions=numbers.map(number=>Math.max(low,Math.min(high,number)));
+    sliders.forEach((slider,index)=>{slider.min=String(low);slider.max=String(high);slider.value=String(positions[index]);slider.setAttribute('aria-valuetext',displayNumber(positions[index],options().displayDigits));});
+    pair.track.style.setProperty('--range-start',`${100*(positions[0]-low)/(high-low)}%`);pair.track.style.setProperty('--range-end',`${100*((sliders[1].hidden?positions[0]:positions[1])-low)/(high-low)}%`);
   }
   function resetRangeDomain(pair){
+    if(pair.ids[0]==='graph-analysis-a'){syncRangePair(pair);return;}
     const [min,max]=pair.ids.map(numeric),span=max-min;if(!Number.isFinite(span)||span<=0)return;
     const low=min-2*span,high=max+2*span;if(!Number.isFinite(high-low))return;
     for(const id of pair.ids){$(id+'-slider').min=String(low);$(id+'-slider').max=String(high);}
@@ -120,7 +125,7 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
   const selected=()=>Number(value('graph-selected'))||0;
   const expressions=()=>graphExpressions(value('graph-source'),kind());
   function currentBounds(){return {xmin:numeric(['cartesian','implicit','surface'].includes(kind())?'graph-min':'graph-xmin'),xmax:numeric(['cartesian','implicit','surface'].includes(kind())?'graph-max':'graph-xmax'),ymin:numeric('graph-ymin'),ymax:numeric('graph-ymax')};}
-  function writeBounds(next){showNumber(['cartesian','implicit','surface'].includes(kind())?'graph-min':'graph-xmin',next.xmin);showNumber(['cartesian','implicit','surface'].includes(kind())?'graph-max':'graph-xmax',next.xmax);showNumber('graph-ymin',next.ymin);showNumber('graph-ymax',next.ymax);for(const pair of new Set(pairedSliders.values()))resetRangeDomain(pair);}
+  function writeBounds(next){showNumber(['cartesian','implicit','surface'].includes(kind())?'graph-min':'graph-xmin',next.xmin);showNumber(['cartesian','implicit','surface'].includes(kind())?'graph-max':'graph-xmax',next.xmax);showNumber('graph-ymin',next.ymin);showNumber('graph-ymax',next.ymax);for(const pair of new Set(pairedSliders.values()))resetRangeDomain(pair);analysisControls();}
   function zControls(){for(const id of ['graph-zmin','graph-zmax']){$(id).disabled=surface.autoZ;const slider=$(id+'-slider');if(slider)slider.disabled=surface.autoZ;}}
   function zRange(){
     if(surface.autoZ)return surfaceZRange(result?.zMin??-1,result?.zMax??1);
@@ -187,7 +192,7 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
     $('graph-source').oninput();persist();
   }
   function render(){
-    heightControls();densityControls();parameterVisibility();formulas();renderRangeNumbers();syncParameterControls();if(!result||!bounds)return;
+    heightControls();densityControls();parameterVisibility();formulas();renderRangeNumbers();analysisControls();syncParameterControls();if(!result||!bounds)return;
     for(const [id,number,suffix] of [['graph-rotation',surface.rotation,'°'],['graph-elevation',surface.elevation,'°'],['graph-surface-zoom',surface.zoom*100,'%']]){let output=$(id+'-value');if(!output){output=document.createElement('output');output.id=id+'-value';$(id).insertAdjacentElement('afterend',output);}output.textContent=displayNumber(number,options().displayDigits)+suffix;}
     let shown=result;
     if(result.surface){
@@ -317,7 +322,7 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
   $('graph-derivative').onchange=()=>{derivative=$('graph-derivative').checked?selected():null;queue();formulas();};
   $('graph-analysis-run').onclick=()=>analyze();$('graph-analysis-clear').onclick=()=>{pendingAnalysis=null;analysisRevision++;analysis=null;trace=null;integral=null;render();};
   $('graph-analysis-visible-range').onclick=()=>{
-    const view=bounds||currentBounds(),[low,high]=kind()==='cartesian'?[view.xmin,view.xmax]:[numeric('graph-min'),numeric('graph-max')];
+    const [low,high]=analysisRange();
     showNumber('graph-analysis-a',low);showNumber('graph-analysis-b',high);analysisControls();
     $('graph-tangent-slider').value=String(low);persist();
   };
@@ -325,11 +330,15 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
     const action=value('graph-analysis-action'),point=['derivative','tangent'].includes(action),tangent=action==='tangent';
     $('graph-other').closest('label').hidden=action!=='intersection';$('graph-analysis-b').closest('label').hidden=point;
     $('graph-tangent-position').hidden=!tangent;$('graph-analysis-a-slider').hidden=tangent;$('graph-analysis-b-slider').hidden=point;
-    $('graph-analysis-a-value').hidden=tangent;
     const pair=pairedSliders.get('graph-analysis-a');if(pair){pair.track.hidden=tangent;syncRangePair(pair);}
-    $('graph-tangent-slider').min=String(numeric('graph-min'));$('graph-tangent-slider').max=String(numeric('graph-max'));
+    const [low,high]=analysisRange(),position=numeric('graph-analysis-a');
+    if(Number.isFinite(high-low)&&high>low){$('graph-tangent-slider').min=String(low);$('graph-tangent-slider').max=String(high);if(Number.isFinite(position))$('graph-tangent-slider').value=String(Math.max(low,Math.min(high,position)));}
   }
   $('graph-analysis-action').onchange=analysisControls;$('graph-tangent-slider').oninput=()=>{showNumber('graph-analysis-a',Number(value('graph-tangent-slider')));};$('graph-tangent-slider').onchange=()=>analyze('tangent');
+  const tangentTrack=document.createElement('div');tangentTrack.className='graph-range-slider graph-axis-slider';
+  $('graph-tangent-slider').before(tangentTrack);tangentTrack.append($('graph-tangent-slider'));
+  const analysisSliders=document.createElement('div');analysisSliders.id='graph-analysis-sliders';
+  $('graph-analysis').querySelector('summary').after(analysisSliders);analysisSliders.append($('graph-tangent-position'));
   for(const id of ['graph-rotation','graph-elevation','graph-surface-zoom'])$(id).oninput=()=>{const previousCount=surfaceSampleCount(currentBounds(),surface.samples,surface.autoDensity,surface.zoom);surface.rotation=Number(value('graph-rotation'));surface.elevation=Number(value('graph-elevation'));surface.zoom=Number(value('graph-surface-zoom'));render();persist();if(surface.autoDensity&&previousCount!==surfaceSampleCount(currentBounds(),surface.samples,true,surface.zoom))queue();};
   $('graph-surface-render').onchange=()=>{surface.renderMode=value('graph-surface-render');render();persist();};
   $('graph-surface-color').oninput=()=>{surface.color=value('graph-surface-color');render();persist();};
@@ -370,12 +379,13 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
   };
   $('graph-source').oninput=()=>{pendingAnalysis=null;derivative=null;$('graph-derivative').checked=false;analysis=null;trace=null;integral=null;revision++;analysisRevision++;selections();formulas();queue();};
   for(const id of ['graph-min','graph-max','graph-ymin','graph-ymax','graph-xmin','graph-xmax','graph-initial','graph-t0'])$(id).onchange=()=>{analysisControls();queue();};
-  for(const id of rangeIds){const field=$(id);editField(field);for(const name of ['input','change'])field.addEventListener(name,()=>{if(field.dataset.displayValue!==field.value)delete field.dataset.displayValue;const pair=pairedSliders.get(id);if(pair)syncRangePair(pair);});}
-  for(const id of sliderIds){const field=$(id),slider=document.createElement('input'),output=document.createElement('output'),current=numeric(id);slider.type='range';slider.id=id+'-slider';slider.min=String(Math.min(-30,current-20));slider.max=String(Math.max(30,current+20));slider.step='any';slider.value=String(current);slider.setAttribute('aria-label',field.closest('label').firstChild.textContent.trim());output.id=id+'-value';output.textContent=displayNumber(current,options().displayDigits);field.insertAdjacentElement('afterend',output);output.insertAdjacentElement('afterend',slider);
+  for(const id of rangeIds){const field=$(id);editField(field);for(const name of ['input','change'])field.addEventListener(name,()=>{if(field.dataset.displayValue!==field.value)delete field.dataset.displayValue;const pair=pairedSliders.get(id);if(pair)syncRangePair(pair);if(['graph-min','graph-max','graph-analysis-a'].includes(id))analysisControls();});}
+  for(const id of sliderIds){const field=$(id),slider=document.createElement('input'),current=numeric(id);slider.type='range';slider.id=id+'-slider';slider.min=String(Math.min(-30,current-20));slider.max=String(Math.max(30,current+20));slider.step='any';slider.value=String(current);slider.setAttribute('aria-label',field.closest('label').firstChild.textContent.trim());field.insertAdjacentElement('afterend',slider);
     slider.oninput=()=>{
       const number=Number(slider.value),pair=pairedSliders.get(id),partner=pair&&!pair.ids.some(key=>$(key+'-slider').hidden)?pair.ids.find(key=>key!==id):null;
       let bounded=number;
       if(partner&&Number.isFinite(numeric(partner))){const limit=numeric(partner),gap=Math.max(2e-7,Math.abs(limit)*1e-10);bounded=id===pair.ids[0]?Math.min(number,limit-gap):Math.max(number,limit+gap);}
+      if(id.startsWith('graph-analysis'))bounded=Math.max(Number(slider.min),Math.min(Number(slider.max),bounded));
       showNumber(id,bounded);if(!id.startsWith('graph-analysis')){bounds=currentBounds();render();}else renderRangeNumbers();
     };
     slider.onchange=()=>{persist();if(id.startsWith('graph-analysis'))analysisControls();else if(!id.startsWith('graph-z'))queue();};
@@ -383,8 +393,10 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
   for(const ids of rangePairs){
     const group=document.createElement('div'),fields=document.createElement('div'),track=document.createElement('div'),labels=ids.map(id=>$(id).closest('label'));
     group.className='graph-range-pair';fields.className='graph-range-fields';track.className='graph-range-slider';group.setAttribute('role','group');group.setAttribute('aria-labelledby',ids.map(id=>id+'-label').join(' '));
+    const analysisPair=ids[0]==='graph-analysis-a';if(analysisPair)track.classList.add('graph-axis-slider');
     group.append(fields,track);labels[0].before(group);
     labels.forEach((label,index)=>{label.id=ids[index]+'-label';fields.append(label);track.append($(ids[index]+'-slider'));});
+    if(analysisPair)analysisSliders.prepend(group);
     const pair={ids,track};for(const id of ids)pairedSliders.set(id,pair);resetRangeDomain(pair);
   }
   for(const [id,number] of Object.entries(saved.ranges||{}))if(rangeIds.includes(id))showNumber(id,number);
