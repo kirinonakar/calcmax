@@ -42,7 +42,8 @@ import org.json.JSONObject
 import kotlin.math.*
 
 @Composable fun GraphScreen(m: CalculatorModel) {
-    val c=LocalInstrument.current
+    val defaults=LocalInstrument.current
+    val c=defaults.copy(curves=m.graphColors.mapIndexed {index,hex->hex?.let {Color(android.graphics.Color.parseColor(it))} ?: defaults.curves[index]})
     val focusManager=LocalFocusManager.current
     var rangeDialog by remember { mutableStateOf(false) }
     var analysis by remember { mutableStateOf(false) }
@@ -218,7 +219,7 @@ import kotlin.math.*
             }
             val surfaceZRange=m.graphData?.let {SurfaceMesh.zRange(m.zMin ?: it.optDouble("zMin",-1.0),m.zMax ?: it.optDouble("zMax",1.0))}
             Column(Modifier.fillMaxWidth()) {
-            GraphFormulas(m.graphKind,sources,0,null,"",shadeSources,null,{},m.displayDigits)
+            GraphFormulas(m.graphKind,sources,0,null,"",shadeSources,null,{},m.displayDigits,c.curves)
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal=14.dp),horizontalArrangement=Arrangement.spacedBy(6.dp),verticalAlignment=Alignment.CenterVertically) {
                 Text(if(isKorean())"렌더링" else "Rendering",fontSize=11.sp,color=c.muted)
                 listOf("wireframe" to (if(isKorean())"와이어프레임" else "Wireframe"),"surface" to (if(isKorean())"표면" else "Surface"),"surface-wireframe" to (if(isKorean())"표면+격자" else "Surface + mesh")).forEach { (mode,label)->
@@ -380,7 +381,7 @@ import kotlin.math.*
         GraphHeightToggle(halfGraphHeight,{halfGraphHeight=!halfGraphHeight},Modifier.align(Alignment.TopEnd))
         }
         Column(Modifier.fillMaxWidth()) {
-        if(m.graphKind!="surface")GraphFormulas(m.graphKind,sources,selected,derivativeSelected,derivativeExpression,shadeSources,{i->m.clearGraphTangent();selected=i;if(other==selected)other=(i+1)%sources.size},{m.toggleGraphDerivative(selected)},m.displayDigits)
+        if(m.graphKind!="surface")GraphFormulas(m.graphKind,sources,selected,derivativeSelected,derivativeExpression,shadeSources,{i->m.clearGraphTangent();selected=i;if(other==selected)other=(i+1)%sources.size},{m.toggleGraphDerivative(selected)},m.displayDigits,c.curves)
         if(m.graphKind!="surface" && (curves.isNotEmpty()||shadeSources.isNotEmpty()))Row(Modifier.horizontalScroll(rememberScrollState()),verticalAlignment=Alignment.CenterVertically) {
             SmallAction("−") { val cx=(m.xMin+m.xMax)/2;val cy=(m.yMin+m.yMax)/2;val halfX=(m.xMax-m.xMin);val halfY=(m.yMax-m.yMin);m.xMin=cx-halfX;m.xMax=cx+halfX;m.yMin=cy-halfY;m.yMax=cy+halfY }
             SmallAction("+") { val cx=(m.xMin+m.xMax)/2;val cy=(m.yMin+m.yMax)/2;val halfX=(m.xMax-m.xMin)/4;val halfY=(m.yMax-m.yMin)/4;m.xMin=cx-halfX;m.xMax=cx+halfX;m.yMin=cy-halfY;m.yMax=cy+halfY }
@@ -562,7 +563,7 @@ internal fun graphShadeFormula(source:String,displayDigits:Int?=null):GraphShade
     GraphShadeFormula(expressions,range).takeIf {it.expressions.isNotEmpty()}
 }.getOrNull()
 
-@Composable private fun GraphFormulas(kind:String,sources:List<String>,selected:Int,derivativeSelected:Int?,derivativeExpression:String,shadeSources:List<String>,onSelect:((Int)->Unit)?,onDerivative:()->Unit,displayDigits:Int) {
+@Composable private fun GraphFormulas(kind:String,sources:List<String>,selected:Int,derivativeSelected:Int?,derivativeExpression:String,shadeSources:List<String>,onSelect:((Int)->Unit)?,onDerivative:()->Unit,displayDigits:Int,colors:List<Color>) {
     val c=LocalInstrument.current
     val equations=remember(kind,sources,displayDigits) {sources.mapIndexed {index,source->graphEquationTree(kind,source,index,displayDigits)}}
     val derivative=remember(derivativeSelected,derivativeExpression,displayDigits) {
@@ -577,7 +578,7 @@ internal fun graphShadeFormula(source:String,displayDigits:Int?=null):GraphShade
             if(tree!=null)Row(Modifier.background(if(index==selected)c.accent.copy(alpha=.16f) else c.scientific,RoundedCornerShape(8.dp))
                 .then(if(onSelect==null)Modifier else Modifier.clickable {onSelect(index)}.semantics {contentDescription="Select curve ${index+1}"})
                 .padding(horizontal=7.dp,vertical=3.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(5.dp)) {
-                MathText(if(index==selected)"●" else "○",11f,Modifier.alignBy(MathAxis),tint=c.curves[index%c.curves.size])
+                MathText(if(index==selected)"●" else "○",11f,Modifier.alignBy(MathAxis),tint=colors[index%colors.size])
                 Box(Modifier.alignBy(MathAxis)){MathNode(tree,12f)}
             }
         }

@@ -78,6 +78,14 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     var displayDigits by mutableIntStateOf(prefs.getInt("displayDigits",10))
     var inputFont by mutableFloatStateOf(prefs.getFloat("inputFont",25f))
     var outputFont by mutableFloatStateOf(prefs.getFloat("outputFont",28f))
+    var graphColors by mutableStateOf(loadGraphColors(prefs.getString("graphColors",null)))
+        private set
+    fun setGraphColor(index:Int,color:String?) {
+        if(index !in 0..5)return
+        graphColors=normalizeGraphColors(graphColors.mapIndexed {i,current->if(i==index)color else current})
+        save()
+    }
+    fun resetGraphColors() {graphColors=List(6) {null};save()}
     var decimal by mutableStateOf(false)
     var resultDisplayMode by mutableStateOf(
         when(prefs.getString("resultDisplayMode","")) {
@@ -384,6 +392,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
             .putInt("precision",precision).putInt("displayDigits",displayDigits).putBoolean("haptics",haptics).putBoolean("sound",sound).putBoolean("historyEnabled",persistHistory).putBoolean("autoCloseBrackets",autoCloseBrackets)
             .putString("language",language)
             .putFloat("inputFont",inputFont).putFloat("outputFont",outputFont).putBoolean("wordWrap",wordWrap)
+            .putString("graphColors",JSONArray(graphColors).toString())
             .putString("variables",variables.toString()).putString("functions",functions.toString()).putString("assumptions",assumptions.toString())
             .putString("equationKind",equationKind).putString("equationCoefficients",JSONArray(equationCoefficients).toString())
             .putString("equationSystem",equationSystem).putString("equationGeneral",equationGeneral).putString("equationVariables",equationVariables)

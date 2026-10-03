@@ -1,6 +1,7 @@
 import {initialLanguage} from './i18n.js';
 import {writeState} from './storage.js';
 import {$} from './app-ui.js';
+import {normalizeGraphColors} from './graph-colors.js';
 
 export function createAppState(saved={},browserLanguage='en') {
   const objectOrEmpty=o=>o && typeof o==='object' && !Array.isArray(o) ? o : {};
@@ -16,6 +17,7 @@ export function createAppState(saved={},browserLanguage='en') {
     digits:Math.max(2,Math.min(200,Number(saved.precision)||30,Number(saved.digits)||10)),
     fields:{...objectOrEmpty(saved.fields)},
     graph:{...objectOrEmpty(saved.graph)},
+    graphColors:normalizeGraphColors(saved.graphColors),
     matrixCells:objectOrEmpty(saved.matrixCells),
     rates:objectOrEmpty(saved.rates)
   };

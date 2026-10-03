@@ -2,14 +2,14 @@ import {displayNumber} from './display-format.js';
 import {integralPolygons} from './graph-integral.js';
 import {clipSurfaceSegment,surfaceFaces,surfaceProjection,surfaceZRange} from './surface-geometry.js';
 
-const colors=['#007b68','#a04c75','#3b70bd','#b17d00','#6b5ec2','#a34629'];
-export const graphCurveColor=index=>colors[index%colors.length];
+import {defaultGraphColors} from './graph-colors.js';
+export const graphCurveColor=(index,colors=defaultGraphColors)=>colors[index%colors.length];
 const w=800,pad=42;
 const finite=point=>point&&point.every(Number.isFinite);
 
 // One persistent bitmap per workspace, with a backing store sized for its
 // actual CSS width and device pixel ratio. Geometry uses the gesture viewBox.
-export function plotGraph(container,result,bounds,{digits=10,dots=false,selected=0,analysis=null,trace=null,integral=null,radianAxis=false,halfHeight=false,heightScale=halfHeight?.5:1,surfaceView={}}={}){
+export function plotGraph(container,result,bounds,{colors=defaultGraphColors,digits=10,dots=false,selected=0,analysis=null,trace=null,integral=null,radianAxis=false,halfHeight=false,heightScale=halfHeight?.5:1,surfaceView={}}={}){
   const scale=[1,.5,2].includes(heightScale)?heightScale:1;
   const h=460*scale,ih=h-2*pad;
   const {xmin,xmax,ymin,ymax}=bounds;

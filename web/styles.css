@@ -13,3 +13,17 @@ button[data-run="python"]:hover:not(:disabled){background:#006553;border-color:#
 button[data-run="python"]:active:not(:disabled){transform:translateY(1px)}
 :root[data-theme="dark"] button[data-run="python"]{background:#076c58;border-color:#076c58}
 :root[data-theme="dark"] button[data-run="python"]:hover:not(:disabled){background:#085b4b;border-color:#085b4b}
+/* Six independent curve colors in Setup. */
+.graph-color-settings{margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid var(--line)}
+.graph-color-settings h3{margin:0 0 10px;font-size:15px}
+.graph-color-choices{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px}
+.graph-color-choices button{padding:8px 0;color:var(--ink);border:1px solid var(--line)}
+.graph-color-choices button::before{content:'';display:block;width:22px;height:8px;margin:0 auto 5px;border-radius:4px;background:var(--swatch)}
+.graph-color-choices button[aria-pressed="true"]{outline:2px solid var(--accent);outline-offset:1px;background:var(--bar)}
+.graph-color-preview{display:flex;align-items:center;gap:12px;margin:14px 0}
+.graph-color-swatch{width:36px;height:36px;border:1px solid var(--line);border-radius:7px}
+.graph-color-slider-label{display:flex;justify-content:space-between;gap:8px}
+.graph-color-settings .hsl-slider{appearance:none;height:12px;padding:0;margin:8px 0;border:1px solid var(--line);border-radius:10px;cursor:pointer}
+.hsl-slider::-webkit-slider-thumb{appearance:none;width:24px;height:24px;border:2px solid var(--ink);border-radius:50%;background:var(--panel)}
+.hsl-slider::-moz-range-thumb{width:20px;height:20px;border:2px solid var(--ink);border-radius:50%;background:var(--panel)}
+.graph-color-resets{display:flex;flex-wrap:wrap;gap:8px}

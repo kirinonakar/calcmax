@@ -20,6 +20,7 @@ import com.kirinonakar.calcmax.ui.theme.LocalInstrument
     AlertDialog(onDismissRequest=close,title={Text(tr("Instrument setup"))},text={Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(10.dp)) {
         Text(tr("Language")); Choices(listOf("English","한국어"),if(m.language=="ko")"한국어" else "English",{m.language=if(it=="한국어")"ko" else "en";m.save()})
         Text(tr("Appearance")); Choices(listOf("System","Light","Dark"),m.theme,{m.theme=it;m.save()})
+        GraphColorSettings(m)
         Text(tr("Angle unit")); Choices(listOf("DEG","RAD","GRAD"),m.angle,{m.angle=it;m.recalculatePreview();m.save()})
         Text(tr("Internal precision · numeric algorithms")); Choices(precisionChoices+"Custom",if(customPrecisionVisible)"Custom" else m.precision.toString(),{if(it=="Custom")customPrecisionVisible=true else {customPrecisionVisible=false;m.precision=it.toInt();m.recalculatePreview();m.save()}})
         if(customPrecisionVisible) {Field(customPrecision,"Custom internal precision · 3–200",Modifier.fillMaxWidth()){customPrecision=it};TextButton(onClick={m.precision=customPrecision.toInt();m.recalculatePreview();m.save()},enabled=customPrecision.toIntOrNull() in 3..200){Text(tr("Apply internal precision"))}}

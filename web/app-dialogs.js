@@ -8,6 +8,7 @@ import {writeState,downloadFile} from './storage.js';
 import {scientificRows,secondRows,numericRows,topKeys,topFunctions} from './keypad.js';
 import {appVersion} from './app-version.js';
 import {parseCatalogHelp,helpExampleInput} from './catalog-help.js';
+import {graphColorSettings} from './graph-color-settings.js';
 
 export function createAppDialogs({state,ui,persist,calculator,changeMode,pressKey,refreshDisplays,renderMatrix,error}) {
   const {toast,openDialog,pickFile}=ui;
@@ -122,6 +123,7 @@ export function createAppDialogs({state,ui,persist,calculator,changeMode,pressKe
   }
   function settingsDialog() {
     const content=element('div');
+    content.append(graphColorSettings({state,persist,refreshDisplays}));
     for(const [key,label,min,max] of [['precision','내부 유효 숫자',3,200],['digits','표시 소수 자릿수',2,200]]){const input=element('input');input.type='number';input.min=min;input.max=max;input.value=state[key];input.dataset.setting=key;input.onchange=()=>{state[key]=Math.max(min,Math.min(max,Number(input.value)||min));state.digits=Math.min(state.precision,state.digits);input.value=state[key];$('digits-indicator').textContent=`≤ ${state.digits} digits`;persist();refreshDisplays();};const holder=element('label',label);holder.append(input);content.append(holder);}
     for(const [key,label,min,max] of [['inputFont','Input font',10,42],['outputFont','Output font',10,48]]){const input=element('input');input.type='range';input.min=min;input.max=max;input.value=state[key];input.dataset.setting=key;input.oninput=()=>{state[key]=Number(input.value);calculator.applyFonts();persist();};const holder=element('label',label);holder.append(input);content.append(holder);}
     for(const [key,label] of [['autoCloseBrackets','Bracket auto-close'],['wordWrap','Input word wrap'],['persistHistory','Save history locally'],['haptics','Key vibration'],['sound','Key sound']]){const input=element('input');input.type='checkbox';input.checked=state[key];input.dataset.setting=key;input.onchange=()=>{state[key]=input.checked;if(key==='wordWrap'){calculator.applyWordWrap();calculator.preview();}persist();};const holder=element('label',label,'check');holder.append(input);content.append(holder);}

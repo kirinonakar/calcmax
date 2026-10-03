@@ -59,7 +59,7 @@ import kotlin.math.roundToInt
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Composable private fun HslColorSlider(
+@Composable internal fun HslColorSlider(
     label:String,
     formattedValue:String,
     value:Float,

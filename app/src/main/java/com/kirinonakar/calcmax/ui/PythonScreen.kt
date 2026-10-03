@@ -9,16 +9,21 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.*
 import com.kirinonakar.calcmax.calculator.CalculatorModel
 import com.kirinonakar.calcmax.math.BracketAutoClose
@@ -29,6 +34,7 @@ import com.kirinonakar.calcmax.ui.theme.LocalInstrument
     val clipboard=LocalClipboardManager.current
     val c=LocalInstrument.current
     var editor by remember { mutableStateOf(TextFieldValue(m.pythonSource,selection=TextRange(m.pythonSelectionStart,m.pythonSelectionEnd))) }
+    val editorFocus=remember {FocusRequester()}
     var importsOpen by remember {mutableStateOf(false)}
     var templatesOpen by remember {mutableStateOf(false)}
     var confirm by remember {mutableStateOf("")}
@@ -44,10 +50,14 @@ import com.kirinonakar.calcmax.ui.theme.LocalInstrument
     }
     fun update(value:TextFieldValue) {editor=value;m.editPython(value.text,value.selection.start,value.selection.end)}
     fun typed(value:TextFieldValue) {
+        val backspace=if(editor.composition==null && value.composition==null && value.selection.collapsed)PythonEditorTools.typedBackspace(editor.text,editor.selection.start,editor.selection.end,value.text,value.selection.start) else null
+        if(backspace!=null) {update(TextFieldValue(backspace.source,selection=TextRange(backspace.cursor)));return}
+        val newline=if(value.composition==null && value.selection.collapsed)PythonEditorTools.typedNewline(editor.text,editor.selection.start,editor.selection.end,value.text,value.selection.start) else null
+        if(newline!=null) {update(TextFieldValue(newline.source,selection=TextRange(newline.cursor)));return}
         val auto=if(m.autoCloseBrackets&&editor.selection.collapsed&&value.selection.collapsed)BracketAutoClose.typed(editor.text,editor.selection.start,value.text,value.selection.start) else null
         update(if(auto!=null)TextFieldValue(auto.source,selection=TextRange(auto.cursor)) else value)
     }
-    fun apply(edit:PythonEdit) {update(TextFieldValue(edit.source,selection=TextRange(edit.cursor)))}
+    fun apply(edit:PythonEdit) {update(TextFieldValue(edit.source,selection=TextRange(edit.cursor,edit.selectionEnd)));editorFocus.requestFocus()}
     fun documentName(uri:Uri):String = runCatching {
         context.contentResolver.query(uri,arrayOf(OpenableColumns.DISPLAY_NAME),null,null,null)?.use {cursor->
             if(cursor.moveToFirst())cursor.getString(0) else null
@@ -111,16 +121,23 @@ import com.kirinonakar.calcmax.ui.theme.LocalInstrument
                 DropdownMenu(templatesOpen,{templatesOpen=false}) {PythonEditorTools.snippets.forEach {snippet->DropdownMenuItem(text={Text(snippet.label)},onClick={apply(PythonEditorTools.insertSnippet(editor.text,editor.selection.min,editor.selection.max,snippet));templatesOpen=false})}}
             }
         }
-        OutlinedTextField(editor,::typed,Modifier.fillMaxWidth().height(320.dp),textStyle=MaterialTheme.typography.bodyMedium.copy(fontFamily=FontFamily.Monospace),label={Text(tr("Python code"))},placeholder={Text("print('Hello, world!')")},singleLine=false)
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+            SmallAction("Indent") {apply(PythonEditorTools.indent(editor.text,editor.selection.start,editor.selection.end))}
+            SmallAction("Outdent") {apply(PythonEditorTools.indent(editor.text,editor.selection.start,editor.selection.end,outdent=true))}
+        }
+        OutlinedTextField(editor,::typed,Modifier.fillMaxWidth().height(320.dp).focusRequester(editorFocus).onPreviewKeyEvent {event->
+            if(event.key==Key.Backspace && event.type==KeyEventType.KeyDown && !event.isCtrlPressed && !event.isAltPressed && !event.isMetaPressed && !event.isShiftPressed && editor.composition==null) {
+                val edit=PythonEditorTools.backspace(editor.text,editor.selection.start,editor.selection.end)
+                if(edit!=null) {apply(edit);true} else false
+            } else if(event.key==Key.Tab && !event.isCtrlPressed && !event.isAltPressed && !event.isMetaPressed) {
+                if(event.type==KeyEventType.KeyDown)apply(PythonEditorTools.tab(editor.text,editor.selection.start,editor.selection.end,event.isShiftPressed))
+                true
+            } else false
+        },textStyle=MaterialTheme.typography.bodyMedium.copy(fontFamily=FontFamily.Monospace),label={Text(tr("Python code"))},placeholder={Text("print('Hello, world!')")},singleLine=false,
+            keyboardOptions=KeyboardOptions(capitalization=KeyboardCapitalization.None,autoCorrectEnabled=false))
         if(suggestions.isNotEmpty())Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
-            suggestions.forEach {candidate->SmallAction(candidate) {
-                val start=PythonEditorTools.wordStart(editor.text,position)
-                var end=position
-                while(end<editor.text.length && (editor.text[end].isLetterOrDigit()||editor.text[end]=='_'))end++
-                var edit=PythonEditorTools.replace(editor.text,start,end,candidate)
-                val required=PythonEditorTools.requiredImport(editor.text,start,candidate)
-                if(required!=null)edit=PythonEditorTools.insertImport(edit.source,edit.cursor,required)
-                apply(edit)
+            suggestions.forEach {candidate->SmallAction(candidate,translate=false) {
+                apply(PythonEditorTools.complete(editor.text,position,candidate))
             }}
         }
         HorizontalDivider()

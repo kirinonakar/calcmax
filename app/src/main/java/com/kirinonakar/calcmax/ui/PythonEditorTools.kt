@@ -1,9 +1,80 @@
 package com.kirinonakar.calcmax.ui
 
-data class PythonEdit(val source:String,val cursor:Int)
+data class PythonEdit(val source:String,val cursor:Int,val selectionEnd:Int=cursor)
 data class PythonSnippet(val label:String,val code:String,val cursorOffset:Int=code.length,val importLine:String?=null)
 
 object PythonEditorTools {
+    private const val indentUnit="    "
+
+    /** Indent the current line or selected lines, retaining the selection direction. */
+    fun indent(source:String,start:Int,end:Int=start,outdent:Boolean=false):PythonEdit {
+        val anchor=start.coerceIn(0,source.length);val caret=end.coerceIn(0,source.length)
+        val first=minOf(anchor,caret);val last=maxOf(anchor,caret)
+        val lineStart=source.lastIndexOf('\n',first-1)+1
+        // A selection ending at the next line's start does not include that line.
+        val includedEnd=if(last>first && source.getOrNull(last-1)=='\n')last-1 else last
+        val newline=source.indexOf('\n',includedEnd)
+        val limit=if(newline<0)source.length else newline
+        val changes=mutableListOf<Pair<Int,Int>>()
+        val replacement=StringBuilder()
+        var at=lineStart
+        source.substring(lineStart,limit).split('\n').forEachIndexed {index,line->
+            if(index>0)replacement.append('\n')
+            val removed=if(!outdent)0 else if(line.startsWith('\t'))1 else line.take(4).takeWhile {it==' '}.length
+            changes+=at to if(outdent)-removed else indentUnit.length
+            replacement.append(if(outdent)line.drop(removed) else indentUnit+line)
+            at+=line.length+1
+        }
+        fun adjusted(position:Int):Int {
+            var delta=0
+            for((offset,change) in changes) {
+                if(position<offset)break
+                delta+=if(change>=0)change else -minOf(position-offset,-change)
+            }
+            return position+delta
+        }
+        return PythonEdit(source.substring(0,lineStart)+replacement+source.substring(limit),adjusted(anchor),adjusted(caret))
+    }
+
+    fun tab(source:String,start:Int,end:Int=start,shift:Boolean=false):PythonEdit =
+        if(shift || start!=end)indent(source,start,end,shift) else replace(source,start,end,indentUnit)
+
+    /** Backspace within leading whitespace removes one level, up to the previous tab stop. */
+    fun backspace(source:String,start:Int,end:Int=start):PythonEdit? {
+        if(start!=end || start !in 1..source.length)return null
+        val lineStart=source.lastIndexOf('\n',start-1)+1
+        val prefix=source.substring(lineStart,start)
+        if(prefix.isEmpty() || prefix.any {it!=' ' && it!='\t'})return null
+        if(prefix.last()=='\t')return replace(source,start-1,start,"")
+        var column=0
+        prefix.forEach {column+=if(it=='\t')indentUnit.length-column%indentUnit.length else 1}
+        val width=(column-1)%indentUnit.length+1
+        var from=start
+        while(from>lineStart && start-from<width && source[from-1]==' ')from--
+        return replace(source,from,start,"")
+    }
+
+    /** Recognize an IME Backspace without changing selections or other deletion operations. */
+    fun typedBackspace(source:String,start:Int,end:Int,nextSource:String,nextCursor:Int):PythonEdit? {
+        if(start!=end || start !in 1..source.length || nextCursor!=start-1)return null
+        if(nextSource!=source.removeRange(start-1,start))return null
+        return backspace(source,start)
+    }
+
+    fun newline(source:String,start:Int,end:Int=start):PythonEdit {
+        val a=minOf(start,end).coerceIn(0,source.length);val b=maxOf(start,end).coerceIn(a,source.length)
+        val line=source.substring(source.lastIndexOf('\n',a-1)+1,a)
+        val prefix=line.takeWhile {it==' ' || it=='\t'}+if(line.trimEnd().endsWith(':'))indentUnit else ""
+        return replace(source,a,b,"\n$prefix")
+    }
+
+    /** Handle a single newline from the IME; leave pasted or unrelated edits intact. */
+    fun typedNewline(source:String,start:Int,end:Int,nextSource:String,nextCursor:Int):PythonEdit? {
+        val a=minOf(start,end).coerceIn(0,source.length);val b=maxOf(start,end).coerceIn(a,source.length)
+        if(nextCursor!=a+1 || nextSource!=source.substring(0,a)+"\n"+source.substring(b))return null
+        return newline(source,a,b)
+    }
+
     val imports=listOf("import math","import statistics","import random","import itertools","from fractions import Fraction","import sympy as sp","import calcmax_catalog as calc")
     val snippets=listOf(
         PythonSnippet("Function","def function_name(value):\n    return value\n",4),
@@ -15,7 +86,7 @@ object PythonEditorTools {
         PythonSnippet("print","print()",6),
         PythonSnippet("sp.N","sp.N()",5,"import sympy as sp")
     )
-    private val common=listOf("abs","all","any","bool","dict","enumerate","filter","float","int","len","list","map","max","min","open","print","range","round","set","sorted","str","sum","tuple","zip","False","None","True","and","as","class","def","elif","else","except","for","from","if","import","in","is","lambda","not","or","pass","return","try","while","with","yield","math","statistics","random","itertools","sympy","sp","calc","Fraction")
+    private val common=listOf("abs","all","any","bool","dict","enumerate","filter","float","input","int","len","list","map","max","min","open","print","range","round","set","sorted","str","sum","tuple","zip","False","None","True","and","as","class","def","elif","else","except","for","from","if","import","in","is","lambda","not","or","pass","return","try","while","with","yield","math","statistics","random","itertools","sympy","sp","calc","Fraction")
     private val members=mapOf(
         "math" to listOf("acos","asin","atan","ceil","cos","e","exp","floor","log","pi","sin","sqrt","tan"),
         "statistics" to listOf("mean","median","mode","stdev","variance"),
@@ -50,6 +121,13 @@ object PythonEditorTools {
             if(module!=null && candidate in members[module].orEmpty())return if(module=="sp")"import sympy as sp" else "import $module"
         }
         return when(candidate){"math","statistics","random"->"import $candidate";"sp"->"import sympy as sp";"calc"->"import calcmax_catalog as calc";"Fraction"->"from fractions import Fraction";else->null}
+    }
+    fun complete(source:String,cursor:Int,candidate:String):PythonEdit {
+        val position=cursor.coerceIn(0,source.length);val start=wordStart(source,position)
+        var end=position
+        while(end<source.length && (source[end].isLetterOrDigit() || source[end]=='_'))end++
+        val edit=replace(source,start,end,candidate)
+        return requiredImport(source,start,candidate)?.let {insertImport(edit.source,edit.cursor,it)} ?: edit
     }
     fun insertImport(source:String,cursor:Int,line:String):PythonEdit {
         val existing=mutableListOf<IntRange>()

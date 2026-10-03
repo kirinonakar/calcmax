@@ -1,5 +1,6 @@
 import {parse,latexInput} from './parser.js';
 import {plotGraph as plot,graphCurveColor} from './graph-canvas.js';
+import {defaultGraphColors} from './graph-colors.js';
 import {mathDisplay} from './math-display.js';
 import {renderFormulas} from './formula-preview.js';
 import {displayNumber} from './display-format.js';
@@ -62,7 +63,7 @@ export function graphShadings(source,kind){
     return item;
   });
 }
-export function createGraphWorkspace({execute,options,onError:reportError,persist,isBusy,isReady=()=>true,saved={}}){
+export function createGraphWorkspace({execute,options,onError:reportError,persist,isBusy,isReady=()=>true,saved={},getColors=()=>defaultGraphColors}){
   const $=id=>document.getElementById(id),value=id=>$(id).value,kind=()=>value('graph-kind');
   const onError=message=>{setText($('graph-status'),message);$('graph-status').classList.add('error');reportError(message);};
   let result=null,bounds=null,analysis=null,trace=null,integral=null,parameters={...(saved.parameters||{})},parameterRanges={...(saved.parameterRanges||{})},derivative=null,radianAxis=!!saved.radianAxis,active=false,pending=false,timer=null,animation=null,revision=0,analysisRevision=0,signature='';
@@ -71,7 +72,7 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
   const window=$('graph-plot').ownerDocument.defaultView;
   const requestFrame=callback=>window.requestAnimationFrame?window.requestAnimationFrame(callback):window.setTimeout(callback,16);
   const cancelFrame=id=>window.cancelAnimationFrame?window.cancelAnimationFrame(id):window.clearTimeout(id);
-  function draw(){if(result&&bounds){let range;try{range=result.surface?zRange():null;}catch{return;}plot($('graph-plot'),range?{...result,zMin:range[0],zMax:range[1]}:result,bounds,{digits:options().displayDigits,dots:kind()==='sequence',analysis,trace,integral,selected:selected(),radianAxis,heightScale,surfaceView:surface});}}
+  function draw(){if(result&&bounds){let range;try{range=result.surface?zRange():null;}catch{return;}plot($('graph-plot'),range?{...result,zMin:range[0],zMax:range[1]}:result,bounds,{colors:getColors(),digits:options().displayDigits,dots:kind()==='sequence',analysis,trace,integral,selected:selected(),radianAxis,heightScale,surfaceView:surface});}}
   function queueDraw(){if(frame!==null)return;frame=requestFrame(()=>{frame=null;draw();});}
   const resizeObserver=window.ResizeObserver?new window.ResizeObserver(queueDraw):null;
   resizeObserver?.observe($('graph-plot'));
@@ -139,14 +140,14 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
     for(const id of ['graph-selected','graph-other']){const before=value(id)===''?(id==='graph-other'?1:0):Number(value(id));$(id).replaceChildren(...Array.from({length:count},(_,i)=>{const option=document.createElement('option');option.value=String(i);option.textContent=`f${i+1}`;return option;}));$(id).value=String(Math.min(before,Math.max(0,count-1)));}
   }
   function formulas(){
-    const next=JSON.stringify([value('graph-source'),kind(),derivative,result?.derivativeExpression,selected(),options().displayDigits,document.documentElement.lang]);if(next===formulaSignature)return;formulaSignature=next;
+    const next=JSON.stringify([value('graph-source'),kind(),derivative,result?.derivativeExpression,selected(),options().displayDigits,document.documentElement.lang,getColors()]);if(next===formulaSignature)return;formulaSignature=next;
     const variable=kind()==='sequence'?'n':['parametric','polar','differential'].includes(kind())?'t':'x',labels=expressions().map((s,i)=>kind()==='cartesian'?cartesianFormula(s,i):kind()==='parametric'?`f${i+1}(t)=${s}`:kind()==='surface'?`z=${s}`:kind()==='differential'?`diff(y,t)=${s}`:kind()==='polar'?`r${i+1}(t)=${s}`:`f${i+1}(${variable})=${s}`);
     if(derivative!==null&&kind()==='cartesian'&&expressions()[derivative])labels.push(`diff(f${derivative+1}(x),x)`+(result?.derivativeSelected===derivative&&result?.derivativeExpression?`=${result.derivativeExpression}`:''));
     for(const line of graphSources(value('graph-source'),kind()).filter(s=>s.startsWith('[shade]')))labels.push(line.slice(7).split(';')[0].trim());
     renderFormulas($('graph-formulas'),labels,{digits:options().displayDigits});
     [...$('graph-formulas').children].slice(0,expressions().length).forEach((line,i)=>{
       line.classList.toggle('selected-curve',i===selected());line.tabIndex=0;line.setAttribute('role','button');line.setAttribute('aria-pressed',String(i===selected()));
-      line.style.setProperty('--curve-color',graphCurveColor(i));
+      line.style.setProperty('--curve-color',graphCurveColor(i,getColors()));
       const pick=()=>{$('graph-selected').value=String(i);$('graph-selected').onchange();};
       line.onclick=pick;line.onkeydown=event=>{if(['Enter',' '].includes(event.key)){event.preventDefault();pick();}};
     });
@@ -160,7 +161,7 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
       const [zMin,zMax]=range;shown={...result,zMin,zMax};
       if(surface.autoZ){showNumber('graph-zmin',zMin);showNumber('graph-zmax',zMax);resetRangeDomain(pairedSliders.get('graph-zmin'));}
     }
-    plot($('graph-plot'),shown,bounds,{digits:options().displayDigits,dots:kind()==='sequence',analysis,trace,integral,selected:selected(),radianAxis,heightScale,surfaceView:surface});
+    plot($('graph-plot'),shown,bounds,{colors:getColors(),digits:options().displayDigits,dots:kind()==='sequence',analysis,trace,integral,selected:selected(),radianAxis,heightScale,surfaceView:surface});
     table();renderAnalysis();
     $('graph-trace').replaceChildren();if(trace)$('graph-trace').append(mathDisplay({kind:'relation',value:'≈',args:[{kind:'symbol',value:'Trace'},{kind:'tuple',args:trace.map(n=>({kind:'number',value:String(n)}))}]},options().displayDigits,true));
   }

@@ -3,14 +3,14 @@ import {displayNumber} from './display-format.js';
 import {integralPolygons} from './graph-integral.js';
 import {plotSurface} from './surface-plot.js';
 const NS = 'http://www.w3.org/2000/svg';
-const colors = ['#007b68','#a04c75','#3b70bd','#b17d00','#6b5ec2','#a34629'];
+import {defaultGraphColors} from './graph-colors.js';
 function svgElement(tag,attributes={},text='') {
   const el = document.createElementNS(NS,tag);
   for (const [key,value] of Object.entries(attributes)) el.setAttribute(key,String(value));
   if (text) el.textContent = text;
   return el;
 }
-export function plot(container,result,bounds,{dots=false,scatterCurves=[],digits=10,analysis=null,trace=null,selected=0,integral=null,radianAxis=false,surfaceView={rotation:35,elevation:32,zoom:1}}={}) {
+export function plot(container,result,bounds,{colors=defaultGraphColors,dots=false,scatterCurves=[],digits=10,analysis=null,trace=null,selected=0,integral=null,radianAxis=false,surfaceView={rotation:35,elevation:32,zoom:1}}={}) {
   const {xmin,xmax,ymin,ymax} = bounds;
   if (![xmin,xmax,ymin,ymax].every(Number.isFinite) || xmax<=xmin || ymax<=ymin) throw new Error('그래프 범위를 확인해 주세요.');
   if(result.surface)return plotSurface(container,result,bounds,{digits,...surfaceView});

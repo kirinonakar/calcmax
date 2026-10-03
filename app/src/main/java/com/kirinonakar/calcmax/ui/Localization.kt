@@ -7,6 +7,9 @@ import androidx.compose.runtime.staticCompositionLocalOf
 val LocalLanguage = staticCompositionLocalOf { "en" }
 
 private val korean = mapOf(
+    "Graph colors" to "그래프 색", "Graph color" to "그래프 색",
+    "Hue (H)" to "색조 (H)", "Saturation (S)" to "채도 (S)", "Lightness (L)" to "명도 (L)",
+    "Reset color" to "색 초기화", "Reset all colors" to "전체 색 초기화",
     "Graph limit reached. Remove a function before adding another." to "그래프 개수 한도에 도달했습니다. 기존 함수를 지운 뒤 추가하세요.",
     "Calculation mode" to "계산 모드", "Choose calculation mode, long press for Scientific/CAS mode" to "계산 모드 선택, 길게 누르면 Scientific/CAS 모드",
     "Stored memory" to "저장된 메모리", "Overwrite mode" to "덮어쓰기 모드", "Insert mode" to "삽입 모드",
@@ -55,6 +58,7 @@ private val korean = mapOf(
     "Name" to "이름", "Parameters" to "매개변수", "Formula" to "공식", "Save function" to "함수 저장",
     "Edit" to "편집", "Insert" to "삽입", "Python code" to "Python 코드", "Enter" to "입력",
     "Open .py" to ".py 열기",
+    "Indent" to "들여쓰기", "Outdent" to "내어쓰기",
     "Discard" to "버리기", "Unsaved changes" to "저장하지 않은 변경 사항",
     "Reset" to "초기화", "Reset ranges" to "범위 초기화", "Reset sliders" to "슬라이더 초기화", "Rotate" to "회전", "Tilt" to "기울기", "Zoom" to "확대", "Half height" to "높이 ½", "Full height" to "전체 높이",
     "Graph range" to "그래프 범위", "Automatic z range" to "z 범위 자동 설정",
