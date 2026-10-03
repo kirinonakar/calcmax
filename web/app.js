@@ -11,6 +11,7 @@ import {createCalculatorKeypad} from './calculator-keypad.js';
 import {createWorkspaces} from './workspaces.js';
 import {createAppDialogs} from './app-dialogs.js';
 import {bindKeyPress} from './keypad.js';
+import {graphColorsForTheme} from './graph-colors.js';
 
 const saved=readState(),state=createAppState(saved,navigator.language),ui=createAppUI();
 setLanguage(state.language);
@@ -23,7 +24,7 @@ const {persist,schedulePersist}=persistence;
 const requestOptions=()=>({angle:value('angle'),precision:state.precision,displayDigits:state.digits,variables:state.variables,functions:state.functions,assumptions:state.assumptions});
 const engine=new EngineClient();
 const runtime=createEngineUI({engine,onChange:updateButtons,onReady:()=>calculator.resetPreview(),cancelPreview:()=>calculator.cancelPreview()});
-graphs=createGraphWorkspace({execute:request=>engine.execute(request),options:requestOptions,onError:error,persist,isBusy:()=>runtime.busy,isReady:()=>engine.ready,saved:state.graph,getColors:()=>state.graphColors});
+graphs=createGraphWorkspace({execute:request=>engine.execute(request),options:requestOptions,onError:error,persist,isBusy:()=>runtime.busy,isReady:()=>engine.ready,saved:state.graph,getColors:()=>graphColorsForTheme(state.graphColors,document.documentElement.dataset.theme)});
 calculator=createCalculator({state,engine,isBusy:()=>runtime.busy,ui,persist,schedulePersist,requestOptions,error,changeMode,updateButtons,graphs,
   pressKey:input=>keypad.press(input),modeDialog:()=>dialogs.mode(),variablesDialog:()=>dialogs.variables(),matrixInsertDialog:()=>dialogs.matrixInsert()});
 keypad=createCalculatorKeypad({state,persist,isCalcActive:()=>calculator.calcActive,isBusy:()=>runtime.busy,handleKey:calculator.handleKey,updateButtons});

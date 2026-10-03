@@ -1,6 +1,15 @@
-export const defaultGraphColors=Object.freeze(['#007b68','#a04c75','#3b70bd','#b17d00','#6b5ec2','#a34629']);
-export function normalizeGraphColors(saved){
-  return defaultGraphColors.map((fallback,i)=>Array.isArray(saved)&&/^#[0-9a-f]{6}$/i.test(saved[i])?saved[i].toLowerCase():fallback);
+export const defaultGraphColors=Object.freeze(['#006d5b','#b7521e','#7449b0','#225fb0','#b13365','#52650d']);
+export const darkGraphColors=Object.freeze(['#79dbb7','#ffb37e','#c4a6ff','#89b9ff','#ffa0c8','#d7e383']);
+const legacyGraphColors=['#007b68','#a04c75','#3b70bd','#b17d00','#6b5ec2','#a34629'];
+export function normalizeGraphColors(saved,legacy=false){
+  return defaultGraphColors.map((_,i)=>{
+    const color=Array.isArray(saved)&&/^#[0-9a-f]{6}$/i.test(saved[i])?saved[i].toLowerCase():null;
+    return legacy&&color===legacyGraphColors[i]?null:color;
+  });
+}
+export function graphColorsForTheme(overrides,theme='light'){
+  const defaults=theme==='dark'?darkGraphColors:defaultGraphColors;
+  return defaults.map((fallback,i)=>overrides?.[i]??fallback);
 }
 export function hexToHsl(hex){
   const [r,g,b]=[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255),max=Math.max(r,g,b),min=Math.min(r,g,b),delta=max-min,l=(max+min)/2;

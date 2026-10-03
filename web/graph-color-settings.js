@@ -1,14 +1,16 @@
 import {element,control} from './app-ui.js';
 import {t} from './i18n.js';
-import {defaultGraphColors,hexToHsl,hslToHex} from './graph-colors.js';
+import {graphColorsForTheme,hexToHsl,hslToHex} from './graph-colors.js';
 
 export function graphColorSettings({state,persist,refreshDisplays}){
   const section=element('section','','graph-color-settings'),heading=element('h3','Graph colors'),choices=element('div','','graph-color-choices'),preview=element('div','','graph-color-preview'),swatch=element('span','','graph-color-swatch'),code=element('code'),sliders=element('div'),buttons=[];
-  let selected=0,hsl=hexToHsl(state.graphColors[0]);
+  const colors=()=>graphColorsForTheme(state.graphColors,document.documentElement.dataset.theme);
+  let selected=0,hsl=hexToHsl(colors()[0]);
   const inputs=[],outputs=[];
   function render(){
-    buttons.forEach((button,i)=>{button.style.setProperty('--swatch',state.graphColors[i]);button.setAttribute('aria-pressed',String(i===selected));});
-    swatch.style.backgroundColor=state.graphColors[selected];code.textContent=state.graphColors[selected].toUpperCase();
+    const palette=colors();
+    buttons.forEach((button,i)=>{button.style.setProperty('--swatch',palette[i]);button.setAttribute('aria-pressed',String(i===selected));});
+    swatch.style.backgroundColor=palette[selected];code.textContent=palette[selected].toUpperCase();
     inputs.forEach((input,i)=>{input.value=hsl[i];outputs[i].textContent=`${Math.round(hsl[i])}${i===0?'°':'%'}`;});
     const [h,s,l]=hsl;
     inputs[0].style.background='linear-gradient(to right, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000)';
@@ -17,7 +19,7 @@ export function graphColorSettings({state,persist,refreshDisplays}){
   }
   function save(){render();refreshDisplays();persist();}
   for(let i=0;i<6;i++){
-    const button=control(`f${i+1}`,()=>{selected=i;hsl=hexToHsl(state.graphColors[i]);render();});
+    const button=control(`f${i+1}`,()=>{selected=i;hsl=hexToHsl(colors()[i]);render();});
     button.dataset.graphColor=String(i);button.setAttribute('aria-label',`${t('Graph color')} ${i+1}`);buttons.push(button);choices.append(button);
   }
   ['Hue (H)','Saturation (S)','Lightness (L)'].forEach((name,i)=>{
@@ -28,6 +30,7 @@ export function graphColorSettings({state,persist,refreshDisplays}){
   });
   preview.append(swatch,code);
   const resets=element('div','','graph-color-resets');
-  resets.append(control('Reset color',()=>{state.graphColors[selected]=defaultGraphColors[selected];hsl=hexToHsl(state.graphColors[selected]);save();}),control('Reset all colors',()=>{state.graphColors=[...defaultGraphColors];hsl=hexToHsl(state.graphColors[selected]);save();}));
-  section.append(heading,choices,preview,sliders,resets);render();return section;
+  resets.append(control('Reset color',()=>{state.graphColors[selected]=null;hsl=hexToHsl(colors()[selected]);save();}),control('Reset all colors',()=>{state.graphColors=Array(6).fill(null);hsl=hexToHsl(colors()[selected]);save();}));
+  section.append(heading,choices,preview,sliders,resets);render();
+  return {element:section,refresh(){hsl=hexToHsl(colors()[selected]);render();}};
 }

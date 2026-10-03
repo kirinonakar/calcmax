@@ -1,4 +1,5 @@
 // Recording context for geometry, draw-call, and scheduling tests in jsdom.
+import {defaultGraphColors} from '../graph-colors.js';
 export function installCanvas(dom){
   const contexts=new WeakMap();
   dom.window.HTMLCanvasElement.prototype.getContext=function(){
@@ -17,4 +18,4 @@ export function installCanvas(dom){
   };
 }
 export function surfaceFills(container){return container.querySelector('canvas').getContext('2d').commands.filter(c=>c.op==='fill'&&c.path.some(p=>p.op==='closePath'));}
-export function curveStrokes(container){return container.querySelector('canvas')?.getContext('2d').commands.filter(c=>c.op==='stroke'&&[2,4].includes(c.lineWidth)&&!c.lineDash.length&&['#007b68','#a04c75','#3b70bd','#b17d00','#6b5ec2','#a34629'].includes(c.strokeStyle))||[];}
+export function curveStrokes(container){return container.querySelector('canvas')?.getContext('2d').commands.filter(c=>c.op==='stroke'&&[2,4].includes(c.lineWidth)&&!c.lineDash.length&&defaultGraphColors.includes(c.strokeStyle))||[];}

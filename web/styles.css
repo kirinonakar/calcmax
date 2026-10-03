@@ -27,3 +27,7 @@ button[data-run="python"]:active:not(:disabled){transform:translateY(1px)}
 .hsl-slider::-webkit-slider-thumb{appearance:none;width:24px;height:24px;border:2px solid var(--ink);border-radius:50%;background:var(--panel)}
 .hsl-slider::-moz-range-thumb{width:20px;height:20px;border:2px solid var(--ink);border-radius:50%;background:var(--panel)}
 .graph-color-resets{display:flex;flex-wrap:wrap;gap:8px}
+/* Chrome's native select popup needs opaque option colors. */
+:root[data-theme="light"] select{color-scheme:light}
+:root[data-theme="dark"] select{color-scheme:dark}
+#settings-dialog select,select option,select optgroup{background-color:var(--number);color:var(--ink)}

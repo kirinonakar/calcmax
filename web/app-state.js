@@ -17,7 +17,8 @@ export function createAppState(saved={},browserLanguage='en') {
     digits:Math.max(2,Math.min(200,Number(saved.precision)||30,Number(saved.digits)||10)),
     fields:{...objectOrEmpty(saved.fields)},
     graph:{...objectOrEmpty(saved.graph)},
-    graphColors:normalizeGraphColors(saved.graphColors),
+    graphColors:normalizeGraphColors(saved.graphColors,saved.graphColorsVersion!==2),
+    graphColorsVersion:2,
     matrixCells:objectOrEmpty(saved.matrixCells),
     rates:objectOrEmpty(saved.rates)
   };

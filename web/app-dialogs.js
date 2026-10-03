@@ -12,7 +12,7 @@ import {graphColorSettings} from './graph-color-settings.js';
 
 export function createAppDialogs({state,ui,persist,calculator,changeMode,pressKey,refreshDisplays,renderMatrix,error}) {
   const {toast,openDialog,pickFile}=ui;
-  let catalog={};
+  let catalog={},graphSettings=null;
   function clearableCatalogSearch(input){
     const holder=element('div','','catalog-search'),clear=control('✕',()=>{
       input.value='';input.dispatchEvent(new input.ownerDocument.defaultView.Event('input',{bubbles:true}));input.focus();
@@ -123,7 +123,8 @@ export function createAppDialogs({state,ui,persist,calculator,changeMode,pressKe
   }
   function settingsDialog() {
     const content=element('div');
-    content.append(graphColorSettings({state,persist,refreshDisplays}));
+    graphSettings=graphColorSettings({state,persist,refreshDisplays});
+    content.append(graphSettings.element);
     for(const [key,label,min,max] of [['precision','내부 유효 숫자',3,200],['digits','표시 소수 자릿수',2,200]]){const input=element('input');input.type='number';input.min=min;input.max=max;input.value=state[key];input.dataset.setting=key;input.onchange=()=>{state[key]=Math.max(min,Math.min(max,Number(input.value)||min));state.digits=Math.min(state.precision,state.digits);input.value=state[key];$('digits-indicator').textContent=`≤ ${state.digits} digits`;persist();refreshDisplays();};const holder=element('label',label);holder.append(input);content.append(holder);}
     for(const [key,label,min,max] of [['inputFont','Input font',10,42],['outputFont','Output font',10,48]]){const input=element('input');input.type='range';input.min=min;input.max=max;input.value=state[key];input.dataset.setting=key;input.oninput=()=>{state[key]=Number(input.value);calculator.applyFonts();persist();};const holder=element('label',label);holder.append(input);content.append(holder);}
     for(const [key,label] of [['autoCloseBrackets','Bracket auto-close'],['wordWrap','Input word wrap'],['persistHistory','Save history locally'],['haptics','Key vibration'],['sound','Key sound']]){const input=element('input');input.type='checkbox';input.checked=state[key];input.dataset.setting=key;input.onchange=()=>{state[key]=input.checked;if(key==='wordWrap'){calculator.applyWordWrap();calculator.preview();}persist();};const holder=element('label',label,'check');holder.append(input);content.append(holder);}
@@ -140,8 +141,9 @@ export function createAppDialogs({state,ui,persist,calculator,changeMode,pressKe
   const systemTheme=window.matchMedia('(prefers-color-scheme: dark)');
   $('language').value=state.language;$('theme').value=state.theme;applyTheme(state.theme,systemTheme.matches);
   translateDOM();
-  systemTheme.addEventListener('change',()=>applyTheme(state.theme,systemTheme.matches));
-  $('theme').onchange=()=>{state.theme=value('theme');applyTheme(state.theme,systemTheme.matches);refreshDisplays();persist();};
+  function refreshTheme(){applyTheme(state.theme,systemTheme.matches);graphSettings?.refresh();refreshDisplays();}
+  systemTheme.addEventListener('change',()=>{if(state.theme==='system')refreshTheme();});
+  $('theme').onchange=()=>{state.theme=value('theme');refreshTheme();persist();};
   $('language').onchange=()=>{state.language=value('language');state.languageChosen=true;setLanguage(state.language);translateDOM();calculator.renderNotation();refreshDisplays();if(['matrix','vector'].includes(value('mode')))renderMatrix();persist();if($('dialog').open)$('dialog').close();};
 
   async function initialize() {
