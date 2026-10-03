@@ -76,6 +76,8 @@ def _dispatch(payload, control=None):
         elif action=="graphAnalysis": result=graph_analysis(engine,request)
         elif action=="programmer": result=programmer(request)
         else:
+            parameters=request.get("functionParameters", [])
+            for name in parameters: engine.bindings[name]=engine.symbol(name)
             value=engine.build(request["tree"])
             if getattr(value,"is_number",False) and value.has(s.I): value=s.expand_complex(value)
             if isinstance(value,list) and value and all(isinstance(row,list) for row in value): value=matrix(value)
@@ -123,9 +125,19 @@ def _dispatch(payload, control=None):
                 ast=result_ast(value)
                 if dms_result:
                     ast={"kind":"frozen_call","value":"sexagesimal","args":[result_ast(part) for part in dms_parts(value)]}
-                symbols=getattr(value,"free_symbols",set())
+                # Calculus answers retain their independent variable, including constant results.
+                source=request["tree"]
+                answer_parameters=parameters or source.get("parameters", [])
+                if (not answer_parameters and source.get("kind")=="call" and len(source.get("args", []))>1
+                        and (source.get("value")=="diff" or source.get("value")=="integrate" and len(source["args"])==2)):
+                    candidate=source["args"][1]
+                    if candidate.get("kind")=="symbol": answer_parameters=[candidate["value"]]
+                if not answer_parameters and source.get("kind")=="symbol" and source.get("value")=="Ans":
+                    answer_parameters=request.get("variables", {}).get("Ans", {}).get("parameters", [])
+                symbols=getattr(value,"free_symbols",set()) | {engine.symbol(name) for name in answer_parameters}
                 guards=[c for c in dict.fromkeys(engine.conditions) if c.free_symbols & symbols]
                 result["resultAst"]={"kind":"restricted","args":[ast]+[result_ast(c) for c in guards]} if guards else ast
+                if answer_parameters: result["resultAst"]["parameters"]=answer_parameters
             except (MathError,TypeError,AttributeError): result["reusable"]=False
         response=json.dumps({"ok":True,**result},ensure_ascii=False,allow_nan=False)
         budget.check()

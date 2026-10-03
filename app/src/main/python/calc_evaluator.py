@@ -113,6 +113,8 @@ class Engine:
         if kind == "constant":
             return {"pi":s.pi,"E":s.E,"I":s.I,"oo":s.oo,"-oo":-s.oo,"EmptySet":s.S.EmptySet,"True":s.true,"False":s.false}[value]
         if kind == "snapshot_symbol": return self.symbol(value)
+        if kind == "answer_call":
+            return self.call_answer(args[0], [build(a) for a in args[1:]])
         if kind == "float": return s.Float(value,self.precision)
         if kind == "restricted":
             result=build(args[0])
@@ -213,6 +215,9 @@ class Engine:
         finally:
             self.bindings = old
     def call(self, name, a, nodes):
+        if name == "Ans":
+            require("Ans" in self.variables, "Ans has no reusable result yet")
+            return self.call_answer(self.variables["Ans"], a)
         # arcsin/arccos/arctan 계열 별칭은 사용자 정의 함수가 없을 때만 정식 이름으로 정규화한다.
         if name not in self.functions:
             name = canonical_function_name(name)
@@ -621,3 +626,26 @@ class Engine:
         if name.isidentifier():
             return s.Function(name)(*a)
         raise MathError("Unknown function: " + name)
+
+    def call_answer(self, body, arguments):
+        """Apply a saved symbolic answer without resolving its frozen symbols."""
+        require("Ans" not in self.resolving, "Recursive answer definition")
+        start = len(self.conditions)
+        self.resolving.add("Ans")
+        try:
+            expression = self.build(body)
+        finally:
+            self.resolving.remove("Ans")
+        require(isinstance(expression, s.Expr), "Ans is not a function")
+        parameters = body.get("parameters")
+        if parameters is None:
+            symbols = sorted(expression.free_symbols, key=s.default_sort_key)
+            require(len(symbols) == 1, "Ans is not a single-variable function")
+        else:
+            symbols = [self.symbol(name) for name in parameters]
+        require(len(symbols) == len(arguments), "Function argument count mismatch")
+        replacements = dict(zip(symbols, arguments))
+        guards = [guard.xreplace(replacements) for guard in self.conditions[start:]]
+        require(all(guard != s.false for guard in guards), "Domain ERROR: excluded value")
+        self.conditions[start:] = [guard for guard in guards if guard != s.true]
+        return expression.xreplace(replacements)

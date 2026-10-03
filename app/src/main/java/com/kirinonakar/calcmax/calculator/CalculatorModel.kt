@@ -112,7 +112,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         private set
     var variables by mutableStateOf(loadObject("variables"))
         internal set
-    var functions by mutableStateOf(loadObject("functions"))
+    var functions by mutableStateOf(FunctionTransfer.removeExpiredAnswerFunctions(loadObject("functions"),variables.optJSONObject("Ans")))
         internal set
     var assumptions by mutableStateOf(loadObject("assumptions"))
         internal set
@@ -382,6 +382,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         save()
     }
     fun save() {
+        functions=FunctionTransfer.removeExpiredAnswerFunctions(functions,variables.optJSONObject("Ans"))
         val editor=prefs.edit()
         editor.putString("expression",this.editor.source).putInt("cursor",this.editor.cursor).putString("mode",mode).putString("angle",angle).putString("theme",theme)
             .putString("result",result?.toString() ?: "{}").putString("resultSource",resultSource).putBoolean("committed",committed)
@@ -584,7 +585,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
                     if(calcSession!=null)break
                     val revision=inputVersion;val source=editor.source
                     val tree=runCatching {calculationTree(source)}.getOrNull()
-                    if(tree!=null && (commitRequested||!requiresExplicitEvaluation(tree,multiArgumentUserFunctions())) && !(tree.value in listOf("=",":=") && tree.args.firstOrNull()?.kind in listOf("symbol","call") && mode!="Equations")) {
+                    if(tree!=null && (commitRequested||!requiresExplicitEvaluation(tree,multiArgumentUserFunctions())) && !(tree.value in listOf("=",":=") && tree.args.firstOrNull()?.kind in listOf("symbol","call") && mode!="Equations") && runCatching {FunctionTransfer.resultTarget(tree)}.getOrNull()==null) {
                         previewBusy=true
                         val response=engine.execute(request().put("tree",JSONObject(tree.json())).put("budget",if(commitRequested)8 else 2))
                         if(revision==inputVersion && source==editor.source && !committed && calcSession==null) {
@@ -605,10 +606,12 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         if(committed)return
         exitEngineering()
         result=response;dmsDisplay=response.optBoolean("dms");dmsConversion=false;resultSource=source;committed=true;commitRequested=false;busy=false
-        val next=JSONObject(variables.toString())
-        if(response.has("resultAst"))next.put("Ans",response.getJSONObject("resultAst")) else next.remove("Ans")
-        variables=next
-        lastAnswerResult=response
+        if(!response.optBoolean("assignment")) {
+            val next=JSONObject(variables.toString())
+            if(response.has("resultAst"))next.put("Ans",response.getJSONObject("resultAst")) else next.remove("Ans")
+            variables=next
+            lastAnswerResult=response
+        }
         appendHistory(HistoryEntry(System.currentTimeMillis(),source,response.optString("exact"),response.optString("decimal"),mode,inputTree=inputTree()?.toString() ?: "",response=response.toString(),answer=inputAnswer?.toString() ?: ""))
         save()
     }
@@ -700,6 +703,11 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         }
         if(committed && source==editor.source)return
         val tree = try { calculationTree(source) } catch(e: Exception) { error=e.message ?: "Syntax ERROR"; return }
+        val target=try {FunctionTransfer.resultTarget(tree)} catch(e:Exception) {error=e.message ?: "Invalid function";return}
+        if(target!=null) {
+            with(CalculatorVariableActions) {performStoreResult(target,source)}
+            return
+        }
         if(tree.value in listOf("=",":=") && tree.args.size==2 && mode!="Equations") {
             val left=tree.args[0];val right=tree.args[1]
             if(left.kind=="symbol") {store(left.value,source.substring(right.start,right.end),finishInput=source==editor.source);return}

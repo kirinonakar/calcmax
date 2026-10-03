@@ -19,7 +19,7 @@ restoreFields(state);
 let calculator,graphs,workspaces,keypad,dialogs;
 const persistence=createPersistence({state,toast:ui.toast,
   snapshot:()=>({expression:calculator.draftSource(),graph:graphs.snapshot()}),
-  onPersist:()=>calculator.schedulePreview()});
+  onPersist:({functionsChanged})=>{if(functionsChanged)workspaces.renderFunctions();calculator.schedulePreview();}});
 const {persist,schedulePersist}=persistence;
 const requestOptions=()=>({angle:value('angle'),precision:state.precision,displayDigits:state.digits,variables:state.variables,functions:state.functions,assumptions:state.assumptions});
 const engine=new EngineClient();

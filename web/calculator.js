@@ -11,7 +11,7 @@ import {createDisplaySizing} from './display-sizing.js';
 import {fractionInput} from './fraction-input.js';
 import {requiresExplicitEvaluation} from './evaluation-policy.js';
 import {graphExpressionTarget} from './graph-workspace.js';
-import {defineFunction} from './function-transfer.js';
+import {defineFunction,resultTarget,resultFunction,removeExpiredAnswerFunctions} from './function-transfer.js';
 import {$,value,element,control} from './app-ui.js';
 
 export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist,requestOptions,error,changeMode,updateButtons,pressKey,modeDialog,variablesDialog,matrixInsertDialog,graphs,onFunctionsChanged=()=>{}}) {
@@ -34,6 +34,7 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
     lastResult=result;lastResultSource=displaySource;
     committed=true;$('commit-indicator').textContent='=';
     if(result.resultAst&&!result.assignment) state.variables.Ans=result.resultAst;
+    if(removeExpiredAnswerFunctions(state.functions,state.variables.Ans))onFunctionsChanged();
     renderResult();
     if(source){activeHistoryEntry={source,exact:result.exact||'',decimal:result.decimal||'',resultAst:result.resultAst,inputAns:previousAnswer,calcValues:result.calcValues,display:{tree:result.tree,decimalTree:result.decimalTree,approximate:result.approximate},time:Date.now(),star:false};state.history.unshift(activeHistoryEntry);state.history=state.history.slice(0,500);for(const entry of state.history.slice(11))delete entry.display;}
     renderTape();tapeFollow.latest();
@@ -47,7 +48,7 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
   }
   function evaluationTree(source){
     const tree=parse(source);
-    function freeze(node){if(inputAnswer&&node.kind==='symbol'&&node.value==='Ans')return inputAnswer;return {...node,args:(node.args||[]).map(freeze)};}
+    function freeze(node){if(inputAnswer&&node.kind==='symbol'&&node.value==='Ans')return inputAnswer;if(inputAnswer&&node.kind==='call'&&node.value==='Ans')return {kind:'answer_call',args:[inputAnswer,...node.args.map(freeze)]};return {...node,args:(node.args||[]).map(freeze)};}
     return inputAnswer?freeze(tree):tree;
   }
   function renderResult() {
@@ -79,6 +80,20 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
       const converted=latexInput(state.autoCloseBrackets?closeInputBrackets(source):source);
       if(source===value('expression')&&converted!==source){$('expression').value=converted;preview();}
       const inputTree=parse(converted),[left,right]=inputTree.args;
+      const target=resultTarget(inputTree);
+      if(target){
+        const tree=evaluationTree(converted.slice(target.expression.start,target.expression.end));
+        const result=await engine.execute({...requestOptions(),tree,functionParameters:target.parameters});
+        if(target.name&&result.ok){
+          if(!result.resultAst)throw new Error('No reusable result to store.');
+          state.functions[target.name]=resultFunction(target.name,target.parameters,result.resultAst);
+          if(target.expression.kind==='symbol'&&target.expression.value==='Ans')state.functions[target.name].answerSource=structuredClone(state.variables.Ans);
+          result.assignment=true;result.note=`${t('함수를 저장했습니다.')} ${target.name}(${target.parameters.join(',')})`;
+        }
+        showResult(result,converted);
+        if(target.name&&result.ok)onFunctionsChanged();
+        return;
+      }
       if(['=',':='].includes(inputTree.value)&&left?.kind==='call'&&left.args.every(arg=>arg.kind==='symbol')){
         const definition=defineFunction(left.value,left.args.map(arg=>arg.value),converted.slice(right.start,right.end));
         state.functions[left.value]=definition;
@@ -130,6 +145,7 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
     try {
       // Typing previews require a complete input, even when = can close brackets.
       tree=evaluationTree(latexInput(source));
+      if(resultTarget(parse(latexInput(source)))){clearPreviewResult();return;}
       const userFunctions=new Set(Object.keys(state.functions).filter(name=>state.functions[name].parameters?.length>1));
       if(requiresExplicitEvaluation(tree,userFunctions)||
         ['=',':='].includes(tree.value)&&['symbol','call'].includes(tree.args?.[0]?.kind)){clearPreviewResult();return;}

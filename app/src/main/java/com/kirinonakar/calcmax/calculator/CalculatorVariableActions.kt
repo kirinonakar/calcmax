@@ -7,6 +7,30 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 internal object CalculatorVariableActions {
+    fun CalculatorModel.performStoreResult(target:FunctionTransfer.ResultTarget,source:String) {
+        if(busy)return
+        val revision=inputVersion
+        val payload=request().put("tree",JSONObject(target.expression.json())).put("functionParameters",JSONArray(target.parameters))
+        job=viewModelScope.launch {
+            busy=true
+            try {
+                val response=engine.execute(payload)
+                if(revision!=inputVersion)return@launch
+                if(!response.optBoolean("ok")){error=response.optString("error","Math ERROR");return@launch}
+                target.name?.let {name->
+                    require(response.has("resultAst")) {"No reusable result to store."}
+                    val definition=FunctionTransfer.resultDefinition(name,target.parameters,response.getJSONObject("resultAst"))
+                    val stored=definition.json()
+                    if(target.expression.kind=="symbol" && target.expression.value=="Ans")stored.put("answerSource",JSONObject(variables.getJSONObject("Ans").toString()))
+                    functions=JSONObject(functions.toString()).put(name,stored)
+                    response.put("assignment",true).put("note","$name(${target.parameters.joinToString()}) defined")
+                }
+                error=""
+                commit(source,response)
+            } catch(e:Exception) {error=e.message ?: "Invalid function"}
+            finally {busy=false}
+        }
+    }
     fun CalculatorModel.performStore(name: String, source: String = editor.source.ifBlank { "Ans" },showResult:Boolean=true,finishInput:Boolean=false) {
         try {
             require(name.matches(Regex("[A-Za-z][A-Za-z0-9_]*"))) { "Use a letter followed by letters, digits or underscores" }

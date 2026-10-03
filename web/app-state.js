@@ -2,12 +2,13 @@ import {initialLanguage} from './i18n.js';
 import {writeState} from './storage.js';
 import {$} from './app-ui.js';
 import {normalizeGraphColors} from './graph-colors.js';
+import {removeExpiredAnswerFunctions} from './function-transfer.js';
 
 export function createAppState(saved={},browserLanguage='en') {
   const objectOrEmpty=o=>o && typeof o==='object' && !Array.isArray(o) ? o : {};
   const state={
     variables:objectOrEmpty(saved.variables),
-    functions:objectOrEmpty(saved.functions),
+    functions:{...objectOrEmpty(saved.functions)},
     datasets:objectOrEmpty(saved.datasets),
     datasetKinds:objectOrEmpty(saved.datasetKinds),
     history:Array.isArray(saved.history)?saved.history.slice(0,500):[],
@@ -41,6 +42,7 @@ export function createAppState(saved={},browserLanguage='en') {
   state.outputFont=Math.max(10,Math.min(48,Number(saved.outputFont)||30));
   state.assumptions=objectOrEmpty(saved.assumptions);
   state.displayShortcuts=Array.isArray(saved.displayShortcuts)?saved.displayShortcuts.slice(0,6):[{label:'∫',input:'integrate(,x)'},{label:'∫ₐᵇ',input:'integrate(,x,0,1)'},{label:'d/dx',input:'diff(,x)'}];
+  removeExpiredAnswerFunctions(state.functions,state.variables.Ans);
   return state;
 }
 
@@ -62,12 +64,13 @@ export function createPersistence({state,snapshot,onPersist,toast}) {
   let saveTimer=null,storageWarning=false;
   function persist() {
     clearTimeout(saveTimer);saveTimer=null;
+    const functionsChanged=removeExpiredAnswerFunctions(state.functions,state.variables.Ans);
     for(const field of document.querySelectorAll('main input[id],main textarea[id],main select[id],.mode-bar select[id]'))state.fields[field.id]=field.type==='checkbox'?field.checked:field.value;
     const draft=snapshot();
     state.fields.expression=draft.expression;
     state.graph=draft.graph;
     if(!writeState({...state,history:state.persistHistory?state.history:[]})&&!storageWarning){storageWarning=true;toast('브라우저 저장 공간을 사용할 수 없어 이번 세션에서만 보관합니다.');}
-    onPersist();
+    onPersist({functionsChanged});
   }
   function schedulePersist(){clearTimeout(saveTimer);saveTimer=setTimeout(persist,150);}
   return {persist,schedulePersist,dispose:()=>clearTimeout(saveTimer)};

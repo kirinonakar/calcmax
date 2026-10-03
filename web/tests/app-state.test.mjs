@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {JSDOM} from 'jsdom';
 import {createAppState,restoreFields,restoreSelect,createPersistence} from '../app-state.js';
+import {defineFunction,encodeFunctions,decodeFunctions} from '../function-transfer.js';
 
 function page(t) {
   const dom=new JSDOM(`<main>
@@ -30,6 +31,21 @@ test('saved state rejects malformed collections and bounds preferences and retai
   const bounded=createAppState(saved);
   assert.equal(bounded.digits,8);assert.equal(bounded.history.length,500);assert.equal(bounded.displayShortcuts.length,6);
   assert.equal(saved.history.length,501,'normalization does not truncate the source backup');
+});
+
+test('Ans functions survive matching restored answers and expire on replacement or clearing',t=>{
+  page(t);
+  const answer={kind:'snapshot_symbol',value:'x'},linked={...defineFunction('g',['x'],'x'),answerSource:answer};
+  const state=createAppState({variables:{Ans:{value:'x',kind:'snapshot_symbol'}},functions:{g:linked,f:defineFunction('f',['x'],'x+1')}});
+  assert.ok(state.functions.g,'JSON key order does not change the answer');
+  assert.deepEqual(decodeFunctions(encodeFunctions(state.functions)).functions.g.answerSource,answer,'function transfer preserves the Ans link');
+  const persistence=createPersistence({state,snapshot:()=>({expression:'',graph:{}}),onPersist:()=>{},toast:()=>{}});
+  state.variables.A={kind:'number',value:'2'};persistence.persist();assert.ok(state.functions.g);
+  state.variables.Ans={kind:'number',value:'2'};persistence.persist();assert.equal(state.functions.g,undefined);assert.ok(state.functions.f);
+  assert.equal(JSON.parse(localStorage.getItem('calcmax-web-v1')).functions.g,undefined);
+  state.variables.Ans=answer;state.functions.g=linked;state.variables={};persistence.persist();assert.equal(state.functions.g,undefined);
+  const saved={variables:{},functions:{g:linked}};assert.equal(createAppState(saved).functions.g,undefined);assert.ok(saved.functions.g,'restoration does not modify the source backup');
+  persistence.dispose();
 });
 
 test('field restoration keeps valid choices and restores options populated after startup',t=>{

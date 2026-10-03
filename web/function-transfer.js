@@ -8,12 +8,49 @@ export function defineFunction(name,parameters,source){
   if(!Array.isArray(parameters)||!parameters.length||parameters.some(p=>!/^[A-Za-z][A-Za-z0-9_]*$/.test(p))||new Set(parameters).size!==parameters.length)throw new Error('Enter distinct valid parameter names');
   return {parameters,source,body:parse(source)};
 }
-export function encodeFunctions(functions){return JSON.stringify({format:'calcmax.functions',version:1,functions:Object.fromEntries(Object.entries(functions).map(([name,f])=>[name,{parameters:f.parameters,source:f.source||astSource(f.body)}]))},null,2);}
+// Result-to-function input is deliberately limited so ordinary equations keep their meaning.
+export function resultTarget(tree){
+  if(!['=',':='].includes(tree.value)||tree.args?.length!==2)return null;
+  const [left,right]=tree.args;
+  if(left.kind==='call'&&left.value==='Ans'){
+    if(!left.args.every(arg=>arg.kind==='symbol'))throw new Error('Enter distinct valid parameter names');
+    const definition=defineFunction('Ans',left.args.map(arg=>arg.value),'0');
+    return {expression:right,parameters:definition.parameters};
+  }
+  const reverse=right.kind==='call'&&['diff','integrate'].includes(right.value)&&(left.kind==='call'||left.kind==='symbol'&&left.value==='Ans');
+  const [expression,target]=reverse?[right,left]:[left,right];
+  const calculus=expression.kind==='call'&&['diff','integrate'].includes(expression.value);
+  if(!(calculus||expression.kind==='symbol'&&expression.value==='Ans'))return null;
+  if(target.kind==='symbol'&&target.value==='Ans'&&calculus)return {expression};
+  if(target.kind!=='call')return null;
+  if(!target.args.every(arg=>arg.kind==='symbol'))throw new Error('Enter distinct valid parameter names');
+  const definition=defineFunction(target.value,target.args.map(arg=>arg.value),'0');
+  return {expression,name:target.value,parameters:definition.parameters};
+}
+export function resultFunction(name,parameters,body){
+  function editable(node){return {...node,...(node.kind==='snapshot_symbol'&&parameters.includes(node.value)?{kind:'symbol'}:{}),...(node.args?{args:node.args.map(editable)}:{})};}
+  const stored=editable(body),source=astSource(stored);
+  defineFunction(name,parameters,source);
+  return {parameters,source,body:stored};
+}
+function answerKey(value){
+  if(Array.isArray(value))return '['+value.map(answerKey).join(',')+']';
+  if(value&&typeof value==='object')return '{'+Object.keys(value).sort().map(key=>JSON.stringify(key)+':'+answerKey(value[key])).join(',')+'}';
+  return JSON.stringify(value);
+}
+export function removeExpiredAnswerFunctions(functions,answer){
+  const current=answerKey(answer);let changed=false;
+  for(const [name,definition] of Object.entries(functions)){
+    if(definition&&Object.hasOwn(definition,'answerSource')&&answerKey(definition.answerSource)!==current){delete functions[name];changed=true;}
+  }
+  return changed;
+}
+export function encodeFunctions(functions){return JSON.stringify({format:'calcmax.functions',version:1,functions:Object.fromEntries(Object.entries(functions).map(([name,f])=>[name,{parameters:f.parameters,source:f.source||astSource(f.body),...(Object.hasOwn(f,'answerSource')?{answerSource:f.answerSource}:{})}]))},null,2);}
 export function decodeFunctions(text){
   const root=JSON.parse(text.replace(/^\uFEFF/,''));if(!root||typeof root!=='object'||Array.isArray(root))throw new Error('Invalid function file');
   if(root.format&&root.format!=='calcmax.functions')throw new Error('Unsupported function file');
   const entries=root.format?root.functions:root,functions={};let skipped=0;
-  for(const [name,f] of Object.entries(entries||{}))try{functions[name]=defineFunction(name,f.parameters,f.source||astSource(f.body));}catch{skipped++;}
+  for(const [name,f] of Object.entries(entries||{}))try{functions[name]={...defineFunction(name,f.parameters,f.source||astSource(f.body)),...(Object.hasOwn(f,'answerSource')?{answerSource:f.answerSource}:{})};}catch{skipped++;}
   if(!Object.keys(functions).length)throw new Error('No valid functions in this file');
   return {functions,skipped};
 }
