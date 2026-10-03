@@ -24,7 +24,7 @@ function cursorRect(target,source,start){
   return {x:start<=Number(target.getAttribute('data-source-start'))?rect.left:rect.right,top:rect.top,height:rect.height};
 }
 function edgeRect(target,edge){
-  const rect=target.getBoundingClientRect(),script=['msup','msub','msubsup'].includes(target.localName),base=script?target.firstElementChild:target,axis=base.getBoundingClientRect();
+  const rect=target.getBoundingClientRect(),functionPower=target.hasAttribute('data-function-power'),script=functionPower||['msup','msub','msubsup'].includes(target.localName),base=functionPower?target.firstElementChild.firstElementChild:script?target.firstElementChild:target,axis=base.getBoundingClientRect();
   // A complete power occupies its own HTML part. Anchor its outside caret to
   // that part, keeping MathML measurements only for the base's vertical offset.
   const part=script&&edge==='after'&&target.parentElement?.localName==='math'?target.closest('.input-part'):null;
@@ -50,7 +50,7 @@ export function markInputCursor(math,source,start,end=start,{boundary=null,struc
   if(end>start)return;
   const candidates=nodes.filter(node=>Number(node.getAttribute('data-source-start'))<=start&&Number(node.getAttribute('data-source-end'))>=start).sort((a,b)=>(Number(a.getAttribute('data-source-end'))-Number(a.getAttribute('data-source-start')))-(Number(b.getAttribute('data-source-end'))-Number(b.getAttribute('data-source-start'))));
   const parts=[...math.children].filter(node=>node.classList.contains('input-part')),edge=boundary==='end'?parts.at(-1):parts[0];
-  const exited=boundary==='after'&&structure?nodes.find(node=>node.localName===(structure.exponentEnd!==undefined?'msup':'mfrac')&&Number(node.getAttribute('data-source-start'))===structure.start&&Number(node.getAttribute('data-source-end'))===structure.end):null;
+  const exited=boundary==='after'&&structure?nodes.find(node=>(structure.exponentEnd!==undefined?(node.localName==='msup'||node.hasAttribute('data-function-power')):node.localName==='mfrac')&&Number(node.getAttribute('data-source-start'))===structure.start&&Number(node.getAttribute('data-source-end'))===structure.end):null;
   const fraction=exited?.localName==='mfrac'?exited:null;
   const target=exited||(boundary?(edge?.firstElementChild?.firstElementChild||math.firstElementChild):candidates.find(node=>['mi','mn','mtext','span'].includes(node.localName))||candidates[0]||math.firstElementChild);
   if(!target)return;

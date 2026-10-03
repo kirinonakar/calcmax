@@ -107,9 +107,22 @@ object LatexInput {
                 "infty" -> append("oo")
                 "times", "cdot" -> append('*')
                 "left", "right", "quad", "qquad" -> Unit
-                "arcsin" -> append("asin")
-                "arccos" -> append("acos")
-                "arctan" -> append("atan")
+                "sin", "cos", "tan", "arcsin", "arccos", "arctan", "ln", "exp" -> {
+                    val name=mapOf("arcsin" to "asin","arccos" to "acos","arctan" to "atan")[command] ?: command
+                    index=skipSpacing(source,index)
+                    val exponent=if(source.getOrNull(index)=='^') {
+                        val (value,next)=argument(source,index+1,true)
+                        index=skipSpacing(source,next)
+                        convertBody(value)
+                    } else null
+                    if(exponent==null && (source.getOrNull(index)=='(' || source.startsWith("\\left",index)))append(name)
+                    else {
+                        val (value,next)=argument(source,index)
+                        append(name).append('(').append(convertBody(value)).append(')')
+                        if(exponent!=null)append("^(").append(exponent).append(')')
+                        index=next
+                    }
+                }
                 else -> append(command)
             }
         }
@@ -152,7 +165,11 @@ object LatexInput {
                         if(source.getOrNull(index)=='_')index=argument(source,index+1,true).second
                         index=argument(source,index).second
                     }
-                    "sin","cos","tan","arcsin","arccos","arctan","ln","exp" -> index=argument(source,index).second
+                    "sin","cos","tan","arcsin","arccos","arctan","ln","exp" -> {
+                        index=skipSpacing(source,index)
+                        if(source.getOrNull(index)=='^')index=argument(source,index+1,true).second
+                        index=argument(source,index).second
+                    }
                 }
             }
             else -> {

@@ -35,7 +35,18 @@ export function mathDisplay(tree,digits=10,decimal=false,{notation='off',groupin
         const contents=args.map(arg=>{const content=row([arg]);content.classList.add('math-root-content');return content;});
         return el(t.kind==='root'?'msqrt':'mroot',contents);
       }
-      case 'power': return superscript(['sum','product','explicit-product','implicit-product','unary','relation'].includes(t.args[0]?.kind)?fenced([args[0]]):args[0],args[1]);
+      case 'power': {
+        let base=t.args[0];
+        while(base?.kind==='parentheses')base=base.args[0];
+        if(base?.kind==='function' && ['sin','cos','tan','sinh','cosh','tanh','sinc'].includes(base.value) && base.args.length===1 && t.args[1]?.kind==='number' && /^\d+$/.test(t.args[1].value) && Number(t.args[1].value)>=2) {
+          const name=el('mi',[],base.value);name.setAttribute('mathvariant','normal');
+          if(base.start!==undefined){name.setAttribute('data-source-start',String(base.start));name.setAttribute('data-source-end',String(base.start+base.value.length));}
+          const powered=row([superscript(name,args[1]),fenced([render(base.args[0],false)])]);
+          powered.setAttribute('data-function-power','true');
+          return powered;
+        }
+        return superscript(['sum','product','explicit-product','implicit-product','unary','relation'].includes(t.args[0]?.kind)?fenced([args[0]]):args[0],args[1]);
+      }
       case 'sum': return row(args.flatMap((a,i) => i && t.args[i].kind !== 'unary' ? [operator('+'),a] : [a]));
       case 'product': return row(args.flatMap((a,i)=>{const item=t.args[i].kind==='sum'?fenced([a]):a;return i&&!(t.args[i-1].kind==='number'&&t.args[i].kind==='symbol')?[operator('·'),item]:[item];}));
       case 'explicit-product': return row(join(args.map((a,i)=>t.args[i].kind==='sum'?fenced([a]):a),'×'));
@@ -64,7 +75,7 @@ export function mathDisplay(tree,digits=10,decimal=false,{notation='off',groupin
       case 'list': case 'set': case 'tuple': return fenced(join(args,','),t.kind === 'set' ? '{' : t.kind==='tuple'?'(':'[',t.kind === 'set' ? '}' : t.kind==='tuple'?')':']');
       case 'quantity': return row([...args,el('mtext',[],` ${value}`)]);
       case 'dms': return row(args.flatMap((a,i) => [a,operator(['°','′','″'][i])]));
-      case 'symbol': return el('mi',[],{pi:'π',oo:'∞',E:'e',I:'i'}[value]||value);
+      case 'symbol': return el('mi',[],{pi:'π',theta:'θ',oo:'∞',E:'e',I:'i'}[value]||value);
       case 'fixed-number': return el('mn',[],value);
       case 'input-operator': {const result=operator(value==='=='?'=':value);result.setAttribute('form','infix');return result;}
       case 'input-text': return el('mtext',[],value);

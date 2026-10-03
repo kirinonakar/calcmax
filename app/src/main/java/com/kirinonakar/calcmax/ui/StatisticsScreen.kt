@@ -36,7 +36,7 @@ import kotlin.math.max
     val c=LocalInstrument.current
     var focused by remember {mutableStateOf(false)}
     Box(modifier.fillMaxHeight().background(if(focused)c.accent.copy(alpha=.12f) else c.display).then(statCellTouch(focus))) {
-        BasicTextField(value,onValue,Modifier.fillMaxSize().focusRequester(focus).onFocusChanged {focused=it.isFocused}.testTag(tag),
+        BasicTextField(value,onValue,Modifier.fillMaxSize().keepInputVisible().focusRequester(focus).onFocusChanged {focused=it.isFocused}.testTag(tag),
             textStyle=MaterialTheme.typography.bodyMedium.copy(fontSize=12.sp,color=c.ink),singleLine=true,cursorBrush=SolidColor(c.accent),
             decorationBox={innerTextField->Box(Modifier.fillMaxSize().padding(horizontal=8.dp),contentAlignment=Alignment.CenterStart){innerTextField()}})
     }
@@ -122,7 +122,7 @@ import kotlin.math.max
             SmallAction(if(csv)"Table editor" else "Direct input"){csv=!csv}
             SmallAction("Add row"){if(parsedRows.size<999)data+=when(dataKind){"xy"->"\n,";"xyz"->"\n,,";else->"\n"}}
         }
-        if(csv)OutlinedTextField(data,{data=it},Modifier.fillMaxWidth().height(180.dp),label={Text(when(dataKind){"xy"->if(isKorean())"x, y 값" else "x, y values";"xyz"->if(isKorean())"x, y, z 값" else "x, y, z values";else->tr("One value per line")})},textStyle=MaterialTheme.typography.bodyLarge.copy(fontFamily=FontFamily.Monospace))
+        if(csv)OutlinedTextField(data,{data=it},Modifier.fillMaxWidth().height(180.dp).keepInputVisible(),label={Text(when(dataKind){"xy"->if(isKorean())"x, y 값" else "x, y values";"xyz"->if(isKorean())"x, y, z 값" else "x, y, z values";else->tr("One value per line")})},textStyle=MaterialTheme.typography.bodyLarge.copy(fontFamily=FontFamily.Monospace))
         else {
             val grid=LocalInstrument.current.grid
             val tableColumns=when(dataKind){"xy"->listOf("x","y");"xyz"->listOf("x","y","z");else->listOf("value")}

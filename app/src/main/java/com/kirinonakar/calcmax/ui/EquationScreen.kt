@@ -70,7 +70,7 @@ import org.json.JSONObject
             Field(m.equationPdeFunction,"Dependent function",Modifier.fillMaxWidth()){m.equationPdeFunction=it}
             Field(m.equationPdeHint,"Hint (optional)",Modifier.fillMaxWidth()){m.equationPdeHint=it}
         }else if(kind=="System") {
-            OutlinedTextField(equations,{m.equationSystem=it},Modifier.fillMaxWidth(),label={Text("One equation per line")},minLines=2)
+            OutlinedTextField(equations,{m.equationSystem=it},Modifier.fillMaxWidth().keepInputVisible(),label={Text("One equation per line")},minLines=2)
             EquationInputPreview(equations,m.inputFont,multiline=true)
             Field(variables,"Variables · comma separated",Modifier.fillMaxWidth(),translate=false){m.equationVariables=it}
         }else {

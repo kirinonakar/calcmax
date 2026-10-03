@@ -10,6 +10,7 @@ import {createFunctionsWorkspace} from '../functions-workspace.js';
 import {createAppState,createPersistence} from '../app-state.js';
 import {readState} from '../storage.js';
 import {parse} from '../parser.js';
+import {inputAssignment} from '../function-transfer.js';
 
 function page(t,execute=()=>assert.fail('Definitions must not execute the body')) {
   const dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'),{url:'http://localhost/'});
@@ -35,6 +36,43 @@ function page(t,execute=()=>assert.fail('Definitions must not execute the body')
   async function enter(source){$('expression').value=source;await calculator.evaluate();}
   return {$,state,engine,errors,calculator,enter};
 }
+
+test('trailing variable and function names save reusable formulas in the actual WASM engine',async t=>{
+  const py=await loadPyodide({indexURL:fileURLToPath(new URL('../vendor/',import.meta.url))});
+  await installEngine(py,{runtimeURL:new URL('../vendor/',import.meta.url),engineURL:new URL('../engine.zip',import.meta.url),fetcher:async url=>new Response(readFileSync(url))});
+  const {$,state,errors,enter}=page(t,async request=>{
+    py.globals.set('payload',JSON.stringify({angle:'RAD',...request}));
+    return JSON.parse(py.runPython('calc_engine.dispatch(payload)'));
+  });
+  const formula='((sin(theta))/(1-cos(theta)^(2)))';
+  await enter(`${formula}=N`);
+  assert.equal(errors.length,0);
+  assert.deepEqual(state.variables.N,parse(formula));
+  assert.deepEqual(state.variables.Ans,parse('42'),'saving preserves the previous answer');
+  assert.deepEqual(createAppState(readState()).variables.N,state.variables.N,'formula survives reload');
+  await enter('theta=pi/6');
+  await enter('N');
+  assert.equal(state.history[0].exact,'2');
+  await enter('theta=pi/2');
+  await enter('N');
+  assert.equal(state.history[0].exact,'1','the stored formula follows the variable value');
+  await enter(`${formula}=wave(theta)`);
+  assert.deepEqual(state.functions.wave.parameters,['theta']);
+  assert.equal(state.functions.wave.source,formula);
+  assert.match($('functions-list').textContent,/wave\(θ\)/);
+  await enter('wave(pi/6)');
+  assert.equal(state.history[0].exact,'2','function arguments override the saved theta value');
+  await enter('sin(theta)=S');
+  assert.equal(state.variables.S.value,'sin','a built-in call is saved as a formula');
+  await enter('2+3=A');
+  assert.equal(state.variables.A.value,'5');
+  await enter('A+1=A');
+  assert.equal(state.variables.A.value,'6','self-reference saves a value without a cycle');
+  await enter('2+3:=B');
+  assert.equal(state.variables.B.value,'5');
+  assert.equal(errors.length,0);
+  for(const source of ['x^2=4','x^2=pi','x^2=sin(x)','solve(x=2,x)','x+1==N'])assert.equal(inputAssignment(parse(source)),null,source);
+});
 
 test('calculator definitions and subsequent calls work in the actual WASM engine and survive reload',async t=>{
   const py=await loadPyodide({indexURL:fileURLToPath(new URL('../vendor/',import.meta.url))});
@@ -202,10 +240,11 @@ test('invalid definitions leave stored functions and the previous answer intact'
 test('typing a definition does not save or evaluate it until explicitly submitted',async t=>{
   t.mock.timers.enable({apis:['setTimeout']});
   const {$,state,engine,calculator,enter}=page(t);
-  for(const source of ['f(x)=x^3-8x+7','g(x,y):=x+y','diff(f(x),x)=g(x)','diff(f(x),x)=Ans','Ans=g(x)','integrate(x,x)=f(x)','integrate(x,x)=Ans','f(x)=integrate(x,x)','g(x)=diff(x^2,x)']){
+  for(const source of ['f(x)=x^3-8x+7','g(x,y):=x+y','diff(f(x),x)=g(x)','diff(f(x),x)=Ans','Ans=g(x)','integrate(x,x)=f(x)','integrate(x,x)=Ans','f(x)=integrate(x,x)','g(x)=diff(x^2,x)','sin(theta)/(1-cos(theta)^2)=N','sin(theta)=N(theta)','2+3=N']){
     $('expression').value=source;calculator.preview();t.mock.timers.tick(500);
     assert.deepEqual(state.functions,{});
     assert.deepEqual(state.history,[]);
+    assert.equal(state.variables.N,undefined);
   }
   assert.equal(engine.execute.mock.callCount(),0);
   await enter('f(x)=1/x');

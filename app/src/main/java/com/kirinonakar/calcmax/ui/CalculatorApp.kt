@@ -1,6 +1,8 @@
 package com.kirinonakar.calcmax.ui
 
+import android.app.Activity
 import android.content.Intent
+import android.view.WindowManager
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.BasicTextField
@@ -66,9 +68,19 @@ private val LocalCalculatorOverlay=staticCompositionLocalOf<(String)->Unit> { {}
     var overlay by rememberSaveable {mutableStateOf("")}
     var screenExpanded by rememberSaveable {mutableStateOf(false)}
     val workspaces=rememberSaveableStateHolder()
+    val context=LocalContext.current
+    val avoidKeyboard=m.mode!="Scientific/CAS"
+    DisposableEffect(context,avoidKeyboard) {
+        val window=(context as? Activity)?.window
+        val previous=window?.attributes?.softInputMode
+        if(previous!=null)window?.setSoftInputMode((previous and WindowManager.LayoutParams.SOFT_INPUT_MASK_ADJUST.inv()) or
+            if(avoidKeyboard)WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE else WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
+        onDispose {if(previous!=null)window?.setSoftInputMode(previous)}
+    }
     LaunchedEffect(m.mode){m.save()}
     CompositionLocalProvider(LocalCalculatorOverlay provides {overlay=it}, LocalLanguage provides m.language) {
-    Column(Modifier.fillMaxSize().background(c.body).windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.displayCutout))) {
+    Column(Modifier.fillMaxSize().background(c.body).windowInsetsPadding(WindowInsets.systemBars.union(WindowInsets.displayCutout))
+        .then(if(avoidKeyboard)Modifier.imePadding()else Modifier)) {
         Row(Modifier.fillMaxWidth().height(44.dp).padding(horizontal=14.dp),verticalAlignment=Alignment.CenterVertically) {
             Text("CalcMax",Modifier.clickable {overlay="About"}.semantics {contentDescription="About CalcMax"},fontWeight=FontWeight.ExtraBold,letterSpacing=2.sp,fontSize=18.sp,color=c.ink)
             Spacer(Modifier.weight(1f))

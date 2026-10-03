@@ -3,6 +3,24 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {parse,latexInput} from '../parser.js';
 
+test('LaTeX trigonometric fractions distinguish function powers from argument powers',()=>{
+  const body=String.raw`\frac{\sin\theta}{1-\cos^2\theta}`;
+  const nodes=n=>[n,...(n.args||[]).flatMap(nodes)];
+  for(const source of [body,`$$${body}$$`,`$${body}$`,String.raw`\[${body}\]`,String.raw`\(${body}\)`]){
+    const converted=latexInput(source);
+    assert.equal(converted,'((sin(theta))/(1-cos(theta)^(2)))');
+    const all=nodes(parse(converted));
+    assert.deepEqual(all.filter(n=>n.kind==='call').map(n=>n.value),['sin','cos']);
+    assert.deepEqual(all.filter(n=>n.kind==='symbol').map(n=>n.value),['theta','theta']);
+    assert.equal(all.find(n=>n.kind==='binary'&&n.value==='^').args[0].value,'cos');
+  }
+  assert.equal(latexInput(String.raw`\sin x^2`),'sin(x^2)');
+  assert.equal(latexInput(String.raw`\sin\cos^2\theta`),'sin(cos(theta)^(2))');
+  assert.equal(parse('θ').value,'theta');
+  assert.equal(parse('sin(θ)^2').args[0].args[0].value,'theta');
+  for(const source of [String.raw`\sin`,String.raw`\cos^2`,String.raw`\sin^`,String.raw`\sin^{} x`])assert.throws(()=>latexInput(source),SyntaxError,source);
+});
+
 test('web parser matches every AST exported by the Kotlin parser',()=>{
   const cases=JSON.parse(readFileSync(new URL('./fixtures/math-cases.json',import.meta.url),'utf8'));
   for(const {source,tree} of cases) assert.deepEqual(parse(source),tree,source);

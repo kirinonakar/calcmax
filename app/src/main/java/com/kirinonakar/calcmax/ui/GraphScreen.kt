@@ -85,7 +85,7 @@ import kotlin.math.*
     val plotHeight=if(halfGraphHeight)graphHeight*0.5f else graphHeight
     Column(Modifier.fillMaxSize().verticalScroll(graphScrollState)) {
     Column(Modifier.fillMaxWidth().zIndex(1f)) {
-        OutlinedTextField(m.graphSource,{m.updateGraphSource(it)},Modifier.fillMaxWidth().padding(start=10.dp,end=10.dp,top=8.dp),label={Text(tr(when(m.graphKind){"parametric"->"One [x(t),y(t)] pair per line";"polar"->"r(t) · radians · one curve per line";"sequence"->"u(n) · use u(n−1) for recurrences";"surface"->"z = f(x,y)";"differential"->"dy/dt = f(t,y)";else->"Function / y=f(x) · Implicit / F(x,y)=0"}))},minLines=if(m.graphKind in listOf("surface","differential"))1 else 2,maxLines=4)
+        OutlinedTextField(m.graphSource,{m.updateGraphSource(it)},Modifier.fillMaxWidth().padding(start=10.dp,end=10.dp,top=8.dp).keepInputVisible(),label={Text(tr(when(m.graphKind){"parametric"->"One [x(t),y(t)] pair per line";"polar"->"r(t) · radians · one curve per line";"sequence"->"u(n) · use u(n−1) for recurrences";"surface"->"z = f(x,y)";"differential"->"dy/dt = f(t,y)";else->"Function / y=f(x) · Implicit / F(x,y)=0"}))},minLines=if(m.graphKind in listOf("surface","differential"))1 else 2,maxLines=4)
         if(m.graphKind=="cartesian")Text(tr("One curve per line · [shade] y<f(x) · between functions: [shade] f, g"),Modifier.padding(horizontal=14.dp,vertical=3.dp),fontSize=11.sp,color=c.muted)
         Column(Modifier.fillMaxWidth().zIndex(1f).background(c.body)) {
             Row(Modifier.fillMaxWidth().zIndex(2f).padding(top=2.dp,bottom=1.dp).horizontalScroll(rememberScrollState()).semantics { contentDescription="Graph types" },horizontalArrangement=Arrangement.spacedBy(6.dp)) {
@@ -661,7 +661,7 @@ internal fun graphShadeFormula(source:String,displayDigits:Int?=null):GraphShade
     var invalid by remember {mutableStateOf(false)}
     LaunchedEffect(value) {if(!focused){draft=value.toString();invalid=false}}
     val shape=RoundedCornerShape(6.dp)
-    BasicTextField(if(focused)draft else graphDisplayNumber(draft,displayDigits),{draft=it;invalid=false},Modifier.width(82.dp).height(32.dp).padding(horizontal=3.dp)
+    BasicTextField(if(focused)draft else graphDisplayNumber(draft,displayDigits),{draft=it;invalid=false},Modifier.width(82.dp).height(32.dp).padding(horizontal=3.dp).keepInputVisible()
         .background(c.display,shape).border(1.dp,if(invalid)MaterialTheme.colorScheme.error else c.grid,shape)
         .onFocusChanged {state->
             val wasFocused=focused;focused=state.isFocused
@@ -682,7 +682,7 @@ internal fun graphShadeFormula(source:String,displayDigits:Int?=null):GraphShade
     val c=LocalInstrument.current
     val shape=RoundedCornerShape(7.dp)
     var focused by remember {mutableStateOf(false)}
-    BasicTextField(if(focused)value else graphDisplayNumber(value,displayDigits),onValue,modifier.height(40.dp).background(c.display,shape).border(1.dp,c.grid,shape).onFocusChanged {focused=it.isFocused}.semantics {contentDescription=label},
+    BasicTextField(if(focused)value else graphDisplayNumber(value,displayDigits),onValue,modifier.keepInputVisible().height(40.dp).background(c.display,shape).border(1.dp,c.grid,shape).onFocusChanged {focused=it.isFocused}.semantics {contentDescription=label},
         textStyle=MaterialTheme.typography.bodyMedium.copy(fontSize=14.sp,color=c.ink),singleLine=true,cursorBrush=SolidColor(c.accent),
         decorationBox={inner->Row(Modifier.fillMaxSize().padding(horizontal=10.dp),verticalAlignment=Alignment.CenterVertically) {
             Text(label,fontSize=11.sp,color=c.muted)

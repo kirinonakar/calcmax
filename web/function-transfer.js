@@ -8,6 +8,24 @@ export function defineFunction(name,parameters,source){
   if(!Array.isArray(parameters)||!parameters.length||parameters.some(p=>!/^[A-Za-z][A-Za-z0-9_]*$/.test(p))||new Set(parameters).size!==parameters.length)throw new Error('Enter distinct valid parameter names');
   return {parameters,source,body:parse(source)};
 }
+// Prefer an existing leading definition; built-in calls can be saved with a trailing name.
+export function inputAssignment(tree){
+  if(!['=',':='].includes(tree.value)||tree.args?.length!==2)return null;
+  const [left,right]=tree.args;
+  const functionHead=node=>node.kind==='call'&&node.args.every(arg=>arg.kind==='symbol');
+  const constants=new Set(['pi','e','i','I','oo','Ans','c0','hP','hbar','G','qe','NA','kB0','me','mp0']);
+  const forward=left.kind==='symbol'||functionHead(left)&&(!reserved.has(left.value)||right.kind==='symbol'&&left.args.some(arg=>arg.value===right.value));
+  const target=forward?left:right.kind==='symbol'&&!constants.has(right.value)||functionHead(right)&&!reserved.has(right.value)?right:left;
+  const expression=target===right?left:right;
+  if(target.kind==='symbol')return {expression,name:target.value,parameters:null};
+  if(functionHead(target))return {expression,name:target.value,parameters:target.args.map(arg=>arg.value)};
+  return null;
+}
+export function graphExpression(tree){
+  const head=tree.args?.[0];
+  return tree.kind==='relation'&&['=','=='].includes(tree.value)&&tree.args.length===2&&
+    head?.kind==='call'&&!reserved.has(head.value)&&head.args.length===1&&head.args[0].kind==='symbol'&&head.args[0].value==='x'?tree.args[1]:tree;
+}
 // Result-to-function input is deliberately limited so ordinary equations keep their meaning.
 export function resultTarget(tree){
   if(!['=',':='].includes(tree.value)||tree.args?.length!==2)return null;

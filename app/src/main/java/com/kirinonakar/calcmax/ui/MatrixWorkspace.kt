@@ -37,7 +37,7 @@ private class MatrixNav{var cursorEnd:Boolean?=null}
     LaunchedEffect(value){if(fieldValue.text!=value)fieldValue=TextFieldValue(value,TextRange(value.length))}
     Box(modifier.fillMaxHeight().background(if(focused)c.accent.copy(alpha=.12f) else c.display).then(statCellTouch(focus))) {
         BasicTextField(fieldValue,{fieldValue=it;onValue(it.text)},
-            Modifier.fillMaxSize().focusRequester(focus)
+            Modifier.fillMaxSize().keepInputVisible().focusRequester(focus)
                 .onFocusChanged {state->
                     focused=state.isFocused
                     val cursorEnd=if(state.isFocused)nav.cursorEnd else null

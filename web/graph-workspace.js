@@ -1,4 +1,5 @@
 import {parse,latexInput} from './parser.js';
+import {graphExpression} from './function-transfer.js';
 import {plotGraph as plot,graphCurveColor} from './graph-canvas.js';
 import {defaultGraphColors} from './graph-colors.js';
 import {mathDisplay} from './math-display.js';
@@ -7,6 +8,11 @@ import {displayNumber} from './display-format.js';
 import {bindGraphGestures,transformBounds,nearestPoint,curvePointAtX} from './graph-view.js';
 import {surfaceZRange,surfaceSampleCount} from './surface-geometry.js';
 import {t,setText} from './i18n.js';
+
+export function graphInputTree(source,kind='cartesian'){
+  const tree=parse(latexInput(source));
+  return kind==='cartesian'?graphExpression(tree):tree;
+}
 
 export function implicitFormula(source){
   try{const tree=parse(latexInput(source));return tree.kind==='relation'?source:`${source}=0`;}catch{return source;}
@@ -57,7 +63,7 @@ export function graphShadings(source,kind){
     for(const part of parts){if(part.includes('..'))intervals.push(part);else expressions.push(part);}
     if(legacyRange)intervals.push(legacyRange.trim());
     if(!expressions.length||expressions.length>2||intervals.length>1)throw new Error('Enter one or two shading functions');
-    const trees=expressions.map(s=>parse(latexInput(s))),relation=trees[0];
+    const trees=expressions.map(s=>graphInputTree(s)),relation=trees[0];
     let item={mode:'band',trees};
     if(trees.length===1&&relation.kind==='relation'){
       const [left,right]=relation.args,isLeft=left.kind==='symbol'&&left.value==='y',isRight=right.kind==='symbol'&&right.value==='y';
@@ -123,7 +129,7 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
     return [min,max];
   }
   function makeRequest(){
-    const trees=expressions().map(s=>parse(latexInput(s))),shadings=graphShadings(value('graph-source'),kind()),min=numeric('graph-min'),max=numeric('graph-max'),view=currentBounds();
+    const trees=expressions().map(s=>graphInputTree(s,kind())),shadings=graphShadings(value('graph-source'),kind()),min=numeric('graph-min'),max=numeric('graph-max'),view=currentBounds();
     if(!trees.length&&!shadings.length)throw new Error('Enter a function to graph');
     if(![min,max,...Object.values(view)].every(Number.isFinite)||max<=min||view.xmax<=view.xmin||view.ymax<=view.ymin)throw new Error('Enter finite values with minimum < maximum');
     if(kind()==='surface')zRange();
@@ -271,7 +277,7 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
     if(pending&&kind()==='cartesian'&&['derivative','tangent'].includes(action)){pendingAnalysis={action,point};return run();}
     pendingAnalysis=null;clearTimeout(timer);timer=null;
     try{
-      const trees=expressions().map(s=>parse(latexInput(s))),a=point??numeric('graph-analysis-a'),b=['derivative','tangent'].includes(action)?a:numeric('graph-analysis-b'),view=bounds||currentBounds(),token=++analysisRevision,source=value('graph-source'),graphKind=kind();
+      const trees=expressions().map(s=>graphInputTree(s,kind())),a=point??numeric('graph-analysis-a'),b=['derivative','tangent'].includes(action)?a:numeric('graph-analysis-b'),view=bounds||currentBounds(),token=++analysisRevision,source=value('graph-source'),graphKind=kind();
       if(!Number.isFinite(a)||!Number.isFinite(b)||!['derivative','tangent'].includes(action)&&a>=b)throw new Error('Enter finite values with a < b');
       const currentParameters={...parameters};
       const tracePoint=trace||(graphKind==='cartesian'&&['derivative','tangent'].includes(action)&&result?.implicitCurves?.[selected()]?curvePointAtX(result.curves[selected()],a):null);

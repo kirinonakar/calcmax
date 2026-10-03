@@ -4,6 +4,23 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class LatexInputTest {
+    @Test fun trigonometricFractionsKeepFunctionsAndTheirPowersSeparate() {
+        val body="\\frac{\\sin\\theta}{1-\\cos^2\\theta}"
+        for(source in listOf(body,"$$${body}$$","$${body}$","\\[$body\\]","\\($body\\)")) {
+            val converted=LatexInput.convert(source)
+            assertEquals("((sin(theta))/(1-cos(theta)^(2)))",converted)
+            val nodes=Parser(converted!!).parse().nodes()
+            assertEquals(listOf("sin","cos"),nodes.filter {it.kind=="call"}.map {it.value})
+            assertEquals(listOf("theta","theta"),nodes.filter {it.kind=="symbol"}.map {it.value})
+            assertEquals("cos",nodes.first {it.kind=="binary"&&it.value=="^"}.args[0].value)
+        }
+        assertEquals("sin(x^2)",LatexInput.convert("\\sin x^2"))
+        assertEquals("sin(cos(theta)^(2))",LatexInput.convert("\\sin\\cos^2\\theta"))
+        assertEquals("theta",Parser("θ").parse().value)
+        assertEquals("theta",Parser("sin(θ)^2").parse().args[0].args[0].value)
+        for(source in listOf("\\sin", "\\cos^2", "\\sin^", "\\sin^{} x"))assertNull(source,LatexInput.convert(source))
+    }
+
     @Test fun thetaEquationPaste() {
         val body="\\cos\\left(\\frac{\\pi}{2} + \\theta\\right) = -\\frac{1}{5}"
         for(source in listOf(body,"$$${body}$$","$${body}$","\\[$body\\]","\\($body\\)")) {

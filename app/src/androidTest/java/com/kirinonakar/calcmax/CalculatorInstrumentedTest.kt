@@ -28,6 +28,15 @@ import java.io.File
 class CalculatorInstrumentedTest {
     @get:Rule val compose=createAndroidComposeRule<MainActivity>()
     private fun model()=ViewModelProvider(compose.activity)[CalculatorModel::class.java]
+    @Test fun workspaceKeyboardPolicyPreservesScientificKeypadOverlayAcrossModeChanges() {
+        for(mode in listOf("Scientific/CAS","Graph","Equations","Matrix","Statistics","Python","Graph","Scientific/CAS")) {
+            compose.runOnIdle {model().mode=mode}
+            compose.runOnIdle {
+                val expected=if(mode=="Scientific/CAS")android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING else android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+                assertEquals(mode,expected,compose.activity.window.attributes.softInputMode and android.view.WindowManager.LayoutParams.SOFT_INPUT_MASK_ADJUST)
+            }
+        }
+    }
     @Test fun latexPasteAndKeyboardInputRecognizeIndexedRootsAndFractionalPowers() {
         val latex="$$\\sqrt[3]{5} \\times 25^{\\frac{1}{3}}$$"
         val source="nthroot(5,3)*25^(((1)/(3)))"

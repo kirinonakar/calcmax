@@ -7,6 +7,24 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class FunctionTransferTest {
+    @Test fun trailingNamesStoreTheWholeFormulaOrAnExplicitFunction() {
+        val formula="((sin(theta))/(1-cos(theta)^(2)))"
+        for(operator in listOf("=",":=")) {
+            val variable=FunctionTransfer.inputAssignment(Parser("$formula${operator}N").parse())!!
+            assertEquals("N",variable.name)
+            assertNull(variable.parameters)
+            assertEquals(formula,"$formula${operator}N".substring(variable.expression.start,variable.expression.end))
+            val function=FunctionTransfer.inputAssignment(Parser("$formula${operator}N(theta)").parse())!!
+            assertEquals("N",function.name)
+            assertEquals(listOf("theta"),function.parameters)
+        }
+        assertEquals("N",FunctionTransfer.inputAssignment(Parser("sin(theta)=N").parse())!!.name)
+        assertEquals("A",FunctionTransfer.inputAssignment(Parser("2+3=A").parse())!!.name)
+        assertEquals("A",FunctionTransfer.inputAssignment(Parser("A=2+3").parse())!!.name)
+        assertEquals("f",FunctionTransfer.inputAssignment(Parser("f(x)=x+1").parse())!!.name)
+        assertEquals("f",FunctionTransfer.inputAssignment(Parser("x+1=f(x)").parse())!!.name)
+        for(source in listOf("x^2=4","x^2=pi","x^2=sin(x)","solve(x=2,x)","x+1==N"))assertNull(source,FunctionTransfer.inputAssignment(Parser(source).parse()))
+    }
     @Test fun answerLinkedFunctionsExpireWhenTheAnswerChangesOrIsCleared() {
         val answer=JSONObject("""{"kind":"snapshot_symbol","value":"x"}""")
         val functions=JSONObject().put("g",FunctionTransfer.definition("g","x","x").json().put("answerSource",answer))

@@ -34,7 +34,7 @@ object Lexer {
                 while(i < source.length && (source[i].isLetterOrDigit() || source[i] == '_')) i++
             } else if(i < source.length && source.substring(start, i+1) in listOf("<=", ">=", "!=", "==", ":=", "**", "->")) i++
             val raw = source.substring(start, i)
-            result += Token(when(raw) { "×", "·" -> "*"; "÷" -> "/"; "−" -> "-"; "π" -> "pi"; "∞" -> "oo"; "**" -> "^"; "≤" -> "<="; "≥" -> ">="; "→" -> "->"; else -> raw }, start, i)
+            result += Token(when(raw) { "×", "·" -> "*"; "÷" -> "/"; "−" -> "-"; "π" -> "pi"; "θ" -> "theta"; "∞" -> "oo"; "**" -> "^"; "≤" -> "<="; "≥" -> ">="; "→" -> "->"; else -> raw }, start, i)
         }
         result += Token("", source.length, source.length)
         return result

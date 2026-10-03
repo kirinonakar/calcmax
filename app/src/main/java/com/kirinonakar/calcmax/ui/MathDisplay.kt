@@ -235,7 +235,7 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
     }.padding(start=12.dp,end=if(close)12.dp else 4.dp,top=3.dp,bottom=3.dp)) {content()}
 }
 
-@Composable fun MathNode(node:JSONObject,size:Float=25f,select:((Int,Int)->Unit)?=null,selection:IntRange?=null,depth:Int=0,hideGroup:Boolean=false,compactRootIndexHole:Boolean=false,compactLogBaseHole:Boolean=false,compactExponentHole:Boolean=false,operandHole:Boolean=false,selectionCoveredByAncestor:Boolean=false) {
+@Composable fun MathNode(node:JSONObject,size:Float=25f,select:((Int,Int)->Unit)?=null,selection:IntRange?=null,depth:Int=0,hideGroup:Boolean=false,compactRootIndexHole:Boolean=false,compactLogBaseHole:Boolean=false,compactExponentHole:Boolean=false,operandHole:Boolean=false,selectionCoveredByAncestor:Boolean=false,functionExponent:(@Composable ()->Unit)?=null) {
     if(depth>36){MathText("…",size);return}
     val c=LocalInstrument.current
     val minimumSize=LocalMathMinimumSize.current
@@ -282,6 +282,13 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
     @Composable fun wrapped(i:Int,scale:Float=1f){MathRow{label("(",scale);child(i,scale);label(")",scale)}}
     val fraction=kind=="fraction"||kind=="binary"&&value=="/"&&node.optString("displayOperator")!="÷"
     val power=kind=="power"||kind=="binary"&&value=="^"
+    fun ungroup(n:JSONObject?):JSONObject?=if(n?.optString("kind")=="group")ungroup(n.optJSONArray("args")?.optJSONObject(0))else n
+    val powerBase=if(power)ungroup(children.firstOrNull())else null
+    val powerExponent=if(power)ungroup(children.getOrNull(1))else null
+    val functionPower=powerBase?.optString("kind") in listOf("call","function","frozen_call") &&
+        powerBase?.optString("value") in listOf("sin","cos","tan","sinh","cosh","tanh","sinc") &&
+        powerBase?.optJSONArray("args")?.length()==1 && powerExponent?.optString("kind") in listOf("number","text") &&
+        (powerExponent?.optString("value")?.toIntOrNull() ?: 0)>=2
     Box(touch) {MathRow {
         if(caret&&!atomic&&cursor<=start)MathText("│",size,blink=true)
         when {
@@ -289,6 +296,8 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
                 FractionLayout({child(0,.9f,true)},{child(1,.9f,true)})
                 if(select!=null){val after=LocalMathAfter.current;Box(Modifier.matchParentSize()){Box(Modifier.align(Alignment.CenterEnd).width(7.dp).fillMaxHeight().clickable{if(after!=null)after(start,end)else select(end,end)}.semantics{contentDescription="After fraction"})}}
             }
+            functionPower->MathNode(powerBase!!,size,select,selection,depth+1,selectionCoveredByAncestor=selectionCoveredByAncestor||highlighted,
+                functionExponent={child(1,.67f,true,compactExponentHole=true)})
             power->PowerLayout({
                 val base=children.firstOrNull()
                 val groupInner=base?.optJSONArray("args")?.optJSONObject(0)
@@ -342,7 +351,7 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
             kind=="call"&&value=="mixed"->MathRow(3.dp){child(0);FractionLayout({child(1,.85f)},{child(2,.85f)})}
             kind=="call"&&value=="eng"->child(0)
             kind in listOf("number","symbol","text")-> {
-                val shown=when(value){"pi"->"π";"oo"->"∞";"E"->"e";"I"->"i";else->value}
+                val shown=when(value){"pi"->"π";"theta"->"θ";"oo"->"∞";"E"->"e";"I"->"i";else->value}
                 val mathItalic=value in listOf("x","y","z","e","E","i","I")
                 if(select==null) MathText(shown,size,italic=mathItalic)
                 else {
@@ -398,7 +407,9 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
                 val wrap=kind in listOf("call","function","list","tuple","set")
                 val openContainer=value=="open"&&kind in listOf("list","set")
                 val operandHoles=kind=="binary"||kind=="relation"
-                if(kind in listOf("call","function"))label(value,.9f)
+                if(kind in listOf("call","function")) {
+                    if(functionExponent!=null)PowerLayout({label(value,.9f)},functionExponent)else label(value,.9f)
+                }
                 if(wrap)label(when(kind){"list"->"[";"set"->"{";else->"("})
                 children.forEachIndexed{i,n->
                     val negativePart=if(kind=="sum"&&n.optString("kind")=="unary"&&n.optString("value")=="-")n.optJSONArray("args")?.optJSONObject(0)else null

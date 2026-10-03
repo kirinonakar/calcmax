@@ -5,6 +5,7 @@ import com.kirinonakar.calcmax.ui.graphShadeFormula
 import com.kirinonakar.calcmax.ui.regressionFormulaGraphSource
 import com.kirinonakar.calcmax.math.Parser
 import com.kirinonakar.calcmax.calculator.graphExpressionTarget
+import com.kirinonakar.calcmax.calculator.graphInputTree
 import com.kirinonakar.calcmax.calculator.removeGraphSource
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -12,6 +13,15 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class GraphFormulaTest {
+    @Test fun namedCartesianInputsPlotTheirBodiesAndKeepTheirCaptions() {
+        for(source in listOf("f(x)=x+1","g(x)=sin(x)","f2(x)=2*x^2")) {
+            assertEquals(Parser(source).parse().args[1].json(),graphInputTree(source).json())
+            assertEquals("cartesian" to source,graphExpressionTarget(source))
+            assertEquals(Parser(source).parse().args[0].value,graphEquationTree("cartesian",source,0)!!.getJSONArray("args").getJSONObject(0).getString("value"))
+        }
+        for(source in listOf("y=x+1","sin(x)=0","x^2+y^2=1"))assertEquals(Parser(source).parse().json(),graphInputTree(source).json())
+        assertEquals(Parser("f(x)=x+1").parse().json(),graphInputTree("f(x)=x+1","implicit").json())
+    }
     @Test fun removalTargetsTheDisplayedOccurrenceAndPreservesShadingAndBlankLines() {
         val source="\n x \n[shade] x, 0\n\nx\nx+1"
         assertEquals("\n x \n[shade] x, 0\n\nx+1",removeGraphSource(source,1))

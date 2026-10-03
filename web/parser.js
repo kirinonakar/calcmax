@@ -3,7 +3,7 @@
 const letter = c => !!c && /\p{L}/u.test(c);
 const digit = c => !!c && /[0-9]/.test(c);
 const numeric = value => /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(value);
-const aliases = {"×":"*", "·":"*", "÷":"/", "−":"-", "π":"pi", "∞":"oo", "**":"^", "≤":"<=", "≥":">=", "→":"->"};
+const aliases = {"×":"*", "·":"*", "÷":"/", "−":"-", "π":"pi", "θ":"theta", "∞":"oo", "**":"^", "≤":"<=", "≥":">=", "→":"->"};
 function scan(source) {
   if (source.length > 8192) throw new SyntaxError('Expression exceeds 8192 characters');
   const tokens = [];
@@ -162,7 +162,7 @@ export function latexInput(input) {
         else if (command==='sqrt') {skipSpacing();if(text[i]==='[')group('[',']');group();}
         else if (command==='left') {skipSpacing();group('(',')');}
         else if (command==='log') {skipSpacing();if(text[i]==='_'){i++;argument(true);}argument();}
-        else if (['sin','cos','tan','arcsin','arccos','arctan','ln','exp'].includes(command)) argument();
+        else if (['sin','cos','tan','arcsin','arccos','arctan','ln','exp'].includes(command)) {skipSpacing();if(text[i]==='^'){i++;argument(true);}argument();}
       } else {
         if (!letter(c) && !digit(c) && c!=='.') throw new SyntaxError('Expected LaTeX argument');
         i++;
@@ -199,6 +199,14 @@ export function latexInput(input) {
         // Keep the calculator's existing explicit log(value,base) syntax.
         if (base===null && (text[i]==='(' || text.startsWith('\\left',i))) result+='log';
         else result+=`log(${body(argument())}${base===null?'':`,${base}`})`;
+      }
+      else if (['sin','cos','tan','arcsin','arccos','arctan','ln','exp'].includes(command)) {
+        const name={arcsin:'asin',arccos:'acos',arctan:'atan'}[command]||command;
+        skipSpacing();
+        let exponent=null;
+        if(text[i]==='^'){i++;exponent=body(argument(true));skipSpacing();}
+        if(exponent===null && (text[i]==='(' || text.startsWith('\\left',i)))result+=name;
+        else result+=`${name}(${body(argument())})${exponent===null?'':`^(${exponent})`}`;
       }
       else if (['left','right','quad','qquad'].includes(command)) continue;
       else if (['pi','infty','times','cdot','arcsin','arccos','arctan'].includes(command)) result += {pi:'pi',infty:'oo',times:'*',cdot:'*',arcsin:'asin',arccos:'acos',arctan:'atan'}[command];

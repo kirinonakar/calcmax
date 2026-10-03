@@ -17,6 +17,31 @@ private val reserved=("sinc sin cos tan asin acos atan arcsin arccos arctan sinh
     }
     data class Import(val definitions:List<Definition>,val skipped:Int)
     data class ResultTarget(val expression:Expr,val name:String?=null,val parameters:List<String> = emptyList())
+    data class InputAssignment(val expression:Expr,val name:String,val parameters:List<String>?=null)
+
+    fun graphExpression(tree:Expr):Expr {
+        val head=tree.args.firstOrNull()
+        return if(tree.kind=="relation" && tree.value in listOf("=","==") && tree.args.size==2 &&
+            head?.kind=="call" && head.value !in reserved && head.args.size==1 &&
+            head.args[0].kind=="symbol" && head.args[0].value=="x")tree.args[1]else tree
+    }
+
+    /** Prefer the existing leading definition; a built-in call is an expression, not a new function. */
+    fun inputAssignment(tree:Expr):InputAssignment? {
+        if(tree.value !in listOf("=",":=") || tree.args.size!=2)return null
+        val (left,right)=tree.args
+        fun functionHead(node:Expr)=node.kind=="call" && node.args.all {it.kind=="symbol"}
+        val constants=setOf("pi","e","i","I","oo","Ans","c0","hP","hbar","G","qe","NA","kB0","me","mp0")
+        val forward=left.kind=="symbol" || functionHead(left)&&(left.value !in reserved ||
+            right.kind=="symbol"&&left.args.any {it.value==right.value})
+        val target=if(forward)left else if(right.kind=="symbol"&&right.value !in constants || functionHead(right)&&right.value !in reserved)right else left
+        val expression=if(target===right)left else right
+        return when {
+            target.kind=="symbol"->InputAssignment(expression,target.value)
+            functionHead(target)->InputAssignment(expression,target.value,target.args.map {it.value})
+            else->null
+        }
+    }
 
     fun resultTarget(tree:Expr):ResultTarget? {
         if(tree.value !in listOf("=",":=") || tree.args.size!=2)return null

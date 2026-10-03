@@ -59,7 +59,7 @@ data class ConstantEntry(val symbol: String,val name: String,val value: String,v
     Column(Modifier.fillMaxSize().padding(14.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
         Text(tr("Scientific constants"),style=MaterialTheme.typography.titleLarge)
         Text(if(isKorean())"SI 정의 상수 및 CODATA 2022 참조값입니다. 누르면 수식에 넣습니다." else "SI defining constants and CODATA 2022 reference values. Tap to insert.",color=LocalInstrument.current.muted,fontSize=12.sp)
-        OutlinedTextField(search,{search=it},modifier=Modifier.fillMaxWidth(),label={Text(tr("Search"))},singleLine=true,
+        OutlinedTextField(search,{search=it},modifier=Modifier.fillMaxWidth().keepInputVisible(),label={Text(tr("Search"))},singleLine=true,
             trailingIcon={if(search.isNotEmpty())IconButton(onClick={search=""}){Text("\u2715",fontSize=15.sp)}})
         Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(10.dp)) {
             if(m.constants==null) Text(if(isKorean())"상수를 불러오는 중…" else "Loading local constants…")

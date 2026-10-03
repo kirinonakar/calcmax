@@ -10,6 +10,11 @@ import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.coroutines.resume
 
+internal fun graphInputTree(source:String,kind:String="cartesian"):Expr {
+    val tree=Parser(LatexInput.convert(source) ?: source).parse()
+    return if(kind=="cartesian")FunctionTransfer.graphExpression(tree)else tree
+}
+
 internal fun graphExpressionTarget(source:String):Pair<String,String> {
     val tree=Parser(source).parse()
     if(tree.kind=="relation") {
@@ -59,7 +64,7 @@ internal object CalculatorGraphActions {
                     if(shadings.length()<4)shadings.put(shadeEntry(line.removePrefix("[shade]").trim()))
                     return@forEach
                 }
-                if(trees.size<limit) trees+=JSONObject(Parser(line).parse().json())
+                if(trees.size<limit) trees+=JSONObject(graphInputTree(line,graphKind).json())
             }
         } catch(e:Exception) { error=e.message ?: "Syntax ERROR"; return }
         if(trees.isEmpty() && shadings.length()==0) { if(!auto)error="Enter a function"; return }
@@ -181,7 +186,7 @@ internal object CalculatorGraphActions {
         if(expressions.isEmpty()||expressions.size>2)throw SyntaxException("[shade] takes one or two functions",0)
         val entry=JSONObject()
         range?.let {entry.put("a",JSONObject(Parser(it.first).parse().json())).put("b",JSONObject(Parser(it.second).parse().json()))}
-        val parsed=expressions.map {Parser(it).parse()}
+        val parsed=expressions.map {graphInputTree(it)}
         if(parsed.size==1&&parsed[0].kind=="relation") {
             val tree=parsed[0]
             val left=tree.args.getOrNull(0);val right=tree.args.getOrNull(1)
@@ -238,7 +243,7 @@ internal object CalculatorGraphActions {
         if(a==null || !a.isFinite() || b==null || !b.isFinite() || (!singled && a>=b)) {error="Enter finite values with a < b";return}
         val sources=graphSource.lines().filter {it.isNotBlank()}.take(8).filter {graphKind!="cartesian" || !it.trim().startsWith("[shade]")}.take(6)
         if(sources.isEmpty() || selected !in sources.indices || action=="intersection" && (other !in sources.indices || other==selected)) {error="Select two different functions";return}
-        val trees=try {JSONArray(sources.map {JSONObject(Parser(it).parse().json())})} catch(e:Exception) {error=e.message ?: "Syntax ERROR";return}
+        val trees=try {JSONArray(sources.map {JSONObject(graphInputTree(it,graphKind).json())})} catch(e:Exception) {error=e.message ?: "Syntax ERROR";return}
         analysisJob?.cancel()
         val source=graphSource
         val kind=graphKind

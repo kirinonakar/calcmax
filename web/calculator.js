@@ -11,7 +11,7 @@ import {createDisplaySizing} from './display-sizing.js';
 import {fractionInput} from './fraction-input.js';
 import {requiresExplicitEvaluation} from './evaluation-policy.js';
 import {graphExpressionTarget} from './graph-workspace.js';
-import {defineFunction,resultTarget,resultFunction,removeExpiredAnswerFunctions} from './function-transfer.js';
+import {defineFunction,inputAssignment,resultTarget,resultFunction,removeExpiredAnswerFunctions} from './function-transfer.js';
 import {$,value,element,control} from './app-ui.js';
 
 export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist,requestOptions,error,changeMode,updateButtons,pressKey,modeDialog,variablesDialog,matrixInsertDialog,graphs,onFunctionsChanged=()=>{}}) {
@@ -79,7 +79,7 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
     try {
       const converted=latexInput(state.autoCloseBrackets?closeInputBrackets(source):source);
       if(source===value('expression')&&converted!==source){$('expression').value=converted;preview();}
-      const inputTree=parse(converted),[left,right]=inputTree.args;
+      const inputTree=parse(converted);
       const target=resultTarget(inputTree);
       if(target){
         const tree=evaluationTree(converted.slice(target.expression.start,target.expression.end));
@@ -94,22 +94,24 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
         if(target.name&&result.ok)onFunctionsChanged();
         return;
       }
-      if(['=',':='].includes(inputTree.value)&&left?.kind==='call'&&left.args.every(arg=>arg.kind==='symbol')){
-        const definition=defineFunction(left.value,left.args.map(arg=>arg.value),converted.slice(right.start,right.end));
-        state.functions[left.value]=definition;
-        const message=`${t('함수를 저장했습니다.')} ${left.value}(${definition.parameters.join(',')})`;
+      const assignment=inputAssignment(inputTree);
+      const assignedSource=assignment?converted.slice(assignment.expression.start,assignment.expression.end):converted;
+      if(assignment?.parameters){
+        const definition=defineFunction(assignment.name,assignment.parameters,assignedSource);
+        state.functions[assignment.name]=definition;
+        const message=`${t('함수를 저장했습니다.')} ${assignment.name}(${definition.parameters.join(',')})`;
         showResult({ok:true,assignment:true,exact:message,decimal:message,tree:{kind:'text',value:message}},converted);
         onFunctionsChanged();
         return;
       }
-      const assignment=converted.match(/^\s*([A-Za-z][A-Za-z0-9_]*)\s*=(?!=)([\s\S]+)$/);
-      if(assignment&&['pi','e','i','I','oo','Ans','c0','hP','hbar','G','qe','NA','kB0','me','mp0'].includes(assignment[1]))throw new Error('Reserved constant or answer name');
-      const tree=evaluationTree(assignment?assignment[2]:converted);
+      if(assignment&&!/^[A-Za-z][A-Za-z0-9_]*$/.test(assignment.name))throw new Error('Use a letter followed by letters, digits or underscores');
+      if(assignment&&['pi','e','i','I','oo','Ans','c0','hP','hbar','G','qe','NA','kB0','me','mp0'].includes(assignment.name))throw new Error('Reserved constant or answer name');
+      const tree=evaluationTree(assignedSource);
       const result=await engine.execute({...requestOptions(),tree});
       if(assignment&&result.ok){
         if(!result.resultAst)throw new Error('No reusable result to store.');
-        const inputs=calcVariables(tree),selfReference=inputs.includes(assignment[1])||calcVariables(tree,state.variables).includes(assignment[1]);
-        state.variables[assignment[1]]=inputs.length&&!selfReference?tree:result.resultAst;result.assignment=true;result.note=`${t('Stored in')} ${assignment[1]}`;
+        const inputs=calcVariables(tree),selfReference=inputs.includes(assignment.name)||calcVariables(tree,state.variables).includes(assignment.name);
+        state.variables[assignment.name]=inputs.length&&!selfReference?tree:result.resultAst;result.assignment=true;result.note=`${t('Stored in')} ${assignment.name}`;
       }
       showResult(result,converted);
     }
@@ -145,7 +147,7 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
     try {
       // Typing previews require a complete input, even when = can close brackets.
       tree=evaluationTree(latexInput(source));
-      if(resultTarget(parse(latexInput(source)))){clearPreviewResult();return;}
+      if(resultTarget(parse(latexInput(source)))||inputAssignment(tree)){clearPreviewResult();return;}
       const userFunctions=new Set(Object.keys(state.functions).filter(name=>state.functions[name].parameters?.length>1));
       if(requiresExplicitEvaluation(tree,userFunctions)||
         ['=',':='].includes(tree.value)&&['symbol','call'].includes(tree.args?.[0]?.kind)){clearPreviewResult();return;}

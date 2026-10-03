@@ -586,7 +586,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
                     if(calcSession!=null)break
                     val revision=inputVersion;val source=editor.source
                     val tree=runCatching {calculationTree(source)}.getOrNull()
-                    if(tree!=null && (commitRequested||!requiresExplicitEvaluation(tree,multiArgumentUserFunctions())) && !(tree.value in listOf("=",":=") && tree.args.firstOrNull()?.kind in listOf("symbol","call") && mode!="Equations") && runCatching {FunctionTransfer.resultTarget(tree)}.getOrNull()==null) {
+                    if(tree!=null && (commitRequested||!requiresExplicitEvaluation(tree,multiArgumentUserFunctions())) && !(mode!="Equations"&&FunctionTransfer.inputAssignment(tree)!=null) && runCatching {FunctionTransfer.resultTarget(tree)}.getOrNull()==null) {
                         previewBusy=true
                         val response=engine.execute(request().put("tree",JSONObject(tree.json())).put("budget",if(commitRequested)8 else 2))
                         if(revision==inputVersion && source==editor.source && !committed && calcSession==null) {
@@ -709,10 +709,12 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
             with(CalculatorVariableActions) {performStoreResult(target,source)}
             return
         }
-        if(tree.value in listOf("=",":=") && tree.args.size==2 && mode!="Equations") {
-            val left=tree.args[0];val right=tree.args[1]
-            if(left.kind=="symbol") {store(left.value,source.substring(right.start,right.end),finishInput=source==editor.source);return}
-            if(left.kind=="call" && left.args.all {it.kind=="symbol"}) {define(left.value,left.args.joinToString(","){it.value},source.substring(right.start,right.end),finishInput=source==editor.source);return}
+        val assignment=if(mode!="Equations")FunctionTransfer.inputAssignment(tree)else null
+        if(assignment!=null) {
+            val body=source.substring(assignment.expression.start,assignment.expression.end)
+            if(assignment.parameters==null)store(assignment.name,body,finishInput=source==editor.source)
+            else define(assignment.name,assignment.parameters.joinToString(","),body,finishInput=source==editor.source)
+            return
         }
         if(mode in listOf("Scientific/CAS","Equations") && source==editor.source) {
             if(resultSource==source && resultVersion==inputVersion && result?.optBoolean("ok")==true) commit(source,result!!)

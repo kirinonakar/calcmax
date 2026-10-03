@@ -4,12 +4,16 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -25,7 +29,21 @@ import com.kirinonakar.calcmax.ui.theme.LocalInstrument
 @Composable fun Choices(values: List<String>,selected: String,choose: (String)->Unit,translate:Boolean=true) {
     Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)) { values.forEach { value->FilterChip(selected==value,onClick={choose(value)},label={Text(if(translate)tr(value) else value,fontSize=12.sp)}) } }
 }
-@Composable fun Field(value: String,label: String,modifier: Modifier=Modifier,enabled: Boolean=true,translate:Boolean=true,onValue: (String)->Unit) { OutlinedTextField(value,onValue,modifier=modifier,label={Text(if(translate)tr(label) else label)},singleLine=true,enabled=enabled) }
+/** Repeat relocation as the IME opens: requesting only on focus uses the old viewport. */
+internal fun Modifier.keepInputVisible():Modifier=composed {
+    val requester=remember {BringIntoViewRequester()}
+    var focused by remember {mutableStateOf(false)}
+    val imeBottom=WindowInsets.ime.getBottom(LocalDensity.current)
+    LaunchedEffect(focused,imeBottom) {
+        if(focused) {
+            withFrameNanos {}
+            requester.bringIntoView()
+        }
+    }
+    this.bringIntoViewRequester(requester).onFocusChanged {focused=it.isFocused}
+}
+
+@Composable fun Field(value: String,label: String,modifier: Modifier=Modifier,enabled: Boolean=true,translate:Boolean=true,onValue: (String)->Unit) { OutlinedTextField(value,onValue,modifier=modifier.keepInputVisible(),label={Text(if(translate)tr(label) else label)},singleLine=true,enabled=enabled) }
 
 /** Whole-cell activation for editable grid cells. The inner text field consumes pointer events and its own
  *  tap handling is cancelled once a scrolling parent claims the gesture, so watch the cell container instead:

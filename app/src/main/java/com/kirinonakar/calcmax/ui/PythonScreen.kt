@@ -1,10 +1,8 @@
 package com.kirinonakar.calcmax.ui
 
-import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.provider.OpenableColumns
-import android.view.WindowManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
@@ -39,11 +37,6 @@ import com.kirinonakar.calcmax.ui.theme.LocalInstrument
     var templatesOpen by remember {mutableStateOf(false)}
     var confirm by remember {mutableStateOf("")}
     var inputText by remember {mutableStateOf("")}
-    DisposableEffect(context) {
-        val window=(context as? Activity)?.window
-        window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
-        onDispose {window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)}
-    }
     LaunchedEffect(m.pythonSource,m.pythonSelectionStart,m.pythonSelectionEnd) {
         if(editor.text!=m.pythonSource || editor.selection.start!=m.pythonSelectionStart || editor.selection.end!=m.pythonSelectionEnd)
             editor=TextFieldValue(m.pythonSource,selection=TextRange(m.pythonSelectionStart,m.pythonSelectionEnd))
@@ -85,7 +78,7 @@ import com.kirinonakar.calcmax.ui.theme.LocalInstrument
     val suggestions=remember(editor.text,position,editor.selection) {
         if(editor.selection.collapsed)PythonEditorTools.completions(editor.text,position) else emptyList()
     }
-    Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(horizontal=12.dp,vertical=8.dp),verticalArrangement=Arrangement.spacedBy(5.dp)) {
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal=12.dp,vertical=8.dp),verticalArrangement=Arrangement.spacedBy(5.dp)) {
         Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("PYTHON",style=MaterialTheme.typography.titleMedium,color=c.ink)
@@ -153,7 +146,7 @@ import com.kirinonakar.calcmax.ui.theme.LocalInstrument
         }
         m.pythonInputPrompt?.let { prompt ->
             Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(inputText,{inputText=it},Modifier.weight(1f),label={Text(prompt.ifEmpty { tr("Input") })},singleLine=true)
+                OutlinedTextField(inputText,{inputText=it},Modifier.weight(1f).keepInputVisible(),label={Text(prompt.ifEmpty { tr("Input") })},singleLine=true)
                 Button(onClick={m.submitPythonInput(inputText);inputText=""}) {Text(tr("Enter"))}
             }
         }
