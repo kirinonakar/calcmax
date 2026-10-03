@@ -1,6 +1,6 @@
 // Native MathML lays out roots and keeps their accessible semantics. Its glyph
-// and overbar can be snapped to different pixels, so paint both with one SVG
-// path in an HTML overlay, outside the MathML layout/baseline coordinate system.
+// and overbar can be snapped to different pixels, so paint a connected contour
+// in an HTML overlay, outside the MathML layout/baseline coordinate system.
 // Chromium's MathMLPainter::PaintBar pixel-snaps bars independently of DrawText.
 const SVG='http://www.w3.org/2000/svg';
 const tracked=new Map();
@@ -9,9 +9,10 @@ let resizeObserver,mutationObserver,scheduled=false;
 function rootPaths({left,top,right,bottom},base,fontSize){
   const width=Math.min(.75*fontSize,base.left-left),x=base.left-width;
   const roof=Math.max(top+.022*fontSize,base.top-.12*fontSize),foot=Math.min(bottom-.022*fontSize,base.bottom-.08*fontSize);
-  // Keep the roof connected, then reinforce only the lead-in and downstroke.
+  // Keep the lead-in and roof at the same weight; reinforce only the downstroke.
   const hook=`M ${x} ${foot-.25*fontSize} L ${x+.2*width} ${foot-.34*fontSize} L ${x+.44*width} ${foot}`;
-  return {contour:`${hook} L ${base.left-.08*fontSize} ${roof} H ${right}`,hook};
+  const downstroke=`M ${x+.2*width} ${foot-.34*fontSize} L ${x+.44*width} ${foot}`;
+  return {contour:`${hook} L ${base.left-.08*fontSize} ${roof} H ${right}`,downstroke};
 }
 
 export function rootPath(rect,base,fontSize){
@@ -45,14 +46,14 @@ export function paintMathRoots(math){
   for(const root of roots){
     const base=root.firstElementChild,box=base.getBoundingClientRect(),fontSize=parseFloat(view.getComputedStyle(root).fontSize);
     if(!box.width||!box.height||!Number.isFinite(fontSize)){root.classList.remove('math-root-painted');continue;}
-    const {contour,hook}=rootPaths(relative(root.getBoundingClientRect()),relative(box),fontSize);
+    const {contour,downstroke}=rootPaths(relative(root.getBoundingClientRect()),relative(box),fontSize);
     const stroke=.044*fontSize;
-    for(const [d,thickness] of [[contour,stroke],[hook,stroke*1.5]]){
+    for(const [d,thickness] of [[contour,stroke],[downstroke,stroke*2]]){
       const path=document.createElementNS(SVG,'path');
       path.setAttribute('d',d);
       path.setAttribute('fill','none');path.setAttribute('stroke','currentColor');
       path.setAttribute('stroke-width',String(thickness));path.setAttribute('stroke-linejoin','round');
-      if(d===hook)path.setAttribute('stroke-linecap','round');
+      if(d===downstroke)path.setAttribute('stroke-linecap','round');
       paths.push(path);
     }
     root.classList.add('math-root-painted');
