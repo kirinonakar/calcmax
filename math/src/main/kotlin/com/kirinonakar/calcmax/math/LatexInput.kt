@@ -2,7 +2,7 @@ package com.kirinonakar.calcmax.math
 
 /** Converts pasted, supported LaTeX math into the calculator's editable expression syntax. */
 object LatexInput {
-    private val integral = Regex("""\\int_\{([^{}]+)\}\^\{([^{}]+)\}([\s\S]*?)(?:\\[,;! ]\s*)?d([A-Za-z])(?=\s*(?:=|$))""")
+    private val integral = Regex("""\\int\s*_\s*\{([^{}]+)\}\s*\^\s*\{([^{}]+)\}([\s\S]*?)(?:\\[,;! ]\s*)?d\s*([A-Za-z])(?=\s*(?:=|$))""")
     private val commands = setOf("frac", "dfrac", "tfrac", "sqrt", "sin", "cos", "tan", "arcsin", "arccos", "arctan", "ln", "log", "exp", "pi", "theta", "infty", "times", "cdot", "left", "right", "quad", "qquad")
     private val commandPattern = Regex("""\\([A-Za-z]+)""")
     private val bracedPower = Regex("""\^\s*\{""")

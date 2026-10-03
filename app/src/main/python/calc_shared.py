@@ -109,6 +109,21 @@ def coordinates(value):
     require(len(set(value))==len(value), "Coordinate variables must be distinct")
     return tuple(value)
 
+def numeric_integral(expression, variable, lower, upper, precision):
+    """Use exact polynomial antiderivatives; otherwise use adaptive quadrature."""
+    lower, upper = s.sympify(lower), s.sympify(upper)
+    if lower.is_finite and upper.is_finite and expression.is_polynomial(variable):
+        # Strict quadrature cannot establish relative accuracy for an integral
+        # that cancels to zero. Keep the stored float values exactly as rationals
+        # during subtraction, so small nonzero integrals are also preserved.
+        exact = expression.xreplace({value: s.Rational(value) for value in expression.atoms(s.Float)})
+        lower = lower.xreplace({value: s.Rational(value) for value in lower.atoms(s.Float)})
+        upper = upper.xreplace({value: s.Rational(value) for value in upper.atoms(s.Float)})
+        primitive = s.Poly(exact, variable).integrate()
+        return (primitive.eval(upper)-primitive.eval(lower)).evalf(precision, strict=True)
+    return s.Integral(expression, (variable, lower, upper)).evalf(precision, strict=True)
+
+
 def numeric_derivative(expression, variable, point, precision, step=None):
     """A high-precision central difference with Richardson extrapolation.
 

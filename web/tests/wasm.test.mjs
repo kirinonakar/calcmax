@@ -6,7 +6,22 @@ import {loadPyodide} from '../vendor/pyodide.mjs';
 import {installEngine} from '../engine-bootstrap.js';
 import {parse,latexInput} from '../parser.js';
 import {tipCommand,moneyResult} from '../money.js';
-import {statisticsCommand,distributionCommand} from '../workspace-commands.js';
+import {statisticsCommand,distributionCommand,equationCommand} from '../workspace-commands.js';
+
+test('actual WASM solves the pasted integral equation using a stored function',async()=>{
+  const py=await loadPyodide({indexURL:fileURLToPath(new URL('../vendor/',import.meta.url))});
+  await installEngine(py,{runtimeURL:new URL('../vendor/',import.meta.url),engineURL:new URL('../engine.zip',import.meta.url),fetcher:async url=>new Response(readFileSync(url))});
+  const source=String.raw`$$\int _{-2}^{a} f(x) dx = \int _{-2}^{0} f(x) dx$$`;
+  const tree=parse(latexInput(equationCommand({source,variable:'a'})));
+  const functions={f:{parameters:['x'],body:parse('3x^2-16x-20')}};
+  // Stored values must not replace the solver variable or the integration variable.
+  for(const variables of [{},{x:parse('99'),a:parse('7')}]) {
+    py.globals.set('payload',JSON.stringify({tree,functions,variables,angle:'RAD'}));
+    const result=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));
+    assert.equal(result.ok,true,result.error);
+    assert.equal(result.exact,'{-2, 0, 10}');
+  }
+});
 
 test('actual CPython WASM reuses the Android engine across workspaces',async()=>{
   const py=await loadPyodide({indexURL:fileURLToPath(new URL('../vendor/',import.meta.url))});

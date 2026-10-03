@@ -5,7 +5,7 @@ from collections import OrderedDict
 from functools import lru_cache
 import sympy as s
 from sympy.core.function import AppliedUndef
-from calc_shared import MathError, require
+from calc_shared import MathError, numeric_integral, require
 from calc_display import readable
 
 _graph_programs = OrderedDict()
@@ -884,11 +884,11 @@ def graph_analysis(engine, request, _expressions=None):
             return {"analysis":action,"points":points,"count":len(points),"truncated":len(positions)>80}
         if action == "arclength":
             slope = s.diff(expression, x)
-            result = s.Integral(s.sqrt(1+slope**2), (x, s.Float(a), s.Float(b))).evalf(engine.precision, strict=True)
+            result = numeric_integral(s.sqrt(1+slope**2), x, a, b, engine.precision)
             require(result.is_real and result.is_finite, "Numerical convergence failed")
             return {"analysis":action,"points":[],"value":float(result)}
         if action == "integral":
-            result = s.Integral(expression, (x, s.Float(a), s.Float(b))).evalf(engine.precision, strict=True)
+            result = numeric_integral(expression, x, a, b, engine.precision)
             require(result.is_real and result.is_finite, "Numerical convergence failed")
             return {"analysis":action,"points":[],"value":float(result),"integralFill":integral_fill(expression,x,a,b)}
         tested = numeric(target, x)
@@ -959,11 +959,11 @@ def graph_analysis(engine, request, _expressions=None):
         return tangent_point(current[0], current[1], slope, direction)
     elif action == "integral":
         integrand = radius**2/2 if kind == "polar" else second*dfirst
-        result = s.Integral(integrand, (variable, s.Float(a), s.Float(b))).evalf(engine.precision, strict=True)
+        result = numeric_integral(integrand, variable, a, b, engine.precision)
         require(result.is_real and result.is_finite, "Numerical convergence failed")
         return {"analysis":action,"points":[],"value":float(result)}
     else:
-        result = s.Integral(s.sqrt(dfirst**2+dsecond**2), (variable, s.Float(a), s.Float(b))).evalf(engine.precision, strict=True)
+        result = numeric_integral(s.sqrt(dfirst**2+dsecond**2), variable, a, b, engine.precision)
         require(result.is_real and result.is_finite, "Numerical convergence failed")
         return {"analysis":action,"points":[],"value":float(result)}
     found = [item for item in points if item is not None]

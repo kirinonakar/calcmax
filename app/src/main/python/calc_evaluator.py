@@ -11,7 +11,7 @@ from calc_shared import (CONSTANTS, UNITS, MathError, canonical_function_name,
                          coordinates, discrete_fourier, dms_parts, flatten,
                          initial_conditions, inverse_mellin_transform,
                          inverse_z_transform, matrix, mellin_transform,
-                         numeric_derivative, ode_equation, require, z_transform)
+                         numeric_derivative, numeric_integral, ode_equation, require, z_transform)
 from calc_statistics import distribution_value, fit_custom_regression, fit_regression, pearson_correlation, statistical_test
 from calc_finance import finance_value
 
@@ -500,8 +500,7 @@ class Engine:
         if name in ("nintegrate", "minimum", "maximum"):
             if name in ("minimum", "maximum"):
                 return (s.minimum if name=="minimum" else s.maximum)(a[0],a[1],s.Interval(a[2],a[3]))
-            # SymPy evalf uses adaptive quadrature and arbitrary precision.
-            result = s.Integral(a[0],(a[1],a[2],a[3])).evalf(self.precision, strict=True)
+            result = numeric_integral(a[0],a[1],a[2],a[3],self.precision)
             require(not result.has(s.Integral), "Numerical convergence failed")
             return result
         if name=="normalize":

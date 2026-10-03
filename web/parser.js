@@ -207,7 +207,7 @@ export function latexInput(input) {
     }
     return result.replace(/\s+/g,'');
   }
-  source = source.replace(/\\int_\{([^{}]+)\}\^\{([^{}]+)\}([\s\S]*?)(?:\\[,;! ]\s*)?d([A-Za-z])(?=\s*(?:=|$))/g,(_,low,high,expr,v) => `integrate(${body(expr)},${v},${body(low)},${body(high)})`);
+  source = source.replace(/\\int\s*_\s*\{([^{}]+)\}\s*\^\s*\{([^{}]+)\}([\s\S]*?)(?:\\[,;! ]\s*)?d\s*([A-Za-z])(?=\s*(?:=|$))/g,(_,low,high,expr,v) => `integrate(${body(expr)},${v},${body(low)},${body(high)})`);
   const converted = body(source);
   parse(converted);
   return converted;

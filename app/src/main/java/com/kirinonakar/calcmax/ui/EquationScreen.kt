@@ -15,6 +15,7 @@ import com.kirinonakar.calcmax.calculator.CalculatorModel
 import com.kirinonakar.calcmax.calculator.FunctionTransfer
 import com.kirinonakar.calcmax.calculator.ResultDisplayMode
 import com.kirinonakar.calcmax.math.Editor
+import com.kirinonakar.calcmax.math.LatexInput
 import com.kirinonakar.calcmax.math.Parser
 import org.json.JSONObject
 
@@ -48,39 +49,44 @@ import org.json.JSONObject
         append("=0")
     }
     val expression=when(kind){
-        "General"->equation
-        "System"->"["+equations.lines().filter{it.isNotBlank()}.joinToString(",")+"]"
-        "dsolve"->m.equationOde
-        "pdsolve"->m.equationPde
+        "General"->LatexInput.convert(equation) ?: equation
+        "System"->"["+equations.lines().filter{it.isNotBlank()}.joinToString(","){LatexInput.convert(it) ?: it}+"]"
+        "dsolve"->LatexInput.convert(m.equationOde) ?: m.equationOde
+        "pdsolve"->LatexInput.convert(m.equationPde) ?: m.equationPde
         else->polynomial
     }
     Panel("Equation solver","") {
         Choices(listOf("Linear","Quadratic","Cubic","System","General","dsolve","pdsolve"),kind,{m.equationKind=it;m.error=""},translate=false)
         if(kind=="dsolve") {
             Field(m.equationOde,"Differential equation",Modifier.fillMaxWidth()){m.equationOde=it}
+            EquationInputPreview(m.equationOde,m.inputFont)
             Field(m.equationOdeFunction,"Dependent function",Modifier.fillMaxWidth()){m.equationOdeFunction=it}
             Field(m.equationOdeVariable,"Independent variable",Modifier.fillMaxWidth()){m.equationOdeVariable=it}
             Field(m.equationOdeInitial,"Initial conditions (optional)",Modifier.fillMaxWidth()){m.equationOdeInitial=it}
             Text(tr("Example: y(0)=1 or [y(0)=1,y(1)=2]"),style=MaterialTheme.typography.bodySmall)
         }else if(kind=="pdsolve") {
             Field(m.equationPde,"Partial differential equation",Modifier.fillMaxWidth()){m.equationPde=it}
+            EquationInputPreview(m.equationPde,m.inputFont)
             Field(m.equationPdeFunction,"Dependent function",Modifier.fillMaxWidth()){m.equationPdeFunction=it}
             Field(m.equationPdeHint,"Hint (optional)",Modifier.fillMaxWidth()){m.equationPdeHint=it}
         }else if(kind=="System") {
             OutlinedTextField(equations,{m.equationSystem=it},Modifier.fillMaxWidth(),label={Text("One equation per line")},minLines=2)
+            EquationInputPreview(equations,m.inputFont,multiline=true)
             Field(variables,"Variables · comma separated",Modifier.fillMaxWidth(),translate=false){m.equationVariables=it}
         }else {
             Field(variable,"Solve for",Modifier.fillMaxWidth(),translate=false){m.equationVariable=it}
-            if(kind=="General")Field(equation,"Equation",Modifier.fillMaxWidth(),translate=false){m.equationGeneral=it}
+            if(kind=="General") {
+                Field(equation,"Equation",Modifier.fillMaxWidth(),translate=false){m.equationGeneral=it}
+                EquationInputPreview(equation,m.inputFont)
+            }
             else {
                 Text(when(degree){1->"a x + b = 0";2->"a x² + b x + c = 0";else->"a x³ + b x² + c x + d = 0"})
                 Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){(0..degree).forEach{i->Field(coefficients[i],('a'+i).toString(),Modifier.weight(1f),translate=false){v->m.equationCoefficients=coefficients.toMutableList().apply{set(i,v)}}}}
+                EquationInputPreview(polynomial,m.inputFont)
             }
             Choices(listOf("Exact","Numeric"),if(numerical)"Numeric" else "Exact",{m.equationNumeric=it=="Numeric"},translate=false)
             if(numerical)Field(guess,"Initial guess",Modifier.fillMaxWidth(),translate=false){m.equationGuess=it}
         }
-        val preview=runCatching{JSONObject(Parser(expression,true).parse().json())}.getOrNull()
-        if(preview!=null)Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())){MathNode(preview,m.inputFont)}
         Button(onClick={
             val command=when(kind) {
                 "dsolve"->if(expression.isBlank()||m.equationOdeFunction.isBlank()||!m.equationOdeVariable.trim().matches(Regex("[A-Za-z][A-Za-z0-9_]*"))) {
@@ -100,6 +106,20 @@ import org.json.JSONObject
         if(m.error.isNotBlank())Text(m.error,color=MaterialTheme.colorScheme.error)
         if(m.result!=null) {HorizontalDivider();Text("Solution");Box(Modifier.horizontalScroll(rememberScrollState())){ResultMath(m.result!!,m.decimal,m.outputFont,
             displayMode=m.resultDisplayMode,thousandsSeparator=m.thousandsSeparator,displayDigits=m.displayDigits)};SmallAction(if(m.decimal)"Show exact" else "Show decimal",translate=false){m.decimal=!m.decimal}}
+    }
+}
+
+/** Render immediately beneath the input, independently for each equation in a system. */
+@Composable private fun EquationInputPreview(source:String,size:Float,multiline:Boolean=false) {
+    val previews=remember(source,multiline) {
+        (if(multiline)source.lines() else listOf(source)).filter{it.isNotBlank()}.mapNotNull {line->
+            runCatching{JSONObject(Parser(LatexInput.convert(line) ?: line,true).parse().json())}.getOrNull()
+        }
+    }
+    if(previews.isNotEmpty())Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(6.dp)) {
+        previews.forEach {preview->
+            Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())){MathNode(preview,size)}
+        }
     }
 }
 

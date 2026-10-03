@@ -21,6 +21,24 @@ test('LaTeX fractions, nested roots, and bounded integrals',()=>{
   assert.throws(()=>latexInput(String.raw`\frac{1}`));
 });
 
+test('LaTeX integral equations allow whitespace around bounds and differentials',()=>{
+  for(const body of [
+    String.raw`\int _{-2}^{a} f(x) dx = \int _{-2}^{0} f(x) dx`,
+    String.raw`\int_{-2}^{a} f(x) dx = \int_{-2}^{0} f(x) dx`,
+    String.raw`\int _ {-2} ^ {a} f(x) \, d x = \int _ {-2} ^ {0} f(x) \, d x`
+  ])for(const source of [body,`$$${body}$$`,`$${body}$`,String.raw`\[${body}\]`,String.raw`\(${body}\)`]) {
+    const converted=latexInput(source);
+    assert.equal(converted,'integrate(f(x),x,-2,a)=integrate(f(x),x,-2,0)');
+    const tree=parse(converted);
+    assert.equal(tree.kind,'relation');
+    assert.deepEqual(tree.args.map(side=>side.value),['integrate','integrate']);
+    assert.deepEqual(tree.args.map(side=>side.args[3].value),['a','0']);
+  }
+  for(const source of [String.raw`\int _{-2} f(x) dx`,String.raw`\int _{-2}^{a} f(x)`,String.raw`\int _{}^{a} f(x) dx`]) {
+    assert.throws(()=>latexInput(source),SyntaxError,source);
+  }
+});
+
 test('LaTeX theta equations accept every supported math delimiter and preserve the variable',()=>{
   const body=String.raw`\cos\left(\frac{\pi}{2} + \theta\right) = -\frac{1}{5}`;
   for(const source of [body,`$$${body}$$`,`$${body}$`,String.raw`\[${body}\]`,String.raw`\(${body}\)`]) {

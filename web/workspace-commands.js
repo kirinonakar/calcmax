@@ -1,4 +1,4 @@
-import {parse} from './parser.js';
+import {parse,latexInput} from './parser.js';
 function csvRecordDelimiter(source,start){
   // Excel separates columns with tabs; commas inside those cells are literal.
   let quoted=false;
@@ -74,7 +74,7 @@ export function polynomialEquation(coefficients,variable='x'){
   return (source||'0')+'=0';
 }
 export function equationCommand({kind='solve',source,variable='x',extra='0,1',initial='',hint=''}){
-  const equations=source.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);if(!equations.length)throw new Error('Enter an equation');
+  const equations=source.split(/\r?\n/).map(s=>s.trim()).filter(Boolean).map(latexInput);if(!equations.length)throw new Error('Enter an equation');
   const expression=equations.length===1?equations[0]:vector(equations);
   if(kind==='dsolve')return `dsolve(${expression},${variable},${extra}${initial.trim()?','+initial.trim():''})`;
   if(kind==='pdsolve')return `pdsolve(${expression},${variable}${hint.trim()?','+hint.trim():''})`;

@@ -121,6 +121,24 @@ class LatexInputTest {
         assertEquals(listOf("x","1","e"),tree.args[0].args.drop(1).map {it.value})
     }
 
+    @Test fun integralEquationsAllowWhitespaceAroundBoundsAndDifferentials() {
+        for(body in listOf(
+            "\\int _{-2}^{a} f(x) dx = \\int _{-2}^{0} f(x) dx",
+            "\\int_{-2}^{a} f(x) dx = \\int_{-2}^{0} f(x) dx",
+            "\\int _ {-2} ^ {a} f(x) \\, d x = \\int _ {-2} ^ {0} f(x) \\, d x"
+        ))for(source in listOf(body,"$$${body}$$","$${body}$","\\[$body\\]","\\($body\\)")) {
+            val converted=LatexInput.convert(source)
+            assertEquals(source,"integrate(f(x),x,-2,a)=integrate(f(x),x,-2,0)",converted)
+            val tree=Parser(converted!!).parse()
+            assertEquals("relation",tree.kind)
+            assertEquals(listOf("integrate","integrate"),tree.args.map {it.value})
+            assertEquals(listOf("a","0"),tree.args.map {it.args[3].value})
+        }
+        for(source in listOf("\\int _{-2} f(x) dx","\\int _{-2}^{a} f(x)","\\int _{}^{a} f(x) dx")) {
+            assertNull(source,LatexInput.convert(source))
+        }
+    }
+
     @Test fun gaussianIntegralPaste() {
         val converted=LatexInput.convert("$$\\int_{0}^{\\infty} e^{-x^2} \\times \\cos(2x) \\, dx$$")
         assertNotNull(converted)
