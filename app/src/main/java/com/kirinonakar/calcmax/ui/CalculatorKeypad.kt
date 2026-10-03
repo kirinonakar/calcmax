@@ -38,8 +38,8 @@ private val ScientificKeys=listOf(
     listOf(KeySpec("RCL",secondary="STO",alternate="STO"),KeySpec("ENG",secondary="←",alternate="ENG−",alpha="i"),KeySpec("(",secondary="%",alternate="%",alpha="z"),KeySpec(")",secondary=",",alternate=",",alpha="x"),KeySpec("S⇔D",secondary="a b/c ⇔ d/c",alternate="MIXED",alpha="y"),KeySpec("M+",secondary="M−",alternate="M−",alpha="M"))
 )
 private val SecondKeys=listOf(
-    listOf(KeySpec("simp","simplify()"),KeySpec("factor","factor()","factorint","factorint()"),KeySpec("expand","expand()"),KeySpec("x", "x", "^", "^()"),KeySpec("y",secondary="=",alternate="RELATION"),KeySpec("z")),
-    listOf(KeySpec("⌊x⌋","floor()","mod","mod(,)"),KeySpec("⌈x⌉","ceil()","divmod","divmod(,)"),KeySpec("∞","oo","sign","sign()"),KeySpec(","),KeySpec("{",secondary="[",alternate="["),KeySpec("}",secondary="]",alternate="]")),
+    listOf(KeySpec("simp","simplify()"),KeySpec("factor","factor()","factorint","factorint()"),KeySpec("expand","expand()"),KeySpec("x", "x", "xʸ", "^()"),KeySpec("y",secondary="x²",alternate="^2"),KeySpec("z",secondary="=",alternate="RELATION")),
+    listOf(KeySpec("⌊x⌋","floor()","mod","mod(,)","a"),KeySpec("⌈x⌉","ceil()","divmod","divmod(,)","b"),KeySpec("∞","oo","sign","sign()","c"),KeySpec(",",secondary="√",alternate="sqrt()",alpha="d"),KeySpec("{",secondary="[",alternate="["),KeySpec("}",secondary="]",alternate="]")),
     listOf(KeySpec("MATRIX","MATRIX_INPUT",secondary="n×m",alternate="MATRIX_SIZE",type="action"),KeySpec("det","det()",secondary="Pol",alternate="pol(,)"),KeySpec("inv","inverse()",secondary="Rec",alternate="rec(,)"),KeySpec("T","transpose()"),KeySpec("‖v‖","norm()"),KeySpec("GRAPH","TO_GRAPH",secondary="MODE",alternate="Graph",type="action"))
 )
 private val NumericKeys=listOf(
@@ -216,7 +216,8 @@ internal fun performKeypadInput(m:CalculatorModel,requestedValue:String,open:(St
     }
     val bg=when(key.type){"numeric"->c.numeric;"danger"->c.clearKey;"action"->c.operator;else->c.scientific}
     val ink=if(key.type=="danger")c.clearInk else c.ink
-    BoxWithConstraints(modifier.combinedClickable(interactionSource=interaction,indication=null,onClick=onClick,onLongClick=onLongClick).semantics(mergeDescendants=true){contentDescription=when(key.input){"TO_GRAPH"->"Graph current expression";"MATRIX_INPUT"->if(shifted)"Insert matrix, choose size" else "Insert 2 by 2 matrix";else->if(shifted&&key.alternate.isNotBlank())if(key.alternate=="RELATION")"Insert equals" else key.alternate else key.title};stateDescription=if(active)"Active" else listOf(key.secondary,key.alpha).filter{it.isNotBlank()}.joinToString()}) {
+    val shiftedSymbol=if(shifted)when(key.alternate){"^()"->"xʸ";"^2"->"x²";"sqrt()"->"√";else->null} else null
+    BoxWithConstraints(modifier.combinedClickable(interactionSource=interaction,indication=null,onClick=onClick,onLongClick=onLongClick).semantics(mergeDescendants=true){contentDescription=when(key.input){"TO_GRAPH"->"Graph current expression";"MATRIX_INPUT"->if(shifted)"Insert matrix, choose size" else "Insert 2 by 2 matrix";else->shiftedSymbol ?: if(shifted&&key.alternate.isNotBlank())if(key.alternate=="RELATION")"Insert equals" else key.alternate else key.title};stateDescription=if(active)"Active" else listOf(key.secondary,key.alpha).filter{it.isNotBlank()}.joinToString()}) {
         val labelHeight=(maxHeight*.25f).coerceAtMost(15.dp)
         val keyFont=(maxHeight.value*(when(key.type){"numeric","danger"->.44f;"action"->.24f;else->.32f})).coerceIn(10f,24f).sp
         val smallFont=(labelHeight.value*.66f).coerceIn(6f,if(key.secondary.length+key.alpha.length>10)7.5f else 10f).sp

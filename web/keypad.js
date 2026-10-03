@@ -1,14 +1,15 @@
 // Android KeySpec layout from ui/CalculatorKeypad.kt. Keep the two pages and
 // shifted/alpha legends together so touch, mouse, and keyboard use the same action.
 const key=(title,input=title,secondary='',alternate='',alpha='',type='scientific')=>({title,input,secondary,alternate,alpha,type});
+const shiftedSymbols={'^()':'xʸ','^2':'x²','sqrt()':'√'};
 export const scientificRows=[
   [key('a/b','()/()','mixed','mixed(,,)'),key('√','sqrt()','³√','cbrt()'),key('x²','^2','x³','^3'),key('x□','^()','ⁿ√','nthroot(,)'),key('log','log()','10ˣ','10^()','n'),key('ln','ln()','eˣ','e^()','t')],
   [key('(−)','NEG','∠','∠','A'),key('°′″','DMS_INPUT','←','DMS','B'),key('hyp','HYP','Abs','abs()','C'),key('sin','sin()','sin⁻¹','asin()','D'),key('cos','cos()','cos⁻¹','acos()','r'),key('tan','tan()','tan⁻¹','atan()','F')],
   [key('RCL','RCL','STO','STO'),key('ENG','ENG','←','ENG−','i'),key('(','(','%','%','z'),key(')',')',',',',','x'),key('S⇔D','S⇔D','a b/c ⇔ d/c','MIXED','y'),key('M+','M+','M−','M−','M')]
 ];
 export const secondRows=[
-  [key('simp','simplify()'),key('factor','factor()','factorint','factorint()'),key('expand','expand()'),key('x','x','^','^()'),key('y','y','=','RELATION'),key('z')],
-  [key('⌊x⌋','floor()','mod','mod(,)'),key('⌈x⌉','ceil()','divmod','divmod(,)'),key('∞','oo','sign','sign()'),key(','),key('{','{','[','['),key('}','}',']',']')],
+  [key('simp','simplify()'),key('factor','factor()','factorint','factorint()'),key('expand','expand()'),key('x','x','xʸ','^()'),key('y','y','x²','^2'),key('z','z','=','RELATION')],
+  [key('⌊x⌋','floor()','mod','mod(,)','a'),key('⌈x⌉','ceil()','divmod','divmod(,)','b'),key('∞','oo','sign','sign()','c'),key(',',',','√','sqrt()','d'),key('{','{','[','['),key('}','}',']',']')],
   [key('MATRIX','MATRIX_INPUT','n×m','MATRIX_SIZE','','action'),key('det','det()','Pol','pol(,)'),key('inv','inverse()','Rec','rec(,)'),key('T','transpose()'),key('‖v‖','norm()'),key('GRAPH','TO_GRAPH','MODE','Graph','','action')]
 ];
 export const numericRows=[
@@ -46,7 +47,8 @@ export function renderKeypad(container,{second=false,shift=false,alpha=false,hyp
     const button=document.createElement('button');button.type='button';button.className=`key ${k.type}`;button.dataset.input=k.input;
     button.keySpec=k;
     if(k.input==='='||k.input==='CALC')button.dataset.evaluate='true';
-    button.setAttribute('aria-label',shift&&k.alternate?k.alternate:k.title);
+    const symbol=shift&&!alpha?shiftedSymbols[k.alternate]:null;
+    button.setAttribute('aria-label',alpha&&k.alpha?k.alpha:shift&&k.alternate?symbol||k.alternate:k.title);
     if(['SHIFT','ALPHA','SECOND','HYP'].includes(k.input)){const active=k.input==='SHIFT'?shift:k.input==='ALPHA'?alpha:k.input==='SECOND'?second:hyperbolic;button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));}
     const legends=document.createElement('small');legends.className='key-hints';legends.append(document.createTextNode(k.secondary));
     if(k.alpha){const letter=document.createElement('span');letter.className='alpha-legend';letter.textContent=k.alpha;legends.append(document.createTextNode('  '),letter);}
@@ -80,7 +82,8 @@ export function renderKeypad(container,{second=false,shift=false,alpha=false,hyp
 }
 export function updateKeypadState(container,{second=false,shift=false,alpha=false,hyperbolic=false}){
   for(const button of container.querySelectorAll('.key')){const k=button.keySpec;if(!k)continue;
-    const label=alpha&&k.alpha?k.alpha:shift&&k.alternate?k.alternate:k.title;button.setAttribute('aria-label',label);
+    const symbol=shift&&!alpha?shiftedSymbols[k.alternate]:null;
+    const label=alpha&&k.alpha?k.alpha:shift&&k.alternate?symbol||k.alternate:k.title;button.setAttribute('aria-label',label);
     if(['SHIFT','ALPHA','SECOND','HYP'].includes(k.input)){const active=k.input==='SHIFT'?shift:k.input==='ALPHA'?alpha:k.input==='SECOND'?second:hyperbolic;button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));}
   }
 }
