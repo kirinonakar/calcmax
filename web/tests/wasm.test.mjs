@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {loadPyodide} from '../vendor/pyodide.mjs';
 import {installEngine} from '../engine-bootstrap.js';
-import {parse} from '../parser.js';
+import {parse,latexInput} from '../parser.js';
 import {tipCommand,moneyResult} from '../money.js';
 import {statisticsCommand,distributionCommand} from '../workspace-commands.js';
 
@@ -28,6 +28,9 @@ test('actual CPython WASM reuses the Android engine across workspaces',async()=>
     console.log(`WASM graph ${samples===200?'interactive':'full precision'}: ${((performance.now()-started)/30).toFixed(1)} ms/frame`);
   }
   assert.equal(evaluate('1/3+1/6').exact,'1/2');
+  assert.equal(evaluate(latexInput(String.raw`$$\sqrt[3]{5} \times 25^{\frac{1}{3}}$$`)).exact,'5');
+  assert.equal(evaluate(latexInput(String.raw`\frac{1}{2}^2`)).exact,'1/4');
+  assert.equal(evaluate(latexInput(String.raw`\sqrt[3]{-8}`)).exact,'2*(-1)**(1/3)');
   assert.equal(evaluate('0.1+0.2').exact,'3/10');
   assert.equal(evaluate('-2^2').exact,'-4');
   assert.equal(evaluate('sin(30)',{angle:'DEG'}).exact,'1/2');

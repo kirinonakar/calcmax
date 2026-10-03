@@ -119,15 +119,26 @@ export function parse(source,{allowHoles=false}={}) {
 
 // Equivalent supported LaTeX subset to math/LatexInput.kt.
 export function latexInput(input) {
-  if (!/\\(?:int|frac|sqrt|sin|cos|tan|pi|infty|times|cdot)\b|^\\[[(]|^\$\$/.test(input.trim())) return input;
-  let source = input.trim().replace(/^\\\[|\\\]$|^\\\(|\\\)$|^\$\$|\$\$$/g,'');
+  const commands = new Set(['int','frac','dfrac','tfrac','sqrt','sin','cos','tan','arcsin','arccos','arctan','ln','log','exp','pi','infty','times','cdot','left','right','quad','qquad']);
+  let source = input.trim();
+  if (!/^\\[[(]|^\$|\^\s*\{/.test(source) && ![...source.matchAll(/\\([A-Za-z]+)/g)].some(match=>commands.has(match[1]))) return input;
+  for (const [open,close] of [['\\[','\\]'],['\\(','\\)'],['$$','$$'],['$','$']]) {
+    if (source.length >= open.length+close.length && source.startsWith(open) && source.endsWith(close)) {
+      source=source.slice(open.length,-close.length);break;
+    }
+  }
   function body(text) {
     let i = 0, result = '';
-    function group() {
+    function group(open='{',close='}') {
       while (/\s/.test(text[i] || '\0')) i++;
-      if (text[i++] !== '{') throw new SyntaxError('Expected LaTeX group');
-      const start = i; let depth = 1;
-      while (i < text.length && depth) { if (text[i] === '{') depth++; if (text[i++] === '}') depth--; }
+      if (text[i++] !== open) throw new SyntaxError('Expected LaTeX group');
+      const start = i; let depth = 1, braces = 0;
+      while (i < text.length && depth) {
+        const character=text[i++];
+        if (open==='[' && character==='{') braces++;
+        else if (open==='[' && character==='}') {if (!braces) throw new SyntaxError('Unmatched LaTeX group');braces--;}
+        else if (!braces) {if (character===open) depth++;if (character===close) depth--;}
+      }
       if (depth) throw new SyntaxError('Unclosed LaTeX group');
       return text.slice(start,i-1);
     }
@@ -138,8 +149,13 @@ export function latexInput(input) {
       const command = /^[A-Za-z]+/.exec(text.slice(i))?.[0];
       if (!command) throw new SyntaxError('Incomplete LaTeX command');
       i += command.length;
-      if (command === 'frac') { const top = group(), bottom = group(); result += `(${body(top)})/(${body(bottom)})`; }
-      else if (command === 'sqrt') result += `sqrt(${body(group())})`;
+      if (['frac','dfrac','tfrac'].includes(command)) { const top = group(), bottom = group(); result += `((${body(top)})/(${body(bottom)}))`; }
+      else if (command === 'sqrt') {
+        while (/\s/.test(text[i] || '\0')) i++;
+        const degree=text[i]==='[' ? body(group('[',']')) : null;
+        const argument=body(group());
+        result += degree===null ? `sqrt(${argument})` : `nthroot(${argument},${degree})`;
+      }
       else if (['left','right','quad','qquad'].includes(command)) continue;
       else if (['pi','infty','times','cdot','arcsin','arccos','arctan'].includes(command)) result += {pi:'pi',infty:'oo',times:'*',cdot:'*',arcsin:'asin',arccos:'acos',arctan:'atan'}[command];
       else if (['sin','cos','tan','ln','log','exp'].includes(command)) result += command;

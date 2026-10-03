@@ -37,7 +37,18 @@ test('root overlays retain MathML semantics, have bounded dimensions, and follow
   const overlay=paintMathRoots(math);
   assert.equal(overlay.parentElement,frame);assert.equal(overlay.getAttribute('width'),'160');assert.equal(overlay.getAttribute('height'),'90');
   assert.equal(overlay.getAttribute('aria-hidden'),'true');assert.equal(overlay.getAttribute('focusable'),'false');
-  assert.equal(overlay.querySelectorAll('path').length,2);assert.equal(math.querySelectorAll('svg').length,0,'no SVG participates in MathML sizing');
+  assert.equal(overlay.querySelectorAll('path').length,4);assert.equal(math.querySelectorAll('svg').length,0,'no SVG participates in MathML sizing');
+  const paths=[...overlay.querySelectorAll('path')];
+  for(let i=0;i<paths.length;i+=2){
+    const contour=paths[i],hook=paths[i+1];
+    assert.ok(contour.getAttribute('d').startsWith(hook.getAttribute('d')+' L '),'the thick hook shares the connected contour coordinates');
+    assert.equal((hook.getAttribute('d').match(/L/g)||[]).length,2,'only the left lead-in and descending diagonal are reinforced');
+    assert.ok(!hook.getAttribute('d').includes('H'),'the roof keeps its original thickness');
+    assert.equal(Number(contour.getAttribute('stroke-width')),.044*24);
+    assert.equal(Number(hook.getAttribute('stroke-width')),Number(contour.getAttribute('stroke-width'))*1.5);
+    assert.equal(hook.getAttribute('stroke-linejoin'),'round');assert.equal(hook.getAttribute('stroke-linecap'),'round');
+    assert.equal(hook.getAttribute('stroke'),'currentColor');
+  }
   assert.equal(math.querySelectorAll('mroot').length,1);assert.equal(math.querySelectorAll('msqrt').length,1);assert.equal(math.querySelectorAll('mfrac').length,1);
   assert.equal(math.textContent,'123','accessible math text is unchanged');
   for(const root of roots){assert.ok(root.classList.contains('math-root-painted'));assert.ok(root.firstElementChild.classList.contains('math-root-content'));}

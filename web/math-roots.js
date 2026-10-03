@@ -6,11 +6,16 @@ const SVG='http://www.w3.org/2000/svg';
 const tracked=new Map();
 let resizeObserver,mutationObserver,scheduled=false;
 
-export function rootPath({left,top,right,bottom},base,fontSize){
+function rootPaths({left,top,right,bottom},base,fontSize){
   const width=Math.min(.75*fontSize,base.left-left),x=base.left-width;
   const roof=Math.max(top+.022*fontSize,base.top-.12*fontSize),foot=Math.min(bottom-.022*fontSize,base.bottom-.08*fontSize);
-  // All segments, including the roof, share coordinates and a single stroke.
-  return `M ${x} ${foot-.25*fontSize} L ${x+.2*width} ${foot-.34*fontSize} L ${x+.44*width} ${foot} L ${base.left-.08*fontSize} ${roof} H ${right}`;
+  // Keep the roof connected, then reinforce only the lead-in and downstroke.
+  const hook=`M ${x} ${foot-.25*fontSize} L ${x+.2*width} ${foot-.34*fontSize} L ${x+.44*width} ${foot}`;
+  return {contour:`${hook} L ${base.left-.08*fontSize} ${roof} H ${right}`,hook};
+}
+
+export function rootPath(rect,base,fontSize){
+  return rootPaths(rect,base,fontSize).contour;
 }
 
 export function paintMathRoots(math){
@@ -40,11 +45,17 @@ export function paintMathRoots(math){
   for(const root of roots){
     const base=root.firstElementChild,box=base.getBoundingClientRect(),fontSize=parseFloat(view.getComputedStyle(root).fontSize);
     if(!box.width||!box.height||!Number.isFinite(fontSize)){root.classList.remove('math-root-painted');continue;}
-    const path=document.createElementNS(SVG,'path');
-    path.setAttribute('d',rootPath(relative(root.getBoundingClientRect()),relative(box),fontSize));
-    path.setAttribute('fill','none');path.setAttribute('stroke','currentColor');
-    path.setAttribute('stroke-width',String(.044*fontSize));path.setAttribute('stroke-linejoin','round');
-    paths.push(path);root.classList.add('math-root-painted');
+    const {contour,hook}=rootPaths(relative(root.getBoundingClientRect()),relative(box),fontSize);
+    const stroke=.044*fontSize;
+    for(const [d,thickness] of [[contour,stroke],[hook,stroke*1.5]]){
+      const path=document.createElementNS(SVG,'path');
+      path.setAttribute('d',d);
+      path.setAttribute('fill','none');path.setAttribute('stroke','currentColor');
+      path.setAttribute('stroke-width',String(thickness));path.setAttribute('stroke-linejoin','round');
+      if(d===hook)path.setAttribute('stroke-linecap','round');
+      paths.push(path);
+    }
+    root.classList.add('math-root-painted');
   }
   overlay.replaceChildren(...paths);
   return overlay;

@@ -77,6 +77,39 @@ test('pasted text replaces the selected number in a completed expression',t=>{
   assert.equal($('expression').value,'12+56');
 });
 
+for(const keyboard of [false,true])test(`LaTeX paste renders indexed roots and fractional powers in ${keyboard?'keyboard':'math'} input`,async t=>{
+  const {$,dom,calculator,engine}=calculatorPage(t,'12+34');
+  if(keyboard)$('typing-toggle').click();
+  const event=new dom.window.Event('paste',{bubbles:true,cancelable:true});
+  Object.defineProperty(event,'clipboardData',{value:{getData:()=>String.raw`$$\sqrt[3]{5} \times 25^{\frac{1}{3}}$$`}});
+  (keyboard?$('expression'):document.body).dispatchEvent(event);
+  const converted='nthroot(5,3)*25^(((1)/(3)))';
+  assert.equal(event.defaultPrevented,true);
+  assert.equal($('expression').value,converted);
+  assert.equal($('expression').selectionStart,converted.length);
+  if(keyboard)$('typing-toggle').click();
+  assert.equal($('expression-preview').querySelectorAll('mroot').length,1);
+  assert.equal($('expression-preview').querySelectorAll('msup').length,1);
+  assert.equal($('expression-preview').querySelectorAll('mfrac').length,1);
+  engine.ready=true;
+  await calculator.evaluate();
+  assert.deepEqual(engine.execute.mock.calls[0].arguments[0].tree,parse(converted));
+  $('undo').click();
+  assert.equal($('expression').value,'12+34');
+});
+
+test('wrapped LaTeX paste replaces a selected operand and keeps surrounding terms',t=>{
+  const {$,dom,clickNumber}=calculatorPage(t,'1+2+3');
+  clickNumber('2');
+  $('typing-toggle').click();
+  const event=new dom.window.Event('paste',{bubbles:true,cancelable:true});
+  Object.defineProperty(event,'clipboardData',{value:{getData:()=>String.raw`$$\sqrt[3]{5} \times 25^{\frac{1}{3}}$$`}});
+  $('expression').dispatchEvent(event);
+  assert.equal(event.defaultPrevented,true);
+  assert.equal($('expression').value,'1+nthroot(5,3)*25^(((1)/(3)))+3');
+  assert.equal($('expression').selectionStart,$('expression').value.length-2);
+});
+
 test('a second click places a caret inside a completed number for partial editing',t=>{
   const {$,calculator,clickNumber}=calculatorPage(t,'12+345');
   clickNumber('345');

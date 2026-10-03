@@ -28,6 +28,54 @@ import java.io.File
 class CalculatorInstrumentedTest {
     @get:Rule val compose=createAndroidComposeRule<MainActivity>()
     private fun model()=ViewModelProvider(compose.activity)[CalculatorModel::class.java]
+    @Test fun latexPasteAndKeyboardInputRecognizeIndexedRootsAndFractionalPowers() {
+        val latex="$$\\sqrt[3]{5} \\times 25^{\\frac{1}{3}}$$"
+        val source="nthroot(5,3)*25^(((1)/(3)))"
+        compose.runOnIdle {model().mode="Scientific/CAS";model().language="en";model().poweredOn=true;model().clear(recordUndo=false)}
+        for(keyboard in listOf(false,true)) {
+            compose.runOnIdle {model().clear(recordUndo=false)}
+            if(keyboard) {
+                compose.onNodeWithText("Keyboard").performClick()
+                compose.onNodeWithContentDescription("Expression input").performClick().performTextInput(latex)
+                compose.onNodeWithText("Math input").performClick()
+            } else {
+                compose.runOnIdle {
+                    val clipboard=compose.activity.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("LaTeX",latex))
+                }
+                compose.onNodeWithText("Paste").performClick()
+            }
+            compose.runOnIdle {
+                assertEquals(source,model().editor.source)
+                assertEquals(source.length,model().editor.cursor)
+                assertEquals("nthroot",model().editor.tree()!!.args[0].value)
+                model().calculate()
+            }
+            compose.waitUntil(30000){!model().busy&&model().committed}
+            compose.runOnIdle {assertEquals("5",model().result!!.getString("exact"))}
+        }
+        compose.runOnIdle {model().clear(recordUndo=false)}
+    }
+    @Test fun wrappedLatexKeyboardPasteReplacesSelectionInsideExpression() {
+        compose.runOnIdle {
+            model().mode="Scientific/CAS";model().language="en";model().poweredOn=true;model().clear(recordUndo=false)
+            model().edit(Editor("1+2+3",3,2))
+        }
+        compose.onNodeWithText("Keyboard").performClick()
+        val input=compose.onNodeWithContentDescription("Expression input")
+        input.performClick()
+        input.performTextInputSelection(androidx.compose.ui.text.TextRange(2,3))
+        input.performTextInput("$$\\sqrt[3]{5} \\times 25^{\\frac{1}{3}}$$")
+        compose.runOnIdle {
+            assertEquals("1+nthroot(5,3)*25^(((1)/(3)))+3",model().editor.source)
+            assertEquals(model().editor.source.length-2,model().editor.cursor)
+            model().calculate()
+        }
+        compose.waitUntil(30000){!model().busy&&model().committed}
+        compose.runOnIdle {assertEquals("9",model().result!!.getString("exact"))}
+        compose.onNodeWithText("Math input").performClick()
+        compose.runOnIdle {model().clear(recordUndo=false)}
+    }
     @Test fun topRightKeysAlignWithScientificColumns() {
         compose.runOnIdle {model().mode="Scientific/CAS";model().poweredOn=true;model().secondKeys=false;model().shift=false;model().alpha=false}
         for((upper,lower) in listOf("MODE" to "log","2nd" to "ln","x⁻¹" to "log","logₐ□" to "ln")) {

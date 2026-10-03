@@ -271,11 +271,11 @@ internal fun largeHistoryTree(root:JSONObject?):Boolean {
             value=TextFieldValue(m.editor.source,TextRange(m.editor.anchor.coerceIn(0,m.editor.source.length),m.editor.cursor.coerceIn(0,m.editor.source.length))),
             onValueChange={
                 val infinityDeleted=m.editor.atomicInfinityDeletion(it.text)
-                val latex=LatexInput.convert(it.text)
+                val latex=LatexInput.convertEdit(m.editor,it.text)
                 if(infinityDeleted!=null) {
                     if(m.committed)m.fresh(infinityDeleted) else m.edit(infinityDeleted)
                 } else if(latex!=null) {
-                    if(m.committed)m.fresh(Editor(latex)) else m.edit(Editor(latex))
+                    if(m.committed)m.fresh(latex) else m.edit(latex)
                 } else {
                 val structuralBracket=m.editor.inCallArgument() && it.text.getOrNull(m.editor.cursor) in listOf('(',')','[',']','{','}')
                 val auto=if(!m.committed&&(m.autoCloseBrackets||structuralBracket)&&m.editor.cursor==m.editor.anchor&&it.selection.collapsed)

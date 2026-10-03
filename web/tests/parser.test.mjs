@@ -16,7 +16,45 @@ test('power precedence, limits, invalid input, and DMS',()=>{
 });
 test('LaTeX fractions, nested roots, and bounded integrals',()=>{
   assert.equal(latexInput('1/3+1/6'),'1/3+1/6');
-  assert.equal(latexInput(String.raw`\[\frac{x^2+1}{x-1}\]`),'(x^2+1)/(x-1)');
+  assert.equal(latexInput(String.raw`\[\frac{x^2+1}{x-1}\]`),'((x^2+1)/(x-1))');
   assert.equal(latexInput(String.raw`$$\int_{0}^{\infty} e^{-x^2} \times \cos(2x) \, dx$$`),'integrate(e^(-x^2)*cos(2x),x,0,oo)');
   assert.throws(()=>latexInput(String.raw`\frac{1}`));
+});
+
+test('LaTeX indexed roots and fractional powers accept every supported math delimiter',()=>{
+  const body=String.raw`\sqrt[3]{5} \times 25^{\frac{1}{3}}`;
+  for(const source of [body,`$$${body}$$`,`$${body}$`,String.raw`\[${body}\]`,String.raw`\(${body}\)`]) {
+    const converted=latexInput(source);
+    assert.equal(converted,'nthroot(5,3)*25^(((1)/(3)))');
+    const tree=parse(converted);
+    assert.equal(tree.value,'*');
+    assert.equal(tree.args[0].value,'nthroot');
+    assert.deepEqual(tree.args[0].args.map(node=>node.value),['5','3']);
+    assert.equal(tree.args[1].value,'^');
+  }
+});
+
+test('LaTeX roots support nested groups, expression degrees, and negative radicands',()=>{
+  assert.equal(latexInput(String.raw`\sqrt [3] {\sqrt{\frac{1}{2}}}`),'nthroot(sqrt(((1)/(2))),3)');
+  assert.equal(latexInput(String.raw`\sqrt[1+1]{\sqrt[3]{64}}`),'nthroot(nthroot(64,3),1+1)');
+  assert.equal(latexInput(String.raw`\sqrt[\frac{4}{2}]{16}`),'nthroot(16,((4)/(2)))');
+  assert.equal(latexInput(String.raw`\sqrt[3]{-8}`),'nthroot(-8,3)');
+});
+
+test('LaTeX fractions remain whole power bases and recognize display and inline variants',()=>{
+  for(const command of ['frac','dfrac','tfrac']) {
+    const converted=latexInput(`\\${command}{1}{2}^2`);
+    assert.equal(converted,'((1)/(2))^2');
+    const tree=parse(converted);
+    assert.equal(tree.value,'^');
+    assert.equal(tree.args[0].args[0].value,'/');
+  }
+  assert.equal(latexInput(String.raw`\ln(2)`),'ln(2)');
+  assert.equal(latexInput('25^{1/3}'),'25^(1/3)');
+});
+
+test('malformed or unsupported LaTeX is rejected before insertion',()=>{
+  for(const source of [String.raw`\sqrt[3{5}`,String.raw`\sqrt[]{5}`,String.raw`\sqrt[3]{}`,String.raw`\sqrt[3]{5`,String.raw`\sqrt[3]`,String.raw`\frac{1}`,String.raw`$$\unknown{1}$$`,String.raw`$$\sqrt{5}$`]) {
+    assert.throws(()=>latexInput(source),SyntaxError,source);
+  }
 });
