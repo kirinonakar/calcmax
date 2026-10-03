@@ -3,7 +3,7 @@ package com.kirinonakar.calcmax.math
 /** Converts pasted, supported LaTeX math into the calculator's editable expression syntax. */
 object LatexInput {
     private val integral = Regex("""\\int_\{([^{}]+)\}\^\{([^{}]+)\}([\s\S]*?)(?:\\[,;! ]\s*)?d([A-Za-z])(?=\s*(?:=|$))""")
-    private val commands = setOf("frac", "dfrac", "tfrac", "sqrt", "sin", "cos", "tan", "arcsin", "arccos", "arctan", "ln", "log", "exp", "pi", "infty", "times", "cdot", "left", "right", "quad", "qquad")
+    private val commands = setOf("frac", "dfrac", "tfrac", "sqrt", "sin", "cos", "tan", "arcsin", "arccos", "arctan", "ln", "log", "exp", "pi", "theta", "infty", "times", "cdot", "left", "right", "quad", "qquad")
     private val commandPattern = Regex("""\\([A-Za-z]+)""")
     private val bracedPower = Regex("""\^\s*\{""")
 
@@ -85,6 +85,24 @@ object LatexInput {
                     else append("nthroot(").append(convertBody(argument)).append(',').append(degree).append(")")
                     index=next
                 }
+                "log" -> {
+                    index=skipSpacing(source,index)
+                    val base=if(source.getOrNull(index)=='_') {
+                        val (value,next)=argument(source,index+1,singleToken=true)
+                        index=skipSpacing(source,next)
+                        convertBody(value)
+                    } else null
+                    // Keep the calculator's existing explicit log(value,base) syntax.
+                    if(base==null && (source.getOrNull(index)=='(' || source.startsWith("\\left",index))) {
+                        append("log")
+                    } else {
+                        val (value,next)=argument(source,index)
+                        append("log(").append(convertBody(value))
+                        if(base!=null)append(',').append(base)
+                        append(')')
+                        index=next
+                    }
+                }
                 "pi" -> append("pi")
                 "infty" -> append("oo")
                 "times", "cdot" -> append('*')
@@ -96,6 +114,62 @@ object LatexInput {
             }
         }
     }.replace(Regex("""\s+"""), "")
+
+    private fun skipSpacing(source:String,from:Int):Int {
+        var index=from
+        while(index<source.length) {
+            if(source[index].isWhitespace())index++
+            else if(source[index]=='\\' && source.getOrNull(index+1) in listOf(',', ';', '!', ' '))index+=2
+            else break
+        }
+        return index
+    }
+
+    /** Read one logarithm base/argument before whitespace is removed. */
+    private fun argument(source:String,from:Int,singleToken:Boolean=false):Pair<String,Int> {
+        val start=skipSpacing(source,from)
+        var index=start
+        when(val c=source.getOrNull(index)) {
+            '{','(' -> index=group(source,index,c,if(c=='{')'}' else ')').second
+            '\\' -> {
+                val match=commandPattern.find(source,index)?.takeIf {it.range.first==index}
+                    ?: error("Expected LaTeX argument")
+                val command=match.groupValues[1]
+                index=match.range.last+1
+                when(command) {
+                    "frac","dfrac","tfrac" -> {
+                        index=group(source,index).second
+                        index=group(source,index).second
+                    }
+                    "sqrt" -> {
+                        index=skipSpacing(source,index)
+                        if(source.getOrNull(index)=='[')index=group(source,index,'[',']').second
+                        index=group(source,index).second
+                    }
+                    "left" -> index=group(source,skipSpacing(source,index),'(',')').second
+                    "log" -> {
+                        index=skipSpacing(source,index)
+                        if(source.getOrNull(index)=='_')index=argument(source,index+1,true).second
+                        index=argument(source,index).second
+                    }
+                    "sin","cos","tan","arcsin","arccos","arctan","ln","exp" -> index=argument(source,index).second
+                }
+            }
+            else -> {
+                require(c!=null && (c.isLetterOrDigit() || c=='.')) {"Expected LaTeX argument"}
+                index++
+                if(!singleToken) {
+                    if(c.isDigit() || c=='.')while(source.getOrNull(index)?.let {it.isDigit() || it=='.'}==true)index++
+                    else while(source.getOrNull(index)?.isLetterOrDigit()==true)index++
+                }
+            }
+        }
+        if(!singleToken) {
+            val power=skipSpacing(source,index)
+            if(source.getOrNull(power)=='^')index=argument(source,power+1,true).second
+        }
+        return source.substring(start,index) to index
+    }
 
     private fun group(source:String,from:Int,open:Char='{',close:Char='}'):Pair<String,Int> {
         var index=from

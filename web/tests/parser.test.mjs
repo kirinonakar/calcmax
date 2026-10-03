@@ -21,6 +21,50 @@ test('LaTeX fractions, nested roots, and bounded integrals',()=>{
   assert.throws(()=>latexInput(String.raw`\frac{1}`));
 });
 
+test('LaTeX theta equations accept every supported math delimiter and preserve the variable',()=>{
+  const body=String.raw`\cos\left(\frac{\pi}{2} + \theta\right) = -\frac{1}{5}`;
+  for(const source of [body,`$$${body}$$`,`$${body}$`,String.raw`\[${body}\]`,String.raw`\(${body}\)`]) {
+    const converted=latexInput(source);
+    assert.equal(converted,'cos(((pi)/(2))+theta)=-((1)/(5))');
+    const tree=parse(converted);
+    assert.equal(tree.kind,'relation');
+    assert.equal(tree.args[0].value,'cos');
+    assert.equal(tree.args[0].args[0].args[1].kind,'symbol');
+    assert.equal(tree.args[0].args[0].args[1].value,'theta');
+  }
+  assert.equal(latexInput(String.raw`\theta`),'theta');
+  assert.equal(latexInput(String.raw`\theta^{2}`),'theta^(2)');
+  assert.throws(()=>latexInput(String.raw`$$\thetaUnknown$$`),SyntaxError);
+});
+
+test('LaTeX logarithms keep the base and argument separate',()=>{
+  const body=String.raw`a = 2 \log \frac{1}{\sqrt{10}} + \log_2 20 `;
+  for(const source of [body,`$$${body}$$`,`$${body}$`,String.raw`\[${body}\]`,String.raw`\(${body}\)`]) {
+    const converted=latexInput(source);
+    assert.equal(converted,'a=2log(((1)/(sqrt(10))))+log(20,2)');
+    const tree=parse(converted);
+    assert.equal(tree.kind,'relation');
+    assert.equal(tree.args[0].value,'a');
+    const basedLog=tree.args[1].args[1];
+    assert.equal(basedLog.kind,'call');
+    assert.equal(basedLog.value,'log');
+    assert.deepEqual(basedLog.args.map(node=>node.value),['20','2']);
+  }
+  for(const [source,expected] of [
+    [String.raw`\log_{10}{100}`,'log((100),(10))'],
+    [String.raw`\log_2 \left(20\right)`,'log((20),2)'],
+    [String.raw`\log_2 \frac{1}{\sqrt{10}}`,'log(((1)/(sqrt(10))),2)'],
+    [String.raw`\log_{\sqrt{2}} 4`,'log(4,(sqrt(2)))'],
+    [String.raw`\log_2 x^2+1`,'log(x^2,2)+1'],
+    [String.raw`\log_2 \log_3 9`,'log(log(9,3),2)'],
+    [String.raw`\log\,100`,'log(100)'],
+    [String.raw`\log(8,2)`,'log(8,2)']
+  ])assert.equal(latexInput(source),expected,source);
+  for(const source of [String.raw`\log_`,String.raw`\log_2`,String.raw`\log_{} 20`,String.raw`\log_2 +20`,String.raw`\log_{2 20`]) {
+    assert.throws(()=>latexInput(source),SyntaxError,source);
+  }
+});
+
 test('LaTeX indexed roots and fractional powers accept every supported math delimiter',()=>{
   const body=String.raw`\sqrt[3]{5} \times 25^{\frac{1}{3}}`;
   for(const source of [body,`$$${body}$$`,`$${body}$`,String.raw`\[${body}\]`,String.raw`\(${body}\)`]) {

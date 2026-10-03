@@ -2,6 +2,30 @@ package com.kirinonakar.calcmax.math
 import org.junit.Assert.*
 import org.junit.Test
 class StructuredEditorTest {
+    @Test fun equalInputFinishesFormulaCallsAfterRightArrow() {
+        val input=Editor("diff(,x)",5).insert("x").move(1).insert("=").insert("a")
+        assertEquals("diff(x,x)=a",input.source)
+        assertEquals("relation",input.tree()?.kind)
+        assertEquals("diff",input.tree()?.args?.get(0)?.value)
+        for(source in listOf("diff(x,x)","integrate(x,x)","sin(x)","sin(diff(x,x))","f(x)")) {
+            val at=source.indexOf('x')+1
+            assertEquals(source+"=a",Editor(source,at).insert("=a").source)
+            val typed=Editor(source,at).typedRelation(source.substring(0,at)+"="+source.substring(at),at+1)!!
+            assertEquals(source+"=",typed.source)
+            assertEquals(typed.source.length,typed.cursor)
+        }
+        assertEquals("1+diff(x,x)=a+2",Editor("1+diff(x,x)+2",8).insert("=a").source)
+    }
+    @Test fun solverEquationsAndSelectionsKeepTheirScopes() {
+        assertEquals("solve(x=1,x)",Editor("solve(x,x)",7).insert("=1").source)
+        val nested="dsolve(diff(y(t),t),y(t),t)"
+        val at=nested.indexOf("y(t)")+3
+        assertEquals("dsolve(diff(y(t),t)=y(t),y(t),t)",Editor(nested,at).insert("=y(t)").source)
+        assertEquals("solve(sin(x)=0,x)",Editor("solve(sin(x),x)",11).insert("=0").source)
+        assertEquals("diff(x=0,x)",Editor("diff(x^2,x)").selectRange(6,8).insert("=0").source)
+        assertNull(Editor("solve(x,x)",7).typedRelation("solve(x=,x)",8))
+        assertNull(Editor("sin(x)",5).typedRelation("sin(x+1)",7))
+    }
     @Test fun deletingEmptyPowerAndFractionTemplatesRemovesTheWholeStructure() {
         for(template in listOf("()^2","()^3","()^(-1)","()^()","()/()")) {
             val editor=Editor(template,1)

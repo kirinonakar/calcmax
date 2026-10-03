@@ -1,6 +1,7 @@
 package com.kirinonakar.calcmax.math
 
 private val inputConstants=setOf("Ans","pi","e","i","I","oo","c0","hP","hbar","G","qe","NA","kB0","me","mp0","epsilon0","mu0","Z0","sigmaSB")
+private val equationCalls=setOf("solve","nsolve","linsolve","dsolve","desolve","pdsolve","rsolve","piecewise")
 
 /** Source is the serialization; cursor and selection can address whole AST subtrees. */
 data class Editor(val source: String = "", val cursor: Int = source.length, val anchor: Int = cursor,
@@ -17,6 +18,10 @@ data class Editor(val source: String = "", val cursor: Int = source.length, val 
         return insert(prefix+text+suffix,prefix.length+text.length)
     }
     fun insert(text: String, inside: Int = text.length): Editor {
+        if(text.startsWith("=")) {
+            val target=exitForRelation()
+            if(target.cursor!=cursor)return target.insert(text,inside)
+        }
         if(cursor==anchor && text in listOf("+","-","−","×","*","·","÷","/","^","∠","=")) {
             val nodes=tree()?.nodes()
             val slot=nodes?.firstOrNull {node->node.kind=="group" && node.args.firstOrNull()?.kind=="hole" && node.start==cursor-1}
@@ -337,6 +342,21 @@ data class Editor(val source: String = "", val cursor: Int = source.length, val 
         return root.nodes().filter{cursor in it.start..it.end}.minByOrNull{it.end-it.start}?.let{it.start..it.end}
     }
     fun tree(): Expr? = runCatching { Parser(source,true).parse() }.getOrNull()
+    /** Formula calls finish before an equality; equation-taking calls keep their input scope. */
+    fun exitForRelation():Editor {
+        if(cursor!=anchor || source.getOrNull(cursor-1) in listOf('=','!','<','>',':'))return this
+        val calls=tree()?.nodes()?.filter {node->node.kind=="call" && node.args.isNotEmpty() &&
+            cursor>=node.args[0].start && cursor<node.end && source.getOrNull(node.end-1)==')'}
+            ?.sortedBy {it.end-it.start} ?: return this
+        var position=cursor
+        for(call in calls) {if(call.value in equationCalls)break;position=call.end}
+        return if(position==cursor)this else Editor(source,position)
+    }
+    /** Intercept only a newly typed equality that must move out of a function. */
+    fun typedRelation(newSource:String,newCursor:Int):Editor? {
+        if(cursor!=anchor || newCursor!=cursor+1 || newSource!=source.substring(0,cursor)+"="+source.substring(cursor))return null
+        return if(exitForRelation().cursor==cursor)null else insert("=")
+    }
     /** An opening delimiter in a call argument needs its close before the next argument separator. */
     fun inCallArgument():Boolean = cursor==anchor && tree()?.nodes()?.any {node->
         node.kind=="call" && node.args.any {cursor in it.start..it.end}

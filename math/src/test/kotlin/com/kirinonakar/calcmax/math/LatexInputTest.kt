@@ -4,6 +4,57 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class LatexInputTest {
+    @Test fun thetaEquationPaste() {
+        val body="\\cos\\left(\\frac{\\pi}{2} + \\theta\\right) = -\\frac{1}{5}"
+        for(source in listOf(body,"$$${body}$$","$${body}$","\\[$body\\]","\\($body\\)")) {
+            val converted=LatexInput.convert(source)
+            assertEquals("cos(((pi)/(2))+theta)=-((1)/(5))",converted)
+            val tree=Parser(converted!!).parse()
+            assertEquals("relation",tree.kind)
+            assertEquals("cos",tree.args[0].value)
+            assertEquals(listOf("pi","theta"),tree.nodes().filter {it.kind=="symbol"}.map {it.value})
+        }
+        assertEquals("theta",LatexInput.convert("\\theta"))
+        assertEquals("theta^(2)",LatexInput.convert("\\theta^{2}"))
+        assertNull(LatexInput.convert("$$\\thetaUnknown$$"))
+    }
+
+    @Test fun thetaPasteReplacesSelectionAndKeepsCaret() {
+        val converted=LatexInput.convertEdit(Editor("1+x+3",3,2),"1+$\\theta$+3")!!
+        assertEquals("1+theta+3",converted.source)
+        assertEquals(7,converted.cursor)
+        assertEquals(converted.cursor,converted.anchor)
+        assertNotNull(converted.tree())
+    }
+
+    @Test fun logarithmPasteKeepsBaseAndArgumentSeparate() {
+        val body="a = 2 \\log \\frac{1}{\\sqrt{10}} + \\log_2 20 "
+        for(source in listOf(body,"$$${body}$$","$${body}$","\\[$body\\]","\\($body\\)")) {
+            val converted=LatexInput.convert(source)
+            assertEquals("a=2log(((1)/(sqrt(10))))+log(20,2)",converted)
+            val tree=Parser(converted!!).parse()
+            assertEquals("relation",tree.kind)
+            assertEquals(listOf("a"),tree.nodes().filter {it.kind=="symbol"}.map {it.value})
+            val basedLog=tree.args[1].args[1]
+            assertEquals("call",basedLog.kind)
+            assertEquals("log",basedLog.value)
+            assertEquals(listOf("20","2"),basedLog.args.map {it.value})
+        }
+        for((source,expected) in listOf(
+            "\\log_{10}{100}" to "log((100),(10))",
+            "\\log_2 \\left(20\\right)" to "log((20),2)",
+            "\\log_2 \\frac{1}{\\sqrt{10}}" to "log(((1)/(sqrt(10))),2)",
+            "\\log_{\\sqrt{2}} 4" to "log(4,(sqrt(2)))",
+            "\\log_2 x^2+1" to "log(x^2,2)+1",
+            "\\log_2 \\log_3 9" to "log(log(9,3),2)",
+            "\\log\\,100" to "log(100)",
+            "\\log(8,2)" to "log(8,2)"
+        ))assertEquals(source,expected,LatexInput.convert(source))
+        for(source in listOf("\\log_", "\\log_2", "\\log_{} 20", "\\log_2 +20", "\\log_{2 20")) {
+            assertNull(source,LatexInput.convert(source))
+        }
+    }
+
     @Test fun fractionPaste() {
         val converted=LatexInput.convert("\\[\\frac{x^2+1}{x-1}\\]")
         assertEquals("((x^2+1)/(x-1))",converted)

@@ -31,6 +31,16 @@ test('actual CPython WASM reuses the Android engine across workspaces',async()=>
   assert.equal(evaluate(latexInput(String.raw`$$\sqrt[3]{5} \times 25^{\frac{1}{3}}$$`)).exact,'5');
   assert.equal(evaluate(latexInput(String.raw`\frac{1}{2}^2`)).exact,'1/4');
   assert.equal(evaluate(latexInput(String.raw`\sqrt[3]{-8}`)).exact,'2*(-1)**(1/3)');
+  const thetaEquation=latexInput(String.raw`$$\cos\left(\frac{\pi}{2} + \theta\right) = -\frac{1}{5}$$`);
+  assert.match(evaluate(thetaEquation).exact,/theta/);
+  assert.equal(evaluate(latexInput(String.raw`\theta`),{variables:{theta:parse('3')}}).exact,'3');
+  const logEquation=latexInput(String.raw`$$a = 2 \log \frac{1}{\sqrt{10}} + \log_2 20 $$`);
+  assert.match(evaluate(logEquation).exact,/a/);
+  const logResult=run({tree:parse(logEquation).args[1]});
+  assert.equal(logResult.ok,true,logResult.error);
+  assert.ok(Math.abs(Number(logResult.decimal)-Math.log2(10))<1e-10);
+  assert.equal(evaluate(latexInput(String.raw`\log_2 8`)).exact,'3');
+  assert.equal(evaluate(latexInput(String.raw`\log 100`)).exact,'2');
   assert.equal(evaluate('0.1+0.2').exact,'3/10');
   assert.equal(evaluate('-2^2').exact,'-4');
   assert.equal(evaluate('sin(30)',{angle:'DEG'}).exact,'1/2');

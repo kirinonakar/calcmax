@@ -6,7 +6,7 @@ import {calcVariables,calcBindings} from './calc-session.js';
 import {previousCalculations,renderPreviousCalculations,followTape} from './calculation-tape.js';
 import {renderFormulas} from './formula-preview.js';
 import {markInputCursor,followInputCursor,followTextCursor,inputPointPosition} from './input-cursor.js';
-import {moveMathCursor,mathStructureExit,emptyCallDeletion,emptyPowerDeletion,emptyFractionDeletion,infinityDeletion,powerInput} from './input-navigation.js';
+import {moveMathCursor,mathStructureExit,functionRelationExit,emptyCallDeletion,emptyPowerDeletion,emptyFractionDeletion,infinityDeletion,powerInput} from './input-navigation.js';
 import {createDisplaySizing} from './display-sizing.js';
 import {fractionInput} from './fraction-input.js';
 import {requiresExplicitEvaluation} from './evaluation-policy.js';
@@ -181,6 +181,10 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
     const field=$('expression'),undo=undoStack();undo.push(field.value);if(undo.length>100)undo.shift();
     const outsideStructure=inputBoundary?.edge==='after'&&inputBoundary.source===field.value&&inputBoundary.position===field.selectionStart&&field.selectionStart===field.selectionEnd;
     if(committed){inputAnswer=null;field.value=!lastResult?.assignment&&(fraction||/^[+\-*/÷^%!∠]/.test(text))?'Ans':'';field.setSelectionRange(field.value.length,field.value.length);committed=false;$('commit-indicator').textContent='';}
+    if(text.startsWith('=')){
+      const position=functionRelationExit(field.value,field.selectionStart,field.selectionEnd);
+      if(position!==null){field.setSelectionRange(position,position);inputBoundary=null;}
+    }
     if(state.autoCloseBrackets&&text.length===1&&field.selectionStart===field.selectionEnd&&!overwrite){const pairs={'(' : ')','[':']','{':'}'};if(pairs[text]){text+=pairs[text];cursor=1;}else if(')]}'.includes(text)&&field.value[field.selectionStart]===text){field.setSelectionRange(field.selectionStart+1,field.selectionStart+1);preview();return;}}
     let start=field.selectionStart,end=!fraction&&overwrite&&field.selectionEnd===start?Math.min(field.value.length,start+text.length):field.selectionEnd;
     if(fraction){({start,end,text,cursor}=fractionInput(field.value,start,end));}
@@ -200,6 +204,10 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
   $('expression').addEventListener('select',renderInputCursor);
   $('expression').addEventListener('keyup',renderInputCursor);
   $('expression').addEventListener('beforeinput',event=>{
+    if(typing&&!event.isComposing&&event.inputType==='insertText'&&event.data==='='){
+      const field=$('expression');
+      if(functionRelationExit(field.value,field.selectionStart,field.selectionEnd)!==null){event.preventDefault();insert('=');return;}
+    }
     if(typing&&['deleteContentBackward','deleteContentForward'].includes(event.inputType)){
       const field=$('expression'),backward=event.inputType==='deleteContentBackward';
       if(infinityDeletion(field.value,field.selectionStart,field.selectionEnd,backward)){event.preventDefault();handleKey(backward?'DEL':'DELETE_FORWARD');return;}

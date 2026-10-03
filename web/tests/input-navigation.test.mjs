@@ -1,7 +1,22 @@
 import test from 'node:test';
+import {functionRelationExit} from '../input-navigation.js';
 import assert from 'node:assert/strict';
 import {emptyCallDeletion,emptyPowerDeletion,emptyFractionDeletion,infinityDeletion,powerInput,moveMathCursor,mathStructureExit} from '../input-navigation.js';
 import {scientificRows,secondRows,topFunctions} from '../keypad.js';
+
+test('equality moves out of formula calls while keeping solver equation scopes',()=>{
+  for(const source of ['diff(x,x)','integrate(x,x)','sin(x)','sin(diff(x,x))','f(x)']){
+    const at=source.indexOf('x')+1;
+    assert.equal(functionRelationExit(source,at,at),source.length,source);
+  }
+  assert.equal(functionRelationExit('diff(x,x)',7,7),9,'the right arrow may move past the comma');
+  assert.equal(functionRelationExit('solve(x,x)',7,7),null);
+  assert.equal(functionRelationExit('solve(sin(x),x)',11,11),12);
+  const nested='dsolve(diff(y(t),t),y(t),t)',at=nested.indexOf('y(t)')+3;
+  assert.equal(functionRelationExit(nested,at,at),nested.indexOf(',y(t)'));
+  assert.equal(functionRelationExit('piecewise((x,x>0),(0,true))',12,12),null);
+  for(const [source,start,end] of [['diff(x,x)',5,6],['diff(x,x)',0,0],['sin(x)',6,6],['sin(x>',6,6]])assert.equal(functionRelationExit(source,start,end),null,source);
+});
 
 test('infinity deletes as a whole symbol without treating names containing oo as infinity',()=>{
   for(const at of [1,2])assert.deepEqual(infinityDeletion('oo',at,at),{start:0,end:2,text:''});

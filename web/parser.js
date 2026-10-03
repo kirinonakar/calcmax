@@ -119,7 +119,7 @@ export function parse(source,{allowHoles=false}={}) {
 
 // Equivalent supported LaTeX subset to math/LatexInput.kt.
 export function latexInput(input) {
-  const commands = new Set(['int','frac','dfrac','tfrac','sqrt','sin','cos','tan','arcsin','arccos','arctan','ln','log','exp','pi','infty','times','cdot','left','right','quad','qquad']);
+  const commands = new Set(['int','frac','dfrac','tfrac','sqrt','sin','cos','tan','arcsin','arccos','arctan','ln','log','exp','pi','theta','infty','times','cdot','left','right','quad','qquad']);
   let source = input.trim();
   if (!/^\\[[(]|^\$|\^\s*\{/.test(source) && ![...source.matchAll(/\\([A-Za-z]+)/g)].some(match=>commands.has(match[1]))) return input;
   for (const [open,close] of [['\\[','\\]'],['\\(','\\)'],['$$','$$'],['$','$']]) {
@@ -142,6 +142,42 @@ export function latexInput(input) {
       if (depth) throw new SyntaxError('Unclosed LaTeX group');
       return text.slice(start,i-1);
     }
+    function skipSpacing() {
+      while (i<text.length) {
+        if (/\s/.test(text[i])) i++;
+        else if (text[i]==='\\' && ',;! '.includes(text[i+1] || '\0')) i+=2;
+        else break;
+      }
+    }
+    // Read one logarithm base/argument before whitespace is removed.
+    function argument(singleToken=false) {
+      skipSpacing();
+      const start=i,c=text[i];
+      if (c==='{' || c==='(') group(c,c==='{'?'}':')');
+      else if (c==='\\') {
+        const command=/^[A-Za-z]+/.exec(text.slice(i+1))?.[0];
+        if (!command) throw new SyntaxError('Expected LaTeX argument');
+        i+=command.length+1;
+        if (['frac','dfrac','tfrac'].includes(command)) {group();group();}
+        else if (command==='sqrt') {skipSpacing();if(text[i]==='[')group('[',']');group();}
+        else if (command==='left') {skipSpacing();group('(',')');}
+        else if (command==='log') {skipSpacing();if(text[i]==='_'){i++;argument(true);}argument();}
+        else if (['sin','cos','tan','arcsin','arccos','arctan','ln','exp'].includes(command)) argument();
+      } else {
+        if (!letter(c) && !digit(c) && c!=='.') throw new SyntaxError('Expected LaTeX argument');
+        i++;
+        if (!singleToken) {
+          if (digit(c) || c==='.') while(digit(text[i]) || text[i]==='.')i++;
+          else while(letter(text[i]) || digit(text[i]))i++;
+        }
+      }
+      if (!singleToken) {
+        const end=i;
+        skipSpacing();
+        if (text[i]==='^') {i++;argument(true);} else i=end;
+      }
+      return text.slice(start,i);
+    }
     while (i < text.length) {
       const c = text[i++];
       if (c !== '\\') { result += c === '{' ? '(' : c === '}' ? ')' : c; continue; }
@@ -156,9 +192,17 @@ export function latexInput(input) {
         const argument=body(group());
         result += degree===null ? `sqrt(${argument})` : `nthroot(${argument},${degree})`;
       }
+      else if (command === 'log') {
+        skipSpacing();
+        let base=null;
+        if (text[i]==='_') {i++;base=body(argument(true));skipSpacing();}
+        // Keep the calculator's existing explicit log(value,base) syntax.
+        if (base===null && (text[i]==='(' || text.startsWith('\\left',i))) result+='log';
+        else result+=`log(${body(argument())}${base===null?'':`,${base}`})`;
+      }
       else if (['left','right','quad','qquad'].includes(command)) continue;
       else if (['pi','infty','times','cdot','arcsin','arccos','arctan'].includes(command)) result += {pi:'pi',infty:'oo',times:'*',cdot:'*',arcsin:'asin',arccos:'acos',arctan:'atan'}[command];
-      else if (['sin','cos','tan','ln','log','exp'].includes(command)) result += command;
+      else if (['sin','cos','tan','ln','log','exp','theta'].includes(command)) result += command;
       else throw new SyntaxError(`Unsupported LaTeX command: ${command}`);
     }
     return result.replace(/\s+/g,'');

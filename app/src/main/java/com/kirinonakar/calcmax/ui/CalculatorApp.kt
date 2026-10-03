@@ -270,9 +270,12 @@ internal fun largeHistoryTree(root:JSONObject?):Boolean {
         else if(typing) BasicTextField(
             value=TextFieldValue(m.editor.source,TextRange(m.editor.anchor.coerceIn(0,m.editor.source.length),m.editor.cursor.coerceIn(0,m.editor.source.length))),
             onValueChange={
+                val relation=if(!m.committed&&it.selection.collapsed&&it.composition==null)m.editor.typedRelation(it.text,it.selection.end) else null
                 val infinityDeleted=m.editor.atomicInfinityDeletion(it.text)
                 val latex=LatexInput.convertEdit(m.editor,it.text)
-                if(infinityDeleted!=null) {
+                if(relation!=null) {
+                    m.edit(relation)
+                } else if(infinityDeleted!=null) {
                     if(m.committed)m.fresh(infinityDeleted) else m.edit(infinityDeleted)
                 } else if(latex!=null) {
                     if(m.committed)m.fresh(latex) else m.edit(latex)

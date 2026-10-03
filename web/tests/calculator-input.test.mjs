@@ -37,6 +37,24 @@ function calculatorPage(t,source,{answer='46',previousAnswer}={}) {
   return {$,dom,calculator,engine,state,clickNumber};
 }
 
+for(const keyboard of [false,true])test(`equality exits functions in ${keyboard?'typing':'math'} input after the right arrow`,t=>{
+  const {$,dom,calculator}=calculatorPage(t,'1+1');
+  $('clear').click();
+  calculator.insert('diff(,x)',5);calculator.insert('x');calculator.handleKey('RIGHT');
+  if(keyboard){
+    $('typing-toggle').click();
+    const event=new dom.window.InputEvent('beforeinput',{inputType:'insertText',data:'=',bubbles:true,cancelable:true});
+    $('expression').dispatchEvent(event);assert.equal(event.defaultPrevented,true);
+  }else calculator.handleKey('RELATION');
+  calculator.insert('a');
+  assert.equal($('expression').value,'diff(x,x)=a');
+  assert.equal(parse($('expression').value).kind,'relation');
+  $('undo').click();assert.equal($('expression').value,'diff(x,x)=');
+  $('undo').click();assert.equal($('expression').value,'diff(x,x)');
+  $('clear').click();calculator.insert('integrate(,x)',10);calculator.insert('x');calculator.handleKey('RIGHT');calculator.insert('=f(x)');
+  assert.equal($('expression').value,'integrate(x,x)=f(x)');
+});
+
 test('clicking a number after = lets keypad input replace it and recalculates the edited expression',async t=>{
   const {$,calculator,engine,state,clickNumber}=calculatorPage(t,'12+34');
   clickNumber('34');
@@ -108,6 +126,41 @@ test('wrapped LaTeX paste replaces a selected operand and keeps surrounding term
   assert.equal(event.defaultPrevented,true);
   assert.equal($('expression').value,'1+nthroot(5,3)*25^(((1)/(3)))+3');
   assert.equal($('expression').selectionStart,$('expression').value.length-2);
+});
+
+for(const keyboard of [false,true])test(`LaTeX theta equation paste reaches evaluation in ${keyboard?'keyboard':'math'} input`,async t=>{
+  const {$,dom,calculator,engine}=calculatorPage(t,'12+34');
+  if(keyboard)$('typing-toggle').click();
+  const event=new dom.window.Event('paste',{bubbles:true,cancelable:true});
+  Object.defineProperty(event,'clipboardData',{value:{getData:()=>String.raw`$$\cos\left(\frac{\pi}{2} + \theta\right) = -\frac{1}{5}$$`}});
+  (keyboard?$('expression'):document.body).dispatchEvent(event);
+  const converted='cos(((pi)/(2))+theta)=-((1)/(5))';
+  assert.equal(event.defaultPrevented,true);
+  assert.equal($('expression').value,converted);
+  assert.equal($('expression').selectionStart,converted.length);
+  engine.ready=true;
+  await calculator.evaluate();
+  assert.deepEqual(engine.execute.mock.calls[0].arguments[0].tree,parse(converted));
+  $('undo').click();
+  assert.equal($('expression').value,'12+34');
+});
+
+for(const keyboard of [false,true])test(`LaTeX based logarithm paste reaches evaluation in ${keyboard?'keyboard':'math'} input`,async t=>{
+  const {$,dom,calculator,engine,state}=calculatorPage(t,'12+34');
+  if(keyboard)$('typing-toggle').click();
+  const event=new dom.window.Event('paste',{bubbles:true,cancelable:true});
+  Object.defineProperty(event,'clipboardData',{value:{getData:()=>String.raw`$$a = 2 \log \frac{1}{\sqrt{10}} + \log_2 20 $$`}});
+  (keyboard?$('expression'):document.body).dispatchEvent(event);
+  const converted='a=2log(((1)/(sqrt(10))))+log(20,2)';
+  assert.equal(event.defaultPrevented,true);
+  assert.equal($('expression').value,converted);
+  assert.equal($('expression').selectionStart,converted.length);
+  engine.ready=true;
+  await calculator.evaluate();
+  assert.deepEqual(engine.execute.mock.calls[0].arguments[0].tree,parse(converted.slice(2)));
+  assert.deepEqual(state.variables.a,parse('21'));
+  $('undo').click();
+  assert.equal($('expression').value,'12+34');
 });
 
 test('a second click places a caret inside a completed number for partial editing',t=>{

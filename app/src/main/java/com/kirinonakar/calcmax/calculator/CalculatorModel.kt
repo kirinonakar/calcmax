@@ -490,7 +490,8 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
                 return
             }
         }
-        val target=if(overwrite&&editor.cursor==editor.anchor)editor.copy(anchor=(editor.cursor+text.length).coerceAtMost(editor.source.length)) else editor
+        val relationTarget=if(value.startsWith("="))editor.exitForRelation() else editor
+        val target=if(overwrite&&relationTarget.cursor==relationTarget.anchor)relationTarget.copy(anchor=(relationTarget.cursor+text.length).coerceAtMost(relationTarget.source.length)) else relationTarget
         edit(target.insertOperand(value,insertionCursor),recordUndo=recordInEdit)
         if(value=="()"||value==")"||value=="(")markTypedParens(editor.cursor)
     }

@@ -1,4 +1,19 @@
 import {parse,scanInputTokens} from './parser.js';
+const equationCalls=new Set(['solve','nsolve','linsolve','dsolve','desolve','pdsolve','rsolve','piecewise']);
+// An equation following a formula belongs outside its calls. Solvers and
+// piecewise conditions keep their own equation input scope.
+export function functionRelationExit(source,start,end){
+  if(start!==end||/[=!<>:]/.test(source[start-1]||''))return null;
+  const calls=[];
+  try{
+    const visit=node=>{if(node.kind==='call'&&node.args.length&&start>=node.args[0].start&&start<node.end&&source[node.end-1]===')')calls.push(node);node.args.forEach(visit);};
+    visit(parse(source,{allowHoles:true}));
+  }catch{return null;}
+  calls.sort((a,b)=>(a.end-a.start)-(b.end-b.start));
+  let position=start;
+  for(const call of calls){if(equationCalls.has(call.value))break;position=call.end;}
+  return position===start?null:position;
+}
 function emptyNodeDeletion(nodes,target){
   const structuralOperand=nodes.some(node=>node.kind==='binary'&&
     (node.value==='^'?node.args[0].start===target.start&&node.args[0].end===target.end:
