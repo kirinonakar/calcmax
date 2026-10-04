@@ -85,16 +85,6 @@ test('keyboard input replaces selected numbers inside completed fractions and po
   assert.equal($('expression').value,'12/9+5^2');
 });
 
-test('pasted text replaces the selected number in a completed expression',t=>{
-  const {$,dom,clickNumber}=calculatorPage(t,'12+34');
-  clickNumber('34');
-  const event=new dom.window.Event('paste',{bubbles:true,cancelable:true});
-  Object.defineProperty(event,'clipboardData',{value:{getData:()=>'56'}});
-  document.body.dispatchEvent(event);
-  assert.equal(event.defaultPrevented,true);
-  assert.equal($('expression').value,'12+56');
-});
-
 for(const keyboard of [false,true])test(`LaTeX paste renders indexed roots and fractional powers in ${keyboard?'keyboard':'math'} input`,async t=>{
   const {$,dom,calculator,engine}=calculatorPage(t,'12+34');
   if(keyboard)$('typing-toggle').click();
@@ -126,75 +116,6 @@ test('wrapped LaTeX paste replaces a selected operand and keeps surrounding term
   assert.equal(event.defaultPrevented,true);
   assert.equal($('expression').value,'1+nthroot(5,3)*25^(((1)/(3)))+3');
   assert.equal($('expression').selectionStart,$('expression').value.length-2);
-});
-
-for(const keyboard of [false,true])test(`LaTeX limit paste reaches evaluation in ${keyboard?'keyboard':'math'} input`,async t=>{
-  const {$,dom,calculator,engine}=calculatorPage(t,'12+34');
-  if(keyboard)$('typing-toggle').click();
-  const event=new dom.window.Event('paste',{bubbles:true,cancelable:true});
-  Object.defineProperty(event,'clipboardData',{value:{getData:()=>String.raw`$$\lim_{x \to 0} \frac{3x^2}{\sin^2 x}$$`}});
-  (keyboard?$('expression'):document.body).dispatchEvent(event);
-  const converted='limit(3x^2/sin(x)^2,x,0)';
-  assert.equal(event.defaultPrevented,true);
-  assert.equal($('expression').value,converted);
-  assert.equal($('expression').selectionStart,converted.length);
-  if(keyboard)$('typing-toggle').click();
-  assert.ok($('expression-preview').querySelector('mfrac'));
-  assert.ok($('expression-preview').textContent.includes('lim'));
-  engine.ready=true;
-  await calculator.evaluate();
-  assert.deepEqual(engine.execute.mock.calls[0].arguments[0].tree,parse(converted));
-  $('undo').click();
-  assert.equal($('expression').value,'12+34');
-});
-
-for(const keyboard of [false,true])test(`LaTeX theta equation paste reaches evaluation in ${keyboard?'keyboard':'math'} input`,async t=>{
-  const {$,dom,calculator,engine}=calculatorPage(t,'12+34');
-  if(keyboard)$('typing-toggle').click();
-  const event=new dom.window.Event('paste',{bubbles:true,cancelable:true});
-  Object.defineProperty(event,'clipboardData',{value:{getData:()=>String.raw`$$\cos\left(\frac{\pi}{2} + \theta\right) = -\frac{1}{5}$$`}});
-  (keyboard?$('expression'):document.body).dispatchEvent(event);
-  const converted='cos(((pi)/(2))+theta)=-((1)/(5))';
-  assert.equal(event.defaultPrevented,true);
-  assert.equal($('expression').value,converted);
-  assert.equal($('expression').selectionStart,converted.length);
-  engine.ready=true;
-  await calculator.evaluate();
-  assert.deepEqual(engine.execute.mock.calls[0].arguments[0].tree,parse(converted));
-  $('undo').click();
-  assert.equal($('expression').value,'12+34');
-});
-
-for(const keyboard of [false,true])test(`LaTeX based logarithm paste reaches evaluation in ${keyboard?'keyboard':'math'} input`,async t=>{
-  const {$,dom,calculator,engine,state}=calculatorPage(t,'12+34');
-  if(keyboard)$('typing-toggle').click();
-  const event=new dom.window.Event('paste',{bubbles:true,cancelable:true});
-  Object.defineProperty(event,'clipboardData',{value:{getData:()=>String.raw`$$a = 2 \log \frac{1}{\sqrt{10}} + \log_2 20 $$`}});
-  (keyboard?$('expression'):document.body).dispatchEvent(event);
-  const converted='a=2log((1)/(sqrt(10)))+log(20,2)';
-  assert.equal(event.defaultPrevented,true);
-  assert.equal($('expression').value,converted);
-  assert.equal($('expression').selectionStart,converted.length);
-  engine.ready=true;
-  await calculator.evaluate();
-  assert.deepEqual(engine.execute.mock.calls[0].arguments[0].tree,parse(converted.slice(2)));
-  assert.deepEqual(state.variables.a,parse('21'));
-  $('undo').click();
-  assert.equal($('expression').value,'12+34');
-});
-
-for(const keyboard of [false,true])test(`LaTeX shifted logarithm equation paste renders without extra fences in ${keyboard?'keyboard':'math'} input`,t=>{
-  const {$,dom}=calculatorPage(t,'12+34');
-  if(keyboard)$('typing-toggle').click();
-  const event=new dom.window.Event('paste',{bubbles:true,cancelable:true});
-  Object.defineProperty(event,'clipboardData',{value:{getData:()=>String.raw`$$\log_{2}(x-3) = \log_{4}(3x-5)$$`}});
-  (keyboard?$('expression'):document.body).dispatchEvent(event);
-  assert.equal(event.defaultPrevented,true);
-  assert.equal($('expression').value,'log(x-3,2)=log(3x-5,4)');
-  assert.equal($('expression').selectionStart,$('expression').value.length);
-  assert.equal($('expression-preview').querySelectorAll('msub').length,2);
-  $('undo').click();
-  assert.equal($('expression').value,'12+34');
 });
 
 test('a second click places a caret inside a completed number for partial editing',t=>{

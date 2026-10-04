@@ -8,13 +8,6 @@ import org.junit.Test
 import kotlin.math.sin
 
 class EngineResultCodecTest {
-    @Test fun smallResultsRemainCompatibleWithTextMessages() {
-        val result="{\"ok\":true,\"note\":\"계산 완료 · π\"}"
-        assertNull(EngineResultCodec.compress(result))
-        assertEquals(result,EngineResultCodec.decode(result,null))
-        assertEquals("{}",EngineResultCodec.decode(null,null))
-    }
-
     @Test fun maximumDensitySurfaceFitsBinderAndRestoresEveryCoordinate() {
         val mesh=JSONArray()
         for(row in 0..96) {

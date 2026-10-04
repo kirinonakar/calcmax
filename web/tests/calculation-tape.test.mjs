@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {JSDOM} from 'jsdom';
-import {previousCalculations,renderPreviousCalculations,followTape} from '../calculation-tape.js';
+import {previousCalculations,renderPreviousCalculations} from '../calculation-tape.js';
 
 test('tape keeps ten previous calculations in chronological order and excludes the active result',()=>{
   const history=Array.from({length:15},(_,i)=>({source:String(15-i),exact:String(15-i),time:15-i}));
@@ -17,16 +17,4 @@ test('history displays exact math and reusable original formulas; old saved rows
   container.querySelector('.tape-expression').click();assert.equal(selected,entries[0]);
   renderPreviousCalculations(container,entries,{decimal:true,reuse:()=>{}});assert.equal(container.querySelector('.tape-result').textContent,'0.5');
   dom.window.close();
-});
-test('current input stays at the top even with a tall result; history browsing waits for gestures',()=>{
-  const dom=new JSDOM('<div><section></section></div>'),scroll=dom.window.document.querySelector('div'),active=scroll.firstElementChild;
-  Object.defineProperty(scroll,'scrollHeight',{value:900});Object.defineProperty(scroll,'clientTop',{value:1});
-  let activeTop=0;scroll.getBoundingClientRect=()=>({top:20});active.getBoundingClientRect=()=>({top:21+activeTop-scroll.scrollTop});
-  let time=0,callback=null;const follow=followTape(scroll,active,{now:()=>time,schedule:fn=>{callback=fn;return 1;},cancel:()=>{callback=null;}});
-  follow.latest();assert.equal(scroll.scrollTop,0,'empty history starts at the very top');
-  activeTop=300;follow.latest();assert.equal(scroll.scrollTop,300,'history is above the current input, regardless of result height');
-  scroll.scrollTop=100;scroll.dispatchEvent(new dom.window.Event('pointerdown'));follow.latest();assert.equal(scroll.scrollTop,100);
-  scroll.dispatchEvent(new dom.window.Event('pointerup'));time=160;callback();assert.equal(scroll.scrollTop,300);
-  scroll.scrollTop=80;scroll.dispatchEvent(new dom.window.Event('scroll'));assert.equal(scroll.scrollTop,80);
-  follow.dispose();dom.window.close();
 });

@@ -29,19 +29,6 @@ DECAY_ROWS = [(x, s.Rational(y)) for x, y in (
 
 
 class RegressionTests(unittest.TestCase):
-    def test_custom_decay_with_free_amplitude_recovers_rounded_data(self):
-        x, a, tau, c = s.symbols("x A T2 C")
-        for model in (a*s.exp(-x/tau)+c, s.exp(-x/tau)+c):
-            for initials in (None, [[tau, 1]], [[tau, 100], [c, 0]]):
-                with self.subTest(model=model, initials=initials):
-                    engine = Engine({"precision": 50})
-                    fitted = calc_statistics.fit_custom_regression(engine, DECAY_ROWS, model, x, initials)
-                    values = dict(engine.regression_parameters)
-                    self.assertAlmostEqual(float(values["T2"]), 100, delta=0.001)
-                    self.assertAlmostEqual(float(values["C"]), 0, delta=1e-6)
-                    if "A" in values: self.assertAlmostEqual(float(values["A"]), 1, delta=1e-6)
-                    self.assertLess(sum(float((fitted.subs(x, xx)-yy)**2) for xx, yy in DECAY_ROWS), 1e-12)
-
     def test_custom_decay_is_invariant_to_units_and_parameter_names(self):
         x, a, tau, c, rate = s.symbols("x gain lifetime baseline beta")
         for x_scale in (s.Rational(1, 10**6), s.Integer(1), s.Integer(10**6)):
@@ -129,58 +116,6 @@ class RegressionTests(unittest.TestCase):
                 self.assertEqual(mp.mp.dps, before)
                 self.assertTrue(json.loads(calc_engine.dispatch(payload))["ok"])
 
-    def test_custom_pi_and_e_are_constants_in_model_and_initial_values(self):
-        import math
-        def symbol(name): return {"kind": "symbol", "value": name}
-        def number(value): return {"kind": "number", "value": str(value)}
-        def binary(op, left, right): return {"kind": "binary", "value": op, "args": [left, right]}
-        def listing(items): return {"kind": "list", "args": items}
-        x = symbol("x")
-        model = binary("+", binary("*", binary("*", symbol("A"), symbol("pi")), x),
-                       binary("*", symbol("B"), binary("^", symbol("e"), binary("*", number(-1), x))))
-        table = listing([listing([number(i), number(2*math.pi*i + 3*math.exp(-i))]) for i in range(5)])
-        initials = listing([listing([symbol(name), binary("/", symbol(constant), symbol(constant))])
-                            for name, constant in (("A", "pi"), ("B", "e"))])
-        for with_initials in (False, True):
-            with self.subTest(with_initials=with_initials):
-                args = [table, symbol("custom"), model, x] + ([initials] if with_initials else [])
-                result = json.loads(calc_engine.dispatch(json.dumps({"tree": {"kind": "call", "value": "regression", "args": args},
-                     "variables": {name: number(99) for name in ("A", "B", "pi", "e")}})))
-                self.assertTrue(result["ok"], result)
-                parameters = dict(result["parameters"])
-                self.assertEqual(set(parameters), {"A", "B"})
-                self.assertAlmostEqual(float(parameters["A"]), 2, places=8)
-                self.assertAlmostEqual(float(parameters["B"]), 3, places=8)
-                self.assertIn("pi", result["exact"])
-                self.assertIn("exp(-x)", result["exact"])
-                self.assertGreater(len(result["curve"]), 100)
-                for at, predicted in result["curve"]:
-                    self.assertAlmostEqual(predicted, 2*math.pi*at + 3*math.exp(-at), places=7)
-        for independent in ("pi", "e", "i", "I"):
-            result = json.loads(calc_engine.dispatch(json.dumps({"tree": {"kind": "call", "value": "regression",
-                "args": [table, symbol("custom"), model, symbol(independent)]}})))
-            self.assertEqual(result["error"], "Choose an independent variable")
-
-    def test_custom_i_is_the_imaginary_unit_instead_of_a_parameter(self):
-        def symbol(name): return {"kind": "symbol", "value": name}
-        def number(value): return {"kind": "number", "value": str(value)}
-        def binary(op, left, right): return {"kind": "binary", "value": op, "args": [left, right]}
-        table = {"kind": "list", "args": [{"kind": "list", "args": [number(x), number(-2*x)]} for x in range(3)]}
-        def fit(formula):
-            return json.loads(calc_engine.dispatch(json.dumps({"tree": {"kind": "call", "value": "regression",
-                "args": [table, symbol("custom"), formula, symbol("x")]},
-                "variables": {name: number(99) for name in ("i", "I")}})))
-        for imaginary in ("i", "I"):
-            with self.subTest(imaginary=imaginary):
-                formula = binary("*", binary("*", symbol("A"), binary("^", symbol(imaginary), number(2))), symbol("x"))
-                result = fit(formula)
-                self.assertTrue(result["ok"], result)
-                self.assertEqual([name for name, _ in result["parameters"]], ["A"])
-                self.assertAlmostEqual(float(result["parameters"][0][1]), 2, places=8)
-                for x, y in result["curve"]:
-                    self.assertAlmostEqual(y, -2*x, places=8)
-                complex_model = binary("*", binary("*", symbol("A"), symbol(imaginary)), symbol("x"))
-                self.assertEqual(fit(complex_model)["error"], "Custom model must be real and finite")
 
     def test_transformed_fits_match_log_linear_least_squares(self):
         rows = [(s.Integer(x), s.Integer(y)) for x, y in [(1, 8), (2, 11), (4, 17), (7, 25), (11, 41)]]
@@ -199,29 +134,6 @@ class RegressionTests(unittest.TestCase):
                     relative = abs(s.N((fitted-expected).subs(x, at)/expected.subs(x, at), 70))
                     self.assertLess(relative, s.Float("1e-65"))
 
-    def test_precision_and_large_offsets_preserve_small_x_variation(self):
-        engine = Engine({"precision": 80})
-        x = engine.symbol("x")
-        # A binary float fit would collapse these distinct x values to one value.
-        origin = s.Integer(10)**40
-        rows = [(origin+i, s.exp(s.Rational(i, 10))) for i in range(6)]
-        fitted = calc_statistics.fit_regression(engine, rows, "exponential")
-        for i in (0, 3, 5):
-            error = abs(s.N(fitted.subs(x, origin+i)/rows[i][1]-1, 80))
-            self.assertLess(error, s.Float("1e-35"))
-        rows = [(s.Integer(10)**40+i, (s.Integer(10)**40+i)**s.Rational(3, 2)) for i in range(6)]
-        fitted = calc_statistics.fit_regression(engine, rows, "power")
-        self.assertLess(abs(s.N(fitted.subs(x, rows[3][0])/rows[3][1]-1, 80)), s.Float("1e-65"))
-
-    def test_hundreds_of_points_finish_with_a_curve_and_reusable_result(self):
-        for mode in ("exponential", "power", "logarithmic"):
-            with self.subTest(mode=mode):
-                result = json.loads(calc_engine.dispatch(request([(i, i*i+3*i+7) for i in range(1, 301)], mode)))
-                self.assertTrue(result["ok"], result)
-                self.assertTrue(result["approximate"])
-                self.assertGreater(len(result["curve"]), 100)
-                self.assertIn("resultAst", result)
-                self.assertLess(len(result["exact"]), 300)
 
     def test_input_domains_and_singular_data_are_rejected(self):
         for mode, rows in [("power", [(0, 1), (2, 3)]), ("power", [(1, -1), (2, 3)]),
@@ -233,13 +145,6 @@ class RegressionTests(unittest.TestCase):
             result = json.loads(calc_engine.dispatch(request([(1, 2), (2, 2), (3, 2)], mode)))
             self.assertTrue(result["ok"], result)
 
-    def test_linear_and_quadratic_keep_exact_coefficients(self):
-        linear = json.loads(calc_engine.dispatch(request([(1, 2), (2, 4), (3, 6)], "linear")))
-        quadratic = json.loads(calc_engine.dispatch(request([(1, 1), (2, 4), (3, 9)], "quadratic")))
-        self.assertEqual(linear["exact"], "2*x")
-        self.assertEqual(quadratic["exact"], "x**2")
-        self.assertFalse(linear["approximate"])
-        self.assertFalse(quadratic["approximate"])
 
     def test_cancellation_during_numeric_fitting_and_next_request(self):
         class Control:

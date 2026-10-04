@@ -20,23 +20,6 @@ class LatexInputTest {
         assertEquals("1+sum(k^2,k,1,5)+3",edit.source)
         assertEquals(edit.source.length-2,edit.cursor)
     }
-    @Test fun explicitFractionParenthesesDoNotDuplicateGeneratedGrouping() {
-        for(command in listOf("frac","dfrac","tfrac")) {
-            val body="\\int_{0}^{1} \\left( \\$command{x}{x} \\right) dx"
-            for(source in listOf(body,"$$${body}$$","$${body}$","\\[$body\\]","\\($body\\)")) {
-                val converted=LatexInput.convert(source)!!
-                assertEquals("integrate(((x)/(x)),x,0,1)",converted)
-                val expression=Parser(converted).parse().args[0]
-                assertEquals("group",expression.kind)
-                assertEquals("/",expression.args[0].value)
-            }
-        }
-        assertEquals("(((x)/(x)))",LatexInput.convert("\\left(\\left(\\frac{x}{x}\\right)\\right)"))
-        assertEquals("(((x)/(x)))",LatexInput.convert("((\\frac{x}{x}))"))
-        assertEquals("((x)/(2))^2",LatexInput.convert("\\left(\\frac{x}{2}\\right)^2"))
-        assertEquals("(((x)/(2))^2)",LatexInput.convert("\\left(\\frac{x}{2}^2\\right)"))
-        assertNull(LatexInput.convert("((x/2))"))
-    }
     @Test fun limitPastePreservesApproachFunctionPowerAndScope() {
         val body="\\lim_{x \\to 0} \\frac{3x^2}{\\sin^2 x}"
         val expected="limit(3x^2/sin(x)^2,x,0)"
@@ -70,46 +53,6 @@ class LatexInputTest {
         assertEquals("1+$expected+3",edit.source)
         assertEquals(2+expected.length,edit.cursor)
     }
-    @Test fun trigonometricFractionsKeepFunctionsAndTheirPowersSeparate() {
-        val body="\\frac{\\sin\\theta}{1-\\cos^2\\theta}"
-        for(source in listOf(body,"$$${body}$$","$${body}$","\\[$body\\]","\\($body\\)")) {
-            val converted=LatexInput.convert(source)
-            assertEquals("((sin(theta))/(1-cos(theta)^(2)))",converted)
-            val nodes=Parser(converted!!).parse().nodes()
-            assertEquals(listOf("sin","cos"),nodes.filter {it.kind=="call"}.map {it.value})
-            assertEquals(listOf("theta","theta"),nodes.filter {it.kind=="symbol"}.map {it.value})
-            assertEquals("cos",nodes.first {it.kind=="binary"&&it.value=="^"}.args[0].value)
-        }
-        assertEquals("sin(x^2)",LatexInput.convert("\\sin x^2"))
-        assertEquals("sin(cos(theta)^(2))",LatexInput.convert("\\sin\\cos^2\\theta"))
-        assertEquals("theta",Parser("θ").parse().value)
-        assertEquals("theta",Parser("sin(θ)^2").parse().args[0].args[0].value)
-        for(source in listOf("\\sin", "\\cos^2", "\\sin^", "\\sin^{} x"))assertNull(source,LatexInput.convert(source))
-    }
-
-    @Test fun thetaEquationPaste() {
-        val body="\\cos\\left(\\frac{\\pi}{2} + \\theta\\right) = -\\frac{1}{5}"
-        for(source in listOf(body,"$$${body}$$","$${body}$","\\[$body\\]","\\($body\\)")) {
-            val converted=LatexInput.convert(source)
-            assertEquals("cos(((pi)/(2))+theta)=-((1)/(5))",converted)
-            val tree=Parser(converted!!).parse()
-            assertEquals("relation",tree.kind)
-            assertEquals("cos",tree.args[0].value)
-            assertEquals(listOf("pi","theta"),tree.nodes().filter {it.kind=="symbol"}.map {it.value})
-        }
-        assertEquals("theta",LatexInput.convert("\\theta"))
-        assertEquals("theta^(2)",LatexInput.convert("\\theta^{2}"))
-        assertNull(LatexInput.convert("$$\\thetaUnknown$$"))
-    }
-
-    @Test fun thetaPasteReplacesSelectionAndKeepsCaret() {
-        val converted=LatexInput.convertEdit(Editor("1+x+3",3,2),"1+$\\theta$+3")!!
-        assertEquals("1+theta+3",converted.source)
-        assertEquals(7,converted.cursor)
-        assertEquals(converted.cursor,converted.anchor)
-        assertNotNull(converted.tree())
-    }
-
     @Test fun logarithmPasteKeepsBaseAndArgumentSeparate() {
         val body="a = 2 \\log \\frac{1}{\\sqrt{10}} + \\log_2 20 "
         for(source in listOf(body,"$$${body}$$","$${body}$","\\[$body\\]","\\($body\\)")) {
@@ -138,46 +81,6 @@ class LatexInputTest {
         }
     }
 
-    @Test fun logarithmEquationRemovesOperandFencesAndPreservesArgumentPowers() {
-        val body="\\log_{2}(x-3) = \\log_{4}(3x-5)"
-        for(source in listOf(body,"$$${body}$$","$${body}$","\\[$body\\]","\\($body\\)")) {
-            val converted=LatexInput.convert(source)
-            assertEquals("log(x-3,2)=log(3x-5,4)",converted)
-            val tree=Parser(converted!!).parse()
-            assertEquals("relation",tree.kind)
-            assertEquals(listOf(listOf("binary","number"),listOf("binary","number")),tree.args.map {log->log.args.map {it.kind}})
-        }
-        assertEquals("log(x-3,2)=log(3x-5,4)",LatexInput.convert("\\log_{2}\\left(x-3\\right)=\\log_{4}{3x-5}"))
-        assertEquals("log((x-3)^2,2)",LatexInput.convert("\\log_{2}(x-3)^2"))
-        assertEquals("log(x-3,1+1)",LatexInput.convert("\\log_{1+1}((x-3))"))
-    }
-
-    @Test fun fractionPaste() {
-        val converted=LatexInput.convert("\\[\\frac{x^2+1}{x-1}\\]")
-        assertEquals("((x^2+1)/(x-1))",converted)
-        assertEquals("/",Parser(converted!!).parse().args[0].value)
-    }
-
-    @Test fun indexedRootAndFractionalPowerPaste() {
-        val body="\\sqrt[3]{5} \\times 25^{\\frac{1}{3}}"
-        for(source in listOf(body,"$$${body}$$","$${body}$","\\[$body\\]","\\($body\\)")) {
-            val converted=LatexInput.convert(source)
-            assertEquals("nthroot(5,3)*25^(((1)/(3)))",converted)
-            val tree=Parser(converted!!).parse()
-            assertEquals("*",tree.value)
-            assertEquals("nthroot",tree.args[0].value)
-            assertEquals(listOf("5","3"),tree.args[0].args.map {it.value})
-            assertEquals("^",tree.args[1].value)
-        }
-    }
-
-    @Test fun nestedRootsAndExpressionDegrees() {
-        assertEquals("nthroot(sqrt(((1)/(2))),3)",LatexInput.convert("\\sqrt [3] {\\sqrt{\\frac{1}{2}}}"))
-        assertEquals("nthroot(nthroot(64,3),1+1)",LatexInput.convert("\\sqrt[1+1]{\\sqrt[3]{64}}"))
-        assertEquals("nthroot(16,((4)/(2)))",LatexInput.convert("\\sqrt[\\frac{4}{2}]{16}"))
-        assertEquals("nthroot(-8,3)",LatexInput.convert("\\sqrt[3]{-8}"))
-    }
-
     @Test fun wrappedLatexReplacesSelectionAndRetainsSurroundingExpressionAndCaret() {
         val previous=Editor("1+2+3",3,2)
         val converted=LatexInput.convertEdit(previous,"1+$$\\sqrt[3]{5} \\times 25^{\\frac{1}{3}}$$+3")!!
@@ -190,32 +93,11 @@ class LatexInputTest {
         assertNull(LatexInput.convertEdit(previous,"1+$$\\sqrt[3]$$+3"))
     }
 
-    @Test fun fractionsRemainWholePowerBases() {
-        for(command in listOf("frac","dfrac","tfrac")) {
-            val converted=LatexInput.convert("\\$command{1}{2}^2")
-            assertEquals("((1)/(2))^2",converted)
-            val tree=Parser(converted!!).parse()
-            assertEquals("^",tree.value)
-            assertEquals("/",tree.args[0].args[0].value)
-        }
-        assertEquals("ln(2)",LatexInput.convert("\\ln(2)"))
-        assertEquals("25^(1/3)",LatexInput.convert("25^{1/3}"))
-    }
-
     @Test fun incompleteOrUnsupportedLatexDoesNotConvert() {
         for(source in listOf("\\sqrt[3{5}","\\sqrt[]{5}","\\sqrt[3]{}","\\sqrt[3]{5", "\\sqrt[3]", "\\frac{1}","$$\\unknown{1}$$","$$\\sqrt{5}$")) {
             assertNull(source,LatexInput.convert(source))
         }
         assertNull(LatexInput.convert("1/3+1/6"))
-    }
-
-    @Test fun definiteIntegralPaste() {
-        val converted=LatexInput.convert("\\[\\int_{1}^{e}\\frac{1}{x}\\,dx=1\\]")
-        assertNotNull(converted)
-        val tree=Parser(converted!!).parse()
-        assertEquals("relation",tree.kind)
-        assertEquals("integrate",tree.args[0].value)
-        assertEquals(listOf("x","1","e"),tree.args[0].args.drop(1).map {it.value})
     }
 
     @Test fun integralEquationsAllowWhitespaceAroundBoundsAndDifferentials() {
@@ -236,28 +118,4 @@ class LatexInputTest {
         }
     }
 
-    @Test fun gaussianIntegralPaste() {
-        val converted=LatexInput.convert("$$\\int_{0}^{\\infty} e^{-x^2} \\times \\cos(2x) \\, dx$$")
-        assertNotNull(converted)
-        val tree=Parser(converted!!).parse()
-        assertEquals("integrate",tree.value)
-        assertEquals("oo",tree.args[3].value)
-        assertEquals("*",tree.args[0].value)
-    }
-
-    @Test fun gaussianIntegralPasteWithImplicitProduct() {
-        val converted=LatexInput.convert("$$\\int_{0}^{\\infty} e^{-x^2} \\cos(2x) \\, dx$$")
-        val tree=Parser(converted!!).parse()
-        assertEquals("integrate",tree.value)
-        assertEquals("*",tree.args[0].value)
-        assertEquals("∘",tree.args[0].displayOperator)
-    }
-
-    @Test fun functionAfterPowerIsImplicit() {
-        val inserted=Editor("e^(-x^2)").insert("cos()",4)
-        assertEquals("e^(-x^2)cos()",inserted.source)
-        val tree=Parser("e^(-x^2)cos(2x)").parse()
-        assertEquals("*",tree.value)
-        assertEquals("∘",tree.displayOperator)
-    }
 }

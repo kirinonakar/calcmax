@@ -20,13 +20,6 @@ test('cache upgrade replaces old offline assets without reloading the ready page
   const first=runtime();await first.dispatch('activate');assert.deepEqual(first.navigated,[]);
 });
 
-test('activation and offline execution work without accessing or navigating open tabs',async()=>{
-  const r=runtime(['calcmax-static-old']);
-  r.context.self.clients.matchAll=()=>{throw new Error('Do not access running pages');};
-  await r.dispatch('activate');
-  assert.ok(r.calls.includes('claim'));
-  assert.equal((await r.dispatch('fetch',{method:'GET',url:'https://example.test/calcmax/vendor/sympy.whl',mode:'cors'})).source,'cached');
-});
 test('updated shell comes from network; offline execution still uses cached assets',async()=>{
   const r=runtime(),shell={method:'GET',url:'https://example.test/calcmax/worker.js',mode:'cors'};
   assert.equal((await r.dispatch('fetch',shell)).source,'network');

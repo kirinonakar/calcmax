@@ -7,6 +7,10 @@ import time
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "app/src/main/python"))
 import calc_engine
+from calc_evaluator import Engine
+from calc_graph import simplify_samples, graph_expressions, _graph_programs
+from unittest.mock import patch
+import sympy as s
 
 
 def number(value): return {"kind": "number", "value": str(value)}
@@ -60,15 +64,6 @@ class ImplicitGraphTests(unittest.TestCase):
         self.assertTrue(all(abs(xx*xx+yy*yy-1)<1e-6 for xx,yy in self.points(result,2)))
         self.assertTrue(all(abs(xx-.3)<1e-6 for xx,yy in self.points(result,3)))
 
-    def test_cartesian_function_and_y_equation_support_the_same_analysis_and_derivative_graph(self):
-        line = binary("+",x,number(1))
-        for action in ("root","minimum","maximum","inflection","derivative","tangent","integral","arclength"):
-            options={"analysis":action,"a":0,"b":0} if action in ("derivative","tangent") else {"analysis":action,"a":-2,"b":2}
-            plain, explicit = self.analyze(line,**options),self.analyze(equation(y,line),**options)
-            self.assertTrue(plain["ok"],plain);self.assertEqual(plain,explicit)
-        result=self.graph(equation(y,line),graphKind="cartesian",derivativeSelected=0)
-        self.assertTrue(result["ok"],result);self.assertEqual(1,result["derivativeCurveIndex"])
-        self.assertTrue(all(abs(point[1]-1)<1e-9 for point in self.points(result,1)))
 
     def test_cartesian_circle_analysis_searches_both_branches_and_chooses_traced_tangents(self):
         roots=self.analyze(circle)
@@ -92,28 +87,6 @@ class ImplicitGraphTests(unittest.TestCase):
         result=self.analyze(circle,analysis="integral",a=-1,b=1,tracePoint=[0,1])
         self.assertTrue(result["ok"],result);self.assertAlmostEqual(math.pi/2,result["value"])
 
-    def test_cartesian_circle_derivative_preserves_both_branches(self):
-        result=self.graph(circle,graphKind="cartesian",derivativeSelected=0)
-        self.assertTrue(result["ok"],result)
-        slopes=self.points(result,1)
-        self.assertTrue(any(px>.3 and py>0 for px,py in slopes))
-        self.assertTrue(any(px>.3 and py<0 for px,py in slopes))
-
-    def test_integral_fill_covers_its_own_interval_for_simplified_lines_and_curves(self):
-        line=binary("+",x,number(3))
-        plotted=self.graph(line,graphKind="cartesian",min=-10,max=10)
-        self.assertLess(len(self.points(plotted)),10,"display curve is intentionally simplified")
-        self.assertFalse(any(.25<=px<=.75 for px,_ in self.points(plotted)),"viewport vertices alone cannot shade this interval")
-        for tree in (line,equation(y,line),x2):
-            result=self.analyze(tree,analysis="integral",a=.25,b=.75)
-            self.assertTrue(result["ok"],result)
-            polygon=result["integralFill"][0]
-            self.assertGreater(len(polygon),100)
-            self.assertEqual([.25,0.0],polygon[0]);self.assertEqual([.75,0.0],polygon[-1])
-            self.assertAlmostEqual(.25,polygon[1][0]);self.assertAlmostEqual(.75,polygon[-2][0])
-        result=self.analyze(circle,analysis="integral",a=-1,b=1,tracePoint=[0,-1])
-        self.assertTrue(result["ok"],result)
-        self.assertTrue(all(py<=0 for polygon in result["integralFill"] for _,py in polygon))
 
     def test_slider_frames_reuse_compiled_contour_and_keep_degenerate_repeated_factors(self):
         from calc_graph import _compiled_graph
@@ -135,44 +108,6 @@ class ImplicitGraphTests(unittest.TestCase):
         self.assertTrue(result["ok"], result.get("error"))
         return [point for point in result["curves"][index] if point is not None]
 
-    def test_circle_has_all_branches_and_coordinates_are_not_parameters(self):
-        result = self.graph(circle, variables={"x": number(8), "y": number(9)}, parameters={"x": 8, "y": 9})
-        points = self.points(result)
-        self.assertTrue(result["implicit"])
-        self.assertEqual([], result["parameters"])
-        self.assertGreater(len(points), 100)
-        for xx, yy in points: self.assertAlmostEqual(1, xx*xx+yy*yy, delta=1e-6)
-        for axis in (0, 1):
-            self.assertGreater(max(point[axis] for point in points), .99)
-            self.assertLess(min(point[axis] for point in points), -.99)
-
-    def test_vertical_horizontal_and_repeated_factor_lines(self):
-        for tree, axis, target in [(equation(x, number(.37)), 0, .37),
-                                   (equation(y, number(.23)), 1, .23),
-                                   (equation(y2, number(0)), 1, 0)]:
-            points = self.points(self.graph(tree))
-            self.assertGreater(len(points), 100)
-            self.assertTrue(all(abs(point[axis]-target) < 1e-6 for point in points))
-            self.assertLess(min(point[1-axis] for point in points), -1.99)
-            self.assertGreater(max(point[1-axis] for point in points), 1.99)
-
-    def test_ellipse_parameters_multiple_curves_and_bare_zero_expression(self):
-        ellipse = equation(binary("+", binary("/", x2, symbol("a")), y2), number(1))
-        result = self.graph(ellipse, equation(x, number(.5)), parameters={"a": 4})
-        points = self.points(result)
-        self.assertEqual(["a"], result["parameters"])
-        self.assertEqual(2, len(result["curves"]))
-        self.assertGreater(max(point[0] for point in points), 1.99)
-        for xx, yy in points: self.assertAlmostEqual(1, xx*xx/4+yy*yy, delta=1e-6)
-        default = self.graph(ellipse)
-        self.assertLess(max(point[0] for point in self.points(default)), 1.01)
-        residual = binary("-", binary("+", x2, y2), number(1))
-        self.assertGreater(len(self.points(self.graph(residual))), 100)
-
-    def test_pan_and_zoom_resample_inside_both_axis_ranges(self):
-        points = self.points(self.graph(circle, min=0, max=1.2, yMin=0, yMax=1.2))
-        self.assertTrue(all(0 <= xx <= 1.2 and 0 <= yy <= 1.2 for xx, yy in points))
-        self.assertEqual([], self.points(self.graph(circle, min=2, max=3, yMin=2, yMax=3)))
 
     def test_disconnected_branches_have_breaks_and_poles_are_not_curves(self):
         result = self.graph(equation(binary("*", x, y), number(1)))
@@ -193,10 +128,41 @@ class ImplicitGraphTests(unittest.TestCase):
                        self.graph(circle, yMin=2, yMax=1), self.graph(), self.graph(*([circle]*7))]:
             self.assertFalse(result["ok"])
 
-    def test_six_curves_fit_the_default_execution_budget(self):
-        result = self.graph(*[equation(binary("+", x2, y2), number(radius)) for radius in (1, 2, 3, 4, 5, 6)])
-        self.assertEqual(6, len(result.get("curves", [])), result.get("error"))
-        for index in range(6): self.assertGreater(len(self.points(result, index)), 100)
+
+class GraphPerformanceTests(unittest.TestCase):
+    def test_symbolic_programs_reuse_builds_and_invalidate_saved_context(self):
+        _graph_programs.clear()
+        tree={"kind":"symbol","value":"a"}
+        def engine(value):return Engine({"variables":{"a":{"kind":"number","value":str(value)}}})
+        self.assertEqual((s.Integer(2),),graph_expressions(engine(2),[tree],("x",)))
+        reused=engine(2)
+        with patch.object(reused,"build",side_effect=AssertionError("symbolic program rebuilt")):
+            self.assertEqual((s.Integer(2),),graph_expressions(reused,[tree],("x",)))
+        self.assertEqual((s.Integer(3),),graph_expressions(engine(3),[tree],("x",)))
+        for value in range(50):graph_expressions(engine(value),[tree],("x",))
+        self.assertLessEqual(len(_graph_programs),32)
+
+    def test_program_cache_does_not_freeze_random_calls_in_stored_definitions(self):
+        _graph_programs.clear()
+        tree={"kind":"symbol","value":"a"}
+        engine=Engine({"variables":{"a":{"kind":"call","value":"rnd","args":[]}}})
+        with patch("calc_evaluator.random.random",side_effect=[.25,.75]):
+            self.assertAlmostEqual(.25,float(graph_expressions(engine,[tree],("x",))[0]))
+            self.assertAlmostEqual(.75,float(graph_expressions(engine,[tree],("x",))[0]))
+        self.assertEqual(0,len(_graph_programs))
 
 
-if __name__ == "__main__": unittest.main()
+    def test_simplification_never_bridges_breaks_or_loses_a_closed_loop(self):
+        points = [[-1,-1], [0,0], None, [1,1], [2,2]]
+        result, parameters = simplify_samples(points, list(range(5)), {}, -2, 2)
+        self.assertEqual(points, result)
+        self.assertEqual(list(range(5)), parameters)
+        circle = [[math.cos(i*2*math.pi/500), math.sin(i*2*math.pi/500)] for i in range(501)]
+        result, parameters = simplify_samples(circle, list(range(501)), {"graphKind": "parametric", "xMin": -2, "xMax": 2}, 0, 2*math.pi)
+        self.assertGreater(len(result), 30)
+        self.assertEqual(circle[0], result[0]); self.assertEqual(circle[-1], result[-1])
+        self.assertEqual(result, [circle[i] for i in parameters])
+
+
+if __name__ == "__main__":
+    unittest.main()

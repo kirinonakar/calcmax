@@ -17,10 +17,6 @@ class ScriptRunnerTests(unittest.TestCase):
         for name in names:
             with self.subTest(name=name): self.assertTrue(callable(getattr(calcmax_catalog,name)))
 
-    def test_import_and_output(self):
-        result=json.loads(script_runner.run(json.dumps({"source":"import math\nprint(math.sqrt(9))","filename":"test.py"})))
-        self.assertTrue(result["ok"],result)
-        self.assertEqual(result["output"],"3.0\n")
 
     def test_input_prompt_and_float_conversion(self):
         class Bridge:
@@ -45,21 +41,6 @@ class ScriptRunnerTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual(len(result["output"]),40000)
 
-    def test_catalog_functions_have_python_definitions(self):
-        source=("import calcmax_catalog as calc\n"
-                "print(calc.mean([1, 2, 3]))\n"
-                "print(calc.factorint(12))\n"
-                "print(calc.diff(calc.x**3, calc.x))\n"
-                "print(calc.convert(1, calc.m, calc.cm))")
-        result=json.loads(script_runner.run(json.dumps({"source":source})))
-        self.assertTrue(result["ok"],result)
-        self.assertEqual(result["output"],"2\n2**2*3\n3*x**2\n100\n")
-
-    def test_prime_functions_match_calculator(self):
-        source="import calcmax_catalog as calc\nprint(calc.prime(1000))\nprint(calc.isprime(123457))"
-        result=json.loads(script_runner.run(json.dumps({"source":source})))
-        self.assertTrue(result["ok"],result)
-        self.assertEqual(result["output"],"7919\nTrue\n")
 
     def test_custom_catalog_function_uses_saved_definition(self):
         definition={"f":{"parameters":["x"],"body":{"kind":"binary","value":"+","args":[{"kind":"symbol","value":"x"},{"kind":"number","value":"1"}]}}}

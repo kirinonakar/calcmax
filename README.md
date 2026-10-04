@@ -191,7 +191,7 @@ python -m venv .venv
 .\gradlew.bat :app:connectedDebugAndroidTest
 ```
 
-The desktop tests consume AST fixtures produced by the actual Kotlin parser. They cover the specification's exact examples, precedence, complex arithmetic, calculus, solving, domains, matrices, statistics, graph discontinuities, units, precision, safeguards, result serialization and 100 seeded rational arithmetic cases. Device tests cover the native keypad, actual service IPC, cancellation/recovery, CAS, graphing, saved variables, activity recreation, both themes, system theme changes and landscape. Regression tests also assert live results without `=`, unchanged keypad bounds, boxed-answer continuation, vertical history gestures, fraction exit hit targets, symbolic/decimal typesetting and calculus at bounds/points. Tests produce screenshots in the app's private `files/qa` directory.
+The desktop tests consume AST fixtures produced by the actual Kotlin parser. They cover representative exact results, precedence, calculus, solving, domains, matrices, statistics, graph discontinuities, units, precision, safeguards, serialization and 100 seeded rational arithmetic cases. Device tests cover the native keypad, service IPC, cancellation/recovery, CAS, graphing, saved variables, activity recreation and themes. Retained interaction tests check editable math, answer continuation, history and fixed keypad bounds. Tests produce screenshots in the app's private `files/qa` directory. See [tests/README.md](tests/README.md) for the suite structure and test retention policy.
 
 ## Explicit bounds
 

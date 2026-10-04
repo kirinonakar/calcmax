@@ -1,8 +1,11 @@
 import test from 'node:test';
-import {functionRelationExit} from '../input-navigation.js';
+import {functionRelationExit,emptyPowerDeletion,emptyFractionDeletion,infinityDeletion,moveMathCursor,mathStructureExit} from '../input-navigation.js';
 import assert from 'node:assert/strict';
-import {emptyCallDeletion,emptyPowerDeletion,emptyFractionDeletion,infinityDeletion,powerInput,moveMathCursor,mathStructureExit} from '../input-navigation.js';
-import {scientificRows,secondRows,topFunctions} from '../keypad.js';
+import {bindKeyPress} from '../keypad.js';
+import {fractionInput} from '../fraction-input.js';
+import {parse} from '../parser.js';
+import {JSDOM} from 'jsdom';
+import {requiresExplicitEvaluation} from '../evaluation-policy.js';
 
 test('equality moves out of formula calls while keeping solver equation scopes',()=>{
   for(const source of ['diff(x,x)','integrate(x,x)','sin(x)','sin(diff(x,x))','f(x)']){
@@ -29,24 +32,6 @@ test('infinity deletes as a whole symbol without treating names containing oo as
   assert.equal(infinityDeletion('oo',0,0),null);
   assert.equal(infinityDeletion('oo',2,2,false),null);
   assert.equal(infinityDeletion('oo',0,1),null,'selections retain their own deletion behavior');
-});
-
-test('power keys create an editable base when an operand is missing',()=>{
-  for(const suffix of ['^2','^3','^(-1)','^()']){
-    for(const [source,at] of [['',0],['1+',2],['sin()',4]])
-      assert.deepEqual(powerInput(source,at,at,suffix),{text:`()${suffix}`,cursor:1});
-    assert.deepEqual(powerInput('3',1,1,suffix),{text:suffix,cursor:suffix==='^()'?2:suffix.length});
-  }
-});
-
-test('Right enters the exponent directly from a filled power base',()=>{
-  for(const [source,baseEnd,exponentStart] of [
-    ['(9)^()',2,5],['(9)^2',2,4],['9^()',1,3],['9^2',1,2],
-    ['sin((9)^())',6,9],['(1+2)^(3+4)',4,7],
-  ]){
-    assert.equal(moveMathCursor(source,baseEnd,baseEnd,'RIGHT'),exponentStart,source);
-    assert.equal(moveMathCursor(source,exponentStart,exponentStart,'LEFT'),baseEnd,source);
-  }
 });
 
 test('Right exits completed exponents and visits nested power/fraction parents in order',()=>{
@@ -90,20 +75,47 @@ test('empty powers and fractions delete as a unit while filled heads survive emp
   assert.equal(emptyPowerDeletion('()^2',0,4),null,'ordinary selections keep their behavior');
 });
 
-test('DEL removes every unused keypad function template, including default calculus variables',()=>{
-  const inputs=[...scientificRows.flat(),...secondRows.flat(),...topFunctions(),...topFunctions(true)]
-    .flatMap(key=>[key.input,key.alternate]).filter(input=>/^[A-Za-z]+\(/.test(input));
-  for(const source of [...new Set(inputs),'mean([])']){
-    assert.deepEqual(emptyCallDeletion(source,source.indexOf('(')+1,source.indexOf('(')+1),{start:0,end:source.length,text:''},source);
+test('fraction templates reuse the preceding operand or selected expression',()=>{
+  for(const [source,start,end,expected,position] of [
+    ['8',1,1,'(8)/()',5],
+    ['12.5',4,4,'(12.5)/()',8],
+    ['2+8',3,3,'2+(8)/()',7],
+    ['sqrt(8)',6,6,'sqrt((8)/())',10],
+    ['sqrt(8)',7,7,'(sqrt(8))/()',11],
+    ['2+3',0,3,'(2+3)/()',7],
+    ['2+8*4',2,3,'2+(8)/()*4',7],
+    ['Ans',3,3,'(Ans)/()',7],
+    ['',0,0,'()/()',1],
+    ['8+',2,2,'8+()/()',3],
+    ['sqrt()',5,5,'sqrt(()/())',6],
+  ]){
+    const change=fractionInput(source,start,end);
+    const result=source.slice(0,change.start)+change.text+source.slice(change.end);
+    assert.equal(result,expected,source);assert.equal(change.start+change.cursor,position,source);
+    assert.doesNotThrow(()=>parse(result,{allowHoles:true}),source);
   }
-  assert.deepEqual(emptyCallDeletion('log(,)',5,5),{start:0,end:6,text:''});
-  assert.deepEqual(emptyCallDeletion('mean([])',6,6),{start:0,end:8,text:''});
 });
 
-test('empty call deletion preserves surrounding terms, operand slots, selections, and entered arguments',()=>{
-  for(const [source,position,start,end,text] of [
-    ['1+sin()',6,2,7,''],['sin(cos())',8,4,9,''],['sin()^2',4,0,5,'()'],['2*sin()*3',6,2,7,'()'],
-  ])assert.deepEqual(emptyCallDeletion(source,position,position),{start,end,text},source);
-  for(const [source,start,end] of [['sin(2)',4,4],['log(,2)',4,4],['integrate(,y,,)',10,10],['sin()',0,0],['sin()',0,5],['12+*3',2,2]])
-    assert.equal(emptyCallDeletion(source,start,end),null,source);
+test('long press invokes only the shifted action; release does not also type the base key',()=>{
+  const dom=new JSDOM('<button></button>'),button=dom.window.document.querySelector('button');
+  let pending,short=0,long=0;
+  const schedule=callback=>{pending=callback;return 1;},cancel=()=>{pending=null;};
+  bindKeyPress(button,()=>short++,()=>long++,{schedule,cancel});
+  const pointer=(type,x=0)=>button.dispatchEvent(new dom.window.MouseEvent(type,{clientX:x,clientY:0,button:0,bubbles:true}));
+  pointer('pointerdown');pointer('pointerup');button.click();assert.equal(short,1);assert.equal(long,0);
+  pointer('pointerdown');pending();pointer('pointerup');button.click();assert.equal(short,1);assert.equal(long,1);
+  // A normal keyboard/mouse click still works after the long click was consumed.
+  button.click();assert.equal(short,2);
+  pointer('pointerdown');pointer('pointercancel');assert.equal(pending,null);button.click();assert.equal(short,2);
+  pointer('pointerdown');pointer('pointermove',20);assert.equal(pending,null);
+  button.disabled=true;pointer('pointerdown');assert.equal(pending,null);
+  dom.window.close();
+});
+
+test('preview policy evaluates arithmetic but waits for expensive or stateful calls',()=>{
+  for(const source of ['2+3*4','cos(2*x)','f(1)','log(100,10)','nthroot(8,3)'])
+    assert.equal(requiresExplicitEvaluation(parse(source)),false,source);
+  for(const source of ['rnd()','integrate(exp(-x^2),(x,0,oo))','1+dot([1,2],[3,4])','f(1,2)'])
+    assert.equal(requiresExplicitEvaluation(parse(source)),true,source);
+  assert.equal(requiresExplicitEvaluation(parse('1+f(1)'),new Set(['f'])),true);
 });

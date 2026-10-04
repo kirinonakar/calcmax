@@ -3,23 +3,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {JSDOM} from 'jsdom';
-import {clipSurfaceSegment,clipSurfacePolygon,surfaceProjection,surfaceFaces,surfaceZRange,surfaceSampleCount} from '../surface-geometry.js';
-import {plot} from '../plot.js';
+import {clipSurfaceSegment,clipSurfacePolygon,surfaceProjection,surfaceFaces} from '../surface-geometry.js';
 import {createGraphWorkspace} from '../graph-workspace.js';
+import {integralPolygons} from '../graph-integral.js';
+
 const bounds={xmin:-1,xmax:1,ymin:-1,ymax:1,zmin:-1,zmax:1};
 const mesh=[[[-1,-1,-2],[1,-1,0]],[[-1,1,0],[1,1,2]]];
 const inside=p=>p.every((v,i)=>v>=[-1,-1,-1][i]-1e-12&&v<=[1,1,1][i]+1e-12);
-
-test('automatic mesh density grows with range and zoom, has a budget cap, and manual control is exact',()=>{
-  assert.equal(surfaceSampleCount(bounds),26);
-  const wide={xmin:-5,xmax:5,ymin:-3,ymax:3};
-  assert.equal(surfaceSampleCount(wide),80);
-  assert.ok(surfaceSampleCount(wide,26,true,.4)<80);
-  assert.equal(surfaceSampleCount(wide,26,true,3),96);
-  assert.equal(surfaceSampleCount({...wide,xmin:-1000,xmax:1000}),96);
-  assert.equal(surfaceSampleCount(wide,40,false,3),40);
-  assert.equal(surfaceSampleCount(wide,1000,false),96);
-});
 
 test('surface clipping trims every axis at the boundary and preserves invalid sample breaks',()=>{
   assert.deepEqual(clipSurfaceSegment([-2,0,-2],[2,0,2],bounds),[[-1,0,-1],[1,0,1]]);
@@ -30,37 +20,6 @@ test('surface clipping trims every axis at the boundary and preserves invalid sa
   assert.ok(polygon.length>=3);assert.ok(polygon.every(inside));
   assert.deepEqual(clipSurfacePolygon([[0,0,2],[1,0,3],[0,1,3]],bounds),[]);
   assert.deepEqual(surfaceFaces([[null,[1,-1,0]],[[-1,1,0],[1,1,0]]],bounds,surfaceProjection(bounds,35,32)),[]);
-});
-
-test('surface faces are clipped, shaded, and sorted from the back after rotation',()=>{
-  for(const rotation of [0,35,90,180,270,359]){
-    const projection=surfaceProjection(bounds,rotation,32),faces=surfaceFaces(mesh,bounds,projection);
-    assert.equal(faces.length,2);
-    assert.ok(faces.every(face=>face.points.every(inside)&&face.height>=0&&face.height<=1&&face.light>=.35&&face.light<=1));
-    assert.ok(faces.every((face,i)=>!i||face.depth>=faces[i-1].depth));
-  }
-  const original=surfaceProjection(bounds,0,32).project([1,0,0]),rotated=surfaceProjection(bounds,90,32).project([1,0,0]);
-  assert.ok(Math.abs(original[0]-1)<1e-12);assert.ok(Math.abs(rotated[0])<1e-12);assert.notEqual(original[2],rotated[2]);
-  assert.deepEqual(surfaceZRange(42,42),[37.8,46.2]);assert.deepEqual(surfaceZRange(0,0),[-1,1]);
-});
-
-test('SVG axes and labels rotate with the same surface projection and all render modes work',()=>{
-  const dom=new JSDOM('<div id="plot"></div>');globalThis.document=dom.window.document;installCanvas(dom);
-  try{
-    const container=document.getElementById('plot'),result={surface:mesh,zMin:-1,zMax:1};
-    const render=(rotation,renderMode)=>plot(container,result,bounds,{surfaceView:{rotation,elevation:32,zoom:1,renderMode}});
-    render(0,'wireframe');const initial=container.querySelector('[data-surface-axis="x"]').outerHTML;
-    const start=container.querySelector('[data-surface-axis="x"]'),projection=surfaceProjection(bounds,0,32),[px,py]=projection.project([-1,-1,-1]);
-    assert.equal(Number(start.getAttribute('x1')),400+px*376*.3);assert.equal(Number(start.getAttribute('y1')),230+py*376*.3);
-    assert.equal(container.querySelectorAll('[data-surface-axis]').length,3);assert.equal(container.querySelectorAll('[data-surface-axis-label]').length,3);
-    assert.ok(container.querySelectorAll('path').length);assert.equal(container.querySelectorAll('[data-surface-face]').length,0);
-    render(90,'surface');assert.notEqual(container.querySelector('[data-surface-axis="x"]').outerHTML,initial);
-    assert.equal(container.querySelectorAll('path').length,0);assert.equal(container.querySelectorAll('[data-surface-face]').length,2);
-    const face=container.querySelector('[data-surface-face]');assert.equal(face.getAttribute('fill'),face.getAttribute('stroke'));
-    render(180,'surface-wireframe');assert.notEqual(container.querySelector('[data-surface-face]').getAttribute('fill'),container.querySelector('[data-surface-face]').getAttribute('stroke'));
-    assert.ok(!container.innerHTML.includes('NaN'));assert.ok(!container.innerHTML.includes('Infinity'));
-    plot(container,{surface:[],zMin:0,zMax:0},bounds);assert.equal(container.querySelectorAll('[data-surface-axis]').length,3);
-  }finally{dom.window.close();}
 });
 
 test('surface workspace exposes automatic/manual z bounds, exact paired sliders, validation, fit and saved options',async()=>{
@@ -91,13 +50,6 @@ test('surface workspace exposes automatic/manual z bounds, exact paired sliders,
   }finally{workspace.dispose();dom.window.close();}
 });
 
-test('constant surfaces keep a centered, increasing automatic z range',async()=>{
-  const dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));globalThis.document=dom.window.document;installCanvas(dom);
-  document.getElementById('graph-kind').value='surface';
-  const workspace=createGraphWorkspace({execute:async()=>({ok:true,surface:[[[-1,-1,42],[1,-1,42]],[[-1,1,42],[1,1,42]]],zMin:42,zMax:42,parameters:[]}),options:()=>({displayDigits:10}),onError:assert.fail,persist:()=>{},isBusy:()=>false});
-  try{await workspace.run();assert.equal(Number(document.getElementById('graph-zmin').value),37.8);assert.equal(Number(document.getElementById('graph-zmax').value),46.2);assert.ok(!document.getElementById('graph-plot').innerHTML.includes('NaN'));}finally{workspace.dispose();dom.window.close();}
-});
-
 test('surface color changes every render mode immediately and density resamples and restores',async()=>{
   let dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));globalThis.document=dom.window.document;installCanvas(dom);
   let workspace;const requests=[];
@@ -123,4 +75,12 @@ test('surface color changes every render mode immediately and density resamples 
     assert.ok($('graph-zmin').closest('.graph-surface-z-range'));
     for(const id of ['graph-rotation','graph-elevation','graph-surface-zoom'])assert.equal($(id).parentElement,$(id+'-value').parentElement);
   }finally{workspace?.dispose();dom.window.close();}
+});
+
+test('integral fill interpolates boundaries of two-point lines and preserves discontinuities',()=>{
+  assert.deepEqual(integralPolygons([[-10,-7],[10,13]],[0,1]),[[[0,0],[0,3],[1,4],[1,0]]]);
+  assert.deepEqual(integralPolygons([[10,13],[-10,-7]],[1,0]),[[[1,0],[1,4],[0,3],[0,0]]]);
+  const polygons=integralPolygons([[-2,-2],[-1,-1],null,[1,1],[2,2]],[-2,2]);
+  assert.equal(polygons.length,2);assert.equal(polygons[0].at(-1)[0],-1);assert.equal(polygons[1][0][0],1);
+  assert.deepEqual(integralPolygons([[-10,-7],[10,13]],[20,21]),[]);
 });

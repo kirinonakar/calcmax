@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {parse,latexInput} from '../parser.js';
+import {parse,latexInput,latexSymbolLabels} from '../parser.js';
+import {JSDOM} from 'jsdom';
+import {expressionDisplay,expressionInputDisplay} from '../expression-display.js';
+import {equationCommand} from '../workspace-commands.js';
 
 test('LaTeX limits preserve the approach, function power, and expression scope',()=>{
   const body=String.raw`\lim_{x \to 0} \frac{3x^2}{\sin^2 x}`;
@@ -34,24 +37,6 @@ test('LaTeX limits preserve the approach, function power, and expression scope',
   for(const source of [String.raw`\lim`,String.raw`\lim_x x`,String.raw`\lim_{x 0} x`,String.raw`\lim_{x+1 \to 0} x`,String.raw`\lim_{x \to} x`,String.raw`\lim_{x \to 0}`])assert.throws(()=>latexInput(source),SyntaxError,source);
 });
 
-test('LaTeX trigonometric fractions distinguish function powers from argument powers',()=>{
-  const body=String.raw`\frac{\sin\theta}{1-\cos^2\theta}`;
-  const nodes=n=>[n,...(n.args||[]).flatMap(nodes)];
-  for(const source of [body,`$$${body}$$`,`$${body}$`,String.raw`\[${body}\]`,String.raw`\(${body}\)`]){
-    const converted=latexInput(source);
-    assert.equal(converted,'((sin(theta))/(1-cos(theta)^(2)))');
-    const all=nodes(parse(converted));
-    assert.deepEqual(all.filter(n=>n.kind==='call').map(n=>n.value),['sin','cos']);
-    assert.deepEqual(all.filter(n=>n.kind==='symbol').map(n=>n.value),['theta','theta']);
-    assert.equal(all.find(n=>n.kind==='binary'&&n.value==='^').args[0].value,'cos');
-  }
-  assert.equal(latexInput(String.raw`\sin x^2`),'sin(x^2)');
-  assert.equal(latexInput(String.raw`\sin\cos^2\theta`),'sin(cos(theta)^(2))');
-  assert.equal(parse('θ').value,'theta');
-  assert.equal(parse('sin(θ)^2').args[0].args[0].value,'theta');
-  for(const source of [String.raw`\sin`,String.raw`\cos^2`,String.raw`\sin^`,String.raw`\sin^{} x`])assert.throws(()=>latexInput(source),SyntaxError,source);
-});
-
 test('web parser matches every AST exported by the Kotlin parser',()=>{
   const cases=JSON.parse(readFileSync(new URL('./fixtures/math-cases.json',import.meta.url),'utf8'));
   for(const {source,tree} of cases) assert.deepEqual(parse(source),tree,source);
@@ -62,12 +47,6 @@ test('power precedence, limits, invalid input, and DMS',()=>{
   assert.equal(parse('12°30′15″').kind,'sexagesimal');
   assert.equal(parse('rnd()').value,'rnd');
   for(const input of ['','1..2','sin()','1+','[1,]','process.exit()','1;2','('.repeat(100)+'1'+')'.repeat(100),'1'.repeat(8193)]) assert.throws(()=>parse(input),SyntaxError,input);
-});
-test('LaTeX fractions, nested roots, and bounded integrals',()=>{
-  assert.equal(latexInput('1/3+1/6'),'1/3+1/6');
-  assert.equal(latexInput(String.raw`\[\frac{x^2+1}{x-1}\]`),'((x^2+1)/(x-1))');
-  assert.equal(latexInput(String.raw`$$\int_{0}^{\infty} e^{-x^2} \times \cos(2x) \, dx$$`),'integrate(e^(-x^2)*cos(2x),x,0,oo)');
-  assert.throws(()=>latexInput(String.raw`\frac{1}`));
 });
 
 test('LaTeX integral equations allow whitespace around bounds and differentials',()=>{
@@ -86,22 +65,6 @@ test('LaTeX integral equations allow whitespace around bounds and differentials'
   for(const source of [String.raw`\int _{-2} f(x) dx`,String.raw`\int _{-2}^{a} f(x)`,String.raw`\int _{}^{a} f(x) dx`]) {
     assert.throws(()=>latexInput(source),SyntaxError,source);
   }
-});
-
-test('LaTeX theta equations accept every supported math delimiter and preserve the variable',()=>{
-  const body=String.raw`\cos\left(\frac{\pi}{2} + \theta\right) = -\frac{1}{5}`;
-  for(const source of [body,`$$${body}$$`,`$${body}$`,String.raw`\[${body}\]`,String.raw`\(${body}\)`]) {
-    const converted=latexInput(source);
-    assert.equal(converted,'cos(((pi)/(2))+theta)=-((1)/(5))');
-    const tree=parse(converted);
-    assert.equal(tree.kind,'relation');
-    assert.equal(tree.args[0].value,'cos');
-    assert.equal(tree.args[0].args[0].args[1].kind,'symbol');
-    assert.equal(tree.args[0].args[0].args[1].value,'theta');
-  }
-  assert.equal(latexInput(String.raw`\theta`),'theta');
-  assert.equal(latexInput(String.raw`\theta^{2}`),'theta^(2)');
-  assert.throws(()=>latexInput(String.raw`$$\thetaUnknown$$`),SyntaxError);
 });
 
 test('LaTeX logarithms keep the base and argument separate',()=>{
@@ -132,54 +95,46 @@ test('LaTeX logarithms keep the base and argument separate',()=>{
   }
 });
 
-test('LaTeX logarithm equations remove operand fences and preserve argument powers',()=>{
-  const body=String.raw`\log_{2}(x-3) = \log_{4}(3x-5)`;
-  for(const source of [body,`$$${body}$$`,`$${body}$`,String.raw`\[${body}\]`,String.raw`\(${body}\)`]) {
-    const converted=latexInput(source);
-    assert.equal(converted,'log(x-3,2)=log(3x-5,4)');
-    const tree=parse(converted);
-    assert.equal(tree.kind,'relation');
-    assert.deepEqual(tree.args.map(log=>log.args.map(arg=>arg.kind)),[['binary','number'],['binary','number']]);
-  }
-  assert.equal(latexInput(String.raw`\log_{2}\left(x-3\right)=\log_{4}{3x-5}`),'log(x-3,2)=log(3x-5,4)');
-  assert.equal(latexInput(String.raw`\log_{2}(x-3)^2`),'log((x-3)^2,2)');
-  assert.equal(latexInput(String.raw`\log_{1+1}((x-3))`),'log(x-3,1+1)');
-});
-
-test('LaTeX indexed roots and fractional powers accept every supported math delimiter',()=>{
-  const body=String.raw`\sqrt[3]{5} \times 25^{\frac{1}{3}}`;
-  for(const source of [body,`$$${body}$$`,`$${body}$`,String.raw`\[${body}\]`,String.raw`\(${body}\)`]) {
-    const converted=latexInput(source);
-    assert.equal(converted,'nthroot(5,3)*25^(((1)/(3)))');
-    const tree=parse(converted);
-    assert.equal(tree.value,'*');
-    assert.equal(tree.args[0].value,'nthroot');
-    assert.deepEqual(tree.args[0].args.map(node=>node.value),['5','3']);
-    assert.equal(tree.args[1].value,'^');
-  }
-});
-
-test('LaTeX roots support nested groups, expression degrees, and negative radicands',()=>{
-  assert.equal(latexInput(String.raw`\sqrt [3] {\sqrt{\frac{1}{2}}}`),'nthroot(sqrt(((1)/(2))),3)');
-  assert.equal(latexInput(String.raw`\sqrt[1+1]{\sqrt[3]{64}}`),'nthroot(nthroot(64,3),1+1)');
-  assert.equal(latexInput(String.raw`\sqrt[\frac{4}{2}]{16}`),'nthroot(16,((4)/(2)))');
-  assert.equal(latexInput(String.raw`\sqrt[3]{-8}`),'nthroot(-8,3)');
-});
-
-test('LaTeX fractions remain whole power bases and recognize display and inline variants',()=>{
-  for(const command of ['frac','dfrac','tfrac']) {
-    const converted=latexInput(`\\${command}{1}{2}^2`);
-    assert.equal(converted,'((1)/(2))^2');
-    const tree=parse(converted);
-    assert.equal(tree.value,'^');
-    assert.equal(tree.args[0].args[0].value,'/');
-  }
-  assert.equal(latexInput(String.raw`\ln(2)`),'ln(2)');
-  assert.equal(latexInput('25^{1/3}'),'25^(1/3)');
-});
-
 test('malformed or unsupported LaTeX is rejected before insertion',()=>{
   for(const source of [String.raw`\sqrt[3{5}`,String.raw`\sqrt[]{5}`,String.raw`\sqrt[3]{}`,String.raw`\sqrt[3]{5`,String.raw`\sqrt[3]`,String.raw`\frac{1}`,String.raw`$$\unknown{1}$$`,String.raw`$$\sqrt{5}$`]) {
     assert.throws(()=>latexInput(source),SyntaxError,source);
+  }
+});
+
+const latexCases=readFileSync(new URL('../../math/src/test/resources/latex-input.tsv',import.meta.url),'utf8').trim().split(/\r?\n/).map(line=>line.split('\t'));
+
+test('extended LaTeX has the same editable conversion fixtures as Android',()=>{
+  for(const [source,expected] of latexCases)for(const [open,close] of [['',''],['$','$'],['$$','$$'],['\\[','\\]'],['\\(','\\)']]) {
+    assert.equal(latexInput(open+source+close),expected,source);
+    parse(expected);
+  }
+  for(const name of Object.keys(latexSymbolLabels))assert.equal(latexInput(`\\${name}`),name);
+});
+
+test('invalid operator bounds, matrices, and missing differentials are rejected',()=>{
+  for(const source of [String.raw`\sum k`,String.raw`\sum_{k}^{3} k`,String.raw`\prod_{k=1} k`,String.raw`\int_0 x dx`,String.raw`\int_0^1 x`,String.raw`\int x dxfoo`,String.raw`\begin{pmatrix}1&2\\3\end{pmatrix}`,String.raw`\begin{matrix}1&\end{matrix}`,String.raw`\begin{matrix}1`,String.raw`\begin{cases}x\end{cases}`,String.raw`\binom{5}`])assert.throws(()=>latexInput(source),undefined,source);
+});
+
+test('Greek symbols and pasted matrices render in previews and editable inputs',t=>{
+  const dom=new JSDOM(''),previous=globalThis.document;
+  globalThis.document=dom.window.document;
+  t.after(()=>{globalThis.document=previous;dom.window.close();});
+  for(const render of [expressionDisplay,expressionInputDisplay]) {
+    const source=latexInput(String.raw`\alpha+\beta+\Gamma+\varphi`);
+    assert.equal(render(source).textContent,'α+β+Γ+φ');
+    const matrix=render(latexInput(String.raw`\begin{bmatrix}1&2\\3&4\end{bmatrix}`));
+    assert.equal(matrix.querySelectorAll('mtr').length,2);
+    assert.equal(matrix.querySelectorAll('mtd').length,4);
+  }
+});
+
+test('equation workspace converts LaTeX before adding the solver call',()=>{
+  const body=String.raw`\int _{-2}^{a} f(x) dx = \int _{-2}^{0} f(x) dx`;
+  for(const source of [body,`$$${body}$$`,`$${body}$`,String.raw`\[${body}\]`,String.raw`\(${body}\)`]) {
+    const command=equationCommand({source,variable:'a'});
+    assert.equal(command,'solve(integrate(f(x),x,-2,a)=integrate(f(x),x,-2,0),a)');
+    assert.equal(parse(latexInput(command)).args[0].kind,'relation');
+    assert.equal(equationCommand({kind:'nsolve',source,variable:'a',extra:'9'}),
+      'nsolve(integrate(f(x),x,-2,a)=integrate(f(x),x,-2,0),a,9)');
   }
 });

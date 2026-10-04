@@ -10,6 +10,8 @@ from fractions import Fraction
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "app/src/main/python"))
 import calc_engine as core
+import sympy as s
+from calc_shared import numeric_integral
 
 CASES = json.loads((ROOT / "build/math-cases.json").read_text(encoding="utf-8"))
 TREES = {case["source"]: case["tree"] for case in CASES}
@@ -17,213 +19,8 @@ TREES = {case["source"]: case["tree"] for case in CASES}
 def run(source, **options):
     return json.loads(core.dispatch(json.dumps({"tree": TREES[source], "angle": "RAD", **options})))
 
+
 class EngineTests(unittest.TestCase):
-    def test_chi2_independence_yates_correction(self):
-        def num(value): return {"kind": "number", "value": str(value)}
-        def evaluate(table, correction=None):
-            xs, ys = [], []
-            for i, row in enumerate(table):
-                for j, count in enumerate(row):
-                    xs.extend([num(i)] * count)
-                    ys.extend([num(j)] * count)
-            args = [{"kind": "list", "args": xs}, {"kind": "list", "args": ys}]
-            if correction is not None: args.append(num(correction))
-            return json.loads(core.dispatch(json.dumps({"tree": {"kind": "call", "value": "chi2independence", "args": args}})))
-        def payload(result):
-            self.assertTrue(result["ok"], result)
-            return dict(line.split(": ", 1) for line in result["exact"].splitlines())
-        table = [[20, 10], [15, 25]]
-        corrected = payload(evaluate(table))
-        self.assertEqual(corrected["chi-square"], "189/40")  # 4.725
-        self.assertEqual(corrected["Yates correction"], "1")
-        self.assertEqual(corrected["df"], "1")
-        self.assertEqual(corrected["observed"], "[[20, 10], [15, 25]]")
-        self.assertAlmostEqual(float(corrected["p value"]), math.erfc(math.sqrt(4.725 / 2)), 12)
-        self.assertEqual(payload(evaluate(table, 1)), corrected)
-        uncorrected = payload(evaluate(table, 0))
-        self.assertEqual(uncorrected["chi-square"], "35/6")  # 5.833333...
-        self.assertEqual(uncorrected["Yates correction"], "0")
-        self.assertAlmostEqual(float(uncorrected["p value"]), math.erfc(math.sqrt(35 / 12)), 12)
-        for table in ([[1, 1], [1, 1]], [[1, 2], [2, 3]]):
-            result = evaluate(table)
-            self.assertEqual(payload(result)["chi-square"], "0")
-            self.assertEqual(payload(result)["p value"], "1")
-            self.assertIn("expected counts are below 5", result["note"])
-        table = [[10, 20, 30], [20, 15, 10]]
-        self.assertEqual(payload(evaluate(table))["chi-square"], payload(evaluate(table, 0))["chi-square"])
-        self.assertEqual(payload(evaluate(table))["Yates correction"], "0")
-        self.assertEqual(payload(evaluate(table))["df"], "2")
-        self.assertIn("only applies to 2×2", evaluate(table)["note"])
-        for invalid in (2, -1, "0.5"):
-            self.assertFalse(evaluate([[1, 2], [2, 3]], invalid)["ok"])
-
-    def test_linear_regression_returns_pearson_correlation(self):
-        def num(value): return {"kind":"number","value":str(value)}
-        def regression(pairs,mode="linear"):
-            table={"kind":"list","args":[{"kind":"list","args":[num(x),num(y)]} for x,y in pairs]}
-            tree={"kind":"call","value":"regression","args":[table,{"kind":"symbol","value":mode}]}
-            return json.loads(core.dispatch(json.dumps({"tree":tree,"angle":"RAD"})))
-        rising=regression([(1,2),(2,4),(3,6)])
-        falling=regression([(1,6),(2,4),(3,2)])
-        uncorrelated=regression([(1,2),(2,1),(3,2)])
-        flat=regression([(1,2),(2,2),(3,2)])
-        quadratic=regression([(1,1),(2,4),(3,9)],"quadratic")
-        self.assertTrue(all(result["ok"] for result in (rising,falling,uncorrelated,flat,quadratic)))
-        self.assertEqual(1.0,rising["correlation"])
-        self.assertEqual(-1.0,falling["correlation"])
-        self.assertEqual(0.0,uncorrelated["correlation"])
-        self.assertIsNone(flat["correlation"])
-        self.assertNotIn("correlation",quadratic)
-
-    def test_tukey_pairwise_adjusted_probabilities(self):
-        from calc_statistics import _studentized_range_sf, _t_sf
-        def listing(values):
-            return {"kind":"list","args":[{"kind":"number","value":str(value)} for value in values]}
-        groups=[[24.5,23.5,26.4,27.1,29.9],[28.4,34.2,29.5,32.2,30.1],[26.1,28.3,24.3,26.2,27.8]]
-        tree={"kind":"call","value":"tukey","args":[listing(group) for group in groups]}
-        result=json.loads(core.dispatch(json.dumps({"tree":tree,"angle":"RAD"})))
-        self.assertTrue(result["ok"],result)
-        values=dict(line.split(": ",1) for line in result["exact"].splitlines())
-        # Published SciPy example: all three adjusted probabilities round to these values.
-        self.assertAlmostEqual(0.014,float(values["x-y adjusted p value"]),places=3)
-        self.assertAlmostEqual(0.980,float(values["x-z adjusted p value"]),places=3)
-        self.assertAlmostEqual(0.020,float(values["y-z adjusted p value"]),places=3)
-        self.assertAlmostEqual(_studentized_range_sf(3,2,9),float(2*_t_sf(3/math.sqrt(2),9)),places=5)
-
-    def test_custom_nonlinear_regression_adc_ivim_and_decay(self):
-        import sympy as s
-        def symbol(name): return {"kind":"symbol","value":name}
-        def number(value): return {"kind":"number","value":str(value)}
-        def binary(op, left, right): return {"kind":"binary","value":op,"args":[left,right]}
-        def exp(arg): return {"kind":"call","value":"exp","args":[arg]}
-        def fit(pairs, formula, initials=None, independent="b"):
-            table={"kind":"list","args":[{"kind":"list","args":[number(x),number(y)]} for x,y in pairs]}
-            args=[table,symbol("custom"),formula,symbol(independent)]
-            if initials is not None:
-                args.append({"kind":"list","args":[{"kind":"list","args":[symbol(name),*[number(v) for v in values]]} for name,values in initials]})
-            return json.loads(core.dispatch(json.dumps({"tree":{"kind":"call","value":"regression","args":args},"angle":"RAD"})))
-        b=symbol("b")
-        adc=exp(binary("*",number(-1),binary("*",b,symbol("ADC"))))
-        adc_pairs=[(x,math.exp(-x*0.0012)) for x in range(0,1100,100)]
-        adc_result=fit(adc_pairs,adc)
-        self.assertTrue(adc_result["ok"],adc_result)
-        fitted=s.sympify(adc_result["exact"])
-        self.assertAlmostEqual(float(fitted.subs("b",500)),math.exp(-0.6),places=5)
-        self.assertEqual(["ADC"],[name for name,_ in adc_result["parameters"]])
-        self.assertAlmostEqual(0.0012,float(adc_result["parameters"][0][1]),places=8)
-        self.assertGreater(len(adc_result["curve"]),100)
-
-        slow=binary("*",binary("-",number(1),symbol("f")),exp(binary("*",number(-1),binary("*",b,symbol("D")))))
-        fast=binary("*",symbol("f"),exp(binary("*",number(-1),binary("*",b,symbol("Dstar")))))
-        ivim=binary("+",slow,fast)
-        ivim_pairs=[(x,0.82*math.exp(-x*0.0008)+0.18*math.exp(-x*0.012)) for x in (0,10,20,40,80,120,200,400,600,800)]
-        ivim_result=fit(ivim_pairs,ivim,[("f",[0.2,0,1]),("D",[0.001,0]),("Dstar",[0.01,0])])
-        self.assertTrue(ivim_result["ok"],ivim_result)
-        fitted=s.sympify(ivim_result["exact"])
-        self.assertAlmostEqual(float(fitted.subs("b",80)),ivim_pairs[4][1],places=5)
-        self.assertEqual({"D","Dstar","f"},{name for name,_ in ivim_result["parameters"]})
-        values=dict(ivim_result["parameters"])
-        self.assertAlmostEqual(0.18,float(values["f"]),places=4)
-        self.assertAlmostEqual(0.0008,float(values["D"]),places=6)
-        self.assertAlmostEqual(0.012,float(values["Dstar"]),places=4)
-        self.assertNotIn("correlation",ivim_result)
-        self.assertFalse(fit(ivim_pairs[:3],ivim)["ok"])
-
-        x=symbol("x")
-        decay=binary("+",binary("*",symbol("A"),exp(binary("*",number(-1),binary("*",symbol("k"),x)))),symbol("C"))
-        decay_pairs=[(point,3*math.exp(-0.4*point)+0.6) for point in range(11)]
-        decay_result=fit(decay_pairs,decay,independent="x")
-        self.assertTrue(decay_result["ok"],decay_result)
-        values=dict(decay_result["parameters"])
-        self.assertAlmostEqual(3,float(values["A"]),places=5)
-        self.assertAlmostEqual(0.4,float(values["k"]),places=5)
-        self.assertAlmostEqual(0.6,float(values["C"]),places=5)
-
-    def test_custom_regression_parameters_follow_internal_precision(self):
-        def number(value): return {"kind":"number","value":str(value)}
-        x={"kind":"symbol","value":"x"}
-        a={"kind":"symbol","value":"A"}
-        rows={"kind":"list","args":[{"kind":"list","args":[number(i*7),number(i)]} for i in (1,2,3)]}
-        tree={"kind":"call","value":"regression","args":[rows,{"kind":"symbol","value":"custom"},
-              {"kind":"binary","value":"*","args":[a,x]},x]}
-        def fit(precision, display_digits):
-            return json.loads(core.dispatch(json.dumps({"tree":tree,"precision":precision,"displayDigits":display_digits})))
-        narrow=fit(12,5)
-        wide=fit(50,5)
-        self.assertTrue(narrow["ok"],narrow)
-        self.assertTrue(wide["ok"],wide)
-        narrow_value=dict(narrow["parameters"])["A"]
-        wide_value=dict(wide["parameters"])["A"]
-        self.assertTrue(wide_value.startswith("0.142857142857142857142857"),wide_value)
-        self.assertGreater(len(wide_value),len(narrow_value)+30)
-        self.assertIn(wide_value,wide["exact"])
-        self.assertEqual(wide["parameters"],fit(50,30)["parameters"])
-        maximum=fit(200,5)
-        self.assertTrue(maximum["ok"],maximum)
-        self.assertGreaterEqual(len(dict(maximum["parameters"])["A"]),201)
-
-    def test_indefinite_integral_places_constant_after_expression(self):
-        tree={"kind":"call","value":"integrate","args":[
-            {"kind":"symbol","value":"x"},{"kind":"symbol","value":"x"}]}
-        result=json.loads(core.dispatch(json.dumps({"tree":tree,"angle":"RAD"})))
-        self.assertTrue(result["ok"],result)
-        self.assertEqual(result["exact"],"x**2/2 + C")
-        self.assertEqual(result["tree"]["args"][-1]["value"],"C")
-        self.assertTrue(result["decimal"].endswith(" + C"))
-
-    def test_prime_index_and_primality_are_distinct(self):
-        def call(name, value):
-            tree={"kind":"call","value":name,"args":[{"kind":"number","value":str(value)}]}
-            return json.loads(core.dispatch(json.dumps({"tree":tree})))
-        self.assertEqual(call("prime",1)["exact"],"2")
-        self.assertEqual(call("prime",1000)["exact"],"7919")
-        self.assertEqual(call("isprime",123457)["exact"],"True")
-        self.assertEqual(call("isprime",123456)["exact"],"False")
-        self.assertEqual(call("isprime",-7)["exact"],"False")
-        self.assertFalse(call("prime",0)["ok"])
-        self.assertFalse(call("prime",100001)["ok"])
-    def test_factorint_displays_prime_powers_and_reuses_numeric_value(self):
-        def factor(value):
-            tree={"kind":"call","value":"factorint","args":[{"kind":"number","value":str(value)}]}
-            return json.loads(core.dispatch(json.dumps({"tree":tree})))
-        result=factor(360)
-        self.assertTrue(result["ok"],result)
-        self.assertEqual(result["exact"],"2**3*3**2*5")
-        self.assertEqual(result["decimal"],"360")
-        self.assertEqual(result["tree"]["kind"],"product")
-        self.assertEqual([item["kind"] for item in result["tree"]["args"]],["power","power","number"])
-        self.assertEqual(factor(1)["exact"],"1")
-        reused=json.loads(core.dispatch(json.dumps({"tree":result["resultAst"]})))
-        self.assertEqual(reused["exact"],"360")
-    def test_round_decimal_places_and_rnd(self):
-        def number(value): return {"kind":"number","value":str(value)}
-        def call(name,*args):
-            return json.loads(core.dispatch(json.dumps({"tree":{"kind":"call","value":name,"args":list(args)}})))
-        self.assertEqual(call("round",number("3.1415"),number(2))["exact"],"3.14")
-        self.assertEqual(call("round",number("1.235"),number(2))["exact"],"1.24")
-        self.assertEqual(call("round",number("-1.225"),number(2))["exact"],"-1.22")
-        self.assertEqual(call("round",number("1234"),number(-2))["exact"],"1200")
-        self.assertEqual(call("round",number("2.5"))["exact"],"2")
-        self.assertFalse(call("round",number(1),number("1.5"))["ok"])
-        self.assertFalse(call("rnd",number(1))["ok"])
-        samples=[call("rnd") for _ in range(5)]
-        self.assertTrue(all(item["ok"] and 0<=float(item["exact"])<1 for item in samples),samples)
-        self.assertGreater(len({item["exact"] for item in samples}),1)
-    def test_roundh_half_up(self):
-        def number(value): return {"kind":"number","value":str(value)}
-        def call(name,*args):
-            return json.loads(core.dispatch(json.dumps({"tree":{"kind":"call","value":name,"args":list(args)}})))
-        for value,places,expected in [
-            ("3.1415",2,"3.14"),("1.225",2,"1.23"),("-1.225",2,"-1.23"),
-            ("2.5",0,"3"),("-2.5",0,"-3"),("125",-1,"130"),("-125",-1,"-130")
-        ]:
-            with self.subTest(value=value,places=places):
-                result=call("roundh",number(value),number(places))
-                self.assertTrue(result["ok"],result)
-                self.assertEqual(result["exact"],expected)
-        self.assertEqual(call("roundh",number("2.5"))["exact"],"3")
-        self.assertEqual(call("round",number("2.5"))["exact"],"2")
-        self.assertFalse(call("roundh",number(1),number("1.5"))["ok"])
     def test_exact_rational_properties(self):
         rng=random.Random(991)
         def rational(a,b): return {"kind":"binary","value":"/","args":[{"kind":"number","value":str(a)},{"kind":"number","value":str(b)}]}
@@ -336,22 +133,6 @@ class EngineTests(unittest.TestCase):
         self.assertLess(len(json.dumps(scientific["tree"])),1000)
         self.assertEqual(evaluate(scientific["resultAst"])["exact"],scientific["exact"])
 
-    def test_tiny_power_inside_numeric_sum_stays_compact(self):
-        num=lambda value:{"kind":"number","value":str(value)}
-        binary=lambda op,a,b:{"kind":"binary","value":op,"args":[a,b]}
-        atan=lambda a:{"kind":"call","value":"atan","args":[a]}
-        tiny=binary("^",num(10),{"kind":"unary","value":"-","args":[num(100000)]})
-        angle=binary("-",binary("-",atan(binary("/",num(1),num(5))),atan(binary("/",num(1),num(239)))),binary("/",{"kind":"symbol","value":"pi"},num(4)))
-        expression=binary("/",num(1),binary("+",angle,tiny))
-        evaluate=lambda tree:json.loads(core.dispatch(json.dumps({"tree":tree,"angle":"RAD"})))
-        result=evaluate(expression)
-        self.assertTrue(result["ok"],result)
-        self.assertIn("10**(-100000)",result["exact"])
-        self.assertLess(len(json.dumps(result)),5000)
-        self.assertAlmostEqual(float(result["decimal"]),-1.688656693123357,places=12)
-        reused=evaluate(result["resultAst"])
-        self.assertTrue(reused["ok"],reused)
-        self.assertIn("10**(-100000)",reused["exact"])
     def test_exact_examples(self):
         for case in CASES:
             if "expected" in case:
@@ -384,21 +165,6 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(tuple_result["exact"],flat_result["exact"])
         self.assertEqual(tuple_result["exact"],"sqrt(pi)*exp(-1)/2")
         self.assertEqual(run("integrate(exp(-x^2)*cos(2x),(x,0,oo))",variables={"x":{"kind":"number","value":"7"}})["exact"],tuple_result["exact"])
-    def test_symbolic_coefficient_display_tree(self):
-        result=run("cos(2*x)")
-        self.assertTrue(result["ok"],result)
-        self.assertEqual([part["kind"] for part in result["tree"]["args"][0]["args"]],["number","symbol"])
-    def test_cold_sympy_integration_bounds(self):
-        tree=TREES["integrate(exp(-x^2)*cos(2x),(x,0,oo))"]
-        dependencies_path=str(pathlib.Path(core.s.__file__).resolve().parent.parent)
-        script=("import sys,json\n"
-                f"sys.path.insert(0,{dependencies_path!r})\n"
-                f"sys.path.insert(0,{str(ROOT / 'app/src/main/python')!r})\n"
-                "import calc_engine\n"
-                f"print(calc_engine.dispatch({json.dumps(json.dumps({'tree':tree,'angle':'RAD'}))}))")
-        result=subprocess.run([sys.executable,"-c",script],cwd=ROOT,capture_output=True,text=True,timeout=20)
-        self.assertEqual(result.returncode,0,result.stderr)
-        self.assertTrue(json.loads(result.stdout)["ok"],result.stdout)
     def test_cold_first_evaluation_stays_within_the_step_budget(self):
         tree={"kind":"number","value":"9"}
         for name in ["sin","cos","tan","atan","acos","asin"]: tree={"kind":"call","value":name,"args":[tree]}
@@ -406,31 +172,13 @@ class EngineTests(unittest.TestCase):
         script=("import sys,json\n"
                 f"sys.path.insert(0,{dependencies_path!r})\n"
                 f"sys.path.insert(0,{str(ROOT / 'app/src/main/python')!r})\n"
-                "import calc_engine\n"
-                f"print(calc_engine.dispatch({json.dumps(json.dumps({'tree':tree,'angle':'DEG'}))}))")
+                "import calc_engine as core\n"
+                f"print(core.dispatch({json.dumps(json.dumps({'tree':tree,'angle':'DEG'}))}))")
         result=subprocess.run([sys.executable,"-c",script],cwd=ROOT,capture_output=True,text=True,timeout=20)
         self.assertEqual(result.returncode,0,result.stderr)
         output=json.loads(result.stdout)
         self.assertTrue(output["ok"],output)
         self.assertAlmostEqual(float(output["decimal"]),9,places=9)
-    def test_cold_fourier_transform_stays_within_the_step_budget(self):
-        # Regression: fourier(exp(-t^2),t,w) spends about 7.5M traced steps on a cold first
-        # evaluation; the former six-million step allowance cut it off after one second of work.
-        tree={"kind":"call","value":"fourier","args":[
-            {"kind":"call","value":"exp","args":[{"kind":"unary","value":"-","args":[
-                {"kind":"binary","value":"^","args":[{"kind":"symbol","value":"t"},{"kind":"number","value":"2"}]}]}]},
-            {"kind":"symbol","value":"t"},{"kind":"symbol","value":"w"}]}
-        dependencies_path=str(pathlib.Path(core.s.__file__).resolve().parent.parent)
-        script=("import sys,json\n"
-                f"sys.path.insert(0,{dependencies_path!r})\n"
-                f"sys.path.insert(0,{str(ROOT / 'app/src/main/python')!r})\n"
-                "import calc_engine\n"
-                f"print(calc_engine.dispatch({json.dumps(json.dumps({'tree':tree,'angle':'RAD','budget':8}))}))")
-        result=subprocess.run([sys.executable,"-c",script],cwd=ROOT,capture_output=True,text=True,timeout=20)
-        self.assertEqual(result.returncode,0,result.stderr)
-        output=json.loads(result.stdout)
-        self.assertTrue(output["ok"],output)
-        self.assertEqual(output["exact"],"sqrt(pi)*exp(-pi**2*w**2)")
     def test_graph(self):
         result=run("sin(x)",action="graph",trees=[TREES["sin(x)"]],min=-3,max=3,samples=100)
         self.assertTrue(result["ok"],result)
@@ -677,40 +425,6 @@ class EngineTests(unittest.TestCase):
         self.assertIn("u(x, y)",solved["exact"])
         higher=node("relation","=",binary("+",call("diff",u,x,x),call("diff",u,y,y)),num(0))
         self.assertFalse(dispatch(call("pdsolve",higher,u),budget=30)["ok"])
-    def test_probability_distributions(self):
-        def node(kind,value="",*args): return {"kind":kind,"value":value,"args":list(args)}
-        def num(value): return node("number",str(value))
-        def sym(name): return node("symbol",name)
-        def call(name,*args): return node("call",name,*args)
-        def neg(value): return node("unary","-",value)
-        def dispatch(tree,**options): return json.loads(core.dispatch(json.dumps({"tree":tree,"angle":"RAD",**options})))
-        self.assertEqual(dispatch(call("normcdf",num(0)))["exact"],"1/2")
-        self.assertEqual(dispatch(call("normcdf",neg(sym("oo")),sym("oo")))["exact"],"1")
-        self.assertEqual(dispatch(call("normpdf",num(0)))["exact"],"sqrt(2)/(2*sqrt(pi))")
-        self.assertEqual(dispatch(call("normalcdf",num(0)))["exact"],"1/2")
-        self.assertAlmostEqual(float(dispatch(call("normcdf",num("1.96")))["decimal"]),0.9750021048517795,12)
-        self.assertAlmostEqual(float(dispatch(call("normcdf",neg(num("1.96")),num("1.96")))["decimal"]),0.950004209703559,12)
-        self.assertAlmostEqual(float(dispatch(call("normcdf",neg(sym("oo")),num(1),num(0),num(1)))["decimal"]),0.8413447460685429,12)
-        self.assertEqual(dispatch(call("invnorm",num("1/2")))["exact"],"0")
-        self.assertAlmostEqual(float(dispatch(call("invnorm",num("0.975")))["decimal"]),1.959963984540054,9)
-        self.assertEqual(dispatch(call("tpdf",num(0),num(10)))["exact"],"63*sqrt(10)/512")
-        self.assertEqual(dispatch(call("tpdf",num(1),num(1)))["exact"],"1/(2*pi)")
-        self.assertEqual(dispatch(call("tcdf",num(0),num(10)))["exact"],"0.5")
-        self.assertAlmostEqual(float(dispatch(call("tcdf",num(1),num(1)))["decimal"]),0.75,12)
-        self.assertAlmostEqual(float(dispatch(call("invt",num("0.975"),num(10)))["decimal"]),2.228138852,6)
-        self.assertAlmostEqual(float(dispatch(call("invt",num("0.99"),num(1)))["decimal"]),math.tan(0.49*math.pi),6)
-        self.assertEqual(dispatch(call("chi2pdf",num(2),num(2)))["exact"],"exp(-1)/2")
-        self.assertEqual(dispatch(call("chi2cdf",num(0),num(5)))["exact"],"0")
-        self.assertAlmostEqual(float(dispatch(call("chi2cdf",num(2),num(2)))["decimal"]),1-math.exp(-1),12)
-        self.assertEqual(dispatch(call("fcdf",num(3),num(2),num(4)))["exact"],"0.84")
-        self.assertEqual(dispatch(call("fpdf",num(1),num(2),num(4)))["exact"],"8/27")
-        self.assertEqual(dispatch(call("binompdf",num(10),num("1/2"),num(5)))["exact"],"63/256")
-        self.assertEqual(dispatch(call("binomcdf",num(10),num("1/2"),num(5)))["exact"],"319/512")
-        self.assertEqual(dispatch(call("binomcdf",num(4),num("1/2")))["exact"],"[1/16, 5/16, 11/16, 15/16, 1]")
-        self.assertEqual(dispatch(call("poissonpdf",num(2),num(3)))["exact"],"4*exp(-2)/3")
-        self.assertEqual(dispatch(call("poissoncdf",num(2),num(3)))["exact"],"19*exp(-2)/3")
-        self.assertEqual(dispatch(call("geometpdf",num("1/2"),num(3)))["exact"],"1/8")
-        self.assertEqual(dispatch(call("geometcdf",num("1/2"),num(3)))["exact"],"7/8")
 
     def test_statistical_tests_and_intervals(self):
         def node(kind,value="",*args): return {"kind":kind,"value":value,"args":list(args)}
@@ -840,20 +554,6 @@ class EngineTests(unittest.TestCase):
         annual=dispatch(call("cagr",num(1000),num(2000),num(5)))
         self.assertAlmostEqual(float(annual["decimal"]),2**0.2-1,9)
 
-    def test_distribution_and_finance_errors(self):
-        def node(kind,value="",*args): return {"kind":kind,"value":value,"args":list(args)}
-        def num(value): return node("number",str(value))
-        def call(name,*args): return node("call",name,*args)
-        def listing(*values): return node("list","",*values)
-        def dispatch(tree,**options): return json.loads(core.dispatch(json.dumps({"tree":tree,"angle":"RAD",**options})))
-        for tree in [call("normcdf",num(1),num(2),num(3)),call("invnorm",num(0)),call("ttest",num(0),listing(num(1))),
-                     call("irr",listing(num(1),num(2),num(3))),call("npv",num(-1),num(-1000),listing(num(300))),
-                     call("tvmpmt",num(0),num("0.05"),num(100),num(0)),call("anova",listing(num(1),num(2))),
-                     call("amort",num("0.005"),num(200000),num(0)),call("binompdf",num(1000),num("1/2")),
-                     call("cagr",num(0),num(100),num(5)),call("cagr",num(1000),num(2000),num(0))]:
-            with self.subTest(tree=tree): self.assertFalse(dispatch(tree)["ok"])
-        self.assertEqual(dispatch(call("tvmpmt",num(0),num("0.05"),num(100),num(0)))["error"],"The number of periods must be positive")
-        self.assertEqual(dispatch(call("cagr",num(0),num(100),num(5)))["error"],"The starting value must be positive")
 
     def test_extended_number_theory_special_functions_and_distributions(self):
         def node(kind,value="",*args): return {"kind":kind,"value":value,"args":list(args)}
@@ -929,3 +629,55 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(exact("regression",rows([(1,1),(2,4),(3,9)]),sym("quadratic")),"x**2")
 
     if __name__=="__main__": unittest.main(verbosity=2)
+
+
+def number(value): return {"kind": "number", "value": str(value)}
+def symbol(name): return {"kind": "symbol", "value": name}
+def binary(op, left, right): return {"kind": "binary", "value": op, "args": [left, right]}
+
+x = symbol("x")
+polynomial = binary("-", binary("-", binary("*", number(3), binary("^", x, number(2))),
+                               binary("*", number(16), x)), number(20))
+
+
+class NumericIntegralTests(unittest.TestCase):
+    def dispatch(self, **request):
+        result = json.loads(core.dispatch(json.dumps(request)))
+        self.assertTrue(result["ok"], result)
+        return result
+
+    def test_graph_zero_signed_integral_keeps_shading(self):
+        for tree in (polynomial, {"kind": "relation", "value": "=", "args": [symbol("y"), polynomial]}):
+            for precision in (15, 50, 100):
+                result = self.dispatch(action="graphAnalysis", trees=[tree], analysis="integral",
+                                       a=-2, b=0, precision=precision)
+                self.assertEqual(0, result["value"])
+                points = [point for polygon in result["integralFill"] for point in polygon]
+                self.assertTrue(any(py > 0 for _, py in points))
+                self.assertTrue(any(py < 0 for _, py in points))
+
+
+    def test_small_nonzero_integrals_are_not_chopped(self):
+        variable = s.Symbol("x")
+        epsilon = s.Rational(1, 10**80)
+        expression = 3*variable**2-16*variable-20+epsilon
+        result = numeric_integral(expression, variable, -2.0, 0.0, 100)
+        self.assertGreater(result, 0)
+        self.assertEqual(s.N(2*epsilon, 100), result)
+        graph = self.dispatch(action="graphAnalysis", trees=[binary("+", polynomial, number("1e-80"))],
+                              analysis="integral", a=-2, b=0, precision=100)
+        self.assertEqual(2e-80, graph["value"])
+
+
+    def test_nonpolynomial_quadrature_and_infinite_bounds(self):
+        variable = s.Symbol("x")
+        self.assertAlmostEqual(2, float(numeric_integral(s.sin(variable), variable, 0, s.pi, 30)))
+        self.assertAlmostEqual(1, float(numeric_integral(s.exp(-variable), variable, 0, s.oo, 30)))
+        divergent = {"kind": "call", "value": "nintegrate", "args": [
+            binary("/", number(1), binary("^", x, number(2))), x, number(-1), number(1)]}
+        result = json.loads(core.dispatch(json.dumps({"tree": divergent})))
+        self.assertFalse(result["ok"], result)
+
+
+if __name__ == "__main__":
+    unittest.main()

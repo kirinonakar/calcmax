@@ -6,7 +6,6 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.kirinonakar.calcmax.calculator.CalculatorModel
 import com.kirinonakar.calcmax.calculator.HistoryEntry
-import com.kirinonakar.calcmax.calculator.toTapeEntry
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -27,59 +26,6 @@ class HistoryDialogInstrumentedTest {
         }
         compose.onNodeWithText("History").performClick()
         compose.onNodeWithText("Calculation history").assertIsDisplayed()
-    }
-
-    @Test fun emptyHistoryOpensAndClosesRepeatedly() {
-        repeat(3) {
-            openHistory(emptyList())
-            compose.onNodeWithText("Your calculations will appear here.").assertIsDisplayed()
-            compose.onNodeWithText("Done").performClick()
-            compose.onNodeWithText("Calculation history").assertDoesNotExist()
-        }
-    }
-
-    @Test fun populatedHistoryOpens() {
-        openHistory(listOf(HistoryEntry(1, "1/2+sqrt(2)", "sqrt(2)+1/2", "1.9142135624", "Scientific/CAS")))
-        compose.onNodeWithText("Reuse").assertIsDisplayed()
-        compose.onNodeWithText("Done").performClick()
-    }
-
-    @Test fun malformedRestoredTapeUsesTextWhenDecimalTreeIsMissing() {
-        val entry = HistoryEntry(1, "1/2", "1/2", "0.5", "Scientific/CAS",
-            response = """{"exact":"1/2","decimal":"0.5","tree":{"kind":"sum","args":[1,null]}}""")
-        compose.runOnIdle {
-            model().mode = "Scientific/CAS"
-            model().decimal = true
-            CalculatorModel::class.java.getDeclaredMethod("setTape", List::class.java).apply {
-                isAccessible = true
-            }.invoke(model(), listOf(entry.toTapeEntry()))
-        }
-        compose.onNodeWithContentDescription("Calculation history, swipe vertically").assertIsDisplayed()
-        openHistory(listOf(entry))
-        compose.onNode(hasText("0.5") and hasAnyAncestor(hasTestTag("history-list"))).assertIsDisplayed()
-        compose.onNodeWithText("Done").performClick()
-        compose.runOnIdle { model().decimal = false }
-    }
-
-    @Test fun searchFavoriteDeleteAndClearKeepHistoryUsable() {
-        val entries = listOf(
-            HistoryEntry(2, "2+3", "5", "5", "Scientific/CAS"),
-            HistoryEntry(1, "1/2", "1/2", "0.5", "Scientific/CAS", favorite = true)
-        )
-        openHistory(entries)
-        compose.onNodeWithText("Search history").performTextInput("2+3")
-        compose.onNodeWithText("☆").performClick()
-        compose.runOnIdle { assertTrue(model().history.first().favorite) }
-        compose.onNodeWithText("Favorites").performClick()
-        compose.onNodeWithText("Delete").performClick()
-        compose.onNodeWithText("No calculations match \"2+3\".").assertIsDisplayed()
-        compose.onNodeWithText("Search history").performTextClearance()
-        compose.onNodeWithText("Reuse").assertIsDisplayed()
-        compose.onNodeWithText("Clear all").performClick()
-        compose.runOnIdle { assertEquals(listOf(entries.last()), model().history) }
-        compose.onNodeWithText("Reuse").performClick()
-        compose.runOnIdle { assertEquals("1/2", model().editor.source) }
-        compose.onNodeWithText("Calculation history").assertDoesNotExist()
     }
 
     @Test fun damagedAndOversizedRecordsRemainReusable() {

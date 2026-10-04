@@ -33,7 +33,7 @@ class StaticDeploymentTests(unittest.TestCase):
             with urllib.request.urlopen(url, timeout=10) as response:
                 modified = response.headers["Last-Modified"]
                 self.assertEqual(response.headers["Cache-Control"], "no-store")
-                self.assertIn(b"export function functionRelationExit", response.read())
+                self.assertEqual(response.read(), (WEB / "input-navigation.js").read_bytes())
             request = urllib.request.Request(url, headers={"If-Modified-Since": modified})
             with urllib.request.urlopen(request, timeout=10) as response:
                 self.assertEqual(response.status, 200)

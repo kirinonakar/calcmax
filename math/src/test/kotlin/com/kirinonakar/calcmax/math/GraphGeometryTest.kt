@@ -1,5 +1,6 @@
 package com.kirinonakar.calcmax.math
 
+import kotlin.math.PI
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -46,4 +47,14 @@ class SurfaceMeshTest {
         assertEquals(37.8 to 46.2,SurfaceMesh.zRange(42.0,42.0))
         assertEquals(-1.0 to 1.0,SurfaceMesh.zRange(0.0,0.0))
     }
+}
+
+class GraphZoomTest {
+    @Test fun zeroSeparationNeverProducesInfiniteZoom() {
+        assertEquals(1.0 to 1.0,GraphZoom.factors("xy",0f,0f,20f,20f))
+    }
+}
+
+class PiAxisTest {
+    @Test fun radianLabels(){assertEquals("π",PiAxis.label(PI));assertEquals("−π/2",PiAxis.label(-PI/2));assertEquals("3π/4",PiAxis.label(3*PI/4));assertEquals("0",PiAxis.label(0.0))}
 }

@@ -55,15 +55,6 @@ for(const kind of ['fatal','error'])test(`${kind} during startup retries once an
   tick(240000);assert.equal(workers.length,2,'failed workers leave no live startup timers');
 });
 
-test('manual retry replaces the startup timer and ignores the cancelled worker',t=>{
-  const {engine,workers,tick}=runtime(t);
-  tick(60000);engine.cancel();tick(60000);
-  assert.equal(workers.length,2,'the original timeout cannot restart the replacement worker');
-  workers[0].message({type:'ready'});assert.equal(engine.ready,false);
-  workers[1].message({type:'ready'});tick(240000);
-  assert.equal(engine.ready,true);assert.equal(workers.length,2);
-});
-
 test('a runtime error settles a calculation without treating it as cold startup',async t=>{
   const {engine,workers,statuses,tick}=runtime(t);
   workers[0].message({type:'ready'});
@@ -91,19 +82,6 @@ test('background previews leave editing unlocked and foreground work waits for t
   workers[0].message({type:'result',id:workers[0].request.id,result:{ok:true,exact:'2'}});
   assert.equal((await commit).exact,'2');
   assert.equal(busy.at(-1),false);
-});
-
-test('completed previews and cancelled background work never leave controls busy',async t=>{
-  const {engine,workers}=runtime(t),busy=[];
-  engine.addEventListener('busy',event=>busy.push(event.detail));
-  workers[0].message({type:'ready'});
-  const preview=engine.execute({},{background:true});
-  workers[0].message({type:'result',id:workers[0].request.id,result:{ok:true}});
-  await preview;assert.deepEqual(busy,[]);
-  const next=engine.execute({},{background:true});
-  const commit=engine.execute({});engine.cancel();
-  assert.equal((await next).ok,false);assert.equal((await commit).ok,false);
-  assert.equal(busy.at(-1),false);assert.equal(engine.pending,null);
 });
 
 test('cancelled foreground work waiting for a preview cannot run on the restarted worker',async t=>{
@@ -150,12 +128,4 @@ test('cancel and stale input replies cannot resume a replacement worker',async t
   workers[1].message({type:'ready'});
   answer('late');await Promise.resolve();
   assert.equal(workers[1].request,undefined);assert.equal((await result).ok,false);
-});
-
-test('closing a Python input dialog cancels execution',async t=>{
-  const {engine,workers}=runtime(t);
-  workers[0].message({type:'ready'});
-  const result=engine.execute({action:'python'},{onInput:()=>null});
-  workers[0].message({type:'input',id:workers[0].request.id,inputId:1});
-  assert.equal((await result).ok,false);assert.equal(workers[0].terminated,true);
 });

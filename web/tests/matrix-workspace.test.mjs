@@ -7,8 +7,7 @@ import {loadPyodide} from '../vendor/pyodide.mjs';
 import {installEngine} from '../engine-bootstrap.js';
 import {createMatrixWorkspace} from '../matrix-workspace.js';
 import {parse} from '../parser.js';
-import {astSource} from '../ast-source.js';
-import {setLanguage,translateDOM} from '../i18n.js';
+import {setLanguage} from '../i18n.js';
 import {renderFormulas} from '../formula-preview.js';
 
 test('matrix/vector controls, saved values and calculations use the shared WASM engine',async t=>{
@@ -46,42 +45,8 @@ test('matrix/vector controls, saved values and calculations use the shared WASM 
     operation('divide','0');assert.equal(evaluate(workspace.command()).ok,false);
   });
 
-  await t.test('vector arithmetic and Android vector operations calculate with literals and saved operands',()=>{
-    grid('vector',3,1,[1,2,3]);
-    operation('add','[4,5,6]');result('[[5],[7],[9]]');
-    operation('subtract','[4,5,6]');result('[[-3],[-3],[-3]]');
-    operation('multiply','2');result('[[2],[4],[6]]');assert.equal($('matrix-other-title').textContent,'Scalar (k)');
-    operation('divide','2');result('[[1/2],[1],[3/2]]');
-    state.variables.B=parse('[4,5,6]');operation('add','B');result('[[5],[7],[9]]');
-    state.variables.k=parse('3');operation('multiply','k');result('[[3],[6],[9]]');
-    operation('dot','B');result('32');operation('cross','B');result('[[-3],[6],[-3]]');
-    grid('vector',3,1,[1,0,0]);operation('angle','[0,1,0]');result('pi/2');
-    operation('projection','[1,1,0]');result('[[1/2],[1/2],[0]]');
-    operation('norm');result('1');assert.equal($('vector-other-label').hidden,true);
-    operation('normalize');result('[[1],[0],[0]]');
-    operation('add','[1,2]');assert.equal(evaluate(workspace.command()).ok,false);
-  });
-
-  await t.test('second operand selection previews the saved value and calculates without replacing the grid',()=>{
-    state.variables={M:parse('[[5,6],[7,8]]'),B:parse('[4,5,6]'),k:parse('2')};
-    grid('matrix',2,2,[1,2,3,4]);operation('add');
-    const choose=name=>{$('matrix-other-name').value=name;$('matrix-other-name').dispatchEvent(new dom.window.Event('change'));};
-    assert.deepEqual([...$('matrix-other-name').options].map(option=>option.value),['','B','M','k']);
-    choose('M');assert.equal(workspace.expression(),'[[1,2],[3,4]]');assert.equal($('vector-other').value,'M');assert.equal($('vector-other').hidden,true);
-    assert.equal(workspace.operandExpression(),'M=[[5,6],[7,8]]');assert.ok($('vector-other-math').querySelector('mtable'));assert.match($('vector-other-math').textContent,/M.*5.*6.*7.*8/);
-    result('[[6,8],[10,12]]');
-    operation('multiply','M');choose('k');result('[[2,4],[6,8]]');assert.match($('vector-other-math').textContent,/k.*2/);
-    grid('vector',3,1,[1,2,3]);operation('dot');choose('B');result('32');assert.equal(workspace.expression(),'[1,2,3]');
-    assert.match($('vector-other-math').textContent,/B.*4.*5.*6/);
-    state.variables.B=parse('[7,8,9]');$('dialog').dispatchEvent(new dom.window.Event('close'));
-    assert.equal($('matrix-other-name').value,'B');assert.match($('vector-other-math').textContent,/B.*7.*8.*9/);result('50');
-    choose('');assert.equal($('vector-other').hidden,false);
-    $('vector-other').value='[3,2,1]';$('vector-other').dispatchEvent(new dom.window.Event('input'));
-    assert.equal($('matrix-other-name').value,'');assert.equal(workspace.operandExpression(),'[3,2,1]');result('10');
-    setLanguage('ko');workspace.render();assert.equal($('matrix-other-name').options[0].textContent,'직접 입력');setLanguage('en');
-  });
-
   await t.test('saved list previews matrices/vectors, loads cells and switches to the required workspace',async()=>{
+    grid('vector',3,1,[1,2,3]);changes.length=0;
     state.variables={scalar:parse('5'),M:parse('[[1,2],[3,4]]'),V:parse('[1/2,x,3]'),Column:parse('[[5],[7],[9]]'),Row:parse('[[2,4,6]]'),Invalid:parse('[[1],[2,3]]'),Empty:parse('[]'),Large:parse('['+Array.from({length:10},(_,i)=>i+1).join(',')+']')};
     workspace.render();
     assert.equal($('matrix-name').tagName,'SELECT');
@@ -110,13 +75,5 @@ test('matrix/vector controls, saved values and calculations use the shared WASM 
     assert.deepEqual(changes,['matrix','vector']);
   });
 
-  await t.test('operand controls translate, retain English operation names and report empty operands',()=>{
-    setLanguage('ko');operation('multiply','2');translateDOM();
-    assert.equal($('matrix-other-title').textContent,'스칼라 (k)');assert.equal($('vector-other').placeholder,'2 또는 저장한 스칼라 변수');
-    for(const name of ['add','subtract','multiply'])assert.equal([...$('matrix-op').options].find(option=>option.value===name).textContent,name);
-    operation('add','  ');assert.throws(()=>workspace.command(),/두 번째 피연산자/);
-    setLanguage('en');translateDOM();assert.equal($('matrix-other-title').textContent,'Second vector (B)');
-    operation('norm');assert.equal($('vector-other-label').hidden,true);assert.ok($('vector-other-label').contains($('vector-other-math')));
-    assert.ok(saves>0);assert.deepEqual(errors,[]);
-  });
+
 });

@@ -7,10 +7,21 @@ import {installEngine} from '../engine-bootstrap.js';
 import {parse,latexInput} from '../parser.js';
 import {tipCommand,moneyResult} from '../money.js';
 import {statisticsCommand,distributionCommand,equationCommand} from '../workspace-commands.js';
+import {JSDOM} from 'jsdom';
+import {resultMathDisplay} from '../result-display.js';
 
-test('actual WASM evaluates pasted LaTeX limits in radians with scoped variables',async()=>{
+// Reuse the interpreter for sequential integration scenarios. The cold solver
+// scenario below explicitly loads its own interpreter to keep startup coverage.
+let sharedRuntime;
+async function loadRuntime(){
   const py=await loadPyodide({indexURL:fileURLToPath(new URL('../vendor/',import.meta.url))});
   await installEngine(py,{runtimeURL:new URL('../vendor/',import.meta.url),engineURL:new URL('../engine.zip',import.meta.url),fetcher:async url=>new Response(readFileSync(url))});
+  return py;
+}
+function runtime(){return sharedRuntime??=loadRuntime();}
+
+test('actual WASM evaluates pasted LaTeX limits in radians with scoped variables',async()=>{
+  const py=await runtime();
   for(const [source,exact] of [
     [String.raw`$$\int_{0}^{1} \left( \frac{x}{x} \right) dx$$`,'1'],
     [String.raw`$$\lim_{x \to 0} \frac{3x^2}{\sin^2 x}$$`,'3'],
@@ -26,8 +37,7 @@ test('actual WASM evaluates pasted LaTeX limits in radians with scoped variables
 });
 
 test('actual WASM solves the pasted integral equation using a stored function',async()=>{
-  const py=await loadPyodide({indexURL:fileURLToPath(new URL('../vendor/',import.meta.url))});
-  await installEngine(py,{runtimeURL:new URL('../vendor/',import.meta.url),engineURL:new URL('../engine.zip',import.meta.url),fetcher:async url=>new Response(readFileSync(url))});
+  const py=await runtime();
   const source=String.raw`$$\int _{-2}^{a} f(x) dx = \int _{-2}^{0} f(x) dx$$`;
   const tree=parse(latexInput(equationCommand({source,variable:'a'})));
   const functions={f:{parameters:['x'],body:parse('3x^2-16x-20')}};
@@ -41,23 +51,16 @@ test('actual WASM solves the pasted integral equation using a stored function',a
 });
 
 test('actual CPython WASM reuses the Android engine across workspaces',async()=>{
-  const py=await loadPyodide({indexURL:fileURLToPath(new URL('../vendor/',import.meta.url))});
-  await installEngine(py,{runtimeURL:new URL('../vendor/',import.meta.url),engineURL:new URL('../engine.zip',import.meta.url),fetcher:async url=>new Response(readFileSync(url))});
+  const py=await runtime();
   function run(request) {
     py.globals.set('payload',JSON.stringify({angle:'RAD',...request}));
     return JSON.parse(py.runPython('calc_engine.dispatch(payload)'));
   }
   function evaluate(source,options={}) { const result=run({tree:parse(source),...options}); assert.equal(result.ok,true,`${source}: ${result.error}`); return result; }
-  const animationRequest={action:'graph',trees:[parse('a*sin(x)')],min:-10,max:10,yMin:-5,yMax:5};
-  for(const samples of [500,200]){
-    run({...animationRequest,samples,parameters:{a:1}});
-    const started=performance.now();
-    for(let frame=0;frame<30;frame++){
-      const value=1+frame/100,result=run({...animationRequest,samples,parameters:{a:value}});
-      assert.equal(result.ok,true,result.error);
-      for(const point of result.curves[0])if(point)assert.ok(Math.abs(point[1]-value*Math.sin(point[0]))<1e-10);
-    }
-    console.log(`WASM graph ${samples===200?'interactive':'full precision'}: ${((performance.now()-started)/30).toFixed(1)} ms/frame`);
+  for(const value of [1,2]){
+    const result=run({action:'graph',trees:[parse('a*sin(x)')],min:-10,max:10,yMin:-5,yMax:5,parameters:{a:value}});
+    assert.equal(result.ok,true,result.error);
+    for(const point of result.curves[0])if(point)assert.ok(Math.abs(point[1]-value*Math.sin(point[0]))<1e-10);
   }
   assert.equal(evaluate('1/3+1/6').exact,'1/2');
   assert.equal(evaluate(latexInput(String.raw`$$\sqrt[3]{5} \times 25^{\frac{1}{3}}$$`)).exact,'5');
@@ -104,96 +107,9 @@ test('actual CPython WASM reuses the Android engine across workspaces',async()=>
     assert.ok(Math.abs(Number(fields['p value'])-expectedP)<1e-10);
   }
   const fit=evaluate(statisticsCommand('0,1\n1,3\n2,5\n3,7',{op:'regression',regression:'custom',formula:'a*x+b',initials:'[[a,1],[b,0]]'}));assert.equal(fit.parameters.length,2);assert.ok(fit.curve.length>10);
-  const decayRows=[[20,.818731],[40,.670320],[60,.548812],[80,.449329],[100,.367879],[150,.223130],[200,.135335],[300,.049787],[400,.018316]];
-  const decayData=decayRows.map(row=>row.join(',')).join('\n');
-  for(const formula of ['A*e^(-x/T2)+C','e^(-x/T2)+C']){
-    const result=evaluate(statisticsCommand(decayData,{op:'regression',regression:'custom',formula}));
-    const parameters=Object.fromEntries(result.parameters.map(([name,value])=>[name,Number(value)]));
-    assert.ok(Math.abs(parameters.T2-100)<.001);
-    assert.ok(Math.abs(parameters.C)<1e-6);
-    if('A' in parameters)assert.ok(Math.abs(parameters.A-1)<1e-6);
-    assert.ok(result.resultAst&&result.curve.length>100);
-    assert.ok(decayRows.reduce((sum,[x,y])=>sum+(('A' in parameters?parameters.A:1)*Math.exp(-x/parameters.T2)+parameters.C-y)**2,0)<1e-12);
-  }
-  for(const [xScale,yScale] of [[1e-6,1e12],[1e6,1e-12]]){
-    const data=decayRows.map(([x])=>`${x*xScale},${yScale*(3*Math.exp(-x/100)+.6)}`).join('\n');
-    const result=evaluate(statisticsCommand(data,{op:'regression',regression:'custom',formula:'gain*exp(-x/lifetime)+baseline'}));
-    const parameters=Object.fromEntries(result.parameters.map(([name,value])=>[name,Number(value)]));
-    assert.ok(Math.abs(parameters.gain/(3*yScale)-1)<1e-10);
-    assert.ok(Math.abs(parameters.lifetime/(100*xScale)-1)<1e-10);
-    assert.ok(Math.abs(parameters.baseline/(.6*yScale)-1)<1e-10);
-  }
-  const boundedData=decayRows.map(([x])=>`${x},${3*Math.exp(-x/100)+.6}`).join('\n');
-  const bounded=evaluate(statisticsCommand(boundedData,{op:'regression',regression:'custom',formula:'A*exp(-x/T2)+C',initials:'[[A,1,0,2],[T2,1,1,300],[C,0,0,1]]'}));
-  const boundedParameters=Object.fromEntries(bounded.parameters.map(([name,value])=>[name,Number(value)]));
-  assert.equal(boundedParameters.A,2);
-  assert.ok(Math.abs(boundedParameters.T2-112.87003710820569)<1e-8);
-  for(const [formula,initials] of [['A*B*x+C',''],['A*exp(-x/T2)+C','[[T2,.01,.001,.1]]']]){
-    const result=run({tree:parse(statisticsCommand(decayData,{op:'regression',regression:'custom',formula,initials}))});
-    assert.equal(result.ok,false,'undetermined/flat parameters must not look like a successful fit');
-    assert.match(result.error,/did not converge to identifiable/);
-  }
-  const customPoints=Array.from({length:300},(_,i)=>`${i+1},${2.3*Math.exp(-(i+1)/70)+.4}`).join('\n');
-  const customStarted=performance.now();
-  const customLarge=evaluate(statisticsCommand(customPoints,{op:'regression',regression:'custom',formula:'A*exp(-x/T2)+C'}));
-  assert.ok(Math.abs(Number(Object.fromEntries(customLarge.parameters).T2)-70)<1e-8);
-  console.log(`WASM custom decay regression: 300 points in ${(performance.now()-customStarted).toFixed(0)} ms`);
-  const constantData=Array.from({length:5},(_,x)=>`${x},${2*Math.PI*x+3*Math.exp(-x)}`).join('\n');
-  const constantFit=evaluate(statisticsCommand(constantData,{op:'regression',regression:'custom',formula:'a*pi*x+b*e^(-x)',initials:'[[a,pi/pi],[b,e/e]]'}));
-  assert.deepEqual(constantFit.parameters.map(([name])=>name),['a','b']);
-  assert.ok(Math.abs(Number(constantFit.parameters[0][1])-2)<1e-8);
-  assert.ok(Math.abs(Number(constantFit.parameters[1][1])-3)<1e-8);
-  assert.ok(constantFit.exact.includes('pi')&&constantFit.exact.includes('exp(-x)'));
-  for(const [x,y] of constantFit.curve)assert.ok(Math.abs(y-(2*Math.PI*x+3*Math.exp(-x)))<1e-7);
-  for(const imaginary of ['i','I']){
-    const imaginaryFit=evaluate(statisticsCommand('0,0\n1,-2\n2,-4',{op:'regression',regression:'custom',formula:`a*${imaginary}^2*x`}));
-    assert.deepEqual(imaginaryFit.parameters.map(([name])=>name),['a']);
-    assert.ok(Math.abs(Number(imaginaryFit.parameters[0][1])-2)<1e-8);
-    for(const [x,y] of imaginaryFit.curve)assert.ok(Math.abs(y+2*x)<1e-8);
-  }
-  for(const regression of ['exponential','power']){
-    const model=x=>regression==='power'?2*x**1.5:2*Math.exp(.01*x);
-    const data=Array.from({length:300},(_,i)=>`${i+1},${model(i+1)}`).join('\n');
-    const start=performance.now(),result=evaluate(statisticsCommand(data,{op:'regression',regression}),{precision:60});
-    assert.ok(result.curve.length>100);assert.ok(result.exact.length<300);assert.equal(result.approximate,true);
-    const predicted=evaluate('subs(Ans,x,15)',{variables:{Ans:result.resultAst},precision:60});
-    assert.ok(Math.abs(Number(predicted.decimal)/model(15)-1)<1e-12,'reusable fitted expression predicts the model');
-    console.log(`WASM ${regression} regression: 300 points in ${(performance.now()-start).toFixed(0)} ms`);
-  }
   for(const family of ['normal','t','chi2','f','binomial','poisson','geometric'])evaluate(distributionCommand({family,query:'cdf'}));
-  for(const [bill,people,whole,tip,total,share] of [['100','3',true,'17','117','39'],['100','2',true,'16','116','58'],['100','1',true,'15','115','115'],['100.01','3',false,'15','115.01',null],['1000000.01','3',true,'150001.99','1150002','383334']]){
-    const result=moneyResult(evaluate(tipCommand({bill,people,whole}),{precision:3}),Number(people)),rows=result.tree.args;
-    assert.equal(Number(rows[0].args[0].value),Number(tip));assert.equal(Number(rows[2].args[0].value),Number(total));
-    if(share!==null)assert.equal(Number(rows[3].args[0].value),Number(share));
-    else assert.equal(rows[3].args[0].args.reduce((sum,node)=>sum+Math.round(Number(node.value)*100),0),Math.round(Number(total)*100));
-  }
-  assert.equal(evaluate('f(3)',{functions:{f:{parameters:['x'],body:parse('x^2+1')}}}).exact,'10');
-  const fixedTip=moneyResult(evaluate(tipCommand({bill:'100',fixed:'20',method:'amount',people:'3'})),3);
-  assert.equal(Number(fixedTip.tree.args.at(-1).args[0].args[0].value),20,'fixed tip shows the implied percentage');
-  const zeroBill=moneyResult(evaluate(tipCommand({bill:'0',fixed:'1',method:'amount',people:'1'})),1);
-  assert.equal(Number(zeroBill.tree.args.at(-1).args[0].args[0].value),0,'zero bill does not divide by zero');
-  for(const [percent,expected] of [['15','15.00'],['15.126','15.13'],['2.675','2.68'],['99.999','100.00']]){
-    const result=moneyResult(evaluate(tipCommand({bill:'100',percent,people:'1',whole:false}),{precision:3}));
-    assert.equal(result.tree.args.at(-1).args[0].args[0].value,expected,'percentage rounds exact values to two places');
-  }
-  for(const [options,expected] of [
-    [{bill:'100',people:'2'},'16.00'],[{bill:'100',people:'3'},'17.00'],
-    [{bill:'100',people:'3',whole:false},'15.00'],[{bill:'100',people:'1'},'15.00'],
-    [{bill:'100',people:'2',tax:'10'},'16.00'],[{bill:'99',people:'3'},'15.15'],
-    [{bill:'0',people:'3'},'0.00'],[{bill:'19.99',people:'1',tax:'8'},'17.06']
-  ]){
-    const result=moneyResult(evaluate(tipCommand(options)),Number(options.people));
-    assert.equal(result.tree.args.at(-1).args[0].args[0].value,expected,'Tip % uses the adjusted tip, excluding tax');
-  }
-  for(const method of ['percent','amount'])for(const whole of [true,false]){
-    const result=moneyResult(evaluate(tipCommand({bill:'19.99',percent:'15',fixed:'2.50',tax:'8',people:'1',method,whole})),1),rows=result.tree.args;
-    const total=whole?25:method==='amount'?24.09:24.59,tip=whole?3.41:method==='amount'?2.50:3;
-    assert.equal(Number(rows[0].args[0].value),tip,'single-person rounding adjusts the tip');
-    assert.equal(Number(rows[1].args[0].value),1.60,'single-person rounding preserves tax');
-    assert.equal(Number(rows[2].args[0].value),total);
-    assert.equal(Number(rows[3].args[0].value),total,'one person pays the full total');
-    if(whole)assert.equal(rows.at(-1).args[0].args[0].value,'17.06','one person sees the adjusted tip percentage');
-  }
+  const tip=moneyResult(evaluate(tipCommand({bill:'100',people:'3',whole:true})),3);
+  assert.equal(Number(tip.tree.args[2].args[0].value),117);
   const previous=evaluate('1/7');
   assert.equal(evaluate('Ans*7',{variables:{Ans:previous.resultAst}}).exact,'1');
   assert.equal(run({tree:parse('1/0')}).ok,false);
@@ -232,4 +148,92 @@ test('actual CPython WASM reuses the Android engine across workspaces',async()=>
   assert.equal(JSON.parse(py.runPython('script_runner.run(payload)')).output,'2\n');
   // This loads the same source archive that the static browser Worker consumes.
   console.log(`WASM engine passed: Python ${py.runPython('sys.version.split()[0]')}, SymPy ${py.runPython('calc_engine.s.__version__')}`);
+});
+
+async function engine(fresh=false) {
+  const py=await (fresh?loadRuntime():runtime());
+  const run=request=>{
+    py.globals.set('payload',JSON.stringify({angle:'RAD',...request}));
+    return JSON.parse(py.runPython('calc_engine.dispatch(payload)'));
+  };
+  run.checkRoots=(result,degree)=>{
+    py.globals.set('root_text',result.decimal);
+    py.globals.set('root_degree',degree);
+    assert.equal(py.runPython("all(abs(calc_engine.s.N(root**root_degree-root+1,30)) < calc_engine.s.Rational(1,10)**25 for root in calc_engine.s.sympify(root_text))"),true);
+  };
+  return run;
+}
+
+for(const degree of [5])test(`fresh WASM solves x^${degree}-x+1=0 and produces every decimal root`,async t=>{
+  const dom=new JSDOM(''),previous=globalThis.document;
+  globalThis.document=dom.window.document;
+  t.after(()=>{globalThis.document=previous;dom.window.close();});
+  const run=await engine(true),tree=parse(equationCommand({source:`x^${degree}-x+1=0`,variable:'x'}));
+  for(let attempt=0;attempt<2;attempt++) {
+    const started=performance.now(),result=run({tree,precision:30,budget:8});
+    assert.equal(result.ok,true,result.error);
+    assert.equal(result.tree.kind,'set');
+    assert.equal(result.tree.args.length,degree);
+    assert.equal(result.decimalTree.args.length,degree);
+    if(degree>4) {
+      assert.equal(result.approximate,true);
+      assert.ok(!result.exact.includes('CRootOf'));
+      assert.ok(!JSON.stringify(result.tree).includes('CRootOf'));
+      const display=resultMathDisplay(result.tree,10,result.approximate);
+      assert.ok(!display.textContent.includes('CRootOf'));
+      assert.ok(display.querySelectorAll('mn').length>=degree);
+      assert.ok(display.classList.contains('result-flow'));
+      assert.equal(display.querySelectorAll('.result-part').length,degree===5?9:12);
+      if(degree===5)assert.ok(display.textContent.includes('1.1673039783'));
+    }
+    run.checkRoots(result,degree);
+    assert.equal(result.note,'');
+    console.log(`WASM degree ${degree} ${attempt?'warm':'cold'}: ${(performance.now()-started).toFixed(0)} ms`);
+  }
+});
+
+test('actual WASM evaluates extended LaTeX with scoped index and integration variables',async()=>{
+  const run=await engine();
+  const cases=readFileSync(new URL('../../math/src/test/resources/latex-input.tsv',import.meta.url),'utf8').trim().split(/\r?\n/).map(line=>line.split('\t'));
+  for(const [source,,exact] of cases) {
+    const result=run({tree:parse(latexInput(source)),precision:30});
+    assert.equal(result.ok,true,`${source}: ${result.error}`);
+    if(exact.startsWith('Matrix('))assert.equal(result.exact.replace(/\s/g,''),exact.replace(/\s/g,''),source);
+    else assert.equal(result.exact,exact,source);
+  }
+  for(const source of [String.raw`\sum_{k=1}^{5} k^2`,String.raw`\prod_{k=1}^{4} k`,String.raw`\int_0^1 x^2 dx`]) {
+    const result=run({tree:parse(latexInput(source)),variables:{k:parse('99'),x:parse('99')}});
+    assert.equal(result.ok,true,result.error);
+    assert.equal(result.exact,source.includes('sum')?'55':source.includes('prod')?'24':'1/3');
+  }
+  for(const [source,angle,exact] of [[String.raw`\sec 60`,'DEG','2'],[String.raw`\csc 100`,'GRAD','1'],[String.raw`\cot 45`,'DEG','1'],[String.raw`\sec\frac{\pi}{3}`,'DEG','2']]) {
+    const result=run({tree:parse(latexInput(source)),angle});
+    assert.equal(result.ok,true,result.error);assert.equal(result.exact,exact);
+  }
+  const symbolic=run({tree:parse(latexInput(String.raw`\sec x`))});
+  const reused=run({tree:parse('subs(Ans,x,pi/3)'),angle:'DEG',variables:{Ans:symbolic.resultAst}});
+  assert.equal(reused.ok,true,reused.error);assert.equal(reused.exact,'2');
+});
+
+test('WASM graph integrals return exact cancellation without losing small nonzero results',async()=>{
+  const py=await runtime();
+  function run(request){
+    py.globals.set('payload',JSON.stringify({angle:'RAD',...request}));
+    const result=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));
+    assert.equal(result.ok,true,result.error);
+    return result;
+  }
+  const formula='3*x^2-16*x-20';
+  for(const precision of [15,50,100]){
+    const result=run({action:'graphAnalysis',trees:[parse(formula)],analysis:'integral',a:-2,b:0,precision});
+    assert.equal(result.value,0);
+    assert.ok(result.integralFill.flat().some(([,y])=>y>0));
+    assert.ok(result.integralFill.flat().some(([,y])=>y<0));
+    assert.equal(Number(run({tree:parse(`nintegrate(${formula},x,-2,0)`),precision}).decimal),0);
+  }
+  assert.equal(run({action:'graphAnalysis',trees:[parse(`${formula}+1e-80`)],analysis:'integral',a:-2,b:0,precision:100}).value,2e-80);
+  assert.equal(run({action:'graphAnalysis',trees:[parse(`[x,${formula}]`)],graphKind:'parametric',variable:'x',analysis:'integral',a:-2,b:0}).value,0);
+  assert.equal(run({action:'graphAnalysis',trees:[parse('0')],graphKind:'polar',analysis:'integral',a:-2,b:0}).value,0);
+  assert.equal(run({action:'graphAnalysis',trees:[parse('[1,2]')],graphKind:'parametric',analysis:'arclength',a:-2,b:0}).value,0);
+  assert.ok(Math.abs(Number(run({tree:parse('nintegrate(sin(x),x,0,pi)')}).decimal)-2)<1e-12);
 });

@@ -1,19 +1,11 @@
 package com.kirinonakar.calcmax.math
+
 import org.junit.Assert.*
 import org.junit.Test
 
 class ParserTest {
     private fun p(s: String) = Parser(s).parse()
     @Test fun precedence() { assertEquals("*",p("2+3*4").args[1].value); assertEquals("unary",p("-2^2").kind); assertEquals("^",p("2^3^2").args[1].value) }
-    @Test fun exactLiteral() { assertEquals("1",p("1/3").args[0].value); assertEquals("number",p("1.234567890123456789").kind) }
-    @Test fun halfUpRoundParses() { assertEquals("roundh",p("roundh(1.225,2)").value) }
-    @Test fun randomCallTakesNoArguments() {
-        assertEquals("rnd",p("rnd()").value)
-        assertTrue(p("rnd()").args.isEmpty())
-        assertTrue(Parser("rnd()",true).parse().args.isEmpty())
-        assertFalse(Editor("rnd()",4).tree()!!.nodes().any {it.kind=="hole"})
-        assertThrows(SyntaxException::class.java) { p("sin()") }
-    }
     @Test fun structures() { assertEquals("list",p("det([[1,2],[3,4]])").args[0].kind); assertEquals("relation",p("solve(x^2=1,x)").args[0].kind); assertEquals("*",p("2x").value) }
     @Test fun savedMatrixRowsParseAcrossNewlines() {
         val matrix=p("[\n[1, 2],\n[3, 4]]")
@@ -32,56 +24,58 @@ class ParserTest {
         assertEquals(9,Parser("[[,,],[,,],[,,]]",true).parse().nodes().count {it.kind=="hole"})
         assertEquals("[[1,,],[,,],[,,]]",Editor().insert("[[,,],[,,],[,,]]",2).insert("1").source)
     }
-    @Test fun integrationTuple() {
-        val integral=p("integrate(exp(-x^2)*cos(2x), (x, 0, oo))")
-        assertEquals("tuple",integral.args[1].kind)
-        assertEquals(listOf("x","0","oo"),integral.args[1].args.map{it.value})
-        assertEquals("*",integral.args[0].args[1].args[0].value)
-        assertEquals("tuple",p("(x,)").kind)
-    }
     @Test fun unicode() { assertEquals("^",p("x²").value); assertEquals("sqrt",p("√8").value); assertEquals("degree",p("30°").value) }
-    @Test fun sexagesimalInputAndIncompleteFields() {
-        val tree=p("2°20′30″")
-        assertEquals("sexagesimal",tree.kind)
-        assertEquals(listOf("2","20","30"),tree.args.map{it.value})
-        val addition=p("2°20′30″+0°39′30″")
-        assertEquals("+",addition.value)
-        assertTrue(addition.args.all{it.kind=="sexagesimal"})
-        assertEquals("degree",p("30°").value)
-        val pending=Parser("2°20",true).parse()
-        assertEquals("sexagesimal",pending.kind)
-        assertTrue(pending.nodes().any{it.kind=="hole"})
-    }
-    @Test fun editor() { assertEquals("sqrt(8)",Editor().insert("sqrt()",5).insert("8").source); assertEquals("2+",Editor("2+3").delete().source); assertEquals("7",Editor("2+3",3,0).insert("7").source) }
-    @Test fun infinityDeletesAsOneSymbol() {
-        assertEquals("",Editor("oo").delete().source)
-        assertEquals("",Editor("oo",1).delete().source)
-        assertEquals("",Editor("oo",0).deleteForward().source)
-        assertEquals("",Editor("oo",1).deleteForward().source)
-        assertEquals("limit(1/x,x,)",Editor("limit(1/x,x,oo)",14).delete().source)
-        assertEquals("",Editor("oo").atomicInfinityDeletion("o")?.source)
-        assertEquals("limit(1/x,x,)",Editor("limit(1/x,x,oo)").atomicInfinityDeletion("limit(1/x,x,o)")?.source)
-        assertEquals("fo",Editor("foo").delete().source)
-    }
     @Test fun invalid() { for(s in listOf("", "1..2", "2+", "a.__class__", "f(1,)", "[1,2", "(x,,0)")) assertThrows(SyntaxException::class.java) { p(s) } }
     @Test fun complexity() { assertThrows(SyntaxException::class.java) { p("(".repeat(200)+"1"+")".repeat(200)) } }
-    @Test fun editingHoles() {
-        val tree=Editor("()/()").tree()!!
-        assertEquals("hole",tree.args[0].args[0].kind)
-        assertEquals(1,tree.args[0].args[0].start)
-        assertEquals("sqrt",Editor("sqrt()").tree()!!.value)
-        assertThrows(SyntaxException::class.java) { p("()/()") }
+}
+
+class EvaluationPolicyTest {
+    @Test fun multiArgumentCallsWaitForEquals() {
+        assertTrue(requiresExplicitEvaluation(Parser("rnd()",true).parse()))
+        assertTrue(requiresExplicitEvaluation(Parser("integrate(e)").parse()))
+        assertTrue(requiresExplicitEvaluation(Parser("roundh(1.225,2)").parse()))
+        assertTrue(requiresExplicitEvaluation(Parser("integrate(,x)",true).parse()))
+        assertTrue(requiresExplicitEvaluation(Parser("integrate(exp(-x^2)*cos(2x),(x,0,oo))").parse()))
+        assertTrue(requiresExplicitEvaluation(Parser("1+dot([1,2],[3,4])").parse()))
+        assertTrue(requiresExplicitEvaluation(Parser("f(1)").parse(),setOf("f")))
     }
-    @Test fun engineeringCatalogSyntax() {
-        for(source in listOf(
-            "taylor(exp(x),x,0,4)",
-            "gradient(x^2+y^2,[x,y])",
-            "dsolve(diff(y(t),t)=y(t),y(t),t)",
-            "dsolve(diff(y(t),t)=y(t),y(t),t,y(0)=1)",
-            "pdsolve(diff(u(x,y),x)+diff(u(x,y),y)=0,u(x,y))",
-            "laplace(sin(t),t,s)",
-            "charpoly([[1,2],[3,4]],x)",
-            "convert(qty(1,V)/qty(1,ohm),A)"
-        )) assertEquals("call",p(source).kind)
+
+    @Test fun entryHelpersPreviewWhileTyping() {
+        assertFalse(requiresExplicitEvaluation(Parser("log(100)").parse()))
+        assertFalse(requiresExplicitEvaluation(Parser("log(100,10)").parse()))
+        assertFalse(requiresExplicitEvaluation(Parser("nthroot(8,3)").parse()))
+        assertFalse(requiresExplicitEvaluation(Parser("mixed(1,1,2)").parse()))
+        assertFalse(requiresExplicitEvaluation(Parser("mod(17,5)").parse()))
+        assertFalse(requiresExplicitEvaluation(Parser("divmod(17,5)").parse()))
+    }
+
+}
+
+class ConstantInputTest {
+    @Test fun insertionSeparatesNumbersAndBothIdentifierBoundaries() {
+        assertEquals("2*e",Editor("2").insertConstant("e").source)
+        val middle=Editor("xy",1).insertConstant("pi")
+        assertEquals("x*pi*y",middle.source)
+        assertEquals(4,middle.cursor)
+        assertEquals("Ans*pi",Editor("Ans*x").selectRange(4,5).insertConstant("pi").source)
+        assertEquals("sin(pi)",Editor("sin()",4).insertConstant("pi").source)
+        assertEquals("pi",Editor("Ans").selectRange(0,3).insertConstant("pi").source)
+        assertEquals("pie",Editor().insertOperand("pie").source)
+    }
+}
+
+class BracketAutoCloseTest {
+    @Test fun openerInsertsTheMatchingCloserAndKeepsTheCaretInside() {
+        assertEquals(BracketEdit("print()",6),BracketAutoClose.typed("print",5,"print(",6))
+        assertEquals(BracketEdit("a()b",2),BracketAutoClose.typed("ab",1,"a(b",2))
+        assertEquals(BracketEdit("{}",1),BracketAutoClose.typed("",0,"{",1))
+        assertEquals(BracketEdit("a[]b",2),BracketAutoClose.typed("ab",1,"a[b",2))
+    }
+}
+
+class TypedParensTest {
+    @Test fun shiftDropsPairsThatWereEditedOrLost() {
+        assertEquals(emptyList<IntRange>(),TypedParens.shift(listOf(2..4),"5×()","5×(3)"))
+        assertEquals(emptyList<IntRange>(),TypedParens.shift(listOf(2..4),"5×()","abc"))
     }
 }

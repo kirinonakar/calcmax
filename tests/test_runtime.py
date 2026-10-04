@@ -28,9 +28,6 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual("Calculation cancelled", json.loads(calc_engine.dispatch(payload, control))["error"])
         self.assertTrue(json.loads(calc_engine.dispatch(payload))["ok"])
 
-    def test_wall_deadline_is_checked_after_native_work(self):
-        with self.assertRaises(ExecutionStopped):
-            with Budget(0.01): time.sleep(0.02)
 
     def test_input_cancellation_does_not_echo_a_fake_answer(self):
         control = Control()

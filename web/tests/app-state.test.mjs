@@ -1,8 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {JSDOM} from 'jsdom';
-import {createAppState,restoreFields,restoreSelect,createPersistence} from '../app-state.js';
+import {createAppState,createPersistence} from '../app-state.js';
 import {defineFunction,encodeFunctions,decodeFunctions} from '../function-transfer.js';
+import {readFileSync} from 'node:fs';
+import {createAppDialogs} from '../app-dialogs.js';
+import {createAppUI} from '../app-ui.js';
+import {setLanguage} from '../i18n.js';
 
 function page(t) {
   const dom=new JSDOM(`<main>
@@ -48,23 +52,6 @@ test('Ans functions survive matching restored answers and expire on replacement 
   persistence.dispose();
 });
 
-test('field restoration keeps valid choices and restores options populated after startup',t=>{
-  const $=page(t),state=createAppState({fields:{expression:'A+B',enabled:true,mode:'removed-mode',dynamic:'2',setting:'saved',obsolete:'unused'}});
-  restoreFields(state);
-  assert.equal($('expression').value,'A+B');assert.equal($('enabled').checked,true);
-  assert.equal($('mode').value,'scientific','obsolete choices leave the HTML default');
-  assert.equal($('setting').value,'default','dialog values are managed by their own settings');
-  $('dynamic').innerHTML='<option>1</option><option>2</option>';
-  restoreSelect(state,'dynamic');assert.equal($('dynamic').value,'2');
-  state.fields.mode='matrix';restoreSelect(state,'mode');assert.equal($('mode').value,'matrix');
-});
-test('legacy implicit workspace migrates to Cartesian with its equation and saved bounds',()=>{
-  const saved={fields:{'graph-kind':'implicit','graph-source':'y^2+x^2=1'},graph:{sources:{implicit:'y^2+x^2=1',cartesian:'x+1'},ranges:{'graph-min':-2,'graph-max':2}}};
-  const state=createAppState(saved);
-  assert.equal(state.fields['graph-kind'],'cartesian');assert.equal(state.graph.sources.cartesian,'y^2+x^2=1');assert.deepEqual(state.graph.ranges,saved.graph.ranges);
-  assert.equal(saved.fields['graph-kind'],'implicit');assert.equal(saved.graph.sources.cartesian,'x+1','migration leaves the input backup intact');
-});
-
 test('persistence saves the CALC formula and graph draft while disabled history stays in memory',t=>{
   const $=page(t),history=[{source:'1+1',exact:'2'}],state=createAppState({history,persistHistory:false});
   $('enabled').checked=true;
@@ -101,3 +88,42 @@ test('storage failures warn once and still retain the session draft and notify p
   assert.equal(warnings.length,1);assert.equal(state.fields.expression,'x+1');assert.equal(updates,2);
   persistence.dispose();
 });
+
+function variablesPage(t,saved,language='en'){
+  const dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'),{url:'http://localhost/'});
+  for(const key of ['document','window','NodeFilter','localStorage']){
+    const original=Object.getOwnPropertyDescriptor(globalThis,key);
+    Object.defineProperty(globalThis,key,{value:dom.window[key],configurable:true});
+    t.after(()=>{if(original)Object.defineProperty(globalThis,key,original);else delete globalThis[key];});
+  }
+  dom.window.matchMedia=()=>({matches:false,addEventListener:()=>{}});
+  dom.window.HTMLDialogElement.prototype.showModal=function(){this.open=true;};
+  const state=createAppState({...saved,language,languageChosen:true});setLanguage(language);
+  const ui=createAppUI(),persistence=createPersistence({state,snapshot:()=>({expression:'A+1',graph:{}}),onPersist:()=>{},toast:assert.fail});
+  t.after(()=>{persistence.dispose();ui.dispose();dom.window.close();setLanguage('en');});
+  const dialogs=createAppDialogs({state,ui,persist:persistence.persist,calculator:{},refreshDisplays:()=>{}});
+  dialogs.variables();
+  return {state,dialogs,body:document.getElementById('dialog-body')};
+}
+
+for(const language of ['en','ko'])for(const hasData of [false,true]){
+  test(`delete all clears stored variables and persists the result (${language}, datasets=${hasData})`,t=>{
+    const answer={kind:'number',value:'3'},variables={A:{kind:'number',value:'1'},M:{kind:'number',value:'2'},Ans:answer};
+    const datasets=hasData?{samples:'1\n2\n3'}:{},datasetKinds=hasData?{samples:'list'}:{};
+    const functions={f:defineFunction('f',['x'],'x+1'),g:{...defineFunction('g',['x'],'x'),answerSource:answer}};
+    const {state,dialogs,body}=variablesPage(t,{variables,datasets,datasetKinds,functions,assumptions:{A:['positive']},history:[{source:'1+2',exact:'3'}]},language);
+    const label=language==='en'?(hasData?'Delete all variables':'Delete all'):(hasData?'변수 모두 삭제':'모두 삭제');
+    const button=[...body.querySelectorAll('button')].find(button=>button.textContent===label);
+    assert.ok(button);assert.equal(button.hidden,false);assert.equal(body.querySelectorAll('.list-row').length,3);
+    button.click();
+    assert.deepEqual(state.variables,{});assert.equal(body.querySelectorAll('.list-row').length,0);assert.equal(button.hidden,true);
+    assert.deepEqual(state.datasets,datasets);assert.deepEqual(state.datasetKinds,datasetKinds);
+    assert.ok(state.functions.f);assert.equal(state.functions.g,undefined,'Ans-linked functions expire when Ans is deleted');
+    assert.deepEqual(state.assumptions,{A:['positive']});assert.equal(state.history.length,1);
+    if(hasData)assert.ok(body.textContent.includes('samples'));
+    const restored=createAppState(JSON.parse(localStorage.getItem('calcmax-web-v1')));
+    assert.deepEqual(restored.variables,{});assert.deepEqual(restored.datasets,datasets);assert.ok(restored.functions.f);assert.equal(restored.functions.g,undefined);
+    dialogs.variables();
+    assert.equal([...body.querySelectorAll('button')].find(button=>button.textContent===label).hidden,true);
+  });
+}

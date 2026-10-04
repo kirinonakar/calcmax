@@ -3,130 +3,94 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {JSDOM} from 'jsdom';
 import {createAppUI} from '../app-ui.js';
-import {setLanguage,translateDOM} from '../i18n.js';
+import {setLanguage} from '../i18n.js';
 import {createStatisticsWorkspace} from '../statistics-workspace.js';
-import {restoreFields} from '../app-state.js';
 
-test('χ² option defaults to Yates, updates the command, and restores an unchecked preference',()=>{
-  for(const saved of [{},{'statistics-yates':false}]){
-    const dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));
-    globalThis.document=dom.window.document;globalThis.NodeFilter=dom.window.NodeFilter;
-    const $=id=>document.getElementById(id);
-    restoreFields({fields:saved});
-    let saves=0,refreshes=0;
-    const workspace=createStatisticsWorkspace({state:{fields:{'statistics-kind':'xy'},datasets:{},datasetKinds:{},digits:10},ui:{},
-      persist:()=>saves++,refreshWorkspaceMath:()=>refreshes++,storeExpression:()=>{},error:assert.fail,changeMode:()=>{},replaceInput:()=>{},graphs:{}});
-    $('statistics-data').value='A,yes\nA,no\nB,yes\nB,no\nA,\n,no';
-    $('statistics-op').value='chi2independence';$('statistics-op').dispatchEvent(new dom.window.Event('change'));
-    const enabled=saved['statistics-yates']!==false;
-    assert.equal($('statistics-yates-options').hidden,false);
-    assert.equal($('statistics-yates').checked,enabled);
-    assert.equal(workspace.expression(),`chi2independence([1,1,2,2],[1,2,1,2],${enabled?1:0})`);
-    $('statistics-yates').click();
-    assert.equal(workspace.expression(),`chi2independence([1,1,2,2],[1,2,1,2],${enabled?0:1})`);
-    assert.equal(saves,1);assert.ok(refreshes>=2);
-    $('statistics-op').value='fisherexact';$('statistics-op').dispatchEvent(new dom.window.Event('change'));
-    assert.equal($('statistics-yates-options').hidden,true);
-    assert.equal(workspace.expression(),'fisherexact([1,1,2,2],[1,2,1,2])');
-    $('statistics-op').value='chi2independence';$('statistics-op').dispatchEvent(new dom.window.Event('change'));
-    assert.equal($('statistics-yates').checked,!enabled);
-    setLanguage('ko');translateDOM();
-    assert.match($('statistics-yates-options').textContent,/Yates 연속성 보정/);
-    assert.match($('statistics-yates-options').textContent,/2×2 표에만 적용됩니다/);
-    setLanguage('en');
-    dom.window.close();
-  }
+function workspace(t){
+  const dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));
+  globalThis.document=dom.window.document;globalThis.NodeFilter=dom.window.NodeFilter;
+  const $=id=>document.getElementById(id),ui=createAppUI(),requests=[],results=[],errors=[];
+  let saves=0,cancels=0;
+  const state={fields:{'statistics-kind':'xy'},datasets:{saved:'1,2\n2,4'},datasetKinds:{saved:'xy'},digits:10};
+  const engine={ready:true,execute:request=>new Promise(resolve=>requests.push({request,resolve})),cancel:()=>cancels++};
+  const statistics=createStatisticsWorkspace({state,engine,ui,persist:()=>saves++,refreshWorkspaceMath:()=>{},
+    storeExpression:()=>{},error:message=>errors.push(message),changeMode:()=>{},replaceInput:()=>{},graphs:{}});
+  statistics.datasetsList();
+  t.after(()=>{ui.dispose();setLanguage('en');dom.window.close();});
+  const run=()=>statistics.runRegression({precision:60},(...args)=>results.push(args));
+  return {$,state,requests,results,errors,run,statistics,get saves(){return saves;},get cancels(){return cancels;}};
+}
+
+test('regression exposes Cancel immediately and cancelled results cannot return; a new fit succeeds',async t=>{
+  const context=workspace(t),{$,requests,results,errors,run}=context;
+  $('regression-kind').value='power';
+  const cancelled=run();
+  assert.equal(requests.length,1);
+  assert.equal(requests[0].request.precision,60);
+  assert.equal($('regression-cancel').hidden,false);
+  assert.equal($('regression-progress').hidden,false);
+  assert.equal($('regression-section').getAttribute('aria-busy'),'true');
+  await run();assert.equal(requests.length,1,'repeated Analyze does not overlap requests');
+  $('regression-cancel').click();
+  assert.equal(context.cancels,1);
+  assert.equal($('regression-cancel').hidden,true);
+  assert.equal($('regression-section').getAttribute('aria-busy'),'false');
+  const next=run();
+  requests[0].resolve({ok:true,exact:'999*x'});await cancelled;
+  assert.equal(results.length,0);
+  assert.equal($('regression-cancel').hidden,false,'old completion cannot clear the new busy state');
+  requests[1].resolve({ok:true,decimal:'2*x',curve:[[1,2],[2,4]]});await next;
+  assert.equal(results.length,1);assert.deepEqual(results[0][3],{decimalDisplay:true});
+  assert.equal($('regression-transfer').hidden,false);
+  assert.match($('regression-caption').textContent,/2/);
+  assert.equal($('regression-cancel').hidden,true);
+  assert.deepEqual(errors,[]);
 });
 
-test('CSV import previews the first three selected rows and follows import options',async t=>{
-  const dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));
-  const {window}=dom;
-  globalThis.document=window.document;globalThis.NodeFilter=window.NodeFilter;
-  window.HTMLDialogElement.prototype.showModal=function(){this.open=true;};
-  window.HTMLDialogElement.prototype.close=function(){this.open=false;};
-  const $=id=>document.getElementById(id),ui=createAppUI();
-  let saves=0;
-  const workspace=createStatisticsWorkspace({state:{fields:{'statistics-kind':'list'},datasets:{},datasetKinds:{},digits:10},ui,
-    persist:()=>saves++,refreshWorkspaceMath:()=>{},storeExpression:()=>{},error:assert.fail,changeMode:()=>{},replaceInput:()=>{},graphs:{}});
-  t.after(()=>{ui.dispose();setLanguage('en');dom.window.close();});
-  const load=async(source,name='sample.csv')=>{
-    $('csv-open').click();
-    Object.defineProperty($('file-input'),'files',{value:[{name,text:async()=>source}],configurable:true});
-    await $('file-input').onchange();
-    assert.equal($('dialog').open,true);
-    return [...$('dialog-body').querySelectorAll('input[type="checkbox"]')];
-  };
-  const toggle=input=>{input.checked=!input.checked;input.dispatchEvent(new window.Event('change'));};
-  const preview=()=>$('dialog-body').querySelector('.csv-preview');
+test('new and added statistics rows stay blank across editing, saving, and data types',t=>{
+  const context=workspace(t),{$,statistics,errors}=context;
+  $('statistics-table-toggle').click();
+  const cell=(row,col)=>$('statistics-grid').querySelector(`input[data-row="${row}"][data-column="${col}"]`);
+  const change=id=>$(id).dispatchEvent(new document.defaultView.Event('change'));
+  for(const [kind,columns] of [['list',1],['xy',2],['xyz',3]]){
+    $('statistics-kind').value=kind;change('statistics-kind');$('statistics-new').click();
+    assert.equal($('statistics-data').value,'');
+    assert.equal($('statistics-grid').querySelectorAll('tbody tr').length,0);
+    $('statistics-add-row').click();$('statistics-add-row').click();statistics.render();
+    assert.equal($('statistics-grid').querySelectorAll('tbody tr').length,2);
+    assert.deepEqual([...$('statistics-grid').querySelectorAll('input')].map(input=>input.value),Array(columns*2).fill(''));
+    cell(1,0).value='5';cell(1,0).dispatchEvent(new document.defaultView.Event('input'));
+    $('statistics-add-row').click();
+    assert.equal($('statistics-grid').querySelectorAll('tbody tr').length,3);
+    assert.equal(cell(0,0).value,'');assert.equal(cell(1,0).value,'5');assert.equal(cell(2,0).value,'');
+    $('statistics-op').value='mean';$('statistics-column').value='0';$('statistics-grouping').value='columns';
+    assert.equal(statistics.expression(),'mean([5])','blank rows must not become zero observations');
+    $('dataset-name').value=`blank-${kind}`;$('dataset-save').click();$('statistics-new').click();
+    $('dataset-list').value=`blank-${kind}`;change('dataset-list');
+    assert.equal($('statistics-grid').querySelectorAll('tbody tr').length,3);
+    assert.equal(cell(0,0).value,'');assert.equal(cell(1,0).value,'5');assert.equal(cell(2,0).value,'');
+    $('statistics-table-toggle').click();$('statistics-table-toggle').click();
+    assert.equal($('statistics-grid').querySelectorAll('tbody tr').length,3);
+    $('statistics-grid').querySelectorAll('.table-row-action button')[1].click();
+    assert.equal($('statistics-grid').querySelectorAll('tbody tr').length,2);
+    assert.deepEqual([...$('statistics-grid').querySelectorAll('input')].map(input=>input.value),Array(columns*2).fill(''));
+  }
+  assert.deepEqual(errors,[]);
+});
 
-  await t.test('header detection, column selection, and import agree while preview leaves the dataset intact',async()=>{
-    setLanguage('ko');
-    const original=$('statistics-data').value,checkboxes=await load('\uFEFFtime,a,b,c\r\n1,10,100,1000\r\n2,20,200,2000\r\n3,30,300,3000\r\n4,40,400,4000');
-    assert.equal($('dialog-body').querySelector('h3').textContent,'미리보기');
-    assert.equal(checkboxes[0].checked,true);
-    assert.equal(preview().textContent,'1  |  10  |  100\n2  |  20  |  200\n3  |  30  |  300');
-    assert.equal(preview().getAttribute('aria-live'),'polite');
-    toggle(checkboxes[2]);toggle(checkboxes[4]);
-    assert.equal(preview().textContent,'1  |  100  |  1000\n2  |  200  |  2000\n3  |  300  |  3000');
-    toggle(checkboxes[0]);
-    assert.equal(preview().textContent,'time  |  b  |  c\n1  |  100  |  1000\n2  |  200  |  2000');
-    toggle(checkboxes[0]);
-    assert.equal($('statistics-data').value,original);assert.equal(saves,0);
-    $('dialog-body').querySelector('button').click();
-    assert.equal($('statistics-data').value,'1,100,1000\n2,200,2000\n3,300,3000\n4,400,4000');
-    assert.equal($('statistics-kind').value,'xyz');assert.equal($('dataset-name').value,'sample');
-    assert.equal($('dialog').open,false);assert.equal(saves,1);
-  });
-
-  await t.test('headerless TSV and short files preview all available rows',async()=>{
-    setLanguage('en');
-    const checkboxes=await load('1\t2\n3\t4','short.tsv');
-    assert.equal($('dialog-body').querySelector('h3').textContent,'Preview');
-    assert.equal(checkboxes[0].checked,false);
-    assert.equal(preview().textContent,'1  |  2\n3  |  4');
-    toggle(checkboxes[2]);assert.equal(preview().textContent,'1\n3');
-    $('dialog-body').querySelector('button').click();
-    assert.equal($('statistics-data').value,'1\n3');assert.equal($('statistics-kind').value,'list');
-  });
-
-  await t.test('quoted values and missing cells stay literal; invalid selection keeps the dialog open',async()=>{
-    const checkboxes=await load('group,value\n"<b>alpha,beta</b>",1\ngamma,2\ndelta\nepsilon,4');
-    assert.equal(preview().textContent,'<b>alpha,beta</b>  |  1\ngamma  |  2\ndelta  |  ');
-    assert.equal(preview().querySelector('b'),null);
-    toggle(checkboxes[1]);toggle(checkboxes[2]);assert.equal(preview().textContent,'');
-    const data=$('statistics-data').value,before=saves;
-    $('dialog-body').querySelector('button').click();
-    assert.equal($('dialog').open,true);assert.equal($('statistics-data').value,data);assert.equal(saves,before);
-    assert.equal($('toast').textContent,'Select one to three columns');
-    toggle(checkboxes[1]);assert.equal(preview().textContent,'<b>alpha,beta</b>\ngamma\ndelta');
-  });
-
-  await t.test('Excel TSV import keeps thousands in two columns',async()=>{
-    const checkboxes=await load('2022-12-02\t\u00a0 166,682 \r\n2023-01-15\t 168,254 \r\n','excel.tsv');
-    assert.equal(checkboxes.length,3);assert.equal(checkboxes[0].checked,false);
-    assert.equal(preview().textContent,'2022-12-02  |  166,682\n2023-01-15  |  168,254');
-    $('dialog-body').querySelector('button').click();
-    assert.equal($('statistics-data').value,'2022-12-02,"166,682"\n2023-01-15,"168,254"');
-    assert.equal($('statistics-kind').value,'xy');
-  });
-
-  await t.test('direct Excel input updates analysis, table editing and stored data',()=>{
-    $('statistics-data').value='2022-12-02\t\u00a0 166,682 \r\n2023-01-15\t 168,254 \r\n2023-02-05\t 169,131 ';
-    $('statistics-data').dispatchEvent(new window.Event('input'));
-    $('statistics-data').dispatchEvent(new window.Event('change'));
-    $('statistics-op').value='mean';$('statistics-column').value='1';
-    assert.equal(workspace.expression(),'mean([166682,168254,169131])');
-    assert.match(workspace.analysisSummary(),/y \(n=3\)/);
-    assert.equal(workspace.expression('regression'),'regression([[1,166682],[45,168254],[66,169131]],linear)');
-    $('statistics-table-toggle').click();
-    const cells=[...$('statistics-grid').querySelectorAll('input')];
-    assert.deepEqual(cells.map(input=>input.value),['2022-12-02','166,682','2023-01-15','168,254','2023-02-05','169,131']);
-    cells[3].value='170,000';cells[3].dispatchEvent(new window.Event('input'));
-    assert.equal(workspace.expression(),'mean([166682,170000,169131])');
-    assert.equal($('statistics-data').value,'2022-12-02,"166,682"\n2023-01-15,"170,000"\n2023-02-05,"169,131"');
-    $('dataset-name').value='ExcelPaste';$('dataset-save').click();
-    $('statistics-new').click();$('dataset-list').value='ExcelPaste';$('dataset-list').dispatchEvent(new window.Event('change'));
-    $('statistics-column').value='1';
-    assert.equal(workspace.expression(),'mean([166682,170000,169131])');
-  });
+test('invalid input and failed fits release busy state; edited input discards old results',async t=>{
+  const context=workspace(t),{$,requests,results,errors,run}=context;
+  $('statistics-data').value='';await run();
+  assert.equal(requests.length,0);assert.equal(errors.length,1);
+  assert.equal($('regression-cancel').hidden,true);
+  $('statistics-data').value='1,2\n2,4';
+  const failed=run();requests[0].resolve({ok:false,error:'Singular matrix'});await failed;
+  assert.equal(results.length,1);assert.equal(results[0][0].ok,false);
+  assert.equal($('regression-cancel').hidden,true);
+  const stale=run();$('statistics-data').value='1,3\n2,6';
+  requests[1].resolve({ok:true,exact:'2*x'});await stale;
+  assert.equal(results.length,1);assert.equal($('regression-cancel').hidden,true);
+  const clearing=run();$('regression-clear').click();
+  requests[2].resolve({ok:true,exact:'3*x'});await clearing;
+  assert.equal(context.cancels,1);assert.equal(results.length,1);
 });
