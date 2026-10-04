@@ -504,6 +504,15 @@ Example: lognormcdf(1)
 `weibullcdf(x,k,λ)` — 와이블 분포의 누적확률 P(X ≤ x).
 예시: weibullcdf(3,2,3)
 
+`cauchypdf(x)` / `cauchypdf(x,x₀,γ)` — 코시 분포의 확률밀도. 기본 위치는 0, 척도는 1입니다. x₀는 유한한 실수, γ는 유한한 양수여야 합니다. 평균과 분산은 정의되지 않습니다.
+Example: cauchypdf(0,0,1)
+`cauchycdf(x)` / `cauchycdf(x,x₀,γ)` — 코시 분포의 누적확률 P(X ≤ x).
+Example: cauchycdf(1,0,1)
+`cauchycdf(low,high)` / `cauchycdf(low,high,x₀,γ)` — 코시 분포의 구간 확률. 무한대 경계값도 입력할 수 있습니다.
+Example: cauchycdf(-1,1,0,1)
+`invcauchy(q)` / `invcauchy(q,x₀,γ)` — 0 ≤ q ≤ 1에 대한 코시 분포의 분위수. q=0과 1에서는 −∞와 ∞, q=0.5에서는 위치(중앙값)를 반환합니다.
+Example: invcauchy(0.75,0,1)
+
 ## Statistical tests
 
 `ttest(μ0,[...])` — 표본평균을 μ0와 비교하는 단일 표본 t 검정.

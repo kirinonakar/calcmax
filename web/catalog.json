@@ -249,7 +249,13 @@
     "nbinompdf(3,0.25,)",
     "nbinomcdf(3,0.25,)",
     "weibullpdf(,2,1)",
-    "weibullcdf(,2,1)"
+    "weibullcdf(,2,1)",
+    "cauchypdf(,0,1)",
+    "cauchycdf()",
+    "cauchycdf(,)",
+    "cauchycdf(,0,1)",
+    "cauchycdf(,,0,1)",
+    "invcauchy(,0,1)"
   ],
   "Tests & intervals": [
     "ttest(,[])",

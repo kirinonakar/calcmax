@@ -296,6 +296,12 @@ def probability(request):
             cdf = lambda x: mp.erfc(-(x-mu)/(sigma*mp.sqrt(2)))/2
             sf = lambda x: mp.erfc((x-mu)/(sigma*mp.sqrt(2)))/2
             pdf = lambda x: mp.exp(-((x-mu)/sigma)**2/2)/(sigma*mp.sqrt(2*mp.pi))
+        elif kind == "cauchy":
+            location, scale = number("location"), positive("scale")
+            # atan2 evaluates the smaller tail directly, even far from the center.
+            cdf = lambda x: mp.atan2(scale,location-x)/mp.pi
+            sf = lambda x: mp.atan2(scale,x-location)/mp.pi
+            pdf = lambda x: 1/(mp.pi*scale*(1+((x-location)/scale)**2))
         elif kind == "binomial":
             n, p = integer("n"), chance("p")
             lo, hi = (n, n) if p == 1 else (0, 0) if p == 0 else (0, n)
@@ -447,6 +453,8 @@ def probability(request):
                 z = normal_z(q)
                 value = mu+sigma*z if kind == "normal" else mp.exp(mu+sigma*z)
             elif kind == "uniform": value = lo+(hi-lo)*q
+            elif kind == "cauchy":
+                value = location if q == mp.mpf('0.5') else location-scale/mp.tan(mp.pi*q) if q < mp.mpf('0.5') else location+scale/mp.tan(mp.pi*(1-q))
             elif kind == "exponential": value = -mp.log1p(-q)/rate
             elif kind == "weibull": value = scale*(-mp.log1p(-q))**(1/shape)
             elif kind in ("gamma", "beta"):
@@ -540,6 +548,9 @@ def probability(request):
                             xs = sorted(set(xs+[int(threshold)]))
                 else:
                     xs = [plot_lo+(plot_hi-plot_lo)*i/80 for i in range(81)]
+                    if kind == "cauchy":
+                        # Wide heavy tails otherwise leave too few samples near the peak.
+                        xs = sorted(set(xs+[quantile(mp.mpf(i)/100) for i in range(1,100)]))
                     # Extra log-spaced samples resolve peaks in right-skewed densities.
                     if kind in ("gamma", "beta", "lognormal", "weibull", "f") and plot_lo > 0 and plot_hi > plot_lo:
                         xs = sorted(set(xs+[mp.exp(mp.log(plot_lo)+(mp.log(plot_hi)-mp.log(plot_lo))*i/80) for i in range(81)]))

@@ -221,6 +221,37 @@ def _binom_term(n, p, k):
 
 def distribution_value(engine, name, a):
     digits = engine.precision
+    if name in ("cauchypdf", "cauchycdf", "invcauchy"):
+        interval = name == "cauchycdf" and len(a) in (2,4)
+        require(len(a) in ((1,2,3,4) if name == "cauchycdf" else (1,3)),
+                name + " takes a value with optional location x₀ and scale γ" + (", or two bounds" if name == "cauchycdf" else ""))
+        location, scale = a[-2:] if len(a) in (3,4) else (s.Integer(0),s.Integer(1))
+        require(location.is_real is True and location.is_finite is True, "Cauchy location must be a finite real number")
+        require(scale.is_real is True and scale.is_finite is True and scale > 0, "Cauchy scale must be finite and positive")
+        def cdf(x):
+            if x == -s.oo: return s.Integer(0)
+            if x == s.oo: return s.Integer(1)
+            return s.atan2(scale,location-x)/s.pi
+        def sf(x):
+            if x == -s.oo: return s.Integer(1)
+            if x == s.oo: return s.Integer(0)
+            return s.atan2(scale,x-location)/s.pi
+        x = _real_or_infinite(a[0], name + " requires a real value")
+        require(x in (s.oo,-s.oo) or x.is_real is True and x.is_finite is True, name + " requires a real value")
+        if name == "invcauchy":
+            require(0 <= x <= 1, "invcauchy requires a probability between 0 and 1")
+            if x == 0: return -s.oo
+            if x == 1: return s.oo
+            if x == s.Rational(1,2): return location
+            return location-scale*s.cot(s.pi*x) if x < s.Rational(1,2) else location+scale*s.cot(s.pi*(1-x))
+        if name == "cauchypdf":
+            if x in (s.oo,-s.oo): return s.Integer(0)
+            return 1/(s.pi*scale*(1+((x-location)/scale)**2))
+        if not interval: return cdf(x)
+        high = _real_or_infinite(a[1], "cauchycdf requires real bounds")
+        require(high in (s.oo,-s.oo) or high.is_real is True and high.is_finite is True, "cauchycdf requires real bounds")
+        require(x <= high, "The lower bound must not be above the upper bound")
+        return sf(x)-sf(high) if x >= location else cdf(high)-cdf(x)
     if name == "normpdf":
         require(len(a) in (1, 3), "normpdf takes x, or x with μ and σ")
         x, mu, sigma = (a[0], s.Integer(0), s.Integer(1)) if len(a) == 1 else a

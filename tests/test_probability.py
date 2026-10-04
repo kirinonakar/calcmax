@@ -129,5 +129,30 @@ class ProbabilityTests(unittest.TestCase):
         self.assertTrue(0<float(result['value'])<1)
         self.assertNotIn('plot',result)
 
+    def test_cauchy_location_scale_tails_quantiles_and_undefined_moments(self):
+        params = dict(distribution='cauchy',location=3,scale=2)
+        for operation,x,expected in [('le',3,.5),('gt',5,.25),('density',3,1/(2*math.pi))]:
+            self.assertAlmostEqual(self.value(operation=operation,x=x,**params),expected,places=14)
+        self.assertAlmostEqual(self.value(operation='between',lower=1,upper=5,**params),.5)
+        self.assertEqual(self.value(operation='between',lower='-inf',upper='inf',**params),1)
+        result = self.run_probability(x=3,**params)
+        self.assertEqual([d['value'] for d in result['details']],['undefined']*3)
+        self.assertTrue(any(abs(x-3)<1e-12 and abs(y-1/(2*math.pi))<1e-14 for x,y,_ in result['plot']['points']))
+        for q,expected in [(0,'−∞'),(1,'∞'),('.25','1.0'),('.5','3.0'),('.75','5.0')]:
+            result = self.run_probability(operation='quantile',q=q,**params)
+            self.assertTrue(result['ok'],result)
+            if q in (0,1): self.assertEqual(result['value'],expected)
+            else: self.assertAlmostEqual(float(result['value']),float(expected))
+        for scale in ('1e-60','1e60'):
+            for q in ('.001','.5','.999','1e-60'):
+                result=self.run_probability(distribution='cauchy',operation='quantile',location=0,scale=scale,q=q)
+                self.assertTrue(result['ok'],result)
+                actual=self.value(distribution='cauchy',location=0,scale=scale,x=result['value'])
+                self.assertAlmostEqual(actual/float(q),1,places=13)
+        for operation,x in [('le','-1e60'),('gt','1e60')]:
+            self.assertAlmostEqual(self.value(distribution='cauchy',operation=operation,location=0,scale=1,x=x)/(1e-60/math.pi),1,places=13)
+        for scale in (0,-1,'inf'):
+            self.assertFalse(self.run_probability(distribution='cauchy',location=0,scale=scale,x=1)['ok'])
+
 
 if __name__ == "__main__":unittest.main()

@@ -21,6 +21,22 @@ async function loadRuntime(){
 }
 function runtime(){return sharedRuntime??=loadRuntime();}
 
+test('Cauchy catalog templates evaluate in WASM and Python mode',async()=>{
+  const py=await runtime();
+  for(const angle of ['DEG','RAD','GRAD']){
+    for(const [source,expected] of [['cauchypdf(0,0,1)',1/Math.PI],['cauchycdf(1)',.75],['cauchycdf(-1,1,0,1)',.5],['invcauchy(.75,3,2)',5]]){
+      py.globals.set('payload',JSON.stringify({tree:parse(source),angle}));
+      const result=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));
+      assert.equal(result.ok,true,result.error);
+      assert.ok(Math.abs(Number(result.decimal)-expected)<1e-14,source);
+    }
+  }
+  py.globals.set('payload',JSON.stringify({source:'import calcmax_catalog as calc\nprint(calc.cauchycdf(-1,1))\nprint(calc.invcauchy(calc.sp.Rational(3,4)))'}));
+  const result=JSON.parse(py.runPython('script_runner.run(payload)'));
+  assert.equal(result.ok,true,result.error);
+  assert.equal(result.output,'1/2\n1\n');
+});
+
 test('actual WASM shades chained inequalities and finds y-intercepts',async()=>{
   const py=await runtime();
   const run=request=>{py.globals.set('payload',JSON.stringify({angle:'RAD',...request}));const result=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));assert.equal(result.ok,true,result.error);return result;};

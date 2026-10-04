@@ -69,6 +69,27 @@ export const probabilitySchema = {
       ]
     },
     {
+      "id": "cauchy",
+      "label": "Cauchy",
+      "ko": "코시 분포",
+      "hint": "Location x₀ is the median; scale γ must be positive. Mean and variance are undefined.",
+      "hintKo": "위치 x₀는 중앙값이며 척도 γ는 양수여야 합니다. 평균과 분산은 정의되지 않습니다.",
+      "fields": [
+        [
+          "location",
+          "Location x₀",
+          "위치 x₀",
+          "0"
+        ],
+        [
+          "scale",
+          "Scale γ",
+          "척도 γ",
+          "1"
+        ]
+      ]
+    },
+    {
       "id": "binomial",
       "label": "Binomial",
       "ko": "이항 분포",
@@ -1079,6 +1100,19 @@ export const probabilitySchema = {
         "draws": "5",
         "marked": "4",
         "k": "2"
+      }
+    },
+    {
+      "id": "ledFailure",
+      "label": "LED · failure by 14,600 h",
+      "ko": "LED · 14,600 h 이내 고장",
+      "category": "distribution",
+      "distribution": "weibull",
+      "operation": "le",
+      "values": {
+        "shape": "3",
+        "scale": "25000",
+        "x": "14600"
       }
     }
   ]

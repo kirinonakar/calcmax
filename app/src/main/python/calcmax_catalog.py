@@ -28,7 +28,7 @@ dsolve desolve laplace ilaplace fourier ifourier fft ifft ztrans invztrans melli
 stats mean median variance stdev quartiles regression covariance correlation qty convert
 normpdf normalcdf normcdf normalpdf invnorm tpdf tcdf invt chi2pdf chi2cdf fpdf fcdf binompdf binomcdf poissonpdf poissoncdf geometpdf geometcdf
 exppdf expcdf unifpdf unifcdf gammapdf gammacdf betapdf betacdf lognormpdf lognormcdf
-hgeompdf hgeomcdf nbinompdf nbinomcdf weibullpdf weibullcdf
+hgeompdf hgeomcdf nbinompdf nbinomcdf weibullpdf weibullcdf cauchypdf cauchycdf invcauchy
 ttest ttest2 ttestpaired ztest ztest2 chi2test chi2independence fisherexact anova tukey shapiro tinterval zinterval
 tvmfv tvmpv tvmpmt tvmn tvmrate npv irr amort cagr
 """.split())

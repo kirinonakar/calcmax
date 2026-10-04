@@ -504,6 +504,15 @@ Example: weibullpdf(3,2,3)
 `weibullcdf(x,k,λ)` — Weibull cumulative probability P(X ≤ x).
 Example: weibullcdf(3,2,3)
 
+`cauchypdf(x)` / `cauchypdf(x,x₀,γ)` — Cauchy density, with default location 0 and scale 1. Require finite x₀ and positive finite γ. The mean and variance are undefined.
+Example: cauchypdf(0,0,1)
+`cauchycdf(x)` / `cauchycdf(x,x₀,γ)` — Cauchy cumulative probability P(X ≤ x).
+Example: cauchycdf(1,0,1)
+`cauchycdf(low,high)` / `cauchycdf(low,high,x₀,γ)` — Cauchy interval probability. Infinite bounds are allowed.
+Example: cauchycdf(-1,1,0,1)
+`invcauchy(q)` / `invcauchy(q,x₀,γ)` — Cauchy quantile for 0 ≤ q ≤ 1. Endpoints return −∞ and ∞; q=0.5 returns the location (median).
+Example: invcauchy(0.75,0,1)
+
 ## Statistical tests
 
 `ttest(μ0,[...])` — One-sample t test of the sample mean against μ0.

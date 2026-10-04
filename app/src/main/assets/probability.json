@@ -12,6 +12,7 @@
   ],
   "distributions": [
     {"id":"normal","label":"Normal","ko":"정규 분포","hint":"Measurements around a mean.","hintKo":"평균 주변에 분포하는 측정값을 계산합니다.","fields":[["mu","Mean μ","평균 μ","0"],["sigma","Standard deviation σ","표준편차 σ","1"]]},
+    {"id":"cauchy","label":"Cauchy","ko":"코시 분포","hint":"Location x₀ is the median; scale γ must be positive. Mean and variance are undefined.","hintKo":"위치 x₀는 중앙값이며 척도 γ는 양수여야 합니다. 평균과 분산은 정의되지 않습니다.","fields":[["location","Location x₀","위치 x₀","0"],["scale","Scale γ","척도 γ","1"]]},
     {"id":"binomial","label":"Binomial","ko":"이항 분포","discrete":true,"hint":"Number of successes in n independent trials (n ≤ 100000).","hintKo":"독립적인 n번 시행의 성공 횟수입니다 (n ≤ 100000).","fields":[["n","Trials n","시행 횟수 n","10"],["p","Success probability p","성공 확률 p","0.5"]]},
     {"id":"poisson","label":"Poisson","ko":"포아송 분포","discrete":true,"hint":"Number of events with an average rate λ (λ ≤ 100000).","hintKo":"평균 발생 횟수 λ에 따른 사건 수입니다 (λ ≤ 100000).","fields":[["rate","Average count λ","평균 발생 횟수 λ","3"]]},
     {"id":"geometric","label":"Geometric","ko":"기하 분포","discrete":true,"hint":"Trial number of the first success, starting at 1.","hintKo":"첫 성공이 나오는 시행 번호입니다. 1부터 셉니다.","fields":[["p","Success probability p","성공 확률 p","0.25"]]},
@@ -56,6 +57,7 @@
     {"id":"atLeastOne","label":"3 flips · any heads","ko":"동전 3번 앞면 1번 이상","category":"repeat","operation":"atLeastOne","values":{"n":"3","p":"1/2"}},
     {"id":"conditional","label":"King | face card","ko":"그림 카드 중 킹","category":"events","operation":"conditionalCounts","values":{"jointCount":"4","conditionCount":"12"}},
     {"id":"draw","label":"Choose 2 of 10 · both","ko":"10명 중 특정 2명","category":"draw","operation":"allMarked","values":{"population":"10","draws":"2","marked":"2"}},
-    {"id":"twoAces","label":"5 of 52 cards · 2 aces","ko":"52장 중 5장 · 에이스 2장","category":"draw","operation":"exactly","values":{"population":"52","draws":"5","marked":"4","k":"2"}}
+    {"id":"twoAces","label":"5 of 52 cards · 2 aces","ko":"52장 중 5장 · 에이스 2장","category":"draw","operation":"exactly","values":{"population":"52","draws":"5","marked":"4","k":"2"}},
+    {"id":"ledFailure","label":"LED · failure by 14,600 h","ko":"LED · 14,600 h 이내 고장","category":"distribution","distribution":"weibull","operation":"le","values":{"shape":"3","scale":"25000","x":"14600"}}
   ]
 }

@@ -22,18 +22,21 @@ test('probability controls run all user examples through actual WASM',async t=>{
   t.after(()=>{setLanguage('en');dom.window.close();});
   assert.ok([...$('mode').options].some(o=>o.value==='probability'));
   assert.equal($('probability-category').value,'basic');
-  const expected=[0.5,0.5,1/6,1/13,0.3125,0.875,1/3,1/45,6*17296/2598960];
+  const expected=[0.5,0.5,1/6,1/13,0.3125,0.875,1/3,1/45,6*17296/2598960,-Math.expm1(-((14600/25000)**3))];
   for(const [i,example] of schema.examples.entries()){
     $('probability-examples').children[i].click();
     const request=workspace.request();
     assert.equal(request.category,example.category);
     assert.equal(request.operation,example.operation);
+    if(example.distribution)assert.equal(request.distribution,example.distribution);
     for(const [key,value] of Object.entries(example.values))assert.equal(request.values[key],value);
     await workspace.run();
     assert.equal(latest.ok,true,latest.error);
     assert.ok(Math.abs(Number(latest.value)-expected[i])<1e-14,example.id);
     assert.equal($('probability-result').hidden,false);
-    assert.equal($('probability-result').querySelector('.probability-fraction').textContent,latest.fraction);
+    const fraction=$('probability-result').querySelector('.probability-fraction');
+    if(latest.fraction?.includes('/'))assert.equal(fraction.textContent,latest.fraction);
+    else assert.equal(fraction,null);
     assert.equal($('probability-error').hidden,true);
   }
 
@@ -58,8 +61,9 @@ test('probability controls run all user examples through actual WASM',async t=>{
   };
   await t.test('new distributions expose the proper fields and run every operation in WASM',async()=>{
     select('probability-category','distribution');
-    for(const id of ['gamma','beta','lognormal','negativeBinomial','weibull']){
+    for(const id of ['gamma','beta','lognormal','negativeBinomial','weibull','cauchy']){
       select('probability-distribution',id);
+      $('probability-reset').click();
       const definition=schema.distributions.find(d=>d.id===id);
       for(const field of definition.fields)assert.equal($(`probability-${id}-${field[0]}`).value,field[3]);
       assert.equal($('probability-hint').textContent,definition.hint);
