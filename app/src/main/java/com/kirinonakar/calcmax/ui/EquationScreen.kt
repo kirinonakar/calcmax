@@ -104,7 +104,7 @@ import org.json.JSONObject
             if(command!=null){m.fresh(Editor(command));m.calculate()}
         },enabled=!m.busy){Text(if(m.busy)"Solving…" else "Solve")}
         if(m.error.isNotBlank())Text(m.error,color=MaterialTheme.colorScheme.error)
-        if(m.result!=null) {HorizontalDivider();Text("Solution");Box(Modifier.horizontalScroll(rememberScrollState())){ResultMath(m.result!!,m.decimal,m.outputFont,
+        if(m.result!=null) {HorizontalDivider();Text("Solution");Box(Modifier.fillMaxWidth()){ResultMath(m.result!!,m.decimal,m.outputFont,
             displayMode=m.resultDisplayMode,thousandsSeparator=m.thousandsSeparator,displayDigits=m.displayDigits)};SmallAction(if(m.decimal)"Show exact" else "Show decimal",translate=false){m.decimal=!m.decimal}}
     }
 }

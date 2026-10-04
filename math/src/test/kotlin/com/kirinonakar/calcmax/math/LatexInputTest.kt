@@ -4,6 +4,22 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class LatexInputTest {
+    @Test fun extendedLatexMatchesSharedWebFixtures() {
+        val cases=javaClass.getResourceAsStream("/latex-input.tsv")!!.bufferedReader().readLines()
+        for(line in cases) {
+            val (source,expected)=line.split('\t')
+            for(wrapped in listOf(source,"$${source}$","$$${source}$$","\\[$source\\]","\\($source\\)")) {
+                assertEquals(wrapped,expected,LatexInput.convert(wrapped))
+                assertNotNull(Parser(expected).parse())
+            }
+        }
+        for(name in LatexInput.symbolLabels.keys)assertEquals(name,LatexInput.convert("\\$name"))
+        for(source in listOf("\\sum k","\\sum_{k}^{3} k","\\prod_{k=1} k","\\int_0 x dx","\\int_0^1 x","\\int x dxfoo","\\begin{pmatrix}1&2\\\\3\\end{pmatrix}","\\begin{matrix}1&\\end{matrix}","\\begin{matrix}1","\\begin{cases}x\\end{cases}","\\binom{5}"))assertNull(source,LatexInput.convert(source))
+        val paste="\\sum_{k=1}^{5} k^2"
+        val edit=LatexInput.convertEdit(Editor("1+x+3",3,2),"1+$${paste}$+3")!!
+        assertEquals("1+sum(k^2,k,1,5)+3",edit.source)
+        assertEquals(edit.source.length-2,edit.cursor)
+    }
     @Test fun explicitFractionParenthesesDoNotDuplicateGeneratedGrouping() {
         for(command in listOf("frac","dfrac","tfrac")) {
             val body="\\int_{0}^{1} \\left( \\$command{x}{x} \\right) dx"

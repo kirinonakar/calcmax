@@ -255,7 +255,7 @@ class Engine:
             theta=a[1]
             if not self.has_explicit_angle(nodes[1]) and not theta.free_symbols: theta *= {"DEG":s.pi/180,"GRAD":s.pi/200}.get(self.angle,1)
             return a[0]*(s.cos(theta)+s.I*s.sin(theta))
-        if name in ("sin", "cos", "tan"):
+        if name in ("sin", "cos", "tan", "sec", "csc", "cot"):
             arg = a[0]
             if not self.has_explicit_angle(nodes[0]) and not getattr(arg, "free_symbols", set()):
                 arg *= {"DEG": s.pi/180, "GRAD": s.pi/200}.get(self.angle, 1)

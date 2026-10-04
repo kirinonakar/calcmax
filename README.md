@@ -29,6 +29,8 @@ Try CalcMax in your browser: [kirinonakar.github.io/calcmax](https://kirinonakar
 
 Paste supported LaTeX into the Android or web calculator with `Paste` or directly into its text input. CalcMax converts it to an editable expression that can be calculated. Math delimiters (`\[...\]`, `\(...\)`, `$$...$$`, and `$...$`).
 
+Supported commands include fractions and roots, Greek letters (including variants and uppercase letters), trig and hyperbolic functions, `\binom`, `\le`/`\ge`/`\neq`, bounded `\sum`/`\prod`, and definite or indefinite `\int`. Bounds accept a braced expression or a single unbraced token, in either order. Integrals require a differential such as `dx`, `d x`, or `\mathrm{d}x`; indefinite results include `C`. Matrix environments `matrix`, `pmatrix`, `bmatrix`, `Bmatrix`, `vmatrix`, `Vmatrix`, and `smallmatrix` become editable matrix entries. A sum/product applies to the remaining expression inside its enclosing group, so use parentheses or braces to delimit its scope.
+
 ```latex
 $$\sqrt[3]{5} \times 25^{\frac{1}{3}}$$
 $$\cos\left(\frac{\pi}{2} + \theta\right) = -\frac{1}{5}$$
@@ -37,6 +39,13 @@ $$\lim_{x \to 0} \frac{3x^2}{\sin^2 x}$$
 \[\frac{x^2+1}{x-1}\]
 \[\int_{1}^{e}\frac{1}{x}\,dx=1\]
 $$\int_{0}^{\infty} e^{-x^2} \times \cos(2x) \, dx$$
+\sum_{k=1}^{5} k^2
+\prod_{k=1}^{4} k
+\alpha + \beta \le \gamma
+\binom{5}{2}
+\begin{bmatrix}1 & 2 \\ 3 & 4\end{bmatrix}
+\int_0^1 x^2 dx
+\int \sinh x dx
 ```
 
 ### Numbers and precision

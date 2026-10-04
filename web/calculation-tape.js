@@ -1,5 +1,5 @@
 import {expressionDisplay} from './expression-display.js';
-import {mathDisplay} from './math-display.js';
+import {resultMathDisplay} from './result-display.js';
 import {t} from './i18n.js';
 
 export function previousCalculations(history,active=null,clearedAt=0){
@@ -20,7 +20,7 @@ export function renderPreviousCalculations(container,entries,{decimal=false,digi
     input.addEventListener('click',()=>reuse(entry));
     const output=document.createElement('div');output.className='tape-result';
     const text=(decimal?entry.decimal:entry.exact)||'',display=entry.display||{},tree=decimal?display.decimalTree||display.tree:display.tree;
-    if(tree&&!compact(tree)&&text.length<10000)output.append(mathDisplay(tree,digits,decimal||display.approximate,{notation,grouping}));
+    if(tree&&!compact(tree)&&text.length<10000)output.append(resultMathDisplay(tree,digits,decimal||display.approximate,{notation,grouping}));
     else if(text.length<=1200&&!text.includes('\n'))try{output.append(expressionDisplay(text));}catch{output.textContent=text;}
     else output.textContent=text.slice(0,1200);
     row.append(input,output);

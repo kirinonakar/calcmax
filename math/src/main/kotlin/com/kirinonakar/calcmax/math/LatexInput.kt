@@ -2,8 +2,10 @@ package com.kirinonakar.calcmax.math
 
 /** Converts pasted, supported LaTeX math into the calculator's editable expression syntax. */
 object LatexInput {
-    private val integral = Regex("""\\int\s*_\s*\{([^{}]+)\}\s*\^\s*\{([^{}]+)\}([\s\S]*?)(?:\\[,;! ]\s*)?d\s*([A-Za-z])(?=\s*(?:=|$))""")
-    private val commands = setOf("lim", "frac", "dfrac", "tfrac", "sqrt", "sin", "cos", "tan", "arcsin", "arccos", "arctan", "ln", "log", "exp", "pi", "theta", "infty", "times", "cdot", "left", "right", "quad", "qquad")
+    private val functions = setOf("sin","cos","tan","sec","csc","cot","sinh","cosh","tanh","arcsin","arccos","arctan","ln","exp")
+    val symbolLabels = mapOf("alpha" to "α","beta" to "β","gamma" to "γ","delta" to "δ","epsilon" to "ϵ","varepsilon" to "ε","zeta" to "ζ","eta" to "η","theta" to "θ","vartheta" to "ϑ","iota" to "ι","kappa" to "κ","varkappa" to "ϰ","lambda" to "λ","mu" to "μ","nu" to "ν","xi" to "ξ","pi" to "π","varpi" to "ϖ","rho" to "ρ","varrho" to "ϱ","sigma" to "σ","varsigma" to "ς","tau" to "τ","upsilon" to "υ","phi" to "ϕ","varphi" to "φ","chi" to "χ","psi" to "ψ","omega" to "ω","Gamma" to "Γ","Delta" to "Δ","Theta" to "Θ","Lambda" to "Λ","Xi" to "Ξ","Pi" to "Π","Sigma" to "Σ","Upsilon" to "Υ","Phi" to "Φ","Psi" to "Ψ","Omega" to "Ω")
+    private val greek = symbolLabels.keys
+    private val commands = setOf("int","sum","prod","binom","begin","lim","frac","dfrac","tfrac","sqrt","log","infty","times","cdot","left","right","quad","qquad","le","leq","ge","geq","ne","neq") + functions + greek
     private val commandPattern = Regex("""\\([A-Za-z]+)""")
     private val bracedPower = Regex("""\^\s*\{""")
 
@@ -20,7 +22,7 @@ object LatexInput {
             source.startsWith('$') && source.endsWith('$') && source.length>=2 -> source.substring(1,source.length-1)
             else -> source
         }.trim()
-        return runCatching { convertIntegrals(source) }.getOrNull()?.takeIf {runCatching {Parser(it).parse()}.isSuccess}
+        return runCatching { convertBody(source) }.getOrNull()?.takeIf {runCatching {Parser(it).parse()}.isSuccess}
     }
 
     /** Convert only the inserted text so wrapped LaTeX also works inside an existing expression. */
@@ -36,25 +38,15 @@ object LatexInput {
         return convert(updated)?.let {Editor(it)}
     }
 
-    private fun convertIntegrals(source:String):String {
-        val match=integral.find(source) ?: return convertBody(source)
-        val lower=convertIntegrals(match.groupValues[1])
-        val upper=convertIntegrals(match.groupValues[2])
-        val body=convertIntegrals(match.groupValues[3].trim())
-        val variable=match.groupValues[4]
-        val replacement="integrate($body,$variable,$lower,$upper)"
-        return convertIntegrals(source.substring(0,match.range.first)+replacement+source.substring(match.range.last+1))
-    }
-
     private fun convertBody(source:String):String = buildString {
         var index=0
         while(index<source.length) {
             val c=source[index]
-            if(c=='(') {
-                val (raw,next)=group(source,index,'(',')')
+            if(c=='(' || c=='{') {
+                val (raw,next)=group(source,index,c,if(c=='(')')' else '}')
                 var converted=convertBody(raw)
                 // An explicit fence already groups a sole fraction; reuse that fence.
-                if(Regex("""^\s*\\(?:frac|dfrac|tfrac)\b""").containsMatchIn(raw)) {
+                if(c=='(' && Regex("""^\s*\\(?:frac|dfrac|tfrac)\b""").containsMatchIn(raw)) {
                     val tree=runCatching {Parser(converted).parse()}.getOrNull()
                     if(tree?.kind=="group" && tree.args[0].kind=="binary" && tree.args[0].value=="/")converted=converted.substring(1,converted.length-1)
                 }
@@ -79,6 +71,34 @@ object LatexInput {
             val command=source.substring(start,index)
             if(command !in commands)error("Unsupported LaTeX command: $command")
             when(command) {
+                "begin" -> {
+                    val (environment,start)=group(source,index)
+                    require(environment in setOf("matrix","pmatrix","bmatrix","Bmatrix","vmatrix","Vmatrix","smallmatrix")) {"Unsupported LaTeX environment"}
+                    val endCommand="\\end{$environment}"
+                    val end=source.indexOf(endCommand,start)
+                    require(end>=0) {"Unclosed LaTeX matrix"}
+                    append(convertMatrix(source.substring(start,end)))
+                    index=end+endCommand.length
+                }
+                "int", "sum", "prod" -> {
+                    val (limits,next)=bounds(source,index)
+                    index=next
+                    if(command=="int") {
+                        val (expression,variable,end)=integralExpression(source,index)
+                        append("integrate(").append(expression).append(',').append(variable)
+                        if(limits.containsKey('_'))append(',').append(limits['_']).append(',').append(limits['^'])
+                        append(')');index=end
+                    } else {
+                        val lower=limits['_'] ?: error("Expected LaTeX sum/product bounds")
+                        val tree=Parser(lower).parse()
+                        require(tree.kind=="relation" && tree.value=="=" && tree.args[0].kind=="symbol") {"Expected index=lower bound"}
+                        val split=lower.indexOf('=')
+                        val end=limitExpressionEnd(source,index)
+                        val expression=compactExpression(convertBody(source.substring(index,end)))
+                        append(if(command=="sum")"sum(" else "product(").append(expression).append(',').append(lower.substring(0,split)).append(',').append(lower.substring(split+1)).append(',').append(limits['^']).append(')')
+                        index=end
+                    }
+                }
                 "lim" -> {
                     index=skipSpacing(source,index)
                     require(source.getOrNull(index)=='_') {"Expected LaTeX limit approach"}
@@ -106,6 +126,12 @@ object LatexInput {
                     val (bottom,afterBottom)=group(source,afterTop)
                     append("((").append(convertBody(top)).append(")/(").append(convertBody(bottom)).append("))")
                     index=afterBottom
+                }
+                "binom" -> {
+                    val (top,afterTop)=group(source,index)
+                    val (bottom,next)=group(source,afterTop)
+                    append("nCr(").append(logOperand(top)).append(',').append(logOperand(bottom)).append(')')
+                    index=next
                 }
                 "sqrt" -> {
                     while(source.getOrNull(index)?.isWhitespace()==true)index++
@@ -137,11 +163,15 @@ object LatexInput {
                         index=next
                     }
                 }
-                "pi" -> append("pi")
                 "infty" -> append("oo")
                 "times", "cdot" -> append('*')
-                "left", "right", "quad", "qquad" -> Unit
-                "sin", "cos", "tan", "arcsin", "arccos", "arctan", "ln", "exp" -> {
+                "left", "right" -> {
+                    index=skipSpacing(source,index)
+                    if(command=="left" && source.getOrNull(index)=='[') {append('(');index++}
+                    else if(command=="right" && source.getOrNull(index)==']') {append(')');index++}
+                }
+                "quad", "qquad" -> Unit
+                in functions -> {
                     val name=mapOf("arcsin" to "asin","arccos" to "acos","arctan" to "atan")[command] ?: command
                     index=skipSpacing(source,index)
                     val exponent=if(source.getOrNull(index)=='^') {
@@ -157,10 +187,80 @@ object LatexInput {
                         index=next
                     }
                 }
+                "le", "leq" -> append("<=")
+                "ge", "geq" -> append(">=")
+                "ne", "neq" -> append("!=")
+                in greek -> {
+                    if(toString().trimEnd().lastOrNull()?.let {it.isLetter() || it=='_'}==true)append('*')
+                    append(command)
+                    val following=source.substring(index).trimStart()
+                    val nextCommand=commandPattern.find(following)?.takeIf {it.range.first==0}?.groupValues?.get(1)
+                    if(following.firstOrNull()?.isLetterOrDigit()==true || nextCommand in greek || nextCommand in functions || nextCommand in setOf("frac","dfrac","tfrac","sqrt","binom","log","sum","prod","int","lim"))append('*')
+                }
                 else -> append(command)
             }
         }
     }.replace(Regex("""\s+"""), "")
+
+    private fun bounds(source:String,from:Int):Pair<Map<Char,String>,Int> {
+        val values=mutableMapOf<Char,String>()
+        var index=skipSpacing(source,from)
+        while(source.getOrNull(index) in listOf('_','^')) {
+            val marker=source[index++]
+            require(marker !in values) {"Duplicate LaTeX bound"}
+            val (value,next)=argument(source,index,true)
+            values[marker]=logOperand(value);index=skipSpacing(source,next)
+        }
+        require(values.containsKey('_')==values.containsKey('^')) {"Expected both LaTeX bounds"}
+        return values to index
+    }
+
+    private val scopeEnd=Regex("""^\\(?:right|leq?|geq?|neq?)\b""")
+    private val differential=Regex("""^(?:\\mathrm\s*\{\s*d\s*\}|d)\s*(\\[A-Za-z]+|[A-Za-z])(?=\s*(?:$|[+\-)=<>,}\]]|\\(?:right|leq?|geq?|neq?)\b|d\s*[A-Za-z]))""")
+    private fun integralExpression(source:String,from:Int):Triple<String,String,Int> {
+        var index=from;var depth=0;var nested=0
+        while(index<source.length) {
+            val tail=source.substring(index);val c=source[index]
+            if(depth==0) {
+                if(Regex("""^\\[,;! ]""").containsMatchIn(tail)) {index+=2;continue}
+                val match=differential.find(tail)
+                if(match!=null && (index==from || !source[index-1].isLetter())) {
+                    if(nested>0)nested--
+                    else {
+                        val raw=source.substring(from,index).trim().replace(Regex("""\\[,;! ]\s*$"""),"")
+                        val variable=convertBody(match.groupValues[1])
+                        require(Parser(variable).parse().kind=="symbol") {"Expected integration variable"}
+                        return Triple(if(raw.isEmpty())"1" else convertBody(raw),variable,index+match.value.length)
+                    }
+                }
+                if(Regex("""^\\int\b""").containsMatchIn(tail))nested++
+                if(c in ")]},=<>" || scopeEnd.containsMatchIn(tail))break
+            }
+            if(c in "([{")depth++ else if(c in ")]}")depth--
+            index++
+        }
+        error("Expected LaTeX integral differential")
+    }
+
+    private fun convertMatrix(content:String):String {
+        val rows=mutableListOf(mutableListOf<String>())
+        var index=0;var start=0;var depth=0
+        while(index<content.length) {
+            val c=content[index]
+            if(c in "([{")depth++ else if(c in ")]}")depth--
+            if(depth==0 && (c=='&' || content.startsWith("\\\\",index))) {
+                rows.last().add(convertBody(content.substring(start,index)))
+                if(c!='&') {rows.add(mutableListOf());index++}
+                start=index+1
+            }
+            index++
+        }
+        if(content.substring(start).isNotBlank())rows.last().add(convertBody(content.substring(start)))
+        else if(rows.last().isEmpty() && rows.size>1)rows.removeAt(rows.lastIndex)
+        else rows.last().add("")
+        require(rows.first().isNotEmpty() && rows.all {row->row.size==rows.first().size && row.all {it.isNotEmpty()}}) {"Expected rectangular LaTeX matrix"}
+        return rows.joinToString(",","[","]") {it.joinToString(",","[","]")}
+    }
 
     private fun compactExpression(source:String):String {
         val tree=Parser(source).parse()
@@ -185,7 +285,7 @@ object LatexInput {
         var depth=0
         while(index<source.length) {
             val c=source[index]
-            if(depth==0 && (c in ")]},=<>" || source.startsWith("\\right",index) && source.getOrNull(index+6)?.isLetter()!=true))break
+            if(depth==0 && (c in ")]},=<>" || scopeEnd.containsMatchIn(source.substring(index))))break
             if(c in "([{")depth++
             else if(c in ")]}")depth--
             index++
@@ -222,7 +322,7 @@ object LatexInput {
                 val command=match.groupValues[1]
                 index=match.range.last+1
                 when(command) {
-                    "frac","dfrac","tfrac" -> {
+                    "frac","dfrac","tfrac","binom" -> {
                         index=group(source,index).second
                         index=group(source,index).second
                     }
@@ -231,13 +331,18 @@ object LatexInput {
                         if(source.getOrNull(index)=='[')index=group(source,index,'[',']').second
                         index=group(source,index).second
                     }
-                    "left" -> index=group(source,skipSpacing(source,index),'(',')').second
+                    "left" -> {
+                        index=skipSpacing(source,index)
+                        val open=source.getOrNull(index)
+                        require(open=='(' || open=='[') {"Expected LaTeX fence"}
+                        index=group(source,index,open,if(open=='(')')' else ']').second
+                    }
                     "log" -> {
                         index=skipSpacing(source,index)
                         if(source.getOrNull(index)=='_')index=argument(source,index+1,true).second
                         index=argument(source,index).second
                     }
-                    "sin","cos","tan","arcsin","arccos","arctan","ln","exp" -> {
+                    in functions -> {
                         index=skipSpacing(source,index)
                         if(source.getOrNull(index)=='^')index=argument(source,index+1,true).second
                         index=argument(source,index).second

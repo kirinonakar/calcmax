@@ -18,7 +18,7 @@ from calc_probability import probability
 
 # Symbolic calls whose cold first evaluation is heavy enough that the generic step allowance used
 # to cut off legitimate work. Nested calls count too, so 1+fourier(exp(-t^2),t,w) is heavy as well.
-HEAVY_CALLS=("integrate","dsolve","desolve","laplace","ilaplace","fourier","ifourier","mellin","invmellin","ztrans","invztrans","pdsolve","domain","range","real_roots","rsolve","invt","tinterval","tukey","tvmrate","irr")
+HEAVY_CALLS=("solve","integrate","dsolve","desolve","laplace","ilaplace","fourier","ifourier","mellin","invmellin","ztrans","invztrans","pdsolve","domain","range","real_roots","rsolve","invt","tinterval","tukey","tvmrate","irr")
 MAX_SHOWN_INTEGER_DIGITS=10000
 
 def shown_exact(rounded):
@@ -94,7 +94,7 @@ def _dispatch(payload, control=None):
                         and getattr(value,"is_number",False) and not value.has(s.I))
             result={"exact":exact,"decimal":readable(decimal_value),"tree":exact_tree,"note":engine.note,
                     "conditions":[readable(c.lhs)+" ≠ "+readable(c.rhs) if isinstance(c,s.Unequality) else str(c) for c in dict.fromkeys(engine.conditions)],"symbolic":bool(getattr(value,"free_symbols",False))}
-            result["approximate"]=bool(getattr(value,"has",lambda *_:False)(s.Float))
+            result["approximate"]=bool(getattr(display_value,"has",lambda *_:False)(s.Float))
             result["decimalTree"]=display_tree(decimal_value)
             if dms_result:
                 result["tree"]=dms_tree(display_value)

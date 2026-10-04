@@ -197,7 +197,7 @@ private val LocalCalculatorOverlay=staticCompositionLocalOf<(String)->Unit> { {}
             if(!compactInput&&input!=null)MathNode(input,m.inputFont*.84f)
             else Text(entry.source.take(800),fontSize=(m.inputFont*.84f).sp,fontFamily=FontFamily.Monospace,color=c.ink,maxLines=4,overflow=TextOverflow.Ellipsis)
         }
-        Box(Modifier.fillMaxWidth().padding(top=6.dp).horizontalScroll(rememberScrollState()),contentAlignment=Alignment.CenterEnd) {
+        Box(Modifier.fillMaxWidth().padding(top=6.dp),contentAlignment=Alignment.CenterEnd) {
             if(!compactResult&&response!=null)ResultMath(response,m.decimal,m.outputFont*.82f,
                 displayMode=m.resultDisplayMode,thousandsSeparator=m.thousandsSeparator,dmsDisplay=response.optBoolean("dms"),displayDigits=m.displayDigits)
             else Text(ResultDisplayFormat.formatText(response?.optString(if(m.decimal)"decimal" else "exact").orEmpty().ifBlank {entry.result},m.resultDisplayMode,m.thousandsSeparator,maxFractionDigits=m.displayDigits).take(1200),
@@ -340,7 +340,7 @@ internal fun largeHistoryTree(root:JSONObject?):Boolean {
                     }}
                 )
             }
-            else if(m.result!=null&&m.poweredOn)Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),contentAlignment=Alignment.CenterEnd){
+            else if(m.result!=null&&m.poweredOn)Box(Modifier.fillMaxWidth(),contentAlignment=Alignment.CenterEnd){
                 val currentResult=m.result!!
                 val compactResult=remember(currentResult,m.decimal) {
                     currentResult.optString("exact").length>20_000||
@@ -417,7 +417,7 @@ internal fun largeHistoryTree(root:JSONObject?):Boolean {
     }
     val shift=if(engineeringConversion)engineeringShift else 0
     val displayTree=tree?.let{ResultDisplayFormat.formatTree(it,effectiveMode,thousandsSeparator,shift,engineeringConversion,displayDigits)}
-    if(displayTree!=null)MathNode(displayTree,size) else Text(ResultDisplayFormat.formatText(result.optString(if(useDecimal)"decimal" else "exact"),effectiveMode,thousandsSeparator,shift,engineeringConversion,displayDigits),fontSize=size.sp,color=LocalInstrument.current.ink,fontFamily=FontFamily.Serif)
+    if(displayTree!=null)WrappedMathResult(displayTree,size) else Text(ResultDisplayFormat.formatText(result.optString(if(useDecimal)"decimal" else "exact"),effectiveMode,thousandsSeparator,shift,engineeringConversion,displayDigits),fontSize=size.sp,color=LocalInstrument.current.ink,fontFamily=FontFamily.Serif)
 }
 private fun domainText(result:JSONObject?):String {
     val conditions=result?.optJSONArray("conditions") ?: return ""

@@ -26,6 +26,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.*
 import com.kirinonakar.calcmax.ui.theme.LocalInstrument
+import com.kirinonakar.calcmax.math.LatexInput
 import org.json.JSONObject
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -397,7 +398,7 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
             kind=="call"&&value=="mixed"->MathRow(3.dp){child(0);FractionLayout({child(1,.85f)},{child(2,.85f)})}
             kind=="call"&&value=="eng"->child(0)
             kind in listOf("number","symbol","text")-> {
-                val shown=when(value){"pi"->"π";"theta"->"θ";"oo"->"∞";"E"->"e";"I"->"i";else->value}
+                val shown=LatexInput.symbolLabels[value] ?: when(value){"oo"->"∞";"E"->"e";"I"->"i";else->value}
                 val mathItalic=value in listOf("x","y","z","e","E","i","I")
                 if(select==null) MathText(shown,size,italic=mathItalic)
                 else {

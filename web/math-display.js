@@ -1,6 +1,7 @@
 import {roundNumber} from './display-format.js';
 import {expressionTree} from './expression-tree.js';
 import {trackMathRoots} from './math-roots.js';
+import {latexSymbolLabels} from './parser.js';
 const NS = 'http://www.w3.org/1998/Math/MathML';
 function el(tag,children=[],text='') {
   const result = document.createElementNS(NS,tag);
@@ -75,7 +76,7 @@ export function mathDisplay(tree,digits=10,decimal=false,{notation='off',groupin
       case 'list': case 'set': case 'tuple': return fenced(join(args,','),t.kind === 'set' ? '{' : t.kind==='tuple'?'(':'[',t.kind === 'set' ? '}' : t.kind==='tuple'?')':']');
       case 'quantity': return row([...args,el('mtext',[],` ${value}`)]);
       case 'dms': return row(args.flatMap((a,i) => [a,operator(['°','′','″'][i])]));
-      case 'symbol': return el('mi',[],{pi:'π',theta:'θ',oo:'∞',E:'e',I:'i'}[value]||value);
+      case 'symbol': return el('mi',[],latexSymbolLabels[value]||{oo:'∞',E:'e',I:'i'}[value]||value);
       case 'fixed-number': return el('mn',[],value);
       case 'input-operator': {const result=operator(value==='=='?'=':value);result.setAttribute('form','infix');return result;}
       case 'input-text': return el('mtext',[],value);

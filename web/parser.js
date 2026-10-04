@@ -117,9 +117,14 @@ export function parse(source,{allowHoles=false}={}) {
   return tree;
 }
 
+export const latexSymbolLabels = Object.fromEntries([
+  ['alpha','α'],['beta','β'],['gamma','γ'],['delta','δ'],['epsilon','ϵ'],['varepsilon','ε'],['zeta','ζ'],['eta','η'],['theta','θ'],['vartheta','ϑ'],['iota','ι'],['kappa','κ'],['varkappa','ϰ'],['lambda','λ'],['mu','μ'],['nu','ν'],['xi','ξ'],['pi','π'],['varpi','ϖ'],['rho','ρ'],['varrho','ϱ'],['sigma','σ'],['varsigma','ς'],['tau','τ'],['upsilon','υ'],['phi','ϕ'],['varphi','φ'],['chi','χ'],['psi','ψ'],['omega','ω'],['Gamma','Γ'],['Delta','Δ'],['Theta','Θ'],['Lambda','Λ'],['Xi','Ξ'],['Pi','Π'],['Sigma','Σ'],['Upsilon','Υ'],['Phi','Φ'],['Psi','Ψ'],['Omega','Ω']
+]);
 // Equivalent supported LaTeX subset to math/LatexInput.kt.
 export function latexInput(input) {
-  const commands = new Set(['int','lim','frac','dfrac','tfrac','sqrt','sin','cos','tan','arcsin','arccos','arctan','ln','log','exp','pi','theta','infty','times','cdot','left','right','quad','qquad']);
+  const functions = new Set(['sin','cos','tan','sec','csc','cot','sinh','cosh','tanh','arcsin','arccos','arctan','ln','exp']);
+  const greek = new Set(Object.keys(latexSymbolLabels));
+  const commands = new Set(['int','sum','prod','binom','begin','lim','frac','dfrac','tfrac','sqrt','log','infty','times','cdot','left','right','quad','qquad','le','leq','ge','geq','ne','neq',...functions,...greek]);
   let source = input.trim();
   if (!/^\\[[(]|^\$|\^\s*\{/.test(source) && ![...source.matchAll(/\\([A-Za-z]+)/g)].some(match=>commands.has(match[1]))) return input;
   for (const [open,close] of [['\\[','\\]'],['\\(','\\)'],['$$','$$'],['$','$']]) {
@@ -175,11 +180,11 @@ export function latexInput(input) {
         const command=/^[A-Za-z]+/.exec(text.slice(i+1))?.[0];
         if (!command) throw new SyntaxError('Expected LaTeX argument');
         i+=command.length+1;
-        if (['frac','dfrac','tfrac'].includes(command)) {group();group();}
+        if (['frac','dfrac','tfrac','binom'].includes(command)) {group();group();}
         else if (command==='sqrt') {skipSpacing();if(text[i]==='[')group('[',']');group();}
-        else if (command==='left') {skipSpacing();group('(',')');}
+        else if (command==='left') {skipSpacing();if(!['(','['].includes(text[i]))throw new SyntaxError('Expected LaTeX fence');group(text[i],text[i]==='('?')':']');}
         else if (command==='log') {skipSpacing();if(text[i]==='_'){i++;argument(true);}argument();}
-        else if (['sin','cos','tan','arcsin','arccos','arctan','ln','exp'].includes(command)) {skipSpacing();if(text[i]==='^'){i++;argument(true);}argument();}
+        else if (functions.has(command)) {skipSpacing();if(text[i]==='^'){i++;argument(true);}argument();}
       } else {
         if (!letter(c) && !digit(c) && c!=='.') throw new SyntaxError('Expected LaTeX argument');
         i++;
@@ -207,21 +212,79 @@ export function latexInput(input) {
       let depth=0;
       while(i<text.length) {
         const c=text[i];
-        if(!depth && (')]}=<>,'.includes(c) || text.startsWith('\\right',i) && !letter(text[i+6])))break;
+        if(!depth && (')]}=<>,'.includes(c) || /^\\(?:right|leq?|geq?|neq?)\b/.test(text.slice(i))))break;
         if('([{'.includes(c))depth++;
         else if(')]}'.includes(c))depth--;
         i++;
       }
       return compactExpression(body(text.slice(start,i)));
     }
+    function bounds() {
+      const values={};
+      skipSpacing();
+      while(text[i]==='_' || text[i]==='^') {
+        const marker=text[i++];
+        if(marker in values)throw new SyntaxError('Duplicate LaTeX bound');
+        values[marker]=logOperand(argument(true));skipSpacing();
+      }
+      if(('_' in values)!==('^' in values))throw new SyntaxError('Expected both LaTeX bounds');
+      return values;
+    }
+    function integralExpression() {
+      const start=i;let depth=0,nested=0;
+      while(i<text.length) {
+        const tail=text.slice(i),c=text[i];
+        if(!depth) {
+          if(/^\\[,;! ]/.test(tail)){i+=2;continue;}
+          const differential=/^(?:\\mathrm\s*\{\s*d\s*\}|d)\s*(\\[A-Za-z]+|[A-Za-z])(?=\s*(?:$|[+\-)=<>,}\]]|\\(?:right|leq?|geq?|neq?)\b|d\s*[A-Za-z]))/.exec(tail);
+          if(differential && (i===start || !letter(text[i-1]))) {
+            if(nested)nested--;
+            else {
+              const expression=text.slice(start,i).trim().replace(/\\[,;! ]\s*$/,'');
+              i+=differential[0].length;
+              const variable=body(differential[1]);
+              if(parse(variable).kind!=='symbol')throw new SyntaxError('Expected integration variable');
+              return [expression?body(expression):'1',variable];
+            }
+          }
+          if(/^\\int\b/.test(tail))nested++;
+          if(')]}=<>,'.includes(c) || /^\\(?:right|leq?|geq?|neq?)\b/.test(tail))break;
+        }
+        if('([{'.includes(c))depth++;else if(')]}'.includes(c))depth--;
+        i++;
+      }
+      throw new SyntaxError('Expected LaTeX integral differential');
+    }
+    function matrix() {
+      const environment=group();
+      if(!['matrix','pmatrix','bmatrix','Bmatrix','vmatrix','Vmatrix','smallmatrix'].includes(environment))throw new SyntaxError('Unsupported LaTeX environment');
+      const endCommand=`\\end{${environment}}`,end=text.indexOf(endCommand,i);
+      if(end<0)throw new SyntaxError('Unclosed LaTeX matrix');
+      const content=text.slice(i,end);i=end+endCommand.length;
+      const rows=[[]];let start=0,depth=0;
+      for(let j=0;j<content.length;j++) {
+        if('({['.includes(content[j]))depth++;
+        else if(')}]'.includes(content[j]))depth--;
+        if(!depth && (content[j]==='&' || content.startsWith('\\\\',j))) {
+          rows.at(-1).push(body(content.slice(start,j)));
+          if(content[j]!=='&'){rows.push([]);j++;}
+          start=j+1;
+        }
+      }
+      if(content.slice(start).trim())rows.at(-1).push(body(content.slice(start)));
+      else if(!rows.at(-1).length && rows.length>1)rows.pop();
+      else rows.at(-1).push('');
+      if(!rows[0].length || rows.some(row=>row.length!==rows[0].length || row.some(cell=>!cell)))throw new SyntaxError('Expected rectangular LaTeX matrix');
+      return `[${rows.map(row=>`[${row.join(',')}]`).join(',')}]`;
+    }
     while (i < text.length) {
       const c = text[i++];
-      if(c==='(') {
+      if(c==='(' || c==='{') {
         i--;
-        const raw=group('(',')');
+        const raw=group(c,c==='('?')':'}');
         let converted=body(raw);
         // An explicit fence already groups a sole fraction; reuse that fence.
-        if(/^\s*\\(?:frac|dfrac|tfrac)\b/.test(raw)) {
+        if(c==='(' && /^\s*\\(?:frac|dfrac|tfrac)\b/.test(raw)) {
           try{const tree=parse(converted);if(tree.kind==='group'&&tree.args[0].kind==='binary'&&tree.args[0].value==='/')converted=converted.slice(1,-1);}catch{}
         }
         result+=`(${converted})`;
@@ -232,7 +295,20 @@ export function latexInput(input) {
       const command = /^[A-Za-z]+/.exec(text.slice(i))?.[0];
       if (!command) throw new SyntaxError('Incomplete LaTeX command');
       i += command.length;
-      if (command==='lim') {
+      if(command==='begin') result+=matrix();
+      else if(command==='int') {
+        const limits=bounds(),[expression,variable]=integralExpression();
+        result+=`integrate(${expression},${variable}${'_' in limits?`,${limits._},${limits['^']}`:''})`;
+      }
+      else if(command==='sum' || command==='prod') {
+        const limits=bounds();
+        if(!('_' in limits))throw new SyntaxError('Expected LaTeX sum/product bounds');
+        const lower=parse(limits._);
+        if(lower.kind!=='relation' || lower.value!=='=' || lower.args[0].kind!=='symbol')throw new SyntaxError('Expected index=lower bound');
+        const split=limits._.indexOf('=');
+        result+=`${command==='sum'?'sum':'product'}(${limitExpression()},${limits._.slice(0,split)},${limits._.slice(split+1)},${limits['^']})`;
+      }
+      else if (command==='lim') {
         skipSpacing();
         if(text[i++]!=='_')throw new SyntaxError('Expected LaTeX limit approach');
         const approach=group().split(/\\(?:to|rightarrow)\b|->|→/);
@@ -246,6 +322,7 @@ export function latexInput(input) {
         result+=`limit(${limitExpression()},${variable},${point}${direction})`;
       }
       else if (['frac','dfrac','tfrac'].includes(command)) { const top = group(), bottom = group(); result += `((${body(top)})/(${body(bottom)}))`; }
+      else if(command==='binom') {const top=group(),bottom=group();result+=`nCr(${logOperand(top)},${logOperand(bottom)})`;}
       else if (command === 'sqrt') {
         while (/\s/.test(text[i] || '\0')) i++;
         const degree=text[i]==='[' ? body(group('[',']')) : null;
@@ -260,7 +337,7 @@ export function latexInput(input) {
         if (base===null && (text[i]==='(' || text.startsWith('\\left',i))) result+='log';
         else result+=`log(${logOperand(argument())}${base===null?'':`,${base}`})`;
       }
-      else if (['sin','cos','tan','arcsin','arccos','arctan','ln','exp'].includes(command)) {
+      else if (functions.has(command)) {
         const name={arcsin:'asin',arccos:'acos',arctan:'atan'}[command]||command;
         skipSpacing();
         let exponent=null;
@@ -268,14 +345,24 @@ export function latexInput(input) {
         if(exponent===null && (text[i]==='(' || text.startsWith('\\left',i)))result+=name;
         else result+=`${name}(${body(argument())})${exponent===null?'':`^(${exponent})`}`;
       }
-      else if (['left','right','quad','qquad'].includes(command)) continue;
-      else if (['pi','infty','times','cdot','arcsin','arccos','arctan'].includes(command)) result += {pi:'pi',infty:'oo',times:'*',cdot:'*',arcsin:'asin',arccos:'acos',arctan:'atan'}[command];
-      else if (['sin','cos','tan','ln','log','exp','theta'].includes(command)) result += command;
+      else if (command==='left' || command==='right') {
+        skipSpacing();
+        if(command==='left' && text[i]==='['){result+='(';i++;}
+        else if(command==='right' && text[i]===']'){result+=')';i++;}
+      }
+      else if (['quad','qquad'].includes(command)) continue;
+      else if (greek.has(command)) {
+        if(/[A-Za-z_]$/.test(result.trimEnd()))result+='*';
+        result+=command;
+        const following=text.slice(i).trimStart(),nextCommand=/^\\([A-Za-z]+)/.exec(following)?.[1];
+        if(letter(following[0]) || digit(following[0]) || greek.has(nextCommand) || functions.has(nextCommand) || ['frac','dfrac','tfrac','sqrt','binom','log','sum','prod','int','lim'].includes(nextCommand))result+='*';
+      }
+      else if (['infty','times','cdot'].includes(command)) result += {infty:'oo',times:'*',cdot:'*'}[command];
+      else if (['le','leq','ge','geq','ne','neq'].includes(command)) result += {le:'<=',leq:'<=',ge:'>=',geq:'>=',ne:'!=',neq:'!='}[command];
       else throw new SyntaxError(`Unsupported LaTeX command: ${command}`);
     }
     return result.replace(/\s+/g,'');
   }
-  source = source.replace(/\\int\s*_\s*\{([^{}]+)\}\s*\^\s*\{([^{}]+)\}([\s\S]*?)(?:\\[,;! ]\s*)?d\s*([A-Za-z])(?=\s*(?:=|$))/g,(_,low,high,expr,v) => `integrate(${body(expr)},${v},${body(low)},${body(high)})`);
   const converted = body(source);
   parse(converted);
   return converted;

@@ -71,6 +71,9 @@ input:disabled,select:disabled{opacity:.45;cursor:default}
 :root[data-workspace="scientific"][data-word-wrap="true"] .calculation-display .expression-preview{align-items:flex-start;white-space:pre-wrap;overflow-x:hidden}
 .input-flow{display:flex;flex-wrap:nowrap;align-items:baseline;width:max-content;white-space:pre-wrap}
 .input-wrapped{flex-wrap:wrap;width:100%;min-width:0;overflow-wrap:anywhere}
+.result-flow{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:flex-end;gap:.15em;width:100%;min-width:0;max-width:100%}
+.result-part{display:block;min-width:0;max-width:100%;overflow-x:auto;padding:.12em 0}
+.result-part math{margin:0}
 .input-part{display:inline-block;max-width:100%;flex-shrink:0}
 .calc-value>.input-wrapped{flex:1;min-width:0;width:auto}
 :root[data-word-wrap="true"] #expression{white-space:pre-wrap;overflow-wrap:anywhere;overflow-x:hidden}

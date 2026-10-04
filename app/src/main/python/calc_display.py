@@ -75,18 +75,26 @@ def approximate(x, digits):
     if isinstance(x,dict): return {k:approximate(v,digits) for k,v in x.items()}
     if isinstance(x,(list,tuple)): return [approximate(v,digits) for v in x]
     if isinstance(x,s.Set):
-        return [s.N(v,digits) for v in sorted(x,key=s.default_sort_key)] if isinstance(x,s.FiniteSet) else x
+        return [approximate(v,digits) for v in sorted(x,key=s.default_sort_key)] if isinstance(x,s.FiniteSet) else x
     if x in (s.true,s.false): return x
+    if isinstance(x,s.Basic) and x.has(s.CRootOf):
+        # Secant refinement checks the root's isolating bounds, avoiding costly
+        # bisection to every decimal digit. Keep the exact RootOf in the result.
+        x=x.xreplace({root:root.eval_approx(digits+5) for root in x.atoms(s.CRootOf)})
     return s.N(x,digits) if hasattr(x,"evalf") else x
 
 def display_rounded(x, digits):
-    """Round floating-point values to the display digits, keeping exact forms exact."""
+    """Round floats and show implicit algebraic roots as readable numeric values."""
     if isinstance(x,Quantity): return Quantity(display_rounded(x.base,digits),x.dimensions,x.absolute_temperature)
     if isinstance(x,dict): return {k:display_rounded(v,digits) for k,v in x.items()}
     if isinstance(x,(list,tuple)): return [display_rounded(v,digits) for v in x]
     if isinstance(x,s.MatrixBase): return x.applyfunc(lambda v: display_rounded(v,digits))
     if isinstance(x,s.Set): return s.FiniteSet(*(display_rounded(v,digits) for v in x)) if isinstance(x,s.FiniteSet) else x
     if isinstance(x,s.Basic):
+        # RootOf is an internal exact root representation, not useful display
+        # notation. Replace it only in the presentation copy of the value.
+        roots={root:approximate(root,digits) for root in x.atoms(s.CRootOf)}
+        if roots: x=x.xreplace(roots)
         floats={f:s.N(f,digits) for f in x.atoms(s.Float)}
         if floats: return x.xreplace(floats)
     return x
@@ -114,7 +122,7 @@ def result_ast(x):
     if isinstance(x,s.Function):
         name=x.func.__name__
         reusable={"log":"ln","Abs":"abs","conjugate":"conj","Piecewise":"piecewise","exp":"exp",
-                  "sin":"sin","cos":"cos","tan":"tan","asin":"asin","acos":"acos","atan":"atan",
+                  "sin":"sin","cos":"cos","tan":"tan","sec":"sec","csc":"csc","cot":"cot","asin":"asin","acos":"acos","atan":"atan",
                   "sinh":"sinh","cosh":"cosh","tanh":"tanh","asinh":"asinh","acosh":"acosh","atanh":"atanh",
                   "sinc":"sinc","gamma":"gamma","erf":"erf","erfc":"erfc","Ei":"Ei","Si":"Si","Ci":"Ci",
                   "zeta":"zeta","re":"re","im":"im","arg":"arg","sign":"sign","floor":"floor","ceiling":"ceil",

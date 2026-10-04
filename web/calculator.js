@@ -1,5 +1,5 @@
 import {parse,latexInput,closeInputBrackets} from './parser.js';
-import {mathDisplay} from './math-display.js';
+import {resultMathDisplay} from './result-display.js';
 import {t,setText} from './i18n.js';
 import {expressionInputDisplay} from './expression-display.js';
 import {calcVariables,calcBindings} from './calc-session.js';
@@ -59,7 +59,7 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
     }
     const text=(decimal ? lastResult.decimal : lastResult.exact)||'';
     const output=element('div');
-    if(tree && text.length<=40000) output.append(mathDisplay(tree,state.digits,decimal||lastResult.approximate,{notation:engineeringConversion?'eng':state.resultDisplayMode,grouping,engineeringShift,showZeroExponent:engineeringConversion}));
+    if(tree && text.length<=40000) output.append(resultMathDisplay(tree,state.digits,decimal||lastResult.approximate,{notation:engineeringConversion?'eng':state.resultDisplayMode,grouping,engineeringShift,showZeroExponent:engineeringConversion}));
     else renderFormulas(output,text.split(/\r?\n/),{digits:state.digits});
     if(output.childNodes.length!==$('answer').childNodes.length||[...output.childNodes].some((node,i)=>!node.isEqualNode($('answer').childNodes[i])))$('answer').replaceChildren(...output.childNodes);
     updateResultSource();
