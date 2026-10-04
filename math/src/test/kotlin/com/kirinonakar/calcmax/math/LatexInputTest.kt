@@ -4,6 +4,23 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class LatexInputTest {
+    @Test fun explicitFractionParenthesesDoNotDuplicateGeneratedGrouping() {
+        for(command in listOf("frac","dfrac","tfrac")) {
+            val body="\\int_{0}^{1} \\left( \\$command{x}{x} \\right) dx"
+            for(source in listOf(body,"$$${body}$$","$${body}$","\\[$body\\]","\\($body\\)")) {
+                val converted=LatexInput.convert(source)!!
+                assertEquals("integrate(((x)/(x)),x,0,1)",converted)
+                val expression=Parser(converted).parse().args[0]
+                assertEquals("group",expression.kind)
+                assertEquals("/",expression.args[0].value)
+            }
+        }
+        assertEquals("(((x)/(x)))",LatexInput.convert("\\left(\\left(\\frac{x}{x}\\right)\\right)"))
+        assertEquals("(((x)/(x)))",LatexInput.convert("((\\frac{x}{x}))"))
+        assertEquals("((x)/(2))^2",LatexInput.convert("\\left(\\frac{x}{2}\\right)^2"))
+        assertEquals("(((x)/(2))^2)",LatexInput.convert("\\left(\\frac{x}{2}^2\\right)"))
+        assertNull(LatexInput.convert("((x/2))"))
+    }
     @Test fun limitPastePreservesApproachFunctionPowerAndScope() {
         val body="\\lim_{x \\to 0} \\frac{3x^2}{\\sin^2 x}"
         val expected="limit(3x^2/sin(x)^2,x,0)"

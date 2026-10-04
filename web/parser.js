@@ -216,6 +216,17 @@ export function latexInput(input) {
     }
     while (i < text.length) {
       const c = text[i++];
+      if(c==='(') {
+        i--;
+        const raw=group('(',')');
+        let converted=body(raw);
+        // An explicit fence already groups a sole fraction; reuse that fence.
+        if(/^\s*\\(?:frac|dfrac|tfrac)\b/.test(raw)) {
+          try{const tree=parse(converted);if(tree.kind==='group'&&tree.args[0].kind==='binary'&&tree.args[0].value==='/')converted=converted.slice(1,-1);}catch{}
+        }
+        result+=`(${converted})`;
+        continue;
+      }
       if (c !== '\\') { result += c === '{' ? '(' : c === '}' ? ')' : c; continue; }
       if (',;! '.includes(text[i] || '\0')) { i++; continue; }
       const command = /^[A-Za-z]+/.exec(text.slice(i))?.[0];

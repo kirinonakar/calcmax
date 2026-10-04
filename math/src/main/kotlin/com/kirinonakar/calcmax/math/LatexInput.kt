@@ -50,6 +50,18 @@ object LatexInput {
         var index=0
         while(index<source.length) {
             val c=source[index]
+            if(c=='(') {
+                val (raw,next)=group(source,index,'(',')')
+                var converted=convertBody(raw)
+                // An explicit fence already groups a sole fraction; reuse that fence.
+                if(Regex("""^\s*\\(?:frac|dfrac|tfrac)\b""").containsMatchIn(raw)) {
+                    val tree=runCatching {Parser(converted).parse()}.getOrNull()
+                    if(tree?.kind=="group" && tree.args[0].kind=="binary" && tree.args[0].value=="/")converted=converted.substring(1,converted.length-1)
+                }
+                append('(').append(converted).append(')')
+                index=next
+                continue
+            }
             if(c!='\\') {
                 append(when(c){'{','}' -> if(c=='{')'(' else ')';'−' -> '-';else -> c})
                 index++

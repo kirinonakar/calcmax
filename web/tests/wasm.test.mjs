@@ -12,6 +12,7 @@ test('actual WASM evaluates pasted LaTeX limits in radians with scoped variables
   const py=await loadPyodide({indexURL:fileURLToPath(new URL('../vendor/',import.meta.url))});
   await installEngine(py,{runtimeURL:new URL('../vendor/',import.meta.url),engineURL:new URL('../engine.zip',import.meta.url),fetcher:async url=>new Response(readFileSync(url))});
   for(const [source,exact] of [
+    [String.raw`$$\int_{0}^{1} \left( \frac{x}{x} \right) dx$$`,'1'],
     [String.raw`$$\lim_{x \to 0} \frac{3x^2}{\sin^2 x}$$`,'3'],
     [String.raw`\lim_{x \to 0^+} 1/x`,'oo'],
     [String.raw`\lim_{x \to 0^{-}} 1/x`,'-oo'],

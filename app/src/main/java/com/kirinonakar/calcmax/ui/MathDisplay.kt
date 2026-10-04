@@ -64,8 +64,8 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
 }
 
 /** Every sibling aligns to a mathematical axis, not the center of its bounding rectangle. */
-@Composable private fun MathRow(gap:Dp=0.dp,content:@Composable ()->Unit) {
-    Layout(content=content){measurables,constraints->
+@Composable private fun MathRow(gap:Dp=0.dp,modifier:Modifier=Modifier,content:@Composable ()->Unit) {
+    Layout(content=content,modifier=modifier){measurables,constraints->
         val children=measurables.map{it.measure(constraints.copy(minWidth=0,minHeight=0))}
         val axis=children.maxOfOrNull{it.axis()} ?: 0
         val below=children.maxOfOrNull{it.height-it.axis()} ?: 0
@@ -235,6 +235,52 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
     }.padding(start=12.dp,end=if(close)12.dp else 4.dp,top=3.dp,bottom=3.dp)) {content()}
 }
 
+/** Tall parentheses enclose the full height of the expression. */
+@Composable private fun Parenthesis(fontSize:Float,closing:Boolean) {
+    val ink=LocalInstrument.current.ink
+    Layout(content={MathText(if(closing)")" else "(",fontSize)},modifier=Modifier.semantics {testTag=if(closing)"math-closing-parenthesis" else "math-opening-parenthesis"}.drawWithContent {
+        if(size.height<=fontSize.sp.toPx()*1.5f)drawContent()
+        else {
+            val stroke=(fontSize.sp.toPx()*.045f).coerceAtLeast(.75.dp.toPx())
+            val top=stroke/2;val bottom=size.height-stroke/2;val middle=size.height/2
+            fun x(fraction:Float)=size.width*if(closing)1-fraction else fraction
+            drawPath(Path().apply {
+                moveTo(x(.85f),top)
+                cubicTo(x(.38f),size.height*.15f,x(.12f),size.height*.32f,x(.12f),middle)
+                cubicTo(x(.12f),size.height*.68f,x(.38f),size.height*.85f,x(.85f),bottom)
+            },ink,style=Stroke(stroke,cap=StrokeCap.Round))
+        }
+    }){ms,constraints->
+        val glyph=ms[0].measure(constraints.copy(minWidth=0,minHeight=0))
+        val height=max(glyph.height,constraints.minHeight)
+        val tall=height>fontSize.sp.toPx()*1.5f
+        val width=if(tall)max(glyph.width,(fontSize.sp.toPx()*.38f).roundToInt())else glyph.width
+        val top=(height-glyph.height)/2
+        layout(width,height,mapOf(MathAxis to if(tall)height/2 else top+glyph.axis())){glyph.place((width-glyph.width)/2,top)}
+    }
+}
+
+@Composable private fun RoundParentheses(size:Float,close:Boolean=true,content:@Composable ()->Unit) {
+    Layout(content={Parenthesis(size,false);MathRow(modifier=Modifier.semantics{testTag="math-fenced-content"},content=content);if(close)Parenthesis(size,true)}){ms,constraints->
+        val inner=constraints.copy(minWidth=0,minHeight=0)
+        val expression=ms[1].measure(inner)
+        val targetHeight=if(expression.height>size.sp.toPx()*1.5f)
+            (expression.height+2.dp.roundToPx()).coerceAtMost(constraints.maxHeight)
+        else 0
+        val fenceConstraints=inner.copy(minHeight=targetHeight)
+        val left=ms[0].measure(fenceConstraints)
+        val right=if(close)ms[2].measure(fenceConstraints)else null
+        val padding=if(targetHeight>0)(targetHeight-expression.height)/2 else 0
+        val axis=if(targetHeight>0)padding+expression.axis()else max(expression.axis(),max(left.axis(),right?.axis() ?: 0))
+        val below=if(targetHeight>0)targetHeight-axis else max(expression.height-expression.axis(),max(left.height-left.axis(),right?.let {it.height-it.axis()} ?: 0))
+        layout(left.width+expression.width+(right?.width ?: 0),axis+below,mapOf(MathAxis to axis)){
+            left.place(0,if(targetHeight>0)0 else axis-left.axis())
+            expression.place(left.width,axis-expression.axis())
+            right?.place(left.width+expression.width,if(targetHeight>0)0 else axis-right.axis())
+        }
+    }
+}
+
 @Composable fun MathNode(node:JSONObject,size:Float=25f,select:((Int,Int)->Unit)?=null,selection:IntRange?=null,depth:Int=0,hideGroup:Boolean=false,compactRootIndexHole:Boolean=false,compactLogBaseHole:Boolean=false,compactExponentHole:Boolean=false,operandHole:Boolean=false,selectionCoveredByAncestor:Boolean=false,functionExponent:(@Composable ()->Unit)?=null) {
     if(depth>36){MathText("…",size);return}
     val c=LocalInstrument.current
@@ -279,7 +325,7 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
             Box(Modifier.then(if(on)Modifier.background(c.accent.copy(alpha=.17f),RoundedCornerShape(2.dp))else Modifier).clickable{pick(from,to)}){label(text,scale)}
         } else label(text,scale)
     }
-    @Composable fun wrapped(i:Int,scale:Float=1f){MathRow{label("(",scale);child(i,scale);label(")",scale)}}
+    @Composable fun wrapped(i:Int,scale:Float=1f){RoundParentheses(size*scale){child(i,scale)}}
     val fraction=kind=="fraction"||kind=="binary"&&value=="/"&&node.optString("displayOperator")!="÷"
     val power=kind=="power"||kind=="binary"&&value=="^"
     fun ungroup(n:JSONObject?):JSONObject?=if(n?.optString("kind")=="group")ungroup(n.optJSONArray("args")?.optJSONObject(0))else n
@@ -347,7 +393,7 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
                 if(value=="")label("″")
             }
             // Empty parentheses stay visible; the hole between them shows only a blinking caret.
-            kind=="group"->if(hideGroup)child(0,compactExponentHole=compactExponentHole)else MathRow{label("(");val inner=children.getOrNull(0);if(inner?.optString("kind")=="hole")child(0,operandHole=true)else if(inner!=null)child(0);if(value!="open")label(")")}
+            kind=="group"->if(hideGroup)child(0,compactExponentHole=compactExponentHole)else RoundParentheses(size,close=value!="open"){val inner=children.getOrNull(0);if(inner?.optString("kind")=="hole")child(0,operandHole=true)else if(inner!=null)child(0)}
             kind=="call"&&value=="mixed"->MathRow(3.dp){child(0);FractionLayout({child(1,.85f)},{child(2,.85f)})}
             kind=="call"&&value=="eng"->child(0)
             kind in listOf("number","symbol","text")-> {
@@ -410,20 +456,26 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
                 if(kind in listOf("call","function")) {
                     if(functionExponent!=null)PowerLayout({label(value,.9f)},functionExponent)else label(value,.9f)
                 }
-                if(wrap)label(when(kind){"list"->"[";"set"->"{";else->"("})
-                children.forEachIndexed{i,n->
-                    val negativePart=if(kind=="sum"&&n.optString("kind")=="unary"&&n.optString("value")=="-")n.optJSONArray("args")?.optJSONObject(0)else null
-                    if(negativePart!=null){label(if(i==0)"−" else " − ");MathNode(negativePart,size,select,selection,depth+1,selectionCoveredByAncestor=selectionCoveredByAncestor||highlighted)}
-                    else {
-                        val adjacentCoefficient=kind=="product"&&i>0&&children[i-1].optString("kind")=="number"&&n.optString("kind")=="symbol"
-                        if(i>0&&!coefficient&&!adjacentCoefficient)opLabel(i,when(kind){"sum"->" + ";"product"->" · ";"binary","relation"->when(value){"*"->if(node.optString("displayOperator")=="∘")"" else " × ";"/"->" ÷ ";"-"->" − ";"!="->" ≠ ";"<="->" ≤ ";">="->" ≥ ";else->" $value "};else->", "})
-                        if(kind=="product"&&n.optString("kind")=="sum")wrapped(i)
-                        // Slots keep their box; directly typed parentheses stay visible.
-                        else child(i,hidden=kind=="binary"&&value=="*"&&n.optString("kind")=="group"&&n.optJSONArray("args")?.optJSONObject(0)?.optString("kind")=="hole"&&n.optString("value")!="open"&&!typedParen(n),operandHole=operandHoles)
+                @Composable fun operands() {
+                    children.forEachIndexed{i,n->
+                        val negativePart=if(kind=="sum"&&n.optString("kind")=="unary"&&n.optString("value")=="-")n.optJSONArray("args")?.optJSONObject(0)else null
+                        if(negativePart!=null){label(if(i==0)"−" else " − ");MathNode(negativePart,size,select,selection,depth+1,selectionCoveredByAncestor=selectionCoveredByAncestor||highlighted)}
+                        else {
+                            val adjacentCoefficient=kind=="product"&&i>0&&children[i-1].optString("kind")=="number"&&n.optString("kind")=="symbol"
+                            if(i>0&&!coefficient&&!adjacentCoefficient)opLabel(i,when(kind){"sum"->" + ";"product"->" · ";"binary","relation"->when(value){"*"->if(node.optString("displayOperator")=="∘")"" else " × ";"/"->" ÷ ";"-"->" − ";"!="->" ≠ ";"<="->" ≤ ";">="->" ≥ ";else->" $value "};else->", "})
+                            if(kind=="product"&&n.optString("kind")=="sum")wrapped(i)
+                            // Slots keep their box; directly typed parentheses stay visible.
+                            else child(i,hidden=kind=="binary"&&value=="*"&&n.optString("kind")=="group"&&n.optJSONArray("args")?.optJSONObject(0)?.optString("kind")=="hole"&&n.optString("value")!="open"&&!typedParen(n),operandHole=operandHoles)
+                        }
                     }
+                    if(kind=="tuple"&&children.size==1)label(",")
                 }
-                if(kind=="tuple"&&children.size==1)label(",")
-                if(wrap&&!openContainer)label(when(kind){"list"->"]";"set"->"}";else->")"})
+                if(wrap&&kind !in listOf("list","set"))RoundParentheses(size){operands()}
+                else {
+                    if(wrap)label(if(kind=="list")"[" else "{")
+                    operands()
+                    if(wrap&&!openContainer)label(if(kind=="list")"]" else "}")
+                }
                 if(children.isEmpty()&&!wrap)label(value)
             }
         }
