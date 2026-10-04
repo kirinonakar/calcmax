@@ -85,13 +85,56 @@ test('keyboard input replaces selected numbers inside completed fractions and po
   assert.equal($('expression').value,'12/9+5^2');
 });
 
+for(const keyboard of [false,true])test(`cosine equation paste avoids redundant fences in ${keyboard?'keyboard':'math'} input`,t=>{
+  const {$,dom}=calculatorPage(t,'12+34');
+  if(keyboard)$('typing-toggle').click();
+  const event=new dom.window.Event('paste',{bubbles:true,cancelable:true});
+  Object.defineProperty(event,'clipboardData',{value:{getData:()=>String.raw`$$\cos\left(\frac{\pi}{2} + \theta\right) = -\frac{1}{5}$$`}});
+  (keyboard?$('expression'):document.body).dispatchEvent(event);
+  assert.equal(event.defaultPrevented,true);
+  assert.equal($('expression').value,'cos(pi/2+theta)=-1/5');
+  assert.equal($('expression').selectionStart,$('expression').value.length);
+  if(keyboard)$('typing-toggle').click();
+  assert.equal($('expression-preview').querySelectorAll('mfrac').length,2);
+  const negative=$('expression-preview').querySelectorAll('mfrac')[1];
+  assert.equal(negative.children[0].textContent,'1');
+  assert.equal(negative.previousElementSibling.textContent,'−');
+  assert.deepEqual([...$('expression-preview').querySelectorAll('mo')].map(n=>n.textContent).filter(s=>s==='('||s===')'),['(',')']);
+  $('undo').click();assert.equal($('expression').value,'12+34');
+});
+
+test('the minus before a fraction selects its sign and the numerator selects only its digits',t=>{
+  const {$,dom,clickNumber}=calculatorPage(t,'-1/5');
+  $('expression').setSelectionRange(4,4);
+  const fraction=$('expression-preview').querySelector('mfrac'),sign=fraction.previousElementSibling;
+  sign.dispatchEvent(new dom.window.MouseEvent('click',{bubbles:true}));
+  assert.equal($('expression').selectionStart,0);assert.equal($('expression').selectionEnd,1);
+  clickNumber('1');
+  assert.equal($('expression').selectionStart,1);assert.equal($('expression').selectionEnd,2);
+});
+
+for(const overwrite of [false,true])test(`pasting a fraction into a denominator keeps its scope and caret (${overwrite?'overwrite':'selection'})`,t=>{
+  const source=overwrite?'1/234+7':'1/2';
+  const {$,dom}=calculatorPage(t,source);
+  $('clear').click();
+  $('expression').value=source;$('expression').setSelectionRange(2,overwrite?2:3);
+  if(overwrite)$('insert-mode').click();
+  $('typing-toggle').click();
+  const event=new dom.window.Event('paste',{bubbles:true,cancelable:true});
+  Object.defineProperty(event,'clipboardData',{value:{getData:()=>String.raw`$$\frac{1}{5}$$`}});
+  $('expression').dispatchEvent(event);
+  assert.equal($('expression').value,overwrite?'1/(1/5)+7':'1/(1/5)');
+  assert.equal($('expression').selectionStart,7);
+  $('undo').click();assert.equal($('expression').value,source);
+});
+
 for(const keyboard of [false,true])test(`LaTeX paste renders indexed roots and fractional powers in ${keyboard?'keyboard':'math'} input`,async t=>{
   const {$,dom,calculator,engine}=calculatorPage(t,'12+34');
   if(keyboard)$('typing-toggle').click();
   const event=new dom.window.Event('paste',{bubbles:true,cancelable:true});
   Object.defineProperty(event,'clipboardData',{value:{getData:()=>String.raw`$$\sqrt[3]{5} \times 25^{\frac{1}{3}}$$`}});
   (keyboard?$('expression'):document.body).dispatchEvent(event);
-  const converted='nthroot(5,3)*25^(((1)/(3)))';
+  const converted='nthroot(5,3)*25^(1/3)';
   assert.equal(event.defaultPrevented,true);
   assert.equal($('expression').value,converted);
   assert.equal($('expression').selectionStart,converted.length);
@@ -114,7 +157,7 @@ test('wrapped LaTeX paste replaces a selected operand and keeps surrounding term
   Object.defineProperty(event,'clipboardData',{value:{getData:()=>String.raw`$$\sqrt[3]{5} \times 25^{\frac{1}{3}}$$`}});
   $('expression').dispatchEvent(event);
   assert.equal(event.defaultPrevented,true);
-  assert.equal($('expression').value,'1+nthroot(5,3)*25^(((1)/(3)))+3');
+  assert.equal($('expression').value,'1+nthroot(5,3)*25^(1/3)+3');
   assert.equal($('expression').selectionStart,$('expression').value.length-2);
 });
 

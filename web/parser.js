@@ -121,7 +121,7 @@ export const latexSymbolLabels = Object.fromEntries([
   ['alpha','α'],['beta','β'],['gamma','γ'],['delta','δ'],['epsilon','ϵ'],['varepsilon','ε'],['zeta','ζ'],['eta','η'],['theta','θ'],['vartheta','ϑ'],['iota','ι'],['kappa','κ'],['varkappa','ϰ'],['lambda','λ'],['mu','μ'],['nu','ν'],['xi','ξ'],['pi','π'],['varpi','ϖ'],['rho','ρ'],['varrho','ϱ'],['sigma','σ'],['varsigma','ς'],['tau','τ'],['upsilon','υ'],['phi','ϕ'],['varphi','φ'],['chi','χ'],['psi','ψ'],['omega','ω'],['Gamma','Γ'],['Delta','Δ'],['Theta','Θ'],['Lambda','Λ'],['Xi','Ξ'],['Pi','Π'],['Sigma','Σ'],['Upsilon','Υ'],['Phi','Φ'],['Psi','Ψ'],['Omega','Ω']
 ]);
 // Equivalent supported LaTeX subset to math/LatexInput.kt.
-export function latexInput(input) {
+export function latexInput(input,{prefix='',suffix=''}={}) {
   const functions = new Set(['sin','cos','tan','sec','csc','cot','sinh','cosh','tanh','arcsin','arccos','arctan','ln','exp']);
   const greek = new Set(Object.keys(latexSymbolLabels));
   const commands = new Set(['int','sum','prod','binom','begin','lim','frac','dfrac','tfrac','sqrt','log','infty','times','cdot','left','right','quad','qquad','le','leq','ge','geq','ne','neq',...functions,...greek]);
@@ -132,11 +132,18 @@ export function latexInput(input) {
       source=source.slice(open.length,-close.length);break;
     }
   }
-  function compactExpression(source) {
+  function compactExpression(source,from=0,to=source.length) {
     const tree=parse(source),groups=[];
-    const shape=n=>n.kind==='group'?shape(n.args[0]):[n.kind,n.value,n.args.map(shape)];
+    // -(a/b) and -a/b have the same value, even though the sign's AST scope differs.
+    const signed=(value,arg)=>arg[0]==='binary'&&arg[1]==='/'
+      ? ['binary','/',[signed(value,arg[2][0]),arg[2][1]]]:['unary',value,[arg]];
+    const shape=n=>{
+      if(n.kind==='group')return shape(n.args[0]);
+      const args=n.args.map(shape);
+      return n.kind==='unary'&&['+','-'].includes(n.value)?signed(n.value,args[0]):[n.kind,n.value,args];
+    };
     const expected=JSON.stringify(shape(tree));
-    function collect(n){if(n.kind==='group')groups.push(n);n.args.forEach(collect);}
+    function collect(n){if(n.kind==='group'&&n.start>=from&&n.end<=to)groups.push(n);n.args.forEach(collect);}
     collect(tree);
     const removed=new Set();
     let result=source;
@@ -363,7 +370,11 @@ export function latexInput(input) {
     }
     return result.replace(/\s+/g,'');
   }
-  const converted = body(source);
+  const converted=body(source);
   parse(converted);
-  return converted;
+  if(!prefix&&!suffix)return compactExpression(converted);
+  // Check the whole edit so removing fraction fences cannot merge adjacent tokens
+  // or change division/power scope. Existing surrounding parentheses stay intact.
+  try{return compactExpression(prefix+converted+suffix,prefix.length,prefix.length+converted.length).slice(prefix.length,-suffix.length||undefined);}
+  catch{return converted;}
 }

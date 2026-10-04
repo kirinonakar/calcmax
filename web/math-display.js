@@ -10,6 +10,7 @@ function el(tag,children=[],text='') {
   return result;
 }
 const operator = value => el('mo',[],value);
+const fractionMinus = () => {const sign=operator('−');sign.setAttribute('rspace','0.18em');return sign;};
 const row = children => el('mrow',children);
 const join = (nodes,separator) => nodes.flatMap((n,i) => i ? [operator(separator),n] : [n]);
 function fenced(children,open='(',close=')') { return row([operator(open),...children,operator(close)]); }
@@ -30,7 +31,16 @@ export function mathDisplay(tree,digits=10,decimal=false,{notation='off',groupin
       case 'fraction': {
         // Nested fractions retain normal operand sizes instead of adding
         // another compact MathML script level at every fraction bar.
-        const fraction=el('mfrac',args);fraction.setAttribute('displaystyle','true');return fraction;
+        const numerator=t.args[0],negative=numerator?.kind==='unary'&&numerator.value==='-';
+        const fraction=el('mfrac',negative?[render(numerator.args[0],false),args[1]]:args);
+        fraction.setAttribute('displaystyle','true');
+        if(!negative)return fraction;
+        // A leading minus belongs on the fraction's axis, outside its numerator.
+        // Keep the complete fraction range for the editor's after-fraction caret.
+        if(t.start!==undefined){fraction.setAttribute('data-source-start',String(t.start));fraction.setAttribute('data-source-end',String(t.end));}
+        const sign=fractionMinus();
+        if(numerator.start!==undefined){sign.setAttribute('data-source-start',String(numerator.start));sign.setAttribute('data-source-end',String(numerator.args[0].start));}
+        return row([sign,fraction]);
       }
       case 'root': case 'indexed-root': {
         const contents=args.map(arg=>{const content=row([arg]);content.classList.add('math-root-content');return content;});
@@ -62,7 +72,12 @@ export function mathDisplay(tree,digits=10,decimal=false,{notation='off',groupin
       case 'derivative': return row([el('mfrac',[args[2]?superscript(el('mi',[],'d'),args[2].cloneNode(true)):el('mi',[],'d'),row([el('mi',[],'d'),args[2]?superscript(args[1],args[2]):args[1]])]),args[0]]);
       case 'point-derivative': return row([el('mfrac',[el('mi',[],'d'),row([el('mi',[],'d'),args[1]])]),fenced([args[0]]),el('msub',[operator('|'),row([args[1],operator('='),args[2]])])]);
       case 'logarithm': return row([el('msub',[el('mi',[],'log'),args[1]]),fenced([args[0]])]);
-      case 'unary': return row([operator(value),...args]);
+      case 'unary': {
+        let argument=t.args[0];
+        while(argument?.kind==='parentheses')argument=argument.args[0];
+        // The mathematical minus uses the font's MATH axis, matching the fraction rule.
+        return row([value==='-'&&argument?.kind==='fraction'?fractionMinus():operator(value),...args]);
+      }
       case 'relation': return row([args[0],operator(value==='=='?'=':value),args[1]]);
       case 'function': {
         if(value==='exp')return superscript(el('mi',[],'e'),args[0]);

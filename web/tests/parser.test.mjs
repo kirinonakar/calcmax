@@ -6,6 +6,29 @@ import {JSDOM} from 'jsdom';
 import {expressionDisplay,expressionInputDisplay} from '../expression-display.js';
 import {equationCommand} from '../workspace-commands.js';
 
+test('pasted cosine equation removes redundant fraction fences in source and both displays',t=>{
+  const body=String.raw`\cos\left(\frac{\pi}{2} + \theta\right) = -\frac{1}{5}`;
+  const expected='cos(pi/2+theta)=-1/5';
+  for(const [open,close] of [['',''],['$','$'],['$$','$$'],['\\[','\\]'],['\\(','\\)']])assert.equal(latexInput(open+body+close),expected);
+  const dom=new JSDOM(''),previous=globalThis.document;
+  globalThis.document=dom.window.document;
+  t.after(()=>{globalThis.document=previous;dom.window.close();});
+  for(const render of [expressionDisplay,expressionInputDisplay]){
+    const display=render(expected);
+    assert.equal(display.querySelectorAll('mfrac').length,2);
+    assert.deepEqual([...display.querySelectorAll('mo')].map(n=>n.textContent).filter(s=>s==='('||s===')'),['(',')']);
+  }
+});
+
+test('fraction compaction respects the surrounding insertion scope and existing fences',()=>{
+  for(const [prefix,suffix,expected] of [
+    ['2','','(1/5)'],['1/','','(1/5)'],['','^2','(1/5)'],['(2)+','+(3)','1/5'],['sin(',')','1/5']
+  ])assert.equal(latexInput(String.raw`\frac{1}{5}`,{prefix,suffix}),expected);
+  assert.equal(latexInput(String.raw`\frac{1}{2x}`),'1/(2x)');
+  assert.equal(latexInput(String.raw`\frac{1}{(x)(x+1)}`),'1/((x)(x+1))');
+  assert.equal(latexInput(String.raw`\frac{1}{(x^2)^3}`),'1/(x^2)^3');
+});
+
 test('LaTeX limits preserve the approach, function power, and expression scope',()=>{
   const body=String.raw`\lim_{x \to 0} \frac{3x^2}{\sin^2 x}`;
   for(const source of [body,`$$${body}$$`,`$${body}$`,String.raw`\[${body}\]`,String.raw`\(${body}\)`]){
@@ -21,8 +44,8 @@ test('LaTeX limits preserve the approach, function power, and expression scope',
     [String.raw`\lim_{x \to 0^+} 1/x`,'limit(1/x,x,0,right)'],
     [String.raw`\lim_{x \to 0^{-}} 1/x`,'limit(1/x,x,0,left)'],
     [String.raw`\lim_{\theta \to \pi} \cos\theta`,'limit(cos(theta),theta,pi)'],
-    [String.raw`(\lim_{x \to 0} x)+2`,'(limit(x,x,0))+2'],
-    [String.raw`\left(\lim_{x \to 0} x\right)+2`,'(limit(x,x,0))+2'],
+    [String.raw`(\lim_{x \to 0} x)+2`,'limit(x,x,0)+2'],
+    [String.raw`\left(\lim_{x \to 0} x\right)+2`,'limit(x,x,0)+2'],
     [String.raw`\lim_{x \to 0} x=0`,'limit(x,x,0)=0'],
     [String.raw`\lim_{x \to 0} (x+1)`,'limit(x+1,x,0)'],
     [String.raw`\lim_{x \to 0} \frac{3x^2+1}{\sin^2 x+2}`,'limit((3x^2+1)/(sin(x)^2+2),x,0)'],
@@ -32,7 +55,7 @@ test('LaTeX limits preserve the approach, function power, and expression scope',
     [String.raw`\lim_{x \to 0} \frac{1}{2x}`,'limit(1/(2x),x,0)'],
     [String.raw`\lim_{x \to 0} (x)(x+1)`,'limit((x)(x+1),x,0)'],
     [String.raw`\lim_{x \to 0} (x^2)^3`,'limit((x^2)^3,x,0)'],
-    [String.raw`\frac{\lim_{x \to 0} x+1}{2}`,'((limit(x+1,x,0))/(2))']
+    [String.raw`\frac{\lim_{x \to 0} x+1}{2}`,'limit(x+1,x,0)/2']
   ])assert.equal(latexInput(source),expected,source);
   for(const source of [String.raw`\lim`,String.raw`\lim_x x`,String.raw`\lim_{x 0} x`,String.raw`\lim_{x+1 \to 0} x`,String.raw`\lim_{x \to} x`,String.raw`\lim_{x \to 0}`])assert.throws(()=>latexInput(source),SyntaxError,source);
 });
@@ -71,7 +94,7 @@ test('LaTeX logarithms keep the base and argument separate',()=>{
   const body=String.raw`a = 2 \log \frac{1}{\sqrt{10}} + \log_2 20 `;
   for(const source of [body,`$$${body}$$`,`$${body}$`,String.raw`\[${body}\]`,String.raw`\(${body}\)`]) {
     const converted=latexInput(source);
-    assert.equal(converted,'a=2log((1)/(sqrt(10)))+log(20,2)');
+    assert.equal(converted,'a=2log(1/sqrt(10))+log(20,2)');
     const tree=parse(converted);
     assert.equal(tree.kind,'relation');
     assert.equal(tree.args[0].value,'a');
@@ -83,7 +106,7 @@ test('LaTeX logarithms keep the base and argument separate',()=>{
   for(const [source,expected] of [
     [String.raw`\log_{10}{100}`,'log(100,10)'],
     [String.raw`\log_2 \left(20\right)`,'log(20,2)'],
-    [String.raw`\log_2 \frac{1}{\sqrt{10}}`,'log((1)/(sqrt(10)),2)'],
+    [String.raw`\log_2 \frac{1}{\sqrt{10}}`,'log(1/sqrt(10),2)'],
     [String.raw`\log_{\sqrt{2}} 4`,'log(4,sqrt(2))'],
     [String.raw`\log_2 x^2+1`,'log(x^2,2)+1'],
     [String.raw`\log_2 \log_3 9`,'log(log(9,3),2)'],

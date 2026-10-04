@@ -9,8 +9,8 @@ object LatexInput {
     private val commandPattern = Regex("""\\([A-Za-z]+)""")
     private val bracedPower = Regex("""\^\s*\{""")
 
-    /** Returns null for ordinary text or unsupported LaTeX, leaving ordinary typing alone. */
-    fun convert(input: String): String? {
+    /** Returns null for ordinary text or unsupported LaTeX. Prefix/suffix preserve insertion scope. */
+    fun convert(input: String, prefix:String="", suffix:String=""): String? {
         val trimmed=input.trim()
         val wrapped=trimmed.startsWith("\\[") || trimmed.startsWith("\\(") || trimmed.startsWith('$')
         if(!wrapped && !bracedPower.containsMatchIn(input) && !commandPattern.findAll(input).any {it.groupValues[1] in commands || it.groupValues[1]=="int"})return null
@@ -22,7 +22,16 @@ object LatexInput {
             source.startsWith('$') && source.endsWith('$') && source.length>=2 -> source.substring(1,source.length-1)
             else -> source
         }.trim()
-        return runCatching { convertBody(source) }.getOrNull()?.takeIf {runCatching {Parser(it).parse()}.isSuccess}
+        return runCatching {
+            val converted=convertBody(source)
+            Parser(converted).parse()
+            if(prefix.isEmpty() && suffix.isEmpty())compactExpression(converted)
+            // Remove only inserted fences and check precedence against the complete edit.
+            else runCatching {
+                compactExpression(prefix+converted+suffix,prefix.length,prefix.length+converted.length)
+                    .let {it.substring(prefix.length,it.length-suffix.length)}
+            }.getOrDefault(converted)
+        }.getOrNull()
     }
 
     /** Convert only the inserted text so wrapped LaTeX also works inside an existing expression. */
@@ -33,7 +42,7 @@ object LatexInput {
         val suffix=previous.source.substring(end)
         if(updated.length>=prefix.length+suffix.length && updated.startsWith(prefix) && updated.endsWith(suffix)) {
             val inserted=updated.substring(prefix.length,updated.length-suffix.length)
-            convert(inserted)?.let {return Editor(prefix+it+suffix,start+it.length)}
+            convert(inserted,prefix,suffix)?.let {return Editor(prefix+it+suffix,start+it.length)}
         }
         return convert(updated)?.let {Editor(it)}
     }
@@ -262,15 +271,23 @@ object LatexInput {
         return rows.joinToString(",","[","]") {it.joinToString(",","[","]")}
     }
 
-    private fun compactExpression(source:String):String {
+    private fun compactExpression(source:String, from:Int=0, to:Int=source.length):String {
         val tree=Parser(source).parse()
-        fun shape(node:Expr):Expr = if(node.kind=="group")shape(node.args[0])
-            else Expr(node.kind,node.value,node.args.map(::shape))
+        // -(a/b) and -a/b have the same value, even though the sign's AST scope differs.
+        fun signed(value:String,arg:Expr):Expr = if(arg.kind=="binary" && arg.value=="/")
+            Expr("binary","/",listOf(signed(value,arg.args[0]),arg.args[1]))
+            else Expr("unary",value,listOf(arg))
+        fun shape(node:Expr):Expr {
+            if(node.kind=="group")return shape(node.args[0])
+            val args=node.args.map(::shape)
+            return if(node.kind=="unary" && node.value in setOf("+","-"))signed(node.value,args[0])
+                else Expr(node.kind,node.value,args)
+        }
         val expected=shape(tree)
         val removed=mutableSetOf<Int>()
         var result=source
         // Remove only parentheses whose absence preserves the complete parsed expression.
-        for(group in tree.nodes().filter {it.kind=="group"}.sortedByDescending {it.start}) {
+        for(group in tree.nodes().filter {it.kind=="group" && it.start>=from && it.end<=to}.sortedByDescending {it.start}) {
             removed.add(group.start);removed.add(group.end-1)
             val candidate=source.filterIndexed {index,_->index !in removed}
             if(runCatching {shape(Parser(candidate).parse())==expected}.getOrDefault(false))result=candidate

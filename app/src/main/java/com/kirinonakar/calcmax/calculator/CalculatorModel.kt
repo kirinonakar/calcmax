@@ -493,7 +493,9 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     fun insert(text: String, inside: Int = text.length) {
         if(!poweredOn)return
         var recordInEdit=true
-        val converted=LatexInput.convert(text)
+        val start=minOf(editor.cursor,editor.anchor)
+        val end=if(overwrite&&editor.cursor==editor.anchor)(start+text.length).coerceAtMost(editor.source.length) else maxOf(editor.cursor,editor.anchor)
+        val converted=LatexInput.convert(text,if(committed)"" else editor.source.substring(0,start),if(committed)"" else editor.source.substring(end))
         var value=converted ?: text
         val insertionCursor=if(converted!=null)converted.length else inside
         if(committed) {

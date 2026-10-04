@@ -13,6 +13,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.*
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
@@ -94,6 +95,25 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
         val bar=ms[2].measure(Constraints.fixed(width,stroke))
         val height=barY+stroke+gap+d.height
         layout(width,height,mapOf(MathAxis to barY+stroke/2)){n.place((width-n.width)/2,0);bar.place(0,barY);d.place((width-d.width)/2,barY+stroke+gap)}
+    }
+}
+/** Draw the minus with the fraction rule's thickness and pixel alignment instead of a font axis estimate. */
+@Composable private fun FractionMinus(size:Float) {
+    val ink=LocalInstrument.current.ink
+    Layout(content={
+        // Retain the serif minus's advance, text height and accessibility text.
+        MathText("−",size,tint=Color.Transparent)
+        Canvas(Modifier) {
+            val stroke=max(1,1.dp.roundToPx())
+            val axis=this.size.height.toInt()/2
+            drawRect(ink,topLeft=Offset(0f,(axis-stroke/2).toFloat()),size=Size(this.size.width,stroke.toFloat()))
+        }
+    }){ms,constraints->
+        val text=ms[0].measure(constraints.copy(minWidth=0,minHeight=0))
+        val rule=ms[1].measure(Constraints.fixed(text.width,text.height))
+        // Keep the minus and fraction rule visibly separate at every text scale.
+        val gap=(size.sp.toPx()*.18f).roundToInt().coerceAtLeast(2.dp.roundToPx())
+        layout(text.width+gap,text.height,mapOf(MathAxis to text.height/2)){text.place(0,0);rule.place(0,0)}
     }
 }
 @Composable private fun PowerLayout(base:@Composable ()->Unit,power:@Composable ()->Unit) {
@@ -282,6 +302,14 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
     }
 }
 
+/** Locate a whole numerator's minus without changing the calculation tree or source ranges. */
+internal fun negativeFractionNumerator(node:JSONObject):JSONObject? {
+    if(node.optString("kind")!="fraction" && !(node.optString("kind")=="binary" && node.optString("value")=="/" && node.optString("displayOperator")!="÷"))return null
+    var numerator=node.optJSONArray("args")?.optJSONObject(0) ?: return null
+    while(numerator.optString("kind")=="group")numerator=numerator.optJSONArray("args")?.optJSONObject(0) ?: return null
+    return numerator.takeIf {it.optString("kind")=="unary" && it.optString("value")=="-" && it.optJSONArray("args")?.length()==1}
+}
+
 @Composable fun MathNode(node:JSONObject,size:Float=25f,select:((Int,Int)->Unit)?=null,selection:IntRange?=null,depth:Int=0,hideGroup:Boolean=false,compactRootIndexHole:Boolean=false,compactLogBaseHole:Boolean=false,compactExponentHole:Boolean=false,operandHole:Boolean=false,selectionCoveredByAncestor:Boolean=false,functionExponent:(@Composable ()->Unit)?=null) {
     if(depth>36){MathText("…",size);return}
     val c=LocalInstrument.current
@@ -339,9 +367,27 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
     Box(touch) {MathRow {
         if(caret&&!atomic&&cursor<=start)MathText("│",size,blink=true)
         when {
-            fraction->Box {
-                FractionLayout({child(0,.9f,true)},{child(1,.9f,true)})
-                if(select!=null){val after=LocalMathAfter.current;Box(Modifier.matchParentSize()){Box(Modifier.align(Alignment.CenterEnd).width(7.dp).fillMaxHeight().clickable{if(after!=null)after(start,end)else select(end,end)}.semantics{contentDescription="After fraction"})}}
+            fraction->MathRow {
+                val negative=negativeFractionNumerator(node)
+                val positive=negative?.optJSONArray("args")?.optJSONObject(0)
+                if(negative!=null && positive!=null) {
+                    val signStart=negative.optInt("start",-1);val signEnd=positive.optInt("start",-1)
+                    val signSelected=select!=null&&!selectionCoveredByAncestor&&!highlighted&&selection!=null&&selection.first<=signStart&&signEnd<=selection.last&&selection.first<selection.last
+                    val signCaret=select!=null&&selection?.first==selection?.last&&(target==signStart..signEnd || target==signStart..negative.optInt("end",-1)&&cursor<signEnd)
+                    Box(Modifier.then(if(signSelected)Modifier.background(c.accent.copy(alpha=.17f),RoundedCornerShape(2.dp))else Modifier)
+                        .then(if(select!=null&&signStart>=0&&signEnd>signStart)Modifier.clickable{select(signStart,signEnd)}else Modifier)){MathRow{
+                            if(signCaret&&cursor<=signStart)MathText("│",size,blink=true)
+                            FractionMinus(size)
+                            if(signCaret&&cursor>signStart)MathText("│",size,blink=true)
+                        }}
+                }
+                Box {
+                    FractionLayout({
+                        if(positive!=null)MathNode(positive,(size*.9f).coerceAtLeast(minimumSize),select,selection,depth+1,hideGroup=true,selectionCoveredByAncestor=selectionCoveredByAncestor||highlighted)
+                        else child(0,.9f,true)
+                    },{child(1,.9f,true)})
+                    if(select!=null){val after=LocalMathAfter.current;Box(Modifier.matchParentSize()){Box(Modifier.align(Alignment.CenterEnd).width(7.dp).fillMaxHeight().clickable{if(after!=null)after(start,end)else select(end,end)}.semantics{contentDescription="After fraction"})}}
+                }
             }
             functionPower->MathNode(powerBase!!,size,select,selection,depth+1,selectionCoveredByAncestor=selectionCoveredByAncestor||highlighted,
                 functionExponent={child(1,.67f,true,compactExponentHole=true)})
@@ -422,10 +468,13 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
             kind=="unary"->MathRow{
                 val pick=select
                 val gapTo=children.getOrNull(0)?.optInt("start",-1) ?: -1
+                val argument=ungroup(children.firstOrNull())
+                val beforeFraction=value=="-"&&(argument?.optString("kind")=="fraction" || argument?.optString("kind")=="binary"&&argument.optString("value")=="/"&&argument.optString("displayOperator")!="÷")
+                @Composable fun sign(){if(beforeFraction)FractionMinus(size)else label(if(value=="-")"−" else value)}
                 if(pick!=null&&gapTo>start) {
                     val on=selection!=null&&selection.first==start&&selection.last==gapTo
-                    Box(Modifier.then(if(on)Modifier.background(c.accent.copy(alpha=.17f),RoundedCornerShape(2.dp))else Modifier).clickable{pick(start,gapTo)}){label(if(value=="-")"−" else value)}
-                } else label(if(value=="-")"−" else value)
+                    Box(Modifier.then(if(on)Modifier.background(c.accent.copy(alpha=.17f),RoundedCornerShape(2.dp))else Modifier).clickable{pick(start,gapTo)}){sign()}
+                } else sign()
                 child(0,operandHole=true)
             }
             kind in listOf("call","function")&&value=="factorial"->MathRow{child(0);label("!")}

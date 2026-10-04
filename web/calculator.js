@@ -177,7 +177,7 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
     if(target){const field=$('expression'),start=Number(target.getAttribute('data-source-start')),end=Number(target.getAttribute('data-source-end'));if(target.classList.contains('selected')||field.selectionStart===field.selectionEnd&&field.selectionStart>=start&&field.selectionStart<=end){const at=inputPointPosition(target,field.value,event.clientX,event.clientY);field.setSelectionRange(at,at);}else field.setSelectionRange(start,end);}else{$('expression').setSelectionRange(value('expression').length,value('expression').length);}
     preview();
   };
-  function insert(text,cursor=null,{factor=false,fraction=false}={}) {
+  function insert(text,cursor=null,{factor=false,fraction=false,latexSource=null}={}) {
     if(isBusy())return;
     if(engineeringConversion)exitEngineering();
     const field=$('expression'),undo=undoStack();undo.push(field.value);if(undo.length>100)undo.shift();
@@ -198,6 +198,7 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
       if(/[\p{L}\p{N}_.)\]}!%]/u.test(before)&&(/^[\p{L}_(]/u.test(text)||/^[0-9.]/.test(text)&&/[\p{L}_)\]}!%]/u.test(before)))prefix='*';
       if(/[\p{L}_]/u.test(after)&&/[\p{L}\p{N}_)\]}!%]$/u.test(text)||/[0-9]/.test(after)&&/[\p{L}_)\]}!%]$/u.test(text))suffix='*';
     }
+    if(latexSource!==null)text=latexInput(latexSource,{prefix:field.value.slice(0,start)+prefix,suffix:suffix+field.value.slice(end)});
     field.setRangeText(prefix+text+suffix,start,end,'end');
     const position=start+prefix.length+(cursor??text.length);field.setSelectionRange(position,position);
     if(typing)field.focus({preventScroll:true});preview();
@@ -216,7 +217,11 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
     }
     if(typing&&state.autoCloseBrackets&&event.inputType==='insertText'&&event.data?.length===1&&'()[]{}'.includes(event.data)){event.preventDefault();insert(event.data);}
   });
-  $('expression').addEventListener('paste',event=>{const text=event.clipboardData?.getData('text');if(!text)return;try{const converted=latexInput(text);if(converted!==text){event.preventDefault();insert(converted);}}catch(exc){event.preventDefault();toast(exc.message);}});
+  function insertPastedExpression(text){
+    const converted=latexInput(text);
+    insert(converted,null,{latexSource:converted===text?null:text});
+  }
+  $('expression').addEventListener('paste',event=>{const text=event.clipboardData?.getData('text');if(!text)return;try{const converted=latexInput(text);if(converted!==text){event.preventDefault();insert(converted,null,{latexSource:text});}}catch(exc){event.preventDefault();toast(exc.message);}});
   $('expression').addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();event.stopPropagation();if(!event.repeat)evaluate();}if(event.key==='Escape'){event.preventDefault();if(calcSession)cancelCalc();else if(isBusy())engine.cancel();else{$('expression').value='';preview();}}});
   $('clear').onclick=()=>{if(engineeringConversion)exitEngineering();if(calcSession){cancelCalc();return;}expressionUndo.push(value('expression'));$('expression').value='';committed=false;lastResult=null;activeHistoryEntry=null;inputAnswer=null;$('answer').replaceChildren();$('note').textContent='';$('commit-indicator').textContent='';preview();};
   $('undo').onclick=()=>{if(isBusy())return;const undo=undoStack();if(undo.length){const field=$('expression');field.value=undo.pop();field.setSelectionRange(field.value.length,field.value.length);committed=false;if(!calcSession)$('commit-indicator').textContent='';preview();}};
@@ -224,8 +229,8 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
   $('cut').onclick=()=>{const field=$('expression'),start=field.selectionStart,end=field.selectionEnd;if(start!==end){clipboard(field.value.slice(start,end));undoStack().push(field.value);field.setRangeText('',start,end,'end');committed=false;preview();}};
   $('typing-toggle').onclick=()=>{typing=!typing;document.documentElement.dataset.typing=String(typing);$('expression').readOnly=!typing;setText($('typing-toggle'),typing?'Math input':'Keyboard');if(typing)$('expression').focus({preventScroll:true});};
   $('insert-mode').onclick=()=>{overwrite=!overwrite;$('insert-mode').textContent=overwrite?'OVR':'INS';};
-  $('paste').onclick=async()=>{try{insert(latexInput(await navigator.clipboard.readText()));}catch{const content=element('div'),field=element('textarea');field.rows=4;field.setAttribute('aria-label',t('Paste expression'));content.append(field,control('Insert',()=>{try{insert(latexInput(field.value));$('dialog').close();}catch(exc){toast(exc.message);}}));openDialog('Paste',content);field.focus({preventScroll:true});}};
-  document.addEventListener('paste',event=>{if(event.defaultPrevented||value('mode')!=='scientific'||typing||$('dialog').open||$('settings-dialog').open||event.target.closest?.('input,select,textarea')&&event.target!==$('expression'))return;const text=event.clipboardData?.getData('text/plain')||event.clipboardData?.getData('text');if(!text)return;event.preventDefault();try{insert(latexInput(text));}catch(exc){toast(exc.message);}});
+  $('paste').onclick=async()=>{try{insertPastedExpression(await navigator.clipboard.readText());}catch{const content=element('div'),field=element('textarea');field.rows=4;field.setAttribute('aria-label',t('Paste expression'));content.append(field,control('Insert',()=>{try{insertPastedExpression(field.value);$('dialog').close();}catch(exc){toast(exc.message);}}));openDialog('Paste',content);field.focus({preventScroll:true});}};
+  document.addEventListener('paste',event=>{if(event.defaultPrevented||value('mode')!=='scientific'||typing||$('dialog').open||$('settings-dialog').open||event.target.closest?.('input,select,textarea')&&event.target!==$('expression'))return;const text=event.clipboardData?.getData('text/plain')||event.clipboardData?.getData('text');if(!text)return;event.preventDefault();try{insertPastedExpression(text);}catch(exc){toast(exc.message);}});
   $('answer-copy').onclick=()=>lastResult&&clipboard(decimal?lastResult.decimal:lastResult.exact);
   $('answer-insert').onclick=()=>{if(state.variables.Ans){changeMode('scientific');insert('Ans',null,{factor:true});}else toast('먼저 재사용 가능한 결과를 계산해 주세요.');};
   $('exact-toggle').onclick=()=>{decimal=!decimal;$('exact-toggle').textContent=decimal?'≈ Decimal':'Exact';renderResult();};

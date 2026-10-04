@@ -78,6 +78,38 @@ function page(t){
   t.after(()=>{globalThis.document=previous;dom.window.close();});
 }
 
+test('negative fractions put the sign before the fraction and retain editable source ranges',t=>{
+  page(t);
+  for(const source of ['-1/5','(-1)/5','-x/5','cos(pi/2+theta)=-1/5','(-1/5)^2']){
+    for(const render of [expressionDisplay,expressionInputDisplay]){
+      const math=render(source),fraction=[...math.querySelectorAll('mfrac')].at(-1);
+      assert.equal(fraction.children[0].textContent,source==='-x/5'?'x':'1',source);
+      assert.equal(fraction.previousElementSibling.localName,'mo',source);
+      assert.equal(fraction.previousElementSibling.textContent,'−',source);
+      assert.equal(fraction.previousElementSibling.getAttribute('rspace'),'0.18em',source);
+      assert.equal(fraction.querySelector('mo'),null,source);
+      const sign=fraction.previousElementSibling,at=source.indexOf('-');
+      assert.equal(Number(sign.getAttribute('data-source-start')),at,source);
+      assert.equal(Number(sign.getAttribute('data-source-end')),at+1,source);
+      const numerator=fraction.children[0];
+      assert.equal(Number(numerator.getAttribute('data-source-start')),at+1,source);
+      assert.equal(Number(numerator.getAttribute('data-source-end')),at+2,source);
+    }
+  }
+  for(const source of ['(-x+1)/5','(-1)^2/5']){
+    const fraction=expressionDisplay(source).querySelector('mfrac');
+    assert.ok(fraction.children[0].querySelector('mo'),source);
+    assert.equal(fraction.previousElementSibling,null,source);
+  }
+  const tree={kind:'fraction',args:[{kind:'unary',value:'-',args:[{kind:'number',value:'1'}]},{kind:'number',value:'5'}]},before=JSON.stringify(tree);
+  const result=mathDisplay(tree).querySelector('mfrac');
+  assert.equal(result.children[0].textContent,'1');assert.equal(result.previousElementSibling.textContent,'−');
+  assert.equal(JSON.stringify(tree),before);
+  const unary=mathDisplay({kind:'unary',value:'-',args:[{kind:'fraction',args:[{kind:'number',value:'1'},{kind:'number',value:'5'}]}]});
+  assert.equal(unary.querySelector('mfrac').previousElementSibling.textContent,'−');
+  assert.equal(unary.querySelector('mfrac').previousElementSibling.getAttribute('rspace'),'0.18em');
+});
+
 test('trigonometric powers sit on the function name in previews, input, and results',t=>{
   page(t);
   for(const source of ['sin(x)^2','(sin(x))^2','sin(x)²','cos(x)^3','tan(θ)^2']){

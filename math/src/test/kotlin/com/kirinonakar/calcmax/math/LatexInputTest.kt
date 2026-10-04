@@ -4,6 +4,27 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class LatexInputTest {
+    @Test fun cosineEquationPasteRemovesRedundantFractionFences() {
+        val body="\\cos\\left(\\frac{\\pi}{2} + \\theta\\right) = -\\frac{1}{5}"
+        val expected="cos(pi/2+theta)=-1/5"
+        for(source in listOf(body,"$${body}$","$$${body}$$","\\[$body\\]","\\($body\\)"))assertEquals(source,expected,LatexInput.convert(source))
+        val pasted=LatexInput.convertEdit(Editor("1+2+3",3,2),"1+$$${body}$$+3")!!
+        assertEquals("1+$expected+3",pasted.source)
+        assertEquals(2+expected.length,pasted.cursor)
+        for((prefix,suffix,converted) in listOf(
+            Triple("2","","(1/5)"),Triple("1/","","(1/5)"),Triple("","^2","(1/5)"),
+            Triple("(2)+","+(3)","1/5"),Triple("sin(",")","1/5")
+        )) {
+            val previous=Editor(prefix+suffix,prefix.length)
+            val edit=LatexInput.convertEdit(previous,prefix+"$$\\frac{1}{5}$$"+suffix)!!
+            assertEquals(prefix+converted+suffix,edit.source)
+            assertEquals(prefix.length+converted.length,edit.cursor)
+        }
+        assertEquals("1/(2x)",LatexInput.convert("\\frac{1}{2x}"))
+        assertEquals("1/((x)(x+1))",LatexInput.convert("\\frac{1}{(x)(x+1)}"))
+        assertEquals("1/(x^2)^3",LatexInput.convert("\\frac{1}{(x^2)^3}"))
+    }
+
     @Test fun extendedLatexMatchesSharedWebFixtures() {
         val cases=javaClass.getResourceAsStream("/latex-input.tsv")!!.bufferedReader().readLines()
         for(line in cases) {
@@ -35,8 +56,8 @@ class LatexInputTest {
             "\\lim_{x \\to 0^+} 1/x" to "limit(1/x,x,0,right)",
             "\\lim_{x \\to 0^{-}} 1/x" to "limit(1/x,x,0,left)",
             "\\lim_{\\theta \\to \\pi} \\cos\\theta" to "limit(cos(theta),theta,pi)",
-            "(\\lim_{x \\to 0} x)+2" to "(limit(x,x,0))+2",
-            "\\left(\\lim_{x \\to 0} x\\right)+2" to "(limit(x,x,0))+2",
+            "(\\lim_{x \\to 0} x)+2" to "limit(x,x,0)+2",
+            "\\left(\\lim_{x \\to 0} x\\right)+2" to "limit(x,x,0)+2",
             "\\lim_{x \\to 0} x=0" to "limit(x,x,0)=0",
             "\\lim_{x \\to 0} (x+1)" to "limit(x+1,x,0)",
             "\\lim_{x \\to 0} \\frac{3x^2+1}{\\sin^2 x+2}" to "limit((3x^2+1)/(sin(x)^2+2),x,0)",
@@ -46,7 +67,7 @@ class LatexInputTest {
             "\\lim_{x \\to 0} \\frac{1}{2x}" to "limit(1/(2x),x,0)",
             "\\lim_{x \\to 0} (x)(x+1)" to "limit((x)(x+1),x,0)",
             "\\lim_{x \\to 0} (x^2)^3" to "limit((x^2)^3,x,0)",
-            "\\frac{\\lim_{x \\to 0} x+1}{2}" to "((limit(x+1,x,0))/(2))"
+            "\\frac{\\lim_{x \\to 0} x+1}{2}" to "limit(x+1,x,0)/2"
         ))assertEquals(source,converted,LatexInput.convert(source))
         for(source in listOf("\\lim","\\lim_x x","\\lim_{x 0} x","\\lim_{x+1 \\to 0} x","\\lim_{x \\to} x","\\lim_{x \\to 0}"))assertNull(source,LatexInput.convert(source))
         val edit=LatexInput.convertEdit(Editor("1+2+3",3,2),"1+$$${body}$$+3")!!
@@ -57,7 +78,7 @@ class LatexInputTest {
         val body="a = 2 \\log \\frac{1}{\\sqrt{10}} + \\log_2 20 "
         for(source in listOf(body,"$$${body}$$","$${body}$","\\[$body\\]","\\($body\\)")) {
             val converted=LatexInput.convert(source)
-            assertEquals("a=2log((1)/(sqrt(10)))+log(20,2)",converted)
+            assertEquals("a=2log(1/sqrt(10))+log(20,2)",converted)
             val tree=Parser(converted!!).parse()
             assertEquals("relation",tree.kind)
             assertEquals(listOf("a"),tree.nodes().filter {it.kind=="symbol"}.map {it.value})
@@ -69,7 +90,7 @@ class LatexInputTest {
         for((source,expected) in listOf(
             "\\log_{10}{100}" to "log(100,10)",
             "\\log_2 \\left(20\\right)" to "log(20,2)",
-            "\\log_2 \\frac{1}{\\sqrt{10}}" to "log((1)/(sqrt(10)),2)",
+            "\\log_2 \\frac{1}{\\sqrt{10}}" to "log(1/sqrt(10),2)",
             "\\log_{\\sqrt{2}} 4" to "log(4,sqrt(2))",
             "\\log_2 x^2+1" to "log(x^2,2)+1",
             "\\log_2 \\log_3 9" to "log(log(9,3),2)",
@@ -84,7 +105,7 @@ class LatexInputTest {
     @Test fun wrappedLatexReplacesSelectionAndRetainsSurroundingExpressionAndCaret() {
         val previous=Editor("1+2+3",3,2)
         val converted=LatexInput.convertEdit(previous,"1+$$\\sqrt[3]{5} \\times 25^{\\frac{1}{3}}$$+3")!!
-        assertEquals("1+nthroot(5,3)*25^(((1)/(3)))+3",converted.source)
+        assertEquals("1+nthroot(5,3)*25^(1/3)+3",converted.source)
         assertEquals(converted.source.length-2,converted.cursor)
         assertEquals(converted.cursor,converted.anchor)
         assertNotNull(converted.tree())
