@@ -125,5 +125,123 @@ class ProbabilityTests(unittest.TestCase):
         self.assertAlmostEqual(probability,0.5+midpoint/2,places=12)
         self.assertEqual(self.value(category="events",operation="union",pa="0.7",pb="0.6",intersection="0.3"),1)
 
+    def test_new_continuous_values_and_moments(self):
+        cases = [
+            ("gamma",dict(shape=2,scale=3),3,1-2/math.e,1/(3*math.e),6,3*math.sqrt(2)),
+            ("beta",dict(alpha=2,beta=3),0.5,0.6875,1.5,0.4,0.2),
+            ("lognormal",dict(mu=0,sigma=1),1,0.5,1/math.sqrt(2*math.pi),math.exp(0.5),math.sqrt((math.e-1)*math.e)),
+            ("weibull",dict(shape=2,scale=3),3,1-1/math.e,2/(3*math.e),3*math.sqrt(math.pi)/2,3*math.sqrt(1-math.pi/4)),
+        ]
+        for kind, params, x, cumulative, density, mean, sd in cases:
+            with self.subTest(distribution=kind):
+                for op in ("le","lt"):
+                    self.assertAlmostEqual(self.value(distribution=kind,operation=op,x=x,**params),cumulative,places=14)
+                for op in ("ge","gt"):
+                    self.assertAlmostEqual(self.value(distribution=kind,operation=op,x=x,**params),1-cumulative,places=14)
+                result=self.run_probability(distribution=kind,operation="density",x=x,**params)
+                self.assertTrue(result["ok"],result)
+                self.assertFalse(result["isProbability"])
+                self.assertNotIn("percent",result)
+                self.assertAlmostEqual(float(result["value"]),density,places=14)
+                details={d["label"]:float(d["value"]) for d in result["details"]}
+                self.assertAlmostEqual(details["E[X]"],mean,places=14)
+                self.assertAlmostEqual(details["SD[X]"],sd,places=14)
+                self.assertAlmostEqual(self.value(distribution=kind,operation="between",lower=0,upper=x,**params),cumulative,places=14)
+
+    def test_new_support_and_endpoint_densities(self):
+        cases=[("gamma",dict(shape=0.5,scale=2),0,"∞"),
+               ("gamma",dict(shape=1,scale=2),0,"0.5"),
+               ("gamma",dict(shape=2,scale=2),0,"0.0"),
+               ("beta",dict(alpha=0.5,beta=2),0,"∞"),
+               ("beta",dict(alpha=2,beta=0.5),1,"∞"),
+               ("beta",dict(alpha=1,beta=3),0,"3.0"),
+               ("beta",dict(alpha=3,beta=1),1,"3.0"),
+               ("beta",dict(alpha=2,beta=2),0,"0.0"),
+               ("lognormal",dict(mu=0,sigma=1),0,"0.0"),
+               ("weibull",dict(shape=0.5,scale=2),0,"∞"),
+               ("weibull",dict(shape=1,scale=2),0,"0.5")]
+        for kind,params,x,expected in cases:
+            with self.subTest(distribution=kind,params=params):
+                result=self.run_probability(distribution=kind,operation="density",x=x,**params)
+                self.assertTrue(result["ok"],result)
+                self.assertEqual(result["value"],expected)
+                for point in [-1,"-inf"]:
+                    self.assertEqual(self.value(distribution=kind,x=point,**params),0)
+                    self.assertEqual(self.value(distribution=kind,operation="ge",x=point,**params),1)
+                self.assertEqual(self.value(distribution=kind,x="inf",**params),1)
+                self.assertEqual(self.value(distribution=kind,operation="gt",x="inf",**params),0)
+
+    def test_new_quantiles_and_small_tails(self):
+        cases=[("gamma",dict(shape=2,scale=3)),("beta",dict(alpha=0.5,beta=3)),
+               ("lognormal",dict(mu=1,sigma=0.7)),("weibull",dict(shape=0.7,scale=3))]
+        for kind,params in cases:
+            for q in ["0.001","0.5","0.999"]:
+                with self.subTest(distribution=kind,q=q):
+                    x=self.run_probability(distribution=kind,operation="quantile",q=q,**params)
+                    self.assertTrue(x["ok"],x)
+                    self.assertAlmostEqual(self.value(distribution=kind,x=x["value"],**params),float(q),places=14)
+            self.assertEqual(self.value(distribution=kind,operation="quantile",q=0,**params),0)
+            self.assertEqual(self.run_probability(distribution=kind,operation="quantile",q=1,**params)["value"],"1" if kind=="beta" else "∞")
+        for kind,params,x,expected in [
+            ("gamma",dict(shape=1,scale=2),200,math.exp(-100)),
+            ("beta",dict(alpha=2,beta=3),"0.9999999999",4e-30-3e-40),
+            ("lognormal",dict(mu=0,sigma=1),str(math.exp(10)),7.619853024160526e-24),
+            ("weibull",dict(shape=2,scale=3),30,math.exp(-100))]:
+            self.assertAlmostEqual(self.value(distribution=kind,operation="gt",x=x,**params)/expected,1,places=13)
+
+    def test_negative_binomial_failures_and_geometric_equivalence(self):
+        params=dict(r=3,p="1/2")
+        masses=[math.comb(k+2,k)/2**(k+3) for k in range(12)]
+        for x in [-1,0,1,2,2.3,7]:
+            for op,predicate in [("eq",lambda k:k==x),("le",lambda k:k<=x),("lt",lambda k:k<x)]:
+                self.assertAlmostEqual(self.value(distribution="negativeBinomial",operation=op,x=x,**params),sum(v for k,v in enumerate(masses) if predicate(k)),places=14)
+            self.assertAlmostEqual(self.value(distribution="negativeBinomial",operation="gt",x=x,**params)+self.value(distribution="negativeBinomial",operation="le",x=x,**params),1,places=14)
+            for op in ["eq","le","lt","ge","gt"]:
+                self.assertAlmostEqual(self.value(distribution="negativeBinomial",operation=op,r=1,p="1/4",x=x),self.value(distribution="geometric",operation=op,p="1/4",x=x+1),places=14)
+        self.assertAlmostEqual(self.value(distribution="negativeBinomial",operation="between",lower="1.2",upper="3.8",**params),masses[2]+masses[3],places=14)
+        for q in ["0.01","0.5","0.99"]:
+            x=self.value(distribution="negativeBinomial",operation="quantile",q=q,**params)
+            self.assertGreaterEqual(self.value(distribution="negativeBinomial",x=x,**params),float(q))
+            self.assertLess(self.value(distribution="negativeBinomial",x=x-1,**params),float(q))
+        for op in ["eq","le","ge","quantile"]:
+            self.assertEqual(self.value(distribution="negativeBinomial",operation=op,r=3,p=1,x=0,q="0.5"),0 if op=="quantile" else 1)
+        result=self.run_probability(distribution="negativeBinomial",x=2,**params)
+        self.assertEqual({d["label"]:float(d["value"]) for d in result["details"]},{"E[X]":3,"SD[X]":math.sqrt(6)})
+        self.assertIn("failures",result["note"])
+
+    def test_new_quantiles_preserve_accuracy_across_scales(self):
+        for kind,params in [("gamma",dict(shape=2,scale="1e-60")),("gamma",dict(shape="0.1",scale="1e60")),
+                            ("weibull",dict(shape=2,scale="1e-60")),("beta",dict(alpha="0.01",beta=3)),
+                            ("lognormal",dict(mu=-200,sigma=1)),("lognormal",dict(mu=0,sigma=20))]:
+            for q in ["0.001","0.5","0.999"]:
+                with self.subTest(distribution=kind,params=params,q=q):
+                    result=self.run_probability(distribution=kind,operation="quantile",q=q,**params)
+                    self.assertTrue(result["ok"],result)
+                    self.assertAlmostEqual(self.value(distribution=kind,x=result["value"],**params),float(q),places=14)
+
+    def test_draw_operations_match_enumeration_and_hypergeometric(self):
+        for population in range(1,7):
+            for marked in range(population+1):
+                for draws in range(population+1):
+                    counts=[sum(item<marked for item in choice) for choice in itertools.combinations(range(population),draws)]
+                    for op,distribution_op in [("exactly","eq"),("atLeast","ge"),("atMost","le"),("atLeastOne","ge"),("allMarked","eq")]:
+                        for k in ([1] if op=="atLeastOne" else [marked] if op=="allMarked" else range(marked+2)):
+                            expected=sum(x==k if distribution_op=="eq" else x>=k if distribution_op=="ge" else x<=k for x in counts)/len(counts)
+                            result=self.run_probability(category="draw",operation=op,population=population,marked=marked,draws=draws,k=k)
+                            self.assertTrue(result["ok"],result)
+                            self.assertEqual(float(result["value"]),expected)
+                            self.assertEqual(float(result["value"]),self.value(distribution="hypergeometric",operation=distribution_op,population=population,successes=marked,draws=draws,x=k))
+        for op,distribution_op,k in [("exactly","eq",3),("atLeast","ge",3),("atMost","le",3),("atLeastOne","ge",1)]:
+            self.assertEqual(self.value(category="draw",operation=op,population=100,marked=10,draws=20,k=k),self.value(distribution="hypergeometric",operation=distribution_op,population=100,successes=10,draws=20,x=k))
+
+    def test_new_parameters_are_validated(self):
+        requests=[dict(distribution="gamma",shape=0,scale=1),dict(distribution="gamma",shape=2,scale=-1),
+                  dict(distribution="beta",alpha=0,beta=2),dict(distribution="beta",alpha=2,beta=-1),
+                  dict(distribution="lognormal",mu=0,sigma=0),dict(distribution="weibull",shape=-1,scale=2),dict(distribution="weibull",shape=1,scale=0),
+                  dict(distribution="negativeBinomial",r=0,p="0.5"),dict(distribution="negativeBinomial",r="1.5",p="0.5"),dict(distribution="negativeBinomial",r=2,p=0),
+                  dict(category="draw",operation="exactly",population=100,marked=10,draws=20,k="1.5"),dict(category="draw",operation="atLeast",population=100,marked=10,draws=20,k=-1)]
+        for request in requests:
+            self.assertFalse(self.run_probability(x=1,**request)["ok"],request)
+
 
 if __name__ == "__main__":unittest.main()

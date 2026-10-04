@@ -118,6 +118,28 @@ export const probabilitySchema = {
       ]
     },
     {
+      "id": "negativeBinomial",
+      "label": "Negative binomial · failures",
+      "ko": "음이항 분포 · 실패 횟수",
+      "discrete": true,
+      "hint": "X counts failures before the r-th success, starting at 0. Total trials = X + r; 1 ≤ r ≤ 100000.",
+      "hintKo": "X는 r번째 성공 전까지의 실패 횟수이며 0부터 셉니다. 총 시행 수 = X + r; 1 ≤ r ≤ 100000.",
+      "fields": [
+        [
+          "r",
+          "Required successes r",
+          "목표 성공 횟수 r",
+          "3"
+        ],
+        [
+          "p",
+          "Success probability p",
+          "성공 확률 p",
+          "0.25"
+        ]
+      ]
+    },
+    {
       "id": "hypergeometric",
       "label": "Hypergeometric",
       "ko": "초기하 분포",
@@ -177,6 +199,90 @@ export const probabilitySchema = {
           "rate",
           "Rate λ",
           "발생률 λ",
+          "1"
+        ]
+      ]
+    },
+    {
+      "id": "gamma",
+      "label": "Gamma",
+      "ko": "감마 분포",
+      "hint": "Waiting time with shape k and scale θ. Mean = kθ; θ is the scale, not the rate.",
+      "hintKo": "형상 k와 척도 θ에 따른 대기 시간입니다. 평균 = kθ이며 θ는 발생률이 아닌 척도입니다.",
+      "fields": [
+        [
+          "shape",
+          "Shape k",
+          "형상 k",
+          "2"
+        ],
+        [
+          "scale",
+          "Scale θ",
+          "척도 θ",
+          "1"
+        ]
+      ]
+    },
+    {
+      "id": "beta",
+      "label": "Beta",
+      "ko": "베타 분포",
+      "hint": "Values between 0 and 1 with positive shapes α and β.",
+      "hintKo": "0부터 1 사이의 값을 다룹니다. 형상 α와 β는 양수입니다.",
+      "fields": [
+        [
+          "alpha",
+          "Shape α",
+          "형상 α",
+          "2"
+        ],
+        [
+          "beta",
+          "Shape β",
+          "형상 β",
+          "3"
+        ]
+      ]
+    },
+    {
+      "id": "lognormal",
+      "label": "Log-normal",
+      "ko": "로그정규 분포",
+      "hint": "Positive values where ln(X) is normal. μ and σ describe ln(X), not X.",
+      "hintKo": "ln(X)가 정규 분포를 따르는 양수 값입니다. μ와 σ는 X가 아닌 ln(X)의 평균과 표준편차입니다.",
+      "fields": [
+        [
+          "mu",
+          "Mean of ln(X) μ",
+          "ln(X)의 평균 μ",
+          "0"
+        ],
+        [
+          "sigma",
+          "SD of ln(X) σ",
+          "ln(X)의 표준편차 σ",
+          "1"
+        ]
+      ]
+    },
+    {
+      "id": "weibull",
+      "label": "Weibull",
+      "ko": "와이블 분포",
+      "hint": "Lifetime with shape k and scale λ, both positive. λ is a scale, not a rate.",
+      "hintKo": "형상 k와 척도 λ가 모두 양수인 수명 분포입니다. λ는 발생률이 아닌 척도입니다.",
+      "fields": [
+        [
+          "shape",
+          "Shape k",
+          "형상 k",
+          "2"
+        ],
+        [
+          "scale",
+          "Scale λ",
+          "척도 λ",
           "1"
         ]
       ]
@@ -417,33 +523,59 @@ export const probabilitySchema = {
     },
     {
       "id": "draw",
-      "hint": "Draw without replacement. Every selection is equally likely.",
-      "hintKo": "중복 없이 뽑으며, 각 조합이 나올 가능성은 같습니다.",
+      "hint": "Draw without replacement (N ≤ 1000). Every selection is equally likely. X counts selected items from the K specified items.",
+      "hintKo": "중복 없이 뽑으며 각 조합의 가능성은 같습니다 (N ≤ 1000). X는 지정한 K개 중 뽑힌 개수입니다.",
       "operations": [
         {
           "id": "allMarked",
           "label": "All specified items selected",
           "ko": "지정한 항목 모두 뽑기"
+        },
+        {
+          "id": "exactly",
+          "label": "Exactly k specified items",
+          "ko": "지정 항목 정확히 k개"
+        },
+        {
+          "id": "atLeast",
+          "label": "At least k specified items",
+          "ko": "지정 항목 k개 이상"
+        },
+        {
+          "id": "atMost",
+          "label": "At most k specified items",
+          "ko": "지정 항목 k개 이하"
+        },
+        {
+          "id": "atLeastOne",
+          "label": "At least one specified item",
+          "ko": "지정 항목 하나 이상"
         }
       ],
       "fields": [
         [
           "population",
-          "Total items",
-          "전체 인원 · 항목 수",
+          "Total items N",
+          "전체 인원 · 항목 수 N",
           "10"
         ],
         [
           "draws",
-          "Items to draw",
-          "뽑을 수",
+          "Items to draw n",
+          "뽑을 수 n",
           "2"
         ],
         [
           "marked",
-          "Specified items",
-          "반드시 뽑힐 수",
+          "Specified items K",
+          "지정 인원 · 항목 수 K",
           "2"
+        ],
+        [
+          "k",
+          "Selected specified items k",
+          "뽑힌 지정 항목 수 k",
+          "1"
         ]
       ]
     },

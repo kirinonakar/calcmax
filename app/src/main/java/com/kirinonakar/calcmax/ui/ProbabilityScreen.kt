@@ -39,6 +39,7 @@ private fun probabilityNumber(text:String,digits:Int):String=runCatching {
     else value.setScale(digits,RoundingMode.HALF_UP).stripTrailingZeros().toPlainString()
 }.getOrDefault(text)
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable fun ProbabilityScreen(m:CalculatorModel) {
     val context=LocalContext.current
     val focus=LocalFocusManager.current
@@ -56,28 +57,32 @@ private fun probabilityNumber(text:String,digits:Int):String=runCatching {
     val operations=if(category=="distribution")schema.getJSONArray("operations").objects().filter {(!it.optBoolean("discrete")||discrete)&&(!it.optBoolean("continuous")||!discrete)} else definition.getJSONArray("operations").objects()
     val operation=operations.firstOrNull {it.getString("id")==draft.optString("operation")} ?: operations.first()
     val fields=(if(category=="distribution")definition.getJSONArray("fields").fields()+operation.getJSONArray("fields").fields() else (operation.optJSONArray("fields") ?: definition.getJSONArray("fields")).fields())
-        .filter {it.getString(0)!="k"||operation.getString("id")=="exactly"}
+        .filter {it.getString(0)!="k"||operation.getString("id") in listOf("exactly","atLeast","atMost")}
     val prefix=if(category=="distribution")distribution.getString("id") else category
     val savedValues=draft.optJSONObject("values") ?: JSONObject()
     fun input(field:JSONArray)=savedValues.optString("$prefix-${field.getString(0)}",field.getString(3))
     fun update(change:(JSONObject)->Unit){m.updateProbabilityDraft(JSONObject(draft.toString()).apply {remove("example");change(this)})}
     val label:(JSONObject)->String={it.probabilityLabel(ko)}
     Panel("Probability","") {
-        // Eight short presets, with editable numbers below each selection.
-        schema.getJSONArray("examples").objects().chunked(2).forEach {row->
-            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
-                row.forEach {example->
-                    val id=example.getString("id")
-                    FilterChip(selected=draft.optString("example")==id,onClick={
-                        val next=JSONObject(draft.toString())
-                        next.put("category",example.getString("category")).put("operation",example.getString("operation")).put("example",id).put("independent",false)
-                        if(example.has("distribution"))next.put("distribution",example.getString("distribution"))
-                        val values=JSONObject(savedValues.toString())
-                        val examplePrefix=example.optString("distribution",example.getString("category"))
-                        val preset=example.getJSONObject("values")
-                        preset.keys().forEach {key->values.put("$examplePrefix-$key",preset.getString(key))}
-                        next.put("values",values);m.updateProbabilityDraft(next)
-                    },label={Text(label(example),fontSize=11.sp)},modifier=Modifier.weight(1f).testTag("probability-example-$id"))
+        // Group presets so panel spacing and chip touch-target padding do not separate every row.
+        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
+            Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(2.dp)) {
+                schema.getJSONArray("examples").objects().chunked(2).forEach {row->
+                    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+                        row.forEach {example->
+                            val id=example.getString("id")
+                            FilterChip(selected=draft.optString("example")==id,onClick={
+                                val next=JSONObject(draft.toString())
+                                next.put("category",example.getString("category")).put("operation",example.getString("operation")).put("example",id).put("independent",false)
+                                if(example.has("distribution"))next.put("distribution",example.getString("distribution"))
+                                val values=JSONObject(savedValues.toString())
+                                val examplePrefix=example.optString("distribution",example.getString("category"))
+                                val preset=example.getJSONObject("values")
+                                preset.keys().forEach {key->values.put("$examplePrefix-$key",preset.getString(key))}
+                                next.put("values",values);m.updateProbabilityDraft(next)
+                            },label={Text(label(example),fontSize=11.sp)},modifier=Modifier.weight(1f).testTag("probability-example-$id"))
+                        }
+                    }
                 }
             }
         }
@@ -88,9 +93,15 @@ private fun probabilityNumber(text:String,digits:Int):String=runCatching {
             update {it.put("distribution",selected.getString("id")).remove("operation")}
         }
         // Wrap operators to keep every choice visible on phone screens.
-        operations.chunked(3).forEach {row->
-            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(5.dp)) {
-                row.forEach {op->FilterChip(selected=op==operation,onClick={update {it.put("operation",op.getString("id"))}},label={Text(label(op),fontSize=12.sp)},modifier=Modifier.weight(1f).testTag("probability-operation-${op.getString("id")}"))}
+        val operationRows=operations.chunked(3)
+        val operationMinimumSize=if(operationRows.size>1)0.dp else LocalMinimumInteractiveComponentSize.current
+        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides operationMinimumSize) {
+            Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(2.dp)) {
+                operationRows.forEach {row->
+                    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(5.dp)) {
+                        row.forEach {op->FilterChip(selected=op==operation,onClick={update {it.put("operation",op.getString("id"))}},label={Text(label(op),fontSize=12.sp)},modifier=Modifier.weight(1f).testTag("probability-operation-${op.getString("id")}"))}
+                    }
+                }
             }
         }
         fields.chunked(2).forEach {row->

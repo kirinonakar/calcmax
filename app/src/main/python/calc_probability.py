@@ -2,6 +2,7 @@
 
 Tails are evaluated directly; subtracting a rounded CDF loses rare-event accuracy.
 Geometric X counts trials through the first success (support 1, 2, ...).
+Negative binomial X counts failures before the r-th success (support 0, 1, ...).
 """
 import math
 import re
@@ -93,6 +94,12 @@ def probability(request):
         if len(parts) == 2: value /= Fraction(parts[1].strip())
         return value/100 if percent else value
 
+    def hypergeometric_counts(population, successes, draws):
+        lower, upper = max(0, draws-(population-successes)), min(draws, successes)
+        def count(k):
+            return math.comb(successes,k)*math.comb(population-successes,draws-k) if lower <= k <= upper else 0
+        return lower, upper, math.comb(population,draws), count
+
     category = request.get("category", "distribution")
     operation = request.get("operation", "le")
     details = []
@@ -130,12 +137,20 @@ def probability(request):
     elif category == "draw":
         population, draws, marked = integer("population",1000), integer("draws",1000), integer("marked",1000)
         require(population > 0 and draws <= population and marked <= population, "Draws and specified items must not exceed total")
-        require(operation == "allMarked", "Unsupported probability operation")
-        favorable = math.comb(population-marked,draws-marked) if marked <= draws else 0
-        total = math.comb(population,draws)
+        require(operation in ("allMarked", "exactly", "atLeast", "atMost", "atLeastOne"), "Unsupported probability operation")
+        lower, upper, total, count = hypergeometric_counts(population,marked,draws)
+        k = marked if operation == "allMarked" else 1 if operation == "atLeastOne" else integer("k",1000)
+        if operation in ("allMarked", "exactly"):
+            favorable = count(k)
+        elif operation in ("atLeast", "atLeastOne"):
+            favorable = sum(count(i) for i in range(max(lower,k),upper+1))
+        else:
+            favorable = sum(count(i) for i in range(lower,min(upper,k)+1))
         exact, value = Fraction(favorable,total), mp.mpf(favorable)/total
-        formula = f"C({population-marked}, {draws-marked}) / C({population}, {draws})" if marked <= draws else "0"
+        symbol = "=" if operation in ("allMarked", "exactly") else "≤" if operation == "atMost" else "≥"
+        formula = f"P(X {symbol} {k}) = {favorable} / {total}"
         details = [("Favorable outcomes",favorable),("Total outcomes",total)]
+        note = "X counts selected specified items; drawing is without replacement."
     elif category == "counting":
         n, r = integer("n", 1000), integer("r", 1000)
         if operation in ("combination", "permutation"):
@@ -213,7 +228,7 @@ def probability(request):
             exact = 1-(1-fp)**n if operation == "atLeastOne" else fp**n if operation == "all" else (1-fp)**n if operation == "none" else math.comb(n,k)*fp**k*(1-fp)**(n-k)
     elif category == "distribution":
         kind = request.get("distribution", "normal")
-        discrete = kind in ("binomial", "poisson", "geometric", "hypergeometric")
+        discrete = kind in ("binomial", "poisson", "geometric", "negativeBinomial", "hypergeometric")
         lo, hi = -mp.inf, mp.inf
         mean, variance = None, None
         # Every distribution supplies mass/density, CDF, and survival directly.
@@ -250,13 +265,22 @@ def probability(request):
         elif kind == "hypergeometric":
             population, successes, draws = integer("population",10000), integer("successes",10000), integer("draws",10000)
             require(population > 0 and successes <= population and draws <= population, "Draws and success items must not exceed population")
-            lo, hi = max(0,draws-(population-successes)), min(draws,successes)
+            lo, hi, denominator, count = hypergeometric_counts(population,successes,draws)
             mean = mp.mpf(draws)*successes/population
             variance = mp.mpf(draws)*successes/population*(1-mp.mpf(successes)/population)*(population-draws)/(population-1) if population > 1 else mp.mpf(0)
-            denominator = mp.binomial(population,draws)
-            pdf = lambda k: mp.binomial(successes,k)*mp.binomial(population-successes,draws-k)/denominator
+            pdf = lambda k: mp.mpf(count(int(k)))/denominator
             cdf = lambda k: mp.fsum(pdf(i) for i in range(lo,int(k)+1))
             sf = lambda k: mp.fsum(pdf(i) for i in range(int(k)+1,hi+1))
+        elif kind == "negativeBinomial":
+            r, p = integer("r"), chance("p")
+            require(r > 0, "Required successes must be greater than zero")
+            require(p > 0, "Success probability must be greater than zero")
+            lo, hi = 0, 0 if p == 1 else mp.inf
+            mean, variance = r*(1-p)/p, r*(1-p)/p**2
+            pdf = lambda k: mp.binomial(k+r-1,k)*p**r*(1-p)**k
+            cdf = lambda k: beta_cdf(r,k+1,p)
+            sf = lambda k: beta_cdf(k+1,r,1-p)
+            note = "Negative binomial X counts failures before the r-th success (starting at 0). Total trials = X + r."
         elif kind == "uniform":
             lo, hi = number("a"), number("b")
             require(hi > lo, "Maximum must be greater than minimum")
@@ -270,6 +294,41 @@ def probability(request):
             cdf = lambda x: -mp.expm1(-rate*x)
             sf = lambda x: mp.exp(-rate*x)
             pdf = lambda x: rate*mp.exp(-rate*x)
+        elif kind == "gamma":
+            shape, scale = positive("shape"), positive("scale")
+            lo, mean, variance = 0, shape*scale, shape*scale**2
+            cdf = lambda x: mp.gammainc(shape,0,x/scale,regularized=True)
+            sf = lambda x: mp.gammainc(shape,x/scale,mp.inf,regularized=True)
+            def pdf(x):
+                if x == 0: return mp.inf if shape < 1 else 1/scale if shape == 1 else mp.mpf(0)
+                return mp.exp((shape-1)*mp.log(x/scale)-x/scale-mp.loggamma(shape))/scale
+        elif kind == "beta":
+            alpha, beta = positive("alpha"), positive("beta")
+            lo, hi = 0, 1
+            mean = alpha/(alpha+beta)
+            variance = alpha*beta/((alpha+beta)**2*(alpha+beta+1))
+            cdf = lambda x: beta_cdf(alpha,beta,x)
+            sf = lambda x: beta_cdf(beta,alpha,1-x)
+            def pdf(x):
+                if x == 0: return mp.inf if alpha < 1 else beta if alpha == 1 else mp.mpf(0)
+                if x == 1: return mp.inf if beta < 1 else alpha if beta == 1 else mp.mpf(0)
+                return mp.exp((alpha-1)*mp.log(x)+(beta-1)*mp.log1p(-x)-mp.loggamma(alpha)-mp.loggamma(beta)+mp.loggamma(alpha+beta))
+        elif kind == "lognormal":
+            mu, sigma = number("mu"), positive("sigma")
+            lo, mean = 0, mp.exp(mu+sigma**2/2)
+            variance = mp.expm1(sigma**2)*mp.exp(2*mu+sigma**2)
+            cdf = lambda x: mp.erfc(-(mp.log(x)-mu)/(sigma*mp.sqrt(2)))/2 if x > 0 else mp.mpf(0)
+            sf = lambda x: mp.erfc((mp.log(x)-mu)/(sigma*mp.sqrt(2)))/2 if x > 0 else mp.mpf(1)
+            pdf = lambda x: mp.exp(-((mp.log(x)-mu)/sigma)**2/2)/(x*sigma*mp.sqrt(2*mp.pi)) if x > 0 else mp.mpf(0)
+        elif kind == "weibull":
+            shape, scale = positive("shape"), positive("scale")
+            lo, mean = 0, scale*mp.gamma(1+1/shape)
+            variance = scale**2*(mp.gamma(1+2/shape)-mp.gamma(1+1/shape)**2)
+            cdf = lambda x: -mp.expm1(-(x/scale)**shape)
+            sf = lambda x: mp.exp(-(x/scale)**shape)
+            def pdf(x):
+                if x == 0: return mp.inf if shape < 1 else 1/scale if shape == 1 else mp.mpf(0)
+                return shape/scale*(x/scale)**(shape-1)*mp.exp(-(x/scale)**shape)
         elif kind == "t":
             df = positive("df")
             mean, variance = (mp.mpf(0) if df > 1 else None), (df/(df-2) if df > 2 else None)
@@ -302,6 +361,7 @@ def probability(request):
             require(False, "Unsupported probability distribution")
 
         original_cdf, original_sf, original_pdf = cdf, sf, pdf
+        distribution_note = note
 
         def cdf(x):
             if discrete: x = mp.floor(x)
@@ -322,11 +382,28 @@ def probability(request):
 
         if operation == "quantile":
             q = chance("q")
+            def reached(x): return sf(x) <= 1-q if q > mp.mpf('0.5') else cdf(x) >= q
             if q == 0 or q == 1 or lo == hi:
                 value = lo if q == 0 else hi
+            elif kind in ("gamma", "beta", "lognormal", "weibull"):
+                # Search log(X) so tiny scales and very skewed distributions do
+                # not lose all significant digits in a fixed linear bisection.
+                center = mu if kind == "lognormal" else mp.log(mean)
+                limit = mp.log(hi) if mp.isfinite(hi) else mp.inf
+                step = mp.mpf(1)
+                left, right = center-step, min(limit,center+step)
+                for _ in range(512):
+                    if not reached(mp.exp(left)) and reached(mp.exp(right)): break
+                    step *= 2
+                    left, right = center-step, min(limit,center+step)
+                require(not reached(mp.exp(left)) and reached(mp.exp(right)), "Quantile exceeds numerical range")
+                for _ in range(mp.prec+8):
+                    middle = (left+right)/2
+                    if reached(mp.exp(middle)): right = middle
+                    else: left = middle
+                value = mp.exp((left+right)/2)
             else:
                 # Monotone search uses the smaller tail and preserves discrete quantiles.
-                def reached(x): return sf(x) <= 1-q if q > mp.mpf('0.5') else cdf(x) >= q
                 left = lo if mp.isfinite(lo) else -1
                 right = hi if mp.isfinite(hi) else max(1,mean or 1)
                 for _ in range(512):
@@ -375,6 +452,7 @@ def probability(request):
             else: require(False, "Unsupported probability operation")
         if mean is not None: details.append(("E[X]",mean))
         if variance is not None: details.append(("SD[X]",mp.sqrt(variance)))
+        if kind == "negativeBinomial" and note != distribution_note: note = distribution_note + " " + note
         if kind == "binomial" and operation == "eq" and n <= 200 and mp.isfinite(x) and x == mp.floor(x) and 0 <= x <= n:
             fp, k = rational("p"), int(x)
             exact = math.comb(n,k)*fp**k*(1-fp)**(n-k)

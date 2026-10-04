@@ -21,7 +21,7 @@ export function createProbabilityWorkspace({state,engine,persist,requestOptions}
   const tool=()=>schema.tools.find(d=>d.id===category());
   const operations=()=>category()==='distribution'?schema.operations.filter(op=>(!op.discrete||distribution().discrete)&&(!op.continuous||!distribution().discrete)):tool().operations;
   const selectedOperation=()=>operations().find(op=>op.id===value('probability-operation'));
-  const fields=()=>category()==='distribution'?[...distribution().fields,...selectedOperation().fields]:(selectedOperation().fields||tool().fields).filter(f=>f[0]!=='k'||value('probability-operation')==='exactly');
+  const fields=()=>category()==='distribution'?[...distribution().fields,...selectedOperation().fields]:(selectedOperation().fields||tool().fields).filter(f=>f[0]!=='k'||['exactly','atLeast','atMost'].includes(value('probability-operation')));
   const fieldId=key=>`probability-${category()==='distribution'?distribution().id:category()}-${key}`;
   function invalidate(){revision++;lastResult=null;$('probability-result').hidden=true;$('probability-plot').hidden=true;$('probability-error').hidden=true;}
   function fillSelect(id,items,fallback){
