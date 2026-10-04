@@ -10,6 +10,7 @@ import {createMatrixWorkspace} from './matrix-workspace.js';
 import {createStatisticsWorkspace} from './statistics-workspace.js';
 import {createFunctionsWorkspace} from './functions-workspace.js';
 import {createPythonWorkspace} from './python-workspace.js';
+import {createProbabilityWorkspace} from './probability-workspace.js';
 
 export function createWorkspaces({state,engine,ui,persist,restoreSelect,requestOptions,isBusy,error,changeMode,replaceInput,insert,evaluate,showResult,graphs}) {
   const {toast}=ui;
@@ -17,6 +18,7 @@ export function createWorkspaces({state,engine,ui,persist,restoreSelect,requestO
   const statistics=createStatisticsWorkspace({state,engine,ui,persist,refreshWorkspaceMath,storeExpression:storeWorkspaceExpression,error,changeMode,replaceInput,graphs});
   const functions=createFunctionsWorkspace({state,ui,persist,refreshWorkspaceMath,changeMode,insert});
   const python=createPythonWorkspace({engine,ui,persist,requestOptions,error,run});
+  const probability=createProbabilityWorkspace({state,engine,persist,requestOptions});
   function equationSource(){return value('equation-form')==='general'?value('equation-source'):polynomialEquation(['equation-a','equation-b','equation-c','equation-d'].slice(0,Number(value('equation-form'))+1).map(value),value('equation-variable'));}
   function tipExpression(){return tipCommand({bill:value('tip-amount'),percent:value('tip-percent'),fixed:value('tip-fixed'),tax:value('tip-tax'),people:value('tip-people'),method:value('tip-method'),whole:$('tip-whole').checked});}
   function tipMethodControls(){const fixed=value('tip-method')==='amount';$('tip-percent').disabled=fixed;$('tip-fixed').disabled=!fixed;}
@@ -53,6 +55,7 @@ export function createWorkspaces({state,engine,ui,persist,restoreSelect,requestO
       persist();refreshWorkspaceMath();
       if(workspace==='graph'){await graphs.run();return;}
       if(workspace==='python'){await python.run();return;}
+      if(workspace==='probability'){await probability.run();return;}
       if(workspace==='regression'){await statistics.runRegression(requestOptions(),showResult);return;}
       if(workspace==='programmer') {
         const result=await engine.execute({...requestOptions(),action:'programmer',base:Number(value('programmer-base')),width:Number(value('programmer-width')),signed:$('programmer-signed').checked,a:value('programmer-a'),b:value('programmer-b'),op:value('programmer-op')});if(result.ok)$('programmer-output').textContent=Object.entries(result.bases).map(([base,n])=>`${base.padEnd(4)} ${n}`).join('\n');showResult(result);return;
@@ -80,6 +83,6 @@ export function createWorkspaces({state,engine,ui,persist,restoreSelect,requestO
     for(const group of Object.keys(unitGroups)){const option=element('option',group==='Amount'?'amount':group);option.value=group;$('unit-category').append(option);}restoreSelect('unit-category');$('unit-category').onchange();
     statistics.datasetsList();functions.render();equationControls();statistics.distributionControls();refreshWorkspaceMath();
   }
-  function render(){refreshWorkspaceMath();statistics.render();}
+  function render(){refreshWorkspaceMath();statistics.render();probability.render();}
   return {initialize,render,refreshMath:refreshWorkspaceMath,renderMatrix:matrix.render,renderFunctions:functions.render,equationSource};
 }

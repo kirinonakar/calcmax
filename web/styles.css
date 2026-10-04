@@ -13,6 +13,28 @@ button[data-run="python"]:hover:not(:disabled){background:#006553;border-color:#
 button[data-run="python"]:active:not(:disabled){transform:translateY(1px)}
 :root[data-theme="dark"] button[data-run="python"]{background:#076c58;border-color:#076c58}
 :root[data-theme="dark"] button[data-run="python"]:hover:not(:disabled){background:#085b4b;border-color:#085b4b}
+/* Probability workspace: examples first, compact inputs, prominent result. */
+.probability-workspace{max-width:920px;margin-inline:auto}
+.probability-examples{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-bottom:18px}
+.probability-examples button{font-size:12px;font-weight:500;padding:10px 6px}
+.probability-examples button[aria-pressed="true"],.probability-operations button[aria-pressed="true"]{background:var(--bar);border-color:var(--accent);color:var(--accent)}
+.probability-operations{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0}
+.probability-operations button{font-size:13px;padding:8px 12px}
+.probability-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin:14px 0 6px}
+.probability-fields label{min-width:0;font-size:13px}
+.probability-independent{display:flex;align-items:center;gap:8px;font-size:13px}
+.probability-independent input{width:auto}
+.probability-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:16px 0}
+button[data-run="probability"]{background:var(--accent);color:var(--panel);padding:12px 24px}
+.probability-result{background:var(--number);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:8px;padding:20px;margin:16px 0;overflow-wrap:anywhere}
+.probability-formula{font-size:14px;color:var(--muted);margin-bottom:12px}
+.probability-fraction{font-size:23px;font-weight:650}
+.probability-value{font-size:32px;font-weight:700;font-variant-numeric:tabular-nums}
+.probability-percent{color:var(--accent);font-size:20px;margin-top:3px}
+.probability-details{display:flex;gap:16px;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:12px;margin-top:16px;font-size:12px;color:var(--muted)}
+.probability-plot svg{display:block;width:100%;max-height:190px}
+.probability-plot .hint{text-align:center;font-size:11px;margin-top:0}
+@media(max-width:600px){.probability-examples{grid-template-columns:repeat(2,minmax(0,1fr))}.probability-fields{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.probability-fields input{min-width:0}.probability-fields label:last-child:nth-child(odd){grid-column:1/-1}.probability-value{font-size:28px}.probability-actions .hint{font-size:11px}}
 /* Six independent curve colors in Setup. */
 .graph-color-settings{margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid var(--line)}
 .graph-color-settings h3{margin:0 0 10px;font-size:15px}

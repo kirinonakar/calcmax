@@ -1,0 +1,741 @@
+export const probabilitySchema = {
+  "categories": [
+    {
+      "id": "basic",
+      "label": "Outcomes",
+      "ko": "경우의 수"
+    },
+    {
+      "id": "dice",
+      "label": "Dice",
+      "ko": "주사위"
+    },
+    {
+      "id": "draw",
+      "label": "Random selection",
+      "ko": "추첨"
+    },
+    {
+      "id": "distribution",
+      "label": "Distributions",
+      "ko": "확률 분포"
+    },
+    {
+      "id": "counting",
+      "label": "Permutations & combinations",
+      "ko": "순열 · 조합"
+    },
+    {
+      "id": "events",
+      "label": "Events & conditional probability",
+      "ko": "사건 · 조건부확률"
+    },
+    {
+      "id": "bayes",
+      "label": "Bayes' theorem",
+      "ko": "베이즈 정리"
+    },
+    {
+      "id": "repeat",
+      "label": "Independent trials",
+      "ko": "독립 반복 시행"
+    }
+  ],
+  "distributions": [
+    {
+      "id": "normal",
+      "label": "Normal",
+      "ko": "정규 분포",
+      "hint": "Measurements around a mean.",
+      "hintKo": "평균 주변에 분포하는 측정값을 계산합니다.",
+      "fields": [
+        [
+          "mu",
+          "Mean μ",
+          "평균 μ",
+          "0"
+        ],
+        [
+          "sigma",
+          "Standard deviation σ",
+          "표준편차 σ",
+          "1"
+        ]
+      ]
+    },
+    {
+      "id": "binomial",
+      "label": "Binomial",
+      "ko": "이항 분포",
+      "discrete": true,
+      "hint": "Number of successes in n independent trials (n ≤ 100000).",
+      "hintKo": "독립적인 n번 시행의 성공 횟수입니다 (n ≤ 100000).",
+      "fields": [
+        [
+          "n",
+          "Trials n",
+          "시행 횟수 n",
+          "10"
+        ],
+        [
+          "p",
+          "Success probability p",
+          "성공 확률 p",
+          "0.5"
+        ]
+      ]
+    },
+    {
+      "id": "poisson",
+      "label": "Poisson",
+      "ko": "포아송 분포",
+      "discrete": true,
+      "hint": "Number of events with an average rate λ (λ ≤ 100000).",
+      "hintKo": "평균 발생 횟수 λ에 따른 사건 수입니다 (λ ≤ 100000).",
+      "fields": [
+        [
+          "rate",
+          "Average count λ",
+          "평균 발생 횟수 λ",
+          "3"
+        ]
+      ]
+    },
+    {
+      "id": "geometric",
+      "label": "Geometric",
+      "ko": "기하 분포",
+      "discrete": true,
+      "hint": "Trial number of the first success, starting at 1.",
+      "hintKo": "첫 성공이 나오는 시행 번호입니다. 1부터 셉니다.",
+      "fields": [
+        [
+          "p",
+          "Success probability p",
+          "성공 확률 p",
+          "0.25"
+        ]
+      ]
+    },
+    {
+      "id": "hypergeometric",
+      "label": "Hypergeometric",
+      "ko": "초기하 분포",
+      "discrete": true,
+      "hint": "Successes when drawing without replacement (N ≤ 10000).",
+      "hintKo": "비복원 추출에서 뽑힌 성공 항목 수입니다 (N ≤ 10000).",
+      "fields": [
+        [
+          "population",
+          "Population N",
+          "모집단 크기 N",
+          "50"
+        ],
+        [
+          "successes",
+          "Success items K",
+          "성공 항목 수 K",
+          "10"
+        ],
+        [
+          "draws",
+          "Draws n",
+          "추출 횟수 n",
+          "5"
+        ]
+      ]
+    },
+    {
+      "id": "uniform",
+      "label": "Uniform",
+      "ko": "균등 분포",
+      "hint": "All values between a and b have equal density.",
+      "hintKo": "a부터 b까지 모든 값의 확률밀도가 같습니다.",
+      "fields": [
+        [
+          "a",
+          "Minimum a",
+          "최솟값 a",
+          "0"
+        ],
+        [
+          "b",
+          "Maximum b",
+          "최댓값 b",
+          "10"
+        ]
+      ]
+    },
+    {
+      "id": "exponential",
+      "label": "Exponential",
+      "ko": "지수 분포",
+      "hint": "Waiting time until an event; λ is the rate, not the mean.",
+      "hintKo": "사건 발생까지의 대기 시간입니다. λ는 평균이 아닌 발생률입니다.",
+      "fields": [
+        [
+          "rate",
+          "Rate λ",
+          "발생률 λ",
+          "1"
+        ]
+      ]
+    },
+    {
+      "id": "t",
+      "label": "Student's t",
+      "ko": "t 분포",
+      "hint": "Student's t distribution with ν degrees of freedom.",
+      "hintKo": "자유도 ν에 따른 스튜던트 t 분포입니다.",
+      "fields": [
+        [
+          "df",
+          "Degrees of freedom ν",
+          "자유도 ν",
+          "10"
+        ]
+      ]
+    },
+    {
+      "id": "chi2",
+      "label": "Chi-square χ²",
+      "ko": "카이제곱 χ² 분포",
+      "hint": "Chi-square distribution with ν degrees of freedom.",
+      "hintKo": "자유도 ν에 따른 카이제곱 분포입니다.",
+      "fields": [
+        [
+          "df",
+          "Degrees of freedom ν",
+          "자유도 ν",
+          "5"
+        ]
+      ]
+    },
+    {
+      "id": "f",
+      "label": "F",
+      "ko": "F 분포",
+      "hint": "F distribution with numerator and denominator degrees of freedom.",
+      "hintKo": "분자·분모 자유도에 따른 F 분포입니다.",
+      "fields": [
+        [
+          "df1",
+          "Numerator degrees of freedom",
+          "분자 자유도",
+          "5"
+        ],
+        [
+          "df2",
+          "Denominator degrees of freedom",
+          "분모 자유도",
+          "10"
+        ]
+      ]
+    }
+  ],
+  "operations": [
+    {
+      "id": "le",
+      "label": "P(X ≤ x)",
+      "ko": "x 이하",
+      "fields": [
+        [
+          "x",
+          "Threshold x",
+          "기준값 x",
+          "1"
+        ]
+      ]
+    },
+    {
+      "id": "lt",
+      "label": "P(X < x)",
+      "ko": "x 미만",
+      "fields": [
+        [
+          "x",
+          "Threshold x",
+          "기준값 x",
+          "1"
+        ]
+      ]
+    },
+    {
+      "id": "ge",
+      "label": "P(X ≥ x)",
+      "ko": "x 이상",
+      "fields": [
+        [
+          "x",
+          "Threshold x",
+          "기준값 x",
+          "1"
+        ]
+      ]
+    },
+    {
+      "id": "gt",
+      "label": "P(X > x)",
+      "ko": "x 초과",
+      "fields": [
+        [
+          "x",
+          "Threshold x",
+          "기준값 x",
+          "1"
+        ]
+      ]
+    },
+    {
+      "id": "between",
+      "label": "P(a ≤ X ≤ b)",
+      "fields": [
+        [
+          "lower",
+          "Lower bound a",
+          "구간 하한 a",
+          "-1"
+        ],
+        [
+          "upper",
+          "Upper bound b",
+          "구간 상한 b",
+          "1"
+        ]
+      ]
+    },
+    {
+      "id": "eq",
+      "label": "P(X = x)",
+      "ko": "정확히 x",
+      "discrete": true,
+      "fields": [
+        [
+          "x",
+          "Value x",
+          "값 x",
+          "1"
+        ]
+      ]
+    },
+    {
+      "id": "density",
+      "label": "Density f(x)",
+      "ko": "확률밀도 f(x)",
+      "continuous": true,
+      "fields": [
+        [
+          "x",
+          "Value x",
+          "값 x",
+          "1"
+        ]
+      ]
+    },
+    {
+      "id": "quantile",
+      "label": "Quantile · P(X ≤ x) = q",
+      "ko": "분위수 · P(X ≤ x) = q",
+      "fields": [
+        [
+          "q",
+          "Cumulative probability q",
+          "누적 확률 q",
+          "0.95"
+        ]
+      ]
+    }
+  ],
+  "tools": [
+    {
+      "id": "basic",
+      "hint": "All outcomes must be equally likely.",
+      "hintKo": "각 경우가 나올 가능성이 같아야 합니다.",
+      "operations": [
+        {
+          "id": "ratio",
+          "label": "Favorable / total",
+          "ko": "원하는 경우 / 전체 경우"
+        }
+      ],
+      "fields": [
+        [
+          "favorable",
+          "Favorable outcomes",
+          "원하는 경우 수",
+          "1"
+        ],
+        [
+          "total",
+          "Total outcomes",
+          "전체 경우 수",
+          "2"
+        ]
+      ]
+    },
+    {
+      "id": "dice",
+      "hint": "Fair, independent dice.",
+      "hintKo": "공정한 주사위를 독립적으로 던집니다.",
+      "operations": [
+        {
+          "id": "eq",
+          "label": "Sum = x",
+          "ko": "합 = x"
+        },
+        {
+          "id": "le",
+          "label": "Sum ≤ x",
+          "ko": "합 ≤ x"
+        },
+        {
+          "id": "ge",
+          "label": "Sum ≥ x",
+          "ko": "합 ≥ x"
+        }
+      ],
+      "fields": [
+        [
+          "dice",
+          "Number of dice",
+          "주사위 개수",
+          "2"
+        ],
+        [
+          "sides",
+          "Sides per die",
+          "주사위 면 수",
+          "6"
+        ],
+        [
+          "x",
+          "Target sum x",
+          "목표 합 x",
+          "7"
+        ]
+      ]
+    },
+    {
+      "id": "draw",
+      "hint": "Draw without replacement. Every selection is equally likely.",
+      "hintKo": "중복 없이 뽑으며, 각 조합이 나올 가능성은 같습니다.",
+      "operations": [
+        {
+          "id": "allMarked",
+          "label": "All specified items selected",
+          "ko": "지정한 항목 모두 뽑기"
+        }
+      ],
+      "fields": [
+        [
+          "population",
+          "Total items",
+          "전체 인원 · 항목 수",
+          "10"
+        ],
+        [
+          "draws",
+          "Items to draw",
+          "뽑을 수",
+          "2"
+        ],
+        [
+          "marked",
+          "Specified items",
+          "반드시 뽑힐 수",
+          "2"
+        ]
+      ]
+    },
+    {
+      "id": "counting",
+      "hint": "Count arrangements or selections. Integers 0 ≤ r ≤ n ≤ 1000.",
+      "hintKo": "배열 또는 선택의 가짓수를 구합니다. 정수 0 ≤ r ≤ n ≤ 1000.",
+      "operations": [
+        {
+          "id": "combination",
+          "label": "Combination nCr",
+          "ko": "조합 nCr"
+        },
+        {
+          "id": "permutation",
+          "label": "Permutation nPr",
+          "ko": "순열 nPr"
+        },
+        {
+          "id": "replacement",
+          "label": "With replacement nʳ",
+          "ko": "중복순열 nʳ"
+        },
+        {
+          "id": "multicombination",
+          "label": "Combination with replacement",
+          "ko": "중복조합"
+        }
+      ],
+      "fields": [
+        [
+          "n",
+          "Items n",
+          "항목 수 n",
+          "10"
+        ],
+        [
+          "r",
+          "Select r",
+          "선택 수 r",
+          "3"
+        ]
+      ]
+    },
+    {
+      "id": "events",
+      "hint": "P(A), P(B), P(A ∩ B).",
+      "hintKo": "P(A), P(B), P(A ∩ B)를 입력하세요.",
+      "operations": [
+        {
+          "id": "conditionalCounts",
+          "label": "Conditional · counts",
+          "ko": "조건부 · 개수로",
+          "hint": "Count only outcomes satisfying the condition.",
+          "hintKo": "조건을 만족하는 경우만 셉니다.",
+          "fields": [
+            [
+              "jointCount",
+              "Favorable within condition",
+              "조건 중 원하는 경우 수",
+              "4"
+            ],
+            [
+              "conditionCount",
+              "Outcomes meeting condition",
+              "조건을 만족하는 전체 수",
+              "12"
+            ]
+          ]
+        },
+        {
+          "id": "intersection",
+          "label": "P(A ∩ B)"
+        },
+        {
+          "id": "union",
+          "label": "P(A ∪ B)"
+        },
+        {
+          "id": "conditional",
+          "label": "P(A | B)"
+        },
+        {
+          "id": "reverse",
+          "label": "P(B | A)"
+        },
+        {
+          "id": "onlyA",
+          "label": "P(A ∩ Bᶜ)"
+        },
+        {
+          "id": "neither",
+          "label": "P(Aᶜ ∩ Bᶜ)"
+        }
+      ],
+      "fields": [
+        [
+          "pa",
+          "P(A)",
+          "P(A)",
+          "0.4"
+        ],
+        [
+          "pb",
+          "P(B)",
+          "P(B)",
+          "0.5"
+        ],
+        [
+          "intersection",
+          "P(A ∩ B)",
+          "P(A ∩ B)",
+          "0.2"
+        ]
+      ]
+    },
+    {
+      "id": "bayes",
+      "hint": "Update a prior after observing evidence. For a test, use sensitivity and false positive rate (1 − specificity).",
+      "hintKo": "관측된 증거로 사전확률을 갱신합니다. 검사라면 민감도와 위양성률(1 − 특이도)을 입력하세요.",
+      "operations": [
+        {
+          "id": "posterior",
+          "label": "P(A | B)"
+        },
+        {
+          "id": "negative",
+          "label": "P(A | Bᶜ)"
+        }
+      ],
+      "fields": [
+        [
+          "prior",
+          "Prior P(A)",
+          "사전확률 P(A)",
+          "1%"
+        ],
+        [
+          "likelihood",
+          "P(B | A) · sensitivity",
+          "P(B | A) · 민감도",
+          "99%"
+        ],
+        [
+          "falsePositive",
+          "P(B | Aᶜ) · false positive rate",
+          "P(B | Aᶜ) · 위양성률",
+          "5%"
+        ]
+      ]
+    },
+    {
+      "id": "repeat",
+      "hint": "Trials must be independent and have the same success probability (n ≤ 100000).",
+      "hintKo": "각 시행이 독립이며 성공 확률이 같아야 합니다 (n ≤ 100000).",
+      "operations": [
+        {
+          "id": "atLeastOne",
+          "label": "At least one success",
+          "ko": "한 번 이상 성공"
+        },
+        {
+          "id": "all",
+          "label": "All succeed",
+          "ko": "모두 성공"
+        },
+        {
+          "id": "none",
+          "label": "No successes",
+          "ko": "모두 실패"
+        },
+        {
+          "id": "exactly",
+          "label": "Exactly k successes",
+          "ko": "정확히 k번 성공"
+        }
+      ],
+      "fields": [
+        [
+          "n",
+          "Trials n",
+          "시행 횟수 n",
+          "10"
+        ],
+        [
+          "p",
+          "Success probability p",
+          "성공 확률 p",
+          "10%"
+        ],
+        [
+          "k",
+          "Success count k",
+          "성공 횟수 k",
+          "2"
+        ]
+      ]
+    }
+  ],
+  "examples": [
+    {
+      "id": "coin",
+      "label": "Coin · heads",
+      "ko": "동전 앞면",
+      "category": "basic",
+      "operation": "ratio",
+      "values": {
+        "favorable": "1",
+        "total": "2"
+      }
+    },
+    {
+      "id": "die",
+      "label": "Die · 4 or more",
+      "ko": "주사위 4 이상",
+      "category": "dice",
+      "operation": "ge",
+      "values": {
+        "dice": "1",
+        "sides": "6",
+        "x": "4"
+      }
+    },
+    {
+      "id": "diceSum",
+      "label": "2 dice · sum 7",
+      "ko": "주사위 2개 합 7",
+      "category": "dice",
+      "operation": "eq",
+      "values": {
+        "dice": "2",
+        "sides": "6",
+        "x": "7"
+      }
+    },
+    {
+      "id": "ace",
+      "label": "Card · ace",
+      "ko": "카드 에이스",
+      "category": "basic",
+      "operation": "ratio",
+      "values": {
+        "favorable": "4",
+        "total": "52"
+      }
+    },
+    {
+      "id": "binomial",
+      "label": "5 flips · 3 heads",
+      "ko": "동전 5번 앞면 3번",
+      "category": "distribution",
+      "distribution": "binomial",
+      "operation": "eq",
+      "values": {
+        "n": "5",
+        "p": "1/2",
+        "x": "3"
+      }
+    },
+    {
+      "id": "atLeastOne",
+      "label": "3 flips · any heads",
+      "ko": "동전 3번 앞면 1번 이상",
+      "category": "repeat",
+      "operation": "atLeastOne",
+      "values": {
+        "n": "3",
+        "p": "1/2"
+      }
+    },
+    {
+      "id": "conditional",
+      "label": "King | face card",
+      "ko": "그림 카드 중 킹",
+      "category": "events",
+      "operation": "conditionalCounts",
+      "values": {
+        "jointCount": "4",
+        "conditionCount": "12"
+      }
+    },
+    {
+      "id": "draw",
+      "label": "Choose 2 of 10 · both",
+      "ko": "10명 중 특정 2명",
+      "category": "draw",
+      "operation": "allMarked",
+      "values": {
+        "population": "10",
+        "draws": "2",
+        "marked": "2"
+      }
+    }
+  ]
+};

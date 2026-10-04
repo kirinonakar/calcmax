@@ -33,6 +33,8 @@ def build(skip_download=False, output=None):
     app_version = re.search(r'versionName\s*=\s*"([^"]+)"', (PROJECT / "app/build.gradle.kts").read_text(encoding="utf-8")).group(1)
     (ROOT / "app-version.js").write_text("export const appVersion = " + json.dumps(app_version) + ";\n", encoding="utf-8")
     ui_source = PROJECT / "app/src/main/java/com/kirinonakar/calcmax/ui"
+    probability_schema = json.loads((PROJECT / "app/src/main/assets/probability.json").read_text(encoding="utf-8"))
+    (ROOT / "probability-schema.js").write_text("export const probabilitySchema = " + json.dumps(probability_schema,ensure_ascii=False,indent=2) + ";\n",encoding="utf-8")
     groups = {name: re.findall(r'"([^"\n]+)"', items) for name, items in re.findall(r'"([^"\n]+)" to listOf\(([^\n]+)\)', (ui_source / "UnitsConstantsScreens.kt").read_text(encoding="utf-8"))}
     native_locale = dict(re.findall(r'"([^"\n]+)" to "([^"\n]+)"', (ui_source / "Localization.kt").read_text(encoding="utf-8")))
     for filename, symbol, data in [("unit-groups.js", "unitGroups", groups), ("native-locale.js", "nativeKorean", native_locale)]:

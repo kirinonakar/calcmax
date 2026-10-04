@@ -49,7 +49,7 @@ function changeMode(mode) {
   $('mode').value=mode;document.documentElement.dataset.workspace=mode;
   setText($('mode-status'),$('mode').selectedOptions[0].textContent);
   const panel=$('answer').closest('.answer-panel'),actions=$('exact-toggle').parentElement;
-  panel.hidden=['graph','python','programmer','constants'].includes(mode);actions.hidden=panel.hidden;
+  panel.hidden=['graph','python','programmer','constants','probability'].includes(mode);actions.hidden=panel.hidden;
   if(mode==='scientific'){$('tape-active').append(panel);$('calculator-display').append(actions);}
   else{panel.append(actions);document.querySelector('main').insertBefore(panel,document.querySelector('.keypad-workspace'));}
   if(mode==='scientific'){const edits=$('calculator-display').querySelector('.edit-actions');if($('stop').parentElement!==edits)edits.insertBefore($('stop'),edits.firstChild);}

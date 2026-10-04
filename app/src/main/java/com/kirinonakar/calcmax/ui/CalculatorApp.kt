@@ -31,7 +31,7 @@ import com.kirinonakar.calcmax.ui.theme.LocalInstrument
 import org.json.JSONObject
 import kotlinx.coroutines.delay
 
-val Modes=listOf("Scientific/CAS","Graph","Python","Equations","Matrix","Vector","Statistics","Programmer","Units","Constants","Tip","Currency","Functions")
+val Modes=listOf("Scientific/CAS","Graph","Python","Equations","Matrix","Vector","Statistics","Probability","Programmer","Units","Constants","Tip","Currency","Functions")
 private fun handleMathInputKey(m:CalculatorModel,event:KeyEvent):Boolean {
     if(event.type!=KeyEventType.KeyDown)return false
     val session=m.calcSession
@@ -88,7 +88,7 @@ private val LocalCalculatorOverlay=staticCompositionLocalOf<(String)->Unit> { {}
         }
         Row(Modifier.fillMaxWidth().height(48.dp).zIndex(2f).background(c.scientific).padding(horizontal=8.dp),verticalAlignment=Alignment.CenterVertically) {
             Box(Modifier.weight(1f).fillMaxHeight().combinedClickable(onClick={overlay="Mode"},onLongClick={m.mode="Scientific/CAS"},onLongClickLabel="Go to Scientific/CAS mode").semantics{contentDescription="Choose calculation mode, long press for Scientific/CAS mode"},contentAlignment=Alignment.CenterStart) {
-                Text(m.mode.uppercase()+" ▾",Modifier.fillMaxWidth().padding(horizontal=8.dp),fontSize=12.sp,color=c.ink)
+                Text((if(m.mode=="Probability")tr(m.mode) else m.mode).uppercase()+" ▾",Modifier.fillMaxWidth().padding(horizontal=8.dp),fontSize=12.sp,color=c.ink)
             }
             if(m.variables.has("M"))Text("M  ",fontSize=10.sp,color=c.muted,modifier=Modifier.semantics{contentDescription="Stored memory"})
             Text(if(m.overwrite)"OVR  " else "INS  ",fontSize=10.sp,color=if(m.overwrite)c.accent else c.muted,fontWeight=if(m.overwrite)FontWeight.Bold else FontWeight.Normal,modifier=Modifier.clickable{m.overwrite=!m.overwrite}.semantics{contentDescription=if(m.overwrite)"Overwrite mode" else "Insert mode"})
@@ -105,6 +105,7 @@ private val LocalCalculatorOverlay=staticCompositionLocalOf<(String)->Unit> { {}
                 "Python"->PythonScreen(m)
                 "Matrix","Vector"->MatrixScreen(m)
                 "Statistics"->StatisticsScreen(m)
+                "Probability"->ProbabilityScreen(m)
                 "Programmer"->ProgrammerScreen(m)
                 "Units"->UnitsScreen(m)
                 "Constants"->ConstantsScreen(m)
@@ -127,11 +128,11 @@ private val LocalCalculatorOverlay=staticCompositionLocalOf<(String)->Unit> { {}
                 }
             }
         }}
-        if(m.mode !in listOf("Scientific/CAS","Equations") && m.error.isNotBlank()) Text(m.error,Modifier.fillMaxWidth().padding(8.dp),fontSize=12.sp,color=c.danger)
+        if(m.mode !in listOf("Scientific/CAS","Equations","Probability") && m.error.isNotBlank()) Text(m.error,Modifier.fillMaxWidth().padding(8.dp),fontSize=12.sp,color=c.danger)
     }
     when(overlay) {
         "About"->AboutDialog {overlay=""}
-        "Mode"->AlertDialog(onDismissRequest={overlay=""},title={Text(tr("Calculation mode"))},text={Column(Modifier.verticalScroll(rememberScrollState())) {Modes.chunked(2).forEach {row->Row {row.forEach {name->TextButton(onClick={m.mode=name;overlay=""},modifier=Modifier.weight(1f)){Text(name)}}}}}},confirmButton={TextButton(onClick={overlay=""}){Text(tr("Close"))}})
+        "Mode"->AlertDialog(onDismissRequest={overlay=""},title={Text(tr("Calculation mode"))},text={Column(Modifier.verticalScroll(rememberScrollState())) {Modes.chunked(2).forEach {row->Row {row.forEach {name->TextButton(onClick={m.mode=name;overlay=""},modifier=Modifier.weight(1f)){Text(if(name=="Probability")tr(name) else name)}}}}}},confirmButton={TextButton(onClick={overlay=""}){Text(tr("Close"))}})
         "Settings"->SettingsDialog(m){overlay=""}
         "MatrixSize"->MatrixSizeDialog(m){overlay=""}
         "History"->HistoryDialog(m){overlay=""}

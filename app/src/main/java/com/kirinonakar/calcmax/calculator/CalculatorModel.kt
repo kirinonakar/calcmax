@@ -57,6 +57,39 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     internal var inputAnswer:JSONObject?=loadObject("inputAnswer").takeIf{it.has("kind")}
     internal var lastAnswerResult:JSONObject?=loadObject("lastAnswerResult").takeIf{it.has("exact")}
     var error by mutableStateOf("")
+    var probabilityDraft by mutableStateOf(loadObject("probabilityDraft"))
+        private set
+    var probabilityResult by mutableStateOf<JSONObject?>(null)
+        private set
+    var probabilityError by mutableStateOf("")
+        private set
+    fun updateProbabilityDraft(draft:JSONObject) {
+        probabilityDraft=JSONObject(draft.toString())
+        probabilityResult=null;probabilityError=""
+        prefs.edit().putString("probabilityDraft",probabilityDraft.toString()).apply()
+    }
+    fun calculateProbability(payload:JSONObject) {
+        if(busy)return
+        val draft=probabilityDraft.toString()
+        probabilityResult=null;probabilityError="";error=""
+        job=viewModelScope.launch {
+            busy=true
+            try {
+                val response=engine.execute(request("probability").apply {
+                    payload.keys().forEach {key->put(key,payload.get(key))}
+                })
+                if(draft==probabilityDraft.toString()) {
+                    if(response.optBoolean("ok"))probabilityResult=response
+                    else probabilityError=response.optString("error")
+                }
+            } catch(cancelled:CancellationException) {
+                if(draft==probabilityDraft.toString())probabilityError="Calculation cancelled"
+                throw cancelled
+            } catch(exc:Exception) {
+                if(draft==probabilityDraft.toString())probabilityError=exc.message ?: "Calculation failed"
+            } finally {busy=false}
+        }
+    }
     private var undoHistory by mutableStateOf<List<Editor>>(emptyList())
     private var calcUndoHistory by mutableStateOf<List<Editor>>(emptyList())
     val canUndo get()=if(calcSession!=null)calcUndoHistory.isNotEmpty() else undoHistory.isNotEmpty()

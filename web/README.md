@@ -53,6 +53,7 @@ Upload the **complete contents of `web/`**, including generated `vendor/`, `engi
 - Statistics, matrices, and vectors use spreadsheet tables with row/column headers and arrow-key cell navigation. Statistics columns and independent sample selectors are named x/y/z; controls unused by the selected analysis are disabled. Group/value data select group names from the data.
 - Matrix and vector workspaces include `add`, `subtract`, `multiply`, and `divide`. The grid accepts up to 9 × 9 matrices or 9 vector components.
 - Statistics include grouped and categorical data, custom regression, distribution queries, and scatter/histogram/box plots.
+- Probability has eight editable examples for coins, dice, cards, conditional probability, and selection, plus ten distributions, tail/interval/quantile queries, combinations, Bayes, and repeated trials. Forms are generated from Android's `probability.json`, and actual calculations use the same offline engine. Results show fractions where available, decimals, percentages, and selected regions in distribution previews.
 - History, variables, custom functions, datasets, drafts, and settings are saved in browser local storage. Setup can export/import a full backup. No account is required.
 - Setup → Graph colors offers independent HSL sliders for all six curve colors, with individual and full-palette resets. Changes immediately update curves, formula markers, trace points and integral shading, and are retained in settings and backups.
 - After the calculation engine is ready, the service worker caches the complete static application for offline use on HTTPS or localhost. The cache version changes when any shipped source or engine file changes. Calculation itself does not require the internet; the optional currency download does.
@@ -78,7 +79,7 @@ Engine asset requests have a 30-second deadline covering headers and the complet
 - `engine-ui.js`: engine status, busy/Stop controls, and offline registration.
 - `calculator.js` / `calculator-keypad.js`: expression editing, evaluation, previews, CALC, results/tape, and keypad modifiers.
 - `workspaces.js`: workspace execution routing, shared formula previews, and simple tool forms.
-- `matrix-workspace.js`, `statistics-workspace.js`, `python-workspace.js`, `functions-workspace.js`, and `graph-workspace.js`: each workspace's controls and state.
+- `matrix-workspace.js`, `statistics-workspace.js`, `probability-workspace.js`, `python-workspace.js`, `functions-workspace.js`, and `graph-workspace.js`: each workspace's controls and state.
 
 ### Run tests / 테스트 실행
 

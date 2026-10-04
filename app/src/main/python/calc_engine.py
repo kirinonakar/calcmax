@@ -14,6 +14,7 @@ from calc_evaluator import Engine
 from calc_graph import graph, graph_analysis, regression_samples
 from calc_programmer import programmer
 from calc_statistics import pearson_correlation
+from calc_probability import probability
 
 # Symbolic calls whose cold first evaluation is heavy enough that the generic step allowance used
 # to cut off legitimate work. Nested calls count too, so 1+fourier(exp(-t^2),t,w) is heavy as well.
@@ -75,6 +76,7 @@ def _dispatch(payload, control=None):
         elif action=="graph": result=graph(engine,request)
         elif action=="graphAnalysis": result=graph_analysis(engine,request)
         elif action=="programmer": result=programmer(request)
+        elif action=="probability": result=probability(request)
         else:
             parameters=request.get("functionParameters", [])
             for name in parameters: engine.bindings[name]=engine.symbol(name)

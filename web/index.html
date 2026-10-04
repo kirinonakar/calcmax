@@ -14,7 +14,7 @@
 <div class="instrument">
   <header><h1><button id="about-button" class="title-button" aria-label="About CalcMax"><img class="title-icon" src="app-icon.png" alt="" width="24" height="24">CalcMax</button></h1><div class="header-actions"><button id="history-button">History</button><button id="catalog-button">Catalog</button><button id="settings-button">Setup</button></div></header>
   <div class="mode-bar"><label class="sr-only" for="mode-status">Workspace</label><span class="mode-picker"><button id="mode-status" type="button" aria-haspopup="dialog" aria-controls="dialog" aria-label="Choose calculation mode, long press for Scientific/CAS mode" title="Choose calculation mode, long press for Scientific/CAS mode">SCIENTIFIC / CAS</button><select id="mode" hidden="">
-    <option value="scientific">SCIENTIFIC / CAS</option><option value="graph">Graph</option><option value="python">Python</option><option value="equation">Equations</option><option value="matrix">Matrix</option><option value="vector">Vector</option><option value="statistics">Data &amp; Statistics</option><option value="programmer">Programmer</option><option value="units">Units</option><option value="constants">Constants</option><option value="tip">Tip</option><option value="currency">Currency</option><option value="functions">Functions</option>
+    <option value="scientific">SCIENTIFIC / CAS</option><option value="graph">Graph</option><option value="python">Python</option><option value="equation">Equations</option><option value="matrix">Matrix</option><option value="vector">Vector</option><option value="statistics">Data &amp; Statistics</option><option value="probability">Probability</option><option value="programmer">Programmer</option><option value="units">Units</option><option value="constants">Constants</option><option value="tip">Tip</option><option value="currency">Currency</option><option value="functions">Functions</option>
   </select></span><button id="insert-mode" aria-label="Insert mode" data-i18narialabel="Insert mode">INS</button><span id="key-modifier"></span><label class="sr-only" for="angle">Angle unit</label><select id="angle"><option>DEG</option><option>RAD</option><option>GRAD</option></select><span id="digits-indicator">≤ 10 digits</span></div>
   <div class="runtime-bar"><span id="status" role="status">Loading WebAssembly runtime…</span><button id="retry" hidden="">Reload engine</button></div>
   <main>
@@ -79,6 +79,23 @@ print(calc.integrate(x**2, x, 0, 1))</textarea></label>
     <section class="workspace" data-mode="matrix vector" hidden="">
       <div class="form-row"><label>Rows / components<select id="matrix-rows"></select></label><label id="matrix-cols-label">Column<select id="matrix-cols"></select></label><label>Operation<select id="matrix-op"></select></label><button data-run="matrix">Calculate</button></div><div class="form-row"><label>Variable name<select id="matrix-name"></select></label><label id="matrix-new-name-label" hidden>New variable name<input id="matrix-new-name" value="A"></label><button id="matrix-store">Store grid</button><button id="matrix-load">Load variable</button><button id="matrix-clear">Clear grid</button><button id="matrix-insert">Insert into calculator</button></div><div id="matrix-grid" class="matrix-grid"></div><label id="vector-other-label"><span id="matrix-other-title">Second matrix / vector (B)</span><select id="matrix-other-name" aria-label="Second operand variable"></select><input id="vector-other" value="B"><div id="vector-other-math" class="formula-preview"></div></label><p id="matrix-operation-hint" class="hint"></p><p class="hint">Enter fractions, symbols, or expressions in each cell. More matrix operations are available in Catalog.</p>
       <details open><summary>Saved matrices / vectors</summary><div id="matrix-saved-list" class="scroll-table"></div></details>
+    </section>
+    <section class="workspace probability-workspace" data-mode="probability" hidden="">
+      <h2>Probability</h2>
+      <div id="probability-examples" class="probability-examples" aria-label="Probability examples"></div>
+      <div class="form-row">
+        <label>Calculation<select id="probability-category"></select></label>
+        <label id="probability-distribution-label">Distribution<select id="probability-distribution"></select></label>
+      </div>
+      <div id="probability-operations" class="probability-operations" role="group" aria-label="Probability operation"></div>
+      <select id="probability-operation" hidden aria-label="Probability operation"></select>
+      <div id="probability-fields" class="probability-fields"></div>
+      <label id="probability-independent-label" class="probability-independent" hidden><input id="probability-independent" type="checkbox">Independent events</label>
+      <p id="probability-hint" class="hint"></p>
+      <div class="probability-actions"><button data-run="probability">Calculate probability</button><button id="probability-reset">Reset inputs</button><span id="probability-number-hint" class="hint">0.5 · 1/2 · 50%</span></div>
+      <div id="probability-error" class="error" role="alert" hidden></div>
+      <div id="probability-result" class="probability-result" aria-live="polite" hidden></div>
+      <div id="probability-plot" class="probability-plot" hidden></div>
     </section>
     <section class="workspace" data-mode="statistics" hidden="">
       <div class="form-row"><label>Saved datasets<select id="dataset-list"><option value="">New dataset</option></select></label><input id="dataset-name" placeholder="Dataset name" aria-label="Dataset name" data-i18nplaceholder="데이터 이름" data-i18narialabel="데이터 이름"><button id="dataset-save">Save</button><button id="dataset-delete">Delete</button><button id="csv-open">Import CSV</button><button id="csv-save">Export CSV</button></div>

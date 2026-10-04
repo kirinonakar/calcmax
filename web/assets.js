@@ -1,4 +1,4 @@
-self.CALCMAX_CACHE = 'calcmax-static-fdf9393e83a045c9';
+self.CALCMAX_CACHE = 'calcmax-static-bc38f22afb1021e5';
 self.CALCMAX_ASSETS = [
   "./",
   "./app-dialogs.js",
@@ -52,6 +52,8 @@ self.CALCMAX_ASSETS = [
   "./native-locale.js",
   "./parser.js",
   "./plot.js",
+  "./probability-schema.js",
+  "./probability-workspace.js",
   "./python-tools.js",
   "./python-workspace.js",
   "./README.md",
