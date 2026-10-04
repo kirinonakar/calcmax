@@ -38,6 +38,7 @@ internal fun statisticsTestCommand(
     grouping: String = "columns",
     firstGroup: String? = null,
     secondGroup: String? = null,
+    yatesCorrection: Boolean = true,
 ): String? {
     fun values(index: Int) = rows.mapNotNull { it.getOrNull(index)?.trim()?.takeIf(String::isNotBlank) }
     fun vector(entries: List<String>) = entries.joinToString(",", "[", "]")
@@ -83,7 +84,7 @@ internal fun statisticsTestCommand(
             column in listOf("x","y","z") -> sample.takeIf { it.isNotEmpty() }?.let { "ztest($mu0,$sigma,${vector(it)}$tailArgument)" }
             else -> null
         }
-        "χ² test" -> if (kind == "xy" && pairs.size >= 2 && (grouping!="group-value"||categoryX.size>=2&&categoryY.size>=2)) "chi2independence(${vector(categoryPairs.map { it.first })},${vector(categoryPairs.map { it.second })})" else null
+        "χ² test" -> if (kind == "xy" && pairs.size >= 2 && (grouping!="group-value"||categoryX.size>=2&&categoryY.size>=2)) "chi2independence(${vector(categoryPairs.map { it.first })},${vector(categoryPairs.map { it.second })},${if(yatesCorrection)1 else 0})" else null
         "Fisher exact" -> if (kind == "xy" && pairs.size >= 2 && (grouping!="group-value"||categoryX.size==2&&categoryY.size==2)) "fisherexact(${vector(categoryPairs.map { it.first })},${vector(categoryPairs.map { it.second })}$tailArgument)" else null
         "ANOVA","Tukey HSD" -> if (groups.size>=2&&groups.all {it.size>=2}) "${if(procedure=="ANOVA")"anova" else "tukey"}(${groups.joinToString(",") {vector(it)}})" else null
         "Shapiro–Wilk" -> sample.takeIf { it.size in 3..5000 }?.let { "shapiro(${vector(it)})" }

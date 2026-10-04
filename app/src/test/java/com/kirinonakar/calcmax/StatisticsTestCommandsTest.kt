@@ -31,7 +31,7 @@ class StatisticsTestCommandsTest {
         assertEquals("ttest2(0,[10,20,30],[15,20,25])", command("t test", rows, "xy", "x-y"))
         assertEquals("ttestpaired(0,[10,20,30],[15,20,25])", command("t test", rows, "xy", "paired"))
         assertEquals("ztest2(0,2,3,[10,20,30],[15,20,25])", statisticsTestCommand("z test",rows,"xy","x-y","Two-sided","0","2","95","3"))
-        assertEquals("chi2independence([10,20,30],[15,20,25])", command("χ² test", rows, "xy"))
+        assertEquals("chi2independence([10,20,30],[15,20,25],1)", command("χ² test", rows, "xy"))
         assertEquals("anova([10,20,30],[15,20,25])", command("ANOVA", rows, "xy"))
     }
 
@@ -40,12 +40,18 @@ class StatisticsTestCommandsTest {
         assertEquals("ttest(0,[1,3,4])", command("t test", rows, "xy"))
         assertEquals("ttest2(0,[1,3,4],[1,0,1])", command("t test", rows, "xy", "x-y"))
         assertEquals("ttestpaired(0,[1,4],[1,1])", command("t test", rows, "xy", "paired"))
-        assertEquals("chi2independence([1,4],[1,1])", command("χ² test", rows, "xy"))
+        assertEquals("chi2independence([1,4],[1,1],1)", command("χ² test", rows, "xy"))
         assertEquals("fisherexact([1,4],[1,1])", command("Fisher exact", rows, "xy"))
         assertEquals("fisherexact([1,4],[1,1],right)", statisticsTestCommand("Fisher exact",rows,"xy","x","Right","0","2","95"))
         assertEquals("anova([1,3,4],[1,0,1])", command("ANOVA", rows, "xy"))
         assertEquals("shapiro([1,3,4])", command("Shapiro–Wilk", rows, "xy"))
         assertEquals("shapiro([1,0,1])", command("Shapiro–Wilk", rows, "xy", "y"))
+    }
+
+    @Test fun yatesCorrectionCanBeTurnedOff() {
+        val rows=listOf(listOf("0","0"),listOf("0","1"),listOf("1","0"),listOf("1","1"))
+        assertEquals("chi2independence([0,0,1,1],[0,1,0,1],1)",command("χ² test",rows,"xy"))
+        assertEquals("chi2independence([0,0,1,1],[0,1,0,1],0)",statisticsTestCommand("χ² test",rows,"xy","x","Two-sided","0","2","95",yatesCorrection=false))
     }
 
     @Test fun insufficientOrInvalidDataCannotRun() {
@@ -81,7 +87,7 @@ class StatisticsTestCommandsTest {
         assertNull(grouped("t test",second="control"))
         val categories=listOf(listOf("control","yes"),listOf("treated","no"),listOf("control","no"),listOf("treated","yes"))
         fun groupedCategories(test:String)=statisticsTestCommand(test,categories,"xy","x","Two-sided","0","2","95",grouping="group-value")
-        assertEquals("chi2independence([1,2,1,2],[1,2,2,1])",groupedCategories("χ² test"))
+        assertEquals("chi2independence([1,2,1,2],[1,2,2,1],1)",groupedCategories("χ² test"))
         assertEquals("fisherexact([1,2,1,2],[1,2,2,1])",groupedCategories("Fisher exact"))
         assertNull(grouped("Fisher exact"))
     }

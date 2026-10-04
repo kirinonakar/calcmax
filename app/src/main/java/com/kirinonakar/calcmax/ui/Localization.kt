@@ -7,6 +7,8 @@ import androidx.compose.runtime.staticCompositionLocalOf
 val LocalLanguage = staticCompositionLocalOf { "en" }
 
 private val korean = mapOf(
+    "Yates continuity correction" to "Yates 연속성 보정",
+    "Applies only to 2×2 tables. Turn off for Pearson χ²." to "2×2 표에만 적용됩니다. 끄면 보정 없는 Pearson χ²를 계산합니다.",
     "Probability" to "확률 계산", "Calculation" to "계산 종류", "Distribution" to "확률 분포",
     "Calculate probability" to "확률 계산", "Reset inputs" to "초기화", "Independent events" to "독립 사건",
     "Probability examples" to "확률 예제", "Probability operation" to "확률 계산 방식",

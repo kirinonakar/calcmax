@@ -3,8 +3,40 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {JSDOM} from 'jsdom';
 import {createAppUI} from '../app-ui.js';
-import {setLanguage} from '../i18n.js';
+import {setLanguage,translateDOM} from '../i18n.js';
 import {createStatisticsWorkspace} from '../statistics-workspace.js';
+import {restoreFields} from '../app-state.js';
+
+test('χ² option defaults to Yates, updates the command, and restores an unchecked preference',()=>{
+  for(const saved of [{},{'statistics-yates':false}]){
+    const dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));
+    globalThis.document=dom.window.document;globalThis.NodeFilter=dom.window.NodeFilter;
+    const $=id=>document.getElementById(id);
+    restoreFields({fields:saved});
+    let saves=0,refreshes=0;
+    const workspace=createStatisticsWorkspace({state:{fields:{'statistics-kind':'xy'},datasets:{},datasetKinds:{},digits:10},ui:{},
+      persist:()=>saves++,refreshWorkspaceMath:()=>refreshes++,storeExpression:()=>{},error:assert.fail,changeMode:()=>{},replaceInput:()=>{},graphs:{}});
+    $('statistics-data').value='A,yes\nA,no\nB,yes\nB,no\nA,\n,no';
+    $('statistics-op').value='chi2independence';$('statistics-op').dispatchEvent(new dom.window.Event('change'));
+    const enabled=saved['statistics-yates']!==false;
+    assert.equal($('statistics-yates-options').hidden,false);
+    assert.equal($('statistics-yates').checked,enabled);
+    assert.equal(workspace.expression(),`chi2independence([1,1,2,2],[1,2,1,2],${enabled?1:0})`);
+    $('statistics-yates').click();
+    assert.equal(workspace.expression(),`chi2independence([1,1,2,2],[1,2,1,2],${enabled?0:1})`);
+    assert.equal(saves,1);assert.ok(refreshes>=2);
+    $('statistics-op').value='fisherexact';$('statistics-op').dispatchEvent(new dom.window.Event('change'));
+    assert.equal($('statistics-yates-options').hidden,true);
+    assert.equal(workspace.expression(),'fisherexact([1,1,2,2],[1,2,1,2])');
+    $('statistics-op').value='chi2independence';$('statistics-op').dispatchEvent(new dom.window.Event('change'));
+    assert.equal($('statistics-yates').checked,!enabled);
+    setLanguage('ko');translateDOM();
+    assert.match($('statistics-yates-options').textContent,/Yates 연속성 보정/);
+    assert.match($('statistics-yates-options').textContent,/2×2 표에만 적용됩니다/);
+    setLanguage('en');
+    dom.window.close();
+  }
+});
 
 test('CSV import previews the first three selected rows and follows import options',async t=>{
   const dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));

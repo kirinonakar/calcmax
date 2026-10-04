@@ -513,7 +513,7 @@ Example: ttest2(0,[1,2,3],[2,4,5])
 Example: ttestpaired(0,[1,2,3],[2,3,5])
 `ztest2(Δ0,σx,σy,x,y)` — Two-sample z test with the known standard deviations.
 Example: ztest2(0,1,1,[1,2,3],[2,4,5])
-`chi2independence(x,y)` — χ² test of independence for two category columns.
+`chi2independence(x,y[,correction])` — χ² test of independence for two category columns. Yates continuity correction defaults to 1 (on) for 2×2 tables; use 0 for uncorrected Pearson χ². Other table sizes are always uncorrected. The result reports whether correction was applied.
 Example: chi2independence([1,1,2,2],[1,2,1,2])
 `fisherexact(x,y)` — Fisher exact test for two categories in each column.
 Example: fisherexact([1,1,1,1,1,1,2,2],[1,1,1,2,2,2,1,2])

@@ -1,4 +1,6 @@
 export const nativeKorean = {
+  "Yates continuity correction": "Yates 연속성 보정",
+  "Applies only to 2×2 tables. Turn off for Pearson χ².": "2×2 표에만 적용됩니다. 끄면 보정 없는 Pearson χ²를 계산합니다.",
   "Probability": "확률 계산",
   "Calculation": "계산 종류",
   "Distribution": "확률 분포",

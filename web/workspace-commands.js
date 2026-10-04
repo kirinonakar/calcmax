@@ -40,7 +40,7 @@ export function statisticsAnalysisData(source,{op='stats',column=0,grouping='col
   const samples=paired?['x','y'].map((label,i)=>({label,values:pairs.map(row=>row[i])})):['anova','tukey'].includes(op)?names.map((label,i)=>({label,values:values[i]})):['ttest2','ztest2'].includes(op)?[first,second].map(i=>({label:names[i],values:values[i]})):[{label:names[selected],values:values[selected]}];
   return {rows,groups,pairs,paired,categorical,first,second,samples};
 }
-export function statisticsCommand(source,{op='stats',column=0,extra='0',tail='two',sigma='1',sigmaY='1',regression='linear',formula='A*exp(-k*x)+C',variable='x',initials='',grouping='columns',firstGroup='',secondGroup='',kind}={}){
+export function statisticsCommand(source,{op='stats',column=0,extra='0',tail='two',sigma='1',sigmaY='1',yatesCorrection=true,regression='linear',formula='A*exp(-k*x)+C',variable='x',initials='',grouping='columns',firstGroup='',secondGroup='',kind}={}){
   if(op==='regression'&&kind&&kind!=='xy')throw new Error('Regression needs x,y data');
   const {rows,groups,pairs,categorical,first,second,samples:activeSamples}=statisticsAnalysisData(source,{op,column,grouping,firstGroup,secondGroup,kind});
   const samples=activeSamples.map(sample=>sample.values),data=samples[0];
@@ -50,7 +50,7 @@ export function statisticsCommand(source,{op='stats',column=0,extra='0',tail='tw
     if(pairs.length<2)throw new Error('Regression needs at least two complete x,y rows');
     return `regression(${vector(pairs.map(p=>vector(p.slice(0,2))))},${regression}${regression==='custom'?`,${formula},${variable}${initials.trim()?','+initials:''}`:''})`;
   }
-  if(categorical){if(pairs.length<2)throw new Error('Enter complete categorical pairs');const left=[...new Set(pairs.map(r=>r[0]))],right=[...new Set(pairs.map(r=>r[1]))];return `${op}(${vector(pairs.map(r=>left.indexOf(r[0])+1))},${vector(pairs.map(r=>right.indexOf(r[1])+1))}${op==='fisherexact'?tailArgument:''})`;}
+  if(categorical){if(pairs.length<2)throw new Error('Enter complete categorical pairs');const left=[...new Set(pairs.map(r=>r[0]))],right=[...new Set(pairs.map(r=>r[1]))];return `${op}(${vector(pairs.map(r=>left.indexOf(r[0])+1))},${vector(pairs.map(r=>right.indexOf(r[1])+1))}${op==='fisherexact'?tailArgument:','+(yatesCorrection?1:0)})`;}
   if(['correlation','ttestpaired'].includes(op)){if(pairs.length<2)throw new Error('Enter at least two complete paired rows');return `${op}(${op==='ttestpaired'?extra+',':''}${vector(pairs.map(r=>r[0]))},${vector(pairs.map(r=>r[1]))}${op==='ttestpaired'?tailArgument:''})`;}
   if(['ttest2','ztest2'].includes(op)){const [a,b]=samples;if(!a?.length||!b?.length||first===second)throw new Error('Select two different nonempty samples');return `${op}(${extra},${op==='ztest2'?sigma+','+sigmaY+',':''}${vector(a)},${vector(b)}${tailArgument})`;}
   if(['anova','tukey'].includes(op)){if(samples.length<2||samples.some(s=>s.length<2))throw new Error('Enter at least two observations in each group');return `${op}(${samples.map(vector).join(',')})`;}

@@ -513,7 +513,7 @@ Example: ttest2(0,[1,2,3],[2,4,5])
 Example: ttestpaired(0,[1,2,3],[2,3,5])
 `ztest2(Δ0,σx,σy,x,y)` — 표준편차를 아는 두 표본의 z 검정.
 Example: ztest2(0,1,1,[1,2,3],[2,4,5])
-`chi2independence(x,y)` — 두 범주 열의 χ² 독립성 검정.
+`chi2independence(x,y[,correction])` — 두 범주 열의 χ² 독립성 검정. 2×2 표의 Yates 연속성 보정은 기본값 1(켬)이며, 0을 넣으면 보정 없는 Pearson χ²를 계산합니다. 다른 크기의 표에는 보정하지 않습니다. 결과에 보정 적용 여부가 표시됩니다.
 Example: chi2independence([1,1,2,2],[1,2,1,2])
 `fisherexact(x,y)` — 각 열이 두 범주일 때의 피셔 정확 검정.
 Example: fisherexact([1,1,1,1,1,1,2,2],[1,1,1,2,2,2,1,2])

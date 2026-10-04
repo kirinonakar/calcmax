@@ -18,6 +18,45 @@ def run(source, **options):
     return json.loads(core.dispatch(json.dumps({"tree": TREES[source], "angle": "RAD", **options})))
 
 class EngineTests(unittest.TestCase):
+    def test_chi2_independence_yates_correction(self):
+        def num(value): return {"kind": "number", "value": str(value)}
+        def evaluate(table, correction=None):
+            xs, ys = [], []
+            for i, row in enumerate(table):
+                for j, count in enumerate(row):
+                    xs.extend([num(i)] * count)
+                    ys.extend([num(j)] * count)
+            args = [{"kind": "list", "args": xs}, {"kind": "list", "args": ys}]
+            if correction is not None: args.append(num(correction))
+            return json.loads(core.dispatch(json.dumps({"tree": {"kind": "call", "value": "chi2independence", "args": args}})))
+        def payload(result):
+            self.assertTrue(result["ok"], result)
+            return dict(line.split(": ", 1) for line in result["exact"].splitlines())
+        table = [[20, 10], [15, 25]]
+        corrected = payload(evaluate(table))
+        self.assertEqual(corrected["chi-square"], "189/40")  # 4.725
+        self.assertEqual(corrected["Yates correction"], "1")
+        self.assertEqual(corrected["df"], "1")
+        self.assertEqual(corrected["observed"], "[[20, 10], [15, 25]]")
+        self.assertAlmostEqual(float(corrected["p value"]), math.erfc(math.sqrt(4.725 / 2)), 12)
+        self.assertEqual(payload(evaluate(table, 1)), corrected)
+        uncorrected = payload(evaluate(table, 0))
+        self.assertEqual(uncorrected["chi-square"], "35/6")  # 5.833333...
+        self.assertEqual(uncorrected["Yates correction"], "0")
+        self.assertAlmostEqual(float(uncorrected["p value"]), math.erfc(math.sqrt(35 / 12)), 12)
+        for table in ([[1, 1], [1, 1]], [[1, 2], [2, 3]]):
+            result = evaluate(table)
+            self.assertEqual(payload(result)["chi-square"], "0")
+            self.assertEqual(payload(result)["p value"], "1")
+            self.assertIn("expected counts are below 5", result["note"])
+        table = [[10, 20, 30], [20, 15, 10]]
+        self.assertEqual(payload(evaluate(table))["chi-square"], payload(evaluate(table, 0))["chi-square"])
+        self.assertEqual(payload(evaluate(table))["Yates correction"], "0")
+        self.assertEqual(payload(evaluate(table))["df"], "2")
+        self.assertIn("only applies to 2×2", evaluate(table)["note"])
+        for invalid in (2, -1, "0.5"):
+            self.assertFalse(evaluate([[1, 2], [2, 3]], invalid)["ok"])
+
     def test_linear_regression_returns_pearson_correlation(self):
         def num(value): return {"kind":"number","value":str(value)}
         def regression(pairs,mode="linear"):
@@ -714,7 +753,7 @@ class EngineTests(unittest.TestCase):
         self.assertAlmostEqual(float(paired["t"]),2*math.sqrt(3),10)
         two_z=payload(dispatch(call("ztest2",num(0),num(2),num(3),listing(num(1),num(2)),listing(num(0),num(1)))))
         self.assertAlmostEqual(float(two_z["z"]),1/math.sqrt(13/2),10)
-        categories=payload(dispatch(call("chi2independence",listing(num(0),num(1),num(1),num(0),num(0)),listing(num(1),num(0),num(0),num(0),num(1)))))
+        categories=payload(dispatch(call("chi2independence",listing(num(0),num(1),num(1),num(0),num(0)),listing(num(1),num(0),num(0),num(0),num(1)),num(0))))
         self.assertEqual(categories["df"],"1")
         self.assertEqual(categories["chi-square"],"20/9")
         self.assertAlmostEqual(float(categories["p value"]),math.erfc(math.sqrt(10/9)),10)

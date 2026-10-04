@@ -94,6 +94,15 @@ test('actual CPython WASM reuses the Android engine across workspaces',async()=>
   assert.match(evaluate('stats([1,2,3,4])').exact,/mean/i);
   assert.match(evaluate(statisticsCommand('A,1\nA,2\nA,3\nB,2\nB,4\nB,6',{op:'ztest2',grouping:'groups',sigma:'1',sigmaY:'2',tail:'left'})).exact,/p value/);
   assert.match(evaluate(statisticsCommand('A,yes\nA,no\nB,yes\nB,no',{op:'chi2independence'})).exact,/chi-square/);
+  const chiData=[[20,10],[15,25]].flatMap((row,i)=>row.flatMap((count,j)=>Array(count).fill(`${i},${j}`))).join('\n');
+  for(const [yatesCorrection,statistic] of [[true,'189/40'],[false,'35/6']]){
+    const result=evaluate(statisticsCommand(chiData,{op:'chi2independence',yatesCorrection}));
+    const fields=Object.fromEntries(result.exact.split('\n').map(line=>line.split(': ')));
+    assert.equal(fields['chi-square'],statistic);
+    assert.equal(fields['Yates correction'],yatesCorrection?'1':'0');
+    const expectedP=yatesCorrection?0.0297271833060546:0.0157252997545054;
+    assert.ok(Math.abs(Number(fields['p value'])-expectedP)<1e-10);
+  }
   const fit=evaluate(statisticsCommand('0,1\n1,3\n2,5\n3,7',{op:'regression',regression:'custom',formula:'a*x+b',initials:'[[a,1],[b,0]]'}));assert.equal(fit.parameters.length,2);assert.ok(fit.curve.length>10);
   const decayRows=[[20,.818731],[40,.670320],[60,.548812],[80,.449329],[100,.367879],[150,.223130],[200,.135335],[300,.049787],[400,.018316]];
   const decayData=decayRows.map(row=>row.join(',')).join('\n');

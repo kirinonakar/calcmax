@@ -25,6 +25,7 @@ import com.kirinonakar.calcmax.ui.theme.LocalInstrument
     var grouping by rememberSaveable {mutableStateOf("Columns")}
     var firstGroup by rememberSaveable {mutableStateOf("")}
     var secondGroup by rememberSaveable {mutableStateOf("")}
+    var yatesCorrection by rememberSaveable {mutableStateOf(true)}
     val columnOptions=when {
         kind=="list"->listOf("x")
         kind=="xyz"->listOf("x","y","z")
@@ -53,7 +54,7 @@ import com.kirinonakar.calcmax.ui.theme.LocalInstrument
     val groupedTwoSample=groupedMode&&test in listOf("t test","z test")
     val twoSample=groupedTwoSample||!groupedMode&&kind=="xy"&&activeColumn=="x-y"&&test in listOf("t test","z test")
     val pairedTest=!groupedMode&&kind=="xy"&&activeColumn=="paired"&&test=="t test"
-    val command=statisticsTestCommand(test,rows,kind,activeColumn,tail,mu0,sigma,level,sigmaY,if(groupedMode)"group-value" else "columns",activeFirst,activeSecond)
+    val command=statisticsTestCommand(test,rows,kind,activeColumn,tail,mu0,sigma,level,sigmaY,if(groupedMode)"group-value" else "columns",activeFirst,activeSecond,yatesCorrection)
     HorizontalDivider()
     Text(tr("Analyze current data"),style=MaterialTheme.typography.titleMedium)
     Text(when(kind){"xy"->"Blank cells are omitted. Paired, χ², and Fisher tests use rows with both values; independent tests use each column separately. Fisher requires exactly two categories per column.";"xyz"->"Blank cells are omitted. ANOVA and Tukey HSD use x, y, and z as three independent groups.";else->"Blank cells are omitted from tests. Choose x,y or x,y,z data for group comparisons."},fontSize=12.sp,color=c.muted)
@@ -88,6 +89,13 @@ import com.kirinonakar.calcmax.ui.theme.LocalInstrument
                     Choices(listOf("Two-sided","Left","Right"),tail,{tail=it})
                 }
             }
+    }
+    if(test=="χ² test") {
+        Row(verticalAlignment=Alignment.CenterVertically) {
+            Checkbox(checked=yatesCorrection,onCheckedChange={yatesCorrection=it},modifier=Modifier.testTag("statistics-yates"))
+            Text(tr("Yates continuity correction"),fontSize=12.sp)
+        }
+        Text(tr("Applies only to 2×2 tables. Turn off for Pearson χ²."),fontSize=11.sp,color=c.muted)
     }
     if(test=="Fisher exact") {
         Column(verticalArrangement=Arrangement.spacedBy(2.dp)) {

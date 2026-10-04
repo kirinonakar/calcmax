@@ -53,7 +53,7 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
   });
   $('csv-save').onclick=()=>downloadFile(`${value('dataset-name')||'calcmax-data'}.csv`,value('statistics-data'),'text/csv');
   function dataRows(){return statisticsDataRows(value('statistics-data'),value('statistics-kind'));}
-  function statisticsExpression(op=value('statistics-op')){return statisticsCommand(value('statistics-data'),{op,kind:value('statistics-kind'),column:Number(value('statistics-column')),extra:value('statistics-extra')||'0',tail:value('statistics-tail'),sigma:value('statistics-sigma'),sigmaY:value('statistics-sigma-y'),regression:value('regression-kind'),formula:value('regression-formula'),variable:value('regression-variable'),initials:value('regression-initials'),grouping:value('statistics-grouping'),firstGroup:value('statistics-first-group'),secondGroup:value('statistics-second-group')});}
+  function statisticsExpression(op=value('statistics-op')){return statisticsCommand(value('statistics-data'),{op,kind:value('statistics-kind'),column:Number(value('statistics-column')),extra:value('statistics-extra')||'0',tail:value('statistics-tail'),sigma:value('statistics-sigma'),sigmaY:value('statistics-sigma-y'),yatesCorrection:$('statistics-yates').checked,regression:value('regression-kind'),formula:value('regression-formula'),variable:value('regression-variable'),initials:value('regression-initials'),grouping:value('statistics-grouping'),firstGroup:value('statistics-first-group'),secondGroup:value('statistics-second-group')});}
   function analysisSummary(){
     const plan=statisticsAnalysisData(value('statistics-data'),{op:value('statistics-op'),kind:value('statistics-kind'),column:Number(value('statistics-column')),grouping:value('statistics-grouping'),firstGroup:value('statistics-first-group'),secondGroup:value('statistics-second-group')});
     if(plan.paired)return `${t('Compared columns')}: x ↔ y · ${t('Complete pairs')}: ${plan.pairs.length}`;
@@ -89,6 +89,7 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
     $('statistics-tail').disabled=!['ttest','ttest2','ttestpaired','ztest','ztest2','fisherexact'].includes(op);
     $('statistics-sigma').disabled=!['ztest','ztest2','zinterval'].includes(op);
     $('statistics-sigma-y').disabled=op!=='ztest2';
+    $('statistics-yates-options').hidden=op!=='chi2independence';
     $('regression-section').hidden=kind!=='xy';
     $('statistics-plot-type').querySelector('[value="scatter"]').disabled=kind!=='xy';
     if(kind!=='xy'&&value('statistics-plot-type')==='scatter')$('statistics-plot-type').value='histogram';
@@ -100,6 +101,7 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
   $('statistics-op').onchange=()=>{if(['tinterval','zinterval'].includes(value('statistics-op'))&&value('statistics-extra')==='0')$('statistics-extra').value='95';statisticsControls();refreshWorkspaceMath();};
   $('statistics-grouping').onchange=()=>{statisticsControls();refreshWorkspaceMath();};
   for(const id of ['statistics-column','statistics-first-group','statistics-second-group'])$(id).onchange=()=>{statisticsControls();refreshWorkspaceMath();};
+  $('statistics-yates').onchange=()=>{refreshWorkspaceMath();persist();};
   function editorRows(){return value('statistics-data').trim()?csvRows(value('statistics-data'),{preserveEmptyRows:true}):[];}
   // Quote an empty List cell so a blank row survives serialization and reload.
   function writeRows(rows){$('statistics-data').value=rows.map(row=>row.length===1&&!row[0]?'""':row.map(cell=>/[",\r\n\t]/.test(cell)?'"'+cell.replace(/"/g,'""')+'"':cell).join(',')).join('\n');statisticsControls();refreshWorkspaceMath();persist();}

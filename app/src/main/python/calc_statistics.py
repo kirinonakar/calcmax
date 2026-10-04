@@ -522,7 +522,9 @@ def statistical_test(engine, name, a, nodes):
             probability = _chisq_sf(_mpf(statistic, digits), _mpf(s.Integer(df), digits))
             return {"chi-square": statistic, "df": s.Integer(df), "p value": _mp_result(probability, engine)}
     if name == "chi2independence":
-        require(len(args) == 2, "chi2independence takes x and y category lists")
+        require(len(args) in (2, 3), "chi2independence takes x and y category lists, optionally correction (1 or 0)")
+        correction = args[2] if len(args) == 3 else s.Integer(1)
+        require(correction in (s.Integer(0), s.Integer(1)), "Yates correction must be 1 (on) or 0 (off)")
         xs, ys = flatten(args[0]), flatten(args[1])
         require(len(xs) == len(ys) and len(xs) >= 2, "χ² independence needs at least two complete pairs")
         for value in xs + ys: _real_value(value, "Categories must be real numbers")
@@ -532,15 +534,26 @@ def statistical_test(engine, name, a, nodes):
         row_totals = [sum(row) for row in counts]
         column_totals = [sum(row[j] for row in counts) for j in range(len(y_categories))]
         n = s.Integer(len(xs))
-        if any(row_total*column_total/n < 5 for row_total in row_totals for column_total in column_totals):
-            engine.note = "Some expected counts are below 5; the χ² approximation may be inaccurate."
-        statistic = s.Add(*[(counts[i][j] - row_totals[i]*column_totals[j]/n)**2/(row_totals[i]*column_totals[j]/n)
-                            for i in range(len(x_categories)) for j in range(len(y_categories))])
         df = s.Integer((len(x_categories) - 1)*(len(y_categories) - 1))
+        corrected = correction == 1 and df == 1
+        engine.note = ("Yates continuity correction applied (2×2 table)." if corrected else
+                       "Yates continuity correction only applies to 2×2 tables; Pearson χ² used." if correction == 1 else
+                       "Pearson χ² without continuity correction.")
+        if any(row_total*column_total/n < 5 for row_total in row_totals for column_total in column_totals):
+            engine.note += " Some expected counts are below 5; the χ² approximation may be inaccurate."
+        terms = []
+        for i in range(len(x_categories)):
+            for j in range(len(y_categories)):
+                expected = row_totals[i]*column_totals[j]/n
+                difference = abs(counts[i][j] - expected)
+                if corrected:
+                    difference = max(s.Integer(0), difference - s.Rational(1, 2))
+                terms.append(difference**2/expected)
+        statistic = s.Add(*terms)
         with mp.workdps(digits + 10):
             probability = _chisq_sf(_mpf(statistic, digits), _mpf(df, digits))
             return {"chi-square": statistic, "df": df, "p value": _mp_result(probability, engine),
-                    "observed": counts, "n": n}
+                    "Yates correction": s.Integer(int(corrected)), "observed": counts, "n": n}
     if name == "fisherexact":
         require(len(args) == 2, "fisherexact takes x and y category lists")
         require(isinstance(args[0], (list, tuple)) and isinstance(args[1], (list, tuple)), "x and y must be category lists")
