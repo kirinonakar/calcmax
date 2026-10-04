@@ -8,6 +8,22 @@ import {parse,latexInput} from '../parser.js';
 import {tipCommand,moneyResult} from '../money.js';
 import {statisticsCommand,distributionCommand,equationCommand} from '../workspace-commands.js';
 
+test('actual WASM evaluates pasted LaTeX limits in radians with scoped variables',async()=>{
+  const py=await loadPyodide({indexURL:fileURLToPath(new URL('../vendor/',import.meta.url))});
+  await installEngine(py,{runtimeURL:new URL('../vendor/',import.meta.url),engineURL:new URL('../engine.zip',import.meta.url),fetcher:async url=>new Response(readFileSync(url))});
+  for(const [source,exact] of [
+    [String.raw`$$\lim_{x \to 0} \frac{3x^2}{\sin^2 x}$$`,'3'],
+    [String.raw`\lim_{x \to 0^+} 1/x`,'oo'],
+    [String.raw`\lim_{x \to 0^{-}} 1/x`,'-oo'],
+    [String.raw`\lim_{x \to \infty} \frac{1}{x}`,'0']
+  ])for(const angle of ['RAD','DEG','GRAD']){
+    py.globals.set('payload',JSON.stringify({tree:parse(latexInput(source)),angle,variables:{x:parse('99')}}));
+    const result=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));
+    assert.equal(result.ok,true,result.error);
+    assert.equal(result.exact,exact,`${source} in ${angle}`);
+  }
+});
+
 test('actual WASM solves the pasted integral equation using a stored function',async()=>{
   const py=await loadPyodide({indexURL:fileURLToPath(new URL('../vendor/',import.meta.url))});
   await installEngine(py,{runtimeURL:new URL('../vendor/',import.meta.url),engineURL:new URL('../engine.zip',import.meta.url),fetcher:async url=>new Response(readFileSync(url))});

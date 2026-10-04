@@ -4,6 +4,39 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class LatexInputTest {
+    @Test fun limitPastePreservesApproachFunctionPowerAndScope() {
+        val body="\\lim_{x \\to 0} \\frac{3x^2}{\\sin^2 x}"
+        val expected="limit(3x^2/sin(x)^2,x,0)"
+        for(source in listOf(body,"$$${body}$$","$${body}$","\\[$body\\]","\\($body\\)")) {
+            assertEquals(expected,LatexInput.convert(source))
+            val tree=Parser(LatexInput.convert(source)!!).parse()
+            assertEquals("limit",tree.value)
+            assertEquals(listOf("x","0"),tree.args.drop(1).map {it.value})
+            assertEquals("sin",tree.args[0].args[1].args[0].value)
+        }
+        for((source,converted) in listOf(
+            "\\lim _ {x \\rightarrow \\infty} \\frac{1}{x}" to "limit(1/x,x,oo)",
+            "\\lim_{x \\to 0^+} 1/x" to "limit(1/x,x,0,right)",
+            "\\lim_{x \\to 0^{-}} 1/x" to "limit(1/x,x,0,left)",
+            "\\lim_{\\theta \\to \\pi} \\cos\\theta" to "limit(cos(theta),theta,pi)",
+            "(\\lim_{x \\to 0} x)+2" to "(limit(x,x,0))+2",
+            "\\left(\\lim_{x \\to 0} x\\right)+2" to "(limit(x,x,0))+2",
+            "\\lim_{x \\to 0} x=0" to "limit(x,x,0)=0",
+            "\\lim_{x \\to 0} (x+1)" to "limit(x+1,x,0)",
+            "\\lim_{x \\to 0} \\frac{3x^2+1}{\\sin^2 x+2}" to "limit((3x^2+1)/(sin(x)^2+2),x,0)",
+            "\\lim_{x \\to 0} \\frac{x}{2}^2" to "limit((x/2)^2,x,0)",
+            "\\lim_{x \\to 0} x^{\\frac{1}{2}}" to "limit(x^(1/2),x,0)",
+            "\\lim_{x \\to 0} \\frac{1}{x(x+1)}" to "limit(1/x(x+1),x,0)",
+            "\\lim_{x \\to 0} \\frac{1}{2x}" to "limit(1/(2x),x,0)",
+            "\\lim_{x \\to 0} (x)(x+1)" to "limit((x)(x+1),x,0)",
+            "\\lim_{x \\to 0} (x^2)^3" to "limit((x^2)^3,x,0)",
+            "\\frac{\\lim_{x \\to 0} x+1}{2}" to "((limit(x+1,x,0))/(2))"
+        ))assertEquals(source,converted,LatexInput.convert(source))
+        for(source in listOf("\\lim","\\lim_x x","\\lim_{x 0} x","\\lim_{x+1 \\to 0} x","\\lim_{x \\to} x","\\lim_{x \\to 0}"))assertNull(source,LatexInput.convert(source))
+        val edit=LatexInput.convertEdit(Editor("1+2+3",3,2),"1+$$${body}$$+3")!!
+        assertEquals("1+$expected+3",edit.source)
+        assertEquals(2+expected.length,edit.cursor)
+    }
     @Test fun trigonometricFractionsKeepFunctionsAndTheirPowersSeparate() {
         val body="\\frac{\\sin\\theta}{1-\\cos^2\\theta}"
         for(source in listOf(body,"$$${body}$$","$${body}$","\\[$body\\]","\\($body\\)")) {

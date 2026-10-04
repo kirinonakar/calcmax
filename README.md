@@ -33,6 +33,7 @@ Paste supported LaTeX into the Android or web calculator with `Paste` or directl
 $$\sqrt[3]{5} \times 25^{\frac{1}{3}}$$
 $$\cos\left(\frac{\pi}{2} + \theta\right) = -\frac{1}{5}$$
 $$a = 2 \log \frac{1}{\sqrt{10}} + \log_2 20 $$
+$$\lim_{x \to 0} \frac{3x^2}{\sin^2 x}$$
 \[\frac{x^2+1}{x-1}\]
 \[\int_{1}^{e}\frac{1}{x}\,dx=1\]
 $$\int_{0}^{\infty} e^{-x^2} \times \cos(2x) \, dx$$

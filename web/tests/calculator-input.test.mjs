@@ -128,6 +128,26 @@ test('wrapped LaTeX paste replaces a selected operand and keeps surrounding term
   assert.equal($('expression').selectionStart,$('expression').value.length-2);
 });
 
+for(const keyboard of [false,true])test(`LaTeX limit paste reaches evaluation in ${keyboard?'keyboard':'math'} input`,async t=>{
+  const {$,dom,calculator,engine}=calculatorPage(t,'12+34');
+  if(keyboard)$('typing-toggle').click();
+  const event=new dom.window.Event('paste',{bubbles:true,cancelable:true});
+  Object.defineProperty(event,'clipboardData',{value:{getData:()=>String.raw`$$\lim_{x \to 0} \frac{3x^2}{\sin^2 x}$$`}});
+  (keyboard?$('expression'):document.body).dispatchEvent(event);
+  const converted='limit(3x^2/sin(x)^2,x,0)';
+  assert.equal(event.defaultPrevented,true);
+  assert.equal($('expression').value,converted);
+  assert.equal($('expression').selectionStart,converted.length);
+  if(keyboard)$('typing-toggle').click();
+  assert.ok($('expression-preview').querySelector('mfrac'));
+  assert.ok($('expression-preview').textContent.includes('lim'));
+  engine.ready=true;
+  await calculator.evaluate();
+  assert.deepEqual(engine.execute.mock.calls[0].arguments[0].tree,parse(converted));
+  $('undo').click();
+  assert.equal($('expression').value,'12+34');
+});
+
 for(const keyboard of [false,true])test(`LaTeX theta equation paste reaches evaluation in ${keyboard?'keyboard':'math'} input`,async t=>{
   const {$,dom,calculator,engine}=calculatorPage(t,'12+34');
   if(keyboard)$('typing-toggle').click();

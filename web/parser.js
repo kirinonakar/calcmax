@@ -119,13 +119,30 @@ export function parse(source,{allowHoles=false}={}) {
 
 // Equivalent supported LaTeX subset to math/LatexInput.kt.
 export function latexInput(input) {
-  const commands = new Set(['int','frac','dfrac','tfrac','sqrt','sin','cos','tan','arcsin','arccos','arctan','ln','log','exp','pi','theta','infty','times','cdot','left','right','quad','qquad']);
+  const commands = new Set(['int','lim','frac','dfrac','tfrac','sqrt','sin','cos','tan','arcsin','arccos','arctan','ln','log','exp','pi','theta','infty','times','cdot','left','right','quad','qquad']);
   let source = input.trim();
   if (!/^\\[[(]|^\$|\^\s*\{/.test(source) && ![...source.matchAll(/\\([A-Za-z]+)/g)].some(match=>commands.has(match[1]))) return input;
   for (const [open,close] of [['\\[','\\]'],['\\(','\\)'],['$$','$$'],['$','$']]) {
     if (source.length >= open.length+close.length && source.startsWith(open) && source.endsWith(close)) {
       source=source.slice(open.length,-close.length);break;
     }
+  }
+  function compactExpression(source) {
+    const tree=parse(source),groups=[];
+    const shape=n=>n.kind==='group'?shape(n.args[0]):[n.kind,n.value,n.args.map(shape)];
+    const expected=JSON.stringify(shape(tree));
+    function collect(n){if(n.kind==='group')groups.push(n);n.args.forEach(collect);}
+    collect(tree);
+    const removed=new Set();
+    let result=source;
+    // Remove only parentheses whose absence preserves the complete parsed expression.
+    for(const group of groups.sort((a,b)=>b.start-a.start)) {
+      removed.add(group.start);removed.add(group.end-1);
+      const candidate=source.split('').filter((_,index)=>!removed.has(index)).join('');
+      try{if(JSON.stringify(shape(parse(candidate)))===expected){result=candidate;continue;}}catch{}
+      removed.delete(group.start);removed.delete(group.end-1);
+    }
+    return result;
   }
   function body(text) {
     let i = 0, result = '';
@@ -184,6 +201,19 @@ export function latexInput(input) {
       while (parse(converted).kind==='group') converted=converted.slice(1,-1);
       return converted;
     }
+    // A limit applies to the remaining expression within its enclosing group.
+    function limitExpression() {
+      const start=i;
+      let depth=0;
+      while(i<text.length) {
+        const c=text[i];
+        if(!depth && (')]}=<>,'.includes(c) || text.startsWith('\\right',i) && !letter(text[i+6])))break;
+        if('([{'.includes(c))depth++;
+        else if(')]}'.includes(c))depth--;
+        i++;
+      }
+      return compactExpression(body(text.slice(start,i)));
+    }
     while (i < text.length) {
       const c = text[i++];
       if (c !== '\\') { result += c === '{' ? '(' : c === '}' ? ')' : c; continue; }
@@ -191,7 +221,20 @@ export function latexInput(input) {
       const command = /^[A-Za-z]+/.exec(text.slice(i))?.[0];
       if (!command) throw new SyntaxError('Incomplete LaTeX command');
       i += command.length;
-      if (['frac','dfrac','tfrac'].includes(command)) { const top = group(), bottom = group(); result += `((${body(top)})/(${body(bottom)}))`; }
+      if (command==='lim') {
+        skipSpacing();
+        if(text[i++]!=='_')throw new SyntaxError('Expected LaTeX limit approach');
+        const approach=group().split(/\\(?:to|rightarrow)\b|->|→/);
+        if(approach.length!==2)throw new SyntaxError('Expected LaTeX limit arrow');
+        const variable=body(approach[0]);
+        if(parse(variable).kind!=='symbol')throw new SyntaxError('Expected limit variable');
+        let point=approach[1].trim(),direction='';
+        const side=/\^\s*(?:\{\s*([+-])\s*\}|([+-]))\s*$/.exec(point);
+        if(side){direction=`,${(side[1]||side[2])==='+'?'right':'left'}`;point=point.slice(0,side.index);}
+        point=body(point);parse(point);
+        result+=`limit(${limitExpression()},${variable},${point}${direction})`;
+      }
+      else if (['frac','dfrac','tfrac'].includes(command)) { const top = group(), bottom = group(); result += `((${body(top)})/(${body(bottom)}))`; }
       else if (command === 'sqrt') {
         while (/\s/.test(text[i] || '\0')) i++;
         const degree=text[i]==='[' ? body(group('[',']')) : null;

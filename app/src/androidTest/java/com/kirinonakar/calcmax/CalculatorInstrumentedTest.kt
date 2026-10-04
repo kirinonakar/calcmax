@@ -65,6 +65,33 @@ class CalculatorInstrumentedTest {
         }
         compose.runOnIdle {model().clear(recordUndo=false)}
     }
+    @Test fun latexLimitPasteAndKeyboardInputCalculateThree() {
+        val latex="$$\\lim_{x \\to 0} \\frac{3x^2}{\\sin^2 x}$$"
+        val source="limit(3x^2/sin(x)^2,x,0)"
+        compose.runOnIdle {model().mode="Scientific/CAS";model().language="en";model().poweredOn=true;model().clear(recordUndo=false)}
+        for(keyboard in listOf(false,true)) {
+            compose.runOnIdle {model().clear(recordUndo=false)}
+            if(keyboard) {
+                compose.onNodeWithText("Keyboard").performClick()
+                compose.onNodeWithContentDescription("Expression input").performClick().performTextInput(latex)
+                compose.onNodeWithText("Math input").performClick()
+            } else {
+                compose.runOnIdle {
+                    val clipboard=compose.activity.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    clipboard.setPrimaryClip(android.content.ClipData.newPlainText("LaTeX",latex))
+                }
+                compose.onNodeWithText("Paste").performClick()
+            }
+            compose.runOnIdle {
+                assertEquals(source,model().editor.source)
+                assertEquals(source.length,model().editor.cursor)
+                model().calculate()
+            }
+            compose.waitUntil(30000){!model().busy&&model().committed}
+            compose.runOnIdle {assertEquals("3",model().result!!.getString("exact"))}
+        }
+        compose.runOnIdle {model().clear(recordUndo=false)}
+    }
     @Test fun wrappedLatexKeyboardPasteReplacesSelectionInsideExpression() {
         compose.runOnIdle {
             model().mode="Scientific/CAS";model().language="en";model().poweredOn=true;model().clear(recordUndo=false)

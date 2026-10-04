@@ -3,6 +3,37 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {parse,latexInput} from '../parser.js';
 
+test('LaTeX limits preserve the approach, function power, and expression scope',()=>{
+  const body=String.raw`\lim_{x \to 0} \frac{3x^2}{\sin^2 x}`;
+  for(const source of [body,`$$${body}$$`,`$${body}$`,String.raw`\[${body}\]`,String.raw`\(${body}\)`]){
+    const converted=latexInput(source);
+    assert.equal(converted,'limit(3x^2/sin(x)^2,x,0)');
+    const tree=parse(converted);
+    assert.equal(tree.value,'limit');
+    assert.deepEqual(tree.args.slice(1).map(n=>n.value),['x','0']);
+    assert.equal(tree.args[0].args[1].args[0].value,'sin');
+  }
+  for(const [source,expected] of [
+    [String.raw`\lim _ {x \rightarrow \infty} \frac{1}{x}`,'limit(1/x,x,oo)'],
+    [String.raw`\lim_{x \to 0^+} 1/x`,'limit(1/x,x,0,right)'],
+    [String.raw`\lim_{x \to 0^{-}} 1/x`,'limit(1/x,x,0,left)'],
+    [String.raw`\lim_{\theta \to \pi} \cos\theta`,'limit(cos(theta),theta,pi)'],
+    [String.raw`(\lim_{x \to 0} x)+2`,'(limit(x,x,0))+2'],
+    [String.raw`\left(\lim_{x \to 0} x\right)+2`,'(limit(x,x,0))+2'],
+    [String.raw`\lim_{x \to 0} x=0`,'limit(x,x,0)=0'],
+    [String.raw`\lim_{x \to 0} (x+1)`,'limit(x+1,x,0)'],
+    [String.raw`\lim_{x \to 0} \frac{3x^2+1}{\sin^2 x+2}`,'limit((3x^2+1)/(sin(x)^2+2),x,0)'],
+    [String.raw`\lim_{x \to 0} \frac{x}{2}^2`,'limit((x/2)^2,x,0)'],
+    [String.raw`\lim_{x \to 0} x^{\frac{1}{2}}`,'limit(x^(1/2),x,0)'],
+    [String.raw`\lim_{x \to 0} \frac{1}{x(x+1)}`,'limit(1/x(x+1),x,0)'],
+    [String.raw`\lim_{x \to 0} \frac{1}{2x}`,'limit(1/(2x),x,0)'],
+    [String.raw`\lim_{x \to 0} (x)(x+1)`,'limit((x)(x+1),x,0)'],
+    [String.raw`\lim_{x \to 0} (x^2)^3`,'limit((x^2)^3,x,0)'],
+    [String.raw`\frac{\lim_{x \to 0} x+1}{2}`,'((limit(x+1,x,0))/(2))']
+  ])assert.equal(latexInput(source),expected,source);
+  for(const source of [String.raw`\lim`,String.raw`\lim_x x`,String.raw`\lim_{x 0} x`,String.raw`\lim_{x+1 \to 0} x`,String.raw`\lim_{x \to} x`,String.raw`\lim_{x \to 0}`])assert.throws(()=>latexInput(source),SyntaxError,source);
+});
+
 test('LaTeX trigonometric fractions distinguish function powers from argument powers',()=>{
   const body=String.raw`\frac{\sin\theta}{1-\cos^2\theta}`;
   const nodes=n=>[n,...(n.args||[]).flatMap(nodes)];

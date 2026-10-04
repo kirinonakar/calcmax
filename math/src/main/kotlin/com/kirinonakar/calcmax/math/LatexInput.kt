@@ -3,7 +3,7 @@ package com.kirinonakar.calcmax.math
 /** Converts pasted, supported LaTeX math into the calculator's editable expression syntax. */
 object LatexInput {
     private val integral = Regex("""\\int\s*_\s*\{([^{}]+)\}\s*\^\s*\{([^{}]+)\}([\s\S]*?)(?:\\[,;! ]\s*)?d\s*([A-Za-z])(?=\s*(?:=|$))""")
-    private val commands = setOf("frac", "dfrac", "tfrac", "sqrt", "sin", "cos", "tan", "arcsin", "arccos", "arctan", "ln", "log", "exp", "pi", "theta", "infty", "times", "cdot", "left", "right", "quad", "qquad")
+    private val commands = setOf("lim", "frac", "dfrac", "tfrac", "sqrt", "sin", "cos", "tan", "arcsin", "arccos", "arctan", "ln", "log", "exp", "pi", "theta", "infty", "times", "cdot", "left", "right", "quad", "qquad")
     private val commandPattern = Regex("""\\([A-Za-z]+)""")
     private val bracedPower = Regex("""\^\s*\{""")
 
@@ -67,6 +67,28 @@ object LatexInput {
             val command=source.substring(start,index)
             if(command !in commands)error("Unsupported LaTeX command: $command")
             when(command) {
+                "lim" -> {
+                    index=skipSpacing(source,index)
+                    require(source.getOrNull(index)=='_') {"Expected LaTeX limit approach"}
+                    val (approach,next)=group(source,index+1)
+                    index=next
+                    val parts=approach.split(Regex("""\\(?:to|rightarrow)\b|->|→"""))
+                    require(parts.size==2) {"Expected LaTeX limit arrow"}
+                    val variable=convertBody(parts[0])
+                    require(Parser(variable).parse().kind=="symbol") {"Expected limit variable"}
+                    var point=parts[1].trim()
+                    val side=Regex("""\^\s*(?:\{\s*([+-])\s*\}|([+-]))\s*$""").find(point)
+                    val direction=if(side==null)"" else {
+                        point=point.substring(0,side.range.first)
+                        if((side.groupValues[1]+side.groupValues[2])=="+")",right" else ",left"
+                    }
+                    point=convertBody(point)
+                    Parser(point).parse()
+                    val end=limitExpressionEnd(source,index)
+                    val expression=compactExpression(convertBody(source.substring(index,end)))
+                    append("limit(").append(expression).append(',').append(variable).append(',').append(point).append(direction).append(')')
+                    index=end
+                }
                 "frac", "dfrac", "tfrac" -> {
                     val (top,afterTop)=group(source,index)
                     val (bottom,afterBottom)=group(source,afterTop)
@@ -127,6 +149,37 @@ object LatexInput {
             }
         }
     }.replace(Regex("""\s+"""), "")
+
+    private fun compactExpression(source:String):String {
+        val tree=Parser(source).parse()
+        fun shape(node:Expr):Expr = if(node.kind=="group")shape(node.args[0])
+            else Expr(node.kind,node.value,node.args.map(::shape))
+        val expected=shape(tree)
+        val removed=mutableSetOf<Int>()
+        var result=source
+        // Remove only parentheses whose absence preserves the complete parsed expression.
+        for(group in tree.nodes().filter {it.kind=="group"}.sortedByDescending {it.start}) {
+            removed.add(group.start);removed.add(group.end-1)
+            val candidate=source.filterIndexed {index,_->index !in removed}
+            if(runCatching {shape(Parser(candidate).parse())==expected}.getOrDefault(false))result=candidate
+            else {removed.remove(group.start);removed.remove(group.end-1)}
+        }
+        return result
+    }
+
+    /** A limit applies to the remaining expression within its enclosing group. */
+    private fun limitExpressionEnd(source:String,from:Int):Int {
+        var index=from
+        var depth=0
+        while(index<source.length) {
+            val c=source[index]
+            if(depth==0 && (c in ")]},=<>" || source.startsWith("\\right",index) && source.getOrNull(index+6)?.isLetter()!=true))break
+            if(c in "([{")depth++
+            else if(c in ")]}")depth--
+            index++
+        }
+        return index
+    }
 
     private fun logOperand(source:String):String {
         var converted=convertBody(source)
