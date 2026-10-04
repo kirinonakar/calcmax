@@ -206,7 +206,7 @@ class ProbabilityTests(unittest.TestCase):
         for op in ["eq","le","ge","quantile"]:
             self.assertEqual(self.value(distribution="negativeBinomial",operation=op,r=3,p=1,x=0,q="0.5"),0 if op=="quantile" else 1)
         result=self.run_probability(distribution="negativeBinomial",x=2,**params)
-        self.assertEqual({d["label"]:float(d["value"]) for d in result["details"]},{"E[X]":3,"SD[X]":math.sqrt(6)})
+        self.assertEqual({d["label"]:float(d["value"]) for d in result["details"]},{"E[X]":3,"Var[X]":6,"SD[X]":math.sqrt(6)})
         self.assertIn("failures",result["note"])
 
     def test_new_quantiles_preserve_accuracy_across_scales(self):
@@ -242,6 +242,107 @@ class ProbabilityTests(unittest.TestCase):
                   dict(category="draw",operation="exactly",population=100,marked=10,draws=20,k="1.5"),dict(category="draw",operation="atLeast",population=100,marked=10,draws=20,k=-1)]
         for request in requests:
             self.assertFalse(self.run_probability(x=1,**request)["ok"],request)
+
+
+    def test_normal_parameter_solver_round_trips_both_tails(self):
+        from fractions import Fraction
+        for operation in ("muLe","muGe","sigmaLe","sigmaGe"):
+            for q in ("0.95","5%","1/2","1e-60"):
+                if operation.startswith("sigma") and q == "1/2": continue
+                known = dict(sigma=10) if operation.startswith("mu") else dict(mu=60)
+                # Choose the side of μ that yields a positive σ.
+                expected=float(Fraction(q.rstrip('%')))/(100 if q.endswith('%') else 1)
+                right = (expected > .5) == operation.endswith("Le")
+                x = 80 if operation.startswith("mu") or right else 40
+                result=self.run_probability(category="normalSolver",operation=operation,x=x,q=q,**known)
+                self.assertTrue(result["ok"],result)
+                self.assertFalse(result["isProbability"])
+                params={d['label']:d['value'] for d in result['details']}
+                actual=self.value(operation='le' if operation.endswith('Le') else 'ge',mu=params['μ'],sigma=params['σ'],x=x)
+                self.assertAlmostEqual(actual/expected,1,places=13)
+        result=self.run_probability(category="normalSolver",operation="muLe",x=80,q="0.95",sigma=10)
+        self.assertAlmostEqual(float(result['value']),63.5514637304853,places=12)
+        for params in [dict(mu=60,x=60,q='0.5'),dict(mu=60,x=80,q='0.5'),dict(mu=60,x=40,q='0.95'),dict(mu=60,x=80,q=0),dict(mu=60,x=80,q=1)]:
+            self.assertFalse(self.run_probability(category='normalSolver',operation='sigmaLe',**params)['ok'])
+        self.assertFalse(self.run_probability(category='normalSolver',operation='muLe',x=80,q='.95',sigma=0)['ok'])
+
+    def test_repeat_ranges_match_enumeration_and_keep_exact_fractions(self):
+        from fractions import Fraction
+        for n in (0,1,5,10):
+            for p in ('0','1/5','1'):
+                fp=Fraction(p)
+                masses=[Fraction(math.comb(n,k))*fp**k*(1-fp)**(n-k) for k in range(n+1)]
+                for k in (0,1,3,n+1):
+                    for operation,expected in [('atLeast',sum(masses[k:])),('atMost',sum(masses[:k+1])),('between',sum(masses[k:k+3]))]:
+                        result=self.run_probability(category='repeat',operation=operation,n=n,p=p,k=k,lower=k,upper=k+2)
+                        self.assertTrue(result['ok'],result)
+                        self.assertEqual(float(result['value']),float(expected))
+                        self.assertEqual(Fraction(result['fraction']),expected)
+        self.assertAlmostEqual(self.value(category='repeat',operation='atLeast',n=10,p='20%',k=3),0.3222004736,places=14)
+        self.assertFalse(self.run_probability(category='repeat',operation='between',n=10,p='.2',lower=4,upper=3)['ok'])
+        self.assertFalse(self.run_probability(category='repeat',operation='atLeast',n=10,p='.2',k='1.5')['ok'])
+        tail=self.value(category='repeat',operation='atLeast',n=100000,p='1e-30',k=1)
+        self.assertAlmostEqual(tail/1e-25,1,places=13)
+
+    def test_bayes_specificity_matches_false_positive_rate(self):
+        for op in ('posterior','negative'):
+            expected=self.value(category='bayes',operation=op,prior='1%',likelihood='99%',falsePositive='5%')
+            self.assertEqual(self.value(category='bayes',operation=op+'Specificity',prior='1%',likelihood='99%',specificity='95%'),expected)
+        self.assertFalse(self.run_probability(category='bayes',operation='posteriorSpecificity',prior='.1',likelihood='.9',specificity='101%')['ok'])
+
+    def test_plot_quantiles_and_nonexistent_moments(self):
+        for distribution,params in [('lognormal',dict(mu=0,sigma=3)),('gamma',dict(shape='.2',scale=5)),('weibull',dict(shape='.3',scale=2)),('binomial',dict(n=100000,p='.5')),('poisson',dict(rate=100000)),('t',dict(df=1)),('f',dict(df1=1,df2=1))]:
+            result=self.run_probability(distribution=distribution,x=1,**params)
+            self.assertTrue(result['ok'],result)
+            points=result['plot']['points']
+            self.assertTrue(1<len(points)<=162)
+            self.assertTrue(all(all(math.isfinite(v) for v in p[:2]) for p in points))
+            for index,q in [(0,'.001'),(-1,'.999')]:
+                bound=self.value(distribution=distribution,operation='quantile',q=q,**params)
+                self.assertAlmostEqual(points[index][0]/bound,1,places=12)
+        for kind,params,mean,variance in [('t',dict(df=1),'undefined','undefined'),('t',dict(df=2),'0.0','∞'),('t',dict(df=3),'0.0','3.0'),('f',dict(df1=5,df2=2),'∞','undefined'),('f',dict(df1=5,df2=4),'2.0','∞')]:
+            result=self.run_probability(distribution=kind,x=1,**params)
+            details={d['label']:d['value'] for d in result['details']}
+            self.assertEqual(details['E[X]'],mean)
+            self.assertEqual(details['Var[X]'],variance)
+            if variance in ('undefined','∞'): self.assertEqual(details['SD[X]'],variance)
+            else: self.assertAlmostEqual(float(details['SD[X]']),math.sqrt(float(variance)),places=14)
+        discrete=self.run_probability(distribution='binomial',operation='quantile',n=10,p='.2',q='.95')
+        self.assertIn('≥',discrete['formula']);self.assertNotIn(' = ',discrete['formula'])
+
+    def test_catalog_distributions_match_probability_mode(self):
+        def evaluate(name,*args):
+            tree={'kind':'call','value':name,'args':[{'kind':'number','value':str(arg)} for arg in args]}
+            return json.loads(calc_engine.dispatch(json.dumps({'tree':tree})))
+        for name,args,params in [('hgeom',(50,10,5),dict(distribution='hypergeometric',population=50,successes=10,draws=5)),('nbinom',(3,.25),dict(distribution='negativeBinomial',r=3,p='.25'))]:
+            for k in (-1,0,1,2,2.5,6):
+                for suffix,operation in [('pdf','eq'),('cdf','le')]:
+                    result=evaluate(name+suffix,*args,k)
+                    self.assertTrue(result['ok'],result)
+                    self.assertAlmostEqual(float(result['decimal']),self.value(operation=operation,x=k,**params),places=14)
+        for x in (-1,0,.5,2):
+            for suffix,operation in [('pdf','density'),('cdf','le')]:
+                result=evaluate('weibull'+suffix,x,2,3)
+                self.assertTrue(result['ok'],result)
+                self.assertAlmostEqual(float(result['decimal']),self.value(distribution='weibull',operation=operation,x=x,shape=2,scale=3),places=14)
+        self.assertEqual(evaluate('hgeompdf',10,2,2,2)['exact'],'1/45')
+        self.assertEqual(evaluate('nbinompdf',3,.5,2)['exact'],'3/16')
+        for name,args in [('hgeomcdf',(10,11,2,1)),('hgeompdf',(10,2,2.5,1)),('nbinompdf',(0,.5,1)),('nbinomcdf',(3,0,1)),('weibullpdf',(1,0,1)),('weibullcdf',(1,2,0))]:
+            self.assertFalse(evaluate(name,*args)['ok'])
+        result=evaluate('nbinomcdf',3,.25,300)
+        self.assertTrue(result['ok'],result)
+        self.assertAlmostEqual(float(result['decimal']),self.value(distribution='negativeBinomial',r=3,p='.25',x=300),places=14)
+        result=evaluate('nbinompdf',1,.25,300)
+        self.assertTrue(result['ok'],result)
+        self.assertAlmostEqual(float(result['decimal'])/(.25*.75**300),1,places=13)
+        self.assertEqual(evaluate('nbinompdf',3,1,0)['exact'],'1')
+        self.assertEqual(evaluate('weibullpdf',0,1,3)['exact'],'1/3')
+
+    def test_preview_numerical_limits_do_not_discard_a_valid_answer(self):
+        result=self.run_probability(distribution='f',df1=1,df2='.001',x=1)
+        self.assertTrue(result['ok'],result)
+        self.assertTrue(0<float(result['value'])<1)
+        self.assertNotIn('plot',result)
 
 
 if __name__ == "__main__":unittest.main()

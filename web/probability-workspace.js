@@ -51,6 +51,7 @@ export function createProbabilityWorkspace({state,engine,persist,requestOptions}
     $('probability-number-hint').hidden=['basic','dice','draw','counting'].includes(category())||value('probability-operation')==='conditionalCounts';
     const source=selectedOperation().hint?selectedOperation():category()==='distribution'?distribution():tool();
     $('probability-hint').textContent=getLanguage()==='ko'?source.hintKo:source.hint;
+    document.querySelector('[data-run="probability"]').textContent=t(category()==='normalSolver'?'Calculate parameter':'Calculate probability');
     renderExamples();
   }
   function renderExamples(){
@@ -82,7 +83,7 @@ export function createProbabilityWorkspace({state,engine,persist,requestOptions}
     if(result.isProbability)target.append(element('div',probabilityNumber(result.percent.replace(/%$/,''),state.digits)+'%','probability-percent'));
     if(result.details?.length){
       const row=element('div','','probability-details');
-      for(const detail of result.details)row.append(element('span',`${t(detail.label)}  ${displayNumber(detail.value,state.digits)}`));
+      for(const detail of result.details)row.append(element('span',`${t(detail.label)}  ${t(probabilityNumber(detail.value,state.digits))}`));
       target.append(row);
     }
     if(result.note)target.append(element('p',t(result.note),'hint'));
@@ -106,6 +107,8 @@ export function createProbabilityWorkspace({state,engine,persist,requestOptions}
     }
     for(const [px,anchor] of [[first,'start'],[last,'end']]){const n=add('text',{x:x(px),y:142,fill:'var(--muted)','font-size':11,'text-anchor':anchor});n.textContent=displayNumber(px,3);}
     target.append(svg,element('p',t(plot.event===false?'Mass / density preview':'Preview · shaded region is the selected event'),'hint'));
+    if(plot.range)target.append(element('p',t('Range · 0.1%–99.9% quantiles'),'hint'));
+    if(plot.sampled)target.append(element('p',t('Preview samples integer masses; some counts are omitted.'),'hint'));
   }
   async function run(){
     persist();const draft=request();invalidate();const version=revision;

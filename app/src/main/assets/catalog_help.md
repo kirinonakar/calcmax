@@ -491,6 +491,19 @@ Example: lognormpdf(1)
 `lognormcdf(x,μ,σ)` — Log-normal cumulative probability P(X ≤ x).
 Example: lognormcdf(1)
 
+`hgeompdf(N,K,n,k)` — Hypergeometric probability mass. Use integers N ≤ 10000 and 0 ≤ K,n ≤ N.
+Example: hgeompdf(10,2,2,2)
+`hgeomcdf(N,K,n,k)` — Cumulative probability of at most k successes in draws without replacement.
+Example: hgeomcdf(10,2,2,1)
+`nbinompdf(r,p,k)` — Mass for k failures before the r-th success. Failures start at 0; total trials = k+r. Use 1 ≤ r ≤ 100000 and 0 < p ≤ 1.
+Example: nbinompdf(3,0.5,2)
+`nbinomcdf(r,p,k)` — Cumulative probability of at most k failures before the r-th success.
+Example: nbinomcdf(3,0.5,2)
+`weibullpdf(x,k,λ)` — Weibull density with positive shape k and scale λ (default 1). λ is a scale, not a rate.
+Example: weibullpdf(3,2,3)
+`weibullcdf(x,k,λ)` — Weibull cumulative probability P(X ≤ x).
+Example: weibullcdf(3,2,3)
+
 ## Statistical tests
 
 `ttest(μ0,[...])` — One-sample t test of the sample mean against μ0.
@@ -554,3 +567,10 @@ Example: amort(0.005,200000,360)
 `cagr(start,end,n)` — Compound annual growth rate from a starting value to an ending value over n periods.
 Example: cagr(1000,2000,5)
 - TVM values follow the cash-flow convention: money received is positive and money paid is negative. Add begin as the last argument for payments at the beginning of each period; the default is end. Rates are per payment period.
+
+
+## Distribution functions matching Probability mode
+
+Discrete CDFs include integer masses up to the real threshold; discrete PDFs return 0 for nonintegers.
+
+Probability mode's **Normal parameter solver** finds μ or σ from P(X≤x)=q or P(X≥x)=q and the known parameter. Require 0<q<1 and positive σ. When q=0.5 and x=μ, σ is not uniquely determined.

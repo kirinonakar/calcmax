@@ -144,6 +144,64 @@ test('probability controls run all eight user examples through actual WASM',asyn
       assert.equal(check.ok,true,check.error);assert.ok(Math.abs(Number(check.value)-0.5)<1e-14,distribution);
     }
   });
+  await t.test('independent trial bounds preserve counts and run the requested event',async()=>{
+    select('probability-category','repeat');
+    edit('probability-repeat-n','10');edit('probability-repeat-p','20%');
+    chooseOperation('atLeast');edit('probability-repeat-k','3');await workspace.run();
+    assert.equal(latest.ok,true,latest.error);assert.equal(Number(latest.value),0.3222004736);
+    assert.match($('probability-result').textContent,/Var\[X\]/);
+    chooseOperation('atMost');assert.equal($('probability-repeat-k').value,'3');await workspace.run();
+    assert.equal(Number(latest.value),0.8791261184);
+    chooseOperation('between');assert.equal($('probability-repeat-k'),null);
+    edit('probability-repeat-lower','2');edit('probability-repeat-upper','4');
+    assert.equal('k' in workspace.request().values,false);await workspace.run();
+    assert.equal(Number(latest.value),0.591396864);
+    chooseOperation('atLeast');assert.equal($('probability-repeat-k').value,'3');
+  });
+  await t.test('normal solver shows only the known parameter and survives reload and localization',async()=>{
+    select('probability-category','normalSolver');
+    assert.equal($('probability-normalSolver-mu'),null);
+    edit('probability-normalSolver-sigma','10');edit('probability-normalSolver-x','80');edit('probability-normalSolver-q','95%');
+    await workspace.run();assert.equal(latest.ok,true,latest.error);
+    assert.ok(Math.abs(Number(latest.value)-63.5514637304853)<1e-12);
+    assert.equal($('probability-result').querySelector('.probability-percent'),null);
+    assert.equal(document.querySelector('[data-run="probability"]').textContent,'Calculate parameter');
+    chooseOperation('sigmaLe');assert.equal($('probability-normalSolver-sigma'),null);
+    edit('probability-normalSolver-mu','63.5514637304853');await workspace.run();
+    assert.ok(Math.abs(Number(latest.value)-10)<1e-12);
+    chooseOperation('muGe');edit('probability-normalSolver-q','5%');await workspace.run();
+    assert.ok(Math.abs(Number(latest.value)-63.5514637304853)<1e-12);
+    const restored=createProbabilityWorkspace({state,engine,persist,requestOptions:()=>({precision:30})});
+    assert.equal(restored.request().operation,'muGe');assert.equal(restored.request().values.q,'5%');
+    chooseOperation('sigmaLe');edit('probability-normalSolver-q','0.5');edit('probability-normalSolver-mu','80');
+    setLanguage('ko');restored.render();await restored.run();
+    assert.match($('probability-error').textContent,/하나로 정해지지/);
+    assert.equal(document.querySelector('[data-run="probability"]').textContent,'모수 계산');
+    setLanguage('en');restored.render();
+  });
+  await t.test('Bayes accepts specificity and plots include quantile ranges and missing moments',async()=>{
+    select('probability-category','bayes');chooseOperation('posteriorSpecificity');
+    assert.equal($('probability-bayes-falsePositive'),null);
+    await workspace.run();assert.equal(latest.ok,true,latest.error);assert.ok(Math.abs(Number(latest.value)-1/6)<1e-14);
+    chooseOperation('posterior');assert.equal($('probability-bayes-specificity'),null);
+    await workspace.run();assert.ok(Math.abs(Number(latest.value)-1/6)<1e-14);
+    select('probability-category','distribution');select('probability-distribution','t');edit('probability-t-df','1');await workspace.run();
+    assert.equal(latest.ok,true,latest.error);assert.match($('probability-result').textContent,/undefined/);
+    assert.equal($('probability-plot').hidden,false);assert.match($('probability-plot').textContent,/0.1%–99.9%/);
+    setLanguage('ko');workspace.render();assert.match($('probability-result').textContent,/정의되지 않음/);setLanguage('en');workspace.render();
+    select('probability-distribution','poisson');edit('probability-poisson-rate','100000');await workspace.run();
+    assert.equal(latest.ok,true,latest.error);assert.equal($('probability-plot').hidden,false);
+    assert.match($('probability-plot').textContent,/some counts are omitted/);
+    chooseOperation('quantile');await workspace.run();assert.match(latest.formula,/≥/);assert.doesNotMatch(latest.formula,/ = /);
+  });
+  await t.test('new Catalog expressions evaluate through actual WASM',async()=>{
+    const catalog=JSON.parse(readFileSync(new URL('../catalog.json',import.meta.url),'utf8'));
+    for(const [name,args,expected] of [['hgeompdf',[10,2,2,2],1/45],['hgeomcdf',[10,2,2,1],44/45],['nbinompdf',[3,.5,2],3/16],['nbinomcdf',[3,.5,2],.5],['weibullpdf',[3,2,3],2/(3*Math.E)],['weibullcdf',[3,2,3],1-1/Math.E]]){
+      assert.ok(catalog.Distributions.some(entry=>entry.startsWith(name+'(')));
+      const result=await engine.execute({tree:{kind:'call',value:name,args:args.map(value=>({kind:'number',value:String(value)}))}});
+      assert.equal(result.ok,true,result.error);assert.ok(Math.abs(Number(result.decimal)-expected)<1e-14,name);
+    }
+  });
 });
 
 test('a response from before an input edit never replaces the new draft',async t=>{

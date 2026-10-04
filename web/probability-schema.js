@@ -21,6 +21,11 @@ export const probabilitySchema = {
       "ko": "확률 분포"
     },
     {
+      "id": "normalSolver",
+      "label": "Normal parameter solver",
+      "ko": "정규 분포 모수 역산"
+    },
+    {
       "id": "counting",
       "label": "Permutations & combinations",
       "ko": "순열 · 조합"
@@ -440,8 +445,8 @@ export const probabilitySchema = {
     },
     {
       "id": "quantile",
-      "label": "Quantile · P(X ≤ x) = q",
-      "ko": "분위수 · P(X ≤ x) = q",
+      "label": "Quantile · inverse CDF",
+      "ko": "분위수 · 역누적분포",
       "fields": [
         [
           "q",
@@ -694,16 +699,66 @@ export const probabilitySchema = {
     },
     {
       "id": "bayes",
-      "hint": "Update a prior after observing evidence. For a test, use sensitivity and false positive rate (1 − specificity).",
-      "hintKo": "관측된 증거로 사전확률을 갱신합니다. 검사라면 민감도와 위양성률(1 − 특이도)을 입력하세요.",
+      "hint": "Update a prior using sensitivity and either false positive rate or specificity. B is a positive result; Bᶜ is a negative result.",
+      "hintKo": "민감도와 위양성률 또는 특이도로 사전확률을 갱신합니다. B는 양성, Bᶜ는 음성 결과입니다.",
       "operations": [
         {
           "id": "posterior",
-          "label": "P(A | B)"
+          "label": "P(A | B) · FPR"
         },
         {
           "id": "negative",
-          "label": "P(A | Bᶜ)"
+          "label": "P(A | Bᶜ) · FPR"
+        },
+        {
+          "id": "posteriorSpecificity",
+          "label": "P(A | B) · specificity",
+          "ko": "P(A | B) · 특이도",
+          "fields": [
+            [
+              "prior",
+              "Prior P(A)",
+              "사전확률 P(A)",
+              "1%"
+            ],
+            [
+              "likelihood",
+              "P(B | A) · sensitivity",
+              "P(B | A) · 민감도",
+              "99%"
+            ],
+            [
+              "specificity",
+              "P(Bᶜ | Aᶜ) · specificity",
+              "P(Bᶜ | Aᶜ) · 특이도",
+              "95%"
+            ]
+          ]
+        },
+        {
+          "id": "negativeSpecificity",
+          "label": "P(A | Bᶜ) · specificity",
+          "ko": "P(A | Bᶜ) · 특이도",
+          "fields": [
+            [
+              "prior",
+              "Prior P(A)",
+              "사전확률 P(A)",
+              "1%"
+            ],
+            [
+              "likelihood",
+              "P(B | A) · sensitivity",
+              "P(B | A) · 민감도",
+              "99%"
+            ],
+            [
+              "specificity",
+              "P(Bᶜ | Aᶜ) · specificity",
+              "P(Bᶜ | Aᶜ) · 특이도",
+              "95%"
+            ]
+          ]
         }
       ],
       "fields": [
@@ -751,6 +806,47 @@ export const probabilitySchema = {
           "id": "exactly",
           "label": "Exactly k successes",
           "ko": "정확히 k번 성공"
+        },
+        {
+          "id": "atLeast",
+          "label": "At least k successes",
+          "ko": "k번 이상 성공"
+        },
+        {
+          "id": "atMost",
+          "label": "At most k successes",
+          "ko": "k번 이하 성공"
+        },
+        {
+          "id": "between",
+          "label": "a–b successes",
+          "ko": "a~b번 성공",
+          "fields": [
+            [
+              "n",
+              "Trials n",
+              "시행 횟수 n",
+              "10"
+            ],
+            [
+              "p",
+              "Success probability p",
+              "성공 확률 p",
+              "10%"
+            ],
+            [
+              "lower",
+              "Minimum successes a",
+              "최소 성공 횟수 a",
+              "2"
+            ],
+            [
+              "upper",
+              "Maximum successes b",
+              "최대 성공 횟수 b",
+              "4"
+            ]
+          ]
         }
       ],
       "fields": [
@@ -772,6 +868,109 @@ export const probabilitySchema = {
           "성공 횟수 k",
           "2"
         ]
+      ]
+    },
+    {
+      "id": "normalSolver",
+      "hint": "Solve one parameter from a left or right tail probability. Enter the other parameter, x and 0 < q < 1; σ must be positive.",
+      "hintKo": "왼쪽 또는 오른쪽 꼬리확률로 모수를 역산합니다. 알려진 모수와 x, 0 < q < 1을 입력하세요. σ는 양수여야 합니다.",
+      "operations": [
+        {
+          "id": "muLe",
+          "label": "μ · P(X ≤ x) = q",
+          "fields": [
+            [
+              "sigma",
+              "Known standard deviation σ",
+              "알려진 표준편차 σ",
+              "10"
+            ],
+            [
+              "x",
+              "Threshold x",
+              "기준값 x",
+              "80"
+            ],
+            [
+              "q",
+              "Probability q",
+              "확률 q",
+              "0.95"
+            ]
+          ]
+        },
+        {
+          "id": "muGe",
+          "label": "μ · P(X ≥ x) = q",
+          "fields": [
+            [
+              "sigma",
+              "Known standard deviation σ",
+              "알려진 표준편차 σ",
+              "10"
+            ],
+            [
+              "x",
+              "Threshold x",
+              "기준값 x",
+              "80"
+            ],
+            [
+              "q",
+              "Probability q",
+              "확률 q",
+              "0.05"
+            ]
+          ]
+        },
+        {
+          "id": "sigmaLe",
+          "label": "σ · P(X ≤ x) = q",
+          "fields": [
+            [
+              "mu",
+              "Known mean μ",
+              "알려진 평균 μ",
+              "60"
+            ],
+            [
+              "x",
+              "Threshold x",
+              "기준값 x",
+              "80"
+            ],
+            [
+              "q",
+              "Probability q",
+              "확률 q",
+              "0.95"
+            ]
+          ]
+        },
+        {
+          "id": "sigmaGe",
+          "label": "σ · P(X ≥ x) = q",
+          "fields": [
+            [
+              "mu",
+              "Known mean μ",
+              "알려진 평균 μ",
+              "60"
+            ],
+            [
+              "x",
+              "Threshold x",
+              "기준값 x",
+              "80"
+            ],
+            [
+              "q",
+              "Probability q",
+              "확률 q",
+              "0.05"
+            ]
+          ]
+        }
       ]
     }
   ],

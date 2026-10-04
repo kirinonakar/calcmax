@@ -93,7 +93,7 @@ private fun probabilityNumber(text:String,digits:Int):String=runCatching {
             update {it.put("distribution",selected.getString("id")).remove("operation")}
         }
         // Wrap operators to keep every choice visible on phone screens.
-        val operationRows=operations.chunked(3)
+        val operationRows=operations.chunked(if(category in listOf("normalSolver","bayes"))2 else 3)
         val operationMinimumSize=if(operationRows.size>1)0.dp else LocalMinimumInteractiveComponentSize.current
         CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides operationMinimumSize) {
             Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(2.dp)) {
@@ -123,7 +123,7 @@ private fun probabilityNumber(text:String,digits:Int):String=runCatching {
                 focus.clearFocus();keyboard?.hide()
                 val values=JSONObject();fields.forEach {field->values.put(field.getString(0),input(field))}
                 m.calculateProbability(JSONObject().put("category",category).put("distribution",distribution.getString("id")).put("operation",operation.getString("id")).put("independent",draft.optBoolean("independent")).put("values",values))
-            },enabled=!m.busy,modifier=Modifier.testTag("probability-calculate")){Text(tr("Calculate probability"))}
+            },enabled=!m.busy,modifier=Modifier.testTag("probability-calculate")){Text(tr(if(category=="normalSolver")"Calculate parameter" else "Calculate probability"))}
             if(m.busy)TextButton(onClick={m.cancel()}){Text(tr("Cancel"))}
             else TextButton(onClick={update {next->val values=JSONObject(savedValues.toString());fields.forEach {values.remove("$prefix-${it.getString(0)}")};next.put("values",values)}}){Text(tr("Reset inputs"))}
         }
@@ -142,7 +142,7 @@ private fun probabilityNumber(text:String,digits:Int):String=runCatching {
                 if('/' in fraction)Text(fraction,fontSize=23.sp,fontWeight=FontWeight.SemiBold)
                 Text(probabilityNumber(result.optString("value"),m.displayDigits),fontSize=30.sp,fontWeight=FontWeight.Bold)
                 if(result.optBoolean("isProbability"))Text(probabilityNumber(result.optString("percent").removeSuffix("%"),m.displayDigits)+"%",fontSize=20.sp,color=c.accent)
-                result.optJSONArray("details")?.objects()?.forEach {detail->Text(tr(detail.getString("label"))+"  "+probabilityNumber(detail.getString("value"),m.displayDigits),fontSize=12.sp,color=c.muted)}
+                result.optJSONArray("details")?.objects()?.forEach {detail->Text(tr(detail.getString("label"))+"  "+tr(probabilityNumber(detail.getString("value"),m.displayDigits)),fontSize=12.sp,color=c.muted)}
                 if(result.optString("note").isNotBlank())Text(tr(result.getString("note")),fontSize=11.sp,color=c.muted)
             }
             result.optJSONObject("plot")?.let {ProbabilityPlot(it,m.displayDigits)}
@@ -185,5 +185,7 @@ private fun probabilityNumber(text:String,digits:Int):String=runCatching {
         }
     }
     Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween){Text(probabilityNumber(min.toString(),minOf(digits,3)),fontSize=10.sp,color=c.muted);Text(probabilityNumber(max.toString(),minOf(digits,3)),fontSize=10.sp,color=c.muted)}
+    if(plot.has("range"))Text(tr("Range · 0.1%–99.9% quantiles"),fontSize=10.sp,color=c.muted)
+    if(plot.optBoolean("sampled"))Text(tr("Preview samples integer masses; some counts are omitted."),fontSize=10.sp,color=c.muted)
     Text(tr(if(plot.optBoolean("event",true))"Preview · shaded region is the selected event" else "Mass / density preview"),fontSize=10.sp,color=c.muted)
 }

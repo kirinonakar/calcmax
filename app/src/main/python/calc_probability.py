@@ -8,7 +8,7 @@ import math
 import re
 import mpmath
 from fractions import Fraction
-from calc_shared import require
+from calc_shared import MathError, require
 
 DECIMAL = r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?"
 NUMBER = re.compile(rf"{DECIMAL}(?:\s*/\s*{DECIMAL})?\Z")
@@ -73,12 +73,26 @@ def probability(request):
         require(0 <= value <= 1, "Probabilities must be between 0 and 1" + f" ({key})")
         return value
 
+    def normal_z(q):
+        # Invert erfc on the smaller tail, including q much smaller than mp.eps.
+        if q == mp.mpf('0.5'): return mp.mpf(0)
+        tail = min(q,1-q)
+        left, right = mp.mpf(0), mp.mpf(1)
+        while mp.erfc(right/mp.sqrt(2))/2 > tail: right *= 2
+        for _ in range(mp.prec+8):
+            middle = (left+right)/2
+            if mp.erfc(middle/mp.sqrt(2))/2 > tail: left = middle
+            else: right = middle
+        return (left+right)/2 * (1 if q > mp.mpf('0.5') else -1)
+
     def positive(key):
         value = number(key)
         require(value > 0, "This parameter must be greater than zero" + f" ({key})")
         return value
 
     def shown(value):
+        if value is None:
+            return "undefined"
         if isinstance(value, int):
             return str(value)
         if mp.isinf(value):
@@ -196,14 +210,16 @@ def probability(request):
         if independent:
             note = "Independent events: P(A ∩ B) = P(A) × P(B)."
     elif category == "bayes":
-        prior, likelihood, false_positive = chance("prior"), chance("likelihood"), chance("falsePositive")
-        require(operation in ("posterior", "negative"), "Unsupported probability operation")
-        if operation == "negative":
+        prior, likelihood = chance("prior"), chance("likelihood")
+        require(operation in ("posterior", "negative", "posteriorSpecificity", "negativeSpecificity"), "Unsupported probability operation")
+        false_positive = 1-chance("specificity") if operation.endswith("Specificity") else chance("falsePositive")
+        negative = operation.startswith("negative")
+        if negative:
             likelihood, false_positive = 1-likelihood, 1-false_positive
         evidence = prior*likelihood + (1-prior)*false_positive
         require(evidence > 0, "Conditioning event has zero probability")
         value = prior*likelihood/evidence
-        event = "Bᶜ" if operation == "negative" else "B"
+        event = "Bᶜ" if negative else "B"
         formula = f"P(A | {event}) = P(A)P({event} | A) / P({event})"
         details = [(f"P({event})", evidence), (f"P(A ∩ {event})", prior*likelihood)]
     elif category == "repeat":
@@ -219,13 +235,55 @@ def probability(request):
             k = integer("k")
             require(k <= n, "Success count must not exceed trial count")
             value, formula = mp.binomial(n,k)*p**k*(1-p)**(n-k), f"P(X = {k}) = C({n}, {k}) p^{k} (1 − p)^{n-k}"
+        elif operation in ("atLeast", "atMost", "between"):
+            # Reuse the same direct-tail binomial engine and inclusive bounds.
+            values = {"n": raw["n"], "p": raw["p"]}
+            if operation == "between":
+                lower, upper = integer("lower"), integer("upper")
+                require(lower <= upper, "Lower bound must not exceed upper bound")
+                values.update(lower=str(lower), upper=str(upper))
+            else:
+                k = integer("k")
+                values["x"] = str(k)
+            result = probability({**request, "category":"distribution", "distribution":"binomial",
+                                  "operation":{"atLeast":"ge", "atMost":"le", "between":"between"}[operation],
+                                  "values":values, "preview":False})
+            result["note"] = "Trials are independent with the same success probability."
+            if n <= 200:
+                fp = rational("p")
+                start, end = (k,n) if operation == "atLeast" else (0,min(k,n)) if operation == "atMost" else (lower,min(upper,n))
+                fraction = sum((math.comb(n,i)*fp**i*(1-fp)**(n-i) for i in range(start,end+1)), Fraction(0))
+                if fraction.numerator.bit_length() < 650 and fraction.denominator.bit_length() < 650:
+                    result["fraction"] = str(fraction)
+            return result
         else:
             require(False, "Unsupported probability operation")
-        details = [("E[X]", n*p), ("SD[X]", mp.sqrt(n*p*(1-p)))]
+        details = [("E[X]", n*p), ("Var[X]", n*p*(1-p)), ("SD[X]", mp.sqrt(n*p*(1-p)))]
         note = "Trials are independent with the same success probability."
         if n <= 200:
             fp = rational("p")
             exact = 1-(1-fp)**n if operation == "atLeastOne" else fp**n if operation == "all" else (1-fp)**n if operation == "none" else math.comb(n,k)*fp**k*(1-fp)**(n-k)
+    elif category == "normalSolver":
+        require(operation in ("muLe", "muGe", "sigmaLe", "sigmaGe"), "Unsupported probability operation")
+        x, q = number("x"), chance("q")
+        require(0 < q < 1, "Normal solver requires 0 < q < 1")
+        z = normal_z(q)
+        if operation.endswith("Ge"): z = -z
+        if operation.startswith("mu"):
+            sigma = positive("sigma")
+            mu = value = x-sigma*z
+            note = "μ = x − σz, where z is the standard normal quantile."
+        else:
+            mu = number("mu")
+            if z == 0:
+                require(False, "σ is not uniquely determined when q = 0.5 and x = μ" if x == mu else "No positive σ satisfies these inputs")
+            sigma = value = (x-mu)/z
+            require(sigma > 0, "No positive σ satisfies these inputs")
+            note = "σ = (x − μ) / z, where z is the standard normal quantile."
+        symbol = "≥" if operation.endswith("Ge") else "≤"
+        formula = f"{'μ' if operation.startswith('mu') else 'σ'} · P(X {symbol} {shown(x)}) = {shown(q)}"
+        details = [("μ",mu),("σ",sigma),("z",z)]
+        is_probability = False
     elif category == "distribution":
         kind = request.get("distribution", "normal")
         discrete = kind in ("binomial", "poisson", "geometric", "negativeBinomial", "hypergeometric")
@@ -331,7 +389,8 @@ def probability(request):
                 return shape/scale*(x/scale)**(shape-1)*mp.exp(-(x/scale)**shape)
         elif kind == "t":
             df = positive("df")
-            mean, variance = (mp.mpf(0) if df > 1 else None), (df/(df-2) if df > 2 else None)
+            mean = mp.mpf(0) if df > 1 else None
+            variance = df/(df-2) if df > 2 else mp.inf if df > 1 else None
             def tail(x):
                 return beta_cdf(df/2,mp.mpf('0.5'),df/(df+x*x))/2
             cdf = lambda x: tail(x) if x < 0 else 1-tail(x)
@@ -349,8 +408,8 @@ def probability(request):
         elif kind == "f":
             d1, d2 = positive("df1"), positive("df2")
             lo = 0
-            mean = d2/(d2-2) if d2 > 2 else None
-            variance = 2*d2*d2*(d1+d2-2)/(d1*(d2-2)**2*(d2-4)) if d2 > 4 else None
+            mean = d2/(d2-2) if d2 > 2 else mp.inf
+            variance = 2*d2*d2*(d1+d2-2)/(d1*(d2-2)**2*(d2-4)) if d2 > 4 else mp.inf if d2 > 2 else None
             cdf = lambda x: beta_cdf(d1/2,d2/2,d1*x/(d1*x+d2))
             sf = lambda x: beta_cdf(d2/2,d1/2,d2/(d1*x+d2))
             def pdf(x):
@@ -380,15 +439,20 @@ def probability(request):
             if lo == hi: return mp.mpf(1)
             return original_pdf(x)
 
-        if operation == "quantile":
-            q = chance("q")
+        def quantile(q):
             def reached(x): return sf(x) <= 1-q if q > mp.mpf('0.5') else cdf(x) >= q
             if q == 0 or q == 1 or lo == hi:
                 value = lo if q == 0 else hi
-            elif kind in ("gamma", "beta", "lognormal", "weibull"):
+            elif kind in ("normal", "lognormal"):
+                z = normal_z(q)
+                value = mu+sigma*z if kind == "normal" else mp.exp(mu+sigma*z)
+            elif kind == "uniform": value = lo+(hi-lo)*q
+            elif kind == "exponential": value = -mp.log1p(-q)/rate
+            elif kind == "weibull": value = scale*(-mp.log1p(-q))**(1/shape)
+            elif kind in ("gamma", "beta"):
                 # Search log(X) so tiny scales and very skewed distributions do
                 # not lose all significant digits in a fixed linear bisection.
-                center = mu if kind == "lognormal" else mp.log(mean)
+                center = mp.log(mean)
                 limit = mp.log(hi) if mp.isfinite(hi) else mp.inf
                 step = mp.mpf(1)
                 left, right = center-step, min(limit,center+step)
@@ -405,7 +469,7 @@ def probability(request):
             else:
                 # Monotone search uses the smaller tail and preserves discrete quantiles.
                 left = lo if mp.isfinite(lo) else -1
-                right = hi if mp.isfinite(hi) else max(1,mean or 1)
+                right = hi if mp.isfinite(hi) else (max(1,mean) if mean is not None and mp.isfinite(mean) else mp.mpf(1))
                 for _ in range(512):
                     if not reached(left) or mp.isfinite(lo): break
                     left *= 2
@@ -427,7 +491,12 @@ def probability(request):
                         if reached(middle): right = middle
                         else: left = middle
                     value = (left+right)/2
-            formula = f"P(X ≤ x) = {shown(q)}"
+            return value
+
+        if operation == "quantile":
+            q = chance("q")
+            value = quantile(q)
+            formula = f"min {{x ∈ support : P(X ≤ x) ≥ {shown(q)}}}" if discrete else f"P(X ≤ x) = {shown(q)}"
             is_probability = False
             note = "Smallest supported integer with P(X ≤ x) ≥ q." if discrete else "Inverse cumulative probability."
         elif operation == "between":
@@ -450,35 +519,47 @@ def probability(request):
             elif operation == "ge": value, formula = sf(mp.ceil(x)-1 if discrete else x), f"P(X ≥ {shown(x)})"
             elif operation == "gt": value, formula = sf(x), f"P(X > {shown(x)})"
             else: require(False, "Unsupported probability operation")
-        if mean is not None: details.append(("E[X]",mean))
-        if variance is not None: details.append(("SD[X]",mp.sqrt(variance)))
+        details.extend([("E[X]",mean),("Var[X]",variance),("SD[X]",mp.sqrt(variance) if variance is not None else None)])
         if kind == "negativeBinomial" and note != distribution_note: note = distribution_note + " " + note
         if kind == "binomial" and operation == "eq" and n <= 200 and mp.isfinite(x) and x == mp.floor(x) and 0 <= x <= n:
             fp, k = rational("p"), int(x)
             exact = math.comb(n,k)*fp**k*(1-fp)**(n-k)
-        # A bounded preview of the mass/density, independent of the calculation's range.
-        # Omit singular boundary points and distributions without finite variance.
-        if mean is not None and variance is not None and variance > 0:
-            scale = mp.sqrt(variance)
-            plot_lo, plot_hi = max(lo,mean-4*scale), min(hi,mean+4*scale)
-            if discrete:
-                start, end = int(mp.ceil(plot_lo)), int(mp.floor(plot_hi))
-                xs = list(range(start,end+1)) if end-start <= 80 else []
-            else:
-                xs = [plot_lo+(plot_hi-plot_lo)*i/80 for i in range(81)]
-            points = []
-            for x in xs:
-                y = pdf(x)
-                if not mp.isfinite(y): continue
-                selected = False
-                if operation == "between": selected = lower <= x <= upper
-                elif operation == "quantile": selected = x <= value
-                elif operation in ("le","lt","ge","gt","eq"):
-                    threshold = number("x",True)
-                    selected = {"le":x<=threshold,"lt":x<threshold,"ge":x>=threshold,"gt":x>threshold,"eq":x==threshold}[operation]
-                xf, yf = float(x), float(y)
-                if math.isfinite(xf) and math.isfinite(yf): points.append([xf,yf,selected])
-            if len(points) > 1: plot = {"discrete":discrete,"points":points,"event":operation!="density"}
+        # Quantile bounds remain useful with skew, infinite moments and large counts.
+        # Preview precision is independent of the requested answer precision.
+        if request.get("preview", True) and lo != hi:
+            try:
+                with mp.workdps(18):
+                    plot_lo, plot_hi = quantile(mp.mpf('0.001')), quantile(mp.mpf('0.999'))
+                if discrete:
+                    start, end = int(plot_lo), int(plot_hi)
+                    # Sample integer masses rather than dropping wide distributions.
+                    xs = sorted(set(start+(end-start)*i//80 for i in range(81)))
+                    if operation == "eq":
+                        threshold = number("x",True)
+                        if mp.isfinite(threshold) and threshold == mp.floor(threshold) and start <= threshold <= end:
+                            xs = sorted(set(xs+[int(threshold)]))
+                else:
+                    xs = [plot_lo+(plot_hi-plot_lo)*i/80 for i in range(81)]
+                    # Extra log-spaced samples resolve peaks in right-skewed densities.
+                    if kind in ("gamma", "beta", "lognormal", "weibull", "f") and plot_lo > 0 and plot_hi > plot_lo:
+                        xs = sorted(set(xs+[mp.exp(mp.log(plot_lo)+(mp.log(plot_hi)-mp.log(plot_lo))*i/80) for i in range(81)]))
+                points = []
+                for x in xs:
+                    y = pdf(x)
+                    if not mp.isfinite(y): continue
+                    selected = False
+                    if operation == "between": selected = lower <= x <= upper
+                    elif operation == "quantile": selected = x <= value
+                    elif operation in ("le","lt","ge","gt","eq"):
+                        threshold = number("x",True)
+                        selected = {"le":x<=threshold,"lt":x<threshold,"ge":x>=threshold,"gt":x>threshold,"eq":x==threshold}[operation]
+                    xf, yf = float(x), float(y)
+                    if math.isfinite(xf) and math.isfinite(yf): points.append([xf,yf,selected])
+                if len(points) > 1: plot = {"discrete":discrete,"points":points,"event":operation!="density",
+                                                  "sampled":discrete and end-start > 80,"range":"0.1%–99.9%"}
+            except (MathError, ArithmeticError, ValueError):
+                # A preview outside numerical/float range must not discard a valid answer.
+                plot = None
     else:
         require(False, "Unsupported probability category")
 

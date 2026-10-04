@@ -633,7 +633,7 @@ class Engine:
         if name in ("normpdf", "normcdf", "invnorm", "tpdf", "tcdf", "invt", "chi2pdf", "chi2cdf", "fpdf", "fcdf",
                     "binompdf", "binomcdf", "poissonpdf", "poissoncdf", "geometpdf", "geometcdf",
                     "exppdf", "expcdf", "unifpdf", "unifcdf", "gammapdf", "gammacdf", "betapdf", "betacdf",
-                    "lognormpdf", "lognormcdf"):
+                    "lognormpdf", "lognormcdf", "hgeompdf", "hgeomcdf", "nbinompdf", "nbinomcdf", "weibullpdf", "weibullcdf"):
             return distribution_value(self, name, a)
         if name in ("ttest", "ttest2", "ttestpaired", "ztest", "ztest2", "chi2test", "chi2independence", "fisherexact", "anova", "tukey", "shapiro", "tinterval", "zinterval"):
             return statistical_test(self, name, a, nodes)

@@ -190,7 +190,7 @@ private val LocalCalculatorOverlay=staticCompositionLocalOf<(String)->Unit> { {}
         val compactInput=remember(entry.input) {input==null||entry.source.length>800||largeHistoryTree(input)}
         val compactResult=remember(entry.result,m.decimal) {
             response==null||entry.result.length>20_000||
-                largeHistoryTree(response.optJSONObject(if(m.decimal)"decimalTree" else "tree"))
+                !safeHistoryResponse(response)
         }
         Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).clickable {m.reuse(entry)}
             .semantics {contentDescription="Reuse calculation: ${entry.source.take(120)}"}) {
@@ -209,17 +209,7 @@ private val LocalCalculatorOverlay=staticCompositionLocalOf<(String)->Unit> { {}
 }
 
 internal fun largeHistoryTree(root:JSONObject?):Boolean {
-    if(root==null)return false
-    val pending=ArrayDeque<JSONObject>()
-    pending.add(root)
-    var count=0
-    while(pending.isNotEmpty()) {
-        val node=pending.removeLast()
-        if(++count>120)return true
-        val args=node.optJSONArray("args")
-        for(index in 0 until (args?.length() ?: 0))args?.optJSONObject(index)?.let(pending::add)
-    }
-    return false
+    return root!=null&&!safeHistoryTree(root)
 }
 
 @Composable fun Display(m:CalculatorModel,screenExpanded:Boolean=false,onToggleScreen:(()->Unit)?=null,requestInitialFocus:Boolean=true) {

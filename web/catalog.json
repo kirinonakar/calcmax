@@ -243,7 +243,13 @@
     "betapdf(,,)",
     "betacdf(,,)",
     "lognormpdf(,,)",
-    "lognormcdf(,,)"
+    "lognormcdf(,,)",
+    "hgeompdf(50,10,5,)",
+    "hgeomcdf(50,10,5,)",
+    "nbinompdf(3,0.25,)",
+    "nbinomcdf(3,0.25,)",
+    "weibullpdf(,2,1)",
+    "weibullcdf(,2,1)"
   ],
   "Tests & intervals": [
     "ttest(,[])",

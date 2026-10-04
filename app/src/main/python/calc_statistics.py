@@ -369,6 +369,57 @@ def distribution_value(engine, name, a):
         require(k.is_Integer and 1 <= k <= 10**6, "geomet k must be a positive integer")
         if name == "geometpdf": return (1 - p)**(int(k) - 1)*p
         return 1 - (1 - p)**int(k)
+    if name in ("nbinompdf", "nbinomcdf"):
+        require(len(a) == 3, name + " takes required successes r, probability p and failures k")
+        r, p, k = a
+        require(r.is_Integer and 1 <= r <= 100000, "nbinom r must be an integer from 1 to 100000")
+        require(getattr(p, "is_number", False) and p.is_real and 0 < p <= 1, "nbinom p must be a probability above 0")
+        _real_or_infinite(k, name + " requires a real count")
+        engine.note = "Negative binomial X counts failures before the r-th success (starting at 0). Total trials = X + r."
+        if k < 0 or name == "nbinompdf" and (k in (s.oo,-s.oo) or not k.is_Integer): return s.Integer(0)
+        if name == "nbinomcdf" and k == s.oo: return s.Integer(1)
+        if p == 1: return s.Integer(1 if name == "nbinomcdf" or k == 0 else 0)
+        count = int(s.floor(k))
+        if count <= 200 and r <= 200:
+            if name == "nbinompdf": return s.binomial(count+r-1,count)*p**r*(1-p)**count
+            return s.Add(*[s.binomial(i+r-1,i)*p**r*(1-p)**i for i in range(count+1)])
+        from calc_probability import probability
+        result = probability(dict(distribution="negativeBinomial", operation="eq" if name == "nbinompdf" else "le", precision=digits, preview=False,
+                                  values={"r":str(r),"p":str(s.N(p,digits+10)),"x":str(count)}))
+        return s.Float(result["value"], digits)
+    if name in ("hgeompdf", "hgeomcdf"):
+        require(len(a) == 4, name + " takes population N, success items K, draws n and count k")
+        population, successes, draws, k = a
+        require(all(v.is_Integer for v in (population,successes,draws)) and 1 <= population <= 10000 and 0 <= successes <= population and 0 <= draws <= population,
+                "hgeom requires 1 ≤ N ≤ 10000 and integer 0 ≤ K, n ≤ N")
+        _real_or_infinite(k, name + " requires a real count")
+        lo, hi = max(0,draws-(population-successes)), min(draws,successes)
+        if k < lo: return s.Integer(0)
+        if name == "hgeomcdf" and k >= hi: return s.Integer(1)
+        if name == "hgeompdf" and (k > hi or not k.is_Integer): return s.Integer(0)
+        denominator = math.comb(int(population),int(draws))
+        def mass(i): return math.comb(int(successes),i)*math.comb(int(population-successes),int(draws)-i)
+        if name == "hgeompdf": numerator = mass(int(k))
+        else:
+            count = int(s.floor(k))
+            numerator = sum(mass(i) for i in range(int(lo),count+1)) if count-lo <= hi-count else denominator-sum(mass(i) for i in range(count+1,int(hi)+1))
+        return s.Rational(numerator,denominator)
+    if name in ("weibullpdf", "weibullcdf"):
+        require(len(a) in (2,3), name + " takes x and shape k, with an optional scale λ")
+        x, shape = a[:2]
+        scale = a[2] if len(a) == 3 else s.Integer(1)
+        _real_or_infinite(x, name + " requires a real bound")
+        _positive(shape, "The shape must be positive")
+        _positive(scale, "The scale must be positive")
+        require(shape.is_finite and scale.is_finite, "Weibull parameters must be finite")
+        if x < 0: return s.Integer(0)
+        if x == s.oo: return s.Integer(1 if name == "weibullcdf" else 0)
+        if x == 0:
+            if name == "weibullcdf" or shape > 1: return s.Integer(0)
+            return 1/scale if shape == 1 else s.oo
+        power = (x/scale)**shape
+        if name == "weibullcdf": return 1-s.exp(-power)
+        return shape/scale*(x/scale)**(shape-1)*s.exp(-power)
     if name in ("exppdf", "expcdf"):
         require(len(a) in (1, 2), name + " takes x, or x with the rate λ")
         x, rate = (a[0], s.Integer(1)) if len(a) == 1 else a
