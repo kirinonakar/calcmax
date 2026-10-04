@@ -178,6 +178,12 @@ export function latexInput(input) {
       }
       return text.slice(start,i);
     }
+    function logOperand(raw) {
+      let converted=body(raw);
+      // The call's comma/closing parenthesis already delimits each operand.
+      while (parse(converted).kind==='group') converted=converted.slice(1,-1);
+      return converted;
+    }
     while (i < text.length) {
       const c = text[i++];
       if (c !== '\\') { result += c === '{' ? '(' : c === '}' ? ')' : c; continue; }
@@ -195,10 +201,10 @@ export function latexInput(input) {
       else if (command === 'log') {
         skipSpacing();
         let base=null;
-        if (text[i]==='_') {i++;base=body(argument(true));skipSpacing();}
+        if (text[i]==='_') {i++;base=logOperand(argument(true));skipSpacing();}
         // Keep the calculator's existing explicit log(value,base) syntax.
         if (base===null && (text[i]==='(' || text.startsWith('\\left',i))) result+='log';
-        else result+=`log(${body(argument())}${base===null?'':`,${base}`})`;
+        else result+=`log(${logOperand(argument())}${base===null?'':`,${base}`})`;
       }
       else if (['sin','cos','tan','arcsin','arccos','arctan','ln','exp'].includes(command)) {
         const name={arcsin:'asin',arccos:'acos',arctan:'atan'}[command]||command;

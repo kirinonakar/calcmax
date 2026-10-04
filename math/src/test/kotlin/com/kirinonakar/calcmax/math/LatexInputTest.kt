@@ -48,7 +48,7 @@ class LatexInputTest {
         val body="a = 2 \\log \\frac{1}{\\sqrt{10}} + \\log_2 20 "
         for(source in listOf(body,"$$${body}$$","$${body}$","\\[$body\\]","\\($body\\)")) {
             val converted=LatexInput.convert(source)
-            assertEquals("a=2log(((1)/(sqrt(10))))+log(20,2)",converted)
+            assertEquals("a=2log((1)/(sqrt(10)))+log(20,2)",converted)
             val tree=Parser(converted!!).parse()
             assertEquals("relation",tree.kind)
             assertEquals(listOf("a"),tree.nodes().filter {it.kind=="symbol"}.map {it.value})
@@ -58,10 +58,10 @@ class LatexInputTest {
             assertEquals(listOf("20","2"),basedLog.args.map {it.value})
         }
         for((source,expected) in listOf(
-            "\\log_{10}{100}" to "log((100),(10))",
-            "\\log_2 \\left(20\\right)" to "log((20),2)",
-            "\\log_2 \\frac{1}{\\sqrt{10}}" to "log(((1)/(sqrt(10))),2)",
-            "\\log_{\\sqrt{2}} 4" to "log(4,(sqrt(2)))",
+            "\\log_{10}{100}" to "log(100,10)",
+            "\\log_2 \\left(20\\right)" to "log(20,2)",
+            "\\log_2 \\frac{1}{\\sqrt{10}}" to "log((1)/(sqrt(10)),2)",
+            "\\log_{\\sqrt{2}} 4" to "log(4,sqrt(2))",
             "\\log_2 x^2+1" to "log(x^2,2)+1",
             "\\log_2 \\log_3 9" to "log(log(9,3),2)",
             "\\log\\,100" to "log(100)",
@@ -70,6 +70,20 @@ class LatexInputTest {
         for(source in listOf("\\log_", "\\log_2", "\\log_{} 20", "\\log_2 +20", "\\log_{2 20")) {
             assertNull(source,LatexInput.convert(source))
         }
+    }
+
+    @Test fun logarithmEquationRemovesOperandFencesAndPreservesArgumentPowers() {
+        val body="\\log_{2}(x-3) = \\log_{4}(3x-5)"
+        for(source in listOf(body,"$$${body}$$","$${body}$","\\[$body\\]","\\($body\\)")) {
+            val converted=LatexInput.convert(source)
+            assertEquals("log(x-3,2)=log(3x-5,4)",converted)
+            val tree=Parser(converted!!).parse()
+            assertEquals("relation",tree.kind)
+            assertEquals(listOf(listOf("binary","number"),listOf("binary","number")),tree.args.map {log->log.args.map {it.kind}})
+        }
+        assertEquals("log(x-3,2)=log(3x-5,4)",LatexInput.convert("\\log_{2}\\left(x-3\\right)=\\log_{4}{3x-5}"))
+        assertEquals("log((x-3)^2,2)",LatexInput.convert("\\log_{2}(x-3)^2"))
+        assertEquals("log(x-3,1+1)",LatexInput.convert("\\log_{1+1}((x-3))"))
     }
 
     @Test fun fractionPaste() {

@@ -151,7 +151,7 @@ for(const keyboard of [false,true])test(`LaTeX based logarithm paste reaches eva
   const event=new dom.window.Event('paste',{bubbles:true,cancelable:true});
   Object.defineProperty(event,'clipboardData',{value:{getData:()=>String.raw`$$a = 2 \log \frac{1}{\sqrt{10}} + \log_2 20 $$`}});
   (keyboard?$('expression'):document.body).dispatchEvent(event);
-  const converted='a=2log(((1)/(sqrt(10))))+log(20,2)';
+  const converted='a=2log((1)/(sqrt(10)))+log(20,2)';
   assert.equal(event.defaultPrevented,true);
   assert.equal($('expression').value,converted);
   assert.equal($('expression').selectionStart,converted.length);
@@ -159,6 +159,20 @@ for(const keyboard of [false,true])test(`LaTeX based logarithm paste reaches eva
   await calculator.evaluate();
   assert.deepEqual(engine.execute.mock.calls[0].arguments[0].tree,parse(converted.slice(2)));
   assert.deepEqual(state.variables.a,parse('21'));
+  $('undo').click();
+  assert.equal($('expression').value,'12+34');
+});
+
+for(const keyboard of [false,true])test(`LaTeX shifted logarithm equation paste renders without extra fences in ${keyboard?'keyboard':'math'} input`,t=>{
+  const {$,dom}=calculatorPage(t,'12+34');
+  if(keyboard)$('typing-toggle').click();
+  const event=new dom.window.Event('paste',{bubbles:true,cancelable:true});
+  Object.defineProperty(event,'clipboardData',{value:{getData:()=>String.raw`$$\log_{2}(x-3) = \log_{4}(3x-5)$$`}});
+  (keyboard?$('expression'):document.body).dispatchEvent(event);
+  assert.equal(event.defaultPrevented,true);
+  assert.equal($('expression').value,'log(x-3,2)=log(3x-5,4)');
+  assert.equal($('expression').selectionStart,$('expression').value.length);
+  assert.equal($('expression-preview').querySelectorAll('msub').length,2);
   $('undo').click();
   assert.equal($('expression').value,'12+34');
 });

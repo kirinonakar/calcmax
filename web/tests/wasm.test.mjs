@@ -56,6 +56,14 @@ test('actual CPython WASM reuses the Android engine across workspaces',async()=>
   assert.ok(Math.abs(Number(logResult.decimal)-Math.log2(10))<1e-10);
   assert.equal(evaluate(latexInput(String.raw`\log_2 8`)).exact,'3');
   assert.equal(evaluate(latexInput(String.raw`\log 100`)).exact,'2');
+  const shiftedLogEquation=latexInput(String.raw`$$\log_{2}(x-3) = \log_{4}(3x-5)$$`);
+  for(const assumptions of [{},{x:['real']},{x:['positive']},{x:['integer']}]) {
+    const result=evaluate(`solve(${shiftedLogEquation},x)`,{assumptions,variables:{x:parse('99')}});
+    assert.equal(result.exact,'{7}');
+    assert.equal(result.note,'');
+    assert.equal(result.tree.kind,'set');
+    assert.equal(evaluate('Ans',{variables:{Ans:result.resultAst}}).exact,'{7}');
+  }
   assert.equal(evaluate('0.1+0.2').exact,'3/10');
   assert.equal(evaluate('-2^2').exact,'-4');
   assert.equal(evaluate('sin(30)',{angle:'DEG'}).exact,'1/2');

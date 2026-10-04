@@ -77,7 +77,7 @@ test('LaTeX logarithms keep the base and argument separate',()=>{
   const body=String.raw`a = 2 \log \frac{1}{\sqrt{10}} + \log_2 20 `;
   for(const source of [body,`$$${body}$$`,`$${body}$`,String.raw`\[${body}\]`,String.raw`\(${body}\)`]) {
     const converted=latexInput(source);
-    assert.equal(converted,'a=2log(((1)/(sqrt(10))))+log(20,2)');
+    assert.equal(converted,'a=2log((1)/(sqrt(10)))+log(20,2)');
     const tree=parse(converted);
     assert.equal(tree.kind,'relation');
     assert.equal(tree.args[0].value,'a');
@@ -87,10 +87,10 @@ test('LaTeX logarithms keep the base and argument separate',()=>{
     assert.deepEqual(basedLog.args.map(node=>node.value),['20','2']);
   }
   for(const [source,expected] of [
-    [String.raw`\log_{10}{100}`,'log((100),(10))'],
-    [String.raw`\log_2 \left(20\right)`,'log((20),2)'],
-    [String.raw`\log_2 \frac{1}{\sqrt{10}}`,'log(((1)/(sqrt(10))),2)'],
-    [String.raw`\log_{\sqrt{2}} 4`,'log(4,(sqrt(2)))'],
+    [String.raw`\log_{10}{100}`,'log(100,10)'],
+    [String.raw`\log_2 \left(20\right)`,'log(20,2)'],
+    [String.raw`\log_2 \frac{1}{\sqrt{10}}`,'log((1)/(sqrt(10)),2)'],
+    [String.raw`\log_{\sqrt{2}} 4`,'log(4,sqrt(2))'],
     [String.raw`\log_2 x^2+1`,'log(x^2,2)+1'],
     [String.raw`\log_2 \log_3 9`,'log(log(9,3),2)'],
     [String.raw`\log\,100`,'log(100)'],
@@ -99,6 +99,20 @@ test('LaTeX logarithms keep the base and argument separate',()=>{
   for(const source of [String.raw`\log_`,String.raw`\log_2`,String.raw`\log_{} 20`,String.raw`\log_2 +20`,String.raw`\log_{2 20`]) {
     assert.throws(()=>latexInput(source),SyntaxError,source);
   }
+});
+
+test('LaTeX logarithm equations remove operand fences and preserve argument powers',()=>{
+  const body=String.raw`\log_{2}(x-3) = \log_{4}(3x-5)`;
+  for(const source of [body,`$$${body}$$`,`$${body}$`,String.raw`\[${body}\]`,String.raw`\(${body}\)`]) {
+    const converted=latexInput(source);
+    assert.equal(converted,'log(x-3,2)=log(3x-5,4)');
+    const tree=parse(converted);
+    assert.equal(tree.kind,'relation');
+    assert.deepEqual(tree.args.map(log=>log.args.map(arg=>arg.kind)),[['binary','number'],['binary','number']]);
+  }
+  assert.equal(latexInput(String.raw`\log_{2}\left(x-3\right)=\log_{4}{3x-5}`),'log(x-3,2)=log(3x-5,4)');
+  assert.equal(latexInput(String.raw`\log_{2}(x-3)^2`),'log((x-3)^2,2)');
+  assert.equal(latexInput(String.raw`\log_{1+1}((x-3))`),'log(x-3,1+1)');
 });
 
 test('LaTeX indexed roots and fractional powers accept every supported math delimiter',()=>{

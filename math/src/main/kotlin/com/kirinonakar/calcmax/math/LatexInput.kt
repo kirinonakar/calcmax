@@ -90,14 +90,14 @@ object LatexInput {
                     val base=if(source.getOrNull(index)=='_') {
                         val (value,next)=argument(source,index+1,singleToken=true)
                         index=skipSpacing(source,next)
-                        convertBody(value)
+                        logOperand(value)
                     } else null
                     // Keep the calculator's existing explicit log(value,base) syntax.
                     if(base==null && (source.getOrNull(index)=='(' || source.startsWith("\\left",index))) {
                         append("log")
                     } else {
                         val (value,next)=argument(source,index)
-                        append("log(").append(convertBody(value))
+                        append("log(").append(logOperand(value))
                         if(base!=null)append(',').append(base)
                         append(')')
                         index=next
@@ -127,6 +127,13 @@ object LatexInput {
             }
         }
     }.replace(Regex("""\s+"""), "")
+
+    private fun logOperand(source:String):String {
+        var converted=convertBody(source)
+        // The call's comma/closing parenthesis already delimits each operand.
+        while(Parser(converted).parse().kind=="group")converted=converted.substring(1,converted.length-1)
+        return converted
+    }
 
     private fun skipSpacing(source:String,from:Int):Int {
         var index=from

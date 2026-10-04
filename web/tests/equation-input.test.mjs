@@ -3,6 +3,11 @@ import assert from 'node:assert/strict';
 import {parse,latexInput} from '../parser.js';
 import {equationCommand} from '../workspace-commands.js';
 
+test('equation workspace keeps logarithm arguments and bases free of extra fences',()=>{
+  const source=String.raw`$$\log_{2}(x-3) = \log_{4}(3x-5)$$`;
+  assert.equal(equationCommand({source,variable:'x'}),'solve(log(x-3,2)=log(3x-5,4),x)');
+});
+
 test('equation workspace converts LaTeX before adding the solver call',()=>{
   const body=String.raw`\int _{-2}^{a} f(x) dx = \int _{-2}^{0} f(x) dx`;
   for(const source of [body,`$$${body}$$`,`$${body}$`,String.raw`\[${body}\]`,String.raw`\(${body}\)`]) {

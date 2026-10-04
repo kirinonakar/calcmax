@@ -482,9 +482,33 @@ class Engine:
             elif var.is_negative: domain=domain.intersect(s.Interval.open(-s.oo,0))
             if var.is_nonzero: domain=domain-s.FiniteSet(0)
             result = s.solveset(expr,var,domain=domain)
+            # solveset can leave even algebraic logarithm equations unresolved.
+            # solve has a separate logarithm strategy; accept its finite roots
+            # only when substitution into the original equation is conclusive.
+            expanded = s.expand_log(expr) if result.has(s.ConditionSet) and expr.has(s.log) else expr
+            functions = sorted((f for f in expanded.atoms(s.Function) if f.has(var)),key=s.default_sort_key)
+            coefficients = [expanded.coeff(f) for f in functions]
+            remainder = expanded - s.Add(*(coefficient*f for coefficient,f in zip(coefficients,functions)))
+            # Rational multiples of logarithms of rational functions have a
+            # finite algebraic candidate equation. Avoid treating general
+            # transcendental equations (log(x)=x, for example) as finite sets.
+            finite_log_equation = (functions and all(f.func == s.log and f.args[0].is_rational_function(var) for f in functions)
+                                   and not remainder.has(var) and all(not coefficient.has(var) for coefficient in coefficients)
+                                   and coefficients[0] != 0 and all(s.simplify(coefficient/coefficients[0]).is_Rational for coefficient in coefficients))
+            if result.has(s.ConditionSet) and finite_log_equation:
+                try:
+                    candidate_variable = s.Dummy("log_solution")
+                    candidates = s.solve(expr.xreplace({var:candidate_variable}),candidate_variable)
+                except (NotImplementedError, ValueError):
+                    candidates = []
+                if candidates:
+                    checks = [s.checksol(expr,var,root) for root in candidates]
+                    membership = [domain.contains(root) for root in candidates]
+                    if all(check is not None for check in checks) and all(inside in (s.true,s.false) for inside in membership):
+                        result = s.FiniteSet(*(root for root,check,inside in zip(candidates,checks,membership) if check and inside == s.true))
             if isinstance(result,s.FiniteSet):
                 result=s.FiniteSet(*(root for root in result if all(condition.subs(var,root)!=s.false for condition in self.conditions)))
-            if isinstance(result,s.ConditionSet): self.note = "Symbolic solution not found. Try nsolve with a bracket."
+            if result.has(s.ConditionSet): self.note = "Symbolic solution not found. Try nsolve with a bracket."
             return result
         if name == "nsolve":
             expr = a[0].lhs-a[0].rhs if isinstance(a[0],s.Equality) else a[0]
