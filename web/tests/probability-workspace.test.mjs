@@ -59,6 +59,63 @@ test('probability controls run all user examples through actual WASM',async t=>{
     const op=operations.find(op=>op.id===id);
     [...$('probability-operations').children].find(button=>button.textContent===(getLanguage()==='ko'?(op.ko||op.label):op.label)).click();
   };
+  await t.test('event inputs follow the target and accept selected conditional probabilities',async()=>{
+    select('probability-category','events');
+    const tool=schema.tools.find(tool=>tool.id==='events');
+    const expected={intersection:.2,union:.7,conditional:.4,reverse:.5,onlyA:.2,neither:.3};
+    for(const op of tool.operations.filter(op=>op.inputs)){
+      chooseOperation(op.id);
+      assert.deepEqual(Object.keys(workspace.request().values),op.inputs);
+      assert.equal($(`probability-events-${op.id}`),null);
+      for(const dropdown of $('probability-fields').querySelectorAll('select')){
+        assert.ok(![...dropdown.options].some(option=>option.value===op.id));
+      }
+      await workspace.run();assert.equal(latest.ok,true,latest.error);
+      assert.ok(Math.abs(Number(latest.value)-expected[op.id])<1e-14);
+    }
+    chooseOperation('intersection');
+    edit('probability-events-pb','50%');edit('probability-events-conditional','1/3');
+    await workspace.run();assert.equal(latest.fraction,'1/6');
+    select('probability-events-conditional-kind','reverse');
+    assert.equal($('probability-result').hidden,true);
+    select('probability-events-pb-kind','pa');
+    edit('probability-events-pa','2/5');edit('probability-events-reverse','1/2');
+    assert.deepEqual(workspace.request().values,{pa:'2/5',reverse:'1/2'});
+    await workspace.run();assert.equal(latest.fraction,'1/5');
+    // Input kinds persist independently for each target, including a recreated workspace.
+    chooseOperation('neither');chooseOperation('intersection');
+    assert.deepEqual(Object.keys(workspace.request().values),['pa','reverse']);
+    const restored=createProbabilityWorkspace({state,engine,persist,requestOptions:()=>({precision:30})});
+    assert.deepEqual(restored.request().values,{pa:'2/5',reverse:'1/2'});
+    $('probability-add-given').click();
+    assert.deepEqual(Object.keys(workspace.request().values),['pa','reverse','pb']);
+    edit('probability-events-pb','1/2');await workspace.run();assert.equal(latest.fraction,'1/5');
+    $('probability-add-given').click();
+    assert.ok('union' in workspace.request().values);
+    edit('probability-events-union','0.6');await workspace.run();
+    assert.equal(latest.ok,false);assert.match(latest.error,/inconsistent/);
+    const unionField=$('probability-events-union').parentElement;
+    unionField.querySelector('button').click();
+    assert.ok(!('union' in workspace.request().values));
+    assert.equal($('probability-error').hidden,true);
+    // Removing the intersection-bearing constraint leaves two insufficient marginals.
+    $('probability-events-reverse').parentElement.querySelector('button').click();
+    await workspace.run();assert.equal(latest.ok,false);assert.match(latest.error,/unique answer/);
+    setLanguage('ko');workspace.render();await workspace.run();
+    assert.match($('probability-error').textContent,/필요한 확률을 추가/);
+    assert.equal($('probability-add-given').textContent,'주어진 확률 추가');
+    setLanguage('en');workspace.render();
+    $('probability-independent').checked=true;
+    $('probability-independent').dispatchEvent(new dom.window.Event('change'));
+    assert.deepEqual(Object.keys(workspace.request().values),['pa','pb']);
+    assert.equal($('probability-fields').querySelector('select'),null);
+    await workspace.run();assert.equal(latest.fraction,'1/5');
+    $('probability-independent').checked=false;
+    $('probability-independent').dispatchEvent(new dom.window.Event('change'));
+    chooseOperation('conditionalCounts');
+    assert.deepEqual(Object.keys(workspace.request().values),['jointCount','conditionCount']);
+    assert.equal($('probability-independent-label').hidden,true);
+  });
   await t.test('new distributions expose the proper fields and run every operation in WASM',async()=>{
     select('probability-category','distribution');
     for(const id of ['gamma','beta','lognormal','negativeBinomial','weibull','cauchy']){

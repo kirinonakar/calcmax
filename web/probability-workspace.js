@@ -21,7 +21,18 @@ export function createProbabilityWorkspace({state,engine,persist,requestOptions}
   const tool=()=>schema.tools.find(d=>d.id===category());
   const operations=()=>category()==='distribution'?schema.operations.filter(op=>(!op.discrete||distribution().discrete)&&(!op.continuous||!distribution().discrete)):tool().operations;
   const selectedOperation=()=>operations().find(op=>op.id===value('probability-operation'));
-  const fields=()=>category()==='distribution'?[...distribution().fields,...selectedOperation().fields]:(selectedOperation().fields||tool().fields).filter(f=>f[0]!=='k'||['exactly','atLeast','atMost'].includes(value('probability-operation')));
+  const eventMode=()=>category()==='events'&&value('probability-operation')!=='conditionalCounts';
+  const eventInputKey=()=>`probability-events-inputs-${value('probability-operation')}`;
+  const eventChoices=()=>tool().fields.filter(f=>f[0]!==value('probability-operation'));
+  function eventInputs(){
+    let saved;try{saved=JSON.parse(state.fields[eventInputKey()]);}catch{}
+    const allowed=new Set(eventChoices().map(f=>f[0]));
+    const keys=Array.isArray(saved)?[...new Set(saved.filter(key=>allowed.has(key)))]:[];
+    return keys.length?keys:selectedOperation().inputs;
+  }
+  function changeEventInputs(keys){state.fields[eventInputKey()]=JSON.stringify(keys);activeExample='';invalidate();renderForm();persist();}
+  const fields=()=>eventMode()?($('probability-independent').checked?['pa','pb']:eventInputs()).map(key=>tool().fields.find(f=>f[0]===key)):
+    category()==='distribution'?[...distribution().fields,...selectedOperation().fields]:(selectedOperation().fields||tool().fields).filter(f=>f[0]!=='k'||['exactly','atLeast','atMost'].includes(value('probability-operation')));
   const fieldId=key=>`probability-${category()==='distribution'?distribution().id:category()}-${key}`;
   function invalidate(){revision++;lastResult=null;$('probability-result').hidden=true;$('probability-plot').hidden=true;$('probability-error').hidden=true;}
   function fillSelect(id,items,fallback){
@@ -39,14 +50,28 @@ export function createProbabilityWorkspace({state,engine,persist,requestOptions}
       button.setAttribute('aria-pressed',String(op.id===value('probability-operation')));return button;
     }));
     const inputs=fields().map(field=>{
-      const id=fieldId(field[0]),wrapper=element('label'),name=element('span',fieldLabel(field)),input=element('input');
+      const editableKind=eventMode()&&!$('probability-independent').checked;
+      const id=fieldId(field[0]),wrapper=element(editableKind?'div':'label','','probability-field'),name=element('span',fieldLabel(field)),input=element('input');
       input.id=id;input.type='text';input.inputMode='decimal';input.autocomplete='off';input.value=state.fields[id]??field[3];
+      input.setAttribute('aria-label',fieldLabel(field));
       input.addEventListener('input',()=>{state.fields[id]=input.value;activeExample='';invalidate();persist();renderExamples();});
       input.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();if(engine.ready&&!engine.pending)void run();}});
-      input.disabled=category()==='events'&&field[0]==='intersection'&&$('probability-independent').checked;
-      wrapper.append(name,input);return wrapper;
+      if(editableKind){
+        const keys=eventInputs(),select=element('select');select.id=`${id}-kind`;select.setAttribute('aria-label',t('Given probability'));
+        for(const choice of eventChoices().filter(f=>f[0]===field[0]||!keys.includes(f[0]))){
+          const option=element('option',fieldLabel(choice));option.value=choice[0];select.append(option);
+        }
+        select.value=field[0];select.addEventListener('change',()=>changeEventInputs(keys.map(key=>key===field[0]?select.value:key)));
+        wrapper.append(select,input);
+        if(keys.length>1){const remove=control(t('Remove given probability'),()=>changeEventInputs(keys.filter(key=>key!==field[0])));remove.type='button';remove.setAttribute('aria-label',`${t('Remove given probability')} ${fieldLabel(field)}`);wrapper.append(remove);}
+      }else wrapper.append(name,input);
+      return wrapper;
     });
     $('probability-fields').replaceChildren(...inputs);
+    if(eventMode()&&!$('probability-independent').checked){
+      const next=eventChoices().find(f=>!eventInputs().includes(f[0]));
+      if(next){const add=control(t('Add given probability'),()=>changeEventInputs([...eventInputs(),next[0]]));add.id='probability-add-given';add.type='button';$('probability-fields').append(add);}
+    }
     $('probability-independent-label').hidden=category()!=='events'||value('probability-operation')==='conditionalCounts';
     $('probability-number-hint').hidden=['basic','dice','draw','counting'].includes(category())||value('probability-operation')==='conditionalCounts';
     const source=selectedOperation().hint?selectedOperation():category()==='distribution'?distribution():tool();

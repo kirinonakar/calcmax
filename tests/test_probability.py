@@ -73,6 +73,88 @@ class ProbabilityTests(unittest.TestCase):
         for request in requests:
             with self.subTest(request=request):self.assertFalse(self.run_probability(**request)["ok"])
 
+    def test_event_defaults_are_target_specific_and_never_require_the_answer(self):
+        tool=next(t for t in SCHEMA['tools'] if t['id']=='events')
+        defaults={field[0]:field[3] for field in tool['fields']}
+        expected={'intersection':.2,'union':.7,'conditional':.4,'reverse':.5,'onlyA':.2,'neither':.3}
+        for op in tool['operations']:
+            if op['id']=='conditionalCounts':continue
+            with self.subTest(operation=op['id']):
+                self.assertNotIn(op['id'],op['inputs'])
+                self.assertAlmostEqual(self.value(category='events',operation=op['id'],**{k:defaults[k] for k in op['inputs']}),expected[op['id']])
+
+    def test_events_accept_conditional_union_and_complement_inputs(self):
+        cases=[('intersection',dict(pb='1/2',conditional='2/5'),'1/5'),
+               ('intersection',dict(pa='40%',reverse='1/2'),'1/5'),
+               ('union',dict(pa='2/5',pb='1/2',conditional='2/5'),'7/10'),
+               ('conditional',dict(pa='2/5',pb='1/2',reverse='1/2'),'2/5'),
+               ('reverse',dict(pa='2/5',pb='1/2',conditional='2/5'),'1/2'),
+               ('onlyA',dict(pa='2/5',pb='1/2',union='7/10'),'1/5'),
+               ('neither',dict(union='7/10'),'3/10'),
+               ('union',dict(neither='3/10'),'7/10'),
+               ('intersection',dict(pa='2/5',pb='1/2',neither='3/10'),'1/5'),
+               ('conditional',dict(pb='1/2',onlyA='1/5',pa='2/5'),'2/5')]
+        from fractions import Fraction
+        for operation,values,expected in cases:
+            with self.subTest(operation=operation,values=values):
+                response=self.run_probability(category='events',operation=operation,**values)
+                self.assertTrue(response['ok'],response)
+                self.assertEqual(Fraction(response['fraction']),Fraction(expected))
+
+    def test_events_detect_ambiguity_conflicts_and_zero_conditioning_events(self):
+        cases=[('intersection',dict(pa='.4',pb='.5'),'unique answer'),
+               ('conditional',dict(pa='.4',pb='.5'),'unique answer'),
+               ('union',dict(pa='.4',pb='.5',intersection='.6'),'inconsistent'),
+               ('neither',dict(union='.7',neither='.2'),'inconsistent'),
+               ('union',dict(pa='0',pb='.5',reverse='.4'),'zero probability'),
+               ('conditional',dict(pb='0',intersection='0'),'zero probability'),
+               ('reverse',dict(pa='0',intersection='0'),'zero probability'),
+               ('intersection',dict(pa='.4',pb='.5',conditional='.4',reverse='.6'),'inconsistent')]
+        for operation,values,error in cases:
+            with self.subTest(operation=operation,values=values):
+                response=self.run_probability(category='events',operation=operation,**values)
+                self.assertFalse(response['ok'],response)
+                self.assertIn(error,response['error'])
+        # No absolute epsilon should merge distinct probabilities, even in tiny events.
+        response=self.run_probability(category='events',operation='intersection',pb='1e-60',conditional='1/3')
+        self.assertTrue(response['ok'],response)
+        self.assertEqual(response['fraction'],f'1/{3*10**60}')
+        self.assertFalse(self.run_probability(category='events',operation='union',pa='1e-60',intersection='2e-60')['ok'])
+        self.assertFalse(self.run_probability(category='events',operation='neither',union='1.000000000000000000000000000000000000000000000001')['ok'])
+
+    def test_event_input_combinations_agree_with_enumerated_venn_regions(self):
+        from fractions import Fraction
+        from calc_event_probability import solve_events
+        from calc_shared import MathError
+        for counts in [(2,2,3,3),(0,2,3,5),(10,0,0,0),(0,0,0,10)]:
+            joint,only_a,only_b,neither=[Fraction(n,10) for n in counts]
+            facts=dict(pa=joint+only_a,pb=joint+only_b,intersection=joint,
+                       union=1-neither,onlyA=only_a,neither=neither)
+            if facts['pb']:facts['conditional']=joint/facts['pb']
+            if facts['pa']:facts['reverse']=joint/facts['pa']
+            for target in ['intersection','union','conditional','reverse','onlyA','neither']:
+                if target not in facts:continue
+                available=[key for key in facts if key!=target]
+                for count in range(1,4):
+                    for keys in itertools.combinations(available,count):
+                        with self.subTest(counts=counts,target=target,keys=keys):
+                            try:answer=solve_events({key:facts[key] for key in keys},target)
+                            except MathError as error:
+                                self.assertIn('unique answer',str(error))
+                            else:self.assertEqual(answer,facts[target])
+
+    def test_events_handle_boundary_and_independent_probabilities(self):
+        self.assertEqual(self.value(category='events',operation='intersection',pa=0),0)
+        self.assertEqual(self.value(category='events',operation='intersection',pa=1,pb='.5'),.5)
+        self.assertEqual(self.value(category='events',operation='conditional',pb='.5',intersection=0),0)
+        self.assertEqual(self.value(category='events',operation='reverse',pa='.4',intersection='.4'),1)
+        # A zero conditional probability determines the intersection without marginals.
+        self.assertEqual(self.value(category='events',operation='intersection',conditional=0),0)
+        for op,expected in [('intersection',.2),('union',.7),('conditional',.4),('reverse',.5),('onlyA',.2),('neither',.3)]:
+            response=json.loads(calc_engine.dispatch(json.dumps(dict(action='probability',category='events',operation=op,independent=True,values=dict(pa='.4',pb='.5')))))
+            self.assertTrue(response['ok'],response)
+            self.assertAlmostEqual(float(response['value']),expected)
+
 
     def test_new_quantiles_preserve_accuracy_across_scales(self):
         for kind,params in [("gamma",dict(shape=2,scale="1e-60")),("gamma",dict(shape="0.1",scale="1e60")),

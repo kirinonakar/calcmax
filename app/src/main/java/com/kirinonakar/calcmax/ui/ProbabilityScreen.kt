@@ -56,12 +56,25 @@ private fun probabilityNumber(text:String,digits:Int):String=runCatching {
     val discrete=distribution.optBoolean("discrete")
     val operations=if(category=="distribution")schema.getJSONArray("operations").objects().filter {(!it.optBoolean("discrete")||discrete)&&(!it.optBoolean("continuous")||!discrete)} else definition.getJSONArray("operations").objects()
     val operation=operations.firstOrNull {it.getString("id")==draft.optString("operation")} ?: operations.first()
-    val fields=(if(category=="distribution")definition.getJSONArray("fields").fields()+operation.getJSONArray("fields").fields() else (operation.optJSONArray("fields") ?: definition.getJSONArray("fields")).fields())
+    val eventMode=category=="events"&&operation.getString("id")!="conditionalCounts"
+    val eventChoices=if(eventMode)definition.getJSONArray("fields").fields().filter {it.getString(0)!=operation.getString("id")} else emptyList()
+    val eventInputDraft=draft.optJSONObject("eventInputs")?.optJSONArray(operation.getString("id"))
+    val eventInputs=if(eventMode) {
+        val saved=eventInputDraft?.let {array->List(array.length()){array.optString(it)}.distinct().filter {key->eventChoices.any {it.getString(0)==key}}}.orEmpty()
+        saved.ifEmpty {val defaults=operation.getJSONArray("inputs");List(defaults.length()){defaults.getString(it)}}
+    } else emptyList()
+    val fields=(if(eventMode) {
+        val keys=if(draft.optBoolean("independent"))listOf("pa","pb") else eventInputs
+        keys.map {key->eventChoices.first {it.getString(0)==key}}
+    } else if(category=="distribution")definition.getJSONArray("fields").fields()+operation.getJSONArray("fields").fields() else (operation.optJSONArray("fields") ?: definition.getJSONArray("fields")).fields())
         .filter {it.getString(0)!="k"||operation.getString("id") in listOf("exactly","atLeast","atMost")}
     val prefix=if(category=="distribution")distribution.getString("id") else category
     val savedValues=draft.optJSONObject("values") ?: JSONObject()
     fun input(field:JSONArray)=savedValues.optString("$prefix-${field.getString(0)}",field.getString(3))
     fun update(change:(JSONObject)->Unit){m.updateProbabilityDraft(JSONObject(draft.toString()).apply {remove("example");change(this)})}
+    fun changeEventInputs(keys:List<String>)=update {next->
+        next.put("eventInputs",JSONObject(draft.optJSONObject("eventInputs")?.toString() ?: "{}").put(operation.getString("id"),JSONArray(keys)))
+    }
     val label:(JSONObject)->String={it.probabilityLabel(ko)}
     Panel("Probability","") {
         // Group presets so panel spacing and chip touch-target padding do not separate every row.
@@ -108,13 +121,24 @@ private fun probabilityNumber(text:String,digits:Int):String=runCatching {
             Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(10.dp)) {
                 row.forEach {field->
                     val key=field.getString(0)
-                    OutlinedTextField(input(field),onValueChange={text->update {next->next.put("values",JSONObject(savedValues.toString()).put("$prefix-$key",text))}},
-                        label={Text(field.getString(if(ko)2 else 1),fontSize=12.sp)},singleLine=true,
-                        enabled=!(category=="events"&&key=="intersection"&&draft.optBoolean("independent")),
-                        keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Text),
-                        modifier=Modifier.weight(1f).keepInputVisible().testTag("probability-input-$key"))
+                    Column(Modifier.weight(1f)) {
+                        if(eventMode&&!draft.optBoolean("independent")) {
+                            val choices=eventChoices.filter {it.getString(0)==key||it.getString(0) !in eventInputs}.map {JSONObject().put("id",it.getString(0)).put("label",it.getString(1)).put("ko",it.getString(2))}
+                            ProbabilitySelect(tr("Given probability"),choices,field.getString(if(ko)2 else 1),ko) {selected->
+                                changeEventInputs(eventInputs.map {if(it==key)selected.getString("id") else it})
+                            }
+                        }
+                        OutlinedTextField(input(field),onValueChange={text->update {next->next.put("values",JSONObject(savedValues.toString()).put("$prefix-$key",text))}},
+                            label={Text(field.getString(if(ko)2 else 1),fontSize=12.sp)},singleLine=true,
+                            keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Text),
+                            modifier=Modifier.fillMaxWidth().keepInputVisible().testTag("probability-input-$key"))
+                        if(eventMode&&!draft.optBoolean("independent")&&eventInputs.size>1)TextButton(onClick={changeEventInputs(eventInputs.filter {it!=key})}){Text(tr("Remove given probability"),fontSize=11.sp)}
+                    }
                 }
             }
+        }
+        if(eventMode&&!draft.optBoolean("independent"))eventChoices.firstOrNull {it.getString(0) !in eventInputs}?.let {next->
+            TextButton(onClick={changeEventInputs(eventInputs+next.getString(0))},modifier=Modifier.testTag("probability-add-given")){Text(tr("Add given probability"))}
         }
         if(category=="events"&&operation.getString("id")!="conditionalCounts")Row {Checkbox(draft.optBoolean("independent"),onCheckedChange={checked->update {it.put("independent",checked)}});Text(tr("Independent events"),Modifier.padding(top=12.dp),fontSize=13.sp)}
         Text((if(operation.has("hint"))operation else definition).optString(if(ko)"hintKo" else "hint"),color=c.muted,fontSize=11.sp)

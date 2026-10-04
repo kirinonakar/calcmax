@@ -648,8 +648,8 @@ export const probabilitySchema = {
     },
     {
       "id": "events",
-      "hint": "P(A), P(B), P(A ∩ B).",
-      "hintKo": "P(A), P(B), P(A ∩ B)를 입력하세요.",
+      "hint": "Choose the given probabilities. The probability being calculated is excluded from inputs.",
+      "hintKo": "주어진 확률을 선택하세요. 구하려는 확률은 입력값에서 제외됩니다.",
       "operations": [
         {
           "id": "conditionalCounts",
@@ -674,27 +674,51 @@ export const probabilitySchema = {
         },
         {
           "id": "intersection",
-          "label": "P(A ∩ B)"
+          "label": "P(A ∩ B)",
+          "inputs": [
+            "pb",
+            "conditional"
+          ]
         },
         {
           "id": "union",
-          "label": "P(A ∪ B)"
+          "label": "P(A ∪ B)",
+          "inputs": [
+            "pa",
+            "pb",
+            "intersection"
+          ]
         },
         {
           "id": "conditional",
-          "label": "P(A | B)"
+          "label": "P(A | B)",
+          "inputs": [
+            "pb",
+            "intersection"
+          ]
         },
         {
           "id": "reverse",
-          "label": "P(B | A)"
+          "label": "P(B | A)",
+          "inputs": [
+            "pa",
+            "intersection"
+          ]
         },
         {
           "id": "onlyA",
-          "label": "P(A ∩ Bᶜ)"
+          "label": "P(A ∩ Bᶜ)",
+          "inputs": [
+            "pa",
+            "intersection"
+          ]
         },
         {
           "id": "neither",
-          "label": "P(Aᶜ ∩ Bᶜ)"
+          "label": "P(Aᶜ ∩ Bᶜ)",
+          "inputs": [
+            "union"
+          ]
         }
       ],
       "fields": [
@@ -715,6 +739,36 @@ export const probabilitySchema = {
           "P(A ∩ B)",
           "P(A ∩ B)",
           "0.2"
+        ],
+        [
+          "union",
+          "P(A ∪ B)",
+          "P(A ∪ B)",
+          "0.7"
+        ],
+        [
+          "conditional",
+          "P(A | B)",
+          "P(A | B)",
+          "0.4"
+        ],
+        [
+          "reverse",
+          "P(B | A)",
+          "P(B | A)",
+          "0.5"
+        ],
+        [
+          "onlyA",
+          "P(A ∩ Bᶜ)",
+          "P(A ∩ Bᶜ)",
+          "0.2"
+        ],
+        [
+          "neither",
+          "P(Aᶜ ∩ Bᶜ)",
+          "P(Aᶜ ∩ Bᶜ)",
+          "0.3"
         ]
       ]
     },

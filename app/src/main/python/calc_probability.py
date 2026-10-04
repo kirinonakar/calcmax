@@ -186,29 +186,31 @@ def probability(request):
         exact, value = Fraction(joint,condition), mp.mpf(joint)/condition
         formula = f"P(A | B) = {joint} / {condition}"
     elif category == "events":
-        a, b = chance("pa"), chance("pb")
+        from calc_event_probability import solve_events, LABELS
         independent = request.get("independent") is True
-        ab = a*b if independent else chance("intersection")
-        fa, fb = rational("pa"), rational("pb")
-        fab = fa*fb if independent else rational("intersection")
-        require(max(0, fa+fb-1) <= fab <= min(fa, fb), "Intersection is inconsistent with P(A) and P(B)")
-        if operation == "conditional":
-            require(b > 0, "Conditioning event has zero probability")
-            value, formula = ab/b, "P(A | B) = P(A ∩ B) / P(B)"
-        elif operation == "reverse":
-            require(a > 0, "Conditioning event has zero probability")
-            value, formula = ab/a, "P(B | A) = P(A ∩ B) / P(A)"
-        else:
-            choices = {"intersection": (ab, "P(A ∩ B)"), "union": (a+b-ab, "P(A ∪ B) = P(A) + P(B) − P(A ∩ B)"),
-                       "onlyA": (a-ab, "P(A ∩ Bᶜ) = P(A) − P(A ∩ B)"), "neither": (1-a-b+ab, "P(Aᶜ ∩ Bᶜ) = 1 − P(A ∪ B)")}
-            require(operation in choices, "Unsupported probability operation")
-            value, formula = choices[operation]
-        details = [("P(A ∩ B)", ab), ("P(A ∪ B)", a+b-ab), ("P(Aᶜ ∩ Bᶜ)", 1-a-b+ab)]
-        exact = {"intersection":fab,"union":fa+fb-fab,"onlyA":fa-fab,"neither":1-fa-fb+fab}.get(operation)
-        if operation == "conditional": exact = fab/fb
-        if operation == "reverse": exact = fab/fa
+        known = {}
+        for key in raw:
+            require(key in LABELS, "Invalid probability inputs")
+            chance(key)
+            known[key] = rational(key)
+            require(0 <= known[key] <= 1, "Probabilities must be between 0 and 1" + f" ({key})")
         if independent:
+            a, b = chance("pa"), chance("pb")
+            fa, fb = rational("pa"), rational("pb")
+            fab = fa*fb
+            if operation in ("conditional", "reverse"):
+                require(fb > 0 if operation == "conditional" else fa > 0, "Conditioning event has zero probability")
+            choices = {"intersection": fab, "union": fa+fb-fab, "conditional": fa,
+                       "reverse": fb, "onlyA": fa-fab, "neither": 1-fa-fb+fab}
+            require(operation in choices, "Unsupported probability operation")
+            exact = choices[operation]
             note = "Independent events: P(A ∩ B) = P(A) × P(B)."
+            formula = LABELS[operation]
+            details = [("P(A)", a), ("P(B)", b)]
+        else:
+            exact = solve_events(known, operation)
+            formula = LABELS[operation] + " · " + ", ".join(LABELS[key] + " = " + shown(mp.mpf(v.numerator)/v.denominator) for key, v in known.items())
+        value = mp.mpf(exact.numerator)/exact.denominator
     elif category == "bayes":
         prior, likelihood = chance("prior"), chance("likelihood")
         require(operation in ("posterior", "negative", "posteriorSpecificity", "negativeSpecificity"), "Unsupported probability operation")

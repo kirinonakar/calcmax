@@ -22,6 +22,9 @@ button[data-run="python"]:active:not(:disabled){transform:translateY(1px)}
 .probability-operations button{font-size:13px;padding:8px 12px}
 .probability-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin:14px 0 6px}
 .probability-fields label{min-width:0;font-size:13px}
+.probability-fields .probability-field{display:flex;flex-direction:column;gap:7px;min-width:0;margin-bottom:12px}
+.probability-field button{align-self:flex-start;font-size:12px;padding:5px 0}
+#probability-add-given{grid-column:1/-1;justify-self:start}
 .probability-independent{display:flex;align-items:center;gap:8px;font-size:13px}
 .probability-independent input{width:auto}
 .probability-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:16px 0}
@@ -35,6 +38,7 @@ button[data-run="probability"]{background:var(--accent);color:var(--panel);paddi
 .probability-plot svg{display:block;width:100%;max-height:190px}
 .probability-plot .hint{text-align:center;font-size:11px;margin-top:0}
 @media(max-width:600px){.probability-examples{grid-template-columns:repeat(2,minmax(0,1fr))}.probability-fields{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.probability-fields input{min-width:0}.probability-fields label:last-child:nth-child(odd){grid-column:1/-1}.probability-value{font-size:28px}.probability-actions .hint{font-size:11px}}
+@media(max-width:600px){.probability-fields .probability-field:nth-last-child(2):nth-child(odd){grid-column:1/-1}}
 /* Six independent curve colors in Setup. */
 .graph-color-settings{margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid var(--line)}
 .graph-color-settings h3{margin:0 0 10px;font-size:15px}
