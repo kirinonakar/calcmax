@@ -83,7 +83,7 @@ test('surface workspace exposes automatic/manual z bounds, exact paired sliders,
     const valid=$('graph-plot').innerHTML;input('graph-zmin',3);assert.equal(errors.length,1);assert.equal($('graph-plot').innerHTML,valid,'invalid range does not replace the valid graph');
     input('graph-rotation',91,'input');assert.equal(workspace.snapshot().surface.rotation,91,'rotation remains usable while a range is being corrected');
     $('graph-fit').click();assert.equal($('graph-auto-z').checked,true);assert.equal($('graph-zmin').value,'-2');assert.equal($('graph-zmax').value,'2');
-    input('graph-min',1000);input('graph-max',1001);$('graph-reset').click();assert.equal($('graph-min').value,'-3');assert.equal($('graph-min-slider').min,'-15');assert.equal($('graph-max-slider').max,'15');
+    input('graph-min',1000);input('graph-max',1001);$('graph-reset').click();assert.equal($('graph-min').value,'-3');assert.equal($('graph-min-slider').min,'-6');assert.equal($('graph-max-slider').max,'6');
     const snapshot=workspace.snapshot();assert.equal(snapshot.surface.autoZ,true);assert.equal(snapshot.surface.renderMode,'surface');assert.ok(saves>0);
     workspace.dispose();
     const restored=createGraphWorkspace({execute:async()=>({ok:true,surface:mesh,zMin:-2,zMax:2,parameters:[]}),options:()=>({displayDigits:3}),onError:assert.fail,persist:()=>{},isBusy:()=>false,saved:{...snapshot,surface:{...snapshot.surface,autoZ:false},ranges:{...snapshot.ranges,'graph-zmin':-.5,'graph-zmax':.5}}});

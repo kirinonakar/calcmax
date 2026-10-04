@@ -24,12 +24,62 @@ function setup(t,saved={}){
   return {dom,byId,workspace,requests,edit,expectDomain};
 }
 
+function expectCenteredViewport(byId){
+  for(const [minId,maxId] of [['graph-min','graph-max'],['graph-ymin','graph-ymax']]){
+    const first=byId(minId+'-slider'),second=byId(maxId+'-slider'),low=Number(first.min),high=Number(first.max);
+    assert.ok(Math.abs((Number(first.value)-low)/(high-low)-.25)<1e-10,minId);
+    assert.ok(Math.abs((Number(second.value)-low)/(high-low)-.75)<1e-10,maxId);
+  }
+}
+
+test('typed graph limits center every range pair with half the track selected',async t=>{
+  const {byId,workspace,requests,edit}=setup(t);
+  byId('graph-auto-z').checked=false;byId('graph-auto-z').onchange();
+  for(const [minId,maxId] of [['graph-min','graph-max'],['graph-ymin','graph-ymax'],['graph-xmin','graph-xmax'],['graph-zmin','graph-zmax']]){
+    edit(maxId,140);edit(minId,100);
+    const first=byId(minId+'-slider'),second=byId(maxId+'-slider'),track=first.parentElement;
+    for(const slider of [first,second]){
+      assert.equal(Number(slider.min),80);assert.equal(Number(slider.max),160);
+    }
+    assert.equal(Number(first.value),100);assert.equal(Number(second.value),140);
+    assert.equal(track.style.getPropertyValue('--range-start'),'25%');
+    assert.equal(track.style.getPropertyValue('--range-end'),'75%');
+    first.value='90';first.oninput();first.onchange();
+    assert.equal(workspace.snapshot().ranges[minId],90);
+    assert.equal(workspace.snapshot().ranges[maxId],140);
+    assert.equal(Number(first.min),80,'drag keeps the domain fixed');
+    assert.equal(Number(first.max),160,'release keeps the domain fixed');
+    edit(minId,110);
+    assert.equal(Number(first.min),95);assert.equal(Number(first.max),155);
+    assert.equal(track.style.getPropertyValue('--range-start'),'25%');
+    assert.equal(track.style.getPropertyValue('--range-end'),'75%');
+  }
+  await workspace.run();
+  assert.equal(requests.at(-1).min,110);assert.equal(requests.at(-1).max,140);
+  assert.equal(requests.at(-1).yMin,110);assert.equal(requests.at(-1).yMax,140);
+});
+
+test('incomplete or invalid typed ranges preserve the slider domain until valid',t=>{
+  const {byId,workspace,edit}=setup(t),slider=byId('graph-min-slider');
+  edit('graph-min',40);edit('graph-max',60);
+  for(const value of ['', '-', '60', '70', 'Infinity']){
+    edit('graph-min',value);
+    assert.equal(Number(slider.min),30);assert.equal(Number(slider.max),70);
+  }
+  edit('graph-min',-100.1234567890123);edit('graph-max',-80.1234567890123);
+  assert.equal(workspace.snapshot().ranges['graph-min'],-100.1234567890123);
+  assert.equal(Number(slider.min),-110.1234567890123);
+  assert.equal(Number(slider.max),-70.1234567890123);
+  assert.equal(slider.parentElement.style.getPropertyValue('--range-start'),'25%');
+  assert.equal(slider.parentElement.style.getPropertyValue('--range-end'),'75%');
+});
+
 test('analysis and tangent domains follow pan, zoom, manual ranges, and Reset',async t=>{
   const {byId,workspace,edit,expectDomain}=setup(t);
-  await workspace.run();expectDomain(-10,10);
+  await workspace.run();expectDomain(-10,10);expectCenteredViewport(byId);
   edit('graph-analysis-a',-2);edit('graph-analysis-b',3);
-  byId('graph-right').click();expectDomain(-7,13);
-  byId('graph-zoom-in').click();expectDomain(-2,8);
+  byId('graph-right').click();expectDomain(-7,13);expectCenteredViewport(byId);
+  byId('graph-zoom-in').click();expectDomain(-2,8);expectCenteredViewport(byId);
   assert.equal(workspace.snapshot().ranges['graph-analysis-a'],-2);
   assert.equal(workspace.snapshot().ranges['graph-analysis-b'],3);
   edit('graph-min',40);edit('graph-max',60);expectDomain(40,60);
@@ -40,7 +90,7 @@ test('analysis and tangent domains follow pan, zoom, manual ranges, and Reset',a
   assert.equal(workspace.snapshot().ranges['graph-analysis-b'],60);
   byId('graph-analysis-action').value='tangent';byId('graph-analysis-action').onchange();
   edit('graph-analysis-a',55);assert.equal(Number(byId('graph-tangent-slider').value),55);
-  byId('graph-reset').click();expectDomain(-10,10);
+  byId('graph-reset').click();expectDomain(-10,10);expectCenteredViewport(byId);
   assert.equal(Number(byId('graph-tangent-slider').value),10);
 });
 
@@ -51,11 +101,14 @@ test('drag updates analysis domains before pointer release and wheel keeps them 
   const pointer=(type,x)=>plot.dispatchEvent(new dom.window.MouseEvent(type,{clientX:x,clientY:200,button:0,bubbles:true}));
   pointer('pointerdown',400);pointer('pointermove',480);
   const ranges=workspace.snapshot().ranges;expectDomain(ranges['graph-min'],ranges['graph-max']);
+  expectCenteredViewport(byId);
   assert.ok(ranges['graph-min']<-10);
   pointer('pointerup',480);
   plot.dispatchEvent(new dom.window.WheelEvent('wheel',{clientX:400,clientY:200,deltaY:-100,bubbles:true}));
   const zoomed=workspace.snapshot().ranges;expectDomain(zoomed['graph-min'],zoomed['graph-max']);
+  expectCenteredViewport(byId);
   assert.ok(zoomed['graph-max']-zoomed['graph-min']<20);
+  byId('graph-zoom-out').click();expectCenteredViewport(byId);
 });
 
 for(const kind of ['parametric','polar'])test(`${kind} analysis uses t limits independently of viewport x`,async t=>{

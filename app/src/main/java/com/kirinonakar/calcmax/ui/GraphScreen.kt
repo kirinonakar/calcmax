@@ -692,16 +692,25 @@ internal fun graphShadeFormula(source:String,displayDigits:Int?=null):GraphShade
 }
 
 @Composable private fun RangeAxisEditor(axis:String,minimum:String,maximum:String,initialMin:Double,initialMax:Double,displayDigits:Int,onMin:(String)->Unit,onMax:(String)->Unit) {
-    val bounds=remember(axis) {
-        val span=(initialMax-initialMin).takeIf {it.isFinite()&&it>0.0} ?: 2.0
-        val start=initialMin-2*span;val end=initialMax+2*span
-        if(start.isFinite()&&end.isFinite()&&(end-start).isFinite()&&end>start)start to end else -10.0 to 10.0
+    fun sliderBounds(min:Double?,max:Double?):Pair<Double,Double>? {
+        if(min==null||max==null||!min.isFinite()||!max.isFinite())return null
+        val span=max-min
+        if(!span.isFinite()||span<=0.0)return null
+        val start=min-span/2;val end=max+span/2
+        return if(start.isFinite()&&end.isFinite()&&(end-start).isFinite()&&end>start)start to end else null
     }
+    var bounds by remember(axis) {mutableStateOf(sliderBounds(initialMin,initialMax) ?: (-10.0 to 10.0))}
     val range=bounds.second-bounds.first
     Text("$axis range",fontSize=12.sp,color=LocalInstrument.current.muted)
     Row(horizontalArrangement=Arrangement.spacedBy(6.dp)) {
-        GraphNumberField(minimum,"$axis min",displayDigits,Modifier.weight(1f)){onMin(it)}
-        GraphNumberField(maximum,"$axis max",displayDigits,Modifier.weight(1f)){onMax(it)}
+        GraphNumberField(minimum,"$axis min",displayDigits,Modifier.weight(1f)){
+            onMin(it)
+            sliderBounds(it.toDoubleOrNull(),maximum.toDoubleOrNull())?.let {next->bounds=next}
+        }
+        GraphNumberField(maximum,"$axis max",displayDigits,Modifier.weight(1f)){
+            onMax(it)
+            sliderBounds(minimum.toDoubleOrNull(),it.toDoubleOrNull())?.let {next->bounds=next}
+        }
     }
     val low=(((minimum.toDoubleOrNull()?.takeIf(Double::isFinite) ?: bounds.first)-bounds.first)/range).coerceIn(0.0,1.0).toFloat()
     val high=(((maximum.toDoubleOrNull()?.takeIf(Double::isFinite) ?: bounds.second)-bounds.first)/range).coerceIn(0.0,1.0).toFloat()

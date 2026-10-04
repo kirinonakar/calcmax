@@ -115,7 +115,7 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
   function resetRangeDomain(pair){
     if(pair.ids[0]==='graph-analysis-a'){syncRangePair(pair);return;}
     const [min,max]=pair.ids.map(numeric),span=max-min;if(!Number.isFinite(span)||span<=0)return;
-    const low=min-2*span,high=max+2*span;if(!Number.isFinite(high-low))return;
+    const low=min-span/2,high=max+span/2;if(!Number.isFinite(high-low))return;
     for(const id of pair.ids){$(id+'-slider').min=String(low);$(id+'-slider').max=String(high);}
     syncRangePair(pair);
   }
@@ -379,7 +379,7 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
   };
   $('graph-source').oninput=()=>{pendingAnalysis=null;derivative=null;$('graph-derivative').checked=false;analysis=null;trace=null;integral=null;revision++;analysisRevision++;selections();formulas();queue();};
   for(const id of ['graph-min','graph-max','graph-ymin','graph-ymax','graph-xmin','graph-xmax','graph-initial','graph-t0'])$(id).onchange=()=>{analysisControls();queue();};
-  for(const id of rangeIds){const field=$(id);editField(field);for(const name of ['input','change'])field.addEventListener(name,()=>{if(field.dataset.displayValue!==field.value)delete field.dataset.displayValue;const pair=pairedSliders.get(id);if(pair)syncRangePair(pair);if(['graph-min','graph-max','graph-analysis-a'].includes(id))analysisControls();});}
+  for(const id of rangeIds){const field=$(id);editField(field);for(const name of ['input','change'])field.addEventListener(name,()=>{if(field.dataset.displayValue!==field.value)delete field.dataset.displayValue;const pair=pairedSliders.get(id);if(pair)resetRangeDomain(pair);if(['graph-min','graph-max','graph-analysis-a'].includes(id))analysisControls();});}
   for(const id of sliderIds){const field=$(id),slider=document.createElement('input'),current=numeric(id);slider.type='range';slider.id=id+'-slider';slider.min=String(Math.min(-30,current-20));slider.max=String(Math.max(30,current+20));slider.step='any';slider.value=String(current);slider.setAttribute('aria-label',field.closest('label').firstChild.textContent.trim());field.insertAdjacentElement('afterend',slider);
     slider.oninput=()=>{
       const number=Number(slider.value),pair=pairedSliders.get(id),partner=pair&&!pair.ids.some(key=>$(key+'-slider').hidden)?pair.ids.find(key=>key!==id):null;
