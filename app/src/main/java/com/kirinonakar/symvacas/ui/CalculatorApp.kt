@@ -91,9 +91,9 @@ private val LocalCalculatorOverlay=staticCompositionLocalOf<(String)->Unit> { {}
                 Text((if(m.mode=="Probability")tr(m.mode) else m.mode).uppercase()+" ▾",Modifier.fillMaxWidth().padding(horizontal=8.dp),fontSize=12.sp,color=c.ink)
             }
             if(m.variables.has("M"))Text("M  ",fontSize=10.sp,color=c.muted,modifier=Modifier.semantics{contentDescription="Stored memory"})
+            Text(if(m.shift)"SHIFT  " else if(m.alpha)"ALPHA  " else if(m.hyperbolic)"HYP  " else if(m.secondKeys)"2ND  " else "",fontSize=10.sp,color=if(m.alpha)c.alpha else c.shift)
             Text(if(m.overwrite)"OVR  " else "INS  ",fontSize=10.sp,color=if(m.overwrite)c.accent else c.muted,fontWeight=if(m.overwrite)FontWeight.Bold else FontWeight.Normal,modifier=Modifier.clickable{m.overwrite=!m.overwrite}.semantics{contentDescription=if(m.overwrite)"Overwrite mode" else "Insert mode"})
             if(m.mixedNumbers)Text("mix  ",fontSize=10.sp,color=c.accent,modifier=Modifier.semantics{contentDescription="Mixed numbers"})
-            Text(if(m.shift)"SHIFT  " else if(m.alpha)"ALPHA  " else if(m.hyperbolic)"HYP  " else if(m.secondKeys)"2ND  " else "",fontSize=10.sp,color=if(m.alpha)c.alpha else c.shift)
             Text(m.angle,Modifier.clickable {m.angle=when(m.angle){"DEG"->"RAD";"RAD"->"GRAD";else->"DEG"};m.recalculatePreview();m.save()}.padding(horizontal=12.dp),fontSize=11.sp,color=c.accent)
             val decimalPlacesLabel=tr("Cycle display decimal places")
             Text("≤${m.displayDigits} decimals",Modifier.clickable {
