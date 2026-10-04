@@ -120,7 +120,7 @@ import kotlin.math.*
                                 Checkbox(spec.animate,{m.setGraphParameterAnimation(name,it)},Modifier.size(32.dp).semantics {contentDescription=animateLabel})
                                 Text(name,Modifier.width(24.dp),fontSize=13.sp,color=c.accent,fontWeight=FontWeight.SemiBold)
                                 CompactSlider(spec.value.toFloat(),{focusManager.clearFocus();m.setGraphParameter(name,it.toDouble())},Modifier.weight(1f),valueRange=(if(low<high)low else low-1f)..(if(high>low)high else low+1f))
-                                GraphParameterValueField(name,spec.value,m.displayDigits,{value->m.setGraphParameter(name,value,expandRange=true);m.error="";m.save()},{m.error=it})
+                                GraphParameterValueField(name,spec.value,m.displayDigits,{value->m.setGraphParameter(name,value,centerRange=true);m.error="";m.save()},{m.error=it})
                                 Box(Modifier.size(30.dp).background(c.scientific,RoundedCornerShape(8.dp)).clickable{focusManager.clearFocus();rangeParameter=name}.semantics {contentDescription="Set $name slider range"},contentAlignment=Alignment.Center) {
                                     Text("±",fontSize=16.sp,color=c.accent)
                                 }
@@ -425,7 +425,10 @@ import kotlin.math.*
                     second=(sliderMin+range.endInclusive*sliderSpan).toString()
                 },Modifier.fillMaxWidth())
             }
-            SmallAction("Use visible ${if(m.graphKind=="cartesian")"x" else "t"} range") {if(m.graphKind=="cartesian"){first=m.xMin.toString();second=m.xMax.toString()}else{first=m.parameterMin.toString();second=m.parameterMax.toString()}}
+            Row(horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+                SmallAction("Use visible ${if(m.graphKind=="cartesian")"x" else "t"} range") {if(m.graphKind=="cartesian"){first=m.xMin.toString();second=m.xMax.toString()}else{first=m.parameterMin.toString();second=m.parameterMax.toString()}}
+                SmallAction("Clear analysis") {focusManager.clearFocus();tangentPositionOpen=false;m.clearGraphTangent()}
+            }
             if(m.graphKind=="cartesian"&&sources.size>1) {
                 Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
                     Text("Intersection: selected f${selected+1} with",fontSize=12.sp,color=c.muted)
@@ -519,12 +522,20 @@ import kotlin.math.*
         if(spec!=null) {
             var low by remember(name){mutableStateOf(spec.min.toString())}
             var high by remember(name){mutableStateOf(spec.max.toString())}
+            var resetRevision by remember(name){mutableIntStateOf(0)}
             AlertDialog(onDismissRequest={rangeParameter=null},title={Text(if(isKorean())"$name 슬라이더 범위" else "$name slider range")},text={Column{
-                RangeAxisEditor(name,low,high,spec.min,spec.max,m.displayDigits,{low=it},{high=it})
+                SmallAction("Reset sliders") {
+                    focusManager.clearFocus();m.resetGraphParameters(name)
+                    low="-5.0";high="5.0";resetRevision++
+                }
+                key(resetRevision){RangeAxisEditor(name,low,high,spec.min,spec.max,m.displayDigits,{low=it},{high=it})}
             }},confirmButton={TextButton(onClick={
                 val start=low.toDoubleOrNull();val end=high.toDoubleOrNull()
                 if(start==null||end==null||!start.isFinite()||!end.isFinite()||start>=end||abs(start)>1e9||abs(end)>1e9)m.error="Enter finite values with minimum < maximum"
-                else {m.setGraphParameterRange(name,start,end);rangeParameter=null}
+                else {
+                    if(start!=spec.min||end!=spec.max)m.setGraphParameterRange(name,start,end) else m.error=""
+                    rangeParameter=null
+                }
             }) {Text(tr("Apply"))}},dismissButton={TextButton(onClick={rangeParameter=null}) {Text(tr("Cancel"))} })
         }
     }

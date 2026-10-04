@@ -57,20 +57,20 @@ export function createProbabilityWorkspace({state,engine,persist,requestOptions}
       input.addEventListener('input',()=>{state.fields[id]=input.value;activeExample='';invalidate();persist();renderExamples();});
       input.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();if(engine.ready&&!engine.pending)void run();}});
       if(editableKind){
-        const keys=eventInputs(),select=element('select');select.id=`${id}-kind`;select.setAttribute('aria-label',t('Given probability'));
+        const keys=eventInputs(),select=element('select');select.id=`${id}-kind`;select.setAttribute('aria-label',fieldLabel(field));
         for(const choice of eventChoices().filter(f=>f[0]===field[0]||!keys.includes(f[0]))){
           const option=element('option',fieldLabel(choice));option.value=choice[0];select.append(option);
         }
         select.value=field[0];select.addEventListener('change',()=>changeEventInputs(keys.map(key=>key===field[0]?select.value:key)));
         wrapper.append(select,input);
-        if(keys.length>1){const remove=control(t('Remove given probability'),()=>changeEventInputs(keys.filter(key=>key!==field[0])));remove.type='button';remove.setAttribute('aria-label',`${t('Remove given probability')} ${fieldLabel(field)}`);wrapper.append(remove);}
+        if(keys.length>1){const remove=control(t('Remove'),()=>changeEventInputs(keys.filter(key=>key!==field[0])));remove.type='button';remove.setAttribute('aria-label',`${t('Remove')} ${fieldLabel(field)}`);wrapper.append(remove);}
       }else wrapper.append(name,input);
       return wrapper;
     });
     $('probability-fields').replaceChildren(...inputs);
     if(eventMode()&&!$('probability-independent').checked){
       const next=eventChoices().find(f=>!eventInputs().includes(f[0]));
-      if(next){const add=control(t('Add given probability'),()=>changeEventInputs([...eventInputs(),next[0]]));add.id='probability-add-given';add.type='button';$('probability-fields').append(add);}
+      if(next){const add=control(t('Add'),()=>changeEventInputs([...eventInputs(),next[0]]));add.id='probability-add-given';add.type='button';$('probability-fields').append(add);}
     }
     $('probability-independent-label').hidden=category()!=='events'||value('probability-operation')==='conditionalCounts';
     $('probability-number-hint').hidden=['basic','dice','draw','counting'].includes(category())||value('probability-operation')==='conditionalCounts';

@@ -119,10 +119,11 @@ internal class GraphState(private val prefs:SharedPreferences) {
         if(next!=graphParameters)graphParameters=next
     }
 
-    fun setParameter(name:String,value:Double,expandRange:Boolean=false) {
+    fun setParameter(name:String,value:Double,centerRange:Boolean=false) {
         val spec=graphParameters[name] ?: return
-        if(!value.isFinite() || (expandRange && abs(value)>1e9))return
-        val next=if(expandRange)spec.copy(value=value,min=minOf(spec.min,value),max=maxOf(spec.max,value))
+        if(!value.isFinite() || (centerRange && abs(value)>1e9))return
+        val half=(spec.max-spec.min)/2
+        val next=if(centerRange)spec.copy(value=value,min=value-half,max=value+half)
             else spec.copy(value=value.coerceIn(spec.min,spec.max))
         if(next!=spec) {
             graphParameters=graphParameters+(name to next)
@@ -134,15 +135,16 @@ internal class GraphState(private val prefs:SharedPreferences) {
     fun setParameterRange(name:String,low:Double,high:Double):Boolean {
         val spec=graphParameters[name] ?: return false
         if(!low.isFinite()||!high.isFinite()||low>=high||abs(low)>1e9||abs(high)>1e9)return false
-        graphParameters=graphParameters+(name to spec.copy(min=low,max=high,value=spec.value.coerceIn(low,high)))
+        graphParameters=graphParameters+(name to spec.copy(min=low,max=high,value=low+(high-low)/2))
         invalidateParameterAnalysis()
         if(graphAnimating)alignAnimation(name)
         return true
     }
 
-    fun resetParameters() {
-        graphParameters=graphParameters.mapValues {(_,spec)->spec.copy(value=if(spec.min<=1.0&&1.0<=spec.max)1.0 else (spec.min+spec.max)/2)}
+    fun resetParameters(name:String?=null) {
+        graphParameters=graphParameters.mapValues {(key,spec)->if(name==null||key==name)spec.copy(value=1.0,min=-5.0,max=5.0) else spec}
         invalidateParameterAnalysis()
+        if(graphAnimating)graphParameters.keys.filter {name==null||it==name}.forEach(::alignAnimation)
     }
     private fun invalidateParameterAnalysis() {graphAnalysis=null;trace=null;shadedInterval=null}
 

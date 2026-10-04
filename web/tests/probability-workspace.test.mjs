@@ -103,7 +103,7 @@ test('probability controls run all user examples through actual WASM',async t=>{
     await workspace.run();assert.equal(latest.ok,false);assert.match(latest.error,/unique answer/);
     setLanguage('ko');workspace.render();await workspace.run();
     assert.match($('probability-error').textContent,/필요한 확률을 추가/);
-    assert.equal($('probability-add-given').textContent,'주어진 확률 추가');
+    assert.equal($('probability-add-given').textContent,'추가');
     setLanguage('en');workspace.render();
     $('probability-independent').checked=true;
     $('probability-independent').dispatchEvent(new dom.window.Event('change'));

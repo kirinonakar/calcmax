@@ -95,7 +95,11 @@ private val LocalCalculatorOverlay=staticCompositionLocalOf<(String)->Unit> { {}
             if(m.mixedNumbers)Text("mix  ",fontSize=10.sp,color=c.accent,modifier=Modifier.semantics{contentDescription="Mixed numbers"})
             Text(if(m.shift)"SHIFT  " else if(m.alpha)"ALPHA  " else if(m.hyperbolic)"HYP  " else if(m.secondKeys)"2ND  " else "",fontSize=10.sp,color=if(m.alpha)c.alpha else c.shift)
             Text(m.angle,Modifier.clickable {m.angle=when(m.angle){"DEG"->"RAD";"RAD"->"GRAD";else->"DEG"};m.recalculatePreview();m.save()}.padding(horizontal=12.dp),fontSize=11.sp,color=c.accent)
-            Text("≤${m.displayDigits} decimals",fontSize=10.sp,color=c.muted)
+            val decimalPlacesLabel=tr("Cycle display decimal places")
+            Text("≤${m.displayDigits} decimals",Modifier.clickable {
+                m.displayDigits=when(m.displayDigits){2->3;3->5;5->10;else->2}
+                m.recalculatePreview();m.save()
+            }.padding(vertical=12.dp).semantics {contentDescription=decimalPlacesLabel},fontSize=10.sp,color=c.muted)
         }
         Box(Modifier.weight(1f)) {workspaces.SaveableStateProvider(m.mode) {
             when(m.mode) {

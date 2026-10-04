@@ -1,4 +1,4 @@
-self.SYMVACAS_CACHE = 'symvacas-static-2d6bef3910ed6cfc';
+self.SYMVACAS_CACHE = 'symvacas-static-a20810e51f2ad937';
 self.SYMVACAS_ASSETS = [
   "./",
   "./app-dialogs.js",

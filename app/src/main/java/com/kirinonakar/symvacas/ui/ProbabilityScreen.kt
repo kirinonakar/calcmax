@@ -124,7 +124,7 @@ private fun probabilityNumber(text:String,digits:Int):String=runCatching {
                     Column(Modifier.weight(1f)) {
                         if(eventMode&&!draft.optBoolean("independent")) {
                             val choices=eventChoices.filter {it.getString(0)==key||it.getString(0) !in eventInputs}.map {JSONObject().put("id",it.getString(0)).put("label",it.getString(1)).put("ko",it.getString(2))}
-                            ProbabilitySelect(tr("Given probability"),choices,field.getString(if(ko)2 else 1),ko) {selected->
+                            ProbabilitySelect("",choices,field.getString(if(ko)2 else 1),ko) {selected->
                                 changeEventInputs(eventInputs.map {if(it==key)selected.getString("id") else it})
                             }
                         }
@@ -132,13 +132,13 @@ private fun probabilityNumber(text:String,digits:Int):String=runCatching {
                             label={Text(field.getString(if(ko)2 else 1),fontSize=12.sp)},singleLine=true,
                             keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.Text),
                             modifier=Modifier.fillMaxWidth().keepInputVisible().testTag("probability-input-$key"))
-                        if(eventMode&&!draft.optBoolean("independent")&&eventInputs.size>1)TextButton(onClick={changeEventInputs(eventInputs.filter {it!=key})}){Text(tr("Remove given probability"),fontSize=11.sp)}
+                        if(eventMode&&!draft.optBoolean("independent")&&eventInputs.size>1)TextButton(onClick={changeEventInputs(eventInputs.filter {it!=key})}){Text(tr("Remove"),fontSize=11.sp)}
                     }
                 }
             }
         }
         if(eventMode&&!draft.optBoolean("independent"))eventChoices.firstOrNull {it.getString(0) !in eventInputs}?.let {next->
-            TextButton(onClick={changeEventInputs(eventInputs+next.getString(0))},modifier=Modifier.testTag("probability-add-given")){Text(tr("Add given probability"))}
+            TextButton(onClick={changeEventInputs(eventInputs+next.getString(0))},modifier=Modifier.testTag("probability-add-given")){Text(tr("Add"))}
         }
         if(category=="events"&&operation.getString("id")!="conditionalCounts")Row {Checkbox(draft.optBoolean("independent"),onCheckedChange={checked->update {it.put("independent",checked)}});Text(tr("Independent events"),Modifier.padding(top=12.dp),fontSize=13.sp)}
         Text((if(operation.has("hint"))operation else definition).optString(if(ko)"hintKo" else "hint"),color=c.muted,fontSize=11.sp)
@@ -177,7 +177,7 @@ private fun probabilityNumber(text:String,digits:Int):String=runCatching {
 @Composable private fun ProbabilitySelect(title:String,items:List<JSONObject>,selected:String,ko:Boolean,onSelect:(JSONObject)->Unit) {
     var expanded by remember {mutableStateOf(false)}
     Box {
-        OutlinedButton(onClick={expanded=true},modifier=Modifier.fillMaxWidth()){Text("$title · $selected ▾")}
+        OutlinedButton(onClick={expanded=true},modifier=Modifier.fillMaxWidth()){Text((if(title.isBlank())"" else "$title · ")+"$selected ▾")}
         DropdownMenu(expanded,onDismissRequest={expanded=false},modifier=Modifier.heightIn(max=320.dp)) {
             items.forEach {item->DropdownMenuItem(text={Text(item.probabilityLabel(ko))},onClick={expanded=false;onSelect(item)})}
         }

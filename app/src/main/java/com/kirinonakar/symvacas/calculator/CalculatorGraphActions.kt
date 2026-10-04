@@ -122,16 +122,17 @@ internal object CalculatorGraphActions {
             }
         }
     }
-    fun CalculatorModel.performSetGraphParameter(name:String,value:Double,expandRange:Boolean=false) {
-        graphState.setParameter(name,value,expandRange)
+    fun CalculatorModel.performSetGraphParameter(name:String,value:Double,centerRange:Boolean=false) {
+        graphState.setParameter(name,value,centerRange)
     }
     fun CalculatorModel.performSetGraphParameterRange(name:String,low:Double,high:Double) {
         if(name !in graphState.graphParameters)return
         if(!graphState.setParameterRange(name,low,high)) {error="Enter finite values with minimum < maximum";return}
         error="";save()
     }
-    fun CalculatorModel.performResetGraphParameters() {
-        graphState.resetParameters()
+    fun CalculatorModel.performResetGraphParameters(name:String?=null) {
+        graphState.resetParameters(name)
+        error=""
         save()
     }
     fun CalculatorModel.performToggleGraphAnimation() {
@@ -231,5 +232,6 @@ internal object CalculatorGraphActions {
         graphState.graphAnalysis=null
         trace=null
         shadedInterval=null
+        error=""
     }
 }

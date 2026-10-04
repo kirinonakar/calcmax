@@ -797,11 +797,11 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     fun clearRegression() = with(CalculatorStatisticsActions) { performClearRegression() }
     fun cancelRegression() = with(CalculatorStatisticsActions) { performCancelRegression() }
     fun plot(auto: Boolean = false) = with(CalculatorGraphActions) { performPlot(auto) }
-    fun setGraphParameter(name:String,value:Double,expandRange:Boolean=false) = with(CalculatorGraphActions) { performSetGraphParameter(name,value,expandRange) }
+    fun setGraphParameter(name:String,value:Double,centerRange:Boolean=false) = with(CalculatorGraphActions) { performSetGraphParameter(name,value,centerRange) }
     fun setGraphParameterAnimation(name:String,enabled:Boolean) {graphState.setParameterAnimation(name,enabled);save()}
     fun resetSurfaceRanges() {graphState.resetSurfaceRanges();save();plot()}
     fun setGraphParameterRange(name:String,low:Double,high:Double) = with(CalculatorGraphActions) { performSetGraphParameterRange(name,low,high) }
-    fun resetGraphParameters() = with(CalculatorGraphActions) { performResetGraphParameters() }
+    fun resetGraphParameters(name:String?=null) = with(CalculatorGraphActions) { performResetGraphParameters(name) }
     fun toggleGraphAnimation() = with(CalculatorGraphActions) { performToggleGraphAnimation() }
     fun editPython(source:String,start:Int=source.length,end:Int=start) = with(CalculatorPythonActions) { performEditPython(source,start,end) }
     fun insertPython(snippet:String,inside:Int=snippet.length) = with(CalculatorPythonActions) { performInsertPython(snippet,inside) }

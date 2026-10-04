@@ -90,6 +90,40 @@ function expectCenteredViewport(byId){
   }
 }
 
+test('Clear analysis removes integral errors and ignores failures from cleared requests',async t=>{
+  const dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));
+  globalThis.document=dom.window.document;installCanvas(dom);
+  const byId=id=>document.getElementById(id),errors=[];
+  const message='Failed to distinguish the expression: Integral(sin(x), (x, -10.0, 10.0)) from zero. Try simplifying the input, using chop=True, or providing a higher maxn for evalf';
+  let respond=async()=>({ok:false,error:message});
+  const workspace=createGraphWorkspace({
+    execute:request=>request.action==='graphAnalysis'?respond():Promise.resolve({ok:true,curves:[[[-10,0],[10,0]]],parameters:[]}),
+    options:()=>({displayDigits:10}),persist:()=>{},isBusy:()=>false,
+    onError:error=>{errors.push(error);byId('answer').textContent=error;},
+    onClearError:()=>byId('answer').replaceChildren(),
+  });
+  t.after(()=>{workspace.dispose();dom.window.close();});
+  byId('graph-source').value='sin(x)';await workspace.run();
+  byId('graph-analysis-action').value='integral';
+  await byId('graph-analysis-run').onclick();
+  assert.equal(byId('graph-status').textContent,message);assert.equal(byId('answer').textContent,message);
+  assert.equal(byId('graph-status').classList.contains('error'),true);
+  byId('graph-analysis-clear').click();
+  const expectCleared=()=>{
+    for(const id of ['graph-status','graph-analysis-result','graph-trace','answer'])assert.equal(byId(id).textContent,'',id);
+    assert.equal(byId('graph-status').classList.contains('error'),false);
+  };
+  expectCleared();
+  for(const reject of [false,true]){
+    let finish;respond=()=>new Promise((resolve,rejectPromise)=>{finish=reject?()=>rejectPromise(new Error(message)):()=>resolve({ok:false,error:message});});
+    const pending=byId('graph-analysis-run').onclick();byId('graph-analysis-clear').click();finish();await pending;
+    expectCleared();assert.equal(errors.length,1,'cleared requests must not restore errors');
+  }
+  respond=async()=>({ok:true,value:0,points:[]});await byId('graph-analysis-run').onclick();
+  assert.notEqual(byId('graph-analysis-result').textContent,'');
+  byId('graph-analysis-clear').click();expectCleared();
+});
+
 test('incomplete or invalid typed ranges preserve the slider domain until valid',t=>{
   const {byId,workspace,edit}=setup(t),slider=byId('graph-min-slider');
   edit('graph-min',40);edit('graph-max',60);
@@ -186,6 +220,29 @@ test('an in-flight plot cannot restore a deleted graph',async t=>{
   await pending;
   assert.equal(byId('graph-plot').children.length,0);
   assert.equal(byId('graph-formulas').children.length,0);
+});
+
+test('typed parameter values and bounds center sliders, and reset restores value and bounds',async t=>{
+  const dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));
+  globalThis.document=dom.window.document;installCanvas(dom);
+  const byId=id=>document.getElementById(id);let saves=0;
+  byId('graph-source').value='a*x';
+  const workspace=createGraphWorkspace({execute:async()=>({ok:true,curves:[[[0,0],[1,1]]],parameters:['a']}),options:()=>({displayDigits:3}),onError:assert.fail,persist:()=>saves++,isBusy:()=>false});
+  t.after(()=>{workspace.dispose();dom.window.close();});
+  await workspace.run();
+  const edit=(selector,value)=>{const input=byId('graph-parameters').querySelector(selector);input.value=String(value);input.dispatchEvent(new dom.window.Event('change'));};
+  const expectSlider=(low,high,value)=>{
+    const slider=byId('graph-parameters').querySelector('input[type="range"]');
+    assert.ok(Math.abs(Number(slider.min)-low)<1e-12);assert.ok(Math.abs(Number(slider.max)-high)<1e-12);assert.equal(Number(slider.value),value);
+    assert.equal(workspace.snapshot().parameters.a,value);
+    workspace.snapshot().parameterRanges.a.forEach((bound,i)=>assert.ok(Math.abs(bound-[low,high][i])<1e-12));
+  };
+  edit('[data-parameter-value]',12.345678901);expectSlider(7.345678901,17.345678901,12.345678901);
+  edit('[data-parameter-value]',10);expectSlider(5,15,10);
+  edit('[data-parameter-bound="0"]',-5);expectSlider(-5,15,5);
+  edit('[data-parameter-bound="1"]',35);expectSlider(-5,35,15);
+  edit('[data-parameter-value]',100);expectSlider(80,120,100);
+  const before=saves;byId('graph-reset-parameters').click();expectSlider(-5,5,1);assert.ok(saves>before);
 });
 
 test('Plot and Analyze stay disabled across animation frames and recover after Stop',async()=>{
