@@ -5,7 +5,7 @@
 
 A native Android scientific, graphing, programming and Computer Algebra System (CAS) calculator. A bundled SymPy engine provides exact offline mathematics.
 
-<img src="screenshot.png" alt="screenshot" width="50%">
+<img src="screenshot.png" alt="screenshot" width="49%"><img src="heart_ani_cut.gif" alt="screenshot" width="49%">
 
 ## 📥 Download
 You can download the latest release from the [Releases Page](https://github.com/kirinonakar/symvacas/releases).
