@@ -136,7 +136,7 @@ input:disabled,select:disabled{opacity:.45;cursor:default}
 #graph-cartesian-help{font-size:12px;color:var(--muted);margin:0 0 12px}
 #graph-parameters .graph-parameter-value{flex-direction:row;align-items:center;justify-content:space-between;gap:10px}#graph-parameters .graph-parameter-value span{overflow-wrap:anywhere}#graph-parameters .graph-parameter-value input{width:120px;flex-shrink:0;padding:7px 9px}#graph-parameters input[aria-invalid="true"]{border-color:#b33724}
 .graph-range-pair{flex:1 1 240px;min-width:0}.graph-range-fields{display:flex;gap:12px}.graph-range-fields label{min-width:0!important;flex:1}.graph-range-fields output{font-variant-numeric:tabular-nums}
-.graph-range-slider{position:relative;height:36px;margin:4px 0 8px;isolation:isolate}
+.graph-range-slider{position:relative;height:36px;margin:4px 0 8px;isolation:isolate;cursor:pointer}
 .graph-range-slider::before{content:"";position:absolute;left:10px;right:10px;top:16px;height:4px;border-radius:2px;background:linear-gradient(to right,var(--line) 0 var(--range-start),var(--accent) var(--range-start) var(--range-end),var(--line) var(--range-end) 100%)}
 .graph-range-slider input[type="range"]{appearance:none;-webkit-appearance:none;position:absolute;inset:0;width:100%;height:36px;margin:0;padding:0;border:0;border-radius:0;background:transparent;pointer-events:none}
 .graph-range-slider input[type="range"]::-webkit-slider-runnable-track{height:4px;background:transparent}
@@ -147,7 +147,7 @@ input:disabled,select:disabled{opacity:.45;cursor:default}
 .graph-range-slider input[type="range"]:focus-visible{outline:none;z-index:1}
 .graph-range-slider input[type="range"]:focus-visible::-webkit-slider-thumb{outline:2px solid var(--accent);outline-offset:3px}
 .graph-range-slider input[type="range"]:focus-visible::-moz-range-thumb{outline:2px solid var(--accent);outline-offset:3px}
-.graph-range-slider:has(input:disabled){opacity:.45}
+.graph-range-slider:has(input:disabled){opacity:.45;cursor:default}
 .graph-range-slider input[type="range"]:disabled::-webkit-slider-thumb{pointer-events:none;cursor:default}
 .graph-range-slider input[type="range"]:disabled::-moz-range-thumb{pointer-events:none;cursor:default}
 #graph-analysis-sliders{width:100%;min-width:0;padding-left:var(--graph-axis-left,5.25%);padding-right:var(--graph-axis-right,5.25%)}

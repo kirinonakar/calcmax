@@ -124,6 +124,23 @@ test('Clear analysis removes integral errors and ignores failures from cleared r
   byId('graph-analysis-clear').click();expectCleared();
 });
 
+test('range tracks move the nearest visible enabled thumb on click and preserve native thumb clicks',t=>{
+  const {dom,byId,workspace}=setup(t);
+  const track=byId('graph-min-slider').parentElement;
+  track.getBoundingClientRect=()=>({left:100,width:220});
+  const click=(target,clientX,button=0)=>target.dispatchEvent(new dom.window.MouseEvent('click',{bubbles:true,clientX,button}));
+  click(track,170);assert.equal(workspace.snapshot().ranges['graph-min'],-8);assert.equal(workspace.snapshot().ranges['graph-max'],10);
+  assert.equal(document.activeElement,byId('graph-min-slider'));
+  click(track,250);assert.equal(workspace.snapshot().ranges['graph-max'],8);
+  click(byId('graph-min-slider'),300);assert.equal(workspace.snapshot().ranges['graph-min'],-8,'thumb click must keep native drag behavior');
+  click(track,150,2);assert.equal(workspace.snapshot().ranges['graph-min'],-8,'right click must not move a thumb');
+  byId('graph-min-slider').disabled=true;byId('graph-max-slider').disabled=true;
+  click(track,110);assert.equal(workspace.snapshot().ranges['graph-min'],-8);
+  byId('graph-analysis-action').value='derivative';byId('graph-analysis-action').onchange();
+  const pointTrack=byId('graph-analysis-a-slider').parentElement;pointTrack.getBoundingClientRect=()=>({left:100,width:220});
+  click(pointTrack,260);assert.equal(workspace.snapshot().ranges['graph-analysis-a'],4,'single visible thumb follows the click');
+});
+
 test('incomplete or invalid typed ranges preserve the slider domain until valid',t=>{
   const {byId,workspace,edit}=setup(t),slider=byId('graph-min-slider');
   edit('graph-min',40);edit('graph-max',60);
@@ -243,6 +260,18 @@ test('typed parameter values and bounds center sliders, and reset restores value
   edit('[data-parameter-bound="1"]',35);expectSlider(-5,35,15);
   edit('[data-parameter-value]',100);expectSlider(80,120,100);
   const before=saves;byId('graph-reset-parameters').click();expectSlider(-5,5,1);assert.ok(saves>before);
+  const rangeTrack=byId('graph-parameters').querySelector('[data-parameter-range]');
+  rangeTrack.getBoundingClientRect=()=>({left:100,width:220});
+  rangeTrack.dispatchEvent(new dom.window.MouseEvent('click',{bubbles:true,clientX:170}));
+  expectSlider(-4,5,.5);
+  rangeTrack.dispatchEvent(new dom.window.MouseEvent('click',{bubbles:true,clientX:250}));
+  expectSlider(-4,4,0);
+  const [minimum,maximum]=rangeTrack.querySelectorAll('input[type="range"]');
+  minimum.value=10;minimum.dispatchEvent(new dom.window.Event('input'));
+  assert.ok(workspace.snapshot().parameterRanges.a[0]<workspace.snapshot().parameterRanges.a[1],'range thumbs cannot cross');
+  maximum.value=-10;maximum.dispatchEvent(new dom.window.Event('input'));
+  assert.ok(workspace.snapshot().parameterRanges.a[0]<workspace.snapshot().parameterRanges.a[1]);
+  byId('graph-reset-parameters').click();expectSlider(-5,5,1);
 });
 
 test('Plot and Analyze stay disabled across animation frames and recover after Stop',async()=>{
