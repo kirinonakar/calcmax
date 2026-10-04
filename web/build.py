@@ -1,4 +1,4 @@
-"""Build a self-hosted static CalcMax distribution; no server-side Python at runtime."""
+"""Build a self-hosted static SymvaCAS distribution; no server-side Python at runtime."""
 import argparse
 import hashlib
 import json
@@ -32,7 +32,7 @@ def build(skip_download=False, output=None):
     shutil.copyfile(PROJECT / "LICENSE", ROOT / "LICENSE")
     app_version = re.search(r'versionName\s*=\s*"([^"]+)"', (PROJECT / "app/build.gradle.kts").read_text(encoding="utf-8")).group(1)
     (ROOT / "app-version.js").write_text("export const appVersion = " + json.dumps(app_version) + ";\n", encoding="utf-8")
-    ui_source = PROJECT / "app/src/main/java/com/kirinonakar/calcmax/ui"
+    ui_source = PROJECT / "app/src/main/java/com/kirinonakar/symvacas/ui"
     probability_schema = json.loads((PROJECT / "app/src/main/assets/probability.json").read_text(encoding="utf-8"))
     (ROOT / "probability-schema.js").write_text("export const probabilitySchema = " + json.dumps(probability_schema,ensure_ascii=False,indent=2) + ";\n",encoding="utf-8")
     groups = {name: re.findall(r'"([^"\n]+)"', items) for name, items in re.findall(r'"([^"\n]+)" to listOf\(([^\n]+)\)', (ui_source / "UnitsConstantsScreens.kt").read_text(encoding="utf-8"))}
@@ -42,7 +42,7 @@ def build(skip_download=False, output=None):
     with zipfile.ZipFile(ROOT / "engine.zip", "w", zipfile.ZIP_DEFLATED) as archive:
         for source in sorted((PROJECT / "app/src/main/python").glob("*.py")):
             archive.write(source, source.name)
-    catalog_source = (PROJECT / "app/src/main/java/com/kirinonakar/calcmax/ui/Catalog.kt").read_text(encoding="utf-8")
+    catalog_source = (PROJECT / "app/src/main/java/com/kirinonakar/symvacas/ui/Catalog.kt").read_text(encoding="utf-8")
     catalog = {}
     for category, entries in re.findall(r'"([^"\n]+)" to listOf\(([^\n]+)\)', catalog_source):
         catalog[category] = re.findall(r'"([^"\n]+)"', entries)
@@ -104,7 +104,7 @@ def assets_manifest():
         digest.update(path.relative_to(ROOT).as_posix().encode())
         digest.update(path.read_bytes())
     assets = ["./"] + ["./" + path.relative_to(ROOT).as_posix() for path in files]
-    source = f"self.CALCMAX_CACHE = 'calcmax-static-{digest.hexdigest()[:16]}';\nself.CALCMAX_ASSETS = {json.dumps(assets, indent=2)};\n"
+    source = f"self.SYMVACAS_CACHE = 'symvacas-static-{digest.hexdigest()[:16]}';\nself.SYMVACAS_ASSETS = {json.dumps(assets, indent=2)};\n"
     (ROOT / "assets.js").write_text(source, encoding="utf-8")
 
 
@@ -115,7 +115,7 @@ def publish_directory(output):
         raise ValueError("Choose an output directory outside web/, e.g. build/web")
     target.mkdir(parents=True, exist_ok=True)
     source = (ROOT / "assets.js").read_text(encoding="utf-8")
-    assets = json.loads(re.search(r"self.CALCMAX_ASSETS = (\[[\s\S]+\]);", source).group(1))
+    assets = json.loads(re.search(r"self.SYMVACAS_ASSETS = (\[[\s\S]+\]);", source).group(1))
     for name in ["./assets.js", *assets]:
         if name == "./":
             continue

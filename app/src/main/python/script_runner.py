@@ -3,7 +3,7 @@ import contextlib
 import builtins
 import json
 import traceback
-import calcmax_catalog
+import symvacas_catalog
 from calc_runtime import Budget, ExecutionStopped
 
 
@@ -36,7 +36,7 @@ def run(payload, input_bridge=None, control=None):
         return value
     script_builtins["input"] = script_input
     namespace["__builtins__"] = script_builtins
-    calcmax_catalog.set_context(request.get("functions"),request.get("variables"),request.get("assumptions"))
+    symvacas_catalog.set_context(request.get("functions"),request.get("variables"),request.get("assumptions"))
     try:
         # Android owns the wall deadline and pauses it during input(). Here we only
         # poll cancellation, including tight loops in user scripts and catalog calls.
@@ -50,4 +50,4 @@ def run(payload, input_bridge=None, control=None):
         return json.dumps({"ok": False, "output": output.getvalue(),
                            "error": traceback.format_exc(limit=12)[-12000:]}, ensure_ascii=False)
     finally:
-        calcmax_catalog.set_context()
+        symvacas_catalog.set_context()

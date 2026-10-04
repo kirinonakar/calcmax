@@ -6,16 +6,16 @@ import unittest
 
 sys.path.insert(0,str(pathlib.Path(__file__).resolve().parents[1] / "app/src/main/python"))
 import script_runner
-import calcmax_catalog
+import symvacas_catalog
 
 
 class ScriptRunnerTests(unittest.TestCase):
     def test_every_catalog_name_has_a_python_callable(self):
-        source=(pathlib.Path(__file__).resolve().parents[1] / "app/src/main/java/com/kirinonakar/calcmax/ui/Catalog.kt").read_text(encoding="utf-8")
+        source=(pathlib.Path(__file__).resolve().parents[1] / "app/src/main/java/com/kirinonakar/symvacas/ui/Catalog.kt").read_text(encoding="utf-8")
         names=set(re.findall(r'"([A-Za-z][A-Za-z0-9_]*)\(',source))
         self.assertGreater(len(names),70)
         for name in names:
-            with self.subTest(name=name): self.assertTrue(callable(getattr(calcmax_catalog,name)))
+            with self.subTest(name=name): self.assertTrue(callable(getattr(symvacas_catalog,name)))
 
 
     def test_input_prompt_and_float_conversion(self):
@@ -44,7 +44,7 @@ class ScriptRunnerTests(unittest.TestCase):
 
     def test_custom_catalog_function_uses_saved_definition(self):
         definition={"f":{"parameters":["x"],"body":{"kind":"binary","value":"+","args":[{"kind":"symbol","value":"x"},{"kind":"number","value":"1"}]}}}
-        result=json.loads(script_runner.run(json.dumps({"source":"import calcmax_catalog as calc\nprint(calc.f(3))","functions":definition})))
+        result=json.loads(script_runner.run(json.dumps({"source":"import symvacas_catalog as calc\nprint(calc.f(3))","functions":definition})))
         self.assertTrue(result["ok"],result)
         self.assertEqual(result["output"],"4\n")
 

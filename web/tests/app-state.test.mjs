@@ -46,7 +46,7 @@ test('Ans functions survive matching restored answers and expire on replacement 
   const persistence=createPersistence({state,snapshot:()=>({expression:'',graph:{}}),onPersist:()=>{},toast:()=>{}});
   state.variables.A={kind:'number',value:'2'};persistence.persist();assert.ok(state.functions.g);
   state.variables.Ans={kind:'number',value:'2'};persistence.persist();assert.equal(state.functions.g,undefined);assert.ok(state.functions.f);
-  assert.equal(JSON.parse(localStorage.getItem('calcmax-web-v1')).functions.g,undefined);
+  assert.equal(JSON.parse(localStorage.getItem('symvacas-web-v1')).functions.g,undefined);
   state.variables.Ans=answer;state.functions.g=linked;state.variables={};persistence.persist();assert.equal(state.functions.g,undefined);
   const saved={variables:{},functions:{g:linked}};assert.equal(createAppState(saved).functions.g,undefined);assert.ok(saved.functions.g,'restoration does not modify the source backup');
   persistence.dispose();
@@ -59,7 +59,7 @@ test('persistence saves the CALC formula and graph draft while disabled history 
   const graph={sources:{cartesian:'x^2'},parameters:{a:3}};
   const persistence=createPersistence({state,snapshot:()=>({expression:'A+B',graph}),onPersist:()=>updates++,toast:()=>assert.fail('storage should work')});
   persistence.persist();
-  const stored=JSON.parse(localStorage.getItem('calcmax-web-v1'));
+  const stored=JSON.parse(localStorage.getItem('symvacas-web-v1'));
   assert.equal(stored.fields.expression,'A+B','temporary numeric CALC input must not replace the formula');
   assert.equal(stored.fields.enabled,true);assert.deepEqual(stored.graph,graph);
   assert.deepEqual(stored.history,[]);assert.deepEqual(state.history,history);assert.equal(updates,1);
@@ -73,7 +73,7 @@ test('draft saves are debounced, immediate persistence flushes, and disposal can
   const persistence=createPersistence({state,snapshot:()=>({expression:$('expression').value,graph:{}}),onPersist:()=>writes++,toast:()=>{}});
   persistence.schedulePersist();t.mock.timers.tick(100);$('expression').value='456';persistence.schedulePersist();
   t.mock.timers.tick(149);assert.equal(writes,0);t.mock.timers.tick(1);assert.equal(writes,1);
-  assert.equal(JSON.parse(localStorage.getItem('calcmax-web-v1')).fields.expression,'456');
+  assert.equal(JSON.parse(localStorage.getItem('symvacas-web-v1')).fields.expression,'456');
   persistence.schedulePersist();persistence.persist();t.mock.timers.tick(150);assert.equal(writes,2);
   persistence.schedulePersist();persistence.dispose();t.mock.timers.tick(150);assert.equal(writes,2);
 });
@@ -121,7 +121,7 @@ for(const language of ['en','ko'])for(const hasData of [false,true]){
     assert.ok(state.functions.f);assert.equal(state.functions.g,undefined,'Ans-linked functions expire when Ans is deleted');
     assert.deepEqual(state.assumptions,{A:['positive']});assert.equal(state.history.length,1);
     if(hasData)assert.ok(body.textContent.includes('samples'));
-    const restored=createAppState(JSON.parse(localStorage.getItem('calcmax-web-v1')));
+    const restored=createAppState(JSON.parse(localStorage.getItem('symvacas-web-v1')));
     assert.deepEqual(restored.variables,{});assert.deepEqual(restored.datasets,datasets);assert.ok(restored.functions.f);assert.equal(restored.functions.g,undefined);
     dialogs.variables();
     assert.equal([...body.querySelectorAll('button')].find(button=>button.textContent===label).hidden,true);

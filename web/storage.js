@@ -1,4 +1,4 @@
-const KEY='calcmax-web-v1';
+const KEY='symvacas-web-v1';
 export function readState() {
   try { const value=JSON.parse(localStorage.getItem(KEY)); return value && typeof value==='object' && !Array.isArray(value) ? value : {}; }
   catch { return {}; }

@@ -1,6 +1,6 @@
-# CalcMax Web / 웹 버전
+# SymvaCAS Web / 웹 버전
 
-CalcMax's existing Python/SymPy engine runs in the browser through CPython WebAssembly (Pyodide 314.0.7, Python 3.14.2, SymPy 1.14.0). The site consists entirely of static files; a calculation server, Android SDK, Node.js build, API key, and special cross-origin isolation headers are not required.
+SymvaCAS's existing Python/SymPy engine runs in the browser through CPython WebAssembly (Pyodide 314.0.7, Python 3.14.2, SymPy 1.14.0). The site consists entirely of static files; a calculation server, Android SDK, Node.js build, API key, and special cross-origin isolation headers are not required.
 
 기존 Python/SymPy 계산 엔진을 브라우저의 WebAssembly 런타임에서 실행합니다. 계산 서버 없이 정적 웹 호스팅으로 배포할 수 있습니다.
 
@@ -12,14 +12,14 @@ Cartesian supports both **Function / y=f(x)** and **Implicit / F(x,y)=0**. Enter
 
 ### GitHub Pages — open index.html / GitHub에서 바로 실행
 
-The repository includes `.github/workflows/pages.yml`. In **Settings → Pages → Build and deployment → Source**, select **GitHub Actions** once. Push the changes to `main` (or run **Actions → Deploy CalcMax Web → Run workflow**). The workflow builds and publishes a complete static site, including the WASM runtime and engine archive. No Python server or build command is needed by visitors.
+The repository includes `.github/workflows/pages.yml`. In **Settings → Pages → Build and deployment → Source**, select **GitHub Actions** once. Push the changes to `main` (or run **Actions → Deploy SymvaCAS Web → Run workflow**). The workflow builds and publishes a complete static site, including the WASM runtime and engine archive. No Python server or build command is needed by visitors.
 
 저장소의 **Settings → Pages → Source**를 **GitHub Actions**로 한 번 설정하세요. 이후 `main`에 업로드하면 자동으로 배포됩니다. 배포가 완료되면 아래 주소에서 `index.html`이 바로 실행됩니다.
 
-- [CalcMax Web](https://kirinonakar.github.io/calcmax/)
-- [index.html](https://kirinonakar.github.io/calcmax/index.html)
+- [SymvaCAS Web](https://kirinonakar.github.io/symvacas/)
+- [index.html](https://kirinonakar.github.io/symvacas/index.html)
 
-These are deployment addresses, not confirmation that the site has already been published. GitHub's repository file viewer shows HTML source; use the Pages URL to run the application. All files are relative to `index.html`, so project Pages paths such as `/calcmax/` are supported. For forks, replace the owner/repository in the URL.
+These are deployment addresses, not confirmation that the site has already been published. GitHub's repository file viewer shows HTML source; use the Pages URL to run the application. All files are relative to `index.html`, so project Pages paths such as `/symvacas/` are supported. For forks, replace the owner/repository in the URL.
 
 ### Local development / 로컬 개발
 
@@ -34,7 +34,7 @@ Open [http://localhost:8080](http://localhost:8080). The first build needs an in
 
 저장소 루트에서 위 명령을 실행한 뒤 브라우저로 접속하세요. 최초 빌드에만 런타임 다운로드가 필요하며, 계산은 브라우저 안에서 처리합니다. `index.html`을 더블 클릭하는 `file://` 방식은 Worker/모듈 로딩 제한 때문에 지원하지 않습니다.
 
-Upload the **complete contents of `web/`**, including generated `vendor/`, `engine.zip`, and `assets.js`, to any static HTTP(S) host. Nested paths such as `/calcmax/` work. Serve `.wasm` as `application/wasm`, `.js`/`.mjs` as JavaScript, and preserve binary archives. Do not replace missing files with an HTML SPA fallback. GitHub Pages, nginx, or a standard static file server can serve the site.
+Upload the **complete contents of `web/`**, including generated `vendor/`, `engine.zip`, and `assets.js`, to any static HTTP(S) host. Nested paths such as `/symvacas/` work. Serve `.wasm` as `application/wasm`, `.js`/`.mjs` as JavaScript, and preserve binary archives. Do not replace missing files with an HTML SPA fallback. GitHub Pages, nginx, or a standard static file server can serve the site.
 
 ## Features / 기능
 
@@ -49,7 +49,7 @@ Upload the **complete contents of `web/`**, including generated `vendor/`, `engi
 - Scroll up to browse up to ten previous calculations; tap a formula to reuse it. The separate History dialog retains up to 500 calculations. Clearing History keeps starred entries.
 - The result notation button cycles OFF → ENG → SCI → OFF, as on Android. OFF shows a dimmed ENG label; ENG uses powers of three and SCI uses powers of ten. The preference is saved and applies to current results and history without changing exact values.
 - CALC prompts for input variables one at a time using the regular keypad or Keyboard entry. Saved formulas and symbolic STO results expose their underlying inputs: after `C=A+B`, enter `C` and press CALC to enter A and B, even if they already have numeric values. Formula assignments retain their source; self-updates such as `B=B+1` still store the computed value. Confirm each value with `=` or CALC; a blank value recalls its stored value or defaults to zero. Values must be numeric. AC cancels and restores the formula.
-- Python editor with local `.py` open/save, `calcmax_catalog`, standard library/SymPy/mpmath, bounded output, and interactive `input()` dialogs. Optional pre-entered values (one per line) are consumed first.
+- Python editor with local `.py` open/save, `symvacas_catalog`, standard library/SymPy/mpmath, bounded output, and interactive `input()` dialogs. Optional pre-entered values (one per line) are consumed first.
 - Statistics, matrices, and vectors use spreadsheet tables with row/column headers and arrow-key cell navigation. Statistics columns and independent sample selectors are named x/y/z; controls unused by the selected analysis are disabled. Group/value data select group names from the data.
 - Matrix and vector workspaces include `add`, `subtract`, `multiply`, and `divide`. The grid accepts up to 9 × 9 matrices or 9 vector components.
 - Statistics include grouped and categorical data, custom regression, distribution queries, and scatter/histogram/box plots.

@@ -22,10 +22,10 @@ export function createAppDialogs({state,ui,persist,calculator,changeMode,pressKe
     holder.append(input,clear);return holder;
   }
   $('about-button').onclick=()=>{
-    const content=element('div','','about-content'),icon=element('img'),version=element('p',`v${appVersion}`,'hint'),link=element('a','https://github.com/kirinonakar/calcmax');
-    icon.src='app-icon.png';icon.alt='CalcMax';icon.width=64;icon.height=64;
-    link.href='https://github.com/kirinonakar/calcmax';link.target='_blank';link.rel='noopener noreferrer';
-    content.append(icon,version,link,control('Close',()=>$('dialog').close()));openDialog('CalcMax',content);
+    const content=element('div','','about-content'),icon=element('img'),version=element('p',`v${appVersion}`,'hint'),link=element('a','https://github.com/kirinonakar/symvacas');
+    icon.src='app-icon.png';icon.alt='SymvaCAS';icon.width=64;icon.height=64;
+    link.href='https://github.com/kirinonakar/symvacas';link.target='_blank';link.rel='noopener noreferrer';
+    content.append(icon,version,link,control('Close',()=>$('dialog').close()));openDialog('SymvaCAS',content);
   };
   function renderDisplayShortcuts(){const toolbar=$('exact-toggle').parentElement;toolbar.querySelectorAll('[data-shortcut]').forEach(button=>button.remove());for(const shortcut of state.displayShortcuts){const button=control(shortcut.label,()=>{if(shortcut.source==='catalog')calculator.insert(shortcut.input,shortcut.input.includes('[]')?shortcut.input.indexOf('[]')+1:shortcut.input.includes('(')?shortcut.input.indexOf('(')+1:shortcut.input.length);else pressKey(shortcut.input);});button.dataset.shortcut=shortcut.input;toolbar.insertBefore(button,$('answer-copy'));}toolbar.append($('shortcut-settings'));}
   $('shortcut-settings').onclick=()=>{
@@ -81,7 +81,7 @@ export function createAppDialogs({state,ui,persist,calculator,changeMode,pressKe
         if(value('mode')==='python'){
           const field=$('python-source'),at=field.selectionStart;let draft=field.value;const inserted=`calc.${source}`;
           draft=draft.slice(0,at)+inserted+draft.slice(field.selectionEnd);
-          if(!draft.includes('import calcmax_catalog as calc'))draft='import calcmax_catalog as calc\nfrom calcmax_catalog import x, y, z, t, pi\n'+draft;
+          if(!draft.includes('import symvacas_catalog as calc'))draft='import symvacas_catalog as calc\nfrom symvacas_catalog import x, y, z, t, pi\n'+draft;
           field.value=draft;field.focus();persist();
         }else{changeMode('scientific');calculator.insert(source,source==='rnd()'?source.length:source.includes('[]')?source.indexOf('[]')+1:source.indexOf('(')+1);}
         $('dialog').close();
@@ -129,9 +129,9 @@ export function createAppDialogs({state,ui,persist,calculator,changeMode,pressKe
     for(const [key,label,min,max] of [['precision','내부 유효 숫자',3,200],['digits','표시 소수 자릿수',2,200]]){const input=element('input');input.type='number';input.min=min;input.max=max;input.value=state[key];input.dataset.setting=key;input.onchange=()=>{state[key]=Math.max(min,Math.min(max,Number(input.value)||min));state.digits=Math.min(state.precision,state.digits);input.value=state[key];$('digits-indicator').textContent=`≤ ${state.digits} digits`;persist();refreshDisplays();};const holder=element('label',label);holder.append(input);content.append(holder);}
     for(const [key,label,min,max] of [['inputFont','Input font',10,42],['outputFont','Output font',10,48]]){const input=element('input');input.type='range';input.min=min;input.max=max;input.value=state[key];input.dataset.setting=key;input.oninput=()=>{state[key]=Number(input.value);calculator.applyFonts();persist();};const holder=element('label',label);holder.append(input);content.append(holder);}
     for(const [key,label] of [['autoCloseBrackets','Bracket auto-close'],['wordWrap','Input word wrap'],['persistHistory','Save history locally'],['haptics','Key vibration'],['sound','Key sound']]){const input=element('input');input.type='checkbox';input.checked=state[key];input.dataset.setting=key;input.onchange=()=>{state[key]=input.checked;if(key==='wordWrap'){calculator.applyWordWrap();calculator.preview();}persist();};const holder=element('label',label,'check');holder.append(input);content.append(holder);}
-    content.append(element('p','계산 기록, 변수, 함수, 작업 내용은 이 브라우저에 저장됩니다. 전체 백업에는 Python 코드도 포함됩니다.','hint'),control('전체 백업 내보내기',()=>{persist();downloadFile('calcmax-backup.json',JSON.stringify(state,null,2),'application/json');}),control('백업 가져오기',()=>pickFile('.json',async file=>{
+    content.append(element('p','계산 기록, 변수, 함수, 작업 내용은 이 브라우저에 저장됩니다. 전체 백업에는 Python 코드도 포함됩니다.','hint'),control('전체 백업 내보내기',()=>{persist();downloadFile('symvacas-backup.json',JSON.stringify(state,null,2),'application/json');}),control('백업 가져오기',()=>pickFile('.json',async file=>{
       const backup=JSON.parse(await file.text());
-      if(!backup||typeof backup!=='object'||!backup.fields||!backup.variables||!backup.functions)throw new Error('CalcMax 웹 백업 파일이 아닙니다.');
+      if(!backup||typeof backup!=='object'||!backup.fields||!backup.variables||!backup.functions)throw new Error('SymvaCAS 웹 백업 파일이 아닙니다.');
       // All restored names and math are still validated by the parser/engine.
       if(!writeState(backup))throw new Error('백업을 저장할 공간이 부족합니다.');location.reload();
     })),control('변수 초기화',()=>{state.variables={};persist();toast('변수를 초기화했습니다.');}));

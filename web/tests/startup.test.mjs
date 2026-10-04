@@ -9,15 +9,15 @@ function fixture(){
   const lock={packages:Object.fromEntries(['mpmath','sympy'].map(name=>[name,{file_name:name+'.whl',sha256:'00'.repeat(32)}]))};
   const pyodide={runPython:source=>{python.push(source);return '/lib/python3.14/site-packages';},unpackArchive:(body,format,options)=>unpacked.push({body:new TextDecoder().decode(body),format,...options}),loadPackage:()=>{throw new Error('Package manager must not run during startup');}};
   const fetcher=async(url,options)=>{requests.push({url:String(url),options});return new Response(String(url).endsWith('pyodide-lock.json')?JSON.stringify(lock):String(url).split('/').at(-1));};
-  const options={runtimeURL:new URL('https://example.test/calcmax/vendor/'),engineURL:new URL('https://example.test/calcmax/engine.zip'),fetcher};
+  const options={runtimeURL:new URL('https://example.test/symvacas/vendor/'),engineURL:new URL('https://example.test/symvacas/engine.zip'),fetcher};
   return {requests,unpacked,python,pyodide,options};
 }
 
 test('cold startup installs bundled wheels in dependency order with integrity and nested paths',async()=>{
   const f=fixture();await installEngine(f.pyodide,f.options);
   assert.deepEqual(f.unpacked.map(item=>item.body),['mpmath.whl','sympy.whl','engine.zip']);
-  assert.deepEqual(f.unpacked.map(item=>item.extractDir),['/lib/python3.14/site-packages','/lib/python3.14/site-packages','/calcmax']);
-  for(const request of f.requests.filter(item=>item.url.endsWith('.whl'))){assert.match(request.url,/\/calcmax\/vendor\//);assert.match(request.options.integrity,/^sha256-/);}
+  assert.deepEqual(f.unpacked.map(item=>item.extractDir),['/lib/python3.14/site-packages','/lib/python3.14/site-packages','/symvacas']);
+  for(const request of f.requests.filter(item=>item.url.endsWith('.whl'))){assert.match(request.url,/\/symvacas\/vendor\//);assert.match(request.options.integrity,/^sha256-/);}
   assert.match(f.python.at(-1),/import calc_engine, script_runner/);
 });
 

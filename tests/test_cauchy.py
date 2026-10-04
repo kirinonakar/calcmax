@@ -6,7 +6,7 @@ import unittest
 
 sys.path.insert(0,str(pathlib.Path(__file__).resolve().parents[1]/'app/src/main/python'))
 import calc_engine
-import calcmax_catalog as calc
+import symvacas_catalog as calc
 import sympy as s
 
 

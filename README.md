@@ -1,6 +1,6 @@
-# CalcMax
+# SymvaCAS
 <p align="center">
-  <img src="app/src/main/ic_launcher-playstore.png" alt="CalcMax" width="100" height="100" />
+  <img src="app/src/main/ic_launcher-playstore.png" alt="SymvaCAS" width="100" height="100" />
 </p>
 
 A native Android scientific, graphing, programming and Computer Algebra System (CAS) calculator. A bundled SymPy engine provides exact offline mathematics.
@@ -8,10 +8,10 @@ A native Android scientific, graphing, programming and Computer Algebra System (
 <img src="screenshot.png" alt="screenshot" width="50%">
 
 ## 📥 Download
-You can download the latest release from the [Releases Page](https://github.com/kirinonakar/calcmax/releases).
+You can download the latest release from the [Releases Page](https://github.com/kirinonakar/symvacas/releases).
 
 ## 🌐 Web version
-Try CalcMax in your browser: [kirinonakar.github.io/calcmax](https://kirinonakar.github.io/calcmax/).
+Try SymvaCAS in your browser: [kirinonakar.github.io/symvacas](https://kirinonakar.github.io/symvacas/).
 
 ## Everyday use
 
@@ -27,7 +27,7 @@ Try CalcMax in your browser: [kirinonakar.github.io/calcmax](https://kirinonakar
 
 ### LaTeX paste
 
-Paste supported LaTeX into the Android or web calculator with `Paste` or directly into its text input. CalcMax converts it to an editable expression that can be calculated. Math delimiters (`\[...\]`, `\(...\)`, `$$...$$`, and `$...$`).
+Paste supported LaTeX into the Android or web calculator with `Paste` or directly into its text input. SymvaCAS converts it to an editable expression that can be calculated. Math delimiters (`\[...\]`, `\(...\)`, `$$...$$`, and `$...$`).
 
 ```latex
 $$\sqrt[3]{5} \times 25^{\frac{1}{3}}$$
@@ -122,7 +122,7 @@ cagr(1000,2000,5)
 
 The `web/` folder contains a static browser port using the same Python/SymPy engine through WebAssembly, with Korean/English UI and light/dark/system themes. It needs no calculation backend.
 
-For GitHub hosting, select **Settings → Pages → Source → GitHub Actions** once. The included **Deploy CalcMax Web** workflow builds and publishes the static `index.html` site on pushes to `main`. Once deployment succeeds, open [CalcMax Web](https://kirinonakar.github.io/calcmax/).
+For GitHub hosting, select **Settings → Pages → Source → GitHub Actions** once. The included **Deploy SymvaCAS Web** workflow builds and publishes the static `index.html` site on pushes to `main`. Once deployment succeeds, open [SymvaCAS Web](https://kirinonakar.github.io/symvacas/).
 
 ```powershell
 python web/build.py

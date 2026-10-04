@@ -14,7 +14,7 @@ export function createFunctionsWorkspace({state,ui,persist,refreshWorkspaceMath,
   }
   $('function-clear').onclick=()=>{for(const id of ['function-name','function-parameters','function-body'])$(id).value='';refreshWorkspaceMath();persist();};
   $('function-save').onclick=()=>{try{const name=value('function-name').trim(),parameters=value('function-parameters').split(',').map(p=>p.trim()),source=latexInput(value('function-body'));state.functions[name]=defineFunction(name,parameters,source);persist();functionsList();toast('함수를 저장했습니다.');}catch(exc){toast(exc.message);}};
-  $('function-export').onclick=()=>downloadFile('calcmax-functions.json',encodeFunctions(state.functions),'application/json');
+  $('function-export').onclick=()=>downloadFile('symvacas-functions.json',encodeFunctions(state.functions),'application/json');
   $('function-import').onclick=()=>pickFile('.json',async file=>{const {functions,skipped}=decodeFunctions(await file.text());Object.assign(state.functions,functions);persist();functionsList();toast(`${t('Functions imported.')} ${Object.keys(functions).length} · ${skipped} ${t('skipped')}`);});
   return {render:functionsList};
 }

@@ -22,7 +22,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "calcmax"
+rootProject.name = "SymvaCAS"
 include(":app")
 include(":math")
  

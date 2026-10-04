@@ -12,7 +12,7 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Calcmax">
+        android:theme="@style/Theme.SymvaCAS">
         <service android:name=".calculator.EngineService" android:exported="false" android:process=":math" />
         <activity
             android:name=".MainActivity"
@@ -20,7 +20,7 @@
             android:windowSoftInputMode="adjustNothing"
             android:exported="true"
             android:label="@string/app_name"
-            android:theme="@style/Theme.Calcmax">
+            android:theme="@style/Theme.SymvaCAS">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 

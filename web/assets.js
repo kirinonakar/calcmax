@@ -1,5 +1,5 @@
-self.CALCMAX_CACHE = 'calcmax-static-3999b83bb885cc56';
-self.CALCMAX_ASSETS = [
+self.SYMVACAS_CACHE = 'symvacas-static-2d6bef3910ed6cfc';
+self.SYMVACAS_ASSETS = [
   "./",
   "./app-dialogs.js",
   "./app-icon.png",

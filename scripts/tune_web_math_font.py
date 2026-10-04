@@ -68,14 +68,14 @@ def tune(font):
         top_dict.CharStrings[name] = pen.getCharString(previous.private, previous.globalSubrs)
     font["MATH"].table.MathConstants.RadicalRuleThickness.Value = THICKNESS
     # Keep the original copyright and OFL notices; identify the local derivative.
-    names = {1: "CalcMax Math", 3: "CalcMaxMath-Regular;2.13b171;radical44",
-             4: "CalcMax Math Regular", 6: "CalcMaxMath-Regular", 16: "CalcMax Math"}
+    names = {1: "SymvaCAS Math", 3: "SymvaCASMath-Regular;2.13b171;radical44",
+             4: "SymvaCAS Math Regular", 6: "SymvaCASMath-Regular", 16: "SymvaCAS Math"}
     for record in font["name"].names:
         if record.nameID in names:
             record.string = names[record.nameID].encode(record.getEncoding())
-    cff.fontNames[0] = "CalcMaxMath-Regular"
-    top_dict.FamilyName = "CalcMax Math"
-    top_dict.FullName = "CalcMax Math Regular"
+    cff.fontNames[0] = "SymvaCASMath-Regular"
+    top_dict.FamilyName = "SymvaCAS Math"
+    top_dict.FullName = "SymvaCAS Math Regular"
     validate(font)
     for name in font.getGlyphOrder():
         if name not in CAPS:

@@ -51,7 +51,7 @@ class Budget:
         if monitoring is not None:
             for tool_id in (5, 4, 3, 2, 1, 0):
                 try:
-                    monitoring.use_tool_id(tool_id, "calcmax-budget")
+                    monitoring.use_tool_id(tool_id, "symvacas-budget")
                 except ValueError:
                     continue
                 self.tool_id = tool_id

@@ -43,7 +43,7 @@ if __name__ == "__main__":
     options = parser.parse_args()
     handler = functools.partial(StaticHandler, directory=str(WEB))
     with http.server.ThreadingHTTPServer((options.bind, options.port), handler) as server:
-        print(f"CalcMax: http://{options.bind}:{server.server_port} (static files only)", flush=True)
+        print(f"SymvaCAS: http://{options.bind}:{server.server_port} (static files only)", flush=True)
         try:
             server.serve_forever()
         except KeyboardInterrupt:

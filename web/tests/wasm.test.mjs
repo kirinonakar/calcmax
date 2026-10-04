@@ -31,7 +31,7 @@ test('Cauchy catalog templates evaluate in WASM and Python mode',async()=>{
       assert.ok(Math.abs(Number(result.decimal)-expected)<1e-14,source);
     }
   }
-  py.globals.set('payload',JSON.stringify({source:'import calcmax_catalog as calc\nprint(calc.cauchycdf(-1,1))\nprint(calc.invcauchy(calc.sp.Rational(3,4)))'}));
+  py.globals.set('payload',JSON.stringify({source:'import symvacas_catalog as calc\nprint(calc.cauchycdf(-1,1))\nprint(calc.invcauchy(calc.sp.Rational(3,4)))'}));
   const result=JSON.parse(py.runPython('script_runner.run(payload)'));
   assert.equal(result.ok,true,result.error);
   assert.equal(result.output,'1/2\n1\n');
@@ -186,7 +186,7 @@ test('actual CPython WASM reuses the Android engine across workspaces',async()=>
   assert.ok(circle.every(([x,y])=>Math.abs(x*x+y*y-4)<1e-5));
   assert.ok(implicit.curves[1].filter(Boolean).every(([x])=>Math.abs(x-.3)<1e-6));
   assert.ok(discontinuity.curves[0].some(p=>p===null));
-  py.globals.set('payload',JSON.stringify({source:'import calcmax_catalog as calc\nprint(calc.mean([1,2,3]))'}));
+  py.globals.set('payload',JSON.stringify({source:'import symvacas_catalog as calc\nprint(calc.mean([1,2,3]))'}));
   assert.equal(JSON.parse(py.runPython('script_runner.run(payload)')).output,'2\n');
   // This loads the same source archive that the static browser Worker consumes.
   console.log(`WASM engine passed: Python ${py.runPython('sys.version.split()[0]')}, SymPy ${py.runPython('calc_engine.s.__version__')}`);

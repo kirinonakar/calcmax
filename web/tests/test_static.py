@@ -46,7 +46,7 @@ class StaticDeploymentTests(unittest.TestCase):
 
     def test_application_module_dependencies_are_cached_for_offline_use(self):
         manifest = (WEB / "assets.js").read_text(encoding="utf-8")
-        assets = set(json.loads(re.search(r"self.CALCMAX_ASSETS = (\[[\s\S]+\]);", manifest).group(1)))
+        assets = set(json.loads(re.search(r"self.SYMVACAS_ASSETS = (\[[\s\S]+\]);", manifest).group(1)))
         pending, visited = ["bootstrap.js", "app.js", "worker.js"], set()
         while pending:
             name = pending.pop()
@@ -67,7 +67,7 @@ class StaticDeploymentTests(unittest.TestCase):
 
     def test_complete_manifest_serves_under_a_nested_path_with_wasm_mime(self):
         source = (WEB / "assets.js").read_text(encoding="utf-8")
-        assets = json.loads(re.search(r"self.CALCMAX_ASSETS = (\[[\s\S]+\]);", source).group(1))
+        assets = json.loads(re.search(r"self.SYMVACAS_ASSETS = (\[[\s\S]+\]);", source).group(1))
 
         class QuietHandler(StaticHandler):
             def log_message(self, *_):

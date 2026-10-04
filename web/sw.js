@@ -1,12 +1,12 @@
 /* All dependencies are same-origin static files. No special response headers. */
 importScripts('./assets.js');
-const CACHE=self.CALCMAX_CACHE;
+const CACHE=self.SYMVACAS_CACHE;
 self.addEventListener('install',event=>{
-  event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(self.CALCMAX_ASSETS)).then(()=>self.skipWaiting()));
+  event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(self.SYMVACAS_ASSETS)).then(()=>self.skipWaiting()));
 });
 self.addEventListener('activate',event=>{
   event.waitUntil((async()=>{
-    const previous=(await caches.keys()).filter(key=>key.startsWith('calcmax-static-')&&key!==CACHE);
+    const previous=(await caches.keys()).filter(key=>key.startsWith('symvacas-static-')&&key!==CACHE);
     for(const key of previous)await caches.delete(key);
     await self.clients.claim();
     // Registration happens after WASM/SymPy is ready. Keep that running page

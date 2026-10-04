@@ -51,7 +51,7 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
       $('dataset-name').value=file.name.replace(/\.(csv|tsv)$/i,'');$('statistics-kind').value=['list','xy','xyz'][selected.length-1];dataKindChange();persist();$('dialog').close();
     }));openDialog('Import CSV',content);
   });
-  $('csv-save').onclick=()=>downloadFile(`${value('dataset-name')||'calcmax-data'}.csv`,value('statistics-data'),'text/csv');
+  $('csv-save').onclick=()=>downloadFile(`${value('dataset-name')||'symvacas-data'}.csv`,value('statistics-data'),'text/csv');
   function dataRows(){return statisticsDataRows(value('statistics-data'),value('statistics-kind'));}
   function statisticsExpression(op=value('statistics-op')){return statisticsCommand(value('statistics-data'),{op,kind:value('statistics-kind'),column:Number(value('statistics-column')),extra:value('statistics-extra')||'0',tail:value('statistics-tail'),sigma:value('statistics-sigma'),sigmaY:value('statistics-sigma-y'),yatesCorrection:$('statistics-yates').checked,regression:value('regression-kind'),formula:value('regression-formula'),variable:value('regression-variable'),initials:value('regression-initials'),grouping:value('statistics-grouping'),firstGroup:value('statistics-first-group'),secondGroup:value('statistics-second-group')});}
   function analysisSummary(){

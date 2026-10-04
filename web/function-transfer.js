@@ -63,10 +63,10 @@ export function removeExpiredAnswerFunctions(functions,answer){
   }
   return changed;
 }
-export function encodeFunctions(functions){return JSON.stringify({format:'calcmax.functions',version:1,functions:Object.fromEntries(Object.entries(functions).map(([name,f])=>[name,{parameters:f.parameters,source:f.source||astSource(f.body),...(Object.hasOwn(f,'answerSource')?{answerSource:f.answerSource}:{})}]))},null,2);}
+export function encodeFunctions(functions){return JSON.stringify({format:'symvacas.functions',version:1,functions:Object.fromEntries(Object.entries(functions).map(([name,f])=>[name,{parameters:f.parameters,source:f.source||astSource(f.body),...(Object.hasOwn(f,'answerSource')?{answerSource:f.answerSource}:{})}]))},null,2);}
 export function decodeFunctions(text){
   const root=JSON.parse(text.replace(/^\uFEFF/,''));if(!root||typeof root!=='object'||Array.isArray(root))throw new Error('Invalid function file');
-  if(root.format&&root.format!=='calcmax.functions')throw new Error('Unsupported function file');
+  if(root.format&&root.format!=='symvacas.functions')throw new Error('Unsupported function file');
   const entries=root.format?root.functions:root,functions={};let skipped=0;
   for(const [name,f] of Object.entries(entries||{}))try{functions[name]={...defineFunction(name,f.parameters,f.source||astSource(f.body)),...(Object.hasOwn(f,'answerSource')?{answerSource:f.answerSource}:{})};}catch{skipped++;}
   if(!Object.keys(functions).length)throw new Error('No valid functions in this file');

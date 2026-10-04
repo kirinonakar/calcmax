@@ -1,6 +1,6 @@
 # Catalog function reference
 
-The function catalog inserts ready-to-fill templates into the current editor. Tap a template to insert it, then tap each empty slot (shown as `[]` or as a blank argument such as `round(x,)`) and type its value. In Python mode the same catalog inserts `calc.<function>(...)` and adds the shared `import calcmax_catalog as calc` line and the symbols `x, y, z, t, pi` once at the top of the file.
+The function catalog inserts ready-to-fill templates into the current editor. Tap a template to insert it, then tap each empty slot (shown as `[]` or as a blank argument such as `round(x,)`) and type its value. In Python mode the same catalog inserts `calc.<function>(...)` and adds the shared `import symvacas_catalog as calc` line and the symbols `x, y, z, t, pi` once at the top of the file.
 
 Use the search box above to filter by function name, template, example or description. The search matches every category at once. Clear the box to see the full reference again.
 
