@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {JSDOM} from 'jsdom';
-import {createGraphWorkspace,graphInputTree,cartesianFormula} from '../graph-workspace.js';
+import {createGraphWorkspace,graphInputTree,cartesianFormula,graphShadings,graphExpressions,removeGraphSource} from '../graph-workspace.js';
 import {installCanvas} from './canvas-context.mjs';
 import {parse} from '../parser.js';
 
@@ -24,6 +24,63 @@ function setup(t,saved={}){
   t.after(()=>{workspace.dispose();dom.window.close();});
   return {dom,byId,workspace,requests,edit,expectDomain};
 }
+
+test('shading aliases parse chained and reversed bounds as one intersection',()=>{
+  for(const prefix of ['[shade]','[s]']){
+    const source=`${prefix} 1<x<3, 1<y<3`,[item]=graphShadings(source,'cartesian');
+    assert.equal(item.mode,'region');
+    assert.deepEqual(item.trees.map(tree=>tree.value),['1','3','1','3']);
+    assert.deepEqual(item.constraints,[{axis:'x',side:'lower'},{axis:'x',side:'upper'},{axis:'y',side:'lower'},{axis:'y',side:'upper'}]);
+    assert.deepEqual(graphExpressions(`x\n${source}\nx+1`,'cartesian'),['x','x+1']);
+    assert.equal(removeGraphSource(`x\n${source}`,0,'cartesian',true),'x');
+  }
+  assert.deepEqual(graphShadings('[s] 3>=x>1, 3>y>=1','cartesian')[0].constraints.map(c=>c.side),['upper','lower','upper','lower']);
+  assert.equal(graphShadings('[s] y<x^2','cartesian')[0].mode,'halfplane');
+  assert.equal(graphShadings('[s] sin(x),cos(x);0..pi','cartesian')[0].mode,'band');
+  for(const source of ['x<x+1','y<y+1','1<y<3,x,x^2,x^3','x=1'])assert.throws(()=>graphShadings(`[s] ${source}`,'cartesian'));
+});
+
+test('shading functions accept chained, reversed and one-sided x bounds',()=>{
+  for(const prefix of ['[s]','[shade]'])for(const range of ['-pi<x<pi','pi>=x>=-pi']){
+    const [item]=graphShadings(`${prefix} sin(x), cos(x), ${range}`,'cartesian');
+    assert.equal(item.mode,'band');assert.deepEqual(item.trees.map(tree=>tree.value),['sin','cos']);
+    const lower=item.xBounds.find(bound=>bound.side==='lower'),upper=item.xBounds.find(bound=>bound.side==='upper');
+    assert.equal(lower.tree.kind,'unary');assert.equal(lower.tree.args[0].value,'pi');assert.equal(upper.tree.value,'pi');
+  }
+  assert.equal(graphShadings('[s] x, x>0','cartesian')[0].xBounds[0].side,'lower');
+  for(const source of ['sin(x),cos(x),y<y+1','x, x^2, x^3, -pi<x<pi','x, 0, x<x+1'])assert.throws(()=>graphShadings(`[s] ${source}`,'cartesian'));
+});
+
+test('shading bands combine x and y restrictions regardless of input order',()=>{
+  for(const source of ['sin(x), cos(x), -1<x<2, y<0','y<0, -1<x<2, sin(x), cos(x)']){
+    const [item]=graphShadings(`[s] ${source}`,'cartesian');
+    assert.equal(item.mode,'band');assert.deepEqual(item.trees.map(tree=>tree.value),['sin','cos']);
+    assert.deepEqual(item.xBounds.map(bound=>bound.side),['lower','upper']);
+    assert.equal(item.yBounds.length,1);assert.equal(item.yBounds[0].side,'upper');assert.equal(item.yBounds[0].tree.value,'0');
+  }
+  const [item]=graphShadings('[shade] x, 2, -1<y<0','cartesian');
+  assert.deepEqual(item.yBounds.map(bound=>bound.side),['lower','upper']);
+});
+
+test('shading-only alias plots and removes without consuming a curve slot',async t=>{
+  const {workspace,byId,requests,remove,errors}=removalPage(t,'[s] 1<x<3, 1<y<3');
+  await workspace.run();
+  assert.equal(requests[0].trees.length,0);assert.equal(requests[0].shadings[0].mode,'region');
+  assert.equal(byId('graph-selected').children.length,0);
+  remove(0);assert.equal(byId('graph-source').value,'');assert.deepEqual(errors,[]);
+});
+
+test('Cartesian y-intercept runs at zero without using range fields',async t=>{
+  const {workspace,byId,requests,edit}=setup(t);
+  edit('graph-analysis-a','');edit('graph-analysis-b','');
+  byId('graph-analysis-action').value='yintercept';byId('graph-analysis-action').onchange();
+  for(const id of ['graph-analysis-a','graph-analysis-b'])assert.equal(byId(id).closest('label').hidden,true);
+  assert.equal(byId('graph-analysis-a-slider').parentElement.hidden,true);
+  byId('graph-analysis-run').click();await Promise.resolve();await Promise.resolve();
+  assert.equal(requests.at(-1).analysis,'yintercept');assert.equal(requests.at(-1).a,0);assert.equal(requests.at(-1).b,0);
+  byId('graph-analysis-action').value='root';byId('graph-analysis-action').onchange();
+  assert.equal(byId('graph-analysis-a').closest('label').hidden,false);
+});
 
 function expectCenteredViewport(byId){
   for(const [minId,maxId] of [['graph-min','graph-max'],['graph-ymin','graph-ymax']]){

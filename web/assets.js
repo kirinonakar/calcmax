@@ -1,4 +1,4 @@
-self.CALCMAX_CACHE = 'calcmax-static-3551e44ec9607acc';
+self.CALCMAX_CACHE = 'calcmax-static-27bb7f789d00384c';
 self.CALCMAX_ASSETS = [
   "./",
   "./app-dialogs.js",

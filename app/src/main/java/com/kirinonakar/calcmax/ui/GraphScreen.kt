@@ -30,6 +30,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.*
 import com.kirinonakar.calcmax.calculator.CalculatorModel
+import com.kirinonakar.calcmax.calculator.isGraphShading
+import com.kirinonakar.calcmax.calculator.graphShadingBody
 import com.kirinonakar.calcmax.math.PiAxis
 import com.kirinonakar.calcmax.math.GraphZoom
 import com.kirinonakar.calcmax.math.SurfaceBounds
@@ -86,7 +88,7 @@ import kotlin.math.*
     Column(Modifier.fillMaxSize().verticalScroll(graphScrollState)) {
     Column(Modifier.fillMaxWidth().zIndex(1f)) {
         OutlinedTextField(m.graphSource,{m.updateGraphSource(it)},Modifier.fillMaxWidth().padding(start=10.dp,end=10.dp,top=8.dp).keepInputVisible(),label={Text(tr(when(m.graphKind){"parametric"->"One [x(t),y(t)] pair per line";"polar"->"r(t) · radians · one curve per line";"sequence"->"u(n) · use u(n−1) for recurrences";"surface"->"z = f(x,y)";"differential"->"dy/dt = f(t,y)";else->"Function / y=f(x) · Implicit / F(x,y)=0"}))},minLines=if(m.graphKind in listOf("surface","differential"))1 else 2,maxLines=4)
-        if(m.graphKind=="cartesian")Text(tr("One curve per line · [shade] y<f(x) · between functions: [shade] f, g"),Modifier.padding(horizontal=14.dp,vertical=3.dp),fontSize=11.sp,color=c.muted)
+        if(m.graphKind=="cartesian")Text(tr("One curve per line · [shade] / [s] -1<x<1 ,-1<y<x · between functions: [s] f, g"),Modifier.padding(horizontal=14.dp,vertical=3.dp),fontSize=11.sp,color=c.muted)
         Column(Modifier.fillMaxWidth().zIndex(1f).background(c.body)) {
             Row(Modifier.fillMaxWidth().zIndex(2f).padding(top=2.dp,bottom=1.dp).horizontalScroll(rememberScrollState()).semantics { contentDescription="Graph types" },horizontalArrangement=Arrangement.spacedBy(6.dp)) {
                 listOf("cartesian" to "Cartesian","parametric" to "Parametric","polar" to "Polar","sequence" to "Sequence","surface" to "3D surface","differential" to "Diff eq").forEach {(kind,label)->
@@ -168,8 +170,8 @@ import kotlin.math.*
             if(line==null||line.length()!=2)null else listOfNotNull(line.optJSONArray(0)?.let {it.getDouble(0) to it.getDouble(1)},line.optJSONArray(1)?.let {it.getDouble(0) to it.getDouble(1)}).takeIf {it.size==2}
         }
         val visibleSources=m.graphSource.lines().filter(String::isNotBlank).take(if(m.graphKind in listOf("surface","differential"))1 else 8)
-        val sources=visibleSources.filter {!(m.graphKind=="cartesian" && it.trim().startsWith("[shade]"))}.take(if(m.graphKind in listOf("surface","differential"))1 else 6)
-        val shadeSources=visibleSources.map(String::trim).filter {m.graphKind=="cartesian" && it.startsWith("[shade]")}.take(4)
+        val sources=visibleSources.filter {!(m.graphKind=="cartesian" && isGraphShading(it))}.take(if(m.graphKind in listOf("surface","differential"))1 else 6)
+        val shadeSources=visibleSources.map(String::trim).filter {m.graphKind=="cartesian" && isGraphShading(it)}.take(4)
         val removeSource:(Int,Boolean)->Unit={index,shading->
             focusManager.clearFocus()
             if(!shading) {
@@ -434,9 +436,9 @@ import kotlin.math.*
                 }
             }
             Row(Modifier.horizontalScroll(rememberScrollState())) {
-                val actions=if(m.graphKind=="cartesian")listOf("Root","Intersection","Minimum","Maximum","Inflection","Derivative","Tangent","Integral","Arc length") else listOf("Root","Minimum","Maximum","Inflection","Derivative","Tangent","Integral","Arc length")
+                val actions=if(m.graphKind=="cartesian")listOf("Root","Y-intercept","Intersection","Minimum","Maximum","Inflection","Derivative","Tangent","Integral","Arc length") else listOf("Root","Y-intercept","Minimum","Maximum","Inflection","Derivative","Tangent","Integral","Arc length")
                 actions.forEach { action->
-                    val key=action.lowercase().replace(" ","")
+                    val key=action.lowercase().replace(" ","").replace("-","")
                     val isTangent=key=="tangent"
                     SmallAction(action,active=if(isTangent&&tangentPositionOpen)true else null,shaded=isTangent&&tangentPositionOpen) {
                         focusManager.clearFocus()
@@ -463,7 +465,7 @@ import kotlin.math.*
             if(m.graphKind=="cartesian")SmallAction(if(isKorean())"도함수 그래프 f${(m.graphDerivativeSelected ?: selected)+1}′" else "Derivative curve f${(m.graphDerivativeSelected ?: selected)+1}′",active=if(m.graphDerivativeSelected!=null)true else null,shaded=m.graphDerivativeSelected!=null) {m.toggleGraphDerivative(selected)}
             if(m.graphAnalysisBusy)Text(if(isKorean())"분석 중…" else "Analyzing…",fontSize=12.sp,color=c.muted)
             m.graphAnalysis?.let {result->
-                val name=when(result.optString("analysis")){"arclength"->"Arc length";"inflection"->"Inflection";"tangent"->"Tangent slope";"intersection"->"Intersection";"minimum"->"Minimum";"maximum"->"Maximum";"integral"->"Integral";else->result.optString("analysis").replaceFirstChar {it.uppercase()}}
+                val name=when(result.optString("analysis")){"yintercept"->tr("Y-intercept");"arclength"->"Arc length";"inflection"->"Inflection";"tangent"->"Tangent slope";"intersection"->"Intersection";"minimum"->"Minimum";"maximum"->"Maximum";"integral"->"Integral";else->result.optString("analysis").replaceFirstChar {it.uppercase()}}
                 if(result.has("value"))Text("$name = ${graphDisplayNumber(result.optDouble("value"),m.displayDigits)}",fontSize=16.sp)
                 else if(result.optBoolean("vertical"))Text("$name · vertical tangent",fontSize=13.sp)
                 else Text("$name · ${result.optInt("count")} point(s)${if(result.optBoolean("truncated"))" · first 80 shown" else ""}",fontSize=13.sp)
@@ -560,7 +562,7 @@ private fun splitGraphFormulaParts(source:String):List<String> {
 internal data class GraphShadeFormula(val expressions:List<JSONObject>,val range:Pair<JSONObject,JSONObject>?)
 
 internal fun graphShadeFormula(source:String,displayDigits:Int?=null):GraphShadeFormula? = runCatching {
-    val parts=splitGraphFormulaParts(source.removePrefix("[shade]").trim())
+    val parts=splitGraphFormulaParts(graphShadingBody(source))
     val expressions=mutableListOf<JSONObject>()
     var range:Pair<JSONObject,JSONObject>?=null
     parts.forEach {part->

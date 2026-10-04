@@ -6,6 +6,9 @@ import com.kirinonakar.calcmax.calculator.graphInputTree
 import com.kirinonakar.calcmax.calculator.loadGraphColors
 import com.kirinonakar.calcmax.calculator.normalizeGraphColors
 import com.kirinonakar.calcmax.calculator.removeGraphSource
+import com.kirinonakar.calcmax.calculator.graphShadeEntry
+import com.kirinonakar.calcmax.calculator.graphShadingBody
+import com.kirinonakar.calcmax.calculator.isGraphShading
 import com.kirinonakar.calcmax.math.Parser
 import com.kirinonakar.calcmax.ui.graphEquationTree
 import com.kirinonakar.calcmax.ui.graphTracePointAtX
@@ -16,6 +19,48 @@ import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class GraphFormulaTest {
+    @Test fun chainedShadingBoundsAndAliasPreserveCurveIndices() {
+        for(prefix in listOf("[shade]","[s]")) {
+            val source="$prefix 1<x<3, 1<y<3"
+            assertTrue(isGraphShading(source))
+            val entry=graphShadeEntry(graphShadingBody(source))
+            assertEquals("region",entry.getString("mode"))
+            assertEquals(listOf("1","3","1","3"),(0..3).map {entry.getJSONArray("trees").getJSONObject(it).getString("value")})
+            assertEquals(listOf("x","x","y","y"),(0..3).map {entry.getJSONArray("constraints").getJSONObject(it).getString("axis")})
+            assertEquals(listOf("lower","upper","lower","upper"),(0..3).map {entry.getJSONArray("constraints").getJSONObject(it).getString("side")})
+            assertEquals(source,removeGraphSource("x\n$source",0))
+            assertEquals("x",removeGraphSource("x\n$source",0,shading=true))
+            assertEquals("$source\nx",appendGraphSource(source,"x"))
+        }
+        assertEquals("halfplane",graphShadeEntry("y<x^2").getString("mode"))
+        assertEquals("band",graphShadeEntry("sin(x),cos(x),0..pi").getString("mode"))
+        val reverse=graphShadeEntry("3>=x>1,3>y>=1")
+        assertEquals(listOf("upper","lower","upper","lower"),(0..3).map {reverse.getJSONArray("constraints").getJSONObject(it).getString("side")})
+        for(source in listOf("x<x+1","y<y+1","1<y<3, x, x^2, x^3","x=1"))assertThrows(IllegalArgumentException::class.java) {graphShadeEntry(source)}
+    }
+    @Test fun shadingFunctionsAcceptInequalityIntervals() {
+        for(source in listOf("sin(x),cos(x),-pi<x<pi","sin(x),cos(x),pi>=x>=-pi")) {
+            val entry=graphShadeEntry(source)
+            assertEquals("band",entry.getString("mode"))
+            assertEquals(listOf("sin","cos"),(0..1).map {entry.getJSONArray("trees").getJSONObject(it).getString("value")})
+            val bounds=entry.getJSONArray("xBounds")
+            val lower=(0..1).map {bounds.getJSONObject(it)}.first {it.getString("side")=="lower"}.getJSONObject("tree")
+            assertEquals("pi",lower.getJSONArray("args").getJSONObject(0).getString("value"))
+        }
+        assertEquals("lower",graphShadeEntry("x, x>0").getJSONArray("xBounds").getJSONObject(0).getString("side"))
+        for(source in listOf("sin(x),cos(x),y<y+1","x,x^2,x^3,-pi<x<pi"))assertThrows(IllegalArgumentException::class.java) {graphShadeEntry(source)}
+    }
+    @Test fun shadingFunctionsCombineXAndYConstraints() {
+        for(source in listOf("sin(x), cos(x), -1<x<2, y<0","y<0, -1<x<2, sin(x), cos(x)")) {
+            val entry=graphShadeEntry(source)
+            assertEquals("band",entry.getString("mode"))
+            assertEquals(2,entry.getJSONArray("trees").length())
+            assertEquals(2,entry.getJSONArray("xBounds").length())
+            val bounds=entry.getJSONArray("yBounds")
+            assertEquals(1,bounds.length());assertEquals("upper",bounds.getJSONObject(0).getString("side"))
+            assertEquals("0",bounds.getJSONObject(0).getJSONObject("tree").getString("value"))
+        }
+    }
     @Test fun namedCartesianInputsPlotTheirBodiesAndKeepTheirCaptions() {
         for(source in listOf("f(x)=x+1","g(x)=sin(x)","f2(x)=2*x^2")) {
             assertEquals(Parser(source).parse().args[1].json(),graphInputTree(source).json())

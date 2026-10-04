@@ -24,6 +24,105 @@ circle = equation(binary("+", x2, y2), number(1))
 
 
 class ImplicitGraphTests(unittest.TestCase):
+    def test_band_y_constraints_keep_disconnected_negative_regions(self):
+        item={"mode":"band","trees":[{"kind":"call","value":name,"args":[x]} for name in ("sin","cos")],
+              "xBounds":[{"side":"lower","tree":number(-1)},{"side":"upper","tree":number(2)}],
+              "yBounds":[{"side":"upper","tree":number(0)}]}
+        result=self.graph(graphKind="cartesian",min=-5,max=5,shadings=[item])
+        self.assertTrue(result["ok"],result)
+        polygons=result["shadings"][0]["fill"]
+        self.assertEqual(2,len(polygons))
+        self.assertAlmostEqual(-1,min(px for px,py in polygons[0]));self.assertAlmostEqual(0,max(px for px,py in polygons[0]),delta=1e-7)
+        self.assertAlmostEqual(math.pi/2,min(px for px,py in polygons[1]),delta=1e-7);self.assertAlmostEqual(2,max(px for px,py in polygons[1]))
+        self.assertTrue(all(py<=0 and min(math.sin(px),math.cos(px))-1e-7<=py<=max(math.sin(px),math.cos(px))+1e-7 for polygon in polygons for px,py in polygon))
+        self.assertTrue(all(py<=0 for line in result["shadings"][0]["boundary"] for point in line if point is not None for px,py in [point]))
+
+    def test_band_y_constraints_parameters_and_empty_intersections(self):
+        item={"mode":"band","trees":[x,number(2)],"yBounds":[{"side":"upper","tree":symbol("c")}]}
+        result=self.graph(graphKind="cartesian",min=-1,max=2,shadings=[item],parameters={"c":-.25})
+        self.assertTrue(result["ok"],result);self.assertEqual(["c"],result["parameters"])
+        polygon=result["shadings"][0]["fill"][0]
+        self.assertAlmostEqual(-.25,max(px for px,py in polygon));self.assertAlmostEqual(-.25,max(py for px,py in polygon))
+        item["yBounds"]=[{"side":"lower","tree":number(-.5)},{"side":"upper","tree":number(0)}]
+        result=self.graph(graphKind="cartesian",min=-1,max=2,shadings=[item])
+        self.assertTrue(result["ok"],result);self.assertTrue(all(-.5<=py<=0 for polygon in result["shadings"][0]["fill"] for px,py in polygon))
+        for bounds in ([{"side":"upper","tree":number(-2)}],[{"side":"lower","tree":number(1)},{"side":"upper","tree":number(0)}]):
+            item["yBounds"]=bounds
+            result=self.graph(graphKind="cartesian",min=-1,max=2,shadings=[item])
+            self.assertTrue(result["ok"],result);self.assertEqual([],result["shadings"][0]["fill"]);self.assertEqual([[],[]],result["shadings"][0]["boundary"])
+
+    def test_function_band_inequality_bounds_clip_and_use_slider_parameters(self):
+        item={"mode":"band","trees":[{"kind":"call","value":name,"args":[x]} for name in ("sin","cos")],
+              "xBounds":[{"side":"lower","tree":{"kind":"unary","value":"-","args":[symbol("pi")]}},{"side":"upper","tree":symbol("pi")}]}
+        result=self.graph(graphKind="cartesian",min=-10,max=10,shadings=[item])
+        self.assertTrue(result["ok"],result)
+        polygon=result["shadings"][0]["fill"][0]
+        self.assertAlmostEqual(-math.pi,min(p[0] for p in polygon));self.assertAlmostEqual(math.pi,max(p[0] for p in polygon))
+        self.assertTrue(all(min(math.sin(px),math.cos(px))-1e-10 <= py <= max(math.sin(px),math.cos(px))+1e-10 for px,py in polygon))
+        result=self.graph(graphKind="cartesian",min=0,max=1,shadings=[item])
+        self.assertTrue(result["ok"],result);self.assertEqual({0.0,1.0},{result["shadings"][0]["fill"][0][0][0],result["shadings"][0]["fill"][0][500][0]})
+        item["xBounds"][1]["tree"]=symbol("a")
+        for parameters,expected in (({"a":2},2.0),({},1.0)):
+            result=self.graph(graphKind="cartesian",min=-10,max=10,shadings=[item],parameters=parameters)
+            self.assertTrue(result["ok"],result);self.assertEqual(["a"],result["parameters"])
+            self.assertEqual(expected,max(p[0] for p in result["shadings"][0]["fill"][0]))
+        result=self.graph(graphKind="cartesian",min=5,max=10,shadings=[item])
+        self.assertTrue(result["ok"],result);self.assertEqual([],result["shadings"][0]["fill"])
+
+    def test_y_intercepts_ignore_x_search_range_and_handle_all_branches(self):
+        for tree,expected in ((binary("+",x,number(3)),[[0.0,3.0]]),(circle,[[0.0,-1.0],[0.0,1.0]]),
+                              (equation(y2,number(0)),[[0.0,0.0]]),(binary("/",number(1),x),[]),
+                              (equation(x,number(1)),[])):
+            result=self.analyze(tree,analysis="yintercept",a=8,b=8,yMin=-2,yMax=2)
+            self.assertTrue(result["ok"],result);self.assertEqual(expected,result["points"])
+        result=self.analyze(equation(x,number(0)),analysis="yintercept")
+        self.assertFalse(result["ok"]);self.assertIn("not isolated",result["error"])
+        result=self.analyze(binary("+",x,symbol("a")),analysis="yintercept",parameters={"a":7})
+        self.assertTrue(result["ok"],result);self.assertEqual([[0.0,7.0]],result["points"])
+
+    def test_parametric_y_intercepts_find_tangencies_and_deduplicate(self):
+        pair={"kind":"list","args":[x2,binary("+",x,number(1))]}
+        result=self.analyze(pair,graphKind="parametric",variable="x",analysis="yintercept")
+        self.assertTrue(result["ok"],result);self.assertEqual([[0.0,1.0]],result["points"])
+        result=self.analyze(number(1),graphKind="polar",analysis="yintercept",a=0,b=2*math.pi)
+        self.assertTrue(result["ok"],result);self.assertEqual(2,len(result["points"]))
+        self.assertAlmostEqual(1,result["points"][0][1]);self.assertAlmostEqual(-1,result["points"][1][1])
+
+    def test_shaded_regions_intersect_chained_bounds_and_follow_parameters(self):
+        constraints=[{"axis":axis,"side":side} for axis in ("x","y") for side in ("lower","upper")]
+        item={"mode":"region","trees":[number(1),symbol("a"),number(1),number(3)],"constraints":constraints}
+        result=self.graph(graphKind="cartesian",min=-5,max=5,yMin=-5,yMax=5,shadings=[item],parameters={"a":3})
+        self.assertTrue(result["ok"],result);self.assertEqual([],result["curves"]);self.assertEqual(["a"],result["parameters"])
+        polygon=result["shadings"][0]["fill"][0]
+        self.assertEqual((1.0,3.0,1.0,3.0),(min(p[0] for p in polygon),max(p[0] for p in polygon),min(p[1] for p in polygon),max(p[1] for p in polygon)))
+        for options in ({"parameters":{"a":.5}},{"min":-5,"max":0},{"yMin":-5,"yMax":0}):
+            request={"graphKind":"cartesian","min":-5,"max":5,"yMin":-5,"yMax":5,"shadings":[item],"parameters":{"a":3},**options}
+            result=self.graph(**request);self.assertTrue(result["ok"],result);self.assertEqual([],result["shadings"][0]["fill"])
+
+    def test_shaded_x_strip_and_curved_region(self):
+        item={"mode":"region","trees":[number(1),number(3)],"constraints":[{"axis":"x","side":"lower"},{"axis":"x","side":"upper"}]}
+        result=self.graph(graphKind="cartesian",min=-5,max=5,shadings=[item])
+        self.assertTrue(result["ok"],result)
+        self.assertEqual({-2.0,2.0},{p[1] for p in result["shadings"][0]["fill"][0]})
+        item["trees"] += [number(0),x2]
+        item["constraints"] += [{"axis":"y","side":"lower"},{"axis":"y","side":"upper"}]
+        result=self.graph(graphKind="cartesian",min=-5,max=5,yMin=-5,yMax=10,shadings=[item])
+        self.assertTrue(result["ok"],result)
+        polygon=result["shadings"][0]["fill"][0]
+        self.assertTrue(all(1<=px<=3 and 0<=py<=px*px+1e-10 for px,py in polygon))
+
+    def test_shaded_regions_skip_undefined_and_conflicting_y_bounds(self):
+        constraints=[{"axis":"y","side":side} for side in ("lower","upper")]
+        for boundary in (binary("/",number(1),x),{"kind":"call","value":"sqrt","args":[x]}):
+            item={"mode":"region","trees":[number(0),boundary],"constraints":constraints}
+            result=self.graph(graphKind="cartesian",min=-2,max=2,shadings=[item])
+            self.assertTrue(result["ok"],result)
+            self.assertTrue(result["shadings"][0]["fill"])
+            self.assertTrue(all(px>=0 for polygon in result["shadings"][0]["fill"] for px,py in polygon))
+        item={"mode":"region","trees":[number(3),number(1)],"constraints":constraints}
+        result=self.graph(graphKind="cartesian",shadings=[item])
+        self.assertTrue(result["ok"],result);self.assertEqual([],result["shadings"][0]["fill"]);self.assertEqual([],result["shadings"][0]["boundary"])
+
     def test_parameterized_quadratic_circle_intersections_use_current_values_without_symbolic_quartics(self):
         from unittest.mock import patch
         quadratic=binary("+",binary("+",binary("*",symbol("a"),x2),binary("*",symbol("b"),x)),symbol("c"))

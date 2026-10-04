@@ -41,34 +41,61 @@ export function splitTopLevel(source){
 export function graphSources(source,kind){
   return source.split(/\r?\n/).map(s=>s.trim()).filter(Boolean).slice(0,['surface','differential'].includes(kind)?1:8);
 }
+export function isGraphShading(source){return /^\[(?:shade|s)\]/.test(source.trim());}
+export function graphShadingBody(source){return source.trim().replace(/^\[(?:shade|s)\]/,'').trim();}
 export function graphExpressions(source,kind){
-  return graphSources(source,kind).filter(s=>!s.startsWith('[shade]')).slice(0,['surface','differential'].includes(kind)?1:6).map(s=>s.replace(kind==='surface'?/^z\s*=\s*/:kind==='differential'?/^dy\/dt\s*=\s*/:kind==='sequence'?/^u\(n\)\s*=\s*/:kind==='polar'?/^r\s*=\s*/:/^\s*=/,''));
+  return graphSources(source,kind).filter(s=>!isGraphShading(s)).slice(0,['surface','differential'].includes(kind)?1:6).map(s=>s.replace(kind==='surface'?/^z\s*=\s*/:kind==='differential'?/^dy\/dt\s*=\s*/:kind==='sequence'?/^u\(n\)\s*=\s*/:kind==='polar'?/^r\s*=\s*/:/^\s*=/,''));
 }
 export function appendGraphSource(existing,source,kind='cartesian'){
   const lines=existing.split(/\r?\n/).filter(line=>line.trim());
   const limit=['surface','differential'].includes(kind)?1:6;
   if(lines.some(line=>line.trim()===source.trim()))return existing;
-  if(lines.length>=8||lines.filter(line=>!line.trim().startsWith('[shade]')).length>=limit)throw new Error('Graph limit reached. Remove a function before adding another.');
+  if(lines.length>=8||lines.filter(line=>!isGraphShading(line)).length>=limit)throw new Error('Graph limit reached. Remove a function before adding another.');
   return existing.trimEnd()+(lines.length?'\n':'')+source;
 }
 export function removeGraphSource(existing,index,kind='cartesian',shading=false){
   const lines=existing.split(/\r?\n/),visible=lines.map((source,index)=>({source,index})).filter(line=>line.source.trim()).slice(0,['surface','differential'].includes(kind)?1:8);
-  const target=visible.filter(line=>line.source.trim().startsWith('[shade]')===shading).slice(0,shading?4:['surface','differential'].includes(kind)?1:6)[index];
+  const target=visible.filter(line=>isGraphShading(line.source)===shading).slice(0,shading?4:['surface','differential'].includes(kind)?1:6)[index];
   return target?lines.filter((_,i)=>i!==target.index).join('\n'):existing;
 }
 export function graphShadings(source,kind){
-  return graphSources(source,kind).filter(s=>s.startsWith('[shade]')).slice(0,4).map(line=>{
+  return graphSources(source,kind).filter(isGraphShading).slice(0,4).map(line=>{
     if(kind!=='cartesian')throw new Error('Shading requires a Cartesian graph');
-    const [body,legacyRange]=line.slice(7).trim().split(';'),parts=splitTopLevel(body),expressions=[],intervals=[];
+    const [body,legacyRange]=graphShadingBody(line).split(';'),parts=splitTopLevel(body),expressions=[],intervals=[];
     for(const part of parts){if(part.includes('..'))intervals.push(part);else expressions.push(part);}
     if(legacyRange)intervals.push(legacyRange.trim());
-    if(!expressions.length||expressions.length>2||intervals.length>1)throw new Error('Enter one or two shading functions');
+    if(!expressions.length||intervals.length>1)throw new Error('Enter shading inequalities or one or two functions');
     const trees=expressions.map(s=>graphInputTree(s)),relation=trees[0];
     let item={mode:'band',trees};
-    if(trees.length===1&&relation.kind==='relation'){
+    if(trees.length===1&&relation.kind==='relation'&&relation.args.every(node=>node.kind!=='relation')&&relation.args.some(node=>node.kind==='symbol'&&node.value==='y')){
       const [left,right]=relation.args,isLeft=left.kind==='symbol'&&left.value==='y',isRight=right.kind==='symbol'&&right.value==='y';
       if(!['<','<=','>','>='].includes(relation.value)||!isLeft&&!isRight)throw new Error('Enter y < f(x) or y > f(x)');
+      const boundary=isLeft?right:left;
+      if((function hasY(node){return node.kind==='symbol'&&node.value==='y'||(node.args||[]).some(hasY);})(boundary))throw new Error('Shading boundaries cannot depend on y');
       item={mode:'halfplane',side:(isLeft?relation.value.startsWith('<'):relation.value.startsWith('>'))?'below':'above',trees:[isLeft?right:left]};
+    }else if(trees.some(tree=>tree.kind==='relation')){
+      const boundaries=[],constraints=[];
+      const has=(node,name)=>node.kind==='symbol'&&node.value===name||(node.args||[]).some(child=>has(child,name));
+      function flatten(node){
+        if(node.kind!=='relation')return [node];
+        if(!['<','<=','>','>='].includes(node.value))throw new Error('Enter x or y inequalities for shading');
+        const left=flatten(node.args[0]),right=flatten(node.args[1]),a=left.at(-1),b=right[0];
+        const axis=node=>node.kind==='symbol'&&['x','y'].includes(node.value)?node.value:null;
+        const onLeft=!!axis(a),name=axis(a)||axis(b),boundary=onLeft?b:a;
+        if(!name||has(boundary,'y')||name==='x'&&has(boundary,'x'))throw new Error('Enter x bounds or y < f(x) inequalities');
+        constraints.push({axis:name,side:(onLeft?node.value.startsWith('<'):node.value.startsWith('>'))?'upper':'lower'});
+        boundaries.push(boundary);
+        return [...left,...right];
+      }
+      for(const tree of trees.filter(tree=>tree.kind==='relation'))flatten(tree);
+      const functions=trees.filter(tree=>tree.kind!=='relation');
+      if(functions.length){
+        if(functions.length>2)throw new Error('Use one or two shading functions with x and y bounds');
+        const bounds=axis=>constraints.flatMap((constraint,index)=>constraint.axis===axis?[{side:constraint.side,tree:boundaries[index]}]:[]);
+        item={mode:'band',trees:functions,xBounds:bounds('x'),yBounds:bounds('y')};
+      }else item={mode:'region',trees:boundaries,constraints};
+    }else if(trees.length>2){
+      throw new Error('Enter one or two shading functions');
     }
     if(intervals.length){const [a,b]=intervals[0].split('..');if(!a||!b)throw new Error('Enter a..b for the shading interval');item.a=parse(a);item.b=parse(b);}
     return item;
@@ -159,7 +186,7 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
     const next=JSON.stringify([value('graph-source'),kind(),derivative,result?.derivativeExpression,selected(),options().displayDigits,document.documentElement.lang,getColors()]);if(next===formulaSignature)return;formulaSignature=next;
     const variable=kind()==='sequence'?'n':['parametric','polar','differential'].includes(kind())?'t':'x',labels=expressions().map((s,i)=>kind()==='cartesian'?cartesianFormula(s,i):kind()==='parametric'?`f${i+1}(t)=${s}`:kind()==='surface'?`z=${s}`:kind()==='differential'?`diff(y,t)=${s}`:kind()==='polar'?`r${i+1}(t)=${s}`:`f${i+1}(${variable})=${s}`);
     if(derivative!==null&&kind()==='cartesian'&&expressions()[derivative])labels.push(`diff(f${derivative+1}(x),x)`+(result?.derivativeSelected===derivative&&result?.derivativeExpression?`=${result.derivativeExpression}`:''));
-    for(const line of graphSources(value('graph-source'),kind()).filter(s=>s.startsWith('[shade]')))labels.push(line.slice(7).split(';')[0].trim());
+    for(const line of graphSources(value('graph-source'),kind()).filter(isGraphShading))labels.push(graphShadingBody(line).split(';')[0].trim());
     renderFormulas($('graph-formulas'),labels,{digits:options().displayDigits});
     const lines=[...$('graph-formulas').children],count=expressions().length;
     function removeButton(line,label,remove){
@@ -282,8 +309,9 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
     if(pending&&kind()==='cartesian'&&['derivative','tangent'].includes(action)){pendingAnalysis={action,point};return run();}
     pendingAnalysis=null;clearTimeout(timer);timer=null;
     try{
-      const trees=expressions().map(s=>graphInputTree(s,kind())),a=point??numeric('graph-analysis-a'),b=['derivative','tangent'].includes(action)?a:numeric('graph-analysis-b'),view=bounds||currentBounds(),token=++analysisRevision,source=value('graph-source'),graphKind=kind();
-      if(!Number.isFinite(a)||!Number.isFinite(b)||!['derivative','tangent'].includes(action)&&a>=b)throw new Error('Enter finite values with a < b');
+      const fixedIntercept=action==='yintercept'&&kind()==='cartesian';
+      const trees=expressions().map(s=>graphInputTree(s,kind())),a=fixedIntercept?0:point??numeric('graph-analysis-a'),b=fixedIntercept||['derivative','tangent'].includes(action)?a:numeric('graph-analysis-b'),view=bounds||currentBounds(),token=++analysisRevision,source=value('graph-source'),graphKind=kind();
+      if(!Number.isFinite(a)||!Number.isFinite(b)||!fixedIntercept&&!['derivative','tangent'].includes(action)&&a>=b)throw new Error('Enter finite values with a < b');
       const currentParameters={...parameters};
       const tracePoint=trace||(graphKind==='cartesian'&&['derivative','tangent'].includes(action)&&result?.implicitCurves?.[selected()]?curvePointAtX(result.curves[selected()],a):null);
       const response=await execute({...options(),angle:'RAD',action:'graphAnalysis',graphKind,trees,analysis:action,a,b,selected:selected(),other:Number(value('graph-other')),variable:graphKind==='cartesian'?'x':'t',parameters:currentParameters,tracePoint,xMin:view.xmin,xMax:view.xmax,yMin:view.ymin,yMax:view.ymax});
@@ -327,10 +355,11 @@ export function createGraphWorkspace({execute,options,onError:reportError,persis
     $('graph-tangent-slider').value=String(low);persist();
   };
   function analysisControls(){
-    const action=value('graph-analysis-action'),point=['derivative','tangent'].includes(action),tangent=action==='tangent';
-    $('graph-other').closest('label').hidden=action!=='intersection';$('graph-analysis-b').closest('label').hidden=point;
-    $('graph-tangent-position').hidden=!tangent;$('graph-analysis-a-slider').hidden=tangent;$('graph-analysis-b-slider').hidden=point;
-    const pair=pairedSliders.get('graph-analysis-a');if(pair){pair.track.hidden=tangent;syncRangePair(pair);}
+    const action=value('graph-analysis-action'),fixedIntercept=action==='yintercept'&&kind()==='cartesian',point=['derivative','tangent'].includes(action),tangent=action==='tangent';
+    $('graph-other').closest('label').hidden=action!=='intersection';$('graph-analysis-b').closest('label').hidden=point||fixedIntercept;
+    $('graph-analysis-a').closest('label').hidden=fixedIntercept;$('graph-analysis-visible-range').hidden=fixedIntercept;
+    $('graph-tangent-position').hidden=!tangent;$('graph-analysis-a-slider').hidden=tangent||fixedIntercept;$('graph-analysis-b-slider').hidden=point||fixedIntercept;
+    const pair=pairedSliders.get('graph-analysis-a');if(pair){pair.track.hidden=tangent||fixedIntercept;syncRangePair(pair);}
     const [low,high]=analysisRange(),position=numeric('graph-analysis-a');
     if(Number.isFinite(high-low)&&high>low){$('graph-tangent-slider').min=String(low);$('graph-tangent-slider').max=String(high);if(Number.isFinite(position))$('graph-tangent-slider').value=String(Math.max(low,Math.min(high,position)));}
   }

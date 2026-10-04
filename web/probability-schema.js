@@ -1067,6 +1067,19 @@ export const probabilitySchema = {
         "draws": "2",
         "marked": "2"
       }
+    },
+    {
+      "id": "twoAces",
+      "label": "5 of 52 cards · 2 aces",
+      "ko": "52장 중 5장 · 에이스 2장",
+      "category": "draw",
+      "operation": "exactly",
+      "values": {
+        "population": "52",
+        "draws": "5",
+        "marked": "4",
+        "k": "2"
+      }
     }
   ]
 };

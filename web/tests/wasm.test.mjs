@@ -9,6 +9,7 @@ import {tipCommand,moneyResult} from '../money.js';
 import {statisticsCommand,distributionCommand,equationCommand} from '../workspace-commands.js';
 import {JSDOM} from 'jsdom';
 import {resultMathDisplay} from '../result-display.js';
+import {graphShadings,graphInputTree} from '../graph-workspace.js';
 
 // Reuse the interpreter for sequential integration scenarios. The cold solver
 // scenario below explicitly loads its own interpreter to keep startup coverage.
@@ -19,6 +20,31 @@ async function loadRuntime(){
   return py;
 }
 function runtime(){return sharedRuntime??=loadRuntime();}
+
+test('actual WASM shades chained inequalities and finds y-intercepts',async()=>{
+  const py=await runtime();
+  const run=request=>{py.globals.set('payload',JSON.stringify({angle:'RAD',...request}));const result=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));assert.equal(result.ok,true,result.error);return result;};
+  for(const prefix of ['[shade]','[s]']){
+    const result=run({action:'graph',graphKind:'cartesian',trees:[],min:-5,max:5,yMin:-5,yMax:5,shadings:graphShadings(`${prefix} 1<x<3, 1<y<3`,'cartesian')});
+    const polygon=result.shadings[0].fill[0];
+    assert.deepEqual([Math.min(...polygon.map(p=>p[0])),Math.max(...polygon.map(p=>p[0])),Math.min(...polygon.map(p=>p[1])),Math.max(...polygon.map(p=>p[1]))],[1,3,1,3]);
+    const band=run({action:'graph',graphKind:'cartesian',trees:[],min:-10,max:10,yMin:-2,yMax:2,shadings:graphShadings(`${prefix} sin(x), cos(x), -pi<x<pi`,'cartesian')});
+    const fill=band.shadings[0].fill[0];
+    assert.ok(Math.abs(Math.min(...fill.map(p=>p[0]))+Math.PI)<1e-10);
+    assert.ok(Math.abs(Math.max(...fill.map(p=>p[0]))-Math.PI)<1e-10);
+    assert.ok(fill.every(([x,y])=>y>=Math.min(Math.sin(x),Math.cos(x))-1e-10&&y<=Math.max(Math.sin(x),Math.cos(x))+1e-10));
+    const clipped=run({action:'graph',graphKind:'cartesian',trees:[],min:-5,max:5,yMin:-2,yMax:2,shadings:graphShadings(`${prefix} sin(x), cos(x), -1<x<2, y<0`,'cartesian')});
+    assert.equal(clipped.shadings[0].fill.length,2);
+    for(const polygon of clipped.shadings[0].fill){
+      assert.ok(polygon.every(([x,y])=>x>=-1&&x<=2&&y<=0&&y>=Math.min(Math.sin(x),Math.cos(x))-1e-7&&y<=Math.max(Math.sin(x),Math.cos(x))+1e-7));
+      assert.ok(Math.max(...polygon.map(p=>p[0]))<=1e-7||Math.min(...polygon.map(p=>p[0]))>=Math.PI/2-1e-7);
+    }
+  }
+  for(const [source,expected] of [['y=x+3',[[0,3]]],['x^2+y^2=1',[[0,-1],[0,1]]],['1/x',[]]]){
+    const result=run({action:'graphAnalysis',graphKind:'cartesian',trees:[graphInputTree(source)],analysis:'yintercept',a:8,b:8,yMin:-2,yMax:2});
+    assert.deepEqual(result.points,expected);
+  }
+});
 
 test('actual WASM evaluates pasted LaTeX limits in radians with scoped variables',async()=>{
   const py=await runtime();

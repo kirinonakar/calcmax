@@ -170,6 +170,8 @@ def graph_cartesian(engine, request, trees, xmin, xmax):
     shade_items = request.get("shadings") or []
     shade_expressions = [graph_expressions(engine, item.get("trees") or [], ("x", "y")) for item in shade_items]
     all_expressions = [residual for _, residual in curvespecs]+[expression for group in shade_expressions for expression in group]
+    bound_trees = [bound["tree"] for item in shade_items for key in ("xBounds","yBounds") for bound in item.get(key,[])]
+    all_expressions += list(graph_expressions(engine,bound_trees,("x","y")))
     names = parameter_names(all_expressions, {"x", "y"})
     sliders = {symbol: value for symbol, value in resolved_parameters(engine, request, all_expressions, {"x", "y"}).items() if symbol not in (x, y)}
     count = min(1600, max(100, int(request.get("samples", 500))))
@@ -368,12 +370,15 @@ def graph_shading(engine, request, items, groups, sliders, xmin, xmax):
         number = _finite_real(s.N(substitute_parameters(engine.build(tree),sliders),engine.precision))
         require(number is not None,"Shading intervals must be finite numbers")
         return number
+    def evaluate(function, at):
+        try: return _finite_real(function(at))
+        except (TypeError, ValueError, ZeroDivisionError, OverflowError): return None
     def samples(expression, a, b):
         function = graph_function(expression, (x,), sliders)
         points = []
         for index in range(count+1):
             at = a+(b-a)*index/count
-            value = _finite_real(function(at))
+            value = evaluate(function,at)
             points.append([at,value] if value is not None else None)
         return points
     shadings = []
@@ -381,7 +386,69 @@ def graph_shading(engine, request, items, groups, sliders, xmin, xmax):
         mode = item.get("mode")
         a,b = endpoint(item,"a",xmin),endpoint(item,"b",xmax)
         require(a < b,"Shading intervals must be increasing")
-        if mode == "halfplane":
+        for bound in item.get("xBounds",[]):
+            require(bound.get("side") in ("lower","upper"), "Invalid shading x bound")
+            expression = engine.build(bound["tree"])
+            require(not expression.has(x,engine.symbol("y")), "Shading x bounds must be constant")
+            at = endpoint({"bound":bound["tree"]},"bound",0)
+            if bound["side"] == "lower": a = max(a,at)
+            else: b = min(b,at)
+        if a >= b:
+            shadings.append({"mode":mode,"boundary":[],"fill":[]})
+            continue
+        if mode == "region":
+            constraints = item.get("constraints") or []
+            require(len(group) == len(constraints) and group, "A shaded region needs inequalities")
+            lower, upper, vertical = [], [], []
+            left, right = max(a,xmin), min(b,xmax)
+            for expression, constraint in zip(group,constraints):
+                axis, side = constraint.get("axis"), constraint.get("side")
+                require(axis in ("x","y") and side in ("lower","upper"), "Invalid shading constraint")
+                require(not expression.has(engine.symbol("y")), "Shading boundaries cannot depend on y")
+                if axis == "x":
+                    require(not expression.has(x), "Shading x bounds must be constant")
+                    at = _finite_real(substitute_parameters(expression,sliders).evalf(engine.precision))
+                    require(at is not None, "Shading x bounds must be finite")
+                    if side == "lower": left = max(left,at)
+                    else: right = min(right,at)
+                    vertical.append(at)
+                else:
+                    (lower if side == "lower" else upper).append(graph_function(expression,(x,),sliders))
+            polygons, boundary, run = [], [], []
+            if left < right:
+                # Intersect every bound at each x; a contradictory region stays empty.
+                for index in range(count+2):
+                    at = left+(right-left)*min(index,count)/count
+                    lows = [evaluate(fn,at) for fn in lower]
+                    highs = [evaluate(fn,at) for fn in upper]
+                    low = max([ymin]+lows) if all(v is not None for v in lows) else None
+                    high = min([ymax]+highs) if all(v is not None for v in highs) else None
+                    if index > count or low is None or high is None or low >= high:
+                        if len(run) >= 2:
+                            top = [[px,hi] for px,lo,hi in run]
+                            bottom = [[px,lo] for px,lo,hi in run]
+                            polygons.append(top+list(reversed(bottom)))
+                        run = []
+                    else: run.append([at,low,high])
+                for expression, constraint in zip(group,constraints):
+                    if constraint["axis"] == "y" and polygons:
+                        line = []
+                        for point in samples(expression,left,right):
+                            if point is not None:
+                                at,value = point
+                                lows,highs = [evaluate(fn,at) for fn in lower],[evaluate(fn,at) for fn in upper]
+                                if not all(v is not None for v in lows+highs) or not max([ymin]+lows)-1e-9 <= value <= min([ymax]+highs)+1e-9: point = None
+                            line.append(point)
+                        boundary.append(line)
+                for at in vertical:
+                    if left <= at <= right:
+                        lows = [evaluate(fn,at) for fn in lower]
+                        highs = [evaluate(fn,at) for fn in upper]
+                        if all(v is not None for v in lows+highs):
+                            lo,hi = max([ymin]+lows),min([ymax]+highs)
+                            if lo < hi: boundary.append([[at,lo],[at,hi]])
+            shadings.append({"mode":mode,"boundary":boundary,"fill":polygons})
+        elif mode == "halfplane":
             require(len(group) == 1,"A shaded inequality needs one boundary curve")
             boundary = samples(group[0],a,b)
             edge = low_edge if item.get("side") == "below" else high_edge
@@ -398,22 +465,47 @@ def graph_shading(engine, request, items, groups, sliders, xmin, xmax):
             require(1 <= len(group) <= 2,"[shade] takes one or two functions")
             first = samples(group[0],a,b)
             second = samples(group[1],a,b) if len(group) == 2 else [[point[0],0.0] if point else None for point in first]
-            runs=[]; run=[]
+            lower,upper = [],[]
+            for bound in item.get("yBounds",[]):
+                require(bound.get("side") in ("lower","upper"), "Invalid shading y bound")
+                expression = engine.build(bound["tree"])
+                require(not expression.has(engine.symbol("y")), "Shading boundaries cannot depend on y")
+                (lower if bound["side"] == "lower" else upper).append(graph_function(expression,(x,),sliders))
+            runs=[]; run=[]; previous=None
             for index in range(len(first)):
                 low = None if first[index] is None else first[index][1]
                 high = None if second[index] is None else second[index][1]
-                if low is None or high is None:
+                at = a+(b-a)*index/count
+                lows,highs = [evaluate(fn,at) for fn in lower],[evaluate(fn,at) for fn in upper]
+                if low is None or high is None or any(v is None for v in lows+highs):
+                    if len(run) >= 2: runs.append(run)
+                    run=[]; previous=None
+                    continue
+                low,high = max([min(low,high)]+lows),min([max(low,high)]+highs)
+                current = [at,low,high]
+                if previous is not None and (previous[2]-previous[1])*(high-low)<0:
+                    # Retain the entry/exit point when clipping changes within a sample.
+                    delta = previous[2]-previous[1]
+                    fraction = delta/(delta-(high-low))
+                    px = previous[0]+(at-previous[0])*fraction
+                    py = previous[1]+(low-previous[1])*fraction
+                    run.append([px,clamp(py),clamp(py)])
+                if low <= high:
+                    run.append([at,clamp(low),clamp(high)])
+                else:
                     if len(run) >= 2: runs.append(run)
                     run=[]
-                    continue
-                run.append([first[index][0],clamp(low),clamp(high)])
+                previous = current
             if len(run) >= 2: runs.append(run)
-            polygons = []
+            polygons = []; boundaries = [[],[]]
             for segment in runs:
                 top = [[at,max(low,high)] for at,low,high in segment]
                 bottom = [[at,min(low,high)] for at,low,high in segment]
                 polygons.append(top+list(reversed(bottom)))
-            shadings.append({"mode":mode,"boundary":[first,second if len(group) == 2 else None],"fill":polygons})
+                for line,points in zip(boundaries,(bottom,top)):
+                    if line: line.append(None)
+                    line.extend(points)
+            shadings.append({"mode":mode,"boundary":boundaries if lower or upper else [first,second if len(group) == 2 else None],"fill":polygons})
         else:
             raise MathError("Unknown shading mode")
     return shadings
@@ -725,6 +817,16 @@ def implicit_analysis(engine, request, curves, x, y, numeric, zeroes, tangent_po
         positions = zeroes(numeric(target, x))
         positions += [value for value in (finite(root) for root in solutions(target, x)) if value is not None and a-1e-9 <= value <= b+1e-9]
         return collect([[px, 0.0] for px in positions if valid(px, 0)])
+    if action == "yintercept":
+        target = residual.subs(x, 0)
+        require(target != 0, "The curve lies on the y axis; intercepts are not isolated")
+        ymin, ymax = float(request.get("yMin",-5)),float(request.get("yMax",5))
+        require(math.isfinite(ymin) and math.isfinite(ymax) and ymin < ymax, "Invalid y range")
+        # Reuse the numerical root search on the y viewport, then include exact roots.
+        search = graph_analysis(engine,{**request,"trees":[],"selected":0,"analysis":"root","a":ymin,"b":ymax},(target.subs(y,x),))
+        positions = [point[0] for point in search["points"]]
+        positions += [value for value in (finite(root) for root in solutions(target,y)) if value is not None]
+        return collect([[0.0,py] for py in positions if valid(0,py)])
     if action == "intersection":
         target = curves[other][1]
         # Substitute a known function first: a parabola against a circle becomes
@@ -800,11 +902,12 @@ def graph_analysis(engine, request, _expressions=None):
     size = len(trees) if _expressions is None else len(_expressions)
     require(0 <= selected < size, "Select a function")
     action = request.get("analysis", "root")
-    require(action in ("root","intersection","minimum","maximum","inflection","derivative","tangent","integral","arclength"), "Unknown graph analysis")
+    require(action in ("root","yintercept","intersection","minimum","maximum","inflection","derivative","tangent","integral","arclength"), "Unknown graph analysis")
     require(action != "intersection" or kind == "cartesian", "Intersections need two Cartesian functions")
     if action == "intersection": require(0 <= other < size and other != selected, "Select two different functions")
-    a = float(request.get("a", -10)); b = float(request.get("b", 10))
-    singled = action in ("derivative", "tangent")
+    fixed_intercept = action == "yintercept" and kind == "cartesian"
+    a = 0.0 if fixed_intercept else float(request.get("a", -10)); b = a if fixed_intercept else float(request.get("b", 10))
+    singled = action in ("derivative", "tangent") or fixed_intercept
     require(math.isfinite(a) and math.isfinite(b) and (singled or a < b) and abs(b-a) <= 1e9, "Invalid analysis range")
     def numeric(expr, variable):
         raw = s.lambdify(variable, expr, modules="math", cse=True, docstring_limit=0)
@@ -866,6 +969,10 @@ def graph_analysis(engine, request, _expressions=None):
         expression = expressions[selected]
         target = expression-expressions[other] if action == "intersection" else expression
         value = numeric(expression, x)
+        if action == "yintercept":
+            intercept = value(0)
+            points = [[0.0,intercept]] if intercept is not None else []
+            return {"analysis":action,"points":points,"count":len(points)}
         if action == "derivative":
             derivative = numeric(s.diff(expression, x), x)(a)
             require(derivative is not None and value(a) is not None, "Derivative is undefined at this point")
@@ -931,6 +1038,14 @@ def graph_analysis(engine, request, _expressions=None):
         return [px,py] if px is not None and py is not None else None
     if action == "root":
         points = [point(at) for at in zeroes(yvalue)]
+    elif action == "yintercept":
+        require(first != 0, "The curve lies on the y axis; intercepts are not isolated")
+        positions = zeroes(xvalue)
+        for at in zeroes(dxvalue):
+            value = xvalue(at)
+            if value is not None and abs(value) < 1e-7 and all(abs(at-old)>1e-6 for old in positions): positions.append(at)
+        points = [[0.0, yvalue(at)] for at in sorted(positions) if yvalue(at) is not None]
+        points = [item for i,item in enumerate(points) if all(abs(item[1]-old[1])>1e-6 for old in points[:i])]
     elif action in ("minimum", "maximum"):
         target = radius if kind == "polar" else second
         target_value = numeric(target, variable)

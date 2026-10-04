@@ -31,14 +31,14 @@ internal fun appendGraphSource(existing:String,source:String,kind:String="cartes
     val lines=existing.lines().filter(String::isNotBlank)
     val limit=if(kind in listOf("surface","differential"))1 else 6
     if(lines.any {it.trim()==source.trim()})return existing
-    require(lines.size<8 && lines.count {!it.trim().startsWith("[shade]")}<limit) {"Graph limit reached. Remove a function before adding another."}
+    require(lines.size<8 && lines.count {!isGraphShading(it)}<limit) {"Graph limit reached. Remove a function before adding another."}
     return existing.trimEnd()+(if(lines.isEmpty())"" else "\n")+source
 }
 
 internal fun removeGraphSource(existing:String,index:Int,kind:String="cartesian",shading:Boolean=false):String {
     val lines=existing.lines()
     val visible=lines.withIndex().filter {it.value.isNotBlank()}.take(if(kind in listOf("surface","differential"))1 else 8)
-    val target=visible.filter {it.value.trim().startsWith("[shade]")==shading}
+    val target=visible.filter {isGraphShading(it.value)==shading}
         .take(if(shading)4 else if(kind in listOf("surface","differential"))1 else 6).getOrNull(index) ?: return existing
     return lines.filterIndexed {i,_->i!=target.index}.joinToString("\n")
 }
@@ -59,9 +59,9 @@ internal object CalculatorGraphActions {
         try {
             graphSource.lines().filter { it.isNotBlank() }.take(if(graphKind in listOf("surface","differential")) 1 else 8).forEach { raw->
                 val line=raw.trim()
-                if(line.startsWith("[shade]")) {
+                if(isGraphShading(line)) {
                     if(graphKind!="cartesian")throw SyntaxException("Shading is available on Cartesian graphs",0)
-                    if(shadings.length()<4)shadings.put(shadeEntry(line.removePrefix("[shade]").trim()))
+                    if(shadings.length()<4)shadings.put(graphShadeEntry(graphShadingBody(line)))
                     return@forEach
                 }
                 if(trees.size<limit) trees+=JSONObject(graphInputTree(line,graphKind).json())
@@ -160,47 +160,6 @@ internal object CalculatorGraphActions {
             }
         }
     }
-    private fun splitTopLevel(text:String):List<String> {
-        val parts=mutableListOf<String>();var depth=0;var start=0
-        text.forEachIndexed { index,ch->
-            when(ch) {
-                '(', '[', '{'->depth++
-                ')', ']', '}'->if(depth>0)depth--
-                ','->if(depth==0) {parts+=text.substring(start,index);start=index+1}
-            }
-        }
-        parts+=text.substring(start)
-        return parts.map(String::trim).filter(String::isNotEmpty)
-    }
-    /** [shade] y<f(x) shades a region; [shade] f or [shade] f, g shades the area to the axis or between the curves, with an optional a..b interval. */
-    private fun shadeEntry(body:String):JSONObject {
-        val items=splitTopLevel(body)
-        if(items.isEmpty())throw SyntaxException("[shade] needs an inequality or one or two functions",0)
-        var range:Pair<String,String>?=null
-        val expressions=mutableListOf<String>()
-        items.forEach { item->
-            val pieces=item.split("..")
-            if(pieces.size==2&&pieces[0].isNotBlank()&&pieces[1].isNotBlank()&&range==null)range=pieces[0].trim() to pieces[1].trim()
-            else expressions+=item
-        }
-        if(expressions.isEmpty()||expressions.size>2)throw SyntaxException("[shade] takes one or two functions",0)
-        val entry=JSONObject()
-        range?.let {entry.put("a",JSONObject(Parser(it.first).parse().json())).put("b",JSONObject(Parser(it.second).parse().json()))}
-        val parsed=expressions.map {graphInputTree(it)}
-        if(parsed.size==1&&parsed[0].kind=="relation") {
-            val tree=parsed[0]
-            val left=tree.args.getOrNull(0);val right=tree.args.getOrNull(1)
-            if(left==null||right==null||tree.value !in listOf("<","<=",">",">="))throw SyntaxException("[shade] needs y < f(x) or y > f(x)",tree.start)
-            val boundary=when {
-                left.kind=="symbol"&&left.value=="y"->right
-                right.kind=="symbol"&&right.value=="y"->left
-                else->throw SyntaxException("[shade] needs y < f(x) or y > f(x)",tree.start)
-            }
-            val below=if(left.kind=="symbol"&&left.value=="y")tree.value.startsWith("<") else tree.value.startsWith(">")
-            entry.put("mode","halfplane").put("side",if(below)"below" else "above").put("trees",JSONArray(listOf(JSONObject(boundary.json()))))
-        } else entry.put("mode","band").put("trees",JSONArray(parsed.map {JSONObject(it.json())}))
-        return entry
-    }
     fun CalculatorModel.performUpdateGraphSource(source:String) {
         graphState.updateSource(source)
         save()
@@ -218,7 +177,7 @@ internal object CalculatorGraphActions {
     fun CalculatorModel.performToggleGraphDerivative(selected:Int) {
         if(graphKind!="cartesian")return
         if(graphDerivativeSelected!=null) {graphDerivativeSelected=null;return}
-        val sources=graphSource.lines().filter(String::isNotBlank).take(8).map(String::trim).filter {!it.startsWith("[shade]")}.take(6)
+        val sources=graphSource.lines().filter(String::isNotBlank).take(8).map(String::trim).filter {!isGraphShading(it)}.take(6)
         if(selected !in sources.indices) {error="Select a function";return}
         graphDerivativeSelected=selected
     }
@@ -238,10 +197,11 @@ internal object CalculatorGraphActions {
     }
     fun CalculatorModel.performAnalyzeGraph(action:String,first:String,second:String,selected:Int,other:Int) {
         if(graphKind !in listOf("cartesian","parametric","polar")) {error="Analysis requires a Cartesian, parametric or polar graph";return}
-        val singled=action in listOf("derivative","tangent")
-        val a=first.toDoubleOrNull();val b=if(singled)a else second.toDoubleOrNull()
+        val fixedIntercept=action=="yintercept" && graphKind=="cartesian"
+        val singled=action in listOf("derivative","tangent") || fixedIntercept
+        val a=if(fixedIntercept)0.0 else first.toDoubleOrNull();val b=if(singled)a else second.toDoubleOrNull()
         if(a==null || !a.isFinite() || b==null || !b.isFinite() || (!singled && a>=b)) {error="Enter finite values with a < b";return}
-        val sources=graphSource.lines().filter {it.isNotBlank()}.take(8).filter {graphKind!="cartesian" || !it.trim().startsWith("[shade]")}.take(6)
+        val sources=graphSource.lines().filter {it.isNotBlank()}.take(8).filter {graphKind!="cartesian" || !isGraphShading(it)}.take(6)
         if(sources.isEmpty() || selected !in sources.indices || action=="intersection" && (other !in sources.indices || other==selected)) {error="Select two different functions";return}
         val trees=try {JSONArray(sources.map {JSONObject(graphInputTree(it,graphKind).json())})} catch(e:Exception) {error=e.message ?: "Syntax ERROR";return}
         analysisJob?.cancel()

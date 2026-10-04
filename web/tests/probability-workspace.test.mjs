@@ -9,7 +9,7 @@ import {getLanguage,setLanguage} from '../i18n.js';
 import {probabilitySchema as schema} from '../probability-schema.js';
 import {createProbabilityWorkspace} from '../probability-workspace.js';
 
-test('probability controls run all eight user examples through actual WASM',async t=>{
+test('probability controls run all user examples through actual WASM',async t=>{
   const py=await loadPyodide({indexURL:fileURLToPath(new URL('../vendor/',import.meta.url))});
   await installEngine(py,{runtimeURL:new URL('../vendor/',import.meta.url),engineURL:new URL('../engine.zip',import.meta.url),fetcher:async url=>new Response(readFileSync(url))});
   const dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));
@@ -22,7 +22,7 @@ test('probability controls run all eight user examples through actual WASM',asyn
   t.after(()=>{setLanguage('en');dom.window.close();});
   assert.ok([...$('mode').options].some(o=>o.value==='probability'));
   assert.equal($('probability-category').value,'basic');
-  const expected=[0.5,0.5,1/6,1/13,0.3125,0.875,1/3,1/45];
+  const expected=[0.5,0.5,1/6,1/13,0.3125,0.875,1/3,1/45,6*17296/2598960];
   for(const [i,example] of schema.examples.entries()){
     $('probability-examples').children[i].click();
     const request=workspace.request();
