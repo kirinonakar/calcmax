@@ -148,6 +148,8 @@ input:disabled,select:disabled{opacity:.45;cursor:default}
 .graph-range-slider input[type="range"]:disabled::-webkit-slider-thumb{pointer-events:none;cursor:default}
 .graph-range-slider input[type="range"]:disabled::-moz-range-thumb{pointer-events:none;cursor:default}
 #graph-analysis-sliders{width:100%;min-width:0;padding-left:var(--graph-axis-left,5.25%);padding-right:var(--graph-axis-right,5.25%)}
+#graph-analysis-sliders .graph-range-fields label{flex-direction:row;align-items:center;gap:8px;margin-bottom:0;white-space:nowrap}
+#graph-analysis-sliders .graph-range-fields input{flex:1;min-width:0;width:0}
 /* Range inputs travel by their width minus the 20px thumb. Align thumb centers
    and the painted track with the canvas x axis, including its dynamic y labels. */
 .graph-axis-slider{margin-left:-10px;margin-right:-10px}
