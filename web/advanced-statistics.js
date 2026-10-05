@@ -220,7 +220,6 @@ export function createAdvancedStatistics({state,persist,data}) {
   };
   $('statistics-data').addEventListener('input',update);
   globalThis.addEventListener?.('resize',()=>{if(displayed)update();});
-  $('statistics-survival-open').onclick=()=>{select.value='survivalanalysis';select.onchange();};
   $('statistics-survival-band').checked=state.fields['statistics-survival-band']!==false;
   $('statistics-survival-band').onchange=()=>{state.fields['statistics-survival-band']=$('statistics-survival-band').checked;update();persist();};
   update();
