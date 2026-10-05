@@ -43,10 +43,10 @@ internal fun statisticsTestCommand(
     fun values(index: Int) = rows.mapNotNull { it.getOrNull(index)?.trim()?.takeIf(String::isNotBlank) }
     fun vector(entries: List<String>) = entries.joinToString(",", "[", "]")
     fun validNumber(text: String) = text.toDoubleOrNull()?.isFinite() == true
+    val names=statisticsColumnNames(kind)
     val x = values(0)
-    val y = if (kind == "xy" || kind == "xyz") values(1) else emptyList()
-    val z = if (kind == "xyz") values(2) else emptyList()
-    val pairs = if (kind == "xy"||kind=="xyz"&&procedure=="Wilcoxon") rows.mapNotNull { row ->
+    val y = if (names.size>1) values(1) else emptyList()
+    val pairs = if (names.size>1) rows.mapNotNull { row ->
         val left = row.getOrNull(0)?.trim()?.takeIf(String::isNotBlank)
         val right = row.getOrNull(1)?.trim()?.takeIf(String::isNotBlank)
         if (left != null && right != null) left to right else null
@@ -57,11 +57,10 @@ internal fun statisticsTestCommand(
     val grouped=if(kind=="xy"&&grouping=="group-value")statisticsGroupedValues(rows) else emptyList()
     val first=grouped.firstOrNull {it.first==firstGroup} ?: grouped.firstOrNull()
     val second=if(secondGroup==first?.first)null else grouped.firstOrNull {it.first==secondGroup} ?: grouped.firstOrNull {it.first!=first?.first}
-    val sample = if(grouped.isNotEmpty())first?.second.orEmpty() else when {column=="z"&&kind=="xyz"->z;column=="y"&&kind!="list"->y;else->x}
+    val sample = if(grouped.isNotEmpty())first?.second.orEmpty() else values(names.indexOf(column).coerceAtLeast(0))
     val groups=when {
         kind=="xy"&&grouping=="group-value"->grouped.map {it.second}
-        kind=="xy"->listOf(x,y)
-        kind=="xyz"->listOf(x,y,z)
+        names.size>1->names.indices.map(::values)
         else->emptyList()
     }
     val tailArgument = when (tail) { "Left" -> ",left"; "Right" -> ",right"; else -> "" }
@@ -73,11 +72,10 @@ internal fun statisticsTestCommand(
         "Mann–Whitney" -> if(grouping=="group-value"&&kind=="xy") {
             if(first!=null&&second!=null&&first.second.isNotEmpty()&&second.second.isNotEmpty())"mannwhitney(${vector(first.second)},${vector(second.second)}$tailArgument)" else null
         } else {
-            val names=if(kind=="xyz")listOf("x","y","z") else if(kind=="xy")listOf("x","y") else emptyList()
             val left=firstGroup?.takeIf {it in names} ?: "x"
             val right=secondGroup?.takeIf {it in names} ?: "y"
-            val leftValues=when(left){"z"->z;"y"->y;else->x}
-            val rightValues=when(right){"z"->z;"x"->x;else->y}
+            val leftValues=values(names.indexOf(left).coerceAtLeast(0))
+            val rightValues=values(names.indexOf(right).coerceAtLeast(0))
             if(names.size>=2&&left!=right&&leftValues.isNotEmpty()&&rightValues.isNotEmpty())"mannwhitney(${vector(leftValues)},${vector(rightValues)}$tailArgument)" else null
         }
         "Kruskal–Wallis" -> if(groups.size>=2&&groups.all {it.isNotEmpty()})"kruskal(${groups.joinToString(","){vector(it)}})" else null
@@ -86,18 +84,18 @@ internal fun statisticsTestCommand(
             grouping=="group-value"&&kind=="xy" -> if(first!=null&&second!=null&&first.second.size>=2&&second.second.size>=2)"ttest2($mu0,${vector(first.second)},${vector(second.second)}$tailArgument)" else null
             kind == "xy" && column == "x-y" && x.size >= 2 && y.size >= 2 -> "ttest2($mu0,${vector(x)},${vector(y)}$tailArgument)"
             kind == "xy" && column == "paired" && pairs.size >= 2 -> "ttestpaired($mu0,${vector(pairs.map { it.first })},${vector(pairs.map { it.second })}$tailArgument)"
-            column in listOf("x","y","z") -> sample.takeIf { it.size >= 2 }?.let { "ttest($mu0,${vector(it)}$tailArgument)" }
+            column in names -> sample.takeIf { it.size >= 2 }?.let { "ttest($mu0,${vector(it)}$tailArgument)" }
             else -> null
         }
         "z test" -> when {
             !validNumber(mu0) || !validSigma -> null
             grouping=="group-value"&&kind=="xy" -> if(first!=null&&second!=null&&validSigmaY&&first.second.isNotEmpty()&&second.second.isNotEmpty())"ztest2($mu0,$sigma,$sigmaY,${vector(first.second)},${vector(second.second)}$tailArgument)" else null
             kind == "xy" && column == "x-y" && validSigmaY && x.isNotEmpty() && y.isNotEmpty() -> "ztest2($mu0,$sigma,$sigmaY,${vector(x)},${vector(y)}$tailArgument)"
-            column in listOf("x","y","z") -> sample.takeIf { it.isNotEmpty() }?.let { "ztest($mu0,$sigma,${vector(it)}$tailArgument)" }
+            column in names -> sample.takeIf { it.isNotEmpty() }?.let { "ztest($mu0,$sigma,${vector(it)}$tailArgument)" }
             else -> null
         }
-        "χ² test" -> if (kind == "xy" && pairs.size >= 2 && (grouping!="group-value"||categoryX.size>=2&&categoryY.size>=2)) "chi2independence(${vector(categoryPairs.map { it.first })},${vector(categoryPairs.map { it.second })},${if(yatesCorrection)1 else 0})" else null
-        "Fisher exact" -> if (kind == "xy" && pairs.size >= 2 && (grouping!="group-value"||categoryX.size==2&&categoryY.size==2)) "fisherexact(${vector(categoryPairs.map { it.first })},${vector(categoryPairs.map { it.second })}$tailArgument)" else null
+        "χ² test" -> if (names.size>1 && pairs.size >= 2 && (grouping!="group-value"||categoryX.size>=2&&categoryY.size>=2)) "chi2independence(${vector(categoryPairs.map { it.first })},${vector(categoryPairs.map { it.second })},${if(yatesCorrection)1 else 0})" else null
+        "Fisher exact" -> if (names.size>1 && pairs.size >= 2 && (grouping!="group-value"||categoryX.size==2&&categoryY.size==2)) "fisherexact(${vector(categoryPairs.map { it.first })},${vector(categoryPairs.map { it.second })}$tailArgument)" else null
         "ANOVA","Tukey HSD" -> if (groups.size>=2&&groups.all {it.size>=2}) "${if(procedure=="ANOVA")"anova" else "tukey"}(${groups.joinToString(",") {vector(it)}})" else null
         "Shapiro–Wilk" -> sample.takeIf { it.size in 3..5000 }?.let { "shapiro(${vector(it)})" }
         "t interval" -> sample.takeIf { it.size >= 2 && validLevel }?.let { "tinterval($level,${vector(it)})" }

@@ -58,11 +58,13 @@ import kotlin.math.max
     var datasetName by rememberSaveable {mutableStateOf(m.statisticsName)}
     var data by rememberSaveable {mutableStateOf(m.statisticsData)}
     var dataKind by rememberSaveable {mutableStateOf(m.statisticsKind)}
+    var columnCount by rememberSaveable {mutableStateOf(if(dataKind.startsWith("columns:"))statisticsColumnCount(dataKind).toString() else "4")}
+    val dataColumns=statisticsColumnNames(dataKind)
     var regression by rememberSaveable {mutableStateOf(m.statisticsRegression)}
     var polynomialDegree by rememberSaveable {mutableStateOf(m.statisticsPolynomialDegree)}
     var logisticResponse by rememberSaveable {mutableStateOf(m.statisticsLogisticResponse)}
     val regressionColumns=statisticsRegressionColumns(dataKind)
-    val responseColumn=logisticResponse.toIntOrNull()?.takeIf {it in regressionColumns.indices} ?: regressionColumns.lastIndex
+    val responseColumn=if(regression in listOf("polynomial","logistic")) {if(logisticResponse=="0")0 else regressionColumns.lastIndex} else logisticResponse.toIntOrNull()?.takeIf {it in regressionColumns.indices} ?: regressionColumns.lastIndex
     LaunchedEffect(dataKind) {if(regressionColumns.isNotEmpty()&&logisticResponse.isNotBlank()&&logisticResponse.toIntOrNull() !in regressionColumns.indices)logisticResponse=regressionColumns.lastIndex.toString()}
     var customFormula by rememberSaveable {mutableStateOf(m.statisticsCustomFormula)}
     var customVariable by rememberSaveable {mutableStateOf(m.statisticsCustomVariable)}
@@ -83,7 +85,7 @@ import kotlin.math.max
     }
     importPreview?.let {preview->StatisticsCsvImportDialog(preview,onDismiss={importPreview=null}) {columns,skipHeader->
         m.clearRegression();data=importStatisticsCsv(preview,columns,skipHeader)
-        dataKind=when(columns.size){3->"xyz";2->"xy";else->"list"}
+        dataKind=statisticsKindForColumns(columns.size);columnCount=columns.size.toString()
         plotType=if(dataKind=="xy")"Scatter" else "Histogram"
         datasetName=datasetName.ifBlank {activeName.ifBlank {"D1"}}
         m.saveDataSet(datasetName,data,dataKind);selected=datasetName;isNew=false
@@ -99,59 +101,68 @@ import kotlin.math.max
     fun variableSource():String=statisticsDataSource(data,dataKind)
     fun startNew() {
         var index=1;val existing=names.toSet();while("D$index" in existing)index++
-        datasetName="D$index";data=when(dataKind){"xy"->",";"xyz"->",,";else->""};isNew=true;selected=""
+        datasetName="D$index";data=",".repeat(dataColumns.size-1);isNew=true;selected=""
     }
     val parsedRows=rows()
-    val dateAxis=if(dataKind=="xy"||dataKind=="xyz")statisticsDateAxis(parsedRows) else null
+    val dateAxis=if(dataColumns.size>1)statisticsDateAxis(parsedRows) else null
     val numericRows=statisticsNumericRows(parsedRows,dateAxis)
     fun vector(column:Int)=numericRows.mapNotNull {it.getOrNull(column)?.takeIf(String::isNotBlank)}.joinToString(",","[","]")
     val xValues=numericRows.mapNotNull {it.getOrNull(0)?.toDoubleOrNull()?.takeIf {v->v.isFinite()}}
     val yValues=if(dataKind!="list")numericRows.mapNotNull {it.getOrNull(1)?.toDoubleOrNull()?.takeIf {v->v.isFinite()}} else emptyList()
-    val zValues=if(dataKind=="xyz")numericRows.mapNotNull {it.getOrNull(2)?.toDoubleOrNull()?.takeIf {v->v.isFinite()}} else emptyList()
+    val zValues=if(dataColumns.size>=3)numericRows.mapNotNull {it.getOrNull(2)?.toDoubleOrNull()?.takeIf {v->v.isFinite()}} else emptyList()
     val paired=numericRows.mapNotNull {row->val x=row.getOrNull(0)?.toDoubleOrNull();val y=row.getOrNull(1)?.toDoubleOrNull();if(x!=null&&y!=null&&x.isFinite()&&y.isFinite())x to y else null}
     var section by rememberSaveable {mutableStateOf("Data")}
     if(section=="Data") Panel("Data & statistics","Enter values once, then summarize, test, or plot the current dataset.",panelScroll) {
         Choices(listOf("Data & analysis","Distributions"),"Data & analysis",{section=if(it=="Data & analysis")"Data" else it})
-        if(names.isNotEmpty())Choices(names,activeName,{name->m.clearRegression();selected=name;isNew=false;m.dataSets.optJSONObject(name)?.let {item->datasetName=name;data=item.optString("csv");dataKind=item.optString("kind","list");plotType=if(dataKind=="xy")"Scatter" else "Histogram"}})
+        if(names.isNotEmpty())Choices(names,activeName,{name->m.clearRegression();selected=name;isNew=false;m.dataSets.optJSONObject(name)?.let {item->datasetName=name;data=item.optString("csv");dataKind=item.optString("kind","list");columnCount=if(dataKind.startsWith("columns:"))statisticsColumnCount(dataKind).toString() else "4";plotType=if(dataKind=="xy")"Scatter" else "Histogram"}})
         Row(horizontalArrangement=Arrangement.spacedBy(6.dp),verticalAlignment=Alignment.CenterVertically) {
             Field(datasetName,"Dataset name",Modifier.weight(1f)){datasetName=it}
             SmallAction("New"){startNew()}
             SmallAction("Save"){m.saveDataSet(datasetName,data,dataKind);selected=datasetName;isNew=false}
             SmallAction("Delete"){if(activeName.isNotBlank()){m.deleteDataSet(activeName);selected="";isNew=true;startNew()}}
         }
-        Choices(listOf("List","x,y data","x,y,z data"),when(dataKind){"xy"->"x,y data";"xyz"->"x,y,z data";else->"List"},{m.clearRegression();dataKind=when(it){"x,y data"->"xy";"x,y,z data"->"xyz";else->"list"};plotType=if(dataKind=="xy")"Scatter" else "Histogram"})
+        Choices(listOf("List","x,y data","x,y,z data","n columns"),when(dataKind){"xy"->"x,y data";"xyz"->"x,y,z data";"list"->"List";else->"n columns"},{m.clearRegression();dataKind=when(it){"x,y data"->"xy";"x,y,z data"->"xyz";"n columns"->"columns:${columnCount.toIntOrNull()?.coerceIn(1,100) ?: 4}";else->"list"};plotType=if(dataKind=="xy")"Scatter" else "Histogram"})
+        if(dataKind.startsWith("columns:"))Field(columnCount,"Column count (1–100)",Modifier.width(170.dp).testTag("statistics-columns")) {text->
+            columnCount=text
+            text.toIntOrNull()?.takeIf {it in 1..100}?.let {m.clearRegression();dataKind="columns:$it"}
+        }
         Row(Modifier.horizontalScroll(rememberScrollState())) {
             SmallAction("Import CSV"){importCsv.launch(arrayOf("text/csv","text/comma-separated-values","text/plain","application/vnd.ms-excel"))}
             SmallAction("Export CSV"){exportCsv.launch("${datasetName.ifBlank {"dataset"}}.csv")}
             SmallAction("Store as $datasetName"){if(datasetName.matches(Regex("[A-Za-z][A-Za-z0-9_]*")))m.store(datasetName,variableSource(),false)else m.error="Dataset name must be a valid variable name"}
             SmallAction(if(csv)"Table editor" else "Direct input"){csv=!csv}
-            SmallAction("Add row"){if(parsedRows.size<999)data+=when(dataKind){"xy"->"\n,";"xyz"->"\n,,";else->"\n"}}
+            SmallAction("Add row"){if(parsedRows.size<999)data+="\n"+",".repeat(dataColumns.size-1)}
         }
-        if(csv)OutlinedTextField(data,{data=it},Modifier.fillMaxWidth().height(180.dp).keepInputVisible(),label={Text(when(dataKind){"xy"->if(isKorean())"x, y 값" else "x, y values";"xyz"->if(isKorean())"x, y, z 값" else "x, y, z values";else->tr("One value per line")})},textStyle=MaterialTheme.typography.bodyLarge.copy(fontFamily=FontFamily.Monospace))
+        if(csv)OutlinedTextField(data,{data=it},Modifier.fillMaxWidth().height(180.dp).keepInputVisible(),label={Text(if(dataKind.startsWith("columns:"))dataColumns.joinToString(", ") else when(dataKind){"xy"->if(isKorean())"x, y 값" else "x, y values";"xyz"->if(isKorean())"x, y, z 값" else "x, y, z values";else->tr("One value per line")})},textStyle=MaterialTheme.typography.bodyLarge.copy(fontFamily=FontFamily.Monospace))
         else {
             val grid=LocalInstrument.current.grid
-            val tableColumns=when(dataKind){"xy"->listOf("x","y");"xyz"->listOf("x","y","z");else->listOf("value")}
-            Column(Modifier.fillMaxWidth().border(1.dp,grid).heightIn(max=300.dp).verticalScroll(rememberScrollState()).testTag("statistics-table")) {
-                Row(Modifier.fillMaxWidth().height(30.dp).background(LocalInstrument.current.scientific)) {
-                    StatHeader("#",Modifier.width(30.dp)); VerticalDivider(color=grid,thickness=1.dp)
-                    tableColumns.forEach {name->StatHeader(name,Modifier.weight(1f));VerticalDivider(color=grid,thickness=1.dp)}
-                    StatHeader("",Modifier.width(48.dp))
-                }
-                HorizontalDivider(color=grid,thickness=1.dp)
-                parsedRows.forEachIndexed {index,row->
-                    val cellFocus=remember(index,tableColumns.size) {List(tableColumns.size){FocusRequester()} }
-                    Row(Modifier.fillMaxWidth().height(44.dp)) {
-                        Box(Modifier.width(30.dp).fillMaxHeight().then(statCellTouch(cellFocus.first())),contentAlignment=Alignment.Center){Text("${index+1}",fontSize=12.sp,color=LocalInstrument.current.muted)}
-                        VerticalDivider(color=grid,thickness=1.dp)
-                        repeat(tableColumns.size) {column->
-                            StatCell(row.getOrElse(column){""},Modifier.weight(1f),cellFocus[column],"statistics-cell-$index-$column") {text->
-                                val next=parsedRows.map {it.toMutableList().apply {while(size<tableColumns.size)add("")}}.toMutableList();next[index][column]=text;data=next.joinToString("\n",transform=::statisticsCsvLine)
-                            }
-                            VerticalDivider(color=grid,thickness=1.dp)
+            val tableColumns=if(dataKind=="list")listOf("value") else dataColumns
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val tableWidth=maxOf(maxWidth,if(tableColumns.size>3)(tableColumns.size*90+78).dp else 0.dp)
+                Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+                    Column(Modifier.width(tableWidth).border(1.dp,grid).heightIn(max=300.dp).verticalScroll(rememberScrollState()).testTag("statistics-table")) {
+                        Row(Modifier.fillMaxWidth().height(30.dp).background(LocalInstrument.current.scientific)) {
+                            StatHeader("#",Modifier.width(30.dp)); VerticalDivider(color=grid,thickness=1.dp)
+                            tableColumns.forEach {name->StatHeader(name,Modifier.weight(1f));VerticalDivider(color=grid,thickness=1.dp)}
+                            StatHeader("",Modifier.width(48.dp))
                         }
-                        Box(Modifier.width(48.dp).fillMaxHeight(),contentAlignment=Alignment.Center){SmallAction("−"){data=parsedRows.filterIndexed {i,_->i!=index}.joinToString("\n",transform=::statisticsCsvLine)}}
+                        HorizontalDivider(color=grid,thickness=1.dp)
+                        parsedRows.forEachIndexed {index,row->
+                            val cellFocus=remember(index,tableColumns.size) {List(tableColumns.size){FocusRequester()} }
+                            Row(Modifier.fillMaxWidth().height(44.dp)) {
+                                Box(Modifier.width(30.dp).fillMaxHeight().then(statCellTouch(cellFocus.first())),contentAlignment=Alignment.Center){Text("${index+1}",fontSize=12.sp,color=LocalInstrument.current.muted)}
+                                VerticalDivider(color=grid,thickness=1.dp)
+                                repeat(tableColumns.size) {column->
+                                    StatCell(row.getOrElse(column){""},Modifier.weight(1f),cellFocus[column],"statistics-cell-$index-$column") {text->
+                                        val next=parsedRows.map {it.toMutableList().apply {while(size<tableColumns.size)add("")}}.toMutableList();next[index][column]=text;data=next.joinToString("\n",transform=::statisticsCsvLine)
+                                    }
+                                    VerticalDivider(color=grid,thickness=1.dp)
+                                }
+                                Box(Modifier.width(48.dp).fillMaxHeight(),contentAlignment=Alignment.Center){SmallAction("−"){data=parsedRows.filterIndexed {i,_->i!=index}.joinToString("\n",transform=::statisticsCsvLine)}}
+                            }
+                            if(index<parsedRows.lastIndex)HorizontalDivider(color=grid,thickness=1.dp)
+                        }
                     }
-                    if(index<parsedRows.lastIndex)HorizontalDivider(color=grid,thickness=1.dp)
                 }
             }
         }
@@ -161,24 +172,25 @@ import kotlin.math.max
             Row(Modifier.horizontalScroll(rememberScrollState())) {
                 fun summarize(command:String) {summaryResultPending=true;m.edit(Editor(command));m.calculate();scope.launch {panelScroll.animateScrollTo(panelScroll.maxValue)}}
                 SmallAction(if(dataKind=="list")"List" else "x",translate=false){val values=vector(0);if(values!="[]")summarize("stats($values)")}
-                if(dataKind!="list")SmallAction("y",translate=false){val values=vector(1);if(values!="[]")summarize("stats($values)")}
-                if(dataKind=="xyz")SmallAction("z",translate=false){val values=vector(2);if(values!="[]")summarize("stats($values)")}
+                dataColumns.drop(1).forEachIndexed {index,name->SmallAction(name,translate=false){val values=vector(index+1);if(values!="[]")summarize("stats($values)")}}
                 val correlationCommand=statisticsCorrelationCommand(numericRows,dataKind)
                 if(dataKind=="xy")SmallAction("correlation",active=if(correlationCommand==null)false else null,translate=false,modifier=Modifier.testTag("statistics-correlation")){correlationCommand?.let {summarize(it)}}
             }
         }
         Column(verticalArrangement=Arrangement.spacedBy(2.dp)) {
             Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
-                Text(tr("Visualize"),Modifier.weight(1f),style=MaterialTheme.typography.titleMedium)
+                Text(tr("Visualize & regression"),Modifier.weight(1f),style=MaterialTheme.typography.titleMedium)
                 if(dataKind!="list")SmallAction("Clear regression"){m.clearRegression()}
             }
             val activeRegression=if(m.regressionFit.isNotBlank()&&m.regressionData==data)m.regressionMode else ""
-            if(dataKind!="list")Choices(if(dataKind=="xyz")listOf("multiple","logistic") else listOf("linear","quadratic","polynomial","logarithmic","exponential","power","logistic","custom"),if(regression in listOf("custom","polynomial"))regression else activeRegression,{selectedMode->
+            if(dataColumns.size>1)Choices(if(dataKind=="xyz"||dataKind.startsWith("columns:"))listOf("multiple","logistic") else listOf("linear","quadratic","polynomial","logarithmic","exponential","power","logistic","custom"),if(regression in listOf("custom","polynomial"))regression else activeRegression,{selectedMode->
                 regression=selectedMode;plotType=if(dataKind=="xy")"Scatter" else "Histogram"
+                val selectedResponse=if(selectedMode in listOf("polynomial","logistic")) {if(logisticResponse=="0")0 else regressionColumns.lastIndex} else responseColumn
+                if(selectedMode in listOf("polynomial","logistic")&&logisticResponse!="0")logisticResponse=""
                 if(selectedMode in listOf("custom","polynomial"))m.clearRegression()
                 if(selectedMode !in listOf("custom","polynomial")) {
-                    val table=statisticsRegressionTable(numericRows,dataKind,selectedMode,responseColumn)
-                    if(table!=null)m.fitRegression("regression($table,$selectedMode)",data,if(selectedMode in listOf("multiple","logistic"))responseColumn else null)
+                    val table=statisticsRegressionTable(numericRows,dataKind,selectedMode,selectedResponse)
+                    if(table!=null)m.fitRegression("regression($table,$selectedMode)",data,if(selectedMode in listOf("multiple","logistic"))selectedResponse else null)
                     else m.error="Add more data points than fit parameters"
                 }
             })
@@ -186,17 +198,18 @@ import kotlin.math.max
                 Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                     Field(polynomialDegree,"Polynomial degree (1–10)",Modifier.weight(1f)){m.clearRegression();polynomialDegree=it}
                     Button(onClick={
-                        val table=numericRows.filter {it.size>=2&&it.take(2).all(String::isNotBlank)}.joinToString(",","[","]"){it.take(2).joinToString(",","[","]")}
-                        m.fitRegression("regression($table,polynomial,$polynomialDegree)",data)
+                        val table=statisticsRegressionTable(numericRows,dataKind,"polynomial",responseColumn)
+                        if(table!=null)m.fitRegression("regression($table,polynomial,$polynomialDegree)",data,responseColumn)
                     },enabled=(polynomialDegree.toIntOrNull() ?: 0) in 1..10&&!m.regressionBusy){Text(tr("Analyze"))}
                 }
             }
             if(dataKind!="list"&&regression in listOf("multiple","logistic"))Text(tr(if(regression=="logistic")"Selected column is response; others are predictors. Logistic response: 0 or 1." else "Selected column is response; others are predictors."),fontSize=11.sp,color=LocalInstrument.current.muted)
-            if(dataKind!="list"&&regression in listOf("multiple","logistic")) {
+            if(dataColumns.size>1&&regression in listOf("multiple","logistic","polynomial")) {
                 Text(tr("Dependent variable"),fontSize=11.sp,color=LocalInstrument.current.muted)
-                Choices(regressionColumns,regressionColumns.getOrNull(responseColumn).orEmpty(),{name->m.clearRegression();logisticResponse=regressionColumns.indexOf(name).toString()},translate=false)
+                if(regression in listOf("polynomial","logistic"))Choices(listOf("first","last"),if(responseColumn==0)"first" else "last",{position->m.clearRegression();logisticResponse=if(position=="first")"0" else ""})
+                else Choices(regressionColumns,regressionColumns.getOrNull(responseColumn).orEmpty(),{name->m.clearRegression();logisticResponse=regressionColumns.indexOf(name).toString()},translate=false)
                 val table=statisticsRegressionTable(numericRows,dataKind,regression,responseColumn)
-                Button(onClick={table?.let {m.fitRegression("regression($it,$regression)",data,responseColumn)}},enabled=table!=null&&!m.regressionBusy){Text(tr("Analyze"))}
+                if(regression!="polynomial")Button(onClick={table?.let {m.fitRegression("regression($it,$regression)",data,responseColumn)}},enabled=table!=null&&!m.regressionBusy){Text(tr("Analyze"))}
             }
             if(m.regressionBusy)Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
                 Text(if(isKorean())"회귀 적합 중…" else "Fitting regression…",Modifier.weight(1f),fontSize=11.sp,color=LocalInstrument.current.muted)
@@ -221,18 +234,18 @@ import kotlin.math.max
             }
             Choices(if(dataKind=="xy")listOf("Scatter","Histogram","Box plot") else listOf("Histogram","Box plot"),plotType,{plotType=it})
         }
-        val fittedResponse=if(m.regressionMode in listOf("multiple","logistic"))m.regressionResponseColumn?.takeIf {it in regressionColumns.indices} ?: regressionColumns.lastIndex else regressionColumns.lastIndex
+        val fittedResponse=if(m.regressionMode in listOf("multiple","logistic","polynomial"))m.regressionResponseColumn?.takeIf {it in regressionColumns.indices} ?: regressionColumns.lastIndex else regressionColumns.lastIndex
         val fittedVariables=statisticsRegressionVariables(dataKind,fittedResponse)
         val fittedResponseName=regressionColumns.getOrNull(fittedResponse).orEmpty()
         val fitVisible=dataKind=="xy"&&plotType=="Scatter"&&m.regressionData==data&&m.regressionFit.isNotBlank()
-        val plotPairs=if(fitVisible&&m.regressionMode=="logistic"&&fittedResponse==0)paired.map {(x,y)->y to x} else paired
-        StatisticsPlot(plotType,if(plotType=="Scatter")plotPairs else xValues.mapIndexed {i,v->i.toDouble() to v},xValues,yValues,if(fitVisible)m.regressionCurve.orEmpty() else emptyList(),if(fitVisible)m.regressionFit else "",m.displayDigits,fitVisible&&m.regressionMode=="linear",m.regressionCorrelation,tertiary=zValues,xDateOrigin=if(fitVisible&&fittedResponse==0)null else dateAxis?.origin,
+        val plotPairs=if(fitVisible&&m.regressionMode in listOf("logistic","polynomial")&&fittedResponse==0)paired.map {(x,y)->y to x} else paired
+        StatisticsPlot(plotType,if(plotType=="Scatter")plotPairs else xValues.mapIndexed {i,v->i.toDouble() to v},xValues,yValues,if(fitVisible)m.regressionCurve.orEmpty() else emptyList(),if(fitVisible)m.regressionFit else "",m.displayDigits,fitVisible&&m.regressionMode=="linear",m.regressionCorrelation,tertiary=zValues,allColumns=dataColumns.mapIndexed {index,name->name to numericRows.mapNotNull {it.getOrNull(index)?.toDoubleOrNull()?.takeIf(Double::isFinite)}},xDateOrigin=if(fitVisible&&fittedResponse==0)null else dateAxis?.origin,
             xAxisLabel=if(fitVisible)fittedVariables["x"] ?: "x" else "x",yAxisLabel=if(fitVisible)fittedResponseName else "y",
-            fitPrefix=if(fitVisible&&m.regressionMode=="logistic")"P($fittedResponseName = 1) = " else "y ≈ ",fitVariables=if(fitVisible&&m.regressionMode=="logistic")fittedVariables else emptyMap())
+            fitPrefix=if(fitVisible&&m.regressionMode=="logistic")"P($fittedResponseName = 1) = " else if(fitVisible)"$fittedResponseName ≈ " else "y ≈ ",fitVariables=if(fitVisible&&m.regressionMode in listOf("logistic","polynomial"))fittedVariables else emptyMap())
         if(dateAxis!=null&&plotType=="Scatter")Text((if(isKorean())"회귀식의 x: ${dateAxis.origin.plusDays(1)} = 1일째" else "Regression x: ${dateAxis.origin.plusDays(1)} = day 1"),fontSize=11.sp,color=LocalInstrument.current.muted)
         if(dataKind!="list"&&m.regressionData==data&&m.regressionFit.isNotBlank()) {
             Column(verticalArrangement=Arrangement.spacedBy(0.dp)) {
-                if(dataKind=="xyz") {
+                if(dataKind=="xyz"||dataKind.startsWith("columns:")) {
                     val equation=remember(m.regressionFit,m.displayDigits,fittedVariables) {regressionFormulaDisplayTree(m.regressionFit,m.displayDigits,fittedVariables)}
                     CompositionLocalProvider(LocalMathMinimumSize provides 8f) {
                         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical=3.dp).testTag("statistics-regression-equation"),
@@ -271,7 +284,7 @@ import kotlin.math.max
                 }
             }
         }
-        StatisticsAnalysis(m,numericRows,dataKind)
+        StatisticsAnalysis(m,numericRows,if(dataColumns.size==1)"list" else dataKind)
         Display(m,requestInitialFocus=false)
     } else {
         Panel(section,"") {
@@ -284,8 +297,8 @@ import kotlin.math.max
 @Composable private fun StatisticsCsvImportDialog(preview:StatisticsCsvImport,onDismiss:()->Unit,onImport:(List<Int>,Boolean)->Unit) {
     var skipHeader by remember(preview) {mutableStateOf(preview.hasHeader)}
     var columnCount by remember(preview) {mutableIntStateOf(minOf(3,preview.columnCount))}
-    var columns by remember(preview) {mutableStateOf((0 until minOf(3,preview.columnCount)).toList())}
-    val names=listOf("x","y","z")
+    var columns by remember(preview) {mutableStateOf((0 until minOf(100,preview.columnCount)).toList())}
+    val names=List(minOf(100,preview.columnCount)){listOf("x","y","z").getOrNull(it) ?: "x${it+1}"}
     AlertDialog(onDismissRequest=onDismiss,title={Text(tr("Import CSV"))},text={
         Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment=Alignment.CenterVertically) {
@@ -294,9 +307,7 @@ import kotlin.math.max
             }
             Text(if(preview.hasHeader)tr("Header detected automatically") else tr("No header detected"),style=MaterialTheme.typography.bodySmall)
             Text(tr("Import as"),style=MaterialTheme.typography.titleSmall)
-            Choices((1..minOf(3,preview.columnCount)).map {names.take(it).joinToString(",")},names.take(columnCount).joinToString(","),{selected->
-                columnCount=selected.split(',').size
-            },translate=false)
+            Field(columnCount.toString(),"Column count (1–100)",Modifier.fillMaxWidth()){text->text.toIntOrNull()?.takeIf {it in 1..minOf(100,preview.columnCount)}?.let {columnCount=it}}
             Text(tr("Choose a CSV column for each variable"),style=MaterialTheme.typography.bodySmall)
             Column(verticalArrangement=Arrangement.spacedBy(2.dp)) {
                 repeat(columnCount) {index->

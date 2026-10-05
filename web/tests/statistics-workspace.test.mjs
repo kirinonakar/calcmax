@@ -60,7 +60,7 @@ test('logistic response choices follow the data type, orient the formula and axe
   assert.equal($('statistics-plot').querySelector('[data-axis-label="x"]').textContent,'y');
   assert.equal($('statistics-plot').querySelector('[data-axis-label="y"]').textContent,'x');
   $('statistics-kind').value='xyz';$('statistics-kind').dispatchEvent(new document.defaultView.Event('change'));
-  assert.deepEqual([...$('regression-response').options].map(option=>option.value),['0','1','2']);
+  assert.deepEqual([...$('regression-response').options].map(option=>option.value),['0','2']);
   assert.equal($('regression-response').value,'0','an explicitly selected compatible response is retained');
   $('regression-kind').value='multiple';$('regression-kind').dispatchEvent(new document.defaultView.Event('change'));
   assert.equal($('regression-response').closest('label').hidden,false);
@@ -291,4 +291,45 @@ test('invalid input and failed fits release busy state; edited input discards ol
   const clearing=run();$('regression-clear').click();
   requests[2].resolve({ok:true,exact:'3*x'});await clearing;
   assert.equal(context.cancels,1);assert.equal(results.length,1);
+});
+
+
+test('n-column datasets keep every column in the editor, saved kind, analysis, and response choices',t=>{
+  const {$,state,statistics}=workspace(t,{'statistics-kind':'columns','statistics-columns':'5','statistics-data':'1,2,3,4,5\n6,7,8,,10'});
+  assert.equal($('statistics-columns-label').hidden,false);
+  $('statistics-table-toggle').click();
+  assert.equal($('statistics-grid').querySelectorAll('tbody input').length,10);
+  assert.equal($('statistics-grid').querySelector('input[data-row="1"][data-column="4"]').value,'10');
+  $('statistics-grid').querySelector('input[data-row="1"][data-column="3"]').value='9';
+  $('statistics-grid').querySelector('input[data-row="1"][data-column="3"]').dispatchEvent(new document.defaultView.Event('input'));
+  $('dataset-name').value='five';$('dataset-save').click();
+  assert.equal(state.datasetKinds.five,'columns:5');
+  assert.equal(state.datasets.five,'1,2,3,4,5\n6,7,8,9,10');
+  assert.equal(statisticsCommand(state.datasets.five,{kind:'columns:5',op:'stats',column:4}),'stats([5,10])');
+  assert.equal(statisticsCommand(state.datasets.five,{kind:'columns:5',op:'anova'}),'anova([1,6],[2,7],[3,8],[4,9],[5,10])');
+  $('statistics-kind').value='list';$('statistics-kind').dispatchEvent(new document.defaultView.Event('change'));
+  $('dataset-list').value='five';$('dataset-list').dispatchEvent(new document.defaultView.Event('change'));
+  assert.equal($('statistics-kind').value,'columns');assert.equal($('statistics-columns').value,'5');
+  $('regression-kind').value='logistic';$('regression-kind').dispatchEvent(new document.defaultView.Event('change'));
+  assert.deepEqual([...$('regression-response').options].map(o=>[o.value,o.textContent]),[['0','first'],['4','last']]);
+  $('regression-response').value='4';$('regression-response').dispatchEvent(new document.defaultView.Event('change'));
+  $('statistics-columns').value='6';$('statistics-columns').dispatchEvent(new document.defaultView.Event('change'));
+  assert.equal($('regression-response').value,'5');
+  $('statistics-columns').value='1';$('statistics-columns').dispatchEvent(new document.defaultView.Event('change'));
+  assert.equal($('regression-section').hidden,true);
+  assert.equal(statisticsCommand('1\n2',{kind:'columns:1',op:'wilcoxon'}),'wilcoxon([1,2])');
+});
+
+test('polynomial first/last response controls reorder data and orient the displayed equation and axes',t=>{
+  const {$,statistics}=workspace(t,{'statistics-data':'1,0\n4,1\n9,2'});
+  $('regression-kind').value='polynomial';$('regression-kind').dispatchEvent(new document.defaultView.Event('change'));
+  assert.equal($('regression-response').closest('label').hidden,false);
+  assert.deepEqual([...$('regression-response').options].map(o=>o.textContent),['first','last']);
+  assert.equal($('regression-response').value,'1');
+  $('regression-response').value='0';$('regression-response').dispatchEvent(new document.defaultView.Event('change'));
+  assert.equal(statistics.expression('regression'),'regression([[0,1],[1,4],[2,9]],polynomial,3)');
+  statistics.showRegression({ok:true,decimal:'x^2+2*x+1',curve:[[0,1],[2,9]]});
+  assert.match($('regression-caption').textContent,/x.*y/);
+  assert.equal($('statistics-plot').querySelector('[data-axis-label="x"]').textContent,'y');
+  assert.equal($('statistics-plot').querySelector('[data-axis-label="y"]').textContent,'x');
 });

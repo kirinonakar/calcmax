@@ -26,9 +26,10 @@ import com.kirinonakar.symvacas.ui.theme.LocalInstrument
     var firstGroup by rememberSaveable {mutableStateOf("")}
     var secondGroup by rememberSaveable {mutableStateOf("")}
     var yatesCorrection by rememberSaveable {mutableStateOf(true)}
+    val dataColumns=statisticsColumnNames(kind)
     val columnOptions=when {
         kind=="list"->listOf("x")
-        kind=="xyz"->listOf("x","y","z")
+        kind!="xy"->dataColumns
         test=="t test"->listOf("x","y","x-y","paired")
         test=="z test"->listOf("x","y","x-y")
         else->listOf("x","y")
@@ -46,10 +47,10 @@ import com.kirinonakar.symvacas.ui.theme.LocalInstrument
     val groupNames=groupedValues.map {it.first}
     val activeFirst=firstGroup.takeIf {it in groupNames} ?: groupNames.firstOrNull().orEmpty()
     val activeSecond=secondGroup.takeIf {it in groupNames&&it!=activeFirst} ?: groupNames.firstOrNull {it!=activeFirst}.orEmpty()
-    val rankColumns=if(kind=="xyz")listOf("x","y","z") else listOf("x","y")
+    val rankColumns=dataColumns.takeIf {it.size>1} ?: listOf("x","y")
     val rankFirst=firstGroup.takeIf {it in rankColumns} ?: "x"
     val rankSecond=secondGroup.takeIf {it in rankColumns&&it!=rankFirst} ?: rankColumns.first {it!=rankFirst}
-    val sample=if(groupedMode)groupedValues.firstOrNull {it.first==activeFirst}?.second else when(activeColumn){"y"->y;"z"->z;else->x}
+    val sample=if(groupedMode)groupedValues.firstOrNull {it.first==activeFirst}?.second else values(dataColumns.indexOf(activeColumn).coerceAtLeast(0))
     val pairCount=if(kind!="list")rows.count {it.getOrNull(0)?.isNotBlank()==true&&it.getOrNull(1)?.isNotBlank()==true} else 0
     val multiColumnTest=test in listOf("χ² test","Fisher exact","ANOVA","Tukey HSD","Mann–Whitney","Kruskal–Wallis")||test=="Wilcoxon"&&kind!="list"
     val groupComparison=test in listOf("ANOVA","Tukey HSD","Kruskal–Wallis")
@@ -61,7 +62,7 @@ import com.kirinonakar.symvacas.ui.theme.LocalInstrument
     val command=statisticsTestCommand(test,rows,kind,activeColumn,tail,mu0,sigma,level,sigmaY,if(groupedMode)"group-value" else "columns",if(rankSelection)rankFirst else activeFirst,if(rankSelection)rankSecond else activeSecond,yatesCorrection)
     HorizontalDivider()
     Text(tr("Analyze current data"),style=MaterialTheme.typography.titleMedium)
-    Text(when(kind){"xy"->"Blank cells are omitted. Paired, χ², and Fisher tests use rows with both values; independent tests use each column separately. Fisher requires exactly two categories per column.";"xyz"->"Blank cells are omitted. ANOVA and Tukey HSD use x, y, and z as three independent groups.";else->"Blank cells are omitted from tests. Choose x,y or x,y,z data for group comparisons."},fontSize=12.sp,color=c.muted)
+    Text(if(kind.startsWith("columns:"))tr("Blank cells are omitted. Group comparisons use all columns.") else when(kind){"xy"->"Blank cells are omitted. Paired, χ², and Fisher tests use rows with both values; independent tests use each column separately. Fisher requires exactly two categories per column.";"xyz"->"Blank cells are omitted. ANOVA and Tukey HSD use x, y, and z as three independent groups.";else->"Blank cells are omitted from tests. Choose x,y or x,y,z data for group comparisons."},fontSize=12.sp,color=c.muted)
     Column(verticalArrangement=Arrangement.spacedBy(2.dp)) {
         Choices(listOf("t test","z test","χ² test","Fisher exact","ANOVA","Tukey HSD","Wilcoxon","Mann–Whitney","Kruskal–Wallis","Shapiro–Wilk","t interval","z interval"),test,{test=it})
         if(kind=="xy"&&test!="Wilcoxon")Choices(listOf("Columns","x=group, y=value"),grouping,{grouping=it})
@@ -114,9 +115,9 @@ import com.kirinonakar.symvacas.ui.theme.LocalInstrument
         }
     }
     val dataStatus=when {
-        x.isEmpty()&&y.isNullOrEmpty()&&z.isNullOrEmpty()->"Add values to the table to run this analysis."
+        dataColumns.indices.all {values(it).isEmpty()}->"Add values to the table to run this analysis."
         multiColumnTest&&kind=="list"->"Switch to x,y or x,y,z data and enter each group."
-        test in listOf("χ² test","Fisher exact")&&kind!="xy"->"Switch to x,y data and enter both columns."
+        test in listOf("χ² test","Fisher exact")&&dataColumns.size<2->"Switch to x,y data and enter both columns."
         groupedComparison&&(groupedValues.size<2||groupedValues.any {it.second.size<2})->"Enter at least two groups with two y values in each group."
         groupedTwoSample&&(activeSecond.isBlank()||(test=="t test"&&((sample?.size ?: 0)<2||(groupedValues.firstOrNull {it.first==activeSecond}?.second?.size ?: 0)<2)))->"Choose two groups with enough y values."
         (pairedTest||test=="χ² test"||test=="Fisher exact")&&pairCount<2->"Enter at least two complete x,y rows."
@@ -130,7 +131,7 @@ import com.kirinonakar.symvacas.ui.theme.LocalInstrument
         else->"Check the required values and sample size."
     }
     if(command==null)Text(dataStatus,fontSize=12.sp,color=c.muted)
-    else Text("${if(rankSelection)"$rankFirst (${values(rankColumns.indexOf(rankFirst)).size}), $rankSecond (${values(rankColumns.indexOf(rankSecond)).size})" else if(groupedComparison)"${groupedValues.size} groups" else if(groupedTwoSample)"$activeFirst (${sample?.size ?: 0}), $activeSecond (${groupedValues.firstOrNull {it.first==activeSecond}?.second?.size ?: 0})" else if(pairedTest||test=="χ² test"||test=="Fisher exact")"$pairCount pairs" else if(kind=="xyz"&&groupComparison)"${x.size} x, ${y?.size ?: 0} y, ${z?.size ?: 0} z" else if(multiColumnTest||twoSample)"${x.size} x, ${y?.size ?: 0} y" else "${sample?.size ?: 0} values"} ready",fontSize=12.sp,color=c.muted)
+    else Text("${if(rankSelection)"$rankFirst (${values(rankColumns.indexOf(rankFirst)).size}), $rankSecond (${values(rankColumns.indexOf(rankSecond)).size})" else if(groupedComparison)"${groupedValues.size} groups" else if(groupedTwoSample)"$activeFirst (${sample?.size ?: 0}), $activeSecond (${groupedValues.firstOrNull {it.first==activeSecond}?.second?.size ?: 0})" else if(pairedTest||test=="χ² test"||test=="Fisher exact")"$pairCount pairs" else if(groupComparison) dataColumns.mapIndexed {index,name->"${values(index).size} $name"}.joinToString(", ") else if(multiColumnTest||twoSample)"${x.size} x, ${y?.size ?: 0} y" else "${sample?.size ?: 0} values"} ready",fontSize=12.sp,color=c.muted)
     if(groupedComparison&&test=="Tukey HSD")Text(groupedValues.mapIndexed {index,(name,_)->"${listOf("x","y","z").getOrNull(index) ?: "group ${index+1}"} = $name"}.joinToString(" · "),fontSize=11.sp,color=c.muted)
     if(groupedMode&&test in listOf("χ² test","Fisher exact"))Text("x: ${xCategories.mapIndexed {index,label->"${index+1}=$label"}.joinToString(", ")} · y: ${yCategories.mapIndexed {index,label->"${index+1}=$label"}.joinToString(", ")}",fontSize=11.sp,color=c.muted)
     Row(Modifier.horizontalScroll(rememberScrollState()),verticalAlignment=Alignment.CenterVertically) {

@@ -22,6 +22,20 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class StatisticsDataSourceTest {
+    @Test fun nColumnsPreserveImportStorageAnalysisAndRegressionOrder() {
+        val csv="1,2,3,4\n5,6,7,8"
+        assertEquals("[[1,2,3,4],[5,6,7,8]]",statisticsDataSource(csv,"columns:4"))
+        assertEquals("[[1,2,3,4],[5,6,7,8]]",statisticsRecallSource(Editor(),csv,"columns:4"))
+        val preview=previewStatisticsCsv("a,b,c,d\n"+csv)
+        assertEquals(csv,importStatisticsCsv(preview,listOf(0,1,2,3),true))
+        val rows=com.kirinonakar.symvacas.ui.statisticsRows(csv)
+        assertEquals("ttest(0,[4,8])",statisticsTestCommand("t test",rows,"columns:4","x4","Two-sided","0","2","95"))
+        assertEquals("anova([1,5],[2,6],[3,7],[4,8])",statisticsTestCommand("ANOVA",rows,"columns:4","x","Two-sided","0","2","95"))
+        val complete=(1..5).map {listOf("$it","${it+1}","${it+2}","${it+3}")}
+        assertEquals("[[2,3,4,1],[3,4,5,2],[4,5,6,3],[5,6,7,4],[6,7,8,5]]",statisticsRegressionTable(complete,"columns:4","logistic",0))
+        assertEquals("[[2,1],[6,5]]",statisticsRegressionTable(rows,"xy","polynomial",0))
+    }
+
     @Test fun excelPasteKeepsDateAndPaddedThousandsAsTwoColumns() {
         val dates=listOf("2022-12-02","2023-01-15","2023-02-05","2023-03-05","2023-04-01","2023-05-01","2023-06-01","2023-07-01","2023-08-01","2023-09-01")
         val values=listOf("166,682","168,254","169,131","172,166","175,120","177,330","177,409","181,512","181,286","183,566")

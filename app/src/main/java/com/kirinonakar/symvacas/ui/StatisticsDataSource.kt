@@ -4,6 +4,13 @@ import com.kirinonakar.symvacas.math.Editor
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
+internal fun statisticsColumnCount(kind:String):Int = when(kind) {
+    "list"->1;"xy"->2;"xyz"->3
+    else->kind.removePrefix("columns:").toIntOrNull()?.coerceIn(1,100) ?: 1
+}
+internal fun statisticsColumnNames(kind:String):List<String> = List(statisticsColumnCount(kind)) {listOf("x","y","z").getOrNull(it) ?: "x${it+1}"}
+internal fun statisticsKindForColumns(count:Int):String = when(count) {1->"list";2->"xy";3->"xyz";else->"columns:${count.coerceIn(1,100)}"}
+
 internal fun statisticsRows(csv:String):List<List<String>> {
     val normalized=csv.replace("\r\n","\n").replace('\r','\n')
     val lines=mutableListOf<String>();var start=0
@@ -31,7 +38,7 @@ internal fun previewStatisticsCsv(csv:String):StatisticsCsvImport {
 }
 
 internal fun importStatisticsCsv(preview:StatisticsCsvImport,columns:List<Int>,skipHeader:Boolean):String {
-    require(columns.isNotEmpty()&&columns.size<=3&&columns.distinct().size==columns.size)
+    require(columns.isNotEmpty()&&columns.size<=100&&columns.distinct().size==columns.size)
     require(columns.all {it in 0 until preview.columnCount})
     return preview.rows.drop(if(skipHeader)1 else 0).joinToString("\n") {row->statisticsCsvLine(columns.map {index->row.getOrNull(index).orEmpty()})}
 }
@@ -77,8 +84,8 @@ private fun statisticsHeader(row:List<String>):Boolean {
 
 internal fun statisticsDataSource(csv:String,kind:String):String {
     val rawRows=statisticsRows(csv)
-    val rows=statisticsNumericRows(rawRows,if(kind=="xy"||kind=="xyz")statisticsDateAxis(rawRows) else null)
-    val columns=when(kind){"xy"->2;"xyz"->3;else->1}
+    val rows=statisticsNumericRows(rawRows,if(statisticsColumnCount(kind)>1)statisticsDateAxis(rawRows) else null)
+    val columns=statisticsColumnCount(kind)
     return if(columns>1)rows.filter {row->(0 until columns).all {index->row.getOrNull(index)?.isNotBlank()==true}}
         .joinToString(",","[","]") {row->row.take(columns).joinToString(",","[","]")}
     else rows.mapNotNull {it.getOrNull(0)?.takeIf(String::isNotBlank)}.joinToString(",","[","]")

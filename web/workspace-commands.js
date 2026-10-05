@@ -5,17 +5,24 @@ function csvRecordDelimiter(source,start){
   for(let i=start;i<source.length;i++){const ch=source[i];if(ch==='"')quoted=!quoted;else if(!quoted){if(ch==='\t')return '\t';if(ch==='\n'||ch==='\r')break;}}
   return ',';
 }
-export function csvRows(source,{maxColumns=3,skipHeader=true,preserveEmptyRows=false}={}){
+export function csvRows(source,{maxColumns=100,skipHeader=true,preserveEmptyRows=false}={}){
   const rows=[];let row=[],cell='',quoted=false,delimiter=csvRecordDelimiter(source,0);
   for(let i=0;i<source.length;i++){const ch=source[i];if(ch==='"'){if(quoted&&source[i+1]==='"'){cell+='"';i++;}else quoted=!quoted;}else if(!quoted&&ch===delimiter){row.push(cell.trim());cell='';}else if(!quoted&&(ch==='\n'||ch==='\r')){if(ch==='\r'&&source[i+1]==='\n')i++;row.push(cell.trim());if(row.some(Boolean)||preserveEmptyRows)rows.push(row);row=[];cell='';delimiter=csvRecordDelimiter(source,i+1);}else cell+=ch;}
   if(quoted)throw new Error('Unclosed CSV quote');row.push(cell.trim());if(row.some(Boolean)||preserveEmptyRows&&source.length&&!/[\r\n]$/.test(source))rows.push(row);
   if(!rows.length||rows.length>5000)throw new Error('Enter 1–5000 data rows');
   if(skipHeader&&['x','n','value','y','x,y','group,value','date,value','date,y','x,y,z'].includes(rows[0].map(s=>s.toLowerCase()).join(',')))rows.shift();
   if(!rows.length)throw new Error('Enter data below the header');
-  const columns=Math.max(...rows.map(r=>r.length));if(columns>maxColumns)throw new Error('Use up to three data columns');return rows.map(r=>Array.from({length:columns},(_,i)=>r[i]||''));
+  const columns=Math.max(...rows.map(r=>r.length));if(columns>maxColumns)throw new Error(`Use up to ${maxColumns} data columns`);return rows.map(r=>Array.from({length:columns},(_,i)=>r[i]||''));
 }
+export function statisticsColumnCount(kind){
+  if(Object.hasOwn({list:1,xy:2,xyz:3},kind))return {list:1,xy:2,xyz:3}[kind];
+  const match=/^columns:(\d+)$/.exec(kind||'');
+  return match&&Number(match[1])>=1&&Number(match[1])<=100?Number(match[1]):0;
+}
+export function statisticsColumnNames(count){return Array.from({length:count},(_,i)=>['x','y','z'][i]||`x${i+1}`);}
+export function statisticsKindForColumns(count){return ['list','xy','xyz'][count-1]||`columns:${count}`;}
 export function statisticsDataRows(source,kind){
-  const columns={list:1,xy:2,xyz:3}[kind];
+  const columns=statisticsColumnCount(kind);
   if(!columns)throw new Error('Select List, x,y data, or x,y,z data');
   return csvRows(source).map(row=>Array.from({length:columns},(_,i)=>row[i]||''));
 }
@@ -26,14 +33,14 @@ export function numericStatisticsRows(rows){
 const vector=values=>'['+values.join(',')+']';
 export function statisticsDatasetSource(source,kind){
   const rows=numericStatisticsRows(statisticsDataRows(source,kind));
-  return vector(kind==='list'?rows.map(row=>row[0]).filter(Boolean):rows.filter(row=>row.every(Boolean)).map(vector));
+  return vector(statisticsColumnCount(kind)===1?rows.map(row=>row[0]).filter(Boolean):rows.filter(row=>row.every(Boolean)).map(vector));
 }
 export function statisticsAnalysisData(source,{op='stats',column=0,grouping='columns',firstGroup='',secondGroup='',kind}={}){
-  const paired=['regression','correlation','ttestpaired','wilcoxon','chi2independence','fisherexact'].includes(op)&&!(op==='wilcoxon'&&kind==='list');
+  const paired=['regression','correlation','ttestpaired','wilcoxon','chi2independence','fisherexact'].includes(op)&&!(op==='wilcoxon'&&statisticsColumnCount(kind)===1);
   const categorical=['chi2independence','fisherexact'].includes(op);
   const grouped=grouping==='groups'&&!paired&&(!kind||kind==='xy'),raw=kind?statisticsDataRows(source,kind):csvRows(source),rows=grouped||categorical?raw:numericStatisticsRows(raw),columns=Array.from({length:rows[0].length},(_,i)=>rows.map(r=>r[i]).filter(Boolean)),pairs=rows.filter(r=>r[0]&&r[1]),groups=new Map();
   if(grouped)for(const [name,number] of pairs){if(!groups.has(name))groups.set(name,[]);groups.get(name).push(number);}
-  const names=groups.size?[...groups.keys()]:['x','y','z'].slice(0,columns.length),values=groups.size?[...groups.values()]:columns;
+  const names=groups.size?[...groups.keys()]:statisticsColumnNames(columns.length),values=groups.size?[...groups.values()]:columns;
   const first=groups.size?(names.includes(firstGroup)?names.indexOf(firstGroup):0):firstGroup?names.indexOf(firstGroup):0;
   const second=groups.size?(names.includes(secondGroup)?names.indexOf(secondGroup):names.findIndex((_,i)=>i!==first)):secondGroup?names.indexOf(secondGroup):1;
   const selected=groups.size?first:column;
@@ -41,7 +48,7 @@ export function statisticsAnalysisData(source,{op='stats',column=0,grouping='col
   return {rows,groups,pairs,paired,categorical,first,second,samples};
 }
 export function statisticsCommand(source,{op='stats',column=0,extra='0',tail='two',sigma='1',sigmaY='1',yatesCorrection=true,regression='linear',degree='3',responseColumn,formula='A*exp(-k*x)+C',variable='x',initials='',grouping='columns',firstGroup='',secondGroup='',kind}={}){
-  if(op==='regression'&&kind&&kind!=='xy'&&!(kind==='xyz'&&['multiple','logistic'].includes(regression)))throw new Error('Regression needs x,y data');
+  if(op==='regression'&&kind&&kind!=='xy'&&!(statisticsColumnCount(kind)>1&&['multiple','logistic'].includes(regression)))throw new Error('Regression needs x,y data');
   const {rows,groups,pairs,categorical,first,second,samples:activeSamples}=statisticsAnalysisData(source,{op,column,grouping,firstGroup,secondGroup,kind});
   const samples=activeSamples.map(sample=>sample.values),data=samples[0];
   if(!categorical){for(const number of samples.flat().filter(Boolean))parse(number);}
@@ -56,10 +63,10 @@ export function statisticsCommand(source,{op='stats',column=0,extra='0',tail='tw
       return `regression(${vector(complete.map(row=>vector(order.map(i=>row[i]))))},${regression})`;
     }
     if(pairs.length<2)throw new Error('Regression needs at least two complete x,y rows');
-    return `regression(${vector(pairs.map(p=>vector(p.slice(0,2))))},${regression}${regression==='polynomial'?','+degree:regression==='custom'?`,${formula},${variable}${initials.trim()?','+initials:''}`:''})`;
+    return `regression(${vector(pairs.map(p=>vector(regression==='polynomial'&&Number(responseColumn)===0?[p[1],p[0]]:p.slice(0,2))))},${regression}${regression==='polynomial'?','+degree:regression==='custom'?`,${formula},${variable}${initials.trim()?','+initials:''}`:''})`;
   }
   if(categorical){if(pairs.length<2)throw new Error('Enter complete categorical pairs');const left=[...new Set(pairs.map(r=>r[0]))],right=[...new Set(pairs.map(r=>r[1]))];return `${op}(${vector(pairs.map(r=>left.indexOf(r[0])+1))},${vector(pairs.map(r=>right.indexOf(r[1])+1))}${op==='fisherexact'?tailArgument:','+(yatesCorrection?1:0)})`;}
-  if(op==='wilcoxon'&&kind==='list'){if(!data?.length)throw new Error('Select a nonempty data column');return `wilcoxon(${vector(data)}${tailArgument})`;}
+  if(op==='wilcoxon'&&statisticsColumnCount(kind)===1){if(!data?.length)throw new Error('Select a nonempty data column');return `wilcoxon(${vector(data)}${tailArgument})`;}
   if(['correlation','ttestpaired','wilcoxon'].includes(op)){if(pairs.length<2)throw new Error('Enter at least two complete paired rows');return `${op}(${op==='ttestpaired'?extra+',':''}${vector(pairs.map(r=>r[0]))},${vector(pairs.map(r=>r[1]))}${op!=='correlation'?tailArgument:''})`;}
   if(op==='mannwhitney'){const [a,b]=samples;if(!a?.length||!b?.length||first===second)throw new Error('Select two different nonempty samples');return `mannwhitney(${vector(a)},${vector(b)}${tailArgument})`;}
   if(['ttest2','ztest2'].includes(op)){const [a,b]=samples;if(!a?.length||!b?.length||first===second)throw new Error('Select two different nonempty samples');return `${op}(${extra},${op==='ztest2'?sigma+','+sigmaY+',':''}${vector(a)},${vector(b)}${tailArgument})`;}

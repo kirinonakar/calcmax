@@ -19,10 +19,11 @@ import kotlin.math.ln
 import kotlin.math.max
 import kotlin.math.roundToLong
 
-@Composable internal fun StatisticsPlot(type:String,points:List<Pair<Double,Double>>,values:List<Double>,secondary:List<Double> = emptyList(),curve:List<Pair<Double,Double>> = emptyList(),fitLabel:String="",displayDigits:Int=10,showCorrelation:Boolean=false,correlation:Double?=null,tertiary:List<Double> = emptyList(),xDateOrigin:LocalDate?=null,xAxisLabel:String="x",yAxisLabel:String="y",fitPrefix:String="y ≈ ",fitVariables:Map<String,String> = emptyMap()) {
+@Composable internal fun StatisticsPlot(type:String,points:List<Pair<Double,Double>>,values:List<Double>,secondary:List<Double> = emptyList(),curve:List<Pair<Double,Double>> = emptyList(),fitLabel:String="",displayDigits:Int=10,showCorrelation:Boolean=false,correlation:Double?=null,tertiary:List<Double> = emptyList(),xDateOrigin:LocalDate?=null,xAxisLabel:String="x",yAxisLabel:String="y",fitPrefix:String="y ≈ ",fitVariables:Map<String,String> = emptyMap(),allColumns:List<Pair<String,List<Double>>> = emptyList()) {
     val c=LocalInstrument.current
+    val series=if(allColumns.isNotEmpty())allColumns.mapIndexed {index,(name,observations)->Triple(if(allColumns.size==1)"" else name,observations,c.curves[index%c.curves.size])}.filter {it.second.isNotEmpty()} else (if(secondary.isEmpty()&&tertiary.isEmpty())listOf(Triple("",values,c.accent)) else listOf(Triple("x",values,c.accent),Triple("y",secondary,c.danger),Triple("z",tertiary,c.curves[2]))).filter {it.second.isNotEmpty()}
     val fitEquation=remember(fitLabel,displayDigits,fitVariables) {if(fitLabel.isBlank())null else regressionFormulaDisplayTree(fitLabel,displayDigits,fitVariables)}
-    Canvas(Modifier.fillMaxWidth().height(220.dp).background(c.display)) {
+    Canvas(Modifier.fillMaxWidth().height(if(type=="Box plot")(series.size*70+70).coerceAtLeast(220).dp else 220.dp).background(c.display)) {
         val left=38.dp.toPx();val right=12.dp.toPx();val top=14.dp.toPx();val bottom=28.dp.toPx()
         val width=size.width-left-right;val height=size.height-top-bottom
         val text=Paint(Paint.ANTI_ALIAS_FLAG).apply {color=c.muted.toArgb();textSize=10.sp.toPx()}
@@ -47,10 +48,9 @@ import kotlin.math.roundToLong
             val lastTick=xDateOrigin?.let {origin->runCatching {origin.plusDays(x1.roundToLong()).toString()}.getOrNull()} ?: "%.4g".format(x1)
             drawContext.canvas.nativeCanvas.drawText(firstTick,left,top+height+16.dp.toPx(),text)
             drawContext.canvas.nativeCanvas.drawText(lastTick,left+width-text.measureText(lastTick),top+height+16.dp.toPx(),text)
-        } else if(values.isEmpty()&&secondary.isEmpty()&&tertiary.isEmpty()) {
+        } else if(series.isEmpty()) {
             drawContext.canvas.nativeCanvas.drawText("Add finite numeric observations to plot",left,top+20.dp.toPx(),text)
         } else if(type=="Histogram") {
-            val series=if(secondary.isEmpty()&&tertiary.isEmpty())listOf(Triple("",values,c.accent)) else listOf(Triple("x",values,c.accent),Triple("y",secondary,c.danger),Triple("z",tertiary,c.curves[2])).filter {it.second.isNotEmpty()}
             val all=series.flatMap {it.second}
             var lo=all.min();var hi=all.max();if(lo==hi){lo-=.5;hi+=.5}
             val bins=ceil(1+ln(all.size.coerceAtLeast(2).toDouble())/ln(2.0)).toInt().coerceIn(3,14)
@@ -70,7 +70,6 @@ import kotlin.math.roundToLong
             drawContext.canvas.nativeCanvas.drawText("%.4g".format(lo),left,top+height+16.dp.toPx(),text)
             drawContext.canvas.nativeCanvas.drawText("%.4g".format(hi),left+width-34.dp.toPx(),top+height+16.dp.toPx(),text)
         } else {
-            val series=if(secondary.isEmpty()&&tertiary.isEmpty())listOf(Triple("",values,c.accent)) else listOf(Triple("x",values,c.accent),Triple("y",secondary,c.danger),Triple("z",tertiary,c.curves[2])).filter {it.second.isNotEmpty()}
             fun quantile(data:List<Double>,p:Double):Double {val position=(data.size-1)*p;val low=floor(position).toInt();val high=ceil(position).toInt();return data[low]+(data[high]-data[low])*(position-low)}
             val all=series.flatMap {it.second}
             var minValue=all.min();var maxValue=all.max();if(minValue==maxValue){minValue-=.5;maxValue+=.5}

@@ -67,7 +67,7 @@ test('Korean regression selections and restored labels execute the selected mode
   let coefficients,auc,roc;
   $('statistics-kind').value='xyz';$('statistics-kind').dispatchEvent(new dom.window.Event('change'));
   $('regression-kind').value='logistic';$('regression-kind').dispatchEvent(new dom.window.Event('change'));
-  for(const response of [0,1,2]){
+  for(const response of [0,2]){
     const original=canonical.map(([a,b,y])=>response===0?[y,a,b]:response===1?[a,y,b]:[a,b,y]).map(row=>row.join(',')).join('\n');
     $('statistics-data').value=original;$('regression-response').value=String(response);$('regression-response').dispatchEvent(new dom.window.Event('change'));
     await run();
@@ -104,6 +104,12 @@ test('regression inference and rank tests run through real WASM and workspace co
   assert.equal(linear.regression.residuals.length,6);
   const polynomial=evaluate(statisticsCommand('0,1\n1,3\n2,9\n3,25\n4,57',{op:'regression',kind:'xy',regression:'polynomial',degree:'3'}));
   assert.equal(polynomial.regression.coefficients.length,4);
+  const firstPolynomial=evaluate(statisticsCommand('1,0\n4,1\n9,2\n16,3',{op:'regression',kind:'xy',regression:'polynomial',degree:'2',responseColumn:0}));
+  assert.deepEqual(firstPolynomial.regression.coefficients.map(c=>Number(c.estimate)),[1,2,1]);
+  const wideRows='1,0,0,0\n3,1,0,0\n4,0,1,0\n5,0,0,1\n10,1,1,1\n12,2,1,1';
+  const wide=evaluate(statisticsCommand(wideRows,{op:'regression',kind:'columns:4',regression:'multiple',responseColumn:0}));
+  assert.equal(wide.regression.coefficients.length,4);
+  wide.regression.coefficients.forEach((c,i)=>assert.ok(Math.abs(Number(c.estimate)-[1,2,3,4][i])<1e-10));
   const multiple=evaluate(statisticsCommand('0,0,1\n1,0,3\n0,1,4\n1,1,7\n2,1,8',{op:'regression',kind:'xyz',regression:'multiple'}));
   assert.equal(multiple.regression.coefficients.length,3);assert.equal(multiple.curve.length,0);
   const logistic=evaluate(statisticsCommand('-3,0\n-2,0\n-1,1\n0,0\n0,1\n1,0\n2,1\n3,1',{op:'regression',kind:'xy',regression:'logistic'}));
