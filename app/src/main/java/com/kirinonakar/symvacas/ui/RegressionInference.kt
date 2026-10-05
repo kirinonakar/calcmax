@@ -39,13 +39,28 @@ import kotlin.math.abs
         else->"OLS inference; independent errors with constant variance."
     }),fontSize=11.sp,color=colors.muted)
     report.optJSONArray("warnings")?.let {warnings->repeat(warnings.length()){Text(tr(warnings.optString(it)),fontSize=11.sp,color=colors.muted)}}
-    val coefficients=report.optJSONArray("coefficients")
+    val coefficients=report.optJSONArray("coefficients")?.let {array->
+        (0 until array.length()).mapNotNull {array.optJSONObject(it)}
+    }.orEmpty()
+    val headers=listOf("Parameter","Estimate","SE","95% CI","p").map {tr(it)}
+    val coefficientRows=coefficients.map {coefficient->
+        listOf(coefficient.optString("name"),value(coefficient,"estimate"),value(coefficient,"se"),
+            "${value(coefficient,"low")} … ${value(coefficient,"high")}",value(coefficient,"p"))
+    }
     Column(Modifier.horizontalScroll(rememberScrollState())) {
-        Row {listOf("Parameter","Estimate","SE","95% CI","p").forEachIndexed {i,label->Text(tr(label),Modifier.width(if(i==3)240.dp else 120.dp),fontSize=11.sp)}}
-        if(coefficients!=null)repeat(coefficients.length()) {index->
-            val coefficient=coefficients.optJSONObject(index) ?: return@repeat
-            Row {listOf(coefficient.optString("name"),value(coefficient,"estimate"),value(coefficient,"se"),"${value(coefficient,"low")} … ${value(coefficient,"high")}",value(coefficient,"p")).forEachIndexed {i,label->Text(label,Modifier.width(if(i==3)240.dp else 120.dp),fontSize=11.sp,fontFamily=FontFamily.Monospace)}}
-            if(coefficient.has("oddsRatio"))Text("${tr("Odds ratio")}: ${value(coefficient,"oddsRatio")} · ${tr("OR 95% CI")}: ${value(coefficient,"oddsLow")} … ${value(coefficient,"oddsHigh")}",fontSize=11.sp)
+        Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
+            headers.forEachIndexed {column,header->
+                // Each column takes the widest header/value, keeping every row aligned.
+                Column(Modifier.width(IntrinsicSize.Max)) {
+                    Text(header,fontSize=11.sp,maxLines=1,softWrap=false)
+                    coefficientRows.forEach {row->
+                        Text(row[column],fontSize=11.sp,fontFamily=FontFamily.Monospace,maxLines=1,softWrap=false)
+                    }
+                }
+            }
+        }
+        coefficients.forEach {coefficient->
+            if(coefficient.has("oddsRatio"))Text("${coefficient.optString("name")} · ${tr("Odds ratio")}: ${value(coefficient,"oddsRatio")} · ${tr("OR 95% CI")}: ${value(coefficient,"oddsLow")} … ${value(coefficient,"oddsHigh")}",fontSize=11.sp)
         }
     }
     TextButton(onClick={expanded=!expanded}) {Text(tr("Residual diagnostics"))}
