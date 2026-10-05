@@ -29,7 +29,7 @@ stats mean median variance stdev quartiles regression covariance correlation qty
 normpdf normalcdf normcdf normalpdf invnorm tpdf tcdf invt chi2pdf chi2cdf fpdf fcdf binompdf binomcdf poissonpdf poissoncdf geometpdf geometcdf
 exppdf expcdf unifpdf unifcdf gammapdf gammacdf betapdf betacdf lognormpdf lognormcdf
 hgeompdf hgeomcdf nbinompdf nbinomcdf weibullpdf weibullcdf cauchypdf cauchycdf invcauchy
-ttest ttest2 ttestpaired ztest ztest2 chi2test chi2independence fisherexact anova tukey shapiro tinterval zinterval
+ttest ttest2 ttestpaired ztest ztest2 chi2test chi2independence fisherexact anova tukey shapiro wilcoxon mannwhitney kruskal tinterval zinterval
 tvmfv tvmpv tvmpmt tvmn tvmrate npv irr amort cagr
 """.split())
 _functions = {}
@@ -49,6 +49,27 @@ def _sympify(value):
     if isinstance(value, list): return [_sympify(item) for item in value]
     if isinstance(value, tuple): return tuple(_sympify(item) for item in value)
     return sp.sympify(value)
+
+
+def regression_report(data, mode="linear", *options):
+    """Return coefficient inference and every residual as a Python dictionary.
+
+    Arguments match regression: polynomial takes degree; custom takes model,
+    independent symbol and optional initial/bound rows. Numeric fields retain
+    precision as decimal strings; unavailable fields are None.
+    """
+    from calc_statistics import fit_regression, fit_custom_regression
+    from calc_shared import require
+    engine = Engine({"angle":"RAD", "functions":_functions, "variables":_variables, "assumptions":_assumptions})
+    rows = _sympify(data)
+    if str(mode) == "custom":
+        require(len(options) in (2,3), "Use regression_report(data,custom,model,x[,initials])")
+        fit_custom_regression(engine, rows, _sympify(options[0]), _sympify(options[1]),
+                              _sympify(options[2]) if len(options)>2 else None)
+    else:
+        require(len(options)<=1 and (not options or str(mode)=="polynomial"), "The degree argument requires polynomial regression")
+        fit_regression(engine, rows, str(mode), _sympify(options[0]) if options else None)
+    return engine.regression_report
 
 
 def __getattr__(name):

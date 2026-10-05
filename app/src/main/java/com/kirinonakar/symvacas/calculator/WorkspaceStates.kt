@@ -207,11 +207,13 @@ internal class StatisticsState(private val prefs:SharedPreferences) {
     var regressionMode by mutableStateOf(prefs.getString("regressionMode",prefs.getString("statisticsRegression","linear")) ?: "")
     var regressionCorrelation by mutableStateOf(prefs.getString("regressionCorrelation",null)?.toDoubleOrNull()?.takeIf(Double::isFinite))
     var regressionParameters by mutableStateOf(loadRegressionParameters())
+    var regressionReport by mutableStateOf(runCatching {JSONObject(prefs.getString("regressionReport",null) ?: "null")}.getOrNull())
     var regressionBusy by mutableStateOf(false)
     var statisticsName by mutableStateOf(prefs.getString("statisticsName","D1") ?: "D1")
     var statisticsData by mutableStateOf(prefs.getString("statisticsData","") ?: "")
     var statisticsKind by mutableStateOf(prefs.getString("statisticsKind","list") ?: "list")
     var statisticsRegression by mutableStateOf(prefs.getString("statisticsRegression","linear") ?: "linear")
+    var statisticsPolynomialDegree by mutableStateOf(prefs.getString("statisticsPolynomialDegree","3") ?: "3")
     var statisticsCustomFormula by mutableStateOf((prefs.getString("statisticsCustomFormula","exp(-b*ADC)") ?: "exp(-b*ADC)").let {if(it=="S0*exp(-b*ADC)")"exp(-b*ADC)" else it})
     var statisticsCustomVariable by mutableStateOf(prefs.getString("statisticsCustomVariable","b") ?: "b")
     var statisticsCustomInitials by mutableStateOf(prefs.getString("statisticsCustomInitials","") ?: "")
@@ -238,29 +240,30 @@ internal class StatisticsState(private val prefs:SharedPreferences) {
 
     fun deleteDataSet(name:String) {dataSets=JSONObject(dataSets.toString()).apply {remove(name)}}
 
-    fun updateSelection(name:String,data:String,kind:String,regression:String,plot:String,csv:Boolean,selected:String,isNew:Boolean,customFormula:String,customVariable:String,customInitials:String) {
+    fun updateSelection(name:String,data:String,kind:String,regression:String,plot:String,csv:Boolean,selected:String,isNew:Boolean,customFormula:String,customVariable:String,customInitials:String,polynomialDegree:String) {
         statisticsName=name;statisticsData=data;statisticsKind=kind;statisticsRegression=regression
-        statisticsCustomFormula=customFormula;statisticsCustomVariable=customVariable;statisticsCustomInitials=customInitials
+        statisticsPolynomialDegree=polynomialDegree;statisticsCustomFormula=customFormula;statisticsCustomVariable=customVariable;statisticsCustomInitials=customInitials
         statisticsPlot=plot;statisticsCsv=csv;statisticsSelected=selected;statisticsIsNew=isNew
     }
 
     fun saveSelection() {
         prefs.edit().putString("statisticsName",statisticsName).putString("statisticsData",statisticsData).putString("statisticsKind",statisticsKind)
-            .putString("statisticsRegression",statisticsRegression).putString("statisticsPlot",statisticsPlot).putBoolean("statisticsCsv",statisticsCsv)
+            .putString("statisticsPolynomialDegree",statisticsPolynomialDegree).putString("statisticsRegression",statisticsRegression).putString("statisticsPlot",statisticsPlot).putBoolean("statisticsCsv",statisticsCsv)
             .putString("statisticsCustomFormula",statisticsCustomFormula).putString("statisticsCustomVariable",statisticsCustomVariable).putString("statisticsCustomInitials",statisticsCustomInitials)
             .putString("statisticsSelected",statisticsSelected).putBoolean("statisticsIsNew",statisticsIsNew).apply()
     }
 
-    fun clearRegression() {regressionCurve=emptyList();regressionFit="";regressionData="";regressionMode="";regressionCorrelation=null;regressionParameters=emptyList();regressionBusy=false}
+    fun clearRegression() {regressionCurve=emptyList();regressionFit="";regressionData="";regressionMode="";regressionCorrelation=null;regressionParameters=emptyList();regressionReport=null;regressionBusy=false}
 
     fun writeTo(editor:SharedPreferences.Editor) {
         editor.putString("dataSets",dataSets.toString())
             .putString("statisticsName",statisticsName).putString("statisticsData",statisticsData).putString("statisticsKind",statisticsKind)
-            .putString("statisticsRegression",statisticsRegression).putString("statisticsPlot",statisticsPlot).putString("statisticsSelected",statisticsSelected)
+            .putString("statisticsPolynomialDegree",statisticsPolynomialDegree).putString("statisticsRegression",statisticsRegression).putString("statisticsPlot",statisticsPlot).putString("statisticsSelected",statisticsSelected)
             .putString("statisticsCustomFormula",statisticsCustomFormula).putString("statisticsCustomVariable",statisticsCustomVariable).putString("statisticsCustomInitials",statisticsCustomInitials)
             .putBoolean("statisticsIsNew",statisticsIsNew).putBoolean("statisticsCsv",statisticsCsv)
             .putString("regressionFit",regressionFit).putString("regressionData",regressionData)
             .putString("regressionMode",regressionMode).putString("regressionCorrelation",regressionCorrelation?.toString())
+            .putString("regressionReport",regressionReport?.toString())
             .putString("regressionParameters",JSONArray(regressionParameters.map {JSONArray().put(it.first).put(it.second)}).toString())
             .putString("regressionCurve",regressionCurve?.let {list->JSONArray(list.map {point->JSONArray().put(point.first).put(point.second)}).toString()} ?: "[]")
     }

@@ -76,6 +76,20 @@ class StatisticsTestCommandsTest {
     private fun command(procedure: String, rows: List<List<String>>, kind: String = "list", column: String = "x") =
         statisticsTestCommand(procedure, rows, kind, column, "Two-sided", "0", "2", "95")
 
+    @Test fun rankTestsKeepPairingAndIndependentMissingCells() {
+        val rows=listOf(listOf("1","4"),listOf("2",""),listOf("","5"),listOf("3","6"))
+        assertEquals("wilcoxon([1,3],[4,6])",command("Wilcoxon",rows,"xy"))
+        assertEquals("mannwhitney([1,2,3],[4,5,6])",command("Mann–Whitney",rows,"xy"))
+        assertEquals("kruskal([1,2,3],[4,5,6])",command("Kruskal–Wallis",rows,"xy"))
+        assertEquals("wilcoxon([1,2,3])",command("Wilcoxon",listOf(listOf("1"),listOf("2"),listOf("3"))))
+        assertEquals("wilcoxon([1,3],[4,6],right)",statisticsTestCommand("Wilcoxon",rows,"xy","x","Right","0","2","95"))
+        val grouped=listOf(listOf("a","1"),listOf("b","4"),listOf("a","2"),listOf("b","5"))
+        assertEquals("mannwhitney([1,2],[4,5])",statisticsTestCommand("Mann–Whitney",grouped,"xy","x","Two-sided","0","2","95",grouping="group-value"))
+        val xyz=listOf(listOf("1","4","7"),listOf("2","5","8"),listOf("3","6","9"))
+        assertEquals("mannwhitney([7,8,9],[1,2,3])",statisticsTestCommand("Mann–Whitney",xyz,"xyz","x","Two-sided","0","2","95",firstGroup="z",secondGroup="x"))
+        assertEquals("wilcoxon([1,2,3],[4,5,6])",command("Wilcoxon",xyz,"xyz"))
+    }
+
     @Test fun testsUseTheCurrentTableValues() {
         assertEquals("ttest(0,[1,2,3])", command("t test", listOf(listOf("1"), listOf("2"), listOf("3"))))
         assertEquals("ttest(0,[1,9,3])", command("t test", listOf(listOf("1"), listOf("9"), listOf("3"))))

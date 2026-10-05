@@ -59,13 +59,14 @@ import kotlin.math.max
     var data by rememberSaveable {mutableStateOf(m.statisticsData)}
     var dataKind by rememberSaveable {mutableStateOf(m.statisticsKind)}
     var regression by rememberSaveable {mutableStateOf(m.statisticsRegression)}
+    var polynomialDegree by rememberSaveable {mutableStateOf(m.statisticsPolynomialDegree)}
     var customFormula by rememberSaveable {mutableStateOf(m.statisticsCustomFormula)}
     var customVariable by rememberSaveable {mutableStateOf(m.statisticsCustomVariable)}
     var customInitials by rememberSaveable {mutableStateOf(m.statisticsCustomInitials)}
     var plotType by rememberSaveable {mutableStateOf(m.statisticsPlot)}
     var csv by rememberSaveable {mutableStateOf(m.statisticsCsv)}
     var importPreview by remember {mutableStateOf<StatisticsCsvImport?>(null)}
-    LaunchedEffect(data,datasetName,dataKind,regression,plotType,csv,selected,isNew,customFormula,customVariable,customInitials) {m.saveStatistics(datasetName,data,dataKind,regression,plotType,csv,selected,isNew,customFormula,customVariable,customInitials)}
+    LaunchedEffect(data,datasetName,dataKind,regression,plotType,csv,selected,isNew,customFormula,customVariable,customInitials,polynomialDegree) {m.saveStatistics(datasetName,data,dataKind,regression,plotType,csv,selected,isNew,customFormula,customVariable,customInitials,polynomialDegree)}
     val importCsv=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {uri->
         if(uri!=null)scope.launch {
             val content=withContext(Dispatchers.IO) {runCatching {context.contentResolver.openInputStream(uri)?.bufferedReader()?.use {it.readText()}}.getOrNull()}
@@ -77,7 +78,7 @@ import kotlin.math.max
         }
     }
     importPreview?.let {preview->StatisticsCsvImportDialog(preview,onDismiss={importPreview=null}) {columns,skipHeader->
-        data=importStatisticsCsv(preview,columns,skipHeader)
+        m.clearRegression();data=importStatisticsCsv(preview,columns,skipHeader)
         dataKind=when(columns.size){3->"xyz";2->"xy";else->"list"}
         plotType=if(dataKind=="xy")"Scatter" else "Histogram"
         datasetName=datasetName.ifBlank {activeName.ifBlank {"D1"}}
@@ -107,14 +108,14 @@ import kotlin.math.max
     var section by rememberSaveable {mutableStateOf("Data")}
     if(section=="Data") Panel("Data & statistics","Enter values once, then summarize, test, or plot the current dataset.",panelScroll) {
         Choices(listOf("Data & analysis","Distributions"),"Data & analysis",{section=if(it=="Data & analysis")"Data" else it})
-        if(names.isNotEmpty())Choices(names,activeName,{name->selected=name;isNew=false;m.dataSets.optJSONObject(name)?.let {item->datasetName=name;data=item.optString("csv");dataKind=item.optString("kind","list");plotType=if(dataKind=="xy")"Scatter" else "Histogram"}})
+        if(names.isNotEmpty())Choices(names,activeName,{name->m.clearRegression();selected=name;isNew=false;m.dataSets.optJSONObject(name)?.let {item->datasetName=name;data=item.optString("csv");dataKind=item.optString("kind","list");plotType=if(dataKind=="xy")"Scatter" else "Histogram"}})
         Row(horizontalArrangement=Arrangement.spacedBy(6.dp),verticalAlignment=Alignment.CenterVertically) {
             Field(datasetName,"Dataset name",Modifier.weight(1f)){datasetName=it}
             SmallAction("New"){startNew()}
             SmallAction("Save"){m.saveDataSet(datasetName,data,dataKind);selected=datasetName;isNew=false}
             SmallAction("Delete"){if(activeName.isNotBlank()){m.deleteDataSet(activeName);selected="";isNew=true;startNew()}}
         }
-        Choices(listOf("List","x,y data","x,y,z data"),when(dataKind){"xy"->"x,y data";"xyz"->"x,y,z data";else->"List"},{dataKind=when(it){"x,y data"->"xy";"x,y,z data"->"xyz";else->"list"};plotType=if(dataKind=="xy")"Scatter" else "Histogram"})
+        Choices(listOf("List","x,y data","x,y,z data"),when(dataKind){"xy"->"x,y data";"xyz"->"x,y,z data";else->"List"},{m.clearRegression();dataKind=when(it){"x,y data"->"xy";"x,y,z data"->"xyz";else->"list"};plotType=if(dataKind=="xy")"Scatter" else "Histogram"})
         Row(Modifier.horizontalScroll(rememberScrollState())) {
             SmallAction("Import CSV"){importCsv.launch(arrayOf("text/csv","text/comma-separated-values","text/plain","application/vnd.ms-excel"))}
             SmallAction("Export CSV"){exportCsv.launch("${datasetName.ifBlank {"dataset"}}.csv")}
@@ -165,17 +166,28 @@ import kotlin.math.max
         Column(verticalArrangement=Arrangement.spacedBy(2.dp)) {
             Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
                 Text(tr("Visualize"),Modifier.weight(1f),style=MaterialTheme.typography.titleMedium)
-                if(dataKind=="xy")SmallAction("Clear regression"){m.clearRegression()}
+                if(dataKind!="list")SmallAction("Clear regression"){m.clearRegression()}
             }
             val activeRegression=if(m.regressionFit.isNotBlank()&&m.regressionData==data)m.regressionMode else ""
-            if(dataKind=="xy")Choices(listOf("linear","quadratic","logarithmic","exponential","power","custom"),if(regression=="custom")"custom" else activeRegression,{selectedMode->
-                regression=selectedMode;plotType="Scatter"
-                if(selectedMode=="custom")m.clearRegression()
-                if(selectedMode!="custom") {
-                    val table=numericRows.filter {it.size>=2&&it[0].isNotBlank()&&it[1].isNotBlank()}.joinToString(",","[","]"){it.take(2).joinToString(",","[","]")}
+            if(dataKind!="list")Choices(if(dataKind=="xyz")listOf("multiple","logistic") else listOf("linear","quadratic","polynomial","logarithmic","exponential","power","logistic","custom"),if(regression in listOf("custom","polynomial"))regression else activeRegression,{selectedMode->
+                regression=selectedMode;plotType=if(dataKind=="xy")"Scatter" else "Histogram"
+                if(selectedMode in listOf("custom","polynomial"))m.clearRegression()
+                if(selectedMode !in listOf("custom","polynomial")) {
+                    val width=if(dataKind=="xyz")3 else 2
+                    val table=numericRows.filter {it.size>=width&&it.take(width).all(String::isNotBlank)}.joinToString(",","[","]"){it.take(width).joinToString(",","[","]")}
                     m.fitRegression("regression($table,$selectedMode)",data)
                 }
             })
+            if(dataKind=="xy"&&regression=="polynomial") {
+                Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                    Field(polynomialDegree,"Polynomial degree (1–10)",Modifier.weight(1f)){m.clearRegression();polynomialDegree=it}
+                    Button(onClick={
+                        val table=numericRows.filter {it.size>=2&&it.take(2).all(String::isNotBlank)}.joinToString(",","[","]"){it.take(2).joinToString(",","[","]")}
+                        m.fitRegression("regression($table,polynomial,$polynomialDegree)",data)
+                    },enabled=(polynomialDegree.toIntOrNull() ?: 0) in 1..10&&!m.regressionBusy){Text(tr("Analyze"))}
+                }
+            }
+            if(dataKind!="list"&&regression in listOf("multiple","logistic"))Text(tr("Last column is response; previous columns are predictors. Logistic response: 0 or 1."),fontSize=11.sp,color=LocalInstrument.current.muted)
             if(m.regressionBusy)Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
                 Text(if(isKorean())"회귀 적합 중…" else "Fitting regression…",Modifier.weight(1f),fontSize=11.sp,color=LocalInstrument.current.muted)
                 SmallAction("Cancel",modifier=Modifier.testTag("statistics-regression-cancel")){m.cancelRegression()}
@@ -202,8 +214,9 @@ import kotlin.math.max
         val fitVisible=dataKind=="xy"&&plotType=="Scatter"&&m.regressionData==data&&m.regressionFit.isNotBlank()
         StatisticsPlot(plotType,if(plotType=="Scatter")paired else xValues.mapIndexed {i,v->i.toDouble() to v},xValues,yValues,if(fitVisible)m.regressionCurve.orEmpty() else emptyList(),if(fitVisible)m.regressionFit else "",m.displayDigits,fitVisible&&m.regressionMode=="linear",m.regressionCorrelation,tertiary=zValues,xDateOrigin=dateAxis?.origin)
         if(dateAxis!=null&&plotType=="Scatter")Text((if(isKorean())"회귀식의 x: ${dateAxis.origin.plusDays(1)} = 1일째" else "Regression x: ${dateAxis.origin.plusDays(1)} = day 1"),fontSize=11.sp,color=LocalInstrument.current.muted)
-        if(dataKind=="xy"&&m.regressionData==data&&m.regressionFit.isNotBlank()) {
+        if(dataKind!="list"&&m.regressionData==data&&m.regressionFit.isNotBlank()) {
             Column(verticalArrangement=Arrangement.spacedBy(0.dp)) {
+                m.regressionReport?.let {RegressionInference(it,m.displayDigits)}
                 if(m.regressionParameters.isNotEmpty()) {
                     Text(tr("Fitted parameters"),fontSize=12.sp,fontWeight=FontWeight.SemiBold)
                     Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(16.dp)) {
@@ -221,7 +234,7 @@ import kotlin.math.max
                         }
                     }
                 }
-                SmallAction("Graph fitted expression"){
+                if(dataKind=="xy")SmallAction("Graph fitted expression"){
                     val fit=if(m.regressionMode=="custom")m.regressionFit.replace(Regex("(?<![A-Za-z0-9_])${Regex.escape(customVariable)}(?![A-Za-z0-9_])"),"x") else m.regressionFit
                     val graphSource=regressionFormulaGraphSource(fit,m.displayDigits)
                     if(graphSource==null)m.error="Could not format fitted expression"

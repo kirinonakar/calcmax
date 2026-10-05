@@ -53,6 +53,7 @@ class Engine:
         self.conditions = []
         self.bindings = {}
         self.regression_parameters = []
+        self.regression_report = None
         self.allow_sequence_calls = False
         self.assumptions = request.get("assumptions", {})
     def symbol(self, name):
@@ -616,8 +617,10 @@ class Engine:
             if name=="covariance": return covariance
             return pearson_correlation(xs,ys)
         if name == "regression":
+            require(len(a) in (1,2,3), "Use regression(data,model[,degree])")
             rows = a[0]; mode = str(a[1]) if len(a)>1 else "linear"
-            return fit_regression(self, rows, mode)
+            require(len(a)<3 or mode=="polynomial", "The degree argument requires polynomial regression")
+            return fit_regression(self, rows, mode, a[2] if len(a)>2 else None)
         if name == "convert":
             if len(a)==2 and isinstance(a[0],Quantity):
                 self.note="Result in "+nodes[1]["value"]
@@ -635,7 +638,7 @@ class Engine:
                     "exppdf", "expcdf", "unifpdf", "unifcdf", "gammapdf", "gammacdf", "betapdf", "betacdf",
                     "lognormpdf", "lognormcdf", "hgeompdf", "hgeomcdf", "nbinompdf", "nbinomcdf", "weibullpdf", "weibullcdf", "cauchypdf", "cauchycdf", "invcauchy"):
             return distribution_value(self, name, a)
-        if name in ("ttest", "ttest2", "ttestpaired", "ztest", "ztest2", "chi2test", "chi2independence", "fisherexact", "anova", "tukey", "shapiro", "tinterval", "zinterval"):
+        if name in ("ttest", "ttest2", "ttestpaired", "ztest", "ztest2", "chi2test", "chi2independence", "fisherexact", "anova", "tukey", "shapiro", "wilcoxon", "mannwhitney", "kruskal", "tinterval", "zinterval"):
             return statistical_test(self, name, a, nodes)
         if name in ("tvmfv", "tvmpv", "tvmpmt", "tvmn", "tvmrate", "npv", "irr", "amort", "cagr"):
             return finance_value(self, name, a, nodes)

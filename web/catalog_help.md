@@ -583,3 +583,25 @@ Example: cagr(1000,2000,5)
 Discrete CDFs include integer masses up to the real threshold; discrete PDFs return 0 for nonintegers.
 
 Probability mode's **Normal parameter solver** finds μ or σ from P(X≤x)=q or P(X≥x)=q and the known parameter. Require 0<q<1 and positive σ. When q=0.5 and x=μ, σ is not uniquely determined.
+
+
+## Regression inference and rank tests
+
+`regression(data,polynomial,degree)` — Polynomial least squares, degrees 1–10.
+Example: regression([[0,1],[1,3],[2,9],[3,25],[4,57]],polynomial,3)
+`regression(data,multiple)` — Multiple linear regression with an intercept. Last column is response; preceding columns are predictors (up to eight). The x,y,z workspace uses x and y to predict z; the formula names them x1 and x2.
+Example: regression([[0,0,1],[1,0,3],[0,1,4],[1,1,7],[2,1,8]],multiple)
+`regression(data,logistic)` — Binomial logistic regression with an intercept and binary 0/1 response in the last column. Reports probability, Wald coefficient/odds-ratio intervals, McFadden R², deviance, AIC and likelihood-ratio p. Separated or singular data are rejected.
+Example: regression([[-3,0],[-2,0],[-1,1],[0,0],[0,1],[1,0],[2,1],[3,1]],logistic)
+`wilcoxon(differences)` — Signed-rank test against zero; zeros omitted. Also accepts paired x,y lists. Exact conditional sign permutation through 50 nonzero differences (including ties), otherwise tie-corrected normal approximation with continuity correction.
+Example: wilcoxon([1,2,3,4,5])
+`mannwhitney(x,y)` — Independent rank test. Exact distribution for untied samples with min(nx,ny)≤8 and total n≤100; otherwise tie-corrected normal approximation with continuity correction. Tests distributions; a location interpretation requires comparable distribution shapes.
+Example: mannwhitney([1,2,3],[4,5,6])
+`kruskal(group1,group2,...)` — Tie-corrected Kruskal–Wallis H and chi-square p. The approximation is more reliable with at least five observations per group.
+Example: kruskal([1,2,3,4,5],[4,5,6,7,8],[7,8,9,10,11])
+
+Wilcoxon and Mann–Whitney accept `left` or `right`; default is two-sided. Wilcoxon tests symmetric differences about zero; Mann–Whitney compares the first sample against the second.
+
+Statistics regression results show R², adjusted R², RMSE, residual SE, coefficient SE/p/95% t intervals and expandable residual diagnostics (plot, standardized residuals, leverage, Cook's D, Shapiro p, and Durbin–Watson in input order). Residual CSV includes every complete observation; the on-screen table previews 100 rows. For exponential/power fits inference uses log(y); amplitude SE uses the delta method and its CI is exponentiated. R²/RMSE and raw residuals remain in original y units. Custom nonlinear inference uses the local Jacobian and is approximate. Independent, constant-variance errors are assumed; bounded fits suppress ordinary inference, insufficient residual degrees of freedom leave inference unavailable, and constant responses leave R² undefined. Diagnostic p values for fitted residuals are exploratory.
+
+Python: `import symvacas_catalog as calc; report = calc.regression_report([[1,2],[2,4],[3,5],[4,4],[5,5],[6,7]], "linear")` returns the same inference and full residual dictionary. Arguments match regression, including polynomial degree and custom model/options.

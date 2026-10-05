@@ -514,6 +514,9 @@ def distribution_value(engine, name, a):
 def statistical_test(engine, name, a, nodes):
     digits = engine.precision
     tail, args = _tail_argument(a, nodes)
+    if name in ("wilcoxon", "mannwhitney", "kruskal"):
+        from calc_inference import rank_test
+        return rank_test(engine, name, args, tail)
     if tail != "both": engine.note = "One-tailed probability (" + tail + " tail)."
     if name == "shapiro":
         require(len(args) == 1 and isinstance(args[0], (list, tuple)), "shapiro takes one data list")
@@ -741,17 +744,55 @@ def pearson_correlation(xs, ys):
     require(vx*vy!=0,"Correlation requires variation in both data sets")
     return s.simplify(sum(x*y for x,y in zip(dx,dy))/s.sqrt(vx*vy))
 
-def fit_regression(engine, rows, mode):
+def fit_regression(engine, rows, mode, degree=None):
+    from calc_inference import regression_report, fit_multivariate, _numbers
+    if mode in ("multiple", "logistic"):
+        return fit_multivariate(engine, rows, logistic=mode=="logistic")
     require(len(rows)>=2 and all(len(row)==2 for row in rows),"Regression requires x,y pairs")
+    for row in rows: _numbers(row)
     xs,ys = zip(*rows)
-    require(mode in ("linear","quadratic","logarithmic","exponential","power"),"Unknown regression type")
+    require(mode in ("linear","quadratic","polynomial","logarithmic","exponential","power"),"Unknown regression type")
     if mode in ("logarithmic", "exponential", "power"):
         return _fit_transformed_regression(engine, xs, ys, mode)
-    degree = 2 if mode == "quadratic" else 1
+    if mode == "polynomial":
+        require(degree is not None and getattr(degree,"is_Integer",False) and 1<=degree<=10, "Polynomial degree must be an integer from 1 to 10")
+        degree = int(degree)
+    else: degree = 2 if mode == "quadratic" else 1
+    require(len(rows)>=degree+1 and len(set(xs))>=degree+1,"Use at least degree + 1 distinct x values")
+    if mode == "polynomial":
+        from calc_inference import _covariance
+        with mp.workdps(engine.precision+30):
+            # Fit a centered, scaled Vandermonde matrix, then convert coefficients
+            # and covariance back to powers of the user's original x.
+            origin = xs[0]
+            offsets = [_mpf(xx-origin,engine.precision) for xx in xs]
+            center = mp.fsum(offsets)/len(xs)
+            scale = max(abs(xx-center) for xx in offsets)
+            require(scale>0,"Regression requires variation in x values")
+            normalized = [(xx-center)/scale for xx in offsets]
+            design = [[xx**i for i in range(degree+1)] for xx in normalized]
+            inverse = _covariance(design)
+            beta,_ = mp.qr_solve(mp.matrix(design),mp.matrix([_mpf(yy,engine.precision) for yy in ys]))
+            base = _mpf(origin,engine.precision)+center
+            transform = mp.matrix(degree+1)
+            for j in range(degree+1):
+                for i in range(j+1): transform[i,j]=math.comb(j,i)*(-base)**(j-i)/scale**j
+            coef = transform*beta
+            x = engine.symbol("x")
+            result = sum(_mp_result(c,engine)*x**i for i,c in enumerate(coef))
+            predictions = [mp.fsum(c*xx**i for i,c in enumerate(beta)) for xx in normalized]
+            original = [_mpf(xx,engine.precision) for xx in xs]
+            regression_report(engine,ys,predictions,[[xx**i for i in range(degree+1)] for xx in original],
+                              ["b"+str(i) for i in range(degree+1)],list(coef),
+                              information_inverse=transform*inverse*transform.T)
+            return result
     design = s.Matrix([[x**i for i in range(degree+1)] for x in xs]); target = s.Matrix(ys)
-    coef = (design.T*design).inv()*design.T*target
+    # QR avoids squaring the condition number. Exact rational inputs stay exact.
+    coef = design.QRsolve(target)
     x = engine.symbol("x")
     result = sum(c*x**i for i,c in enumerate(coef))
+    regression_report(engine,ys,[result.subs(x,xx) for xx in xs],design.tolist(),
+                      ["b"+str(i) for i in range(degree+1)],list(coef))
     return result
 
 def _fit_transformed_regression(engine, xs, ys, mode):
@@ -787,9 +828,19 @@ def _fit_transformed_regression(engine, xs, ys, mode):
         a = _mp_result(mp.exp(intercept) if log_y else intercept, engine)
         b = _mp_result(slope, engine)
     x = engine.symbol("x")
-    if mode == "logarithmic": return a + b*s.log(x)
-    if mode == "exponential": return a*s.exp(b*x)
-    return a*x**b
+    result = a+b*s.log(x) if mode=="logarithmic" else a*s.exp(b*x) if mode=="exponential" else a*x**b
+    from calc_inference import regression_report
+    with mp.workdps(engine.precision+15):
+        tx = [mp.log(_mpf(xx,engine.precision)) if log_x else _mpf(xx,engine.precision) for xx in xs]
+        ty = [mp.log(_mpf(yy,engine.precision)) if log_y else _mpf(yy,engine.precision) for yy in ys]
+        intercept = mp.log(_mpf(a,engine.precision)) if log_y else _mpf(a,engine.precision)
+        slope = _mpf(b,engine.precision)
+        predictions = [_mpf(result.subs(x,xx),engine.precision) for xx in xs]
+        regression_report(engine,ys,predictions,[[1,xx] for xx in tx],["A","b"] if log_y else ["a","b"],
+                          [intercept,slope],inference_y=ty if log_y else None,
+                          inference_predicted=[intercept+slope*xx for xx in tx] if log_y else None,
+                          transform=["exp",None] if log_y else None)
+    return result
 
 def _regression_qr(design, target, damping=0.0):
     """Column-scaled least squares, with reorthogonalization and optional LM rows.
@@ -1101,5 +1152,7 @@ def fit_custom_regression(engine, rows, expression, independent, options=None):
             fitted = [s.Float(str(value), engine.precision) for value in refined]
         engine.regression_parameters = [[str(parameter), str(value)]
                                         for parameter, value in zip(parameters, fitted)]
+        from calc_inference import expression_report
+        expression_report(engine, rows, expression, independent, parameters, fitted, precise_limits)
         return expression.subs(dict(zip(parameters, fitted)))
     return fitted_expression()

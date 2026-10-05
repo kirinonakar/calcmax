@@ -46,7 +46,7 @@ internal fun statisticsTestCommand(
     val x = values(0)
     val y = if (kind == "xy" || kind == "xyz") values(1) else emptyList()
     val z = if (kind == "xyz") values(2) else emptyList()
-    val pairs = if (kind == "xy") rows.mapNotNull { row ->
+    val pairs = if (kind == "xy"||kind=="xyz"&&procedure=="Wilcoxon") rows.mapNotNull { row ->
         val left = row.getOrNull(0)?.trim()?.takeIf(String::isNotBlank)
         val right = row.getOrNull(1)?.trim()?.takeIf(String::isNotBlank)
         if (left != null && right != null) left to right else null
@@ -69,6 +69,18 @@ internal fun statisticsTestCommand(
     val validSigmaY = sigmaY.toDoubleOrNull()?.let { it.isFinite() && it > 0 } == true
     val validLevel = level.toDoubleOrNull()?.let { it.isFinite() && it > 0 && it < 100 && it != 1.0 } == true
     return when (procedure) {
+        "Wilcoxon" -> if(kind!="list"&&pairs.isNotEmpty())"wilcoxon(${vector(pairs.map {it.first})},${vector(pairs.map {it.second})}$tailArgument)" else if(kind=="list"&&sample.isNotEmpty())"wilcoxon(${vector(sample)}$tailArgument)" else null
+        "Mann–Whitney" -> if(grouping=="group-value"&&kind=="xy") {
+            if(first!=null&&second!=null&&first.second.isNotEmpty()&&second.second.isNotEmpty())"mannwhitney(${vector(first.second)},${vector(second.second)}$tailArgument)" else null
+        } else {
+            val names=if(kind=="xyz")listOf("x","y","z") else if(kind=="xy")listOf("x","y") else emptyList()
+            val left=firstGroup?.takeIf {it in names} ?: "x"
+            val right=secondGroup?.takeIf {it in names} ?: "y"
+            val leftValues=when(left){"z"->z;"y"->y;else->x}
+            val rightValues=when(right){"z"->z;"x"->x;else->y}
+            if(names.size>=2&&left!=right&&leftValues.isNotEmpty()&&rightValues.isNotEmpty())"mannwhitney(${vector(leftValues)},${vector(rightValues)}$tailArgument)" else null
+        }
+        "Kruskal–Wallis" -> if(groups.size>=2&&groups.all {it.isNotEmpty()})"kruskal(${groups.joinToString(","){vector(it)}})" else null
         "t test" -> when {
             !validNumber(mu0) -> null
             grouping=="group-value"&&kind=="xy" -> if(first!=null&&second!=null&&first.second.size>=2&&second.second.size>=2)"ttest2($mu0,${vector(first.second)},${vector(second.second)}$tailArgument)" else null

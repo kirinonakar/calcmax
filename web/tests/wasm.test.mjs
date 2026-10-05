@@ -21,6 +21,27 @@ async function loadRuntime(){
 }
 function runtime(){return sharedRuntime??=loadRuntime();}
 
+test('regression inference and rank tests run through real WASM and workspace commands',async()=>{
+  const py=await runtime();
+  const evaluate=source=>{py.globals.set('payload',JSON.stringify({tree:parse(latexInput(source)),angle:'RAD',precision:40}));const result=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));assert.equal(result.ok,true,result.error);return result;};
+  const linear=evaluate(statisticsCommand('1,2\n2,4\n3,5\n4,4\n5,5\n6,7',{op:'regression',kind:'xy'}));
+  assert.ok(Math.abs(Number(linear.regression.rSquared)-.7714285714285716)<1e-12);
+  assert.ok(Math.abs(Number(linear.regression.coefficients[1].se)-.20995626366712966)<1e-12);
+  assert.equal(linear.regression.residuals.length,6);
+  const polynomial=evaluate(statisticsCommand('0,1\n1,3\n2,9\n3,25\n4,57',{op:'regression',kind:'xy',regression:'polynomial',degree:'3'}));
+  assert.equal(polynomial.regression.coefficients.length,4);
+  const multiple=evaluate(statisticsCommand('0,0,1\n1,0,3\n0,1,4\n1,1,7\n2,1,8',{op:'regression',kind:'xyz',regression:'multiple'}));
+  assert.equal(multiple.regression.coefficients.length,3);assert.equal(multiple.curve.length,0);
+  const logistic=evaluate(statisticsCommand('-3,0\n-2,0\n-1,1\n0,0\n0,1\n1,0\n2,1\n3,1',{op:'regression',kind:'xy',regression:'logistic'}));
+  assert.ok(Math.abs(Number(logistic.regression.coefficients[1].estimate)-.7324875300102196)<1e-12);
+  assert.ok(logistic.curve.every(([,prob])=>prob>=0&&prob<=1));
+  for(const source of ['wilcoxon([1,2,3,4,5])','mannwhitney([1,2,3],[4,5,6])','kruskal([1,2,3,4,5],[4,5,6,7,8],[7,8,9,10,11])'])assert.ok(evaluate(source).tree);
+  const custom=evaluate('regression([[1,2],[2,4],[3,5],[4,4],[5,5],[6,7]],custom,a+b*x,x)');
+  assert.equal(custom.regression.approximate,true);assert.ok(Number(custom.regression.coefficients[0].se)>0);
+  py.globals.set('payload',JSON.stringify({source:'import symvacas_catalog as calc\nprint(calc.wilcoxon([1,2,3,4,5]))\nprint(calc.regression([[0,0,1],[1,0,3],[0,1,4],[1,1,7],[2,1,8]],"multiple"))\nprint(calc.regression_report([[1,2],[2,4],[3,5],[4,4],[5,5],[6,7]])["coefficients"][1]["se"])'}));
+  const pythonResult=JSON.parse(py.runPython('script_runner.run(payload)'));assert.equal(pythonResult.ok,true,pythonResult.error);assert.match(pythonResult.output,/p value/);assert.match(pythonResult.output,/x1/);assert.match(pythonResult.output,/0.209956263667/);
+});
+
 test('Cauchy catalog templates evaluate in WASM and Python mode',async()=>{
   const py=await runtime();
   for(const angle of ['DEG','RAD','GRAD']){

@@ -17,8 +17,8 @@ internal object CalculatorStatisticsActions {
         statisticsState.deleteDataSet(name)
         save()
     }
-    fun CalculatorModel.performSaveStatistics(name:String,data:String,kind:String,regression:String,plot:String,csv:Boolean,selected:String,isNew:Boolean,customFormula:String,customVariable:String,customInitials:String) {
-        statisticsState.updateSelection(name,data,kind,regression,plot,csv,selected,isNew,customFormula,customVariable,customInitials)
+    fun CalculatorModel.performSaveStatistics(name:String,data:String,kind:String,regression:String,plot:String,csv:Boolean,selected:String,isNew:Boolean,customFormula:String,customVariable:String,customInitials:String,polynomialDegree:String) {
+        statisticsState.updateSelection(name,data,kind,regression,plot,csv,selected,isNew,customFormula,customVariable,customInitials,polynomialDegree)
         statisticsState.saveSelection()
     }
     fun CalculatorModel.performFitRegression(source: String, data: String) {
@@ -37,6 +37,7 @@ internal object CalculatorStatisticsActions {
                     statisticsState.regressionFit=response.optString("exact");statisticsState.regressionData=data;statisticsState.regressionMode=fittedMode
                     statisticsState.regressionCorrelation=response.optDouble("correlation",Double.NaN).takeIf(Double::isFinite)
                     val parameters=response.optJSONArray("parameters")
+                    statisticsState.regressionReport=response.optJSONObject("regression")
                     statisticsState.regressionParameters=if(parameters==null)emptyList() else (0 until parameters.length()).mapNotNull {index->
                         parameters.optJSONArray(index)?.let {pair->pair.optString(0) to pair.optString(1)}
                     }
@@ -46,7 +47,7 @@ internal object CalculatorStatisticsActions {
                     appendHistory(HistoryEntry(System.currentTimeMillis(),source,response.optString("exact"),response.optString("decimal"),mode,
                         inputTree=tree.json(),response=response.toString()))
                     save()
-                } else {statisticsState.regressionCurve=emptyList();statisticsState.regressionFit="";statisticsState.regressionData="";statisticsState.regressionMode="";statisticsState.regressionCorrelation=null;statisticsState.regressionParameters=emptyList();error=response.optString("error","Math ERROR")}
+                } else {statisticsState.clearRegression();error=response.optString("error","Math ERROR")}
             } finally {if(regressionJob===currentJob){statisticsState.regressionBusy=false;regressionJob=null}}
         }
     }

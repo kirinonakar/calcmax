@@ -18,7 +18,7 @@ from calc_probability import probability
 
 # Symbolic calls whose cold first evaluation is heavy enough that the generic step allowance used
 # to cut off legitimate work. Nested calls count too, so 1+fourier(exp(-t^2),t,w) is heavy as well.
-HEAVY_CALLS=("solve","integrate","dsolve","desolve","laplace","ilaplace","fourier","ifourier","mellin","invmellin","ztrans","invztrans","pdsolve","domain","range","real_roots","rsolve","invt","tinterval","tukey","tvmrate","irr")
+HEAVY_CALLS=("solve","integrate","dsolve","desolve","laplace","ilaplace","fourier","ifourier","mellin","invmellin","ztrans","invztrans","pdsolve","domain","range","real_roots","rsolve","invt","tinterval","tukey","tvmrate","irr","regression","wilcoxon","mannwhitney")
 MAX_SHOWN_INTEGER_DIGITS=10000
 
 def shown_exact(rounded):
@@ -114,10 +114,11 @@ def _dispatch(payload, control=None):
                 rows=None
                 try:
                     rows=engine.build(request["tree"]["args"][0])
-                    result["curve"]=regression_samples(engine,value,rows,request)
+                    result["curve"]=regression_samples(engine,value,rows,request) if all(len(row)==2 for row in rows) else []
                 except Exception: result["curve"]=[]
                 mode=request["tree"]["args"][1].get("value") if len(request["tree"]["args"])>1 else "linear"
-                if mode=="custom": result["parameters"]=engine.regression_parameters
+                result["parameters"]=engine.regression_parameters
+                result["regression"]=engine.regression_report
                 if mode=="linear":
                     try:
                         xs,ys=zip(*rows)

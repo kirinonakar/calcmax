@@ -57,3 +57,5 @@ button[data-run="probability"]{background:var(--accent);color:var(--panel);paddi
 :root[data-theme="light"] select{color-scheme:light}
 :root[data-theme="dark"] select{color-scheme:dark}
 #settings-dialog select,select option,select optgroup{background-color:var(--number);color:var(--ink)}
+
+#regression-inference{min-width:0;font-size:12px;line-height:1.5}#regression-inference p{margin:8px 0;overflow-wrap:anywhere}#regression-inference td,#regression-inference th{padding:6px 10px;white-space:nowrap;font-variant-numeric:tabular-nums}#regression-inference details{margin-top:12px}#regression-inference summary{cursor:pointer;color:var(--accent)}

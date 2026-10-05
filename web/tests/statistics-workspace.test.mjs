@@ -5,6 +5,8 @@ import {JSDOM} from 'jsdom';
 import {createAppUI} from '../app-ui.js';
 import {setLanguage} from '../i18n.js';
 import {createStatisticsWorkspace} from '../statistics-workspace.js';
+import {statisticsCommand} from '../workspace-commands.js';
+import {regressionResidualCSV} from '../regression-report.js';
 
 function workspace(t){
   const dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));
@@ -20,6 +22,50 @@ function workspace(t){
   const run=()=>statistics.runRegression({precision:60},(...args)=>results.push(args));
   return {$,state,requests,results,errors,run,statistics,get saves(){return saves;},get cancels(){return cancels;}};
 }
+
+test('rank commands preserve complete pairs, separate samples, and grouped observations',()=>{
+  assert.equal(statisticsCommand('1,4\n2,\n,5\n3,6',{op:'wilcoxon',kind:'xy',tail:'right'}),'wilcoxon([1,3],[4,6],right)');
+  assert.equal(statisticsCommand('1\n2\n3',{op:'wilcoxon',kind:'list'}),'wilcoxon([1,2,3])');
+  assert.equal(statisticsCommand('1,4\n2,\n,5\n3,6',{op:'mannwhitney',kind:'xy'}),'mannwhitney([1,2,3],[4,5,6])');
+  assert.equal(statisticsCommand('a,1\nb,4\na,2\nb,5',{op:'mannwhitney',kind:'xy',grouping:'groups',tail:'left'}),'mannwhitney([1,2],[4,5],left)');
+  assert.equal(statisticsCommand('a,1\nb,4\nc,7\na,2\nb,5\nc,8',{op:'kruskal',kind:'xy',grouping:'groups'}),'kruskal([1,2],[4,5],[7,8])');
+});
+
+test('polynomial and multivariate commands use degree and complete response rows',()=>{
+  assert.equal(statisticsCommand('0,1\n1,3\n2,9\n3,25\n4,57',{op:'regression',kind:'xy',regression:'polynomial',degree:'3'}),'regression([[0,1],[1,3],[2,9],[3,25],[4,57]],polynomial,3)');
+  const rows='0,0,1\n1,0,3\n0,1,4\n1,1,7\n2,1,8\n3,2,';
+  assert.equal(statisticsCommand(rows,{op:'regression',kind:'xyz',regression:'multiple'}),'regression([[0,0,1],[1,0,3],[0,1,4],[1,1,7],[2,1,8]],multiple)');
+  assert.match(statisticsCommand(rows,{op:'regression',kind:'xyz',regression:'logistic'}),/,logistic\)$/);
+});
+
+test('regression renders inference and residual plot, exports every row, and clears stale data',t=>{
+  const {$,statistics}=workspace(t);
+  const report={n:120,df:118,fitScale:'y',rSquared:'.9',adjustedRSquared:'.89',rmse:'.2',warnings:[],coefficients:[{name:'b0',estimate:'1',se:'.1',low:'.8',high:'1.2',p:'.01'}],
+    residuals:Array.from({length:120},(_,i)=>({row:i+1,observed:String(i),fitted:String(i+.1),residual:'-.1',standardized:'-1',leverage:'.1',cook:'.01'}))};
+  statistics.showRegression({ok:true,decimal:'2*x',regression:report});
+  assert.match($('regression-inference').textContent,/95% CI/);
+  assert.match($('regression-inference').textContent,/R²=0.9/);
+  assert.equal($('regression-inference').querySelectorAll('svg circle').length,120);
+  assert.equal(regressionResidualCSV(report).split('\n').length,121);
+  assert.equal($('regression-export').hidden,false);
+  $('statistics-data').value='3,4';$('statistics-data').dispatchEvent(new document.defaultView.Event('input'));
+  assert.equal($('regression-inference').textContent,'');
+  assert.equal($('regression-export').hidden,true);
+});
+
+test('xyz regression controls select multivariate models and keep graph transfer hidden',t=>{
+  const {$,statistics}=workspace(t);
+  $('statistics-kind').value='xyz';$('statistics-kind').dispatchEvent(new document.defaultView.Event('change'));
+  assert.equal($('regression-section').hidden,false);
+  assert.equal($('regression-kind').value,'multiple');
+  assert.equal([...$('regression-kind').options].filter(o=>!o.disabled).map(o=>o.value).join(','),'multiple,logistic');
+  $('statistics-data').value='0,0,1\n1,0,3\n0,1,4\n1,1,7\n2,1,8';
+  statistics.showRegression({ok:true,decimal:'1+2*x1+3*x2'});
+  assert.equal($('regression-transfer').hidden,true);
+  $('statistics-kind').value='xy';$('statistics-kind').dispatchEvent(new document.defaultView.Event('change'));
+  $('regression-kind').value='polynomial';$('regression-kind').dispatchEvent(new document.defaultView.Event('change'));
+  assert.equal($('regression-degree').closest('label').hidden,false);
+});
 
 test('regression exposes Cancel immediately and cancelled results cannot return; a new fit succeeds',async t=>{
   const context=workspace(t),{$,requests,results,errors,run}=context;

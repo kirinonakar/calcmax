@@ -311,6 +311,8 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     var regressionParameters
         get()=statisticsState.regressionParameters
         private set(value) {statisticsState.regressionParameters=value}
+    val regressionReport get()=statisticsState.regressionReport
+    val statisticsPolynomialDegree get()=statisticsState.statisticsPolynomialDegree
     var regressionBusy
         get()=statisticsState.regressionBusy
         private set(value) {statisticsState.regressionBusy=value}
@@ -793,8 +795,8 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     fun clearHistory() { history=history.filter { it.favorite };tape=emptyList();save() }
     fun saveDataSet(name:String,csv:String,kind:String) = with(CalculatorStatisticsActions) { performSaveDataSet(name,csv,kind) }
     fun deleteDataSet(name:String) = with(CalculatorStatisticsActions) { performDeleteDataSet(name) }
-    fun saveStatistics(name:String,data:String,kind:String,regression:String,plot:String,csv:Boolean,selected:String,isNew:Boolean,customFormula:String,customVariable:String,customInitials:String) =
-        with(CalculatorStatisticsActions) { performSaveStatistics(name,data,kind,regression,plot,csv,selected,isNew,customFormula,customVariable,customInitials) }
+    fun saveStatistics(name:String,data:String,kind:String,regression:String,plot:String,csv:Boolean,selected:String,isNew:Boolean,customFormula:String,customVariable:String,customInitials:String,polynomialDegree:String="3") =
+        with(CalculatorStatisticsActions) { performSaveStatistics(name,data,kind,regression,plot,csv,selected,isNew,customFormula,customVariable,customInitials,polynomialDegree) }
     fun fitRegression(source:String,data:String) = with(CalculatorStatisticsActions) { performFitRegression(source,data) }
     fun clearRegression() = with(CalculatorStatisticsActions) { performClearRegression() }
     fun cancelRegression() = with(CalculatorStatisticsActions) { performCancelRegression() }
