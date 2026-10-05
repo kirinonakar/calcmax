@@ -490,7 +490,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         result?.let {tape=(tape+TapeEntry(editor.source,inputTree()?.toString() ?: "{}",it.toString(),inputAnswer?.toString() ?: "")).takeLast(maxTapeEntries)}
         committed=false;editor=Editor();result=null;dmsDisplay=false;dmsConversion=false;resultSource="";inputAnswer=null
     }
-    fun insert(text: String, inside: Int = text.length) {
+    fun insert(text: String, inside: Int = text.length, operand:Boolean = true) {
         if(!poweredOn)return
         var recordInEdit=true
         val start=minOf(editor.cursor,editor.anchor)
@@ -527,7 +527,9 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         }
         val relationTarget=if(value.startsWith("="))editor.exitForRelation() else editor
         val target=if(overwrite&&relationTarget.cursor==relationTarget.anchor)relationTarget.copy(anchor=(relationTarget.cursor+text.length).coerceAtMost(relationTarget.source.length)) else relationTarget
-        edit(target.insertOperand(value,insertionCursor),recordUndo=recordInEdit)
+        // Keyboard characters may be part of a name (theta, pi, integrate).
+        // Only complete keypad operands request constant separation.
+        edit(if(operand)target.insertOperand(value,insertionCursor) else target.insert(value,insertionCursor),recordUndo=recordInEdit)
         if(value=="()"||value==")"||value=="(")markTypedParens(editor.cursor)
     }
     fun markTypedParens(cursor:Int) {typedParens=TypedParens.mark(typedParens,editor.source,cursor)}
@@ -692,9 +694,9 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         calcSession=CalcSession(source,names.toList())
     }
     fun editCalcValue(value:Editor) {if(busy)return;calcSession?.let{session->if(value.source!=session.input.source)calcUndoHistory=(calcUndoHistory+session.input).takeLast(100);calcSession=session.copy(input=value)};error=""}
-    fun insertCalcValue(text:String,inside:Int=text.length) {
+    fun insertCalcValue(text:String,inside:Int=text.length,operand:Boolean=true) {
         val session=calcSession ?: return
-        editCalcValue(session.input.insertOperand(text,inside))
+        editCalcValue(if(operand)session.input.insertOperand(text,inside) else session.input.insert(text,inside))
     }
     fun cancelCalc() {job?.cancel();busy=false;calcSession=null;calcUndoHistory=emptyList();error="";schedulePreview()}
     fun submitCalcValue() {

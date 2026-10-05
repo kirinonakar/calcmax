@@ -172,17 +172,19 @@ data class Editor(val source: String = "", val cursor: Int = source.length, val 
         val end=if(index==0)node.args[1].start else node.end
         return Editor(source.removeRange(start,end),start)
     }
-    private fun infinityAt(position:Int,backward:Boolean):Token? = runCatching {
-        Lexer.scan(source).firstOrNull {token->
-            token.text=="oo" && (if(backward)position>token.start && position<=token.end else position>=token.start && position<token.end)
-        }
+    private fun symbolAt(position:Int,backward:Boolean):Token? = runCatching {
+        val tokens=Lexer.scan(source)
+        tokens.withIndex().firstOrNull {(index,token)->
+            (token.text in LatexInput.symbolLabels || token.text=="oo") && tokens.getOrNull(index+1)?.text!="(" &&
+                (if(backward)position>token.start && position<=token.end else position>=token.start && position<token.end)
+        }?.value
     }.getOrNull()
-    /** The system text field reports a one-character deletion even for the displayed ∞ symbol. */
-    fun atomicInfinityDeletion(nextSource:String):Editor? {
-        if(source.length!=nextSource.length+1)return null
+    /** The system text field reports a character deletion for a symbol's source spelling. */
+    fun atomicSymbolDeletion(nextSource:String):Editor? {
+        if(cursor!=anchor || source.length!=nextSource.length+1)return null
         val removed=(0 until nextSource.length).firstOrNull {source[it]!=nextSource[it]} ?: nextSource.length
         if(source.removeRange(removed,removed+1)!=nextSource)return null
-        val token=infinityAt(removed,false) ?: return null
+        val token=symbolAt(removed,false) ?: return null
         return remove(token.start,token.end)
     }
     fun delete(): Editor {
@@ -207,7 +209,7 @@ data class Editor(val source: String = "", val cursor: Int = source.length, val 
         emptyDenominatorAt(cursor)?.let{return removeEmptyDenominator(it)}
         emptyMultiplicationOperandAt(cursor)?.let{return removeEmptyMultiplicationOperand(it.first,it.second)}
         powerAtExponentStart(cursor)?.let{return clearPowerBase(it)}
-        infinityAt(cursor,true)?.let{return remove(it.start,it.end)}
+        symbolAt(cursor,true)?.let{return remove(it.start,it.end)}
         return if(cursor<=0 || hiddenCallOpen(cursor-1) || hiddenFractionDelimiter(cursor-1) || emptyStructuredSlotDelimiter(cursor-1))this else remove(cursor-1,cursor)
     }
     fun deleteForward():Editor {
@@ -223,7 +225,7 @@ data class Editor(val source: String = "", val cursor: Int = source.length, val 
         emptyDenominatorAt(cursor)?.let{return removeEmptyDenominator(it)}
         emptyMultiplicationOperandAt(cursor)?.let{return removeEmptyMultiplicationOperand(it.first,it.second)}
         if(source.getOrNull(cursor)=='^')powerAtExponentStart(cursor+1)?.let{return clearPowerBase(it)}
-        infinityAt(cursor,false)?.let{return remove(it.start,it.end)}
+        symbolAt(cursor,false)?.let{return remove(it.start,it.end)}
         return if(cursor>=source.length || hiddenCallOpen(cursor) || hiddenFractionDelimiter(cursor) || emptyStructuredSlotDelimiter(cursor))this else remove(cursor,cursor+1)
     }
     private fun hiddenPowerBase(power:Expr):Expr? = power.args.getOrNull(0)?.takeIf {base->
@@ -313,12 +315,26 @@ data class Editor(val source: String = "", val cursor: Int = source.length, val 
             }?.minByOrNull {it.end-it.start}
             if(call!=null)return Editor(source+")",cursor+1)
         }
-        val position=(cursor+delta).coerceIn(0,source.length)
+        val position=tokenCursor(delta) ?: (cursor+delta).coerceIn(0,source.length)
         if(delta>0&&cursor<source.length&&source[cursor]==')') {
             val container=tree()?.nodes()?.filter {it.kind=="binary"&&it.value in listOf("/","^")&&it.args[1].kind=="group"&&it.args[1].end==position}?.minByOrNull{it.end-it.start}
             if(container!=null)return Editor(source,position,outside=container.start..container.end)
         }
         return Editor(source,position,exponent=exponent?.takeIf{position in it})
+    }
+    /** Function names and their opening delimiter, symbols and operators move as a unit. */
+    private fun tokenCursor(delta:Int):Int? {
+        if(delta !in listOf(-1,1))return null
+        val tokens=runCatching {Lexer.scan(source)}.getOrNull() ?: return null
+        for((index,token) in tokens.withIndex()) {
+            val first=source.getOrNull(token.start) ?: continue
+            if(token.text.isEmpty() || first.isDigit() || first=='.')continue
+            val next=tokens.getOrNull(index+1)
+            val end=if(first.isLetter() && token.text!="mod" && next?.text=="(")next.end else token.end
+            if(delta<0 && cursor>token.start && cursor<=end)return token.start
+            if(delta>0 && cursor>=token.start && cursor<end)return end
+        }
+        return null
     }
     private fun barePower(start:Int,end:Int):Expr?=tree()?.nodes()?.filter{
         it.kind=="binary"&&it.value=="^"&&it.args[1].kind!="group"&&start>=it.args[1].start&&end<=it.args[1].end

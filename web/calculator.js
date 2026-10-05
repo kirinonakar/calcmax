@@ -6,7 +6,7 @@ import {calcVariables,calcBindings} from './calc-session.js';
 import {previousCalculations,renderPreviousCalculations,followTape} from './calculation-tape.js';
 import {renderFormulas} from './formula-preview.js';
 import {markInputCursor,followInputCursor,followTextCursor,inputPointPosition} from './input-cursor.js';
-import {moveMathCursor,mathStructureExit,functionRelationExit,emptyCallDeletion,emptyPowerDeletion,emptyFractionDeletion,infinityDeletion,powerInput} from './input-navigation.js';
+import {moveMathCursor,mathStructureExit,functionRelationExit,emptyCallDeletion,emptyPowerDeletion,emptyFractionDeletion,symbolDeletion,powerInput} from './input-navigation.js';
 import {createDisplaySizing} from './display-sizing.js';
 import {fractionInput} from './fraction-input.js';
 import {requiresExplicitEvaluation} from './evaluation-policy.js';
@@ -231,7 +231,7 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
     }
     if(typing&&['deleteContentBackward','deleteContentForward'].includes(event.inputType)){
       const field=$('expression'),backward=event.inputType==='deleteContentBackward';
-      if(infinityDeletion(field.value,field.selectionStart,field.selectionEnd,backward)){event.preventDefault();handleKey(backward?'DEL':'DELETE_FORWARD');return;}
+      if(symbolDeletion(field.value,field.selectionStart,field.selectionEnd,backward)){event.preventDefault();handleKey(backward?'DEL':'DELETE_FORWARD');return;}
     }
     if(typing&&state.autoCloseBrackets&&event.inputType==='insertText'&&event.data?.length===1&&'()[]{}'.includes(event.data)){event.preventDefault();insert(event.data);}
   });
@@ -320,7 +320,7 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
     else if(input==='INS')$('insert-mode').click();
     else if(input==='NEG'){if(committed){$('expression').value='';committed=false;}insert('-');}
     else if(input==='DEL'||input==='DELETE_FORWARD'){
-      const f=$('expression'),start=f.selectionStart,end=f.selectionEnd,call=emptyPowerDeletion(f.value,start,end)||emptyFractionDeletion(f.value,start,end)||emptyCallDeletion(f.value,start,end)||infinityDeletion(f.value,start,end,input==='DEL');
+      const f=$('expression'),start=f.selectionStart,end=f.selectionEnd,call=emptyPowerDeletion(f.value,start,end)||emptyFractionDeletion(f.value,start,end)||emptyCallDeletion(f.value,start,end)||symbolDeletion(f.value,start,end,input==='DEL');
       undoStack().push(f.value);
       if(call){f.setRangeText(call.text,call.start,call.end,'end');const at=call.start+(call.cursor??(call.text?1:0));f.setSelectionRange(at,at);}
       else f.setRangeText('',start===end&&input==='DEL'?Math.max(0,start-1):start,start===end&&input==='DELETE_FORWARD'?Math.min(f.value.length,end+1):end,'end');

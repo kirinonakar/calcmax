@@ -52,6 +52,27 @@ class EvaluationPolicyTest {
 }
 
 class ConstantInputTest {
+    @Test fun typedCharactersCompleteSymbolAndFunctionNames() {
+        for(name in LatexInput.symbolLabels.keys+listOf("integrate","sin","piecewise","my_identifier")) {
+            var editor=Editor("sin()",4)
+            for((index,character) in name.withIndex()) {
+                editor=editor.insert(character.toString())
+                assertEquals(name,"sin(${name.take(index+1)})",editor.source)
+            }
+            assertEquals(name,name,editor.tree()?.args?.firstOrNull()?.value)
+        }
+        assertEquals("theta",Editor("thta",2).insert("e").source)
+        assertEquals("pi",Editor("p").insert("i").source)
+        var function=Editor()
+        for((index,character) in "sin(60)".withIndex()) {
+            function=function.insert(character.toString())
+            assertEquals("sin(60)".take(index+1),function.source)
+        }
+        assertEquals("call",function.tree()?.kind)
+        assertEquals("sin",function.tree()?.value)
+        assertEquals("x*e",Editor("x").insertOperand("e").source)
+        assertEquals("th*e",Editor("th").insertConstant("e").source)
+    }
     @Test fun insertionSeparatesNumbersAndBothIdentifierBoundaries() {
         assertEquals("2*e",Editor("2").insertConstant("e").source)
         val middle=Editor("xy",1).insertConstant("pi")

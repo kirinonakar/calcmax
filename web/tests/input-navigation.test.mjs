@@ -1,11 +1,40 @@
 import test from 'node:test';
-import {functionRelationExit,emptyPowerDeletion,emptyFractionDeletion,infinityDeletion,moveMathCursor,mathStructureExit} from '../input-navigation.js';
+import {functionRelationExit,emptyPowerDeletion,emptyFractionDeletion,symbolDeletion,moveMathCursor,mathStructureExit} from '../input-navigation.js';
 import assert from 'node:assert/strict';
 import {bindKeyPress} from '../keypad.js';
 import {fractionInput} from '../fraction-input.js';
-import {parse} from '../parser.js';
+import {parse,latexSymbolLabels} from '../parser.js';
 import {JSDOM} from 'jsdom';
 import {requiresExplicitEvaluation} from '../evaluation-policy.js';
+
+test('arrows cross function heads and symbols in one step while numbers retain character steps',()=>{
+  const source='sin(60)+cos(60)';let at=source.length;
+  for(const expected of [14,13,12,8,7,6,5,4,0]){
+    at=moveMathCursor(source,at,at,'LEFT');assert.equal(at,expected);
+  }
+  for(const name of ['sin','cos','tan','asin','sinh','log','ln','exp','sqrt','cbrt','nthroot','integrate','f','my_func']){
+    for(const source of [`1+${name}(60)`,`1+${name}()`,`1+${name}(`,`1+${name} (60)`,`1+*${name}(60)`]){
+      const begin=source.indexOf(name),inside=source.indexOf('(')+1;
+      assert.equal(moveMathCursor(source,inside,inside,'LEFT'),begin,source);
+      assert.equal(moveMathCursor(source,begin,begin,'RIGHT'),inside,source);
+    }
+  }
+  for(const symbol of ['pi','theta','Ans','oo','hbar','epsilon0','my_value','π','∞','<=','!=','->']){
+    const source=`1+${symbol}+2`,end=2+symbol.length;
+    assert.equal(moveMathCursor(source,end,end,'LEFT'),2,source);
+    assert.equal(moveMathCursor(source,2,2,'RIGHT'),end,source);
+    if(symbol.length>1){
+      assert.equal(moveMathCursor(source,3,3,'LEFT'),2,source);
+      assert.equal(moveMathCursor(source,3,3,'RIGHT'),end,source);
+    }
+  }
+  assert.equal(moveMathCursor('sin(cos(60))',8,8,'LEFT'),4);
+  assert.equal(moveMathCursor('sin(cos(60))',4,4,'LEFT'),0);
+  assert.equal(moveMathCursor('123.45',3,3,'LEFT'),2);
+  assert.equal(moveMathCursor('123.45',3,3,'RIGHT'),4);
+  assert.equal(moveMathCursor('theta',1,4,'LEFT'),1);
+  assert.equal(moveMathCursor('theta',1,4,'RIGHT'),4);
+});
 
 test('equality moves out of formula calls while keeping solver equation scopes',()=>{
   for(const source of ['diff(x,x)','integrate(x,x)','sin(x)','sin(diff(x,x))','f(x)']){
@@ -22,16 +51,31 @@ test('equality moves out of formula calls while keeping solver equation scopes',
 });
 
 test('infinity deletes as a whole symbol without treating names containing oo as infinity',()=>{
-  for(const at of [1,2])assert.deepEqual(infinityDeletion('oo',at,at),{start:0,end:2,text:''});
-  for(const at of [0,1])assert.deepEqual(infinityDeletion('oo',at,at,false),{start:0,end:2,text:''});
-  assert.deepEqual(infinityDeletion('limit(1/x,x,oo)',14,14),{start:12,end:14,text:''});
-  assert.deepEqual(infinityDeletion('oo^2',2,2),{start:0,end:2,text:'()'});
-  assert.deepEqual(infinityDeletion('2*oo',4,4),{start:2,end:4,text:'()'});
-  assert.deepEqual(infinityDeletion('1+*oo',5,5),{start:3,end:5,text:''},'invalid expressions still delete the token atomically');
-  for(const source of ['foo','oo_value','oo2','food','root'])assert.equal(infinityDeletion(source,source.length,source.length),null,source);
-  assert.equal(infinityDeletion('oo',0,0),null);
-  assert.equal(infinityDeletion('oo',2,2,false),null);
-  assert.equal(infinityDeletion('oo',0,1),null,'selections retain their own deletion behavior');
+  for(const at of [1,2])assert.deepEqual(symbolDeletion('oo',at,at),{start:0,end:2,text:''});
+  for(const at of [0,1])assert.deepEqual(symbolDeletion('oo',at,at,false),{start:0,end:2,text:''});
+  assert.deepEqual(symbolDeletion('limit(1/x,x,oo)',14,14),{start:12,end:14,text:''});
+  assert.deepEqual(symbolDeletion('oo^2',2,2),{start:0,end:2,text:'()'});
+  assert.deepEqual(symbolDeletion('2*oo',4,4),{start:2,end:4,text:'()'});
+  assert.deepEqual(symbolDeletion('1+*oo',5,5),{start:3,end:5,text:''},'invalid expressions still delete the token atomically');
+  for(const source of ['foo','oo_value','oo2','food','root'])assert.equal(symbolDeletion(source,source.length,source.length),null,source);
+  assert.equal(symbolDeletion('oo',0,0),null);
+  assert.equal(symbolDeletion('oo',2,2,false),null);
+  assert.equal(symbolDeletion('oo',0,1),null,'selections retain their own deletion behavior');
+});
+
+test('displayed Greek symbols delete atomically without consuming ordinary identifiers or function names',()=>{
+  for(const name of Object.keys(latexSymbolLabels)){
+    const source=`sin(${name})`,begin=4,end=begin+name.length;
+    for(let at=begin+1;at<=end;at++)assert.deepEqual(symbolDeletion(source,at,at),{start:begin,end,text:''},name);
+    for(let at=begin;at<end;at++)assert.deepEqual(symbolDeletion(source,at,at,false),{start:begin,end,text:''},name);
+    assert.deepEqual(symbolDeletion(`${name}^2`,name.length,name.length),{start:0,end:name.length,text:'()'},name);
+    assert.deepEqual(symbolDeletion(`2*${name}`,2,2,false),{start:2,end:2+name.length,text:'()'},name);
+    assert.equal(symbolDeletion(`${name}(x)`,name.length,name.length),null,name);
+    assert.equal(symbolDeletion(`${name}_value`,name.length,name.length),null,name);
+  }
+  assert.equal(symbolDeletion('theta',1,3),null,'selections retain explicit source ranges');
+  for(const source of ['thet','mytheta','Ans','sin','log','theta2'])assert.equal(symbolDeletion(source,source.length,source.length),null,source);
+  assert.deepEqual(symbolDeletion('1+*theta',8,8),{start:3,end:8,text:''});
 });
 
 test('Right exits completed exponents and visits nested power/fraction parents in order',()=>{

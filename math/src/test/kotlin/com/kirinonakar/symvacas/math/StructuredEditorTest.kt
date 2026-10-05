@@ -2,6 +2,63 @@ package com.kirinonakar.symvacas.math
 import org.junit.Assert.*
 import org.junit.Test
 class StructuredEditorTest {
+    @Test fun displayedSymbolsDeleteAsAUnit() {
+        for(name in LatexInput.symbolLabels.keys+"oo") {
+            val source="sin($name)"
+            val end=4+name.length
+            for(at in 5..end)assertEquals(name,"sin()",Editor(source,at).delete().source)
+            for(at in 4 until end)assertEquals(name,"sin()",Editor(source,at).deleteForward().source)
+            for(at in name.indices) {
+                val deleted=Editor(name,at).atomicSymbolDeletion(name.removeRange(at,at+1))
+                assertEquals(name,"",deleted?.source)
+                assertEquals(name,0,deleted?.cursor)
+            }
+            assertEquals(name,"()^2",Editor("$name^2",name.length).delete().source)
+            assertEquals(name,"2*()",Editor("2*$name",2).deleteForward().source)
+            assertEquals(name,"${name.dropLast(1)}(x)",Editor("$name(x)",name.length).delete().source)
+            assertEquals(name,"${name.dropLast(1)}_value",Editor("${name}_value",name.length).delete().source)
+        }
+        for(name in listOf("thet","mytheta","Ans","sin","log","theta2")) {
+            assertEquals(name.dropLast(1),Editor(name).delete().source)
+            assertNull(Editor(name).atomicSymbolDeletion(name.dropLast(1)))
+        }
+        assertEquals("tta",Editor("theta").selectRange(1,3).delete().source)
+        assertNull(Editor("theta").selectRange(1,2).atomicSymbolDeletion("teta"))
+        assertEquals("1+*",Editor("1+*theta").delete().source)
+    }
+    @Test fun arrowsCrossFunctionHeadsAndSymbolsInOneStep() {
+        val source="sin(60)+cos(60)"
+        var editor=Editor(source)
+        for(expected in listOf(14,13,12,8,7,6,5,4,0)) {
+            editor=editor.move(-1)
+            assertEquals(expected,editor.cursor)
+            assertEquals(source,editor.source)
+        }
+        for(name in listOf("sin","cos","tan","asin","sinh","log","ln","exp","sqrt","cbrt","nthroot","integrate","f","my_func")) {
+            for(input in listOf("1+$name(60)","1+$name()","1+$name(","1+$name (60)","1+*$name(60)")) {
+                val begin=input.indexOf(name)
+                val inside=input.indexOf('(')+1
+                assertEquals(input,begin,Editor(input,inside).move(-1).cursor)
+                assertEquals(input,inside,Editor(input,begin).move(1).cursor)
+            }
+        }
+        for(symbol in listOf("pi","theta","Ans","oo","hbar","epsilon0","my_value","π","∞","<=","!=","->")) {
+            val input="1+$symbol+2"
+            val end=2+symbol.length
+            assertEquals(input,2,Editor(input,end).move(-1).cursor)
+            assertEquals(input,end,Editor(input,2).move(1).cursor)
+            if(symbol.length>1) {
+                assertEquals(input,2,Editor(input,3).move(-1).cursor)
+                assertEquals(input,end,Editor(input,3).move(1).cursor)
+            }
+        }
+        assertEquals(4,Editor("sin(cos(60))",8).move(-1).cursor)
+        assertEquals(0,Editor("sin(cos(60))",4).move(-1).cursor)
+        assertEquals(2,Editor("123.45",3).move(-1).cursor)
+        assertEquals(4,Editor("123.45",3).move(1).cursor)
+        assertEquals(1,Editor("theta").selectRange(1,4).move(-1).cursor)
+        assertEquals(4,Editor("theta").selectRange(1,4).move(1).cursor)
+    }
     @Test fun rightClosesAnUnclosedFunctionAndMovesOutside() {
         for(name in listOf("sin","cos","tan","asin","sinh","sqrt","f")) {
             val input=Editor("$name(").insert("9").move(1)

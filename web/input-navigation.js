@@ -1,4 +1,4 @@
-import {parse,scanInputTokens} from './parser.js';
+import {parse,scanInputTokens,latexSymbolLabels} from './parser.js';
 const equationCalls=new Set(['solve','nsolve','linsolve','dsolve','desolve','pdsolve','rsolve','piecewise']);
 // An equation following a formula belongs outside its calls. Solvers and
 // piecewise conditions keep their own equation input scope.
@@ -25,11 +25,15 @@ function tailDeletion(source,node){
   const keep=head.kind==='group'&&['number','symbol','call'].includes(inner?.kind)?inner:head;
   return {start:node.start,end:node.end,text:source.slice(keep.start,keep.end),cursor:keep.end-keep.start};
 }
-export function infinityDeletion(source,start,end,backward=true){
+// Use the renderer's symbol map so a displayed Greek glyph has one deletion unit.
+export function symbolDeletion(source,start,end,backward=true){
   if(start!==end)return null;
   let token;
-  try{token=scanInputTokens(source).find(token=>token.text==='oo'&&(backward?
-    start>token.start&&start<=token.end:start>=token.start&&start<token.end));}catch{return null;}
+  try{
+    const tokens=scanInputTokens(source);
+    token=tokens.find((token,index)=>(Object.hasOwn(latexSymbolLabels,token.text)||token.text==='oo')&&tokens[index+1]?.text!=='('&&(backward?
+      start>token.start&&start<=token.end:start>=token.start&&start<token.end));
+  }catch{return null;}
   if(!token)return null;
   const nodes=[];
   try{const visit=node=>{nodes.push(node);node.args.forEach(visit);};visit(parse(source,{allowHoles:true}));}catch{}
@@ -99,16 +103,32 @@ export function mathStructureExit(source,start,end,direction,outside=null,operat
   }
   return null;
 }
+// Function heads include their opening delimiter; other nonnumeric tokens are
+// single cursor steps even when their source spelling has several characters.
+function moveTokenCursor(source,start,direction){
+  if(!['LEFT','RIGHT'].includes(direction))return null;
+  try{
+    const tokens=scanInputTokens(source);
+    for(let index=0;index<tokens.length;index++){
+      const token=tokens[index];
+      if(!token.text||/[0-9.]/.test(source[token.start]))continue;
+      const next=tokens[index+1],end=/\p{L}/u.test(source[token.start])&&token.text!=='mod'&&next?.text==='('?next.end:token.end;
+      if(direction==='LEFT'&&start>token.start&&start<=end)return token.start;
+      if(direction==='RIGHT'&&start>=token.start&&start<end)return end;
+    }
+  }catch{}
+  return Math.max(0,Math.min(source.length,start+(direction==='LEFT'?-1:1)));
+}
 export function moveMathCursor(source,start,end,direction){
   if(direction==='HOME')return 0;
   if(direction==='END')return source.length;
   if(start!==end)return direction==='LEFT'?start:direction==='RIGHT'?end:null;
   const exit=mathStructureExit(source,start,end,direction);if(exit)return exit.position;
-  const nodes=[];try{const visit=node=>{nodes.push(node);node.args.forEach(visit);};visit(parse(source,{allowHoles:true}));}catch{return ['LEFT','RIGHT'].includes(direction)?Math.max(0,Math.min(source.length,start+(direction==='LEFT'?-1:1))):null;}
+  const nodes=[];try{const visit=node=>{nodes.push(node);node.args.forEach(visit);};visit(parse(source,{allowHoles:true}));}catch{return moveTokenCursor(source,start,direction);}
   const roots=nodes.filter(node=>node.kind==='call'&&['sqrt','cbrt','nthroot'].includes(node.value)).sort((a,b)=>(a.end-a.start)-(b.end-b.start));
   for(const root of roots){const argument=root.args[0];if(!argument)continue;if(direction==='LEFT'&&start===argument.start)return root.start;if(direction==='RIGHT'&&start===argument.end)return root.end;if(direction==='RIGHT'&&start===root.start)return argument.start;if(direction==='LEFT'&&start===root.end)return argument.end;if(direction==='UP'&&start>=argument.start&&start<=argument.end)return root.end;}
   const matrix=nodes.filter(node=>node.kind==='list'&&node.args.length&&node.args.every(row=>row.kind==='list')&&start>=node.start&&start<=node.end).sort((a,b)=>(a.end-a.start)-(b.end-b.start))[0];
   if(matrix){const rowIndex=matrix.args.findIndex(row=>start<=row.end),row=matrix.args[rowIndex],column=row?.args.findIndex(cell=>start<=cell.end),cell=row?.args[column];if(cell){if(direction==='UP'||direction==='DOWN'){const target=matrix.args[rowIndex+(direction==='UP'?-1:1)]?.args[column];if(target)return Math.min(target.end,target.start+Math.max(0,start-cell.start));}if(direction==='RIGHT'&&start===cell.end){const target=row.args[column+1]||matrix.args[rowIndex+1]?.args[0];if(target)return target.start;}if(direction==='LEFT'&&start===cell.start){const target=row.args[column-1]||matrix.args[rowIndex-1]?.args.at(-1);if(target)return target.end;}}}
   for(const node of nodes){if(node.kind!=='binary')continue;const [left,right]=node.args;if(node.value==='/'&&node.displayOperator!=='÷'){const a=left.end-(left.kind==='group'?1:0),b=right.start+(right.kind==='group'?1:0);if(direction==='RIGHT'&&start===a)return b;if(direction==='LEFT'&&start===b)return a;if(direction==='DOWN'&&start>=left.start&&start<=left.end)return b;if(direction==='UP'&&start>=right.start&&start<=right.end)return left.start+(left.kind==='group'?1:0);}if(node.value==='^'){const a=left.end-(left.kind==='group'?1:0),b=right.start+(right.kind==='group'?1:0);if(direction==='LEFT'&&start===b)return a;if(direction==='RIGHT'&&(start===a||start===left.end))return b;}}
-  return ['LEFT','RIGHT'].includes(direction)?Math.max(0,Math.min(source.length,start+(direction==='LEFT'?-1:1))):null;
+  return moveTokenCursor(source,start,direction);
 }

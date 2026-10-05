@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import {JSDOM} from 'jsdom';
 import {createCalculator} from '../calculator.js';
 import {createAppState} from '../app-state.js';
-import {parse} from '../parser.js';
+import {parse,latexSymbolLabels} from '../parser.js';
 
 function calculatorPage(t,source,{answer='46',previousAnswer}={}) {
   const dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));
@@ -36,6 +36,71 @@ function calculatorPage(t,source,{answer='46',previousAnswer}={}) {
   }
   return {$,dom,calculator,engine,state,clickNumber};
 }
+
+test('keyboard characters complete Greek symbol names without inserting constant multiplication',t=>{
+  const {$,dom,calculator}=calculatorPage(t,'1+1');
+  const type=letter=>document.body.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:letter,bubbles:true,cancelable:true}));
+  for(const [name,glyph] of Object.entries(latexSymbolLabels)){
+    $('clear').click();calculator.insert('sin()',4);
+    for(let index=0;index<name.length;index++){
+      type(name[index]);
+      assert.equal($('expression').value,`sin(${name.slice(0,index+1)})`,name);
+    }
+    assert.equal(parse($('expression').value).args[0].value,name);
+    assert.ok([...$('expression-preview').querySelectorAll('mi')].some(node=>node.textContent===glyph),name);
+    calculator.handleKey('DEL');assert.equal($('expression').value,'sin()',name);
+  }
+  $('clear').click();calculator.insert('thta');$('expression').setSelectionRange(2,2);type('e');
+  assert.equal($('expression').value,'theta');
+  $('clear').click();calculator.insert('th');calculator.handleKey('e');assert.equal($('expression').value,'th*e');
+});
+
+test('typing sin and other function names keeps one name and opens its argument',t=>{
+  const {$,dom}=calculatorPage(t,'1+1');
+  const type=letter=>document.body.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:letter,bubbles:true,cancelable:true}));
+  for(const name of ['sin','cos','tan','asin','sinh','integrate','piecewise','limit']){
+    $('clear').click();
+    for(let index=0;index<name.length;index++){
+      type(name[index]);assert.equal($('expression').value,name.slice(0,index+1),name);
+    }
+    for(const letter of '(60)')type(letter);
+    assert.equal($('expression').value,`${name}(60)`);
+    assert.equal(parse($('expression').value).kind,'call');
+    assert.equal(parse($('expression').value).value,name);
+  }
+});
+
+for(const typing of [false,true])for(const backward of [false,true])test(`Greek symbol deletion is atomic in ${typing?'typing':'math'} input (${backward?'Backspace':'Delete'})`,t=>{
+  const source='sin(theta)+pi',{$,dom,calculator}=calculatorPage(t,source);
+  assert.ok([...$('expression-preview').querySelectorAll('mi')].some(node=>node.textContent==='θ'));
+  if(typing)$('typing-toggle').click();
+  const at=backward?9:4;$('expression').setSelectionRange(at,at);
+  if(typing){
+    const event=new dom.window.InputEvent('beforeinput',{inputType:backward?'deleteContentBackward':'deleteContentForward',bubbles:true,cancelable:true});
+    $('expression').dispatchEvent(event);assert.equal(event.defaultPrevented,true);
+  }else document.body.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:backward?'Backspace':'Delete',bubbles:true,cancelable:true}));
+  assert.equal($('expression').value,'sin()+pi');assert.equal($('expression').selectionStart,4);
+  $('undo').click();assert.equal($('expression').value,source);
+  $('expression').setSelectionRange(source.length,source.length);calculator.handleKey('DEL');
+  assert.equal($('expression').value,'sin(theta)+');
+});
+
+for(const keyboard of [false,true])test(`arrows cross function heads through ${keyboard?'keyboard':'keypad'} controls`,t=>{
+  const source='sin(60)+cos(60)',{$,dom,calculator}=calculatorPage(t,source);
+  $('expression').setSelectionRange(source.length,source.length);
+  const move=direction=>{
+    if(keyboard)document.body.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:direction==='LEFT'?'ArrowLeft':'ArrowRight',bubbles:true,cancelable:true}));
+    else calculator.handleKey(direction);
+  };
+  for(const expected of [14,13,12,8,7,6,5,4,0]){
+    move('LEFT');assert.equal($('expression').selectionStart,expected);
+    assert.equal($('expression').selectionEnd,expected);
+    assert.equal($('expression').value,source);
+    assert.equal($('expression-preview').querySelector('.input-caret').dataset.sourceStart,String(expected));
+  }
+  move('RIGHT');assert.equal($('expression').selectionStart,4);
+  $('expression').setSelectionRange(8,8);move('RIGHT');assert.equal($('expression').selectionStart,12);
+});
 
 for(const keyboard of [false,true])test(`equality exits functions in ${keyboard?'typing':'math'} input after the right arrow`,t=>{
   const {$,dom,calculator}=calculatorPage(t,'1+1');
