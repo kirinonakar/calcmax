@@ -104,6 +104,10 @@ input:disabled,select:disabled{opacity:.45;cursor:default}
 :root[data-workspace="scientific"] .calculation-display #expression{height:64px;min-height:64px}
 :root[data-workspace="scientific"] .calculation-display .answer-panel{display:block;grid-row:auto;padding:0;flex:none;overflow:visible}
 :root[data-workspace="scientific"] .calculation-display #answer{min-height:56px}
+/* Each answer grows with its MathML; vertical navigation belongs to the tape. */
+:root[data-workspace="scientific"] .calculation-display #answer,
+:root[data-workspace="scientific"] .calculation-display #answer .result-part{overflow-y:hidden;scrollbar-width:none}
+:root[data-workspace="scientific"] .calculation-display #answer .result-part::-webkit-scrollbar{display:none}
 .tape-entry{padding:10px 0;border-bottom:1px solid var(--line);min-width:0}
 .tape-expression{display:block;width:100%;min-width:0;padding:0;border:0;border-radius:0;color:var(--ink);font-family:"Cambria Math",Cambria,serif;font-size:clamp(16px,3.4vw,27px);font-weight:400;line-height:1.5;text-align:left;white-space:pre-wrap;overflow-wrap:anywhere;overflow-x:auto}
 .tape-expression:hover{background:var(--operator)}.tape-expression:disabled{opacity:1}
