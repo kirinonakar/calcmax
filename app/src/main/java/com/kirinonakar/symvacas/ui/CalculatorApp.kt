@@ -88,7 +88,7 @@ private val LocalCalculatorOverlay=staticCompositionLocalOf<(String)->Unit> { {}
         }
         Row(Modifier.fillMaxWidth().height(48.dp).zIndex(2f).background(c.scientific).padding(horizontal=8.dp),verticalAlignment=Alignment.CenterVertically) {
             Box(Modifier.weight(1f).fillMaxHeight().combinedClickable(onClick={overlay="Mode"},onLongClick={m.mode="Scientific/CAS"},onLongClickLabel="Go to Scientific/CAS mode").semantics{contentDescription="Choose calculation mode, long press for Scientific/CAS mode"},contentAlignment=Alignment.CenterStart) {
-                Text((if(m.mode=="Probability")tr(m.mode) else m.mode).uppercase()+" ▾",Modifier.fillMaxWidth().padding(horizontal=8.dp),fontSize=12.sp,color=c.ink)
+                Text(m.mode.uppercase()+" ▾",Modifier.fillMaxWidth().padding(horizontal=8.dp),fontSize=12.sp,color=c.ink)
             }
             if(m.variables.has("M"))Text("M  ",fontSize=10.sp,color=c.muted,modifier=Modifier.semantics{contentDescription="Stored memory"})
             Text(if(m.shift)"SHIFT  " else if(m.alpha)"ALPHA  " else if(m.hyperbolic)"HYP  " else if(m.secondKeys)"2ND  " else "",fontSize=10.sp,color=if(m.alpha)c.alpha else c.shift)
@@ -122,7 +122,7 @@ private val LocalCalculatorOverlay=staticCompositionLocalOf<(String)->Unit> { {}
     }
     when(overlay) {
         "About"->AboutDialog {overlay=""}
-        "Mode"->AlertDialog(onDismissRequest={overlay=""},title={Text(tr("Calculation mode"))},text={Column(Modifier.verticalScroll(rememberScrollState())) {Modes.chunked(2).forEach {row->Row {row.forEach {name->TextButton(onClick={m.mode=name;overlay=""},modifier=Modifier.weight(1f)){Text(if(name=="Probability")tr(name) else name)}}}}}},confirmButton={TextButton(onClick={overlay=""}){Text(tr("Close"))}})
+        "Mode"->AlertDialog(onDismissRequest={overlay=""},title={Text(tr("Calculation mode"))},text={Column(Modifier.verticalScroll(rememberScrollState())) {Modes.chunked(2).forEach {row->Row {row.forEach {name->TextButton(onClick={m.mode=name;overlay=""},modifier=Modifier.weight(1f)){Text(name)}}}}}},confirmButton={TextButton(onClick={overlay=""}){Text(tr("Close"))}})
         "Settings"->SettingsDialog(m){overlay=""}
         "MatrixSize"->MatrixSizeDialog(m){overlay=""}
         "History"->HistoryDialog(m){overlay=""}

@@ -15,11 +15,13 @@ from calc_graph import graph, graph_analysis, regression_samples
 from calc_programmer import programmer
 from calc_statistics import pearson_correlation
 from calc_probability import probability
+from calc_advanced_statistics import FUNCTIONS as ADVANCED_STATISTICS
 
 # Symbolic calls whose cold first evaluation is heavy enough that the generic step allowance used
 # to cut off legitimate work. Nested calls count too, so 1+fourier(exp(-t^2),t,w) is heavy as well.
 HEAVY_CALLS=("solve","integrate","dsolve","desolve","laplace","ilaplace","fourier","ifourier","mellin","invmellin","ztrans","invztrans","pdsolve","domain","range","real_roots","rsolve","invt","tinterval","tukey","tvmrate","irr","regression","wilcoxon","mannwhitney")
 MAX_SHOWN_INTEGER_DIGITS=10000
+HEAVY_CALLS += tuple(ADVANCED_STATISTICS)
 
 def shown_exact(rounded):
     """Keep exact values reusable without sending a huge integer to the result view."""

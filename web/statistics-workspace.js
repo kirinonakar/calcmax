@@ -1,8 +1,9 @@
 import {$,value,element,control} from './app-ui.js';
 import {t,setText} from './i18n.js';
 import {downloadFile} from './storage.js';
-import {statisticsCommand,statisticsAnalysisData,distributionCommand,csvRows,statisticsDataRows,statisticsDatasetSource,numericStatisticsRows,statisticsColumnCount,statisticsColumnNames,statisticsKindForColumns,statisticsCsvHasHeader,statisticsColumnLabels} from './workspace-commands.js';
+import {statisticsCommand,statisticsAnalysisData,csvRows,statisticsDataRows,statisticsDatasetSource,numericStatisticsRows,statisticsColumnCount,statisticsColumnNames,statisticsKindForColumns,statisticsCsvHasHeader,statisticsColumnLabels} from './workspace-commands.js';
 import {statisticsPlot,statisticsPlotPanels} from './statistics-plot.js';
+import {createAdvancedStatistics} from './advanced-statistics.js';
 import {renderFormulas} from './formula-preview.js';
 import {editableTable} from './editable-table.js';
 import {parse,latexInput} from './parser.js';
@@ -18,6 +19,7 @@ export function regressionGraphSource(source,digits=10,variable='x') {
 export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorkspaceMath,storeExpression,error,changeMode,replaceInput,graphs}) {
   const {toast,pickFile,openDialog}=ui;
   let statisticsGraph=null;
+  let advanced=null;
   let regressionRun=null;
   const menus=Object.fromEntries(['statistics-op','statistics-grouping','regression-kind','regression-response','statistics-plot-type'].map(id=>
     [id,[...$(id).options].map(option=>({option,label:option.textContent}))]));
@@ -81,10 +83,6 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
     if(plan.paired)return `${t('Compared columns')}: x ↔ y · ${t('Complete pairs')}: ${plan.pairs.length}`;
     return `${t('Analyzed groups')} (${plan.samples.length}): ${plan.samples.map(sample=>`${sample.label} (n=${sample.values?.length||0})`).join(' · ')}`;
   }
-  function distributionExpression(){return distributionCommand(Object.fromEntries(['family','query','x','a','b','p','mean','sigma','df','df2','trials','success','lambda','k'].map(name=>[name,value('distribution-'+name)])));}
-  function distributionControls(){const family=value('distribution-family'),discrete=['binomial','poisson','geometric'].includes(family),queries=discrete?(family==='binomial'?['pdf','cdf','list-pdf','list-cdf']:['pdf','cdf']):['normal','t'].includes(family)?['pdf','cdf','interval','quantile']:['pdf','cdf','interval'];for(const option of $('distribution-query').options)option.disabled=!queries.includes(option.value);if(!queries.includes(value('distribution-query')))$('distribution-query').value='cdf';const query=value('distribution-query'),shown=new Set(discrete?(query.startsWith('list')?[]:['k']):query==='interval'?['a','b']:query==='quantile'?['p']:['x']);for(const name of family==='normal'?['mean','sigma']:family==='f'?['df','df2']:['t','chi2'].includes(family)?['df']:family==='binomial'?['trials','success']:family==='poisson'?['lambda']:['success'])shown.add(name);for(const name of ['x','a','b','p','mean','sigma','df','df2','trials','success','lambda','k'])$('distribution-'+name).closest('label').hidden=!shown.has(name);refreshWorkspaceMath();}
-  $('distribution-family').onchange=distributionControls;$('distribution-query').onchange=distributionControls;
-  $('distribution-insert').onclick=()=>{changeMode('scientific');replaceInput(distributionExpression(),{uncommit:true});};
   $('regression-kind').onchange=()=>{invalidateRegression();statisticsControls();$('regression-custom').hidden=regressionMode()!=='custom';$('regression-penalty-label').hidden=!['linear','multiple','logistic'].includes(value('regression-kind'));$('regression-lasso').hidden=!['ridge','lasso','elasticnet','logisticridge','logisticlasso','logisticelasticnet'].includes(regressionMode());$('regression-ratio-label').hidden=!regressionMode().endsWith('elasticnet');$('regression-forest').hidden=!regressionMode().startsWith('randomforest');$('regression-degree').closest('label').hidden=regressionMode()!=='polynomial';$('regression-data-help').hidden=!['multiple','logistic','polynomial','ridge','lasso','elasticnet','logisticridge','logisticlasso','logisticelasticnet','randomforest','randomforestclassifier','randomforestregressor'].includes(regressionMode());$('regression-response').closest('label').hidden=!['multiple','logistic','polynomial','ridge','lasso','elasticnet','logisticridge','logisticlasso','logisticelasticnet','randomforest','randomforestclassifier','randomforestregressor'].includes(regressionMode());setText($('regression-data-help'),regressionMode().startsWith('logistic')?'Selected column is response; others are predictors. Logistic response: 0 or 1.':'Selected column is response; others are predictors.');refreshWorkspaceMath();};
   $('regression-kind').onchange();
   for(const id of ['regression-alpha','regression-ratio','regression-trees','regression-depth','regression-seed'])$(id).addEventListener('input',()=>{invalidateRegression();refreshWorkspaceMath();});
@@ -138,6 +136,7 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
     $('statistics-plot-grouping-label').hidden=value('statistics-plot-type')==='scatter'||columns<2;
     setText($('statistics-data-label'),kind==='list'?'One value per line':kind==='xy'?'x, y values':kind==='xyz'?'x, y, z values':statisticsColumnNames(columns).join(', '));
     try{$('statistics-samples').textContent=analysisSummary();}catch{setText($('statistics-samples'),'Enter data to see analyzed groups');}
+    advanced?.render();
   }
   function dataKindChange(){cancelRegression();statisticsGraph=null;$('regression-caption').replaceChildren();$('regression-inference').replaceChildren();$('regression-export').hidden=true;$('regression-transfer').hidden=true;$('statistics-plot').replaceChildren();$('statistics-plot-type').value=dataKind()==='xy'?'scatter':'histogram';render();refreshWorkspaceMath();}
   $('statistics-kind').onchange=dataKindChange;
@@ -219,6 +218,7 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
     }catch(exc){if(regressionRun===run)error(exc.message);}
     finally{if(regressionRun===run){regressionRun=null;regressionBusy(false);}}
   }
+  advanced=createAdvancedStatistics({state,persist,data:()=>value('statistics-data')});
   statisticsControls();
-  return {datasetsList,expression:statisticsExpression,analysisSummary,distributionExpression,distributionControls,render,showRegression,runRegression};
+  return {datasetsList,expression:statisticsExpression,advancedExpression:advanced.expression,analysisSummary,render:()=>{render();advanced.render();},showRegression,runRegression};
 }

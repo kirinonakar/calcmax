@@ -1,0 +1,1492 @@
+[
+  {
+    "name": "levene",
+    "function": "levene",
+    "arguments": [
+      [
+        1,
+        2,
+        4,
+        5
+      ],
+      [
+        2,
+        3,
+        5,
+        8
+      ]
+    ],
+    "expected": [
+      [
+        [
+          "F"
+        ],
+        0.42857142857142855
+      ],
+      [
+        [
+          "p"
+        ],
+        0.5369633243867575
+      ]
+    ],
+    "tolerance": 1e-10,
+    "source": "SciPy 1.18.1; statsmodels 0.15.0"
+  },
+  {
+    "name": "bartlett",
+    "function": "bartlett",
+    "arguments": [
+      [
+        1,
+        2,
+        4,
+        5
+      ],
+      [
+        2,
+        3,
+        5,
+        8
+      ]
+    ],
+    "expected": [
+      [
+        [
+          "chi2"
+        ],
+        0.3460436154846863
+      ],
+      [
+        [
+          "p"
+        ],
+        0.5563613333974676
+      ]
+    ],
+    "tolerance": 1e-10,
+    "source": "SciPy 1.18.1; statsmodels 0.15.0"
+  },
+  {
+    "name": "padjust bonferroni",
+    "function": "padjust",
+    "arguments": [
+      [
+        0.04,
+        0.01,
+        0.03,
+        0.2
+      ],
+      "bonferroni"
+    ],
+    "expected": [
+      [
+        [
+          "adjusted p",
+          0
+        ],
+        0.16
+      ],
+      [
+        [
+          "adjusted p",
+          1
+        ],
+        0.04
+      ],
+      [
+        [
+          "adjusted p",
+          2
+        ],
+        0.12
+      ],
+      [
+        [
+          "adjusted p",
+          3
+        ],
+        0.8
+      ]
+    ],
+    "tolerance": 1e-12,
+    "source": "SciPy 1.18.1; statsmodels 0.15.0"
+  },
+  {
+    "name": "padjust holm",
+    "function": "padjust",
+    "arguments": [
+      [
+        0.04,
+        0.01,
+        0.03,
+        0.2
+      ],
+      "holm"
+    ],
+    "expected": [
+      [
+        [
+          "adjusted p",
+          0
+        ],
+        0.09
+      ],
+      [
+        [
+          "adjusted p",
+          1
+        ],
+        0.04
+      ],
+      [
+        [
+          "adjusted p",
+          2
+        ],
+        0.09
+      ],
+      [
+        [
+          "adjusted p",
+          3
+        ],
+        0.2
+      ]
+    ],
+    "tolerance": 1e-12,
+    "source": "SciPy 1.18.1; statsmodels 0.15.0"
+  },
+  {
+    "name": "padjust fdr",
+    "function": "padjust",
+    "arguments": [
+      [
+        0.04,
+        0.01,
+        0.03,
+        0.2
+      ],
+      "fdr"
+    ],
+    "expected": [
+      [
+        [
+          "adjusted p",
+          0
+        ],
+        0.05333333333333334
+      ],
+      [
+        [
+          "adjusted p",
+          1
+        ],
+        0.04
+      ],
+      [
+        [
+          "adjusted p",
+          2
+        ],
+        0.05333333333333334
+      ],
+      [
+        [
+          "adjusted p",
+          3
+        ],
+        0.2
+      ]
+    ],
+    "tolerance": 1e-12,
+    "source": "SciPy 1.18.1; statsmodels 0.15.0"
+  },
+  {
+    "name": "padjust by",
+    "function": "padjust",
+    "arguments": [
+      [
+        0.04,
+        0.01,
+        0.03,
+        0.2
+      ],
+      "by"
+    ],
+    "expected": [
+      [
+        [
+          "adjusted p",
+          0
+        ],
+        0.1111111111111111
+      ],
+      [
+        [
+          "adjusted p",
+          1
+        ],
+        0.08333333333333331
+      ],
+      [
+        [
+          "adjusted p",
+          2
+        ],
+        0.1111111111111111
+      ],
+      [
+        [
+          "adjusted p",
+          3
+        ],
+        0.41666666666666663
+      ]
+    ],
+    "tolerance": 1e-12,
+    "source": "SciPy 1.18.1; statsmodels 0.15.0"
+  },
+  {
+    "name": "McNemar exact",
+    "function": "mcnemar",
+    "arguments": [
+      [
+        [
+          20,
+          8
+        ],
+        [
+          2,
+          15
+        ]
+      ],
+      "exact"
+    ],
+    "expected": [
+      [
+        [
+          "p"
+        ],
+        0.109375
+      ]
+    ],
+    "tolerance": 1e-12,
+    "source": "SciPy 1.18.1; statsmodels 0.15.0"
+  },
+  {
+    "name": "McNemar corrected",
+    "function": "mcnemar",
+    "arguments": [
+      [
+        [
+          20,
+          8
+        ],
+        [
+          2,
+          15
+        ]
+      ],
+      "corrected"
+    ],
+    "expected": [
+      [
+        [
+          "p"
+        ],
+        0.11384629800665763
+      ]
+    ],
+    "tolerance": 1e-12,
+    "source": "SciPy 1.18.1; statsmodels 0.15.0"
+  },
+  {
+    "name": "McNemar asymptotic",
+    "function": "mcnemar",
+    "arguments": [
+      [
+        [
+          20,
+          8
+        ],
+        [
+          2,
+          15
+        ]
+      ],
+      "asymptotic"
+    ],
+    "expected": [
+      [
+        [
+          "p"
+        ],
+        0.05777957112359715
+      ]
+    ],
+    "tolerance": 1e-12,
+    "source": "SciPy 1.18.1; statsmodels 0.15.0"
+  },
+  {
+    "name": "KS exact 3",
+    "function": "kstest",
+    "arguments": [
+      [
+        1,
+        2,
+        3
+      ],
+      [
+        4,
+        5,
+        6
+      ]
+    ],
+    "expected": [
+      [
+        [
+          "D"
+        ],
+        1.0
+      ],
+      [
+        [
+          "p"
+        ],
+        0.09999999999999999
+      ]
+    ],
+    "tolerance": 1e-12,
+    "source": "SciPy 1.18.1; statsmodels 0.15.0"
+  },
+  {
+    "name": "KS exact 5",
+    "function": "kstest",
+    "arguments": [
+      [
+        1,
+        3,
+        6,
+        8
+      ],
+      [
+        2,
+        4,
+        5,
+        7,
+        9
+      ]
+    ],
+    "expected": [
+      [
+        [
+          "D"
+        ],
+        0.3
+      ],
+      [
+        [
+          "p"
+        ],
+        0.9682539682539681
+      ]
+    ],
+    "tolerance": 1e-12,
+    "source": "SciPy 1.18.1; statsmodels 0.15.0"
+  },
+  {
+    "name": "poissonreg",
+    "function": "poissonreg",
+    "arguments": [
+      [
+        [
+          0,
+          1
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          1,
+          3
+        ],
+        [
+          1,
+          1
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          2,
+          5
+        ],
+        [
+          3,
+          4
+        ],
+        [
+          3,
+          8
+        ],
+        [
+          4,
+          6
+        ],
+        [
+          4,
+          10
+        ]
+      ]
+    ],
+    "expected": [
+      [
+        [
+          "coefficients",
+          0,
+          "estimate"
+        ],
+        0.059479350593690375
+      ],
+      [
+        [
+          "coefficients",
+          0,
+          "SE"
+        ],
+        0.4206258405925287
+      ],
+      [
+        [
+          "coefficients",
+          1,
+          "estimate"
+        ],
+        0.5304484245481438
+      ],
+      [
+        [
+          "coefficients",
+          1,
+          "SE"
+        ],
+        0.13212779141170428
+      ],
+      [
+        [
+          "log likelihood"
+        ],
+        -17.76663079032029
+      ]
+    ],
+    "tolerance": 0.0002,
+    "source": "SciPy 1.18.1; statsmodels 0.15.0"
+  },
+  {
+    "name": "nbreg",
+    "function": "nbreg",
+    "arguments": [
+      [
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          1
+        ],
+        [
+          0,
+          8
+        ],
+        [
+          1,
+          0
+        ],
+        [
+          1,
+          1
+        ],
+        [
+          1,
+          3
+        ],
+        [
+          1,
+          15
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          2,
+          5
+        ],
+        [
+          2,
+          23
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          3,
+          3
+        ],
+        [
+          3,
+          10
+        ],
+        [
+          3,
+          35
+        ]
+      ]
+    ],
+    "expected": [
+      [
+        [
+          "coefficients",
+          0,
+          "estimate"
+        ],
+        0.9020154435295387
+      ],
+      [
+        [
+          "coefficients",
+          0,
+          "SE"
+        ],
+        0.6094397763916539
+      ],
+      [
+        [
+          "coefficients",
+          1,
+          "estimate"
+        ],
+        0.5494036015339375
+      ],
+      [
+        [
+          "coefficients",
+          1,
+          "SE"
+        ],
+        0.3199635896162754
+      ],
+      [
+        [
+          "log likelihood"
+        ],
+        -44.282907730842226
+      ],
+      [
+        [
+          "dispersion alpha (NB2)"
+        ],
+        1.727302924455156
+      ]
+    ],
+    "tolerance": 0.0002,
+    "source": "SciPy 1.18.1; statsmodels 0.15.0"
+  },
+  {
+    "name": "multinomial",
+    "function": "multinomial",
+    "arguments": [
+      [
+        [
+          -2,
+          0
+        ],
+        [
+          -2,
+          1
+        ],
+        [
+          -1,
+          0
+        ],
+        [
+          -1,
+          2
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          1
+        ],
+        [
+          0,
+          2
+        ],
+        [
+          1,
+          1
+        ],
+        [
+          1,
+          2
+        ],
+        [
+          2,
+          1
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          2,
+          0
+        ]
+      ]
+    ],
+    "expected": [
+      [
+        [
+          "coefficients",
+          0,
+          "estimate"
+        ],
+        0.0001238307636460438
+      ],
+      [
+        [
+          "coefficients",
+          0,
+          "SE"
+        ],
+        0.7186097629160457
+      ],
+      [
+        [
+          "coefficients",
+          1,
+          "estimate"
+        ],
+        0.25896715707080653
+      ],
+      [
+        [
+          "coefficients",
+          1,
+          "SE"
+        ],
+        0.516744818043013
+      ],
+      [
+        [
+          "coefficients",
+          2,
+          "estimate"
+        ],
+        -0.05013792904982814
+      ],
+      [
+        [
+          "coefficients",
+          2,
+          "SE"
+        ],
+        0.7367982384435334
+      ],
+      [
+        [
+          "coefficients",
+          3,
+          "estimate"
+        ],
+        0.3925897615399055
+      ],
+      [
+        [
+          "coefficients",
+          3,
+          "SE"
+        ],
+        0.5293381862742149
+      ],
+      [
+        [
+          "log likelihood"
+        ],
+        -12.883343245280443
+      ]
+    ],
+    "tolerance": 0.0002,
+    "source": "SciPy 1.18.1; statsmodels 0.15.0"
+  },
+  {
+    "name": "ordinal",
+    "function": "ordinal",
+    "arguments": [
+      [
+        [
+          -2,
+          0
+        ],
+        [
+          -2,
+          1
+        ],
+        [
+          -1,
+          0
+        ],
+        [
+          -1,
+          2
+        ],
+        [
+          0,
+          0
+        ],
+        [
+          0,
+          1
+        ],
+        [
+          0,
+          2
+        ],
+        [
+          1,
+          1
+        ],
+        [
+          1,
+          2
+        ],
+        [
+          2,
+          1
+        ],
+        [
+          2,
+          2
+        ],
+        [
+          2,
+          0
+        ]
+      ]
+    ],
+    "expected": [
+      [
+        [
+          "coefficients",
+          0,
+          "estimate"
+        ],
+        0.2823811427943416
+      ],
+      [
+        [
+          "coefficients",
+          0,
+          "SE"
+        ],
+        0.38154917052155374
+      ],
+      [
+        [
+          "log likelihood"
+        ],
+        -12.902962653565382
+      ],
+      [
+        [
+          "cutpoints",
+          0
+        ],
+        -0.6697836661490142
+      ],
+      [
+        [
+          "cutpoints",
+          1
+        ],
+        0.7703156821112309
+      ]
+    ],
+    "tolerance": 0.0002,
+    "source": "SciPy 1.18.1; statsmodels 0.15.0"
+  },
+  {
+    "name": "cox",
+    "function": "cox",
+    "arguments": [
+      [
+        [
+          1,
+          1,
+          0
+        ],
+        [
+          2,
+          1,
+          1
+        ],
+        [
+          3,
+          0,
+          0
+        ],
+        [
+          4,
+          1,
+          1
+        ],
+        [
+          5,
+          1,
+          0
+        ],
+        [
+          6,
+          0,
+          1
+        ],
+        [
+          7,
+          1,
+          1
+        ],
+        [
+          8,
+          1,
+          0
+        ]
+      ]
+    ],
+    "expected": [
+      [
+        [
+          "coefficients",
+          0,
+          "estimate"
+        ],
+        0.2700666634492815
+      ],
+      [
+        [
+          "coefficients",
+          0,
+          "SE"
+        ],
+        0.9161108609794568
+      ],
+      [
+        [
+          "partial log likelihood"
+        ],
+        -7.670127259641999
+      ]
+    ],
+    "tolerance": 1e-05,
+    "source": "SciPy 1.18.1; statsmodels 0.15.0"
+  },
+  {
+    "name": "mixedmodel",
+    "function": "mixedmodel",
+    "arguments": [
+      [
+        [
+          1,
+          0,
+          2
+        ],
+        [
+          1,
+          1,
+          4
+        ],
+        [
+          1,
+          2,
+          4
+        ],
+        [
+          2,
+          0,
+          3
+        ],
+        [
+          2,
+          1,
+          4
+        ],
+        [
+          2,
+          2,
+          6
+        ],
+        [
+          3,
+          0,
+          1
+        ],
+        [
+          3,
+          1,
+          3
+        ],
+        [
+          3,
+          2,
+          4
+        ],
+        [
+          4,
+          0,
+          4
+        ],
+        [
+          4,
+          1,
+          5
+        ],
+        [
+          4,
+          2,
+          8
+        ]
+      ]
+    ],
+    "expected": [
+      [
+        [
+          "coefficients",
+          0,
+          "estimate"
+        ],
+        2.4999999999999996
+      ],
+      [
+        [
+          "coefficients",
+          1,
+          "estimate"
+        ],
+        1.5000000000000002
+      ],
+      [
+        [
+          "residual variance"
+        ],
+        0.333333342843241
+      ],
+      [
+        [
+          "random intercept variance"
+        ],
+        1.16666659058741
+      ]
+    ],
+    "tolerance": 0.0002,
+    "source": "SciPy 1.18.1; statsmodels 0.15.0"
+  },
+  {
+    "name": "GEE gaussian",
+    "function": "gee",
+    "arguments": [
+      [
+        [
+          1,
+          0,
+          2
+        ],
+        [
+          1,
+          1,
+          4
+        ],
+        [
+          1,
+          2,
+          4
+        ],
+        [
+          2,
+          0,
+          3
+        ],
+        [
+          2,
+          1,
+          4
+        ],
+        [
+          2,
+          2,
+          6
+        ],
+        [
+          3,
+          0,
+          1
+        ],
+        [
+          3,
+          1,
+          3
+        ],
+        [
+          3,
+          2,
+          4
+        ],
+        [
+          4,
+          0,
+          4
+        ],
+        [
+          4,
+          1,
+          5
+        ],
+        [
+          4,
+          2,
+          8
+        ]
+      ],
+      "gaussian"
+    ],
+    "expected": [
+      [
+        [
+          "coefficients",
+          0,
+          "estimate"
+        ],
+        2.5
+      ],
+      [
+        [
+          "coefficients",
+          0,
+          "SE"
+        ],
+        0.4526158538000088
+      ],
+      [
+        [
+          "coefficients",
+          1,
+          "estimate"
+        ],
+        1.5
+      ],
+      [
+        [
+          "coefficients",
+          1,
+          "SE"
+        ],
+        0.1767766952966369
+      ]
+    ],
+    "tolerance": 2e-05,
+    "source": "SciPy 1.18.1; statsmodels 0.15.0"
+  },
+  {
+    "name": "GEE binomial",
+    "function": "gee",
+    "arguments": [
+      [
+        [
+          1,
+          0,
+          1
+        ],
+        [
+          1,
+          1,
+          0
+        ],
+        [
+          1,
+          2,
+          1
+        ],
+        [
+          2,
+          0,
+          0
+        ],
+        [
+          2,
+          1,
+          1
+        ],
+        [
+          2,
+          2,
+          0
+        ],
+        [
+          3,
+          0,
+          1
+        ],
+        [
+          3,
+          1,
+          0
+        ],
+        [
+          3,
+          2,
+          1
+        ],
+        [
+          4,
+          0,
+          0
+        ],
+        [
+          4,
+          1,
+          1
+        ],
+        [
+          4,
+          2,
+          0
+        ],
+        [
+          5,
+          0,
+          1
+        ],
+        [
+          5,
+          1,
+          0
+        ],
+        [
+          5,
+          2,
+          1
+        ],
+        [
+          6,
+          0,
+          0
+        ],
+        [
+          6,
+          1,
+          1
+        ],
+        [
+          6,
+          2,
+          0
+        ],
+        [
+          7,
+          0,
+          1
+        ],
+        [
+          7,
+          1,
+          0
+        ],
+        [
+          7,
+          2,
+          1
+        ],
+        [
+          8,
+          0,
+          0
+        ],
+        [
+          8,
+          1,
+          1
+        ],
+        [
+          8,
+          2,
+          0
+        ]
+      ],
+      "binomial"
+    ],
+    "expected": [
+      [
+        [
+          "coefficients",
+          0,
+          "estimate"
+        ],
+        -1.4802973661668756e-16
+      ],
+      [
+        [
+          "coefficients",
+          0,
+          "SE"
+        ],
+        0.23570226039551592
+      ],
+      [
+        [
+          "coefficients",
+          1,
+          "estimate"
+        ],
+        5.987645017598145e-17
+      ],
+      [
+        [
+          "coefficients",
+          1,
+          "SE"
+        ],
+        0.0
+      ]
+    ],
+    "tolerance": 2e-05,
+    "source": "SciPy 1.18.1; statsmodels 0.15.0"
+  },
+  {
+    "name": "GEE poisson",
+    "function": "gee",
+    "arguments": [
+      [
+        [
+          1,
+          0,
+          2
+        ],
+        [
+          1,
+          1,
+          3
+        ],
+        [
+          1,
+          2,
+          4
+        ],
+        [
+          2,
+          0,
+          3
+        ],
+        [
+          2,
+          1,
+          4
+        ],
+        [
+          2,
+          2,
+          1
+        ],
+        [
+          3,
+          0,
+          4
+        ],
+        [
+          3,
+          1,
+          1
+        ],
+        [
+          3,
+          2,
+          2
+        ],
+        [
+          4,
+          0,
+          1
+        ],
+        [
+          4,
+          1,
+          2
+        ],
+        [
+          4,
+          2,
+          3
+        ],
+        [
+          5,
+          0,
+          2
+        ],
+        [
+          5,
+          1,
+          3
+        ],
+        [
+          5,
+          2,
+          4
+        ],
+        [
+          6,
+          0,
+          3
+        ],
+        [
+          6,
+          1,
+          4
+        ],
+        [
+          6,
+          2,
+          1
+        ],
+        [
+          7,
+          0,
+          4
+        ],
+        [
+          7,
+          1,
+          1
+        ],
+        [
+          7,
+          2,
+          2
+        ],
+        [
+          8,
+          0,
+          1
+        ],
+        [
+          8,
+          1,
+          2
+        ],
+        [
+          8,
+          2,
+          3
+        ]
+      ],
+      "poisson"
+    ],
+    "expected": [
+      [
+        [
+          "coefficients",
+          0,
+          "estimate"
+        ],
+        0.9162907318741551
+      ],
+      [
+        [
+          "coefficients",
+          0,
+          "SE"
+        ],
+        0.15092308563562362
+      ],
+      [
+        [
+          "coefficients",
+          1,
+          "estimate"
+        ],
+        -3.422267689453336e-17
+      ],
+      [
+        [
+          "coefficients",
+          1,
+          "SE"
+        ],
+        0.1414213562373095
+      ]
+    ],
+    "tolerance": 2e-05,
+    "source": "SciPy 1.18.1; statsmodels 0.15.0"
+  },
+  {
+    "name": "repeatedanova",
+    "function": "repeatedanova",
+    "arguments": [
+      [
+        [
+          2,
+          4,
+          5
+        ],
+        [
+          3,
+          4,
+          7
+        ],
+        [
+          4,
+          7,
+          8
+        ],
+        [
+          2,
+          3,
+          6
+        ],
+        [
+          5,
+          6,
+          7
+        ]
+      ]
+    ],
+    "expected": [
+      [
+        [
+          "F"
+        ],
+        31.00000000000001
+      ],
+      [
+        [
+          "p"
+        ],
+        0.00017059558517284437
+      ]
+    ],
+    "tolerance": 1e-10,
+    "source": "SciPy 1.18.1; statsmodels 0.15.0"
+  }
+]

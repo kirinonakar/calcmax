@@ -13,6 +13,7 @@ from calc_shared import (CONSTANTS, UNITS, MathError, canonical_function_name,
                          inverse_z_transform, matrix, mellin_transform,
                          numeric_derivative, numeric_integral, ode_equation, require, z_transform)
 from calc_statistics import distribution_value, fit_custom_regression, fit_regression, pearson_correlation, statistical_test
+from calc_advanced_statistics import FUNCTIONS as ADVANCED_STATISTICS, advanced
 from calc_finance import finance_value
 
 MAX_EXACT_DIGITS = 100000
@@ -192,6 +193,10 @@ class Engine:
             for n in candidates:
                 if n["kind"] == "symbol": self.bindings[n["value"]] = self.symbol(n["value"])
         try:
+            if value == "impute":
+                # NA is a missing-data token only inside impute; elsewhere it
+                # retains its existing Avogadro-constant meaning.
+                self.bindings["NA"] = self.symbol("NA")
             if value == "regression" and len(args) > 1 and args[1].get("kind") == "symbol" and args[1].get("value") == "custom":
                 require(len(args) in (4, 5), "Use regression(data,custom,model,x,initials)")
                 constants = {"pi": s.pi, "e": s.E, "i": s.I, "I": s.I}
@@ -638,6 +643,8 @@ class Engine:
                     "exppdf", "expcdf", "unifpdf", "unifcdf", "gammapdf", "gammacdf", "betapdf", "betacdf",
                     "lognormpdf", "lognormcdf", "hgeompdf", "hgeomcdf", "nbinompdf", "nbinomcdf", "weibullpdf", "weibullcdf", "cauchypdf", "cauchycdf", "invcauchy"):
             return distribution_value(self, name, a)
+        if name in ADVANCED_STATISTICS:
+            return advanced(self, name, a)
         if name in ("ttest", "ttest2", "ttestpaired", "ztest", "ztest2", "chi2test", "chi2independence", "fisherexact", "anova", "tukey", "shapiro", "wilcoxon", "mannwhitney", "kruskal", "tinterval", "zinterval"):
             return statistical_test(self, name, a, nodes)
         if name in ("tvmfv", "tvmpv", "tvmpmt", "tvmn", "tvmrate", "npv", "irr", "amort", "cagr"):

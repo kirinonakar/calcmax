@@ -121,9 +121,7 @@ import kotlin.math.max
     val yValues=if(dataKind!="list")numericRows.mapNotNull {it.getOrNull(1)?.toDoubleOrNull()?.takeIf {v->v.isFinite()}} else emptyList()
     val zValues=if(dataColumns.size>=3)numericRows.mapNotNull {it.getOrNull(2)?.toDoubleOrNull()?.takeIf {v->v.isFinite()}} else emptyList()
     val paired=numericRows.mapNotNull {row->val x=row.getOrNull(0)?.toDoubleOrNull();val y=row.getOrNull(1)?.toDoubleOrNull();if(x!=null&&y!=null&&x.isFinite()&&y.isFinite())x to y else null}
-    var section by rememberSaveable {mutableStateOf("Data")}
-    if(section=="Data") Panel("Data & statistics","Enter values once, then summarize, test, or plot the current dataset.",panelScroll) {
-        Choices(listOf("Data & analysis","Distributions"),"Data & analysis",{section=if(it=="Data & analysis")"Data" else it})
+    Panel("Data & statistics","Enter values once, then summarize, test, or plot the current dataset.",panelScroll) {
         if(names.isNotEmpty())Choices(names,activeName,{name->m.clearRegression();selected=name;isNew=false;m.dataSets.optJSONObject(name)?.let {item->datasetName=name;data=item.optString("csv");dataKind=item.optString("kind","list");columnCount=if(dataKind.startsWith("columns:"))statisticsColumnCount(dataKind).toString() else "4";plotType=if(dataKind=="xy")"Scatter" else "Histogram"}})
         Row(horizontalArrangement=Arrangement.spacedBy(6.dp),verticalAlignment=Alignment.CenterVertically) {
             Field(datasetName,"Dataset name",Modifier.weight(1f)){datasetName=it}
@@ -331,12 +329,8 @@ import kotlin.math.max
             }
         }
         StatisticsAnalysis(m,numericRows,if(dataColumns.size==1)"list" else dataKind)
+        AdvancedStatistics(m,data,dataKind)
         Display(m,requestInitialFocus=false)
-    } else {
-        Panel(section,"") {
-            Choices(listOf("Data & analysis","Distributions"),section,{section=if(it=="Data & analysis")"Data" else it})
-            DistributionSection(m)
-        }
     }
 }
 

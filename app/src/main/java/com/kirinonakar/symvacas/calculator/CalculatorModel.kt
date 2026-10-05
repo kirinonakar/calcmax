@@ -59,6 +59,12 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     var error by mutableStateOf("")
     var probabilityDraft by mutableStateOf(loadObject("probabilityDraft"))
         private set
+    var advancedStatisticsDraft by mutableStateOf(loadObject("advancedStatisticsDraft"))
+        private set
+    fun updateAdvancedStatisticsDraft(draft:JSONObject) {
+        advancedStatisticsDraft=JSONObject(draft.toString())
+        prefs.edit().putString("advancedStatisticsDraft",draft.toString()).apply()
+    }
     var probabilityResult by mutableStateOf<JSONObject?>(null)
         private set
     var probabilityError by mutableStateOf("")

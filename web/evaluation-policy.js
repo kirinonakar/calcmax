@@ -8,6 +8,7 @@ const multiArgumentFunctions=new Set([
   'tpdf','tcdf','invt','chi2pdf','chi2cdf','fpdf','fcdf',
   'binompdf','binomcdf','poissonpdf','poissoncdf','geometpdf','geometcdf',
   'ttest','ztest','chi2test','anova','tukey','wilcoxon','mannwhitney','kruskal','tinterval','zinterval',
+  'padjust','cohend','eta2','levene','bartlett','mcnemar','kaplanmeier','logrank','cox','repeatedanova','mixedmodel','gee','multinomial','ordinal','poissonreg','nbreg','bootstrapci','testpower','samplesize','kstest','crossvalidate','pca','kmeans','impute',
   'tvmfv','tvmpv','tvmpmt','tvmn','tvmrate','npv','irr','amort','cagr'
 ]);
 const previewFunctions=new Set(['log','nthroot','mixed','mod','divmod']);

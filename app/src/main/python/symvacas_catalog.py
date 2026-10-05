@@ -7,6 +7,7 @@ pi = sp.pi
 true, false = sp.true, sp.false
 left, right, both, linear = "left", "right", "both", "linear"
 begin, end = "begin", "end"
+NA = sp.Symbol("NA")
 m, cm = "m", "cm"
 _names = set("""
 abs floor ceil round roundh sign sqrt cbrt nthroot atan2 arctan2 frac iPart log ln exp sinc sinh cosh tanh asin acos atan arcsin arccos arctan sin cos tan
@@ -33,6 +34,8 @@ ttest ttest2 ttestpaired ztest ztest2 chi2test chi2independence fisherexact anov
 tvmfv tvmpv tvmpmt tvmn tvmrate npv irr amort cagr
 """.split())
 _functions = {}
+from calc_advanced_statistics import FUNCTIONS as _advanced_statistics
+_names.update(_advanced_statistics)
 _variables = {}
 _assumptions = {}
 

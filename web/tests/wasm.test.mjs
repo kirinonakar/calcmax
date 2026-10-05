@@ -4,6 +4,8 @@ import {readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {loadPyodide} from '../vendor/pyodide.mjs';
 import {installEngine} from '../engine-bootstrap.js';
+import {createAdvancedStatistics} from '../advanced-statistics.js';
+import {advancedStatisticsSchema} from '../advanced-statistics-schema.js';
 import {parse,latexInput} from '../parser.js';
 import {tipCommand,moneyResult} from '../money.js';
 import {statisticsCommand,distributionCommand,equationCommand} from '../workspace-commands.js';
@@ -19,6 +21,46 @@ import {renderRegressionReport,regressionResidualCSV} from '../regression-report
 // Reuse the interpreter for sequential integration scenarios. The cold solver
 // scenario below explicitly loads its own interpreter to keep startup coverage.
 let sharedRuntime;
+test('guided statistics UI runs every new form and correction method in real WASM',async t=>{
+  const py=await runtime(),dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));
+  const original=Object.getOwnPropertyDescriptor(globalThis,'document');
+  Object.defineProperty(globalThis,'document',{value:dom.window.document,configurable:true});
+  const language=getLanguage();
+  t.after(()=>{setLanguage(language);dom.window.close();if(original)Object.defineProperty(globalThis,'document',original);else delete globalThis.document;});
+  const state={fields:{}},api=createAdvancedStatistics({state,persist:()=>{},data:()=>''});
+  for(const language of ['en','ko']){
+    setLanguage(language);
+    for(const definition of advancedStatisticsSchema.filter(item=>item.controls)){
+      const select=document.getElementById('statistics-advanced-kind');select.value=definition.id;select.onchange();api.render();
+      assert.equal(document.getElementById('statistics-advanced-input').value,'example');
+      assert.equal(document.getElementById('statistics-advanced-expression').hidden,true);
+      assert.ok(document.getElementById('statistics-advanced-controls').children.length>0);
+      const modes=definition.id==='padjust'?['bonferroni','holm','fdr']:[null];
+      for(const mode of modes){
+        if(mode){const method=document.getElementById('statistics-form-padjust-method');method.value=mode;method.onchange();}
+        const source=api.expression();
+        py.globals.set('payload',JSON.stringify({tree:parse(latexInput(source)),precision:20,budget:30}));
+        const result=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));
+        assert.equal(result.ok,true,`${language} ${definition.id}: ${result.error}`);
+        if(mode)assert.match(result.exact,new RegExp('method: '+mode));
+      }
+    }
+  }
+});
+test('every advanced statistics example and Python catalog run in real WASM',async()=>{
+  const py=await runtime();
+  const definitions=JSON.parse(readFileSync(new URL('../../app/src/main/assets/advanced_statistics.json',import.meta.url),'utf8'));
+  for(const item of definitions){
+    py.globals.set('payload',JSON.stringify({tree:parse(latexInput(item.example)),precision:20,budget:30}));
+    const result=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));
+    assert.equal(result.ok,true,item.id+': '+result.error);
+    assert.equal(result.tree.kind,'rows');
+    assert.match(result.note,/binary64/);
+    if(item.id==='impute')assert.match(result.exact,/imputed cells: 2/);
+  }
+  assert.equal(py.runPython("str(__import__('symvacas_catalog').padjust([0.01,0.04], 'bonferroni')['adjusted p'][0])"),'0.0200000000000000');
+  assert.equal(py.runPython("int(__import__('symvacas_catalog').impute([[1,__import__('symvacas_catalog').NA],[3,4]])['imputed cells'])"),1);
+});
 async function loadRuntime(){
   const py=await loadPyodide({indexURL:fileURLToPath(new URL('../vendor/',import.meta.url))});
   await installEngine(py,{runtimeURL:new URL('../vendor/',import.meta.url),engineURL:new URL('../engine.zip',import.meta.url),fetcher:async url=>new Response(readFileSync(url))});

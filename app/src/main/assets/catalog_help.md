@@ -626,3 +626,81 @@ Regularized logistic regression (Ridge/LASSO/Elastic Net) also reports predictor
 Unregularized logistic regression automatically applies Firth bias reduction (log L + 0.5 log|X′WX|) when a strictly separating coefficient vector certifies complete separation; ordinary datasets retain MLE. Results explicitly identify Firth and include finite coefficients, OR, probabilities and ROC/AUC. Coefficient/OR 95% intervals and p values are approximate Wald inference, not profile penalized-likelihood inference. Ordinary MLE AIC and likelihood-ratio tests are omitted for Firth fits. Constant responses and singular designs remain invalid; Ridge/LASSO/Elastic Net keep their selected penalty.
 Logistic residual diagnostics and full CSV include leverage and Cook's distance. The one-step GLM approximation uses hᵢ=wᵢxᵢ′(X′WX)⁻¹xᵢ and Cook Dᵢ=Pearsonᵢ²hᵢ/[p(1−hᵢ)²]. Firth uses Fisher information at the bias-reduced fit. Penalized models use a local active-predictor design including the intercept and the L2 Hessian, holding predictor selection fixed. Singular active designs or h=1 leave unavailable diagnostics empty.
 References: [Firth logistic regression](https://search.r-project.org/CRAN/refmans/logistf/html/logistf.html), [GLM influence diagnostics](https://www.statsmodels.org/stable/generated/statsmodels.stats.outliers_influence.GLMInfluence.html).
+
+## Advanced statistics
+
+In Statistics, Advanced analysis provides controls for correction methods, column roles, groups, predictors and test options. Switch between current data, examples and an editable expression. Table analyses reject blank selected cells; impute converts them to NA. All advanced analyses use binary64 numerics.
+
+`padjust` — p values; method bonferroni / holm / fdr (BH) / by; alpha.
+Example: padjust([0.01,0.04,0.03,0.2],holm,0.05)
+
+`cohend` — Two samples; independent (pooled d) or paired (dz).
+Example: cohend([1,2,4,5],[2,3,5,8],independent)
+
+`eta2` — Independent groups as separate lists.
+Example: eta2([1,2,4,5],[2,3,5,8])
+
+`levene` — Separate group lists; median-centered equal-variance test.
+Example: levene([1,2,4,5],[2,3,5,8])
+
+`bartlett` — Separate group lists; normality assumption.
+Example: bartlett([1,2,4,5],[2,3,5,8])
+
+`mcnemar` — Paired 2×2 count table; exact / corrected / asymptotic.
+Example: mcnemar([[20,8],[2,15]],exact)
+
+`kaplanmeier` — Rows: time, event (1=event, 0=censored); confidence level.
+Example: kaplanmeier([[1,1],[2,0],[3,1],[4,1],[5,0],[6,1]],0.95)
+
+`logrank` — Two time/event tables. Current data: time, event, group (exactly two groups).
+Example: logrank([[1,1],[3,1],[4,0],[6,1]],[[2,0],[4,1],[5,1],[7,0]])
+
+`cox` — Rows: time, event 0/1, predictors. Breslow ties; no intercept.
+Example: cox([[1,1,0],[2,1,1],[3,0,0],[4,1,1],[5,1,0],[6,0,1],[7,1,1],[8,1,0]])
+
+`repeatedanova` — Rows=subjects, columns=conditions; one factor, complete balanced data. Includes GG correction.
+Example: repeatedanova([[2,4,5],[3,4,7],[4,7,8],[2,3,6],[5,6,7]])
+
+`mixedmodel` — Rows: subject ID, predictors, response. Gaussian random intercept ML; ≤300 rows.
+Example: mixedmodel([[1,0,2],[1,1,4],[1,2,4],[2,0,3],[2,1,4],[2,2,6],[3,0,1],[3,1,3],[3,2,4],[4,0,4],[4,1,5],[4,2,8]])
+
+`gee` — Rows: cluster ID, predictors, response. gaussian / binomial / poisson; independent working correlation, sandwich SE.
+Example: gee([[1,0,2],[1,1,4],[1,2,4],[2,0,3],[2,1,4],[2,2,6],[3,0,1],[3,1,3],[3,2,4],[4,0,4],[4,1,5],[4,2,8]],gaussian)
+
+`multinomial` — Rows: predictors, numeric category response. Smallest category is reference.
+Example: multinomial([[-2,0],[-2,1],[-1,0],[-1,2],[0,0],[0,1],[0,2],[1,1],[1,2],[2,1],[2,2],[2,0]])
+
+`ordinal` — Rows: predictors, ordered numeric response. Proportional-odds cumulative logit.
+Example: ordinal([[-2,0],[-2,1],[-1,0],[-1,2],[0,0],[0,1],[0,2],[1,1],[1,2],[2,1],[2,2],[2,0]])
+
+`poissonreg` — Rows: predictors, integer count response. Log link.
+Example: poissonreg([[0,1],[0,0],[1,3],[1,1],[2,2],[2,5],[3,4],[3,8],[4,6],[4,10]])
+
+`nbreg` — Rows: predictors, integer count response. NB2 with estimated dispersion.
+Example: nbreg([[0,0],[0,0],[0,1],[0,8],[1,0],[1,1],[1,3],[1,15],[2,0],[2,2],[2,5],[2,23],[3,1],[3,3],[3,10],[3,35]])
+
+`bootstrapci` — Statistic mean / median / stdev, confidence level, resamples, seed. Percentile IID bootstrap.
+Example: bootstrapci([1,2,3,4,5,8],mean,0.95,2000,0)
+
+`testpower` — Cohen d, n per group/pairs, alpha, independent / paired / onesample. Two-sided normal approximation.
+Example: testpower(0.5,64,0.05,independent)
+
+`samplesize` — Cohen d, target power, alpha, design. Two-sided normal approximation.
+Example: samplesize(0.5,0.8,0.05,independent)
+
+`kstest` — Two sample lists, or kstest(data,normal,mu,sigma) / kstest(data,uniform,lower,width). Continuous null; one-sample p is asymptotic.
+Example: kstest([1,2,4,5],[2,3,5,8])
+
+`crossvalidate` — Rows: predictors, response; folds, seed. Shuffled k-fold OLS.
+Example: crossvalidate([[0,1],[1,3],[2,4],[3,7],[4,8],[5,11],[6,12],[7,15],[8,16]],3,0)
+
+`pca` — Rows=observations, columns=features; components, standardize 1/0.
+Example: pca([[1,2],[2,1],[3,4],[4,3],[5,7]],2,1)
+
+`kmeans` — Numeric feature rows; k, seed. Euclidean distance, 10 restarts, raw feature scale.
+Example: kmeans([[1,1],[1,2],[2,1],[8,8],[8,9],[9,8]],2,0)
+
+`impute` — NA for missing cells; mean / median / mode. Single imputation.
+Example: impute([[1,NA],[2,4],[NA,6],[4,8]],mean)
+
+Models return errors on failed convergence or non-identifiability. Cox assumes proportional hazards; ordinal logistic assumes proportional odds. Mixed models support random intercepts only; GEE supports independent working correlation only. GG adjusts repeated-measures degrees of freedom for nonsphericity. Single imputation does not propagate imputation uncertainty. Cross-validation supports OLS only, without grouped/time-series splits or hyperparameter search. Bootstrap CIs use the percentile method, not BCa.
