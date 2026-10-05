@@ -17,8 +17,8 @@ internal object CalculatorStatisticsActions {
         statisticsState.deleteDataSet(name)
         save()
     }
-    fun CalculatorModel.performSaveStatistics(name:String,data:String,kind:String,regression:String,plot:String,csv:Boolean,selected:String,isNew:Boolean,customFormula:String,customVariable:String,customInitials:String,polynomialDegree:String,logisticResponse:String) {
-        statisticsState.updateSelection(name,data,kind,regression,plot,csv,selected,isNew,customFormula,customVariable,customInitials,polynomialDegree,logisticResponse)
+    fun CalculatorModel.performSaveStatistics(name:String,data:String,kind:String,regression:String,plot:String,csv:Boolean,selected:String,isNew:Boolean,customFormula:String,customVariable:String,customInitials:String,polynomialDegree:String,logisticResponse:String,lassoAlpha:String,forestTrees:String,forestDepth:String,forestSeed:String,regularization:String,l1Ratio:String,forestTask:String) {
+        statisticsState.updateSelection(name,data,kind,regression,plot,csv,selected,isNew,customFormula,customVariable,customInitials,polynomialDegree,logisticResponse,lassoAlpha,forestTrees,forestDepth,forestSeed,regularization,l1Ratio,forestTask)
         statisticsState.saveSelection()
     }
     fun CalculatorModel.performFitRegression(source: String, data: String, responseColumn:Int?) {
@@ -35,7 +35,7 @@ internal object CalculatorStatisticsActions {
                     val array=response.optJSONArray("curve")
                     statisticsState.regressionCurve=if(array==null)emptyList() else (0 until array.length()).mapNotNull {index->array.optJSONArray(index)?.let {pair->pair.optDouble(0) to pair.optDouble(1)}}
                     statisticsState.regressionFit=response.optString("exact");statisticsState.regressionData=data;statisticsState.regressionMode=fittedMode
-                    statisticsState.regressionResponseColumn=if(fittedMode in listOf("multiple","logistic","polynomial"))responseColumn else null
+                    statisticsState.regressionResponseColumn=if(fittedMode in listOf("multiple","logistic","polynomial","ridge","lasso","elasticnet","logisticridge","logisticlasso","logisticelasticnet","randomforest","randomforestclassifier","randomforestregressor"))responseColumn else null
                     statisticsState.regressionCorrelation=response.optDouble("correlation",Double.NaN).takeIf(Double::isFinite)
                     val parameters=response.optJSONArray("parameters")
                     statisticsState.regressionReport=response.optJSONObject("regression")

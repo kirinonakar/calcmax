@@ -314,6 +314,13 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     val regressionReport get()=statisticsState.regressionReport
     val regressionResponseColumn get()=statisticsState.regressionResponseColumn
     val statisticsLogisticResponse get()=statisticsState.statisticsLogisticResponse
+    val statisticsRegularization get()=statisticsState.statisticsRegularization
+    val statisticsL1Ratio get()=statisticsState.statisticsL1Ratio
+    val statisticsLassoAlpha get()=statisticsState.statisticsLassoAlpha
+    val statisticsForestTask get()=statisticsState.statisticsForestTask
+    val statisticsForestTrees get()=statisticsState.statisticsForestTrees
+    val statisticsForestDepth get()=statisticsState.statisticsForestDepth
+    val statisticsForestSeed get()=statisticsState.statisticsForestSeed
     val statisticsPolynomialDegree get()=statisticsState.statisticsPolynomialDegree
     var regressionBusy
         get()=statisticsState.regressionBusy
@@ -800,8 +807,8 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     fun clearHistory() { history=history.filter { it.favorite };tape=emptyList();save() }
     fun saveDataSet(name:String,csv:String,kind:String) = with(CalculatorStatisticsActions) { performSaveDataSet(name,csv,kind) }
     fun deleteDataSet(name:String) = with(CalculatorStatisticsActions) { performDeleteDataSet(name) }
-    fun saveStatistics(name:String,data:String,kind:String,regression:String,plot:String,csv:Boolean,selected:String,isNew:Boolean,customFormula:String,customVariable:String,customInitials:String,polynomialDegree:String="3",logisticResponse:String="") =
-        with(CalculatorStatisticsActions) { performSaveStatistics(name,data,kind,regression,plot,csv,selected,isNew,customFormula,customVariable,customInitials,polynomialDegree,logisticResponse) }
+    fun saveStatistics(name:String,data:String,kind:String,regression:String,plot:String,csv:Boolean,selected:String,isNew:Boolean,customFormula:String,customVariable:String,customInitials:String,polynomialDegree:String="3",logisticResponse:String="",lassoAlpha:String="0.1",forestTrees:String="100",forestDepth:String="10",forestSeed:String="0",regularization:String="none",l1Ratio:String="0.5",forestTask:String="auto") =
+        with(CalculatorStatisticsActions) { performSaveStatistics(name,data,kind,regression,plot,csv,selected,isNew,customFormula,customVariable,customInitials,polynomialDegree,logisticResponse,lassoAlpha,forestTrees,forestDepth,forestSeed,regularization,l1Ratio,forestTask) }
     fun fitRegression(source:String,data:String,responseColumn:Int?=null) = with(CalculatorStatisticsActions) { performFitRegression(source,data,responseColumn) }
     fun clearRegression() = with(CalculatorStatisticsActions) { performClearRegression() }
     fun cancelRegression() = with(CalculatorStatisticsActions) { performCancelRegression() }

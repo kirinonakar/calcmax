@@ -609,3 +609,14 @@ Python에서도 `import symvacas_catalog as calc; report = calc.regression_repor
 통계 화면의 다중 회귀는 x/y/z에서, 로지스틱 회귀는 x/y 또는 x/y/z에서 종속변수 열을 선택합니다. 나머지 열은 설명변수이며, 로지스틱 종속변수에는 0과 1이 모두 필요합니다. 기본값은 마지막 열입니다. 입력 표는 원래 순서를 유지하며 회귀식과 산점도 축에는 선택한 열 이름을 표시합니다. Odds ratio와 OR 95% CI 표기는 언어 설정과 관계없이 영문으로 유지합니다.
 
 로지스틱 회귀에 C-statistic(ROC AUC)와 ROC 그래프(FPR 대 민감도/TPR)를 표시합니다. 동률 점수에는 절반의 점수를 부여하며 대각선은 우연 수준(AUC=0.5) 기준선입니다. 양성은 1이며 ROC/AUC는 적합에 사용한 데이터의 성능을 나타냅니다.
+
+규제 회귀: 선형/다중 회귀와 로지스틱 회귀에서 규제 없음, Ridge, LASSO, Elastic Net을 선택합니다. 설명변수는 평균 0·표준편차 1로 표준화하고 절편에는 규제를 적용하지 않습니다. 표시되는 계수는 원래 단위입니다. α>0, L1 비율은 0~1입니다. 선형 회귀의 목적함수는 SSE/(2n) + α[(1−비율)·||β||²/2 + 비율·||β||₁]이며 로지스틱 회귀는 첫 항 대신 평균 로그 손실을 사용합니다. Ridge는 비율 0, LASSO는 비율 1입니다. 따라서 Ridge의 α는 SSE + α||β||² 형태의 라이브러리와 스케일이 다릅니다.
+`regression(data,ridge,alpha)`, `regression(data,lasso,alpha)`, `regression(data,elasticnet,[alpha,l1_ratio])`를 사용합니다. 로지스틱 모델은 `logisticridge`, `logisticlasso`, `logisticelasticnet`이며 종속변수는 0과 1을 모두 포함해야 합니다. α 기본값은 0.1, L1 비율은 0.5입니다. 마지막 열이 종속변수이며 통계 화면에서 다른 열도 선택할 수 있습니다. 최대 5000행·100개 설명변수를 지원하고 결측 행은 제외됩니다. 학습 적합도, 계수, 잔차와 로지스틱 AUC·ROC·로그 손실·정확도를 표시합니다. 일반적인 OLS/Wald 추론은 제공하지 않습니다. 모델 계산은 64비트 부동소수점입니다.
+Example: regression([[0,1],[1,3],[2,5],[3,7]],lasso,0.1)
+Example: regression([[-2,0],[-1,0],[1,1],[2,1]],logisticelasticnet,[0.1,0.5])
+`regression(data,randomforest,[trees,max_depth,seed])` — 랜덤 포레스트 회귀. 기본값은 [100,10,0], 트리 수 1~200, 깊이 1~20, 시드 0~2147483647입니다. 부트스트랩 CART 제곱오차 트리의 예측을 평균하며 노드마다 sqrt(설명변수 수)개 변수를 시도합니다. 선택한 변수가 분할되지 않으면 나머지도 시도합니다. 같은 시드로 결과가 재현됩니다. 학습 R²·RMSE와 OOB R²·RMSE·유효 표본 수, 불순도 기반 변수 중요도, OOB 순열 중요도(변수를 섞은 뒤 R² 감소)를 표시합니다. 순열 중요도는 최대 200개 OOB 관측값에서 3번 반복한 평균이며 음수도 가능합니다. OOB 종속변수가 일정하면 순열 중요도는 계산할 수 없습니다. 트리 모델은 회귀식으로 그래프에 전송할 수 없습니다. x,y 데이터는 예측 곡선을 표시합니다.
+Example: regression([[0,0],[1,1],[2,4],[3,9],[4,16]],randomforest,[100,10,0])
+Python: `calc.regression_report(data,"elasticnet",[0.1,0.5])` 또는 `calc.regression_report(data,"randomforest",[100,10,0])`로 결과를 받을 수 있습니다.
+
+Random Forest 분류: 유형의 기본값은 자동입니다. 종속변수가 0/1이면 이진 분류로 학습하고, 그 외에는 회귀를 수행합니다. 분류에는 0과 1이 모두 필요하며 양성 클래스는 1입니다. 회귀 또는 이진 분류를 직접 지정할 수도 있습니다. 수식은 `regression(data,randomforestclassifier,[trees,depth,seed])` 또는 `randomforestregressor`를 사용합니다. 분류는 Gini와 동등한 이진 제곱오차 분할을 사용하고, 각 잎의 클래스-1 비율을 트리 전체에서 평균한 예측확률로 ROC/AUC를 계산합니다. C-statistic은 같은 AUC 값입니다. 예측확률 ≥0.5는 클래스 1로 판정합니다. 혼동 행렬은 행=실제 0/1, 열=예측 0/1이며 [[TN,FP],[FN,TP]]입니다. 민감도=TP/(TP+FN), 특이도=TN/(TN+FP), 정확도=(TP+TN)/n을 표시합니다. 학습 지표와 OOB 지표·ROC·혼동 행렬을 따로 제공합니다. OOB 예측이 없는 행은 OOB 계산에서 제외하고, 클래스가 없으면 해당 비율이나 AUC는 계산할 수 없습니다. 분류의 순열 중요도는 OOB AUC 감소량입니다.
+Example: regression([[-3,0],[-2,0],[-1,0],[1,1],[2,1],[3,1]],randomforestclassifier,[100,10,0])

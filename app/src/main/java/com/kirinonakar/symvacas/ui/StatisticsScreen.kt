@@ -61,8 +61,17 @@ import kotlin.math.max
     var columnCount by rememberSaveable {mutableStateOf(if(dataKind.startsWith("columns:"))statisticsColumnCount(dataKind).toString() else "4")}
     val dataColumns=statisticsColumnNames(dataKind)
     var regression by rememberSaveable {mutableStateOf(m.statisticsRegression)}
+    var regularization by rememberSaveable {mutableStateOf(m.statisticsRegularization)}
+    var l1Ratio by rememberSaveable {mutableStateOf(m.statisticsL1Ratio)}
+    var lassoAlpha by rememberSaveable {mutableStateOf(m.statisticsLassoAlpha)}
+    var forestTask by rememberSaveable {mutableStateOf(m.statisticsForestTask)}
+    var forestTrees by rememberSaveable {mutableStateOf(m.statisticsForestTrees)}
+    var forestDepth by rememberSaveable {mutableStateOf(m.statisticsForestDepth)}
+    var forestSeed by rememberSaveable {mutableStateOf(m.statisticsForestSeed)}
     var polynomialDegree by rememberSaveable {mutableStateOf(m.statisticsPolynomialDegree)}
     var logisticResponse by rememberSaveable {mutableStateOf(m.statisticsLogisticResponse)}
+    val regularized=regression in listOf("linear","multiple","logistic")&&regularization!="none"
+    val fitMode=if(regularized)(if(regression=="logistic")"logistic" else "")+regularization else if(regression=="randomforest")when(forestTask){"classification"->"randomforestclassifier";"regression"->"randomforestregressor";else->"randomforest"} else regression
     val regressionColumns=statisticsRegressionColumns(dataKind)
     val responseColumn=if(regression in listOf("polynomial","logistic")) {if(logisticResponse=="0")0 else regressionColumns.lastIndex} else logisticResponse.toIntOrNull()?.takeIf {it in regressionColumns.indices} ?: regressionColumns.lastIndex
     LaunchedEffect(dataKind) {if(regressionColumns.isNotEmpty()&&logisticResponse.isNotBlank()&&logisticResponse.toIntOrNull() !in regressionColumns.indices)logisticResponse=regressionColumns.lastIndex.toString()}
@@ -73,7 +82,7 @@ import kotlin.math.max
     var plotType by rememberSaveable {mutableStateOf(m.statisticsPlot)}
     var csv by rememberSaveable {mutableStateOf(m.statisticsCsv)}
     var importPreview by remember {mutableStateOf<StatisticsCsvImport?>(null)}
-    LaunchedEffect(data,datasetName,dataKind,regression,plotType,plotGrouping,csv,selected,isNew,customFormula,customVariable,customInitials,polynomialDegree,logisticResponse) {m.statisticsPlotGrouping=plotGrouping;m.saveStatistics(datasetName,data,dataKind,regression,plotType,csv,selected,isNew,customFormula,customVariable,customInitials,polynomialDegree,logisticResponse)}
+    LaunchedEffect(data,datasetName,dataKind,regression,plotType,plotGrouping,csv,selected,isNew,customFormula,customVariable,customInitials,polynomialDegree,logisticResponse,lassoAlpha,forestTrees,forestDepth,forestSeed,regularization,l1Ratio,forestTask) {m.statisticsPlotGrouping=plotGrouping;m.saveStatistics(datasetName,data,dataKind,regression,plotType,csv,selected,isNew,customFormula,customVariable,customInitials,polynomialDegree,logisticResponse,lassoAlpha,forestTrees,forestDepth,forestSeed,regularization,l1Ratio,forestTask)}
     val importCsv=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {uri->
         if(uri!=null)scope.launch {
             val content=withContext(Dispatchers.IO) {runCatching {context.contentResolver.openInputStream(uri)?.bufferedReader()?.use {it.readText()}}.getOrNull()}
@@ -183,18 +192,45 @@ import kotlin.math.max
                 Text(tr("Visualize & regression"),Modifier.weight(1f),style=MaterialTheme.typography.titleMedium)
                 if(dataKind!="list")SmallAction("Clear regression"){m.clearRegression()}
             }
-            val activeRegression=if(m.regressionFit.isNotBlank()&&m.regressionData==data)m.regressionMode else ""
-            if(dataColumns.size>1)Choices(if(dataKind=="xyz"||dataKind.startsWith("columns:"))listOf("multiple","logistic") else listOf("linear","quadratic","polynomial","logarithmic","exponential","power","logistic","custom"),if(regression in listOf("custom","polynomial"))regression else activeRegression,{selectedMode->
+            val activeRegression=if(m.regressionFit.isNotBlank()&&m.regressionData==data)when {m.regressionMode.startsWith("randomforest")->"randomforest";m.regressionMode.startsWith("logistic")->"logistic";m.regressionMode in listOf("ridge","lasso","elasticnet")->if(dataColumns.size>2)"multiple" else "linear";else->m.regressionMode} else ""
+            if(dataColumns.size>1)Choices(if(dataKind=="xyz"||dataKind.startsWith("columns:"))listOf("multiple","logistic","randomforest") else listOf("linear","quadratic","polynomial","logarithmic","exponential","power","logistic","randomforest","custom"),if(regularized||regression in listOf("custom","polynomial","randomforest"))regression else activeRegression,{selectedMode->
                 regression=selectedMode;plotType=if(dataKind=="xy")"Scatter" else "Histogram"
                 val selectedResponse=if(selectedMode in listOf("polynomial","logistic")) {if(logisticResponse=="0")0 else regressionColumns.lastIndex} else responseColumn
                 if(selectedMode in listOf("polynomial","logistic")&&logisticResponse!="0")logisticResponse=""
-                if(selectedMode in listOf("custom","polynomial"))m.clearRegression()
-                if(selectedMode !in listOf("custom","polynomial")) {
+                if(selectedMode in listOf("custom","polynomial","randomforest")||regularization!="none")m.clearRegression()
+                if(selectedMode !in listOf("custom","polynomial","randomforest")&&(selectedMode !in listOf("linear","multiple","logistic")||regularization=="none")) {
                     val table=statisticsRegressionTable(numericRows,dataKind,selectedMode,selectedResponse)
                     if(table!=null)m.fitRegression("regression($table,$selectedMode)",data,if(selectedMode in listOf("multiple","logistic"))selectedResponse else null)
                     else m.error="Add more data points than fit parameters"
                 }
             })
+            if(dataColumns.size>1&&regression in listOf("linear","multiple","logistic")) {
+                Text(tr("Regularization"),fontSize=11.sp,color=LocalInstrument.current.muted)
+                Choices(listOf("none","ridge","lasso","elasticnet"),regularization,{m.clearRegression();regularization=it})
+            }
+            if(dataColumns.size>1&&(regularized||regression=="randomforest")) {
+                if(regularized) {
+                    Field(lassoAlpha,"Regularization α",Modifier.fillMaxWidth()){m.clearRegression();lassoAlpha=it}
+                    if(regularization=="elasticnet")Field(l1Ratio,"L1 ratio (0–1)",Modifier.fillMaxWidth()){m.clearRegression();l1Ratio=it}
+                    Text(tr("Predictors standardized; coefficients in original units."),fontSize=11.sp,color=LocalInstrument.current.muted)
+                } else {
+                    Text(tr("Forest task"),fontSize=11.sp,color=LocalInstrument.current.muted)
+                    val tasks=mapOf("Auto (0/1 → classification)" to "auto","Regression" to "regression","Binary classification" to "classification")
+                    Choices(tasks.keys.toList(),tasks.entries.firstOrNull {it.value==forestTask}?.key ?: tasks.keys.first(),{m.clearRegression();forestTask=tasks[it] ?: "auto"})
+                    Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                        Field(forestTrees,"Trees (1–200)",Modifier.weight(1f)){m.clearRegression();forestTrees=it}
+                        Field(forestDepth,"Max depth (1–20)",Modifier.weight(1f)){m.clearRegression();forestDepth=it}
+                    }
+                    Field(forestSeed,"Random seed",Modifier.fillMaxWidth()){m.clearRegression();forestSeed=it}
+                }
+                val table=statisticsRegressionTable(numericRows,dataKind,fitMode,responseColumn)
+                val validOptions=if(regularized)lassoAlpha.toDoubleOrNull()?.let {it.isFinite()&&it>0}==true&&(regularization!="elasticnet"||l1Ratio.toDoubleOrNull()?.let {it in 0.0..1.0}==true)
+                    else forestTrees.toIntOrNull() in 1..200&&forestDepth.toIntOrNull() in 1..20&&forestSeed.toLongOrNull() in 0L..2147483647L
+                Button(onClick={table?.let {
+                    val options=if(regularized){if(regularization=="elasticnet")"[$lassoAlpha,$l1Ratio]" else lassoAlpha} else "[$forestTrees,$forestDepth,$forestSeed]"
+                    m.fitRegression("regression($it,$fitMode,$options)",data,responseColumn)
+                }},enabled=table!=null&&validOptions&&!m.regressionBusy){Text(tr("Analyze"))}
+            }
             if(dataKind=="xy"&&regression=="polynomial") {
                 Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                     Field(polynomialDegree,"Polynomial degree (1–10)",Modifier.weight(1f)){m.clearRegression();polynomialDegree=it}
@@ -205,12 +241,12 @@ import kotlin.math.max
                 }
             }
             if(dataKind!="list"&&regression in listOf("multiple","logistic"))Text(tr(if(regression=="logistic")"Selected column is response; others are predictors. Logistic response: 0 or 1." else "Selected column is response; others are predictors."),fontSize=11.sp,color=LocalInstrument.current.muted)
-            if(dataColumns.size>1&&regression in listOf("multiple","logistic","polynomial")) {
+            if(dataColumns.size>1&&(regularized||regression in listOf("multiple","logistic","polynomial","randomforest"))) {
                 Text(tr("Dependent variable"),fontSize=11.sp,color=LocalInstrument.current.muted)
                 if(regression in listOf("polynomial","logistic"))Choices(listOf("first","last"),if(responseColumn==0)"first" else "last",{position->m.clearRegression();logisticResponse=if(position=="first")"0" else ""})
                 else Choices(regressionColumns,regressionColumns.getOrNull(responseColumn).orEmpty(),{name->m.clearRegression();logisticResponse=regressionColumns.indexOf(name).toString()},translate=false)
-                val table=statisticsRegressionTable(numericRows,dataKind,regression,responseColumn)
-                if(regression!="polynomial")Button(onClick={table?.let {m.fitRegression("regression($it,$regression)",data,responseColumn)}},enabled=table!=null&&!m.regressionBusy){Text(tr("Analyze"))}
+                val table=statisticsRegressionTable(numericRows,dataKind,fitMode,responseColumn)
+                if(!regularized&&regression !in listOf("polynomial","randomforest"))Button(onClick={table?.let {m.fitRegression("regression($it,$regression)",data,responseColumn)}},enabled=table!=null&&!m.regressionBusy){Text(tr("Analyze"))}
             }
             if(m.regressionBusy)Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
                 Text(if(isKorean())"회귀 적합 중…" else "Fitting regression…",Modifier.weight(1f),fontSize=11.sp,color=LocalInstrument.current.muted)
@@ -239,28 +275,28 @@ import kotlin.math.max
                 Choices(listOf("Columns","first","last"),if(plotGrouping=="columns")"Columns" else plotGrouping,{plotGrouping=if(it=="Columns")"columns" else it})
             }
         }
-        val fittedResponse=if(m.regressionMode in listOf("multiple","logistic","polynomial"))m.regressionResponseColumn?.takeIf {it in regressionColumns.indices} ?: regressionColumns.lastIndex else regressionColumns.lastIndex
+        val fittedResponse=if(m.regressionMode in listOf("multiple","logistic","polynomial","ridge","lasso","elasticnet","logisticridge","logisticlasso","logisticelasticnet","randomforest","randomforestclassifier","randomforestregressor"))m.regressionResponseColumn?.takeIf {it in regressionColumns.indices} ?: regressionColumns.lastIndex else regressionColumns.lastIndex
         val fittedVariables=statisticsRegressionVariables(dataKind,fittedResponse)
         val parameterLabels=statisticsRegressionParameterLabels(dataKind,m.regressionMode,fittedResponse,data)
         val fittedResponseName=regressionColumns.getOrNull(fittedResponse).orEmpty()
         val fitVisible=dataKind=="xy"&&plotType=="Scatter"&&m.regressionData==data&&m.regressionFit.isNotBlank()
-        val plotPairs=if(fitVisible&&m.regressionMode in listOf("logistic","polynomial")&&fittedResponse==0)paired.map {(x,y)->y to x} else paired
+        val plotPairs=if(fitVisible&&m.regressionMode in listOf("logistic","polynomial","ridge","lasso","elasticnet","logisticridge","logisticlasso","logisticelasticnet","randomforest","randomforestclassifier","randomforestregressor")&&fittedResponse==0)paired.map {(x,y)->y to x} else paired
         val plotPanels=if(plotType=="Scatter")listOf(StatisticsPlotPanel("",emptyList())) else statisticsPlotPanels(parsedRows,dataKind,plotGrouping)
         plotPanels.forEach {panel->
             if(panel.label.isNotBlank())Text(panel.label,style=MaterialTheme.typography.titleSmall)
-            StatisticsPlot(plotType,if(plotType=="Scatter")plotPairs else xValues.mapIndexed {i,v->i.toDouble() to v},xValues,yValues,if(fitVisible)m.regressionCurve.orEmpty() else emptyList(),if(fitVisible)m.regressionFit else "",m.displayDigits,fitVisible&&m.regressionMode=="linear",m.regressionCorrelation,tertiary=zValues,allColumns=panel.series,xDateOrigin=if(fitVisible&&fittedResponse==0)null else dateAxis?.origin,
+            StatisticsPlot(plotType,if(plotType=="Scatter")plotPairs else xValues.mapIndexed {i,v->i.toDouble() to v},xValues,yValues,if(fitVisible)m.regressionCurve.orEmpty() else emptyList(),if(fitVisible&&!m.regressionMode.startsWith("randomforest"))m.regressionFit else "",m.displayDigits,fitVisible&&m.regressionMode=="linear",m.regressionCorrelation,tertiary=zValues,allColumns=panel.series,xDateOrigin=if(fitVisible&&fittedResponse==0)null else dateAxis?.origin,
                 xAxisLabel=if(fitVisible)fittedVariables["x"] ?: "x" else "x",yAxisLabel=if(fitVisible)fittedResponseName else "y",
-                fitPrefix=if(fitVisible&&m.regressionMode=="logistic")"P($fittedResponseName = 1) = " else if(fitVisible)"$fittedResponseName ≈ " else "y ≈ ",fitVariables=if(fitVisible&&m.regressionMode in listOf("logistic","polynomial"))fittedVariables else emptyMap())
+                fitPrefix=if(fitVisible&&m.regressionMode.startsWith("logistic"))"P($fittedResponseName = 1) = " else if(fitVisible)"$fittedResponseName ≈ " else "y ≈ ",fitVariables=if(fitVisible&&m.regressionMode in listOf("logistic","polynomial","ridge","lasso","elasticnet","logisticridge","logisticlasso","logisticelasticnet","randomforest","randomforestclassifier","randomforestregressor"))fittedVariables else emptyMap())
         }
         if(dateAxis!=null&&plotType=="Scatter")Text((if(isKorean())"회귀식의 x: ${dateAxis.origin.plusDays(1)} = 1일째" else "Regression x: ${dateAxis.origin.plusDays(1)} = day 1"),fontSize=11.sp,color=LocalInstrument.current.muted)
         if(dataKind!="list"&&m.regressionData==data&&m.regressionFit.isNotBlank()) {
             Column(verticalArrangement=Arrangement.spacedBy(0.dp)) {
-                if(dataKind=="xyz"||dataKind.startsWith("columns:")) {
+                if(!m.regressionMode.startsWith("randomforest")&&(dataKind=="xyz"||dataKind.startsWith("columns:"))) {
                     val equation=remember(m.regressionFit,m.displayDigits,fittedVariables) {regressionFormulaDisplayTree(m.regressionFit,m.displayDigits,fittedVariables)}
                     CompositionLocalProvider(LocalMathMinimumSize provides 8f) {
                         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical=3.dp).testTag("statistics-regression-equation"),
                             horizontalArrangement=Arrangement.spacedBy(5.dp)) {
-                            MathText(if(m.regressionMode=="logistic")"P($fittedResponseName = 1) = " else "$fittedResponseName = ",12f,Modifier.alignBy(MathAxis))
+                            MathText(if(m.regressionMode.startsWith("logistic"))"P($fittedResponseName = 1) = " else "$fittedResponseName = ",12f,Modifier.alignBy(MathAxis))
                             Box(Modifier.alignBy(MathAxis)) {
                                 if(equation!=null)MathNode(equation,12f)
                                 else Text(m.regressionFit,fontSize=12.sp,fontFamily=FontFamily.Monospace)
@@ -286,7 +322,7 @@ import kotlin.math.max
                         }
                     }
                 }
-                if(dataKind=="xy")SmallAction("Graph fitted expression"){
+                if(dataKind=="xy"&&!m.regressionMode.startsWith("randomforest"))SmallAction("Graph fitted expression"){
                     val fit=if(m.regressionMode=="custom")m.regressionFit.replace(Regex("(?<![A-Za-z0-9_])${Regex.escape(customVariable)}(?![A-Za-z0-9_])"),"x") else m.regressionFit
                     val graphSource=regressionFormulaGraphSource(fit,m.displayDigits)
                     if(graphSource==null)m.error="Could not format fitted expression"

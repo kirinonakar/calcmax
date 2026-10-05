@@ -142,6 +142,10 @@ def _dispatch(payload, control=None):
                 result["resultAst"]={"kind":"restricted","args":[ast]+[result_ast(c) for c in guards]} if guards else ast
                 if answer_parameters: result["resultAst"]["parameters"]=answer_parameters
             except (MathError,TypeError,AttributeError): result["reusable"]=False
+        if getattr(engine, "regression_report", None) and engine.regression_report.get("model") == "randomforest":
+            result.pop("resultAst", None)
+            result["reusable"] = False
+            result["symbolic"] = False
         response=json.dumps({"ok":True,**result},ensure_ascii=False,allow_nan=False)
         budget.check()
         return response

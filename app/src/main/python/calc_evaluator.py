@@ -617,9 +617,9 @@ class Engine:
             if name=="covariance": return covariance
             return pearson_correlation(xs,ys)
         if name == "regression":
-            require(len(a) in (1,2,3), "Use regression(data,model[,degree])")
+            require(len(a) in (1,2,3), "Use regression(data,model[,options])")
             rows = a[0]; mode = str(a[1]) if len(a)>1 else "linear"
-            require(len(a)<3 or mode=="polynomial", "The degree argument requires polynomial regression")
+            require(len(a)<3 or mode in ("polynomial", "ridge", "lasso", "elasticnet", "logisticridge", "logisticlasso", "logisticelasticnet", "randomforest", "randomforestclassifier", "randomforestregressor"), "Options require polynomial or machine learning regression")
             return fit_regression(self, rows, mode, a[2] if len(a)>2 else None)
         if name == "convert":
             if len(a)==2 and isinstance(a[0],Quantity):

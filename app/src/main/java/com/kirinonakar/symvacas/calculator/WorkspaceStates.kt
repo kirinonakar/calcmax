@@ -214,6 +214,13 @@ internal class StatisticsState(private val prefs:SharedPreferences) {
     var statisticsData by mutableStateOf(prefs.getString("statisticsData","") ?: "")
     var statisticsKind by mutableStateOf(prefs.getString("statisticsKind","list") ?: "list")
     var statisticsRegression by mutableStateOf(prefs.getString("statisticsRegression","linear") ?: "linear")
+    var statisticsRegularization by mutableStateOf(prefs.getString("statisticsRegularization","none") ?: "none")
+    var statisticsL1Ratio by mutableStateOf(prefs.getString("statisticsL1Ratio","0.5") ?: "0.5")
+    var statisticsLassoAlpha by mutableStateOf(prefs.getString("statisticsLassoAlpha","0.1") ?: "0.1")
+    var statisticsForestTask by mutableStateOf(prefs.getString("statisticsForestTask","auto") ?: "auto")
+    var statisticsForestTrees by mutableStateOf(prefs.getString("statisticsForestTrees","100") ?: "100")
+    var statisticsForestDepth by mutableStateOf(prefs.getString("statisticsForestDepth","10") ?: "10")
+    var statisticsForestSeed by mutableStateOf(prefs.getString("statisticsForestSeed","0") ?: "0")
     var statisticsPolynomialDegree by mutableStateOf(prefs.getString("statisticsPolynomialDegree","3") ?: "3")
     var statisticsLogisticResponse by mutableStateOf(prefs.getString("statisticsLogisticResponse","") ?: "")
     var statisticsCustomFormula by mutableStateOf((prefs.getString("statisticsCustomFormula","exp(-b*ADC)") ?: "exp(-b*ADC)").let {if(it=="S0*exp(-b*ADC)")"exp(-b*ADC)" else it})
@@ -243,7 +250,8 @@ internal class StatisticsState(private val prefs:SharedPreferences) {
 
     fun deleteDataSet(name:String) {dataSets=JSONObject(dataSets.toString()).apply {remove(name)}}
 
-    fun updateSelection(name:String,data:String,kind:String,regression:String,plot:String,csv:Boolean,selected:String,isNew:Boolean,customFormula:String,customVariable:String,customInitials:String,polynomialDegree:String,logisticResponse:String) {
+    fun updateSelection(name:String,data:String,kind:String,regression:String,plot:String,csv:Boolean,selected:String,isNew:Boolean,customFormula:String,customVariable:String,customInitials:String,polynomialDegree:String,logisticResponse:String,lassoAlpha:String,forestTrees:String,forestDepth:String,forestSeed:String,regularization:String,l1Ratio:String,forestTask:String) {
+        statisticsForestTask=forestTask;statisticsRegularization=regularization;statisticsL1Ratio=l1Ratio;statisticsLassoAlpha=lassoAlpha;statisticsForestTrees=forestTrees;statisticsForestDepth=forestDepth;statisticsForestSeed=forestSeed
         statisticsName=name;statisticsData=data;statisticsKind=kind;statisticsRegression=regression
         statisticsLogisticResponse=logisticResponse;statisticsPolynomialDegree=polynomialDegree;statisticsCustomFormula=customFormula;statisticsCustomVariable=customVariable;statisticsCustomInitials=customInitials
         statisticsPlot=plot;statisticsCsv=csv;statisticsSelected=selected;statisticsIsNew=isNew
@@ -251,7 +259,7 @@ internal class StatisticsState(private val prefs:SharedPreferences) {
 
     fun saveSelection() {
         prefs.edit().putString("statisticsName",statisticsName).putString("statisticsData",statisticsData).putString("statisticsKind",statisticsKind)
-            .putString("statisticsLogisticResponse",statisticsLogisticResponse).putString("statisticsPolynomialDegree",statisticsPolynomialDegree).putString("statisticsRegression",statisticsRegression).putString("statisticsPlot",statisticsPlot).putString("statisticsPlotGrouping",statisticsPlotGrouping).putBoolean("statisticsCsv",statisticsCsv)
+            .putString("statisticsRegularization",statisticsRegularization).putString("statisticsL1Ratio",statisticsL1Ratio).putString("statisticsLassoAlpha",statisticsLassoAlpha).putString("statisticsForestTask",statisticsForestTask).putString("statisticsForestTrees",statisticsForestTrees).putString("statisticsForestDepth",statisticsForestDepth).putString("statisticsForestSeed",statisticsForestSeed).putString("statisticsLogisticResponse",statisticsLogisticResponse).putString("statisticsPolynomialDegree",statisticsPolynomialDegree).putString("statisticsRegression",statisticsRegression).putString("statisticsPlot",statisticsPlot).putString("statisticsPlotGrouping",statisticsPlotGrouping).putBoolean("statisticsCsv",statisticsCsv)
             .putString("statisticsCustomFormula",statisticsCustomFormula).putString("statisticsCustomVariable",statisticsCustomVariable).putString("statisticsCustomInitials",statisticsCustomInitials)
             .putString("statisticsSelected",statisticsSelected).putBoolean("statisticsIsNew",statisticsIsNew).apply()
     }
@@ -261,7 +269,7 @@ internal class StatisticsState(private val prefs:SharedPreferences) {
     fun writeTo(editor:SharedPreferences.Editor) {
         editor.putString("dataSets",dataSets.toString())
             .putString("statisticsName",statisticsName).putString("statisticsData",statisticsData).putString("statisticsKind",statisticsKind)
-            .putString("statisticsLogisticResponse",statisticsLogisticResponse).putString("statisticsPolynomialDegree",statisticsPolynomialDegree).putString("statisticsRegression",statisticsRegression).putString("statisticsPlot",statisticsPlot).putString("statisticsPlotGrouping",statisticsPlotGrouping).putString("statisticsSelected",statisticsSelected)
+            .putString("statisticsRegularization",statisticsRegularization).putString("statisticsL1Ratio",statisticsL1Ratio).putString("statisticsLassoAlpha",statisticsLassoAlpha).putString("statisticsForestTask",statisticsForestTask).putString("statisticsForestTrees",statisticsForestTrees).putString("statisticsForestDepth",statisticsForestDepth).putString("statisticsForestSeed",statisticsForestSeed).putString("statisticsLogisticResponse",statisticsLogisticResponse).putString("statisticsPolynomialDegree",statisticsPolynomialDegree).putString("statisticsRegression",statisticsRegression).putString("statisticsPlot",statisticsPlot).putString("statisticsPlotGrouping",statisticsPlotGrouping).putString("statisticsSelected",statisticsSelected)
             .putString("statisticsCustomFormula",statisticsCustomFormula).putString("statisticsCustomVariable",statisticsCustomVariable).putString("statisticsCustomInitials",statisticsCustomInitials)
             .putBoolean("statisticsIsNew",statisticsIsNew).putBoolean("statisticsCsv",statisticsCsv)
             .putString("regressionFit",regressionFit).putString("regressionData",regressionData)

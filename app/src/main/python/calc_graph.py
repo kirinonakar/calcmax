@@ -69,8 +69,11 @@ def regression_samples(engine, value, rows, request):
     padding=(high-low)*0.05
     start,end=low-padding,high+padding
     count=min(600,max(120,int(request.get("samples",240))))
-    x=next(iter(value.free_symbols),engine.symbol("x"))
-    function=s.lambdify(x,value,modules="math",cse=True,docstring_limit=0)
+    if getattr(engine, "regression_predict", None) is not None:
+        function = lambda x: engine.regression_predict([x])
+    else:
+        x=next(iter(value.free_symbols),engine.symbol("x"))
+        function=s.lambdify(x,value,modules="math",cse=True,docstring_limit=0)
     curve=[]
     for index in range(count+1):
         at=start+(end-start)*index/count

@@ -185,6 +185,14 @@ class StatisticsTestCommandsTest {
 }
 
 class RegressionFormulaTest {
+    @Test fun machineLearningModelsAllowSmallSamplesAndReorderResponse() {
+        val rows=listOf(listOf("1","10","20"),listOf("","11","21"),listOf("0","12","22"))
+        for(mode in listOf("ridge","lasso","elasticnet","logisticridge","logisticlasso","logisticelasticnet","randomforest","randomforestclassifier","randomforestregressor")) {
+            assertEquals("[[10,20,1],[12,22,0]]",statisticsRegressionTable(rows,"xyz",mode,0))
+            assertEquals("y",com.kirinonakar.symvacas.ui.statisticsRegressionParameterLabels("xyz",mode,0)["b1"])
+            assertEquals("z",com.kirinonakar.symvacas.ui.statisticsRegressionParameterLabels("xyz",mode,0)["b2"])
+        }
+    }
     @Test fun coefficientLabelsTrackHeaderColumnsAndSelectedResponse() {
         fun labels(kind:String,mode:String,response:Int,csv:String="")=com.kirinonakar.symvacas.ui.statisticsRegressionParameterLabels(kind,mode,response,csv)
         assertEquals(mapOf("b0" to "Intercept","b1" to "Age (y)","b2" to "Weight (z)"),labels("xyz","logistic",0,"Outcome,Age,Weight\n0,20,50\n1,30,60"))

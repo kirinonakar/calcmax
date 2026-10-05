@@ -2,13 +2,14 @@ import {element} from './app-ui.js';
 import {t} from './i18n.js';
 import {roundNumber} from './display-format.js';
 
-export function regressionROC(report,digits=10){
+export function regressionROC(report,digits=10,{oob=false}={}){
   const points=(report.roc||[]).map(point=>point.map(Number)).filter(point=>point.length===2&&point.every(n=>Number.isFinite(n)&&n>=0&&n<=1));
   if(points.length<2)return null;
   const figure=element('figure');figure.style.margin='12px 0';
-  figure.append(element('figcaption',`${t('ROC curve')} · AUC=${roundNumber(String(report.auc),digits)}`),element('p',t('ROC/AUC uses fitted data; positive class = 1.')));
+  const title=oob?'OOB ROC curve':'ROC curve';
+  figure.append(element('figcaption',`${t(title)} · AUC=${roundNumber(String(report.auc),digits)}`),element('p',t(oob?'ROC/AUC uses OOB predictions; positive class = 1.':'ROC/AUC uses fitted data; positive class = 1.')));
   const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg');
-  svg.setAttribute('viewBox','0 0 360 360');svg.setAttribute('role','img');svg.setAttribute('aria-label',t('ROC curve'));svg.dataset.roc='true';svg.style.width='100%';svg.style.maxWidth='360px';svg.style.height='auto';
+  svg.setAttribute('viewBox','0 0 360 360');svg.setAttribute('role','img');svg.setAttribute('aria-label',t(title));svg.dataset.roc=oob?'oob':'true';svg.style.width='100%';svg.style.maxWidth='360px';svg.style.height='auto';
   const draw=(tag,attributes,label='')=>{const node=document.createElementNS(ns,tag);for(const [key,value] of Object.entries(attributes))node.setAttribute(key,String(value));node.textContent=label;svg.append(node);return node;};
   const x=value=>52+288*value,y=value=>306-288*value;
   for(const value of [0,.25,.5,.75,1]){

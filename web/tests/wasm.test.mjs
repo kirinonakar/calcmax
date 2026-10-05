@@ -25,6 +25,73 @@ async function loadRuntime(){
 }
 function runtime(){return sharedRuntime??=loadRuntime();}
 
+test('forest classification controls show ROC, C-statistic, confusion matrices and threshold metrics in real WASM',async t=>{
+  const py=await runtime(),dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));
+  const previousLanguage=getLanguage();
+  for(const key of ['document','NodeFilter']){
+    const original=Object.getOwnPropertyDescriptor(globalThis,key);
+    Object.defineProperty(globalThis,key,{value:dom.window[key],configurable:true});
+    t.after(()=>{if(original)Object.defineProperty(globalThis,key,original);else delete globalThis[key];});
+  }
+  const $=id=>document.getElementById(id),ui=createAppUI(),results=[],errors=[];
+  t.after(()=>{ui.dispose();setLanguage(previousLanguage);dom.window.close();});
+  const canonical=Array.from({length:20},(_,i)=>[i-10,7,Number(i>=10)]);
+  const state=createAppState({fields:{'statistics-kind':'xyz','regression-kind':'randomforest','regression-forest-task':'classification','regression-trees':'60','regression-depth':'6','regression-seed':'42','regression-response-choice':'0','statistics-data':canonical.map(([x,z,y])=>[y,x,z].join(',')).join('\n')}});
+  restoreFields(state);
+  const engine={ready:true,cancel:()=>{},execute:async request=>{
+    assert.equal(request.tree.args[1].value,$('regression-forest-task').value==='classification'?'randomforestclassifier':$('regression-forest-task').value==='regression'?'randomforestregressor':'randomforest');
+    py.globals.set('payload',JSON.stringify(request));return JSON.parse(py.runPython('calc_engine.dispatch(payload)'));
+  }};
+  const statistics=createStatisticsWorkspace({state,engine,ui,persist:()=>{},refreshWorkspaceMath:()=>{},storeExpression:()=>{},error:message=>errors.push(message),changeMode:()=>{},replaceInput:()=>{},graphs:{}});
+  const run=()=>statistics.runRegression({precision:30},result=>{assert.equal(result.ok,true,result.error);results.push(result);});
+  for(const language of ['en','ko']){
+    setLanguage(language);translateDOM();statistics.render();await run();
+    const report=results.at(-1).regression;
+    assert.equal(report.task,'classification');assert.equal(report.auc,report.cStatistic);
+    assert.deepEqual(report.confusionMatrix,[[10,0],[0,10]]);
+    assert.equal(report.sensitivity,1);assert.equal(report.specificity,1);assert.equal(report.accuracy,1);
+    assert.ok(Number(report.oobAuc)>.9);assert.equal(report.oobClassification.n,report.oobN);
+    assert.equal($('regression-inference').querySelectorAll('svg[data-roc]').length,2);
+    assert.equal($('regression-inference').querySelectorAll('svg[data-roc="oob"]').length,1);
+    assert.match($('regression-inference').textContent,/C-statistic \(AUC\)/);
+    assert.match($('regression-inference').textContent,/0\.5/);
+    const matrices=[...$('regression-inference').querySelectorAll('table')].filter(table=>/Confusion matrix|혼동 행렬/.test(table.getAttribute('aria-label')||''));
+    assert.equal(matrices.length,2);
+    assert.deepEqual([...matrices[0].querySelectorAll('td')].map(td=>Number(td.textContent)),[10,0,0,10]);
+    assert.equal($('regression-transfer').hidden,true);
+    assert.equal($('regression-caption').textContent,'');
+  }
+  $('regression-forest-task').value='regression';$('regression-forest-task').dispatchEvent(new dom.window.Event('change'));
+  assert.equal($('regression-inference').textContent,'','task change clears the previous confusion/ROC result');
+  await run();assert.equal(results.at(-1).regression.task,'regression');
+  assert.equal($('regression-inference').querySelectorAll('svg[data-roc]').length,0);
+  $('regression-forest-task').value='auto';$('regression-forest-task').dispatchEvent(new dom.window.Event('change'));await run();
+  assert.equal(results.at(-1).regression.task,'classification');
+  assert.deepEqual(errors,[]);
+});
+
+test('regularized linear/logistic families and forest importances execute from workspace commands in WASM',async()=>{
+  const py=await runtime();
+  for(const mode of ['ridge','lasso','elasticnet','logisticridge','logisticlasso','logisticelasticnet','randomforest']){
+    const binary=mode.startsWith('logistic');
+    const data=Array.from({length:16},(_,i)=>[i-8,7,binary?Number(i>=8):(i-8)**2].join(',')).join('\n');
+    const source=statisticsCommand(data,{op:'regression',kind:'xyz',regression:mode,trees:'20',maxDepth:'5',seed:'42'});
+    py.globals.set('payload',JSON.stringify({tree:parse(latexInput(source)),precision:30}));
+    const result=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));
+    assert.equal(result.ok,true,`${mode}: ${result.error}`);
+    assert.equal(result.regression.model,mode);
+    assert.equal(result.regression.residuals.length,16);
+    assert.equal(result.regression.df,null);
+    if(binary){assert.ok(Number(result.regression.auc)>.95);assert.ok(result.regression.roc.length>2);}
+    if(mode==='randomforest'){
+      assert.equal(result.regression.featureImportance.length,2);
+      assert.equal(result.regression.permutationImportance.length,2);
+      assert.equal(result.reusable,false);
+      assert.equal(result.resultAst,undefined);
+    }
+  }
+});
+
 test('Korean regression selections and restored labels execute the selected models in WASM',async t=>{
   const py=await runtime();
   const dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));

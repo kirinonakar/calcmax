@@ -49,6 +49,7 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
   const automaticResponse=()=>state.fields['regression-response-choice']===undefined;
   if(automaticResponse())$('regression-response').value=String(dataColumns()-1);
 
+  function regressionMode(){const base=value('regression-kind'),penalty=value('regression-penalty');if(base==='randomforest')return {auto:'randomforest',regression:'randomforestregressor',classification:'randomforestclassifier'}[value('regression-forest-task')]||'randomforest';return ['linear','multiple','logistic'].includes(base)&&penalty!=='none'?(base==='logistic'?'logistic':'')+penalty:base;}
   function datasetsList(){const previous=value('dataset-list');$('dataset-list').replaceChildren(element('option','새 데이터'));$('dataset-list').firstChild.value='';for(const name of Object.keys(state.datasets)) {const option=element('option',name);option.value=name;$('dataset-list').append(option);}if(Object.hasOwn(state.datasets,previous))$('dataset-list').value=previous;}
   $('dataset-list').onchange=()=>{const name=value('dataset-list');if(Object.hasOwn(state.datasets,name)){$('statistics-data').value=state.datasets[name];$('dataset-name').value=name;const savedKind=state.datasetKinds[name];setDataKind(statisticsColumnCount(savedKind)?savedKind:inferDataKind());dataKindChange();persist();}};
   $('dataset-save').onclick=()=>{const name=value('dataset-name').trim();if(!name){toast('데이터 이름을 입력하세요.');return;}state.datasets[name]=value('statistics-data');state.datasetKinds[name]=dataKind();datasetsList();$('dataset-list').value=name;persist();toast('데이터를 저장했습니다.');};
@@ -74,7 +75,7 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
   });
   $('csv-save').onclick=()=>downloadFile(`${value('dataset-name')||'symvacas-data'}.csv`,value('statistics-data'),'text/csv');
   function dataRows(){return statisticsDataRows(value('statistics-data'),dataKind());}
-  function statisticsExpression(op=value('statistics-op')){return statisticsCommand(value('statistics-data'),{op,kind:dataKind(),column:Number(value('statistics-column')),extra:value('statistics-extra')||'0',tail:value('statistics-tail'),sigma:value('statistics-sigma'),sigmaY:value('statistics-sigma-y'),yatesCorrection:$('statistics-yates').checked,regression:value('regression-kind'),degree:value('regression-degree'),responseColumn:Number(value('regression-response')),formula:value('regression-formula'),variable:value('regression-variable'),initials:value('regression-initials'),grouping:value('statistics-grouping'),firstGroup:value('statistics-first-group'),secondGroup:value('statistics-second-group')});}
+  function statisticsExpression(op=value('statistics-op')){return statisticsCommand(value('statistics-data'),{op,kind:dataKind(),column:Number(value('statistics-column')),extra:value('statistics-extra')||'0',tail:value('statistics-tail'),sigma:value('statistics-sigma'),sigmaY:value('statistics-sigma-y'),yatesCorrection:$('statistics-yates').checked,regression:regressionMode(),degree:value('regression-degree'),alpha:value('regression-alpha'),l1Ratio:value('regression-ratio'),trees:value('regression-trees'),maxDepth:value('regression-depth'),seed:value('regression-seed'),responseColumn:Number(value('regression-response')),formula:value('regression-formula'),variable:value('regression-variable'),initials:value('regression-initials'),grouping:value('statistics-grouping'),firstGroup:value('statistics-first-group'),secondGroup:value('statistics-second-group')});}
   function analysisSummary(){
     const plan=statisticsAnalysisData(value('statistics-data'),{op:value('statistics-op'),kind:dataKind(),column:Number(value('statistics-column')),grouping:value('statistics-grouping'),firstGroup:value('statistics-first-group'),secondGroup:value('statistics-second-group')});
     if(plan.paired)return `${t('Compared columns')}: x ↔ y · ${t('Complete pairs')}: ${plan.pairs.length}`;
@@ -84,10 +85,13 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
   function distributionControls(){const family=value('distribution-family'),discrete=['binomial','poisson','geometric'].includes(family),queries=discrete?(family==='binomial'?['pdf','cdf','list-pdf','list-cdf']:['pdf','cdf']):['normal','t'].includes(family)?['pdf','cdf','interval','quantile']:['pdf','cdf','interval'];for(const option of $('distribution-query').options)option.disabled=!queries.includes(option.value);if(!queries.includes(value('distribution-query')))$('distribution-query').value='cdf';const query=value('distribution-query'),shown=new Set(discrete?(query.startsWith('list')?[]:['k']):query==='interval'?['a','b']:query==='quantile'?['p']:['x']);for(const name of family==='normal'?['mean','sigma']:family==='f'?['df','df2']:['t','chi2'].includes(family)?['df']:family==='binomial'?['trials','success']:family==='poisson'?['lambda']:['success'])shown.add(name);for(const name of ['x','a','b','p','mean','sigma','df','df2','trials','success','lambda','k'])$('distribution-'+name).closest('label').hidden=!shown.has(name);refreshWorkspaceMath();}
   $('distribution-family').onchange=distributionControls;$('distribution-query').onchange=distributionControls;
   $('distribution-insert').onclick=()=>{changeMode('scientific');replaceInput(distributionExpression(),{uncommit:true});};
-  $('regression-kind').onchange=()=>{invalidateRegression();statisticsControls();$('regression-custom').hidden=value('regression-kind')!=='custom';$('regression-degree').closest('label').hidden=value('regression-kind')!=='polynomial';$('regression-data-help').hidden=!['multiple','logistic','polynomial'].includes(value('regression-kind'));$('regression-response').closest('label').hidden=!['multiple','logistic','polynomial'].includes(value('regression-kind'));setText($('regression-data-help'),value('regression-kind')==='logistic'?'Selected column is response; others are predictors. Logistic response: 0 or 1.':'Selected column is response; others are predictors.');refreshWorkspaceMath();};
+  $('regression-kind').onchange=()=>{invalidateRegression();statisticsControls();$('regression-custom').hidden=regressionMode()!=='custom';$('regression-penalty-label').hidden=!['linear','multiple','logistic'].includes(value('regression-kind'));$('regression-lasso').hidden=!['ridge','lasso','elasticnet','logisticridge','logisticlasso','logisticelasticnet'].includes(regressionMode());$('regression-ratio-label').hidden=!regressionMode().endsWith('elasticnet');$('regression-forest').hidden=!regressionMode().startsWith('randomforest');$('regression-degree').closest('label').hidden=regressionMode()!=='polynomial';$('regression-data-help').hidden=!['multiple','logistic','polynomial','ridge','lasso','elasticnet','logisticridge','logisticlasso','logisticelasticnet','randomforest','randomforestclassifier','randomforestregressor'].includes(regressionMode());$('regression-response').closest('label').hidden=!['multiple','logistic','polynomial','ridge','lasso','elasticnet','logisticridge','logisticlasso','logisticelasticnet','randomforest','randomforestclassifier','randomforestregressor'].includes(regressionMode());setText($('regression-data-help'),regressionMode().startsWith('logistic')?'Selected column is response; others are predictors. Logistic response: 0 or 1.':'Selected column is response; others are predictors.');refreshWorkspaceMath();};
   $('regression-kind').onchange();
+  for(const id of ['regression-alpha','regression-ratio','regression-trees','regression-depth','regression-seed'])$(id).addEventListener('input',()=>{invalidateRegression();refreshWorkspaceMath();});
+  $('regression-forest-task').onchange=()=>{$('regression-kind').onchange();persist();};
+  $('regression-penalty').onchange=()=>{$('regression-kind').onchange();persist();};
   $('regression-response').onchange=()=>{state.fields['regression-response-auto']=false;state.fields['regression-response-choice']=value('regression-response');state.fields['regression-response-position']=Number(value('regression-response'))===0?'first':'last';invalidateRegression();refreshWorkspaceMath();persist();};
-  $('regression-custom').hidden=value('regression-kind')!=='custom';
+  $('regression-custom').hidden=regressionMode()!=='custom';
   $('regression-clear').onclick=()=>{cancelRegression();statisticsGraph=null;$('regression-caption').replaceChildren();$('regression-inference').replaceChildren();$('regression-export').hidden=true;$('regression-transfer').hidden=true;if(!$('statistics-plot').hidden)$('statistics-plot-run').click();};
   $('regression-export').onclick=()=>downloadFile('regression-residuals.csv',regressionResidualCSV(statisticsGraph?.report),'text/csv');
   function statisticsControls(){
@@ -118,7 +122,7 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
     $('statistics-columns-label').hidden=!kind.startsWith('columns:');
     $('regression-section').hidden=columns<2;
     $('regression-response').value=automaticResponse()?String(columns-1):String(state.fields['regression-response-choice']);
-    const positionResponse=['polynomial','logistic'].includes(value('regression-kind'));
+    const positionResponse=['polynomial','logistic','logisticridge','logisticlasso','logisticelasticnet'].includes(regressionMode());
     if(positionResponse&&state.fields['regression-response-position']==='last')$('regression-response').value=String(columns-1);
     const responseOptions=statisticsColumnNames(columns).flatMap((name,i)=>{
       if(positionResponse&&i!==0&&i!==columns-1)return [];
@@ -127,9 +131,9 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
     menus['regression-response']=responseOptions;
     filterMenu('regression-response',column=>Number(column)<columns,String(columns-1));
     if(kind!=='list'&&!automaticResponse())state.fields['regression-response-choice']=value('regression-response');
-    if(filterMenu('regression-kind',model=>kind==='xyz'||kind.startsWith('columns:')?columns>1&&['multiple','logistic'].includes(model):kind==='xy'&&model!=='multiple',kind==='xyz'||kind.startsWith('columns:')?'multiple':'linear'))$('regression-kind').onchange();
-    $('regression-data-help').hidden=!['multiple','logistic','polynomial'].includes(value('regression-kind'));
-    $('regression-response').closest('label').hidden=!['multiple','logistic','polynomial'].includes(value('regression-kind'));
+    if(filterMenu('regression-kind',model=>kind==='xyz'||kind.startsWith('columns:')?columns>1&&['multiple','logistic','randomforest'].includes(model):kind==='xy'&&model!=='multiple',kind==='xyz'||kind.startsWith('columns:')?'multiple':'linear'))$('regression-kind').onchange();
+    $('regression-data-help').hidden=!['multiple','logistic','polynomial','ridge','lasso','elasticnet','logisticridge','logisticlasso','logisticelasticnet','randomforest','randomforestclassifier','randomforestregressor'].includes(regressionMode());
+    $('regression-response').closest('label').hidden=!['multiple','logistic','polynomial','ridge','lasso','elasticnet','logisticridge','logisticlasso','logisticelasticnet','randomforest','randomforestclassifier','randomforestregressor'].includes(regressionMode());
     filterMenu('statistics-plot-type',plot=>plot!=='scatter'||kind==='xy',kind==='xy'?'scatter':'histogram');
     $('statistics-plot-grouping-label').hidden=value('statistics-plot-type')==='scatter'||columns<2;
     setText($('statistics-data-label'),kind==='list'?'One value per line':kind==='xy'?'x, y values':kind==='xyz'?'x, y, z values':statisticsColumnNames(columns).join(', '));
@@ -185,20 +189,20 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
   }
   function render(){statisticsControls();if(!$('statistics-grid').hidden)statisticsGrid();if(statisticsGraph){drawStatisticsGraph();if(statisticsGraph.captions)renderFormulas($('regression-caption'),statisticsGraph.captions,{digits:state.digits});for(const [name,n] of statisticsGraph.parameters||[])$('regression-caption').append(element('span',`${regressionParameterName(name,statisticsGraph.parameterLabels)} = ${roundNumber(String(n),state.digits)}`,'regression-parameter'));renderRegressionReport($('regression-inference'),statisticsGraph.report,state.digits,statisticsGraph.parameterLabels);}}
   function showRegression(result) {
-    const rows=numericStatisticsRows(dataRows()),names=statisticsColumnNames(dataColumns()),logistic=value('regression-kind')==='logistic';
-    const response=['multiple','logistic','polynomial'].includes(value('regression-kind'))?Number(value('regression-response')):names.length-1,predictors=names.filter((_,i)=>i!==response);
-    const parameterLabels=regressionParameterLabels(value('regression-kind'),statisticsColumnLabels(value('statistics-data'),dataKind()),response);
+    const rows=numericStatisticsRows(dataRows()),names=statisticsColumnNames(dataColumns()),logistic=regressionMode().startsWith('logistic');
+    const response=['multiple','logistic','polynomial','ridge','lasso','elasticnet','logisticridge','logisticlasso','logisticelasticnet','randomforest','randomforestclassifier','randomforestregressor'].includes(regressionMode())?Number(value('regression-response')):names.length-1,predictors=names.filter((_,i)=>i!==response);
+    const parameterLabels=regressionParameterLabels(regressionMode(),statisticsColumnLabels(value('statistics-data'),dataKind()),response);
     const variables=Object.fromEntries(predictors.map((name,i)=>[names.length===2?'x':`x${i+1}`,name]));
     let displayed=result.decimal||result.exact;
-    if(logistic||value('regression-kind')==='polynomial'||names.length>2){
+    if(logistic||['polynomial','ridge','lasso','elasticnet'].includes(regressionMode())||names.length>2){
       const renamed=node=>({...node,value:node.kind==='symbol'?(variables[node.value]||node.value):node.value,args:node.args.map(renamed)});
       try{displayed=astSource(renamed(parse(latexInput(displayed))));}catch{}
     }
 
-    statisticsGraph={rows,plotRows:['polynomial','logistic'].includes(value('regression-kind'))&&names.length===2?rows.map(row=>[row[1-response],row[response]]):rows,xAxisLabel:predictors[0],yAxisLabel:names[response],curve:result.curve||[],fit:result.decimal||result.exact,report:result.regression,parameterLabels,parameters:(result.parameters||[]).filter(([name])=>parameterLabels[name]),variable:value('regression-kind')==='custom'?value('regression-variable'):'x',
-      captions:[`${logistic?`P(${names[response]}=1)`:names[response]}=${displayed}`,...(result.correlation!==null&&result.correlation!==undefined?[`r=${result.correlation}`]:[]),...(result.parameters||[]).filter(([name])=>!parameterLabels[name]).map(([name,n])=>`${name}=${n}`)]};
+    statisticsGraph={rows,plotRows:['polynomial','logistic','ridge','lasso','elasticnet','logisticridge','logisticlasso','logisticelasticnet','randomforest','randomforestclassifier','randomforestregressor'].includes(regressionMode())&&names.length===2?rows.map(row=>[row[1-response],row[response]]):rows,xAxisLabel:predictors[0],yAxisLabel:names[response],curve:result.curve||[],fit:result.decimal||result.exact,report:result.regression,parameterLabels,parameters:(result.parameters||[]).filter(([name])=>parameterLabels[name]),variable:regressionMode()==='custom'?value('regression-variable'):'x',
+      captions:regressionMode().startsWith('randomforest')?[]:[`${logistic?`P(${names[response]}=1)`:names[response]}=${displayed}`,...(result.correlation!==null&&result.correlation!==undefined?[`r=${result.correlation}`]:[]),...(result.parameters||[]).filter(([name])=>!parameterLabels[name]).map(([name,n])=>`${name}=${n}`)]};
     $('statistics-plot').hidden=false;render();
-    $('regression-transfer').hidden=dataColumns()!==2;
+    $('regression-transfer').hidden=dataColumns()!==2||regressionMode().startsWith('randomforest');
     $('regression-export').hidden=!result.regression;
   }
   async function runRegression(options,showResult){

@@ -22,7 +22,7 @@ import com.kirinonakar.symvacas.ui.theme.LocalInstrument
 import org.json.JSONObject
 import kotlin.math.min
 
-@Composable internal fun RegressionRoc(report:JSONObject,digits:Int) {
+@Composable internal fun RegressionRoc(report:JSONObject,digits:Int,oob:Boolean=false) {
     val points=remember(report) {
         report.optJSONArray("roc")?.let {array->(0 until array.length()).mapNotNull {index->
             array.optJSONArray(index)?.let {point->
@@ -34,11 +34,11 @@ import kotlin.math.min
     if(points.size<2)return
     val colors=LocalInstrument.current
     val auc=ResultDisplayFormat.formatText(report.optString("auc"),ResultDisplayMode.OFF,false,maxFractionDigits=digits)
-    val title="${tr("ROC curve")} · AUC=$auc"
+    val title="${tr(if(oob)"OOB ROC curve" else "ROC curve")} · AUC=$auc"
     val xLabel=tr("False positive rate (FPR)");val yLabel=tr("Sensitivity (TPR)")
     Text(title,fontSize=12.sp)
-    Text(tr("ROC/AUC uses fitted data; positive class = 1."),fontSize=11.sp,color=colors.muted)
-    Canvas(Modifier.widthIn(max=360.dp).fillMaxWidth().aspectRatio(1f).testTag("statistics-roc").semantics {contentDescription="$title · $xLabel · $yLabel"}) {
+    Text(tr(if(oob)"ROC/AUC uses OOB predictions; positive class = 1." else "ROC/AUC uses fitted data; positive class = 1."),fontSize=11.sp,color=colors.muted)
+    Canvas(Modifier.widthIn(max=360.dp).fillMaxWidth().aspectRatio(1f).testTag(if(oob)"statistics-oob-roc" else "statistics-roc").semantics {contentDescription="$title · $xLabel · $yLabel"}) {
         val left=40.dp.toPx();val top=12.dp.toPx()
         val side=min(size.width-left-12.dp.toPx(),size.height-top-40.dp.toPx()).coerceAtLeast(1f)
         fun x(value:Double)=left+side*value.toFloat()

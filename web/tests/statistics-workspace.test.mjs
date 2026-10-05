@@ -26,6 +26,54 @@ function workspace(t,fields={}){
   return {$,state,requests,results,errors,run,statistics,get saves(){return saves;},get cancels(){return cancels;}};
 }
 
+test('regularization is selected within linear and logistic families and invalidates prior results',t=>{
+  const context=workspace(t,{'regression-kind':'linear','regression-penalty':'elasticnet','regression-alpha':'0.2','regression-ratio':'0.7'});
+  const {$,statistics}=context;
+  $('statistics-data').value='0,1\n1,3\n2,5';
+  assert.equal($('regression-penalty-label').hidden,false);
+  assert.equal($('regression-lasso').hidden,false);
+  assert.equal($('regression-ratio-label').hidden,false);
+  assert.equal(statistics.expression('regression'),'regression([[0,1],[1,3],[2,5]],elasticnet,[0.2,0.7])');
+  $('regression-kind').value='logistic';$('regression-kind').dispatchEvent(new document.defaultView.Event('change'));
+  $('statistics-data').value='-1,0\n1,1';
+  assert.equal(statistics.expression('regression'),'regression([[-1,0],[1,1]],logisticelasticnet,[0.2,0.7])');
+  statistics.showRegression({exact:'1/(1+exp(-x))',regression:{model:'logisticelasticnet',n:2,df:null,alpha:.2,l1Ratio:.7,selectedPredictors:1,coefficients:[{name:'b1',estimate:'1'}],residuals:[]}});
+  assert.doesNotMatch($('regression-inference').textContent,/OLS|Wald|95% CI/);
+  $('regression-alpha').value='0.3';$('regression-alpha').dispatchEvent(new document.defaultView.Event('input'));
+  assert.equal($('regression-inference').textContent,'');
+});
+
+test('forest reports both importance measures and suppresses algebraic graph transfer',t=>{
+  const {$,statistics}=workspace(t,{'regression-kind':'randomforest','regression-trees':'20','regression-depth':'4','regression-seed':'7'});
+  $('statistics-data').value='0,1\n1,3\n2,5';
+  assert.equal($('regression-penalty-label').hidden,true);
+  assert.equal($('regression-forest').hidden,false);
+  assert.equal(statistics.expression('regression'),'regression([[0,1],[1,3],[2,5]],randomforest,[20,4,7])');
+  statistics.showRegression({exact:'RandomForest',curve:[[0,1],[2,5]],regression:{model:'randomforest',n:3,df:null,trees:20,maxDepth:4,seed:7,oobN:3,permutationN:3,permutationRepeats:3,featureImportance:[{name:'b1',estimate:1}],permutationImportance:[{name:'b1',estimate:.8}],residuals:[]}});
+  assert.equal($('regression-caption').textContent,'');
+  assert.equal($('regression-transfer').hidden,true);
+  assert.match($('regression-inference').textContent,/Feature importance/);
+  assert.match($('regression-inference').textContent,/Permutation importance/);
+  assert.doesNotMatch($('regression-inference').textContent,/df=null|OLS|95% CI/);
+});
+
+test('forest task choices survive restore and keep all response columns selectable',t=>{
+  const {$,statistics}=workspace(t,{'statistics-kind':'xyz','regression-kind':'randomforest','regression-forest-task':'classification','regression-response-choice':'1'});
+  $('statistics-data').value='10,0,20\n11,1,21';
+  assert.equal($('regression-forest-task').value,'classification');
+  assert.deepEqual([...$('regression-response').options].map(option=>option.value),['0','1','2']);
+  assert.equal(statistics.expression('regression'),'regression([[10,20,0],[11,21,1]],randomforestclassifier,[100,10,0])');
+  $('regression-forest-task').value='regression';$('regression-forest-task').dispatchEvent(new document.defaultView.Event('change'));
+  assert.equal(statistics.expression('regression'),'regression([[10,20,0],[11,21,1]],randomforestregressor,[100,10,0])');
+});
+
+test('regularized commands allow more predictors than rows and keep only complete response rows',()=>{
+  for(const mode of ['ridge','lasso','elasticnet','logisticridge','logisticlasso','logisticelasticnet','randomforest']){
+    const command=statisticsCommand('1,10,20\n,11,21\n0,12,22',{kind:'xyz',op:'regression',regression:mode,responseColumn:0});
+    assert.ok(command.startsWith('regression([[10,20,1],[12,22,0]],'+mode));
+  }
+});
+
 test('rank commands preserve complete pairs, separate samples, and grouped observations',()=>{
   assert.equal(statisticsCommand('1,4\n2,\n,5\n3,6',{op:'wilcoxon',kind:'xy',tail:'right'}),'wilcoxon([1,3],[4,6],right)');
   assert.equal(statisticsCommand('1\n2\n3',{op:'wilcoxon',kind:'list'}),'wilcoxon([1,2,3])');
@@ -123,7 +171,7 @@ test('xyz regression controls select multivariate models and keep graph transfer
   $('statistics-kind').value='xyz';$('statistics-kind').dispatchEvent(new document.defaultView.Event('change'));
   assert.equal($('regression-section').hidden,false);
   assert.equal($('regression-kind').value,'multiple');
-  assert.equal([...$('regression-kind').options].filter(o=>!o.disabled).map(o=>o.value).join(','),'multiple,logistic');
+  assert.equal([...$('regression-kind').options].filter(o=>!o.disabled).map(o=>o.value).join(','),'multiple,logistic,randomforest');
   $('statistics-data').value='0,0,1\n1,0,3\n0,1,4\n1,1,7\n2,1,8';
   statistics.showRegression({ok:true,decimal:'1+2*x1+3*x2'});
   assert.equal($('regression-transfer').hidden,true);
@@ -159,8 +207,8 @@ test('Korean xyz data keeps multiple and logistic selectable and submits their m
   $('statistics-kind').value='xyz';$('statistics-kind').dispatchEvent(new document.defaultView.Event('change'));
   $('statistics-data').value='0,0,1\n1,0,0\n0,1,0\n1,1,1\n2,1,0';
   assert.equal($('regression-kind').value,'multiple');
-  assert.deepEqual([...$('regression-kind').options].filter(option=>!option.disabled).map(option=>option.value),['multiple','logistic']);
-  for(const model of ['multiple','logistic']){
+  assert.deepEqual([...$('regression-kind').options].filter(option=>!option.disabled).map(option=>option.value),['multiple','logistic','randomforest']);
+  for(const model of ['multiple','logistic','randomforest']){
     $('regression-kind').value=model;$('regression-kind').dispatchEvent(new document.defaultView.Event('change'));
     const pending=run();
     const request=requests.at(-1);
@@ -175,11 +223,11 @@ for(const language of ['en','ko'])test(`data type changes remove incompatible me
   const {$,statistics}=workspace(t),options=id=>[...$(id).options].map(option=>option.value);
   const changeKind=kind=>{$('statistics-kind').value=kind;$('statistics-kind').dispatchEvent(new document.defaultView.Event('change'));};
   setLanguage(language);translateDOM();statistics.render();
-  const xyModels=['linear','quadratic','polynomial','logistic','logarithmic','exponential','power','custom'];
+  const xyModels=['linear','quadratic','polynomial','logistic','randomforest','logarithmic','exponential','power','custom'];
   assert.deepEqual(options('regression-kind'),xyModels);
   $('regression-kind').value='custom';$('regression-kind').dispatchEvent(new document.defaultView.Event('change'));
   changeKind('xyz');
-  assert.deepEqual(options('regression-kind'),['multiple','logistic']);
+  assert.deepEqual(options('regression-kind'),['multiple','logistic','randomforest']);
   assert.equal($('regression-kind').value,'multiple');
   assert.equal($('regression-custom').hidden,true);
   assert.deepEqual(options('statistics-plot-type'),['histogram','box']);
@@ -196,8 +244,8 @@ for(const language of ['en','ko'])test(`data type changes remove incompatible me
   assert.ok(options('statistics-op').includes('wilcoxon'),'one-sample signed ranks remain available');
   assert.deepEqual(options('statistics-plot-type'),['histogram','box']);
   changeKind('xyz');
-  assert.deepEqual(options('regression-kind'),['multiple','logistic']);
-  assert.deepEqual([...$('regression-kind').options].map(option=>option.textContent),['multiple','logistic'].map(translate));
+  assert.deepEqual(options('regression-kind'),['multiple','logistic','randomforest']);
+  assert.deepEqual([...$('regression-kind').options].map(option=>option.textContent),['multiple','logistic','Random Forest'].map(translate));
   assert.ok(options('statistics-op').includes('anova'),'valid group tests return after changing the data type');
   changeKind('xy');$('regression-kind').value='polynomial';$('regression-kind').dispatchEvent(new document.defaultView.Event('change'));
   assert.equal($('regression-degree').closest('label').hidden,false);

@@ -745,6 +745,11 @@ def pearson_correlation(xs, ys):
     return s.simplify(sum(x*y for x,y in zip(dx,dy))/s.sqrt(vx*vy))
 
 def fit_regression(engine, rows, mode, degree=None):
+    if mode in ("ridge", "lasso", "elasticnet", "logisticridge", "logisticlasso", "logisticelasticnet", "randomforest", "randomforestclassifier", "randomforestregressor"):
+        from calc_machine_learning import fit_regularized, fit_random_forest
+        if not mode.startswith("randomforest"):
+            return fit_regularized(engine, rows, mode, degree)
+        return fit_random_forest(engine, rows, degree, {"randomforestclassifier": "classification", "randomforestregressor": "regression"}.get(mode, "auto"))
     from calc_inference import regression_report, fit_multivariate, _numbers
     if mode in ("multiple", "logistic"):
         return fit_multivariate(engine, rows, logistic=mode=="logistic")
