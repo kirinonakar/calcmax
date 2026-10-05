@@ -312,6 +312,8 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         get()=statisticsState.regressionParameters
         private set(value) {statisticsState.regressionParameters=value}
     val regressionReport get()=statisticsState.regressionReport
+    val regressionResponseColumn get()=statisticsState.regressionResponseColumn
+    val statisticsLogisticResponse get()=statisticsState.statisticsLogisticResponse
     val statisticsPolynomialDegree get()=statisticsState.statisticsPolynomialDegree
     var regressionBusy
         get()=statisticsState.regressionBusy
@@ -795,9 +797,9 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     fun clearHistory() { history=history.filter { it.favorite };tape=emptyList();save() }
     fun saveDataSet(name:String,csv:String,kind:String) = with(CalculatorStatisticsActions) { performSaveDataSet(name,csv,kind) }
     fun deleteDataSet(name:String) = with(CalculatorStatisticsActions) { performDeleteDataSet(name) }
-    fun saveStatistics(name:String,data:String,kind:String,regression:String,plot:String,csv:Boolean,selected:String,isNew:Boolean,customFormula:String,customVariable:String,customInitials:String,polynomialDegree:String="3") =
-        with(CalculatorStatisticsActions) { performSaveStatistics(name,data,kind,regression,plot,csv,selected,isNew,customFormula,customVariable,customInitials,polynomialDegree) }
-    fun fitRegression(source:String,data:String) = with(CalculatorStatisticsActions) { performFitRegression(source,data) }
+    fun saveStatistics(name:String,data:String,kind:String,regression:String,plot:String,csv:Boolean,selected:String,isNew:Boolean,customFormula:String,customVariable:String,customInitials:String,polynomialDegree:String="3",logisticResponse:String="") =
+        with(CalculatorStatisticsActions) { performSaveStatistics(name,data,kind,regression,plot,csv,selected,isNew,customFormula,customVariable,customInitials,polynomialDegree,logisticResponse) }
+    fun fitRegression(source:String,data:String,responseColumn:Int?=null) = with(CalculatorStatisticsActions) { performFitRegression(source,data,responseColumn) }
     fun clearRegression() = with(CalculatorStatisticsActions) { performClearRegression() }
     fun cancelRegression() = with(CalculatorStatisticsActions) { performCancelRegression() }
     fun plot(auto: Boolean = false) = with(CalculatorGraphActions) { performPlot(auto) }

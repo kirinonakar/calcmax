@@ -10,6 +10,10 @@ import {statisticsCommand,distributionCommand,equationCommand} from '../workspac
 import {JSDOM} from 'jsdom';
 import {resultMathDisplay} from '../result-display.js';
 import {graphShadings,graphInputTree} from '../graph-workspace.js';
+import {createStatisticsWorkspace} from '../statistics-workspace.js';
+import {createAppUI} from '../app-ui.js';
+import {createAppState,restoreFields} from '../app-state.js';
+import {getLanguage,setLanguage,translateDOM} from '../i18n.js';
 
 // Reuse the interpreter for sequential integration scenarios. The cold solver
 // scenario below explicitly loads its own interpreter to keep startup coverage.
@@ -20,6 +24,76 @@ async function loadRuntime(){
   return py;
 }
 function runtime(){return sharedRuntime??=loadRuntime();}
+
+test('Korean regression selections and restored labels execute the selected models in WASM',async t=>{
+  const py=await runtime();
+  const dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));
+  const previousLanguage=getLanguage();
+  for(const key of ['document','NodeFilter']){
+    const original=Object.getOwnPropertyDescriptor(globalThis,key);
+    Object.defineProperty(globalThis,key,{value:dom.window[key],configurable:true});
+    t.after(()=>{if(original)Object.defineProperty(globalThis,key,original);else delete globalThis[key];});
+  }
+  const $=id=>document.getElementById(id),ui=createAppUI(),requests=[],results=[],errors=[];
+  t.after(()=>{ui.dispose();setLanguage(previousLanguage);dom.window.close();});
+  const binary='0,0,0\n0,0,1\n1,0,0\n1,0,1\n0,1,0\n0,1,1\n1,1,0\n1,1,1';
+  const state=createAppState({fields:{'statistics-kind':'xyz','regression-kind':'로지스틱','statistics-data':binary}},'ko-KR');
+  setLanguage(state.language);restoreFields(state);
+  const engine={ready:true,cancel:()=>{},execute:async request=>{
+    requests.push(request);py.globals.set('payload',JSON.stringify(request));return JSON.parse(py.runPython('calc_engine.dispatch(payload)'));
+  }};
+  const statistics=createStatisticsWorkspace({state,engine,ui,persist:()=>{},refreshWorkspaceMath:()=>{},storeExpression:()=>{},error:message=>errors.push(message),changeMode:()=>{},replaceInput:()=>{},graphs:{}});
+  translateDOM();statistics.render();
+  assert.equal($('regression-kind').value,'logistic','previously saved Korean label survives startup');
+  const run=()=>statistics.runRegression({angle:'RAD',precision:40},result=>{assert.equal(result.ok,true,result.error);results.push(result);});
+  await run();assert.equal(results.at(-1).regression.fitScale,'binomial');
+  assert.match($('regression-inference').textContent,/Odds ratio/);
+  assert.match($('regression-inference').textContent,/OR 95% CI/);
+  assert.doesNotMatch($('regression-inference').textContent,/오즈비/);
+  for(const [model,kind,data,expectedCount] of [
+    ['multiple','xyz','0,0,1\n1,0,3\n0,1,4\n1,1,7\n2,1,8',3],
+    ['polynomial','xy','0,1\n1,3\n2,9\n3,25\n4,57',4],
+    ['logistic','xy','-3,0\n-2,0\n-1,1\n0,0\n0,1\n1,0\n2,1\n3,1',2]
+  ]){
+    $('statistics-kind').value=kind;$('statistics-kind').dispatchEvent(new dom.window.Event('change'));
+    $('statistics-data').value=data;$('regression-kind').value=model;$('regression-kind').dispatchEvent(new dom.window.Event('change'));
+    setLanguage('en');translateDOM();statistics.render();setLanguage('ko');translateDOM();statistics.render();
+    assert.equal($('regression-kind').value,model);await run();
+    assert.equal(requests.at(-1).tree.args[1].value,model);
+    assert.equal(results.at(-1).regression.coefficients.length,expectedCount);
+  }
+  assert.equal(requests.length,4);assert.deepEqual(errors,[]);
+  const canonical=[[-2,-1,0],[-2,-1,1],[-1,1,0],[-1,1,1],[0,0,0],[0,0,1],[1,-1,0],[1,-1,1],[2,1,0],[2,1,1],[2,1,1],[-2,-1,0]];
+  let coefficients,auc,roc;
+  $('statistics-kind').value='xyz';$('statistics-kind').dispatchEvent(new dom.window.Event('change'));
+  $('regression-kind').value='logistic';$('regression-kind').dispatchEvent(new dom.window.Event('change'));
+  for(const response of [0,1,2]){
+    const original=canonical.map(([a,b,y])=>response===0?[y,a,b]:response===1?[a,y,b]:[a,b,y]).map(row=>row.join(',')).join('\n');
+    $('statistics-data').value=original;$('regression-response').value=String(response);$('regression-response').dispatchEvent(new dom.window.Event('change'));
+    await run();
+    assert.deepEqual(requests.at(-1).tree.args[0],parse(`regression(${JSON.stringify(canonical)},logistic)`).args[0]);
+    const current=results.at(-1).regression.coefficients.map(coefficient=>Number(coefficient.estimate));
+    if(coefficients)current.forEach((value,i)=>assert.ok(Math.abs(value-coefficients[i])<1e-12));else coefficients=current;
+    const report=results.at(-1).regression;
+    if(auc!==undefined){assert.equal(report.auc,auc);assert.deepEqual(report.roc,roc);}else{auc=report.auc;roc=report.roc;}
+    assert.match($('regression-inference').textContent,/C-statistic \(AUC\)/);
+    assert.equal($('regression-inference').querySelectorAll('[data-roc-curve]').length,1);
+    assert.equal($('statistics-data').value,original,'fitting does not reorder the visible table');
+    assert.match($('regression-caption').textContent.replace(/\s/g,''),new RegExp(`P\\(${['x','y','z'][response]}=1\\)`));
+  }
+  const linearRows=[[1,2,5],[2,1,4],[3,0,3],[0,3,6],[2,4,10],[4,2,8]];
+  $('regression-kind').value='multiple';$('regression-kind').dispatchEvent(new dom.window.Event('change'));
+  assert.equal($('regression-response').closest('label').hidden,false);
+  for(const response of [0,1,2]){
+    $('statistics-data').value=linearRows.map(([a,b,y])=>response===0?[y,a,b]:response===1?[a,y,b]:[a,b,y]).map(row=>row.join(',')).join('\n');
+    $('regression-response').value=String(response);$('regression-response').dispatchEvent(new dom.window.Event('change'));await run();
+    const fitted=results.at(-1).regression.coefficients;
+    assert.equal($('regression-inference').querySelector('[data-roc]'),null);
+    assert.ok(Math.abs(Number(fitted[1].estimate)-1)<1e-12);
+    assert.ok(Math.abs(Number(fitted[2].estimate)-2)<1e-12);
+    assert.ok($('regression-caption').textContent.replace(/\s/g,'').startsWith(`${['x','y','z'][response]}=`));
+  }
+});
 
 test('regression inference and rank tests run through real WASM and workspace commands',async()=>{
   const py=await runtime();
@@ -34,6 +108,8 @@ test('regression inference and rank tests run through real WASM and workspace co
   assert.equal(multiple.regression.coefficients.length,3);assert.equal(multiple.curve.length,0);
   const logistic=evaluate(statisticsCommand('-3,0\n-2,0\n-1,1\n0,0\n0,1\n1,0\n2,1\n3,1',{op:'regression',kind:'xy',regression:'logistic'}));
   assert.ok(Math.abs(Number(logistic.regression.coefficients[1].estimate)-.7324875300102196)<1e-12);
+  assert.equal(Number(logistic.regression.auc),.78125);
+  assert.deepEqual(logistic.regression.roc.map(point=>point.map(Number)).at(-1),[1,1]);
   assert.ok(logistic.curve.every(([,prob])=>prob>=0&&prob<=1));
   for(const source of ['wilcoxon([1,2,3,4,5])','mannwhitney([1,2,3],[4,5,6])','kruskal([1,2,3,4,5],[4,5,6,7,8],[7,8,9,10,11])'])assert.ok(evaluate(source).tree);
   const custom=evaluate('regression([[1,2],[2,4],[3,5],[4,4],[5,5],[6,7]],custom,a+b*x,x)');

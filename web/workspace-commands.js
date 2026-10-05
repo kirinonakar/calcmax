@@ -40,7 +40,7 @@ export function statisticsAnalysisData(source,{op='stats',column=0,grouping='col
   const samples=paired?['x','y'].map((label,i)=>({label,values:pairs.map(row=>row[i])})):['anova','tukey','kruskal'].includes(op)?names.map((label,i)=>({label,values:values[i]})):['ttest2','ztest2','mannwhitney'].includes(op)?[first,second].map(i=>({label:names[i],values:values[i]})):[{label:names[selected],values:values[selected]}];
   return {rows,groups,pairs,paired,categorical,first,second,samples};
 }
-export function statisticsCommand(source,{op='stats',column=0,extra='0',tail='two',sigma='1',sigmaY='1',yatesCorrection=true,regression='linear',degree='3',formula='A*exp(-k*x)+C',variable='x',initials='',grouping='columns',firstGroup='',secondGroup='',kind}={}){
+export function statisticsCommand(source,{op='stats',column=0,extra='0',tail='two',sigma='1',sigmaY='1',yatesCorrection=true,regression='linear',degree='3',responseColumn,formula='A*exp(-k*x)+C',variable='x',initials='',grouping='columns',firstGroup='',secondGroup='',kind}={}){
   if(op==='regression'&&kind&&kind!=='xy'&&!(kind==='xyz'&&['multiple','logistic'].includes(regression)))throw new Error('Regression needs x,y data');
   const {rows,groups,pairs,categorical,first,second,samples:activeSamples}=statisticsAnalysisData(source,{op,column,grouping,firstGroup,secondGroup,kind});
   const samples=activeSamples.map(sample=>sample.values),data=samples[0];
@@ -50,7 +50,10 @@ export function statisticsCommand(source,{op='stats',column=0,extra='0',tail='tw
     if(['multiple','logistic'].includes(regression)){
       const complete=rows.filter(row=>row.every(Boolean));
       if(complete.length<=rows[0].length)throw new Error('Add more data points than fit parameters');
-      return `regression(${vector(complete.map(vector))},${regression})`;
+      const response=responseColumn===undefined?rows[0].length-1:Number(responseColumn);
+      if(!Number.isInteger(response)||response<0||response>=rows[0].length)throw new Error('Select a dependent variable column');
+      const order=rows[0].map((_,i)=>i).filter(i=>i!==response).concat(response);
+      return `regression(${vector(complete.map(row=>vector(order.map(i=>row[i]))))},${regression})`;
     }
     if(pairs.length<2)throw new Error('Regression needs at least two complete x,y rows');
     return `regression(${vector(pairs.map(p=>vector(p.slice(0,2))))},${regression}${regression==='polynomial'?','+degree:regression==='custom'?`,${formula},${variable}${initials.trim()?','+initials:''}`:''})`;

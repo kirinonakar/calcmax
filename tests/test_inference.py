@@ -8,12 +8,14 @@ import sys
 import unittest
 import math
 import itertools
+import random
 
 sys.path.insert(0,str(pathlib.Path(__file__).resolve().parents[1]/'app/src/main/python'))
 import sympy as s
 from calc_evaluator import Engine
 from calc_statistics import fit_regression, fit_custom_regression
-from calc_inference import rank_test
+from calc_inference import rank_test, _binary_roc
+import mpmath as mp
 from calc_shared import MathError
 import calc_engine
 
@@ -91,6 +93,9 @@ class InferenceTests(unittest.TestCase):
             self.assertAlmostEqual(float(slope[key]),expected,places=12)
         self.assertAlmostEqual(float(report['pseudoRSquared']),.23126385277910777,places=12)
         self.assertAlmostEqual(float(report['likelihoodP']),.10926649982714333,places=12)
+        self.assertAlmostEqual(float(report['auc']),.78125,places=12)
+        self.assertEqual(report['roc'][0],['0.0','0.0'])
+        self.assertEqual(report['roc'][-1],['1.0','1.0'])
         self.assertAlmostEqual(float(slope['oddsRatio']),math.exp(float(slope['estimate'])),places=12)
         for x,_ in rows:self.assertTrue(0<float(result.subs(s.Symbol('x'),x))<1)
         for invalid in [[(1,0),(2,0),(3,1),(4,1)],[(1,0),(2,0),(3,0),(4,0)],[(1,0),(2,2),(3,1),(4,0)]]:
@@ -176,6 +181,30 @@ class RankTests(unittest.TestCase):
         self.assertAlmostEqual(float(result['p value']),.004853488501369138,places=12)
         with self.assertRaises(MathError):self.run_test('kruskal',[[1,1],[1,1]])
         with self.assertRaises(MathError):self.run_test('kruskal',[[1],[2]],'left')
+
+
+class RocTests(unittest.TestCase):
+    def test_reference_curve_perfect_reversed_and_tied_scores(self):
+        area,points=_binary_roc([0,0,1,1],[.1,.4,.35,.8])
+        self.assertEqual(float(area),.75)
+        self.assertEqual([[float(x),float(y)] for x,y in points],[[0,0],[0,.5],[.5,.5],[.5,1],[1,1]])
+        for labels,scores,expected in [([0,1],[.1,.9],1),([0,1],[.9,.1],0),([0,1],[1,1],.5),([1,0,1,0],[.8,.8,.6,.2],.625),([0,1],[1000,1001],1)]:
+            self.assertEqual(float(_binary_roc(labels,scores)[0]),expected)
+
+    def test_auc_matches_independent_pairwise_concordance_for_ties(self):
+        randomizer=random.Random(105)
+        for _ in range(50):
+            labels=[0]*randomizer.randint(1,8)+[1]*randomizer.randint(1,8)
+            scores=[randomizer.randint(-3,3) for _ in labels]
+            positive=[v for y,v in zip(labels,scores) if y==1];negative=[v for y,v in zip(labels,scores) if y==0]
+            expected=sum(1 if a>b else .5 if a==b else 0 for a in positive for b in negative)/(len(positive)*len(negative))
+            auc,points=_binary_roc(labels,scores)
+            self.assertAlmostEqual(float(auc),expected,places=14)
+            self.assertTrue(all(a[0]<=b[0] and a[1]<=b[1] for a,b in zip(points,points[1:])))
+
+    def test_invalid_labels_and_scores_are_rejected(self):
+        for labels,scores in [([1,1],[0,1]),([0,0],[0,1]),([0,2],[0,1]),([0,1],[0]),([0,1],[0,mp.inf])]:
+            with self.assertRaises(MathError):_binary_roc(labels,scores)
 
 
 if __name__=='__main__':unittest.main()

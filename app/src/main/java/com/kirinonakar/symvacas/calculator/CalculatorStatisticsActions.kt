@@ -17,11 +17,11 @@ internal object CalculatorStatisticsActions {
         statisticsState.deleteDataSet(name)
         save()
     }
-    fun CalculatorModel.performSaveStatistics(name:String,data:String,kind:String,regression:String,plot:String,csv:Boolean,selected:String,isNew:Boolean,customFormula:String,customVariable:String,customInitials:String,polynomialDegree:String) {
-        statisticsState.updateSelection(name,data,kind,regression,plot,csv,selected,isNew,customFormula,customVariable,customInitials,polynomialDegree)
+    fun CalculatorModel.performSaveStatistics(name:String,data:String,kind:String,regression:String,plot:String,csv:Boolean,selected:String,isNew:Boolean,customFormula:String,customVariable:String,customInitials:String,polynomialDegree:String,logisticResponse:String) {
+        statisticsState.updateSelection(name,data,kind,regression,plot,csv,selected,isNew,customFormula,customVariable,customInitials,polynomialDegree,logisticResponse)
         statisticsState.saveSelection()
     }
-    fun CalculatorModel.performFitRegression(source: String, data: String) {
+    fun CalculatorModel.performFitRegression(source: String, data: String, responseColumn:Int?) {
         regressionJob?.cancel()
         val tree=try {Parser(source).parse()} catch(e:Exception) {error=e.message ?: "Syntax ERROR";return}
         val fittedMode=tree.args.getOrNull(1)?.value ?: "linear"
@@ -35,6 +35,7 @@ internal object CalculatorStatisticsActions {
                     val array=response.optJSONArray("curve")
                     statisticsState.regressionCurve=if(array==null)emptyList() else (0 until array.length()).mapNotNull {index->array.optJSONArray(index)?.let {pair->pair.optDouble(0) to pair.optDouble(1)}}
                     statisticsState.regressionFit=response.optString("exact");statisticsState.regressionData=data;statisticsState.regressionMode=fittedMode
+                    statisticsState.regressionResponseColumn=if(fittedMode in listOf("multiple","logistic"))responseColumn else null
                     statisticsState.regressionCorrelation=response.optDouble("correlation",Double.NaN).takeIf(Double::isFinite)
                     val parameters=response.optJSONArray("parameters")
                     statisticsState.regressionReport=response.optJSONObject("regression")

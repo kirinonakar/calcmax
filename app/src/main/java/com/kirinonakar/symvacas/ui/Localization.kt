@@ -7,6 +7,11 @@ import androidx.compose.runtime.staticCompositionLocalOf
 val LocalLanguage = staticCompositionLocalOf { "en" }
 
 private val korean = mapOf(
+    "ROC curve" to "ROC 곡선", "False positive rate (FPR)" to "위양성률 (FPR)", "Sensitivity (TPR)" to "민감도 (TPR)",
+    "ROC/AUC uses fitted data; positive class = 1." to "ROC/AUC는 적합 데이터 기준이며 양성은 1입니다.",
+    "Selected column is response; others are predictors." to "선택한 열은 종속변수, 나머지 열은 설명변수입니다.",
+    "Dependent variable" to "종속변수",
+    "Selected column is response; others are predictors. Logistic response: 0 or 1." to "선택한 열은 종속변수, 나머지 열은 설명변수입니다. 종속변수: 0 또는 1.",
     "Rank tests require data lists" to "순위 검정에는 데이터 목록을 입력하세요",
     "Deviance residual vs fitted probability." to "적합 확률 대비 이탈도 잔차.",
     "R² is undefined for a constant response." to "종속변수가 상수이면 R²는 정의되지 않습니다.",
@@ -30,8 +35,6 @@ private val korean = mapOf(
     "Parameter" to "계수",
     "Estimate" to "추정값",
     "95% CI" to "95% 신뢰구간",
-    "Odds ratio" to "오즈비",
-    "OR 95% CI" to "오즈비 95% 신뢰구간",
     "Residual diagnostics" to "잔차 진단",
     "Residual vs fitted" to "적합값 대비 잔차",
     "Fitted value" to "적합값",
@@ -221,7 +224,7 @@ private val korean = mapOf(
     "Analyze current data" to "현재 데이터 분석", "Hypothesized difference Δ₀" to "가정한 차이 Δ₀",
     "Hypothesized mean μ₀" to "가정한 평균 μ₀", "Confidence level (0–1 or %)" to "신뢰수준 (0–1 또는 %)",
     "Known σx" to "알려진 σx", "Known σ" to "알려진 σ", "Known σy" to "알려진 σy",
-    "Alternative hypothesis" to "대립가설", "Alternative odds ratio (ordered categories)" to "대립 오즈비 (순서 있는 범주)",
+    "Alternative hypothesis" to "대립가설", "Alternative odds ratio (ordered categories)" to "대립 Odds ratio (순서 있는 범주)",
     "Insert expression" to "수식 넣기", "Signed interpretation" to "부호 있는 값으로 해석",
     "Scientific constants" to "과학 상수",
     "Recall variable" to "변수 불러오기", "No stored variables" to "저장된 변수가 없습니다",

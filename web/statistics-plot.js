@@ -1,11 +1,11 @@
 import {plot,dataBounds} from './plot.js';
 import {displayNumber} from './display-format.js';
-export function statisticsPlot(container,rows,{type='scatter',digits=10,curve=[]}={}){
+export function statisticsPlot(container,rows,{type='scatter',digits=10,curve=[],xAxisLabel='x',yAxisLabel='y'}={}){
   const columns=Array.from({length:rows[0]?.length||1},(_,i)=>rows.map(r=>r[i]).filter(s=>s!==''&&s!==undefined).map(Number).filter(Number.isFinite));
   if(type==='scatter'){
     const points=rows.filter(r=>r[0]!==''&&r[1]!==''&&r.length>1).map(r=>r.slice(0,2).map(Number)).filter(p=>p.every(Number.isFinite));
     if(!points.length){container.replaceChildren();return;}
-    plot(container,{curves:[points,...(curve.length?[curve]:[])]},dataBounds(points),{scatterCurves:[0],digits});return;
+    plot(container,{curves:[points,...(curve.length?[curve]:[])]},dataBounds(points),{scatterCurves:[0],digits,xAxisLabel,yAxisLabel});return;
   }
   const NS='http://www.w3.org/2000/svg',svg=document.createElementNS(NS,'svg');svg.setAttribute('viewBox','0 0 800 400');svg.setAttribute('role','img');svg.setAttribute('aria-label',type==='box'?'Box plot':'Histogram');
   const colors=['var(--accent)','#a04c75','#3b70bd'],node=(tag,attrs,text='')=>{const el=document.createElementNS(NS,tag);for(const [name,value] of Object.entries(attrs))el.setAttribute(name,String(value));el.textContent=text;svg.append(el);return el;};

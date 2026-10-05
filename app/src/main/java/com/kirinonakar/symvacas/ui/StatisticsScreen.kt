@@ -60,13 +60,17 @@ import kotlin.math.max
     var dataKind by rememberSaveable {mutableStateOf(m.statisticsKind)}
     var regression by rememberSaveable {mutableStateOf(m.statisticsRegression)}
     var polynomialDegree by rememberSaveable {mutableStateOf(m.statisticsPolynomialDegree)}
+    var logisticResponse by rememberSaveable {mutableStateOf(m.statisticsLogisticResponse)}
+    val regressionColumns=statisticsRegressionColumns(dataKind)
+    val responseColumn=logisticResponse.toIntOrNull()?.takeIf {it in regressionColumns.indices} ?: regressionColumns.lastIndex
+    LaunchedEffect(dataKind) {if(regressionColumns.isNotEmpty()&&logisticResponse.isNotBlank()&&logisticResponse.toIntOrNull() !in regressionColumns.indices)logisticResponse=regressionColumns.lastIndex.toString()}
     var customFormula by rememberSaveable {mutableStateOf(m.statisticsCustomFormula)}
     var customVariable by rememberSaveable {mutableStateOf(m.statisticsCustomVariable)}
     var customInitials by rememberSaveable {mutableStateOf(m.statisticsCustomInitials)}
     var plotType by rememberSaveable {mutableStateOf(m.statisticsPlot)}
     var csv by rememberSaveable {mutableStateOf(m.statisticsCsv)}
     var importPreview by remember {mutableStateOf<StatisticsCsvImport?>(null)}
-    LaunchedEffect(data,datasetName,dataKind,regression,plotType,csv,selected,isNew,customFormula,customVariable,customInitials,polynomialDegree) {m.saveStatistics(datasetName,data,dataKind,regression,plotType,csv,selected,isNew,customFormula,customVariable,customInitials,polynomialDegree)}
+    LaunchedEffect(data,datasetName,dataKind,regression,plotType,csv,selected,isNew,customFormula,customVariable,customInitials,polynomialDegree,logisticResponse) {m.saveStatistics(datasetName,data,dataKind,regression,plotType,csv,selected,isNew,customFormula,customVariable,customInitials,polynomialDegree,logisticResponse)}
     val importCsv=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {uri->
         if(uri!=null)scope.launch {
             val content=withContext(Dispatchers.IO) {runCatching {context.contentResolver.openInputStream(uri)?.bufferedReader()?.use {it.readText()}}.getOrNull()}
@@ -173,9 +177,9 @@ import kotlin.math.max
                 regression=selectedMode;plotType=if(dataKind=="xy")"Scatter" else "Histogram"
                 if(selectedMode in listOf("custom","polynomial"))m.clearRegression()
                 if(selectedMode !in listOf("custom","polynomial")) {
-                    val width=if(dataKind=="xyz")3 else 2
-                    val table=numericRows.filter {it.size>=width&&it.take(width).all(String::isNotBlank)}.joinToString(",","[","]"){it.take(width).joinToString(",","[","]")}
-                    m.fitRegression("regression($table,$selectedMode)",data)
+                    val table=statisticsRegressionTable(numericRows,dataKind,selectedMode,responseColumn)
+                    if(table!=null)m.fitRegression("regression($table,$selectedMode)",data,if(selectedMode in listOf("multiple","logistic"))responseColumn else null)
+                    else m.error="Add more data points than fit parameters"
                 }
             })
             if(dataKind=="xy"&&regression=="polynomial") {
@@ -187,7 +191,13 @@ import kotlin.math.max
                     },enabled=(polynomialDegree.toIntOrNull() ?: 0) in 1..10&&!m.regressionBusy){Text(tr("Analyze"))}
                 }
             }
-            if(dataKind!="list"&&regression in listOf("multiple","logistic"))Text(tr("Last column is response; previous columns are predictors. Logistic response: 0 or 1."),fontSize=11.sp,color=LocalInstrument.current.muted)
+            if(dataKind!="list"&&regression in listOf("multiple","logistic"))Text(tr(if(regression=="logistic")"Selected column is response; others are predictors. Logistic response: 0 or 1." else "Selected column is response; others are predictors."),fontSize=11.sp,color=LocalInstrument.current.muted)
+            if(dataKind!="list"&&regression in listOf("multiple","logistic")) {
+                Text(tr("Dependent variable"),fontSize=11.sp,color=LocalInstrument.current.muted)
+                Choices(regressionColumns,regressionColumns.getOrNull(responseColumn).orEmpty(),{name->m.clearRegression();logisticResponse=regressionColumns.indexOf(name).toString()},translate=false)
+                val table=statisticsRegressionTable(numericRows,dataKind,regression,responseColumn)
+                Button(onClick={table?.let {m.fitRegression("regression($it,$regression)",data,responseColumn)}},enabled=table!=null&&!m.regressionBusy){Text(tr("Analyze"))}
+            }
             if(m.regressionBusy)Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
                 Text(if(isKorean())"회귀 적합 중…" else "Fitting regression…",Modifier.weight(1f),fontSize=11.sp,color=LocalInstrument.current.muted)
                 SmallAction("Cancel",modifier=Modifier.testTag("statistics-regression-cancel")){m.cancelRegression()}
@@ -211,11 +221,30 @@ import kotlin.math.max
             }
             Choices(if(dataKind=="xy")listOf("Scatter","Histogram","Box plot") else listOf("Histogram","Box plot"),plotType,{plotType=it})
         }
+        val fittedResponse=if(m.regressionMode in listOf("multiple","logistic"))m.regressionResponseColumn?.takeIf {it in regressionColumns.indices} ?: regressionColumns.lastIndex else regressionColumns.lastIndex
+        val fittedVariables=statisticsRegressionVariables(dataKind,fittedResponse)
+        val fittedResponseName=regressionColumns.getOrNull(fittedResponse).orEmpty()
         val fitVisible=dataKind=="xy"&&plotType=="Scatter"&&m.regressionData==data&&m.regressionFit.isNotBlank()
-        StatisticsPlot(plotType,if(plotType=="Scatter")paired else xValues.mapIndexed {i,v->i.toDouble() to v},xValues,yValues,if(fitVisible)m.regressionCurve.orEmpty() else emptyList(),if(fitVisible)m.regressionFit else "",m.displayDigits,fitVisible&&m.regressionMode=="linear",m.regressionCorrelation,tertiary=zValues,xDateOrigin=dateAxis?.origin)
+        val plotPairs=if(fitVisible&&m.regressionMode=="logistic"&&fittedResponse==0)paired.map {(x,y)->y to x} else paired
+        StatisticsPlot(plotType,if(plotType=="Scatter")plotPairs else xValues.mapIndexed {i,v->i.toDouble() to v},xValues,yValues,if(fitVisible)m.regressionCurve.orEmpty() else emptyList(),if(fitVisible)m.regressionFit else "",m.displayDigits,fitVisible&&m.regressionMode=="linear",m.regressionCorrelation,tertiary=zValues,xDateOrigin=if(fitVisible&&fittedResponse==0)null else dateAxis?.origin,
+            xAxisLabel=if(fitVisible)fittedVariables["x"] ?: "x" else "x",yAxisLabel=if(fitVisible)fittedResponseName else "y",
+            fitPrefix=if(fitVisible&&m.regressionMode=="logistic")"P($fittedResponseName = 1) = " else "y ≈ ",fitVariables=if(fitVisible&&m.regressionMode=="logistic")fittedVariables else emptyMap())
         if(dateAxis!=null&&plotType=="Scatter")Text((if(isKorean())"회귀식의 x: ${dateAxis.origin.plusDays(1)} = 1일째" else "Regression x: ${dateAxis.origin.plusDays(1)} = day 1"),fontSize=11.sp,color=LocalInstrument.current.muted)
         if(dataKind!="list"&&m.regressionData==data&&m.regressionFit.isNotBlank()) {
             Column(verticalArrangement=Arrangement.spacedBy(0.dp)) {
+                if(dataKind=="xyz") {
+                    val equation=remember(m.regressionFit,m.displayDigits,fittedVariables) {regressionFormulaDisplayTree(m.regressionFit,m.displayDigits,fittedVariables)}
+                    CompositionLocalProvider(LocalMathMinimumSize provides 8f) {
+                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical=3.dp).testTag("statistics-regression-equation"),
+                            horizontalArrangement=Arrangement.spacedBy(5.dp)) {
+                            MathText(if(m.regressionMode=="logistic")"P($fittedResponseName = 1) = " else "$fittedResponseName = ",12f,Modifier.alignBy(MathAxis))
+                            Box(Modifier.alignBy(MathAxis)) {
+                                if(equation!=null)MathNode(equation,12f)
+                                else Text(m.regressionFit,fontSize=12.sp,fontFamily=FontFamily.Monospace)
+                            }
+                        }
+                    }
+                }
                 m.regressionReport?.let {RegressionInference(it,m.displayDigits)}
                 if(m.regressionParameters.isNotEmpty()) {
                     Text(tr("Fitted parameters"),fontSize=12.sp,fontWeight=FontWeight.SemiBold)

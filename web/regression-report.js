@@ -1,13 +1,14 @@
 import {element} from './app-ui.js';
 import {t} from './i18n.js';
 import {roundNumber} from './display-format.js';
+import {regressionROC} from './regression-roc.js';
 
 export function renderRegressionReport(container,report,digits=10) {
   container.replaceChildren();
   if(!report)return;
   const number=value=>value===null||value===undefined?'—':roundNumber(String(value),digits);
   const summary=element('p');
-  const metrics=[['R²','rSquared'],['Adjusted R²','adjustedRSquared'],['RMSE','rmse'],['Residual SE','residualSE'],['McFadden R²','pseudoRSquared'],['Deviance','deviance'],['AIC','aic'],['LR p','likelihoodP'],['Durbin–Watson','durbinWatson'],['Residual Shapiro p','shapiroP']];
+  const metrics=[['R²','rSquared'],['Adjusted R²','adjustedRSquared'],['RMSE','rmse'],['Residual SE','residualSE'],['C-statistic (AUC)','auc'],['McFadden R²','pseudoRSquared'],['Deviance','deviance'],['AIC','aic'],['LR p','likelihoodP'],['Durbin–Watson','durbinWatson'],['Residual Shapiro p','shapiroP']];
   summary.textContent=`n=${report.n} · df=${report.df} · `+metrics.filter(([,key])=>report[key]!=null||['rSquared','adjustedRSquared'].includes(key)&&key in report).map(([name,key])=>`${t(name)}=${number(report[key])}`).join(' · ');
   container.append(summary);
   const note=report.fitScale==='binomial'?'Binomial MLE; Wald intervals.':report.fitScale==='log(y)'?'Inference in log(y); R² and RMSE in original y units.':report.approximate?'Local Jacobian approximation; independent errors with constant variance.':'OLS inference; independent errors with constant variance.';
@@ -20,6 +21,7 @@ export function renderRegressionReport(container,report,digits=10) {
   const body=element('tbody');
   for(const c of report.coefficients||[]){const row=element('tr');for(const label of [c.name,number(c.estimate),number(c.se),`${number(c.low)} … ${number(c.high)}`,number(c.p),...(report.fitScale==='binomial'?[number(c.oddsRatio),`${number(c.oddsLow)} … ${number(c.oddsHigh)}`]:[])])row.append(element('td',label));body.append(row);}
   table.append(body);wrapper.append(table);container.append(wrapper);
+  if(report.roc){const roc=regressionROC(report,digits);if(roc)container.append(roc);}
   const details=element('details'),label=element('summary',t('Residual diagnostics'));details.append(label);
   details.append(element('p',t(report.fitScale==='binomial'?'Deviance residual vs fitted probability.':'Residual vs fitted; Durbin–Watson uses input row order.')));
   const binomial=report.fitScale==='binomial';

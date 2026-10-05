@@ -5,6 +5,9 @@ import com.kirinonakar.symvacas.math.Parser
 import com.kirinonakar.symvacas.ui.importStatisticsCsv
 import com.kirinonakar.symvacas.ui.previewStatisticsCsv
 import com.kirinonakar.symvacas.ui.regressionFormulaDisplayTree
+import com.kirinonakar.symvacas.ui.multivariateRegressionDisplayTree
+import com.kirinonakar.symvacas.ui.statisticsRegressionTable
+import com.kirinonakar.symvacas.ui.statisticsRegressionVariables
 import com.kirinonakar.symvacas.ui.statisticsCsvLine
 import com.kirinonakar.symvacas.ui.statisticsDataSource
 import com.kirinonakar.symvacas.ui.statisticsDateAxis
@@ -139,6 +142,33 @@ class StatisticsTestCommandsTest {
 }
 
 class RegressionFormulaTest {
+    @Test fun logisticResponseChoiceReordersOnlyCompleteRowsAndMapsThePredictors() {
+        val rows=listOf(listOf("0","10","20"),listOf("1","11","21"),listOf("","12","22"),listOf("0","13","23"),listOf("1","14","24"))
+        assertEquals("[[10,20,0],[11,21,1],[13,23,0],[14,24,1]]",statisticsRegressionTable(rows,"xyz","logistic",0))
+        assertEquals("[[10,20,0],[11,21,1],[13,23,0],[14,24,1]]",statisticsRegressionTable(rows,"xyz","multiple",0))
+        assertEquals("[[0,20,10],[1,21,11],[0,23,13],[1,24,14]]",statisticsRegressionTable(rows,"xyz","logistic",1))
+        assertEquals(mapOf("x1" to "y","x2" to "z"),statisticsRegressionVariables("xyz",0))
+        assertEquals(mapOf("x" to "y"),statisticsRegressionVariables("xy",0))
+        assertEquals("[[10,0],[11,1],[13,0],[14,1]]",statisticsRegressionTable(rows,"xy","logistic",0))
+        assertNull(statisticsRegressionTable(rows,"xy","logistic",2))
+        assertEquals("missing cells in the input table stay untouched","",rows[2][0])
+    }
+
+    @Test fun multivariateCaptionsMatchDataColumnsInsideLogisticExpressions() {
+        val formula="1/(1+exp(-0.123456789*x1+0.987654321*x2+x10))"
+        val displayed=multivariateRegressionDisplayTree(formula,5)!!
+        val values=mutableListOf<String>()
+        fun symbols(node:org.json.JSONObject) {
+            if(node.optString("kind")=="symbol")values.add(node.optString("value"))
+            node.optJSONArray("args")?.let {args->repeat(args.length()){symbols(args.getJSONObject(it))}}
+        }
+        symbols(displayed)
+        assertEquals(listOf("x","y","x10"),values)
+        assertTrue(displayed.toString().contains("0.12346"))
+        assertTrue(displayed.toString().contains("0.98765"))
+        assertTrue("the original stored predictor names stay intact",regressionFormulaDisplayTree(formula,5)!!.toString().contains("x1"))
+    }
+
     @Test fun fittedFormulaUsesConfiguredFractionalPlaces() {
         val source="0.123456789*x + 1/7"
         val five=regressionFormulaDisplayTree(source,5)!!.toString()

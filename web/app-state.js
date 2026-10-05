@@ -23,6 +23,10 @@ export function createAppState(saved={},browserLanguage='en') {
     matrixCells:objectOrEmpty(saved.matrixCells),
     rates:objectOrEmpty(saved.rates)
   };
+  // Older regression options used their translated labels as option values.
+  const regressionAliases={'다항':'polynomial','다중':'multiple','로지스틱':'logistic'};
+  const regression=state.fields['regression-kind'];
+  if(Object.hasOwn(regressionAliases,regression))state.fields['regression-kind']=regressionAliases[regression];
   if(state.fields['graph-kind']==='implicit'){
     const source=state.fields['graph-source']||state.graph.sources?.implicit||'x^2+y^2=1';
     state.fields['graph-kind']='cartesian';state.fields['graph-source']=source;

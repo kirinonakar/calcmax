@@ -13,10 +13,20 @@ internal fun decimalFractionFormulaTree(source:String, fractionDigits:Int=3):JSO
     JSONObject(decimalizeRegressionFractions(Parser(source).parse(),fractionDigits).json())
 }.getOrNull()
 
-internal fun regressionFormulaDisplayTree(source:String, displayDigits:Int):JSONObject? =
+internal fun regressionFormulaDisplayTree(source:String, displayDigits:Int,variables:Map<String,String> = emptyMap()):JSONObject? =
     decimalFractionFormulaTree(source,displayDigits)?.let {
         ResultDisplayFormat.formatTree(it,ResultDisplayMode.OFF,false,maxFractionDigits=displayDigits)
+    }?.also {tree->
+        fun rename(node:JSONObject) {
+            if(node.optString("kind")=="symbol")variables[node.optString("value")]?.let {node.put("value",it)}
+            node.optJSONArray("args")?.let {args->repeat(args.length()){index->args.optJSONObject(index)?.let(::rename)}}
+        }
+        if(variables.isNotEmpty())rename(tree)
     }
+
+/** Match the two predictors in x,y,z data while keeping the stored fit intact. */
+internal fun multivariateRegressionDisplayTree(source:String,displayDigits:Int):JSONObject? =
+    regressionFormulaDisplayTree(source,displayDigits,mapOf("x1" to "x","x2" to "y"))
 
 /** Make a parseable graph expression whose coefficients match the displayed fit. */
 internal fun regressionFormulaGraphSource(source:String, displayDigits:Int):String? = runCatching {

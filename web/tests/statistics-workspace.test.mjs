@@ -3,17 +3,19 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {JSDOM} from 'jsdom';
 import {createAppUI} from '../app-ui.js';
-import {setLanguage} from '../i18n.js';
+import {setLanguage,translateDOM,t as translate} from '../i18n.js';
 import {createStatisticsWorkspace} from '../statistics-workspace.js';
 import {statisticsCommand} from '../workspace-commands.js';
-import {regressionResidualCSV} from '../regression-report.js';
+import {regressionResidualCSV,renderRegressionReport} from '../regression-report.js';
+import {restoreFields} from '../app-state.js';
 
-function workspace(t){
+function workspace(t,fields={}){
   const dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));
   globalThis.document=dom.window.document;globalThis.NodeFilter=dom.window.NodeFilter;
   const $=id=>document.getElementById(id),ui=createAppUI(),requests=[],results=[],errors=[];
   let saves=0,cancels=0;
-  const state={fields:{'statistics-kind':'xy'},datasets:{saved:'1,2\n2,4'},datasetKinds:{saved:'xy'},digits:10};
+  const state={fields:{'statistics-kind':'xy',...fields},datasets:{saved:'1,2\n2,4'},datasetKinds:{saved:'xy'},digits:10};
+  restoreFields(state);
   const engine={ready:true,execute:request=>new Promise(resolve=>requests.push({request,resolve})),cancel:()=>cancels++};
   const statistics=createStatisticsWorkspace({state,engine,ui,persist:()=>saves++,refreshWorkspaceMath:()=>{},
     storeExpression:()=>{},error:message=>errors.push(message),changeMode:()=>{},replaceInput:()=>{},graphs:{}});
@@ -36,6 +38,47 @@ test('polynomial and multivariate commands use degree and complete response rows
   const rows='0,0,1\n1,0,3\n0,1,4\n1,1,7\n2,1,8\n3,2,';
   assert.equal(statisticsCommand(rows,{op:'regression',kind:'xyz',regression:'multiple'}),'regression([[0,0,1],[1,0,3],[0,1,4],[1,1,7],[2,1,8]],multiple)');
   assert.match(statisticsCommand(rows,{op:'regression',kind:'xyz',regression:'logistic'}),/,logistic\)$/);
+  assert.equal(statisticsCommand('0,10,20\n1,11,21\n,12,22\n0,13,23\n1,14,24',{op:'regression',kind:'xyz',regression:'logistic',responseColumn:0}),'regression([[10,20,0],[11,21,1],[13,23,0],[14,24,1]],logistic)');
+  assert.equal(statisticsCommand('0,10,20\n1,11,21\n,12,22\n0,13,23\n1,14,24',{op:'regression',kind:'xyz',regression:'multiple',responseColumn:0}),'regression([[10,20,0],[11,21,1],[13,23,0],[14,24,1]],multiple)');
+  assert.equal(statisticsCommand('0,10\n1,11\n0,12\n1,13',{op:'regression',kind:'xy',regression:'logistic',responseColumn:0}),'regression([[10,0],[11,1],[12,0],[13,1]],logistic)');
+  assert.throws(()=>statisticsCommand(rows,{op:'regression',kind:'xyz',regression:'logistic',responseColumn:3}),/dependent variable/);
+});
+
+test('logistic response choices follow the data type, orient the formula and axes, and cancel stale fits',async t=>{
+  const context=workspace(t),{$,state,requests,results,statistics,run}=context;
+  $('regression-kind').value='logistic';$('regression-kind').dispatchEvent(new document.defaultView.Event('change'));
+  assert.equal($('regression-response').closest('label').hidden,false);
+  assert.deepEqual([...$('regression-response').options].map(option=>option.value),['0','1']);
+  assert.equal($('regression-response').value,'1');
+  $('statistics-data').value='0,10\n1,11\n0,12\n1,13';
+  const old=run();
+  $('regression-response').value='0';$('regression-response').dispatchEvent(new document.defaultView.Event('change'));
+  assert.equal(state.fields['regression-response-auto'],false);assert.equal(context.cancels,1);
+  requests[0].resolve({ok:true,decimal:'x'});await old;assert.equal(results.length,0);
+  statistics.showRegression({ok:true,decimal:'1/(1+exp(-x))',curve:[[10,.1],[13,.9]]});
+  assert.match($('regression-caption').textContent,/P.*x.*1/);
+  assert.equal($('statistics-plot').querySelector('[data-axis-label="x"]').textContent,'y');
+  assert.equal($('statistics-plot').querySelector('[data-axis-label="y"]').textContent,'x');
+  $('statistics-kind').value='xyz';$('statistics-kind').dispatchEvent(new document.defaultView.Event('change'));
+  assert.deepEqual([...$('regression-response').options].map(option=>option.value),['0','1','2']);
+  assert.equal($('regression-response').value,'0','an explicitly selected compatible response is retained');
+  $('regression-kind').value='multiple';$('regression-kind').dispatchEvent(new document.defaultView.Event('change'));
+  assert.equal($('regression-response').closest('label').hidden,false);
+  $('statistics-kind').value='xy';$('statistics-kind').dispatchEvent(new document.defaultView.Event('change'));
+  $('regression-kind').value='linear';$('regression-kind').dispatchEvent(new document.defaultView.Event('change'));
+  assert.equal($('regression-response').closest('label').hidden,true);
+});
+
+test('restored dependent-variable choices survive localization and temporarily hidden regression controls',t=>{
+  const {$,state,statistics}=workspace(t,{'statistics-kind':'xyz','regression-kind':'logistic','regression-response':'0','regression-response-choice':'0','regression-response-auto':false});
+  setLanguage('ko');translateDOM();statistics.render();
+  assert.equal($('regression-response').value,'0');
+  $('statistics-kind').value='list';$('statistics-kind').dispatchEvent(new document.defaultView.Event('change'));
+  assert.equal(state.fields['regression-response-choice'],'0');
+  $('statistics-kind').value='xyz';$('statistics-kind').dispatchEvent(new document.defaultView.Event('change'));
+  $('regression-kind').value='logistic';$('regression-kind').dispatchEvent(new document.defaultView.Event('change'));
+  assert.equal($('regression-response').value,'0');
+  assert.equal($('regression-response').closest('label').hidden,false);
 });
 
 test('regression renders inference and residual plot, exports every row, and clears stale data',t=>{
@@ -53,6 +96,27 @@ test('regression renders inference and residual plot, exports every row, and cle
   assert.equal($('regression-export').hidden,true);
 });
 
+test('logistic C-statistic and ROC display the correct axes and chance reference in both languages',t=>{
+  const {$}=workspace(t);
+  const report={n:4,df:2,fitScale:'binomial',auc:'.75',roc:[['0','0'],['0','.5'],['.5','.5'],['.5','1'],['1','1']],coefficients:[],residuals:[],warnings:[]};
+  for(const language of ['en','ko']){
+    setLanguage(language);renderRegressionReport($('regression-inference'),report);
+    assert.match($('regression-inference').textContent,/C-statistic \(AUC\)=0.75/);
+    const svg=$('regression-inference').querySelector('svg[data-roc]');
+    assert.equal(svg.getAttribute('role'),'img');
+    assert.equal(svg.getAttribute('aria-label'),translate('ROC curve'));
+    assert.ok(svg.textContent.includes(translate('False positive rate (FPR)')));
+    assert.ok(svg.textContent.includes(translate('Sensitivity (TPR)')));
+    assert.ok(svg.querySelector('[data-roc-chance]'));
+    const positions=[...svg.querySelector('[data-roc-curve]').getAttribute('d').matchAll(/[ML]([\d.]+),([\d.]+)/g)].map(match=>[Number(match[1]),Number(match[2])]);
+    assert.equal(positions.length,report.roc.length);
+    assert.ok(positions[0][0]<positions.at(-1)[0]&&positions[0][1]>positions.at(-1)[1]);
+    assert.ok(positions.slice(1).every((point,i)=>point[0]>=positions[i][0]&&point[1]<=positions[i][1]));
+  }
+  renderRegressionReport($('regression-inference'),{n:4,df:2,fitScale:'y',coefficients:[],residuals:[]});
+  assert.equal($('regression-inference').querySelector('svg[data-roc]'),null);
+});
+
 test('xyz regression controls select multivariate models and keep graph transfer hidden',t=>{
   const {$,statistics}=workspace(t);
   $('statistics-kind').value='xyz';$('statistics-kind').dispatchEvent(new document.defaultView.Event('change'));
@@ -65,6 +129,94 @@ test('xyz regression controls select multivariate models and keep graph transfer
   $('statistics-kind').value='xy';$('statistics-kind').dispatchEvent(new document.defaultView.Event('change'));
   $('regression-kind').value='polynomial';$('regression-kind').dispatchEvent(new document.defaultView.Event('change'));
   assert.equal($('regression-degree').closest('label').hidden,false);
+});
+
+test('translated regression labels retain model IDs and the selected model through language changes',t=>{
+  const {$,statistics}=workspace(t);
+  const models=[...$('regression-kind').options].map(option=>option.value);
+  for(const language of ['ko','en','ko']){
+    setLanguage(language);translateDOM();statistics.render();
+    assert.deepEqual([...$('regression-kind').options].map(option=>option.value),models);
+    for(const model of models.filter(model=>model!=='multiple')){
+      $('regression-kind').value=model;$('regression-kind').dispatchEvent(new document.defaultView.Event('change'));
+      statistics.render();
+      assert.equal($('regression-kind').value,model);
+      assert.equal($('regression-custom').hidden,model!=='custom');
+      assert.equal($('regression-degree').closest('label').hidden,model!=='polynomial');
+      const source=statistics.expression('regression');
+      assert.match(source,new RegExp(`,${model}(?:,|\\))`));
+    }
+    $('regression-kind').value='logistic';
+  }
+  setLanguage('en');translateDOM();
+  assert.equal($('regression-kind').value,'logistic');
+});
+
+test('Korean xyz data keeps multiple and logistic selectable and submits their model IDs',async t=>{
+  const {$,statistics,requests,run}=workspace(t);
+  setLanguage('ko');translateDOM();
+  $('statistics-kind').value='xyz';$('statistics-kind').dispatchEvent(new document.defaultView.Event('change'));
+  $('statistics-data').value='0,0,1\n1,0,0\n0,1,0\n1,1,1\n2,1,0';
+  assert.equal($('regression-kind').value,'multiple');
+  assert.deepEqual([...$('regression-kind').options].filter(option=>!option.disabled).map(option=>option.value),['multiple','logistic']);
+  for(const model of ['multiple','logistic']){
+    $('regression-kind').value=model;$('regression-kind').dispatchEvent(new document.defaultView.Event('change'));
+    const pending=run();
+    const request=requests.at(-1);
+    assert.ok(request,`selected ${model} starts a fit`);
+    assert.equal(request.request.tree.args[1].value,model);
+    request.resolve({ok:true,decimal:model==='logistic'?'1/2':'x1+x2'});await pending;
+    assert.equal($('regression-kind').value,model);
+  }
+});
+
+for(const language of ['en','ko'])test(`data type changes remove incompatible menu entries and restore valid translated choices (${language})`,t=>{
+  const {$,statistics}=workspace(t),options=id=>[...$(id).options].map(option=>option.value);
+  const changeKind=kind=>{$('statistics-kind').value=kind;$('statistics-kind').dispatchEvent(new document.defaultView.Event('change'));};
+  setLanguage(language);translateDOM();statistics.render();
+  const xyModels=['linear','quadratic','polynomial','logistic','logarithmic','exponential','power','custom'];
+  assert.deepEqual(options('regression-kind'),xyModels);
+  $('regression-kind').value='custom';$('regression-kind').dispatchEvent(new document.defaultView.Event('change'));
+  changeKind('xyz');
+  assert.deepEqual(options('regression-kind'),['multiple','logistic']);
+  assert.equal($('regression-kind').value,'multiple');
+  assert.equal($('regression-custom').hidden,true);
+  assert.deepEqual(options('statistics-plot-type'),['histogram','box']);
+  assert.deepEqual(options('statistics-grouping'),['columns']);
+  $('regression-kind').value='logistic';changeKind('xy');
+  assert.equal($('regression-kind').value,'logistic','a model compatible with both shapes stays selected');
+  assert.deepEqual(options('regression-kind'),xyModels);
+  assert.deepEqual(options('statistics-plot-type'),['scatter','histogram','box']);
+  $('statistics-op').value='anova';changeKind('list');
+  assert.equal($('regression-section').hidden,true);
+  assert.deepEqual(options('regression-kind'),[]);
+  assert.equal($('statistics-op').value,'stats');
+  for(const invalid of ['correlation','ttestpaired','ttest2','ztest2','anova','tukey','mannwhitney','kruskal','chi2independence','fisherexact'])assert.ok(!options('statistics-op').includes(invalid),`${invalid} is absent for a List`);
+  assert.ok(options('statistics-op').includes('wilcoxon'),'one-sample signed ranks remain available');
+  assert.deepEqual(options('statistics-plot-type'),['histogram','box']);
+  changeKind('xyz');
+  assert.deepEqual(options('regression-kind'),['multiple','logistic']);
+  assert.deepEqual([...$('regression-kind').options].map(option=>option.textContent),['multiple','logistic'].map(translate));
+  assert.ok(options('statistics-op').includes('anova'),'valid group tests return after changing the data type');
+  changeKind('xy');$('regression-kind').value='polynomial';$('regression-kind').dispatchEvent(new document.defaultView.Event('change'));
+  assert.equal($('regression-degree').closest('label').hidden,false);
+  assert.ok([...document.querySelectorAll('#regression-kind option,#statistics-op option,#statistics-plot-type option,#statistics-grouping option')].every(option=>!option.disabled),'menus contain no disabled choices');
+});
+
+test('independent comparisons omit the first group from second-group choices and hide unsupported grouping',t=>{
+  const {$,statistics}=workspace(t),change=id=>$(id).dispatchEvent(new document.defaultView.Event('change'));
+  $('statistics-data').value='a,1\nb,4\nc,7\na,2\nb,5\nc,8';
+  $('statistics-op').value='mannwhitney';change('statistics-op');
+  $('statistics-grouping').value='groups';change('statistics-grouping');
+  assert.deepEqual([...$('statistics-second-group').options].map(option=>option.value),['b','c']);
+  $('statistics-first-group').value='b';change('statistics-first-group');
+  assert.deepEqual([...$('statistics-second-group').options].map(option=>option.value),['a','c']);
+  assert.notEqual($('statistics-second-group').value,'b');
+  assert.match(statistics.expression(),/^mannwhitney\(\[4,5\],\[(?:1,2|7,8)\]\)$/);
+  $('statistics-op').value='wilcoxon';change('statistics-op');
+  assert.deepEqual([...$('statistics-grouping').options].map(option=>option.value),['columns']);
+  $('statistics-op').value='mannwhitney';change('statistics-op');
+  assert.deepEqual([...$('statistics-grouping').options].map(option=>option.value),['columns','groups']);
 });
 
 test('regression exposes Cancel immediately and cancelled results cannot return; a new fit succeeds',async t=>{

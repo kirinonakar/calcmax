@@ -29,7 +29,7 @@ import kotlin.math.abs
         return ResultDisplayFormat.formatText(raw,ResultDisplayMode.OFF,false,maxFractionDigits=digits)
     }
     val metrics=listOf("R²" to "rSquared","Adjusted R²" to "adjustedRSquared","RMSE" to "rmse","Residual SE" to "residualSE",
-        "McFadden R²" to "pseudoRSquared","Deviance" to "deviance","AIC" to "aic","LR p" to "likelihoodP",
+        "C-statistic (AUC)" to "auc","McFadden R²" to "pseudoRSquared","Deviance" to "deviance","AIC" to "aic","LR p" to "likelihoodP",
         "Durbin–Watson" to "durbinWatson","Residual Shapiro p" to "shapiroP")
     Text("n=${report.optInt("n")} · df=${report.optInt("df")} · "+metrics.filter {report.has(it.second)&&(!report.isNull(it.second)||it.second in listOf("rSquared","adjustedRSquared"))}.map {"${tr(it.first)}=${value(report,it.second)}"}.joinToString(" · "),fontSize=11.sp)
     Text(tr(when {
@@ -63,6 +63,7 @@ import kotlin.math.abs
             if(coefficient.has("oddsRatio"))Text("${coefficient.optString("name")} · ${tr("Odds ratio")}: ${value(coefficient,"oddsRatio")} · ${tr("OR 95% CI")}: ${value(coefficient,"oddsLow")} … ${value(coefficient,"oddsHigh")}",fontSize=11.sp)
         }
     }
+    RegressionRoc(report,digits)
     TextButton(onClick={expanded=!expanded}) {Text(tr("Residual diagnostics"))}
     if(expanded) {
         val binomial=report.optString("fitScale")=="binomial"

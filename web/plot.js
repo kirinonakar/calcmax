@@ -10,12 +10,14 @@ function svgElement(tag,attributes={},text='') {
   if (text) el.textContent = text;
   return el;
 }
-export function plot(container,result,bounds,{colors=defaultGraphColors,dots=false,scatterCurves=[],digits=10,analysis=null,trace=null,selected=0,integral=null,radianAxis=false,surfaceView={rotation:35,elevation:32,zoom:1}}={}) {
+export function plot(container,result,bounds,{colors=defaultGraphColors,dots=false,scatterCurves=[],digits=10,analysis=null,trace=null,selected=0,integral=null,radianAxis=false,xAxisLabel=null,yAxisLabel=null,surfaceView={rotation:35,elevation:32,zoom:1}}={}) {
   const {xmin,xmax,ymin,ymax} = bounds;
   if (![xmin,xmax,ymin,ymax].every(Number.isFinite) || xmax<=xmin || ymax<=ymin) throw new Error('그래프 범위를 확인해 주세요.');
   if(result.surface)return plotSurface(container,result,bounds,{digits,...surfaceView});
   const w=800,h=460,pad=42,innerW=w-2*pad,innerH=h-2*pad;
   const svg = svgElement('svg',{viewBox:`0 0 ${w} ${h}`,role:'img','aria-label':result.surface ? '3D surface graph' : 'Function graph'});
+  if(xAxisLabel)svg.append(svgElement('text',{x:w-pad+14,y:h-pad+4,fill:'var(--muted)','font-size':12,'data-axis-label':'x'},xAxisLabel));
+  if(yAxisLabel)svg.append(svgElement('text',{x:pad,y:pad-14,fill:'var(--muted)','font-size':12,'data-axis-label':'y'},yAxisLabel));
   const defs = svgElement('defs'), clip = svgElement('clipPath',{id:`clip-${container.id}`});
   clip.append(svgElement('rect',{x:pad,y:pad,width:innerW,height:innerH})); defs.append(clip); svg.append(defs);
   const x = v => pad+(v-xmin)/(xmax-xmin)*innerW, y = v => h-pad-(v-ymin)/(ymax-ymin)*innerH;

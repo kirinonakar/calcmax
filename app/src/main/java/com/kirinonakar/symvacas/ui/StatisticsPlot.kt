@@ -19,9 +19,9 @@ import kotlin.math.ln
 import kotlin.math.max
 import kotlin.math.roundToLong
 
-@Composable internal fun StatisticsPlot(type:String,points:List<Pair<Double,Double>>,values:List<Double>,secondary:List<Double> = emptyList(),curve:List<Pair<Double,Double>> = emptyList(),fitLabel:String="",displayDigits:Int=10,showCorrelation:Boolean=false,correlation:Double?=null,tertiary:List<Double> = emptyList(),xDateOrigin:LocalDate?=null) {
+@Composable internal fun StatisticsPlot(type:String,points:List<Pair<Double,Double>>,values:List<Double>,secondary:List<Double> = emptyList(),curve:List<Pair<Double,Double>> = emptyList(),fitLabel:String="",displayDigits:Int=10,showCorrelation:Boolean=false,correlation:Double?=null,tertiary:List<Double> = emptyList(),xDateOrigin:LocalDate?=null,xAxisLabel:String="x",yAxisLabel:String="y",fitPrefix:String="y ≈ ",fitVariables:Map<String,String> = emptyMap()) {
     val c=LocalInstrument.current
-    val fitEquation=remember(fitLabel,displayDigits) {if(fitLabel.isBlank())null else regressionFormulaDisplayTree(fitLabel,displayDigits)}
+    val fitEquation=remember(fitLabel,displayDigits,fitVariables) {if(fitLabel.isBlank())null else regressionFormulaDisplayTree(fitLabel,displayDigits,fitVariables)}
     Canvas(Modifier.fillMaxWidth().height(220.dp).background(c.display)) {
         val left=38.dp.toPx();val right=12.dp.toPx();val top=14.dp.toPx();val bottom=28.dp.toPx()
         val width=size.width-left-right;val height=size.height-top-bottom
@@ -41,8 +41,8 @@ import kotlin.math.roundToLong
                 drawPath(path,c.danger,style=Stroke(2.dp.toPx()))
             }
             points.forEach {drawCircle(c.accent,4.dp.toPx(),Offset(px(it.first),py(it.second)))}
-            if(xDateOrigin==null)drawContext.canvas.nativeCanvas.drawText("x",left+width-4,top+height+20.dp.toPx(),text)
-            drawContext.canvas.nativeCanvas.drawText("y",5.dp.toPx(),top+12.dp.toPx(),text)
+            if(xDateOrigin==null)drawContext.canvas.nativeCanvas.drawText(xAxisLabel,left+width-4,top+height+20.dp.toPx(),text)
+            drawContext.canvas.nativeCanvas.drawText(yAxisLabel,5.dp.toPx(),top+12.dp.toPx(),text)
             val firstTick=xDateOrigin?.let {origin->runCatching {origin.plusDays(x0.roundToLong()).toString()}.getOrNull()} ?: "%.4g".format(x0)
             val lastTick=xDateOrigin?.let {origin->runCatching {origin.plusDays(x1.roundToLong()).toString()}.getOrNull()} ?: "%.4g".format(x1)
             drawContext.canvas.nativeCanvas.drawText(firstTick,left,top+height+16.dp.toPx(),text)
@@ -97,7 +97,7 @@ import kotlin.math.roundToLong
     if(type=="Scatter" && fitEquation!=null)CompositionLocalProvider(LocalMathMinimumSize provides 8f) {
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal=10.dp,vertical=3.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(5.dp)) {
             MathText("●",11f,Modifier.alignBy(MathAxis),tint=c.danger)
-            MathText("y ≈ ",12f,Modifier.alignBy(MathAxis))
+            MathText(fitPrefix,12f,Modifier.alignBy(MathAxis))
             Box(Modifier.alignBy(MathAxis)){MathNode(fitEquation,12f)}
             if(showCorrelation) {
                 MathText("    r = ",12f,Modifier.alignBy(MathAxis))

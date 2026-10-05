@@ -201,6 +201,31 @@ def expression_report(engine, rows, model, independent, names, coefficients, bou
                       approximate=True)
 
 
+def _binary_roc(target, scores):
+    """Empirical ROC and concordance AUC, grouping tied decision scores.
+
+    Logits preserve score order even when probabilities round to zero or one.
+    Linear interpolation through each tied block gives half credit to ties.
+    """
+    require(len(target)==len(scores) and target and all(y in (0,1) for y in target), "ROC requires paired binary labels and scores")
+    positives=int(sum(target)); negatives=len(target)-positives
+    require(positives>0 and negatives>0, "ROC requires both 0 and 1")
+    require(all(mp.isfinite(score) for score in scores), "ROC scores must be finite numbers")
+    order=sorted(range(len(scores)),key=lambda i:scores[i],reverse=True)
+    points=[[mp.mpf(0),mp.mpf(0)]]
+    true_positives=false_positives=start=0
+    while start<len(order):
+        end=start+1
+        while end<len(order) and scores[order[end]]==scores[order[start]]: end+=1
+        for index in order[start:end]:
+            if target[index]==1:true_positives+=1
+            else:false_positives+=1
+        points.append([mp.mpf(false_positives)/negatives,mp.mpf(true_positives)/positives])
+        start=end
+    area=mp.fsum((right[0]-left[0])*(right[1]+left[1])/2 for left,right in zip(points,points[1:]))
+    return area,points
+
+
 def fit_multivariate(engine, rows, logistic=False):
     from calc_statistics import _mpf, _mp_result, _normal_sf, _quantile, _normal_cdf, _chisq_sf
     require(isinstance(rows,(list,tuple)) and len(rows)>=3 and all(isinstance(row,(list,tuple)) for row in rows), "Enter regression data rows")
@@ -260,6 +285,9 @@ def fit_multivariate(engine, rows, logistic=False):
                       "pseudoRSquared":mp.nstr(1-loss/null_loss,engine.precision), "deviance":mp.nstr(2*loss,engine.precision),
                       "aic":mp.nstr(2*loss+2*p,engine.precision),"likelihoodRatio":mp.nstr(lr,engine.precision),
                       "likelihoodP":mp.nstr(_chisq_sf(lr,p-1),engine.precision),"coefficients":[],"residuals":[]}
+            auc,roc=_binary_roc(target,linear)
+            report["auc"]=mp.nstr(auc,engine.precision)
+            report["roc"]=[[mp.nstr(x,engine.precision),mp.nstr(y,engine.precision)] for x,y in roc]
             for j,value in enumerate(coefficients):
                 se=mp.sqrt(covariance[j,j]); low=value-critical*se; high=value+critical*se
                 out=lambda v: mp.nstr(v,engine.precision)
