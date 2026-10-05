@@ -59,7 +59,9 @@ function changeMode(mode) {
   if(['matrix','vector'].includes(mode))workspaces.renderMatrix();
   if(mode==='scientific'){calculator.renderTape();calculator.followTape();}
   graphs.activate(mode==='graph');workspaces.refreshMath();calculator.updateResultSource();
-  calculator.refreshSizing();persist();
+  calculator.refreshSizing();
+  if(mode==='scientific')calculator.renderInputCursor();
+  persist();
 }
 function refreshDisplays(){calculator.renderResult();workspaces.render();graphs.render();}
 $('mode').onchange=()=>changeMode(value('mode'));$('angle').onchange=persist;

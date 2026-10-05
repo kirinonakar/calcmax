@@ -55,6 +55,25 @@ for(const keyboard of [false,true])test(`equality exits functions in ${keyboard?
   assert.equal($('expression').value,'integrate(x,x)=f(x)');
 });
 
+test('returning from keyboard input measures the visible formula and keeps its insertion point',t=>{
+  const {$,calculator}=calculatorPage(t,'sin(9)');
+  $('typing-toggle').click();
+  calculator.replaceInput('sin(9)',{uncommit:true});
+  $('expression').setSelectionRange(5,5);
+  const flow=$('expression-preview').querySelector('.input-flow'),number=flow.querySelector('mn');
+  const box=(left,top,width,height)=>({left,top,right:left+width,bottom:top+height,width,height});
+  flow.getBoundingClientRect=()=>document.documentElement.dataset.typing==='true'?box(0,0,0,0):box(100,50,90,24);
+  number.getBoundingClientRect=()=>document.documentElement.dataset.typing==='true'?box(0,0,0,0):box(147,54,12,16);
+  calculator.renderInputCursor();
+  assert.equal(flow.querySelector('.input-caret'),null,'hidden MathML cannot supply caret coordinates');
+  $('typing-toggle').click();
+  const caret=flow.querySelector('.input-caret');
+  assert.ok(caret,'switching back redraws the caret without an extra key or click');
+  assert.equal(caret.style.left,'59px');assert.equal(caret.style.top,'4px');
+  assert.equal(caret.dataset.sourceStart,'5');assert.equal($('expression').selectionStart,5);
+  calculator.insert('0');assert.equal($('expression').value,'sin(90)');
+});
+
 test('clicking a number after = lets keypad input replace it and recalculates the edited expression',async t=>{
   const {$,calculator,engine,state,clickNumber}=calculatorPage(t,'12+34');
   clickNumber('34');

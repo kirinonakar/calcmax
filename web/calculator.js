@@ -164,7 +164,25 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
       } catch { /* Incomplete or failed previews leave the input editable. */ }
     },100);
   }
-  function renderInputCursor(){displaySizing.refresh();const field=$('expression'),display=$('expression-preview'),math=display.querySelector('.input-flow,math');if(inputBoundary&&(inputBoundary.source!==field.value||inputBoundary.position!==field.selectionStart||field.selectionStart!==field.selectionEnd))inputBoundary=null;if(math){const marker=markInputCursor(math,field.value,field.selectionStart,field.selectionEnd,{boundary:inputBoundary?.edge,structure:inputBoundary});if(!typing)followInputCursor(display,marker||display.querySelector('.selected'),12,state.wordWrap);}else if(!field.value&&!display.querySelector('.text-caret')){const cursor=element('span','│','text-caret');display.append(cursor);}if(typing&&!state.wordWrap)followTextCursor(field);}
+  function renderInputCursor(){
+    displaySizing.refresh();
+    const field=$('expression'),display=$('expression-preview');
+    if(inputBoundary&&(inputBoundary.source!==field.value||inputBoundary.position!==field.selectionStart||field.selectionStart!==field.selectionEnd))inputBoundary=null;
+    // Hidden MathML has zero-sized rectangles. Rebuild its caret when the
+    // math input is visible instead of saving those coordinates for later.
+    if(typing||document.documentElement.dataset.workspace!=='scientific'){
+      for(const marker of display.querySelectorAll('.input-caret'))marker.remove();
+      if(typing&&!state.wordWrap)followTextCursor(field);
+      return;
+    }
+    const math=display.querySelector('.input-flow,math');
+    if(math){
+      const marker=markInputCursor(math,field.value,field.selectionStart,field.selectionEnd,{boundary:inputBoundary?.edge,structure:inputBoundary});
+      followInputCursor(display,marker||display.querySelector('.selected'),12,state.wordWrap);
+    }else if(!field.value&&!display.querySelector('.text-caret')){
+      display.append(element('span','│','text-caret'));
+    }
+  }
   $('expression-preview').onclick=event=>{
     inputBoundary=null;
     if(committed&&!isBusy()){
@@ -227,7 +245,7 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
   $('undo').onclick=()=>{if(isBusy())return;const undo=undoStack();if(undo.length){const field=$('expression');field.value=undo.pop();field.setSelectionRange(field.value.length,field.value.length);committed=false;if(!calcSession)$('commit-indicator').textContent='';preview();}};
   $('copy').onclick=()=>{const f=$('expression');clipboard(f.value.slice(f.selectionStart,f.selectionEnd)||f.value);};
   $('cut').onclick=()=>{const field=$('expression'),start=field.selectionStart,end=field.selectionEnd;if(start!==end){clipboard(field.value.slice(start,end));undoStack().push(field.value);field.setRangeText('',start,end,'end');committed=false;preview();}};
-  $('typing-toggle').onclick=()=>{typing=!typing;document.documentElement.dataset.typing=String(typing);$('expression').readOnly=!typing;setText($('typing-toggle'),typing?'Math input':'Keyboard');if(typing)$('expression').focus({preventScroll:true});};
+  $('typing-toggle').onclick=()=>{typing=!typing;document.documentElement.dataset.typing=String(typing);$('expression').readOnly=!typing;setText($('typing-toggle'),typing?'Math input':'Keyboard');if(typing)$('expression').focus({preventScroll:true});renderInputCursor();};
   $('insert-mode').onclick=()=>{overwrite=!overwrite;$('insert-mode').textContent=overwrite?'OVR':'INS';};
   $('paste').onclick=async()=>{try{insertPastedExpression(await navigator.clipboard.readText());}catch{const content=element('div'),field=element('textarea');field.rows=4;field.setAttribute('aria-label',t('Paste expression'));content.append(field,control('Insert',()=>{try{insertPastedExpression(field.value);$('dialog').close();}catch(exc){toast(exc.message);}}));openDialog('Paste',content);field.focus({preventScroll:true});}};
   document.addEventListener('paste',event=>{if(event.defaultPrevented||value('mode')!=='scientific'||typing||$('dialog').open||$('settings-dialog').open||event.target.closest?.('input,select,textarea')&&event.target!==$('expression'))return;const text=event.clipboardData?.getData('text/plain')||event.clipboardData?.getData('text');if(!text)return;event.preventDefault();try{insertPastedExpression(text);}catch(exc){toast(exc.message);}});
@@ -387,6 +405,9 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
 
   document.documentElement.dataset.typing='false';
   document.fonts?.addEventListener('loadingdone',renderInputCursor);
+  const CursorResizeObserver=document.defaultView.ResizeObserver;
+  const cursorResizeObserver=CursorResizeObserver?new CursorResizeObserver(renderInputCursor):null;
+  cursorResizeObserver?.observe($('expression-preview'));
   function replaceInput(source,{uncommit=false}={}) {
     $('expression').value=source;
     if(uncommit)committed=false;
@@ -399,6 +420,7 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
   function updateResultSource(){ $('result-source').hidden=['scientific','tip'].includes(value('mode'))||!lastResultSource; }
   function dispose() {
     cancelCalculationPreview();tapeFollow.dispose();displaySizing.dispose();
+    cursorResizeObserver?.disconnect();
     document.fonts?.removeEventListener('loadingdone',renderInputCursor);
   }
   return {handleKey,insert,evaluate,showResult,renderResult,renderTape,renderNotation,preview,renderInputCursor,applyFonts,applyWordWrap,replaceInput,updateResultSource,
