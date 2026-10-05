@@ -35,6 +35,7 @@ import kotlin.math.abs
         "Durbin–Watson" to "durbinWatson","Residual Shapiro p" to "shapiroP")
     Text("n=${report.optInt("n")} · "+(if(report.isNull("df"))"" else "df=${report.optInt("df")} · ")+metrics.filter {report.has(it.second)&&(!report.isNull(it.second)||it.second in listOf("rSquared","adjustedRSquared"))}.map {"${tr(it.first)}=${value(report,it.second)}"}.joinToString(" · "),fontSize=11.sp)
     Text(tr(when {
+        report.optString("method")=="firth"->"Firth logistic regression; approximate Wald intervals."
         machineLearning->"Training fit; ordinary coefficient inference is unavailable."
         report.optString("fitScale")=="binomial"->"Binomial MLE; Wald intervals."
         report.optString("fitScale")=="log(y)"->"Inference in log(y); R² and RMSE in original y units."
@@ -49,10 +50,11 @@ import kotlin.math.abs
         (0 until array.length()).mapNotNull {array.optJSONObject(it)}
     }.orEmpty()
     val hasVif=coefficients.any {it.has("vif")&&!it.isNull("vif")}
-    val headers=((if(machineLearning)listOf("Parameter",if(forest)"Feature importance" else "Estimate") else listOf("Parameter","Estimate","SE","95% CI","p"))+if(hasVif)listOf("VIF") else emptyList()).map {tr(it)}
+    val hasPenalizedOdds=machineLearning&&coefficients.any {it.has("oddsRatio")&&!it.isNull("oddsRatio")}
+    val headers=((if(machineLearning)listOf("Parameter",if(forest)"Feature importance" else "Estimate") else listOf("Parameter","Estimate","SE","95% CI","p"))+(if(hasVif)listOf("VIF") else emptyList())+(if(hasPenalizedOdds)listOf("Odds ratio") else emptyList())).map {tr(it)}
     val coefficientRows=coefficients.map {coefficient->
         listOf(parameterName(coefficient),value(coefficient,"estimate"))+(if(machineLearning)emptyList() else listOf(value(coefficient,"se"),
-            "${value(coefficient,"low")} … ${value(coefficient,"high")}",value(coefficient,"p"))) + if(hasVif)listOf(value(coefficient,"vif")) else emptyList()
+            "${value(coefficient,"low")} … ${value(coefficient,"high")}",value(coefficient,"p"))) + (if(hasVif)listOf(value(coefficient,"vif")) else emptyList()) + (if(hasPenalizedOdds)listOf(value(coefficient,"oddsRatio")) else emptyList())
     }
     Column(Modifier.horizontalScroll(rememberScrollState())) {
         Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
@@ -67,7 +69,7 @@ import kotlin.math.abs
             }
         }
         coefficients.forEach {coefficient->
-            if(coefficient.has("oddsRatio"))Text("${parameterName(coefficient)} · ${tr("Odds ratio")}: ${value(coefficient,"oddsRatio")} · ${tr("OR 95% CI")}: ${value(coefficient,"oddsLow")} … ${value(coefficient,"oddsHigh")}",fontSize=11.sp)
+            if(!machineLearning&&coefficient.has("oddsRatio"))Text("${parameterName(coefficient)} · ${tr("Odds ratio")}: ${value(coefficient,"oddsRatio")} · ${tr("OR 95% CI")}: ${value(coefficient,"oddsLow")} … ${value(coefficient,"oddsHigh")}",fontSize=11.sp)
         }
     }
     if(forest) {
@@ -86,8 +88,9 @@ import kotlin.math.abs
     }
     TextButton(onClick={expanded=!expanded}) {Text(tr("Residual diagnostics"))}
     if(expanded) {
-        val binomial=report.optString("fitScale")=="binomial"
+        val binomial=report.optString("fitScale")=="binomial"||report.optString("model").startsWith("logistic")
         Text(tr(if(binomial)"Deviance residual vs fitted probability." else if(machineLearning)"Residual vs fitted" else "Residual vs fitted; Durbin–Watson uses input row order."),fontSize=11.sp,color=colors.muted)
+        if(binomial)Text(tr("Logistic leverage and Cook's D use a one-step GLM approximation."),fontSize=11.sp,color=colors.muted)
         val rows=report.optJSONArray("residuals")
         val residuals=if(rows==null)emptyList() else (0 until rows.length()).mapNotNull {rows.optJSONObject(it)}
         val points=residuals.mapNotNull {row->
@@ -106,8 +109,8 @@ import kotlin.math.abs
             Text(tr("Fitted value"),fontSize=11.sp,color=colors.muted)
         }
         Column(Modifier.horizontalScroll(rememberScrollState())) {
-            Text((if(machineLearning)listOf("Observation","Observed","Fitted value","Residual") else if(binomial)listOf("Observation","Observed","Fitted value","Residual","Pearson residual","Deviance residual") else listOf("Observation","Observed","Fitted value","Residual","Standardized","Leverage","Cook's D")).map {tr(it)}.joinToString(" | "),fontSize=11.sp)
-            residuals.take(100).forEach {row->Text((listOf("row","observed","fitted","residual")+if(machineLearning)emptyList() else listOf("standardized")+if(binomial)listOf("deviance") else listOf("leverage","cook")).joinToString(" | "){value(row,it)},fontSize=11.sp,fontFamily=FontFamily.Monospace)}
+            Text((if(binomial)listOf("Observation","Observed","Fitted value","Residual","Pearson residual","Deviance residual","Leverage","Cook's D") else if(machineLearning)listOf("Observation","Observed","Fitted value","Residual") else listOf("Observation","Observed","Fitted value","Residual","Standardized","Leverage","Cook's D")).map {tr(it)}.joinToString(" | "),fontSize=11.sp)
+            residuals.take(100).forEach {row->Text((listOf("row","observed","fitted","residual")+(if(binomial)listOf("standardized","deviance","leverage","cook") else if(machineLearning)emptyList() else listOf("standardized","leverage","cook"))).joinToString(" | "){value(row,it)},fontSize=11.sp,fontFamily=FontFamily.Monospace)}
         }
         if(residuals.size>100)Text(tr("Showing first 100 rows; copy includes all rows."),fontSize=11.sp,color=colors.muted)
         TextButton(onClick={

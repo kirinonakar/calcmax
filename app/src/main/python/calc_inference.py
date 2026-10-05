@@ -245,6 +245,7 @@ def fit_multivariate(engine, rows, logistic=False):
         transform = mp.eye(p)
         for j in range(1,p): transform[0,j]=-centers[j-1]/scales[j-1]; transform[j,j]=1/scales[j-1]
         if logistic:
+            from calc_firth import complete_separation, fit_firth
             require(all(v in (0,1) for v in target) and 0<sum(target)<n, "Logistic response must contain both 0 and 1")
             sigmoid = lambda v: 1/(1+mp.exp(-v)) if v>=0 else mp.exp(v)/(1+mp.exp(v))
             softplus = lambda v: max(v,0)+mp.log1p(mp.exp(-abs(v)))
@@ -256,12 +257,17 @@ def fit_multivariate(engine, rows, logistic=False):
             beta = mp.matrix([mp.log(sum(target)/(n-sum(target)))]+[0]*(p-1))
             tolerance = mp.power(10,-min(engine.precision,30))
             converged = False
+            firth = False
             for _ in range(150):
                 linear, probabilities, loss = evaluate(beta)
+                if complete_separation(rows, design, target, beta, transform):
+                    firth = True
+                    break
                 # Finite fits may have extreme logits at distant observations.
-                # Separation is rejected by rank loss or failure of Newton steps
-                # to converge, rather than by an arbitrary probability cutoff.
-                weighted = [[mp.sqrt(prob*(1-prob))*v for v in row] for row,prob in zip(design,probabilities)]
+                # Full-rank complete separation switches to Firth; other failed
+                # or non-identifiable fits still report an error.
+                weights = [mp.exp(-abs(z))/(1+mp.exp(-abs(z)))**2 for z in linear]
+                weighted = [[mp.sqrt(w)*v for v in row] for row,w in zip(design,weights)]
                 covariance = _covariance(weighted)
                 gradient = mp.matrix([mp.fsum(row[j]*(y-prob) for row,y,prob in zip(design,target,probabilities)) for j in range(p)])
                 step = covariance*gradient
@@ -273,9 +279,16 @@ def fit_multivariate(engine, rows, logistic=False):
                     if max(abs(v) for v in gradient)<mp.sqrt(tolerance): converged=True
                     break
                 beta += rate*step
-            require(converged, "Logistic fit is separated or did not converge; finite inference unavailable")
+            if firth:
+                beta, normalized_covariance, penalized_loglik, firth_iterations = fit_firth(design, target, engine.precision)
+                engine.note = "Complete separation detected; Firth bias reduction applied."
+            else:
+                require(converged, "Logistic fit is separated or did not converge; finite inference unavailable")
             linear,probabilities,loss = evaluate(beta)
-            covariance = transform*_covariance([[mp.sqrt(prob*(1-prob))*v for v in row] for row,prob in zip(design,probabilities)])*transform.T
+            if not firth:
+                weights = [mp.exp(-abs(z))/(1+mp.exp(-abs(z)))**2 for z in linear]
+                normalized_covariance = _covariance([[mp.sqrt(w)*v for v in row] for row,w in zip(design,weights)])
+            covariance = transform*normalized_covariance*transform.T
             coefficients = transform*beta
             critical = _quantile(_normal_cdf,s.Rational(975,1000),engine,0,4)
             mean = sum(target)/n
@@ -285,6 +298,13 @@ def fit_multivariate(engine, rows, logistic=False):
                       "pseudoRSquared":mp.nstr(1-loss/null_loss,engine.precision), "deviance":mp.nstr(2*loss,engine.precision),
                       "aic":mp.nstr(2*loss+2*p,engine.precision),"likelihoodRatio":mp.nstr(lr,engine.precision),
                       "likelihoodP":mp.nstr(_chisq_sf(lr,p-1),engine.precision),"coefficients":[],"residuals":[]}
+            report.update(method="firth" if firth else "mle", intervalMethod="wald")
+            if firth:
+                report.update(separation="complete", penalizedLogLikelihood=mp.nstr(penalized_loglik,engine.precision), iterations=firth_iterations)
+                report["warnings"].append(engine.note)
+                # The ordinary MLE AIC and LR test do not apply to this estimator.
+                for key in ("aic", "likelihoodRatio", "likelihoodP"):
+                    report.pop(key, None)
             auc,roc=_binary_roc(target,linear)
             report["auc"]=mp.nstr(auc,engine.precision)
             report["roc"]=[[mp.nstr(x,engine.precision),mp.nstr(y,engine.precision)] for x,y in roc]
@@ -300,6 +320,11 @@ def fit_multivariate(engine, rows, logistic=False):
                 pearson=mp.exp(-logit/2) if y==1 else -mp.exp(logit/2)
                 report["residuals"].append({"row":i+1,"observed":out(y),"fitted":out(prob),"residual":out(y-prob),
                                             "standardized":out(pearson),"deviance":out(dev),"leverage":None,"cook":None})
+            from calc_logistic_diagnostics import logistic_diagnostics
+            logistic_diagnostics(report, design, target, linear, engine.precision, inverse=normalized_covariance)
+            report["influenceMethod"] = "glm-firth-approximate" if firth else "glm"
+            if firth:
+                report["warnings"].append("Firth influence diagnostics use a GLM approximation at the bias-reduced fit.")
             engine.regression_report=report
             engine.regression_parameters=[[c["name"],c["estimate"]] for c in report["coefficients"]]
         else:

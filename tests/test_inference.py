@@ -101,7 +101,7 @@ class InferenceTests(unittest.TestCase):
         _,single=fit([(-3,0),(-2,0),(-1,1),(0,0),(0,1),(1,0),(2,1),(3,1)],'logistic')
         self.assertEqual(float(single['coefficients'][1]['vif']),1)
 
-    def test_logistic_inference_matches_statsmodels_and_rejects_separation(self):
+    def test_logistic_inference_matches_statsmodels_and_rejects_invalid_responses(self):
         rows=[(-3,0),(-2,0),(-1,1),(0,0),(0,1),(1,0),(2,1),(3,1)]
         result,report=fit(rows,'logistic')
         slope=report['coefficients'][1]
@@ -113,8 +113,19 @@ class InferenceTests(unittest.TestCase):
         self.assertEqual(report['roc'][0],['0.0','0.0'])
         self.assertEqual(report['roc'][-1],['1.0','1.0'])
         self.assertAlmostEqual(float(slope['oddsRatio']),math.exp(float(slope['estimate'])),places=12)
+        # Independent weighted 2x2 information-matrix formula for the hat diagonal.
+        beta=[float(c['estimate']) for c in report['coefficients']]
+        probabilities=[1/(1+math.exp(-beta[0]-beta[1]*x)) for x,_ in rows]
+        weights=[q*(1-q) for q in probabilities]
+        a=sum(weights);b=sum(w*x for w,(x,_) in zip(weights,rows));c=sum(w*x*x for w,(x,_) in zip(weights,rows))
+        for (x,y),q,w,residual in zip(rows,probabilities,weights,report['residuals']):
+            expected_h=w*(c-2*b*x+a*x*x)/(a*c-b*b)
+            expected_cook=(y-q)**2/(q*(1-q))*expected_h/(2*(1-expected_h)**2)
+            self.assertAlmostEqual(float(residual['leverage']),expected_h,places=12)
+            self.assertAlmostEqual(float(residual['cook']),expected_cook,places=12)
         for x,_ in rows:self.assertTrue(0<float(result.subs(s.Symbol('x'),x))<1)
-        for invalid in [[(1,0),(2,0),(3,1),(4,1)],[(1,0),(2,0),(3,0),(4,0)],[(1,0),(2,2),(3,1),(4,0)]]:
+        self.assertEqual(report['method'],'mle')
+        for invalid in [[(1,0),(2,0),(3,0),(4,0)],[(1,0),(2,2),(3,1),(4,0)]]:
             with self.assertRaises(MathError):fit(invalid,'logistic')
         _,wide=fit([(-1000,0),(-5,0),*rows,(5,1),(1000,1)],'logistic')
         self.assertGreater(float(wide['coefficients'][1]['estimate']),.1)
@@ -122,6 +133,60 @@ class InferenceTests(unittest.TestCase):
         _,multivariate=fit([(a,b,response) for a,b in [(0,0),(1,0),(0,1),(1,1)] for response in (0,1)],'logistic')
         self.assertEqual(len(multivariate['coefficients']),3)
         self.assertEqual(multivariate['n'],8)
+
+    def test_complete_separation_firth_matches_exact_two_group_solution_and_influence(self):
+        rows=[(0,0)]*4+[(1,1)]*6
+        _,report=fit(rows,'logistic')
+        self.assertEqual(report['method'],'firth')
+        self.assertEqual(report['separation'],'complete')
+        self.assertEqual(report['intervalMethod'],'wald')
+        # The saturated binary-predictor Firth solution adds 1/2 to each cell.
+        self.assertAlmostEqual(float(report['coefficients'][0]['estimate']),math.log(1/9),places=12)
+        self.assertAlmostEqual(float(report['coefficients'][1]['estimate']),math.log(117),places=12)
+        self.assertAlmostEqual(float(report['coefficients'][1]['oddsRatio']),117,places=10)
+        self.assertAlmostEqual(float(report['coefficients'][1]['se']),math.sqrt(1/(4*.1*.9)+1/(6*(13/14)*(1/14))),places=12)
+        self.assertEqual(float(report['auc']),1)
+        self.assertNotIn('aic',report);self.assertNotIn('likelihoodP',report)
+        for i,row in enumerate(report['residuals']):
+            q,n=(.1,4) if i<4 else (13/14,6)
+            y=rows[i][1];h=1/n
+            self.assertAlmostEqual(float(row['fitted']),q,places=12)
+            self.assertAlmostEqual(float(row['leverage']),h,places=12)
+            self.assertAlmostEqual(float(row['cook']),(y-q)**2/(q*(1-q))*h/(2*(1-h)**2),places=12)
+
+    def test_firth_multivariate_score_stationarity_units_and_response_flip(self):
+        rows=[(-2,-1,0),(-1,2,0),(-1,-2,0),(1,1,1),(2,-2,1),(2,3,1)]
+        _,report=fit(rows,'logistic')
+        self.assertEqual(report['method'],'firth')
+        with mp.workdps(60):
+            beta=[mp.mpf(c['estimate']) for c in report['coefficients']]
+            x=mp.matrix([[1,a,b] for a,b,_ in rows]);y=[mp.mpf(v) for _,_,v in rows]
+            def objective(values):
+                z=x*mp.matrix(values)
+                q=[1/(1+mp.exp(-v)) for v in z]
+                info=x.T*mp.diag([v*(1-v) for v in q])*x
+                return mp.fsum(t*mp.log(v)+(1-t)*mp.log(1-v) for t,v in zip(y,q))+mp.log(mp.det(info))/2
+            for j in range(3):
+                derivative=mp.diff(lambda value:objective(beta[:j]+[value]+beta[j+1:]),beta[j])
+                self.assertLess(abs(derivative),mp.mpf('1e-20'))
+        transformed=[(s.Integer(10**9)+s.Rational(a,10**6),b*10**6,y) for a,b,y in rows]
+        _,scaled=fit(transformed,'logistic')
+        _,flipped=fit([(a,b,1-y) for a,b,y in rows],'logistic')
+        for actual,changed,opposite in zip(report['residuals'],scaled['residuals'],flipped['residuals']):
+            self.assertAlmostEqual(float(actual['fitted']),float(changed['fitted']),places=12)
+            self.assertAlmostEqual(float(actual['leverage']),float(changed['leverage']),places=12)
+            self.assertAlmostEqual(float(actual['cook']),float(changed['cook']),places=12)
+            self.assertAlmostEqual(float(actual['fitted'])+float(opposite['fitted']),1,places=12)
+            self.assertAlmostEqual(float(actual['cook']),float(opposite['cook']),places=12)
+        self.assertAlmostEqual(sum(float(r['leverage']) for r in report['residuals']),3,places=12)
+
+    def test_firth_certificate_does_not_mask_singular_designs_or_label_zero_margins_complete(self):
+        with self.assertRaises(MathError):fit([(-2,-4,0),(-1,-2,0),(1,2,1),(2,4,1)],'logistic')
+        # Opposite responses at the same predictor cannot be strictly separated.
+        from calc_firth import complete_separation
+        rows=[[s.Integer(x),s.Integer(y)] for x,y in [(-1,0),(0,0),(0,1),(1,1)]]
+        design=[[mp.mpf(1),mp.mpf(row[0])] for row in rows]
+        self.assertFalse(complete_separation(rows,design,[mp.mpf(row[-1]) for row in rows],mp.matrix([0,1]),mp.eye(2)))
 
     def test_custom_local_jacobian_and_bounded_fit(self):
         x,a,b=s.symbols('x a b')

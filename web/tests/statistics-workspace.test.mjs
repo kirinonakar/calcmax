@@ -57,6 +57,40 @@ test('forest reports both importance measures and suppresses algebraic graph tra
   assert.doesNotMatch($('regression-inference').textContent,/df=null|OLS|95% CI/);
 });
 
+test('all regularized logistic reports show predictor OR without Wald interval columns in both languages',t=>{
+  const {$}=workspace(t);
+  const report={n:6,df:null,alpha:.1,l1Ratio:1,selectedPredictors:2,coefficients:[
+    {name:'b0',estimate:'0'},
+    {name:'b1',estimate:'0.6931471805599453',oddsRatio:'2'},
+    {name:'b2',estimate:'-0.6931471805599453',oddsRatio:'0.5'},
+    {name:'b3',estimate:'0',oddsRatio:'1'}],residuals:[]};
+  for(const language of ['en','ko'])for(const model of ['logisticlasso','logisticridge','logisticelasticnet']){
+    setLanguage(language);renderRegressionReport($('regression-inference'),{...report,model},10,{b0:'Intercept',b1:'Age',b2:'Weight',b3:'Noise'});
+    const table=$('regression-inference').querySelector('table');
+    assert.deepEqual([...table.querySelectorAll('th')].map(cell=>cell.textContent),[translate('Parameter'),translate('Estimate'),'Odds ratio']);
+    assert.deepEqual([...table.querySelectorAll('tbody tr')].map(row=>row.lastElementChild.textContent),['—','2','0.5','1']);
+    assert.deepEqual([...table.querySelectorAll('tbody tr')].slice(1).map(row=>row.firstElementChild.textContent),['Age','Weight','Noise']);
+    assert.doesNotMatch(table.textContent,/95% CI|Wald/);
+  }
+});
+
+test('ordinary, Firth and regularized logistic residual tables include influence columns and every CSV row',t=>{
+  const {$}=workspace(t),residuals=[{row:1,observed:'0',fitted:'.1',residual:'-.1',standardized:'-.333',deviance:'-.459',leverage:'.25',cook:'.02469'}];
+  for(const report of [
+    {fitScale:'binomial',method:'mle'},
+    {fitScale:'binomial',method:'firth'},
+    {model:'logisticlasso',fitScale:'logisticlasso'},
+    {model:'logisticridge',fitScale:'logisticridge'},
+    {model:'logisticelasticnet',fitScale:'logisticelasticnet'}
+  ]){
+    renderRegressionReport($('regression-inference'),{...report,n:1,coefficients:[],residuals});
+    const rows=$('regression-inference').querySelector('details table').rows;
+    assert.deepEqual([...rows[0].cells].map(cell=>cell.textContent),['Observation','Observed','Fitted value','Residual','Pearson residual','Deviance residual','Leverage',"Cook's D"]);
+    assert.deepEqual([...rows[1].cells].slice(-2).map(cell=>cell.textContent),['0.25','0.02469']);
+    const csv=regressionResidualCSV({residuals});assert.match(csv,/leverage,cook/);assert.match(csv,/.25,.02469/);
+  }
+});
+
 test('forest task choices survive restore and keep all response columns selectable',t=>{
   const {$,statistics}=workspace(t,{'statistics-kind':'xyz','regression-kind':'randomforest','regression-forest-task':'classification','regression-response-choice':'1'});
   $('statistics-data').value='10,0,20\n11,1,21';

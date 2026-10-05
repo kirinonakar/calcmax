@@ -167,6 +167,11 @@ def _fit_logistic(engine, xs, ys, columns, origins, means, scales, mode, alpha, 
     original_intercept = math.fsum([intercept]+[-b*(origin+mean) for b, origin, mean in zip(coefficients, origins, means)])
     fitted = [_sigmoid(z) for z in eta]
     report = _report(engine, ys, fitted, mode, [original_intercept]+coefficients)
+    # Predictor ORs use coefficients in original units. The intercept is baseline
+    # odds, not a predictor odds ratio; penalization does not supply Wald intervals.
+    with mp.workdps(30):
+        for coefficient in report["coefficients"][1:]:
+            coefficient["oddsRatio"] = mp.nstr(mp.exp(mp.mpf(coefficient["estimate"])), 16)
     report.update(alpha=alpha, l1Ratio=ratio, standardized=True, iterations=iteration+1,
                   selectedPredictors=sum(b != 0 for b in coefficients),
                   logLoss=math.fsum((max(z, 0)-y*z+math.log1p(math.exp(-abs(z))))/n for z, y in zip(eta, ys)),
@@ -174,6 +179,12 @@ def _fit_logistic(engine, xs, ys, columns, origins, means, scales, mode, alpha, 
     report.pop("rSquared", None)
     auc, roc = _binary_roc(list(map(mp.mpf, ys)), list(map(mp.mpf, eta)))
     report.update(auc=str(auc), roc=[[str(x), str(y)] for x, y in roc])
+    from calc_logistic_diagnostics import logistic_diagnostics
+    active = [j for j in range(p) if scales[j] and (ratio == 0 or beta[j] != 0)]
+    design = [[1]+[columns[j][i] for j in active] for i in range(n)]
+    logistic_diagnostics(report, design, ys, eta, 16, l2=l2)
+    report["influenceMethod"] = "glm-penalized-approximate"
+    report["warnings"].append("Penalized influence diagnostics are local approximations with selected predictors held fixed.")
     variables = [engine.symbol("x" if p == 1 else "x"+str(j+1)) for j in range(p)]
     expression = s.Float(original_intercept, 16)+sum(s.Float(b, 16)*x for b, x in zip(coefficients, variables))
     return 1/(1+s.exp(-expression))

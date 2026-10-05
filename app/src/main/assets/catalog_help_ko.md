@@ -591,7 +591,7 @@ Example: cagr(1000,2000,5)
 Example: regression([[0,1],[1,3],[2,9],[3,25],[4,57]],polynomial,3)
 `regression(data,multiple)` — 절편을 포함한 다중회귀. 마지막 열은 종속변수, 앞 열은 설명변수(최대 8개)입니다. x,y,z 화면에서는 x,y로 z를 예측하며 식에서는 x1,x2로 표시합니다.
 Example: regression([[0,0,1],[1,0,3],[0,1,4],[1,1,7],[2,1,8]],multiple)
-`regression(data,logistic)` — 마지막 열이 0/1인 이항 로지스틱 회귀. 확률식, Wald 계수·Odds ratio 신뢰구간, McFadden R², 이탈도, AIC, 우도비 p값을 제공합니다. 분리되거나 계수 식별이 불가능한 데이터는 거부합니다.
+`regression(data,logistic)` — 마지막 열이 0/1인 이항 로지스틱 회귀. 확률식, Wald 계수·Odds ratio 신뢰구간, McFadden R², 이탈도, AIC, 우도비 p값을 제공합니다. 완전 분리가 확인되면 Firth 편향 감소를 자동 적용합니다. 계수 식별이 불가능한 데이터는 거부합니다.
 Example: regression([[-3,0],[-2,0],[-1,1],[0,0],[0,1],[1,0],[2,1],[3,1]],logistic)
 `wilcoxon(differences)` — 0에 대한 부호순위 검정. 대응 x,y 목록도 받으며 0 차이는 제외합니다. 0이 아닌 차이 50개까지 동률을 포함한 정확 조건부 부호순열, 이후 동률·연속성 보정 정규근사를 사용합니다.
 Example: wilcoxon([1,2,3,4,5])
@@ -620,3 +620,8 @@ Python: `calc.regression_report(data,"elasticnet",[0.1,0.5])` 또는 `calc.regre
 
 Random Forest 분류: 유형의 기본값은 자동입니다. 종속변수가 0/1이면 이진 분류로 학습하고, 그 외에는 회귀를 수행합니다. 분류에는 0과 1이 모두 필요하며 양성 클래스는 1입니다. 회귀 또는 이진 분류를 직접 지정할 수도 있습니다. 수식은 `regression(data,randomforestclassifier,[trees,depth,seed])` 또는 `randomforestregressor`를 사용합니다. 분류는 Gini와 동등한 이진 제곱오차 분할을 사용하고, 각 잎의 클래스-1 비율을 트리 전체에서 평균한 예측확률로 ROC/AUC를 계산합니다. C-statistic은 같은 AUC 값입니다. 예측확률 ≥0.5는 클래스 1로 판정합니다. 혼동 행렬은 행=실제 0/1, 열=예측 0/1이며 [[TN,FP],[FN,TP]]입니다. 민감도=TP/(TP+FN), 특이도=TN/(TN+FP), 정확도=(TP+TN)/n을 표시합니다. 학습 지표와 OOB 지표·ROC·혼동 행렬을 따로 제공합니다. OOB 예측이 없는 행은 OOB 계산에서 제외하고, 클래스가 없으면 해당 비율이나 AUC는 계산할 수 없습니다. 분류의 순열 중요도는 OOB AUC 감소량입니다.
 Example: regression([[-3,0],[-2,0],[-1,0],[1,1],[2,1],[3,1]],randomforestclassifier,[100,10,0])
+
+규제 로지스틱(Ridge/LASSO/Elastic Net)의 설명변수에도 Odds ratio=exp(β)를 표시합니다. β는 원래 단위의 계수이며 다른 변수를 고정했을 때 해당 변수 1단위 증가에 대한 OR입니다. LASSO로 계수가 0이 된 변수의 OR은 1입니다. 절편은 설명변수 OR로 표시하지 않으며, 규제 추정치에 일반적인 Wald OR 신뢰구간은 제공하지 않습니다.
+
+로지스틱 규제 없음에서 완전 분리를 확인하면 Firth 회귀(log L + 0.5 log|X′WX|)를 자동 적용하고 결과에 Firth를 표시합니다. 일반적인 데이터는 기존 MLE를 유지합니다. Firth는 유한한 계수·OR·예측확률·ROC/AUC를 제공하며, 표시되는 계수와 OR의 95% 신뢰구간 및 p값은 근사 Wald 방식입니다(프로파일 우도 방식이 아닙니다). MLE의 AIC·우도비 검정은 Firth 결과에서 생략합니다. 모든 종속변수가 같은 경우나 특이한 설계 행렬은 계속 거부합니다. Ridge/LASSO/Elastic Net 선택 시 해당 규제 모델을 유지합니다.
+로지스틱 잔차 진단 및 전체 CSV에 leverage와 Cook 거리를 포함합니다. hᵢ=wᵢxᵢ′(X′WX)⁻¹xᵢ, Cook Dᵢ=Pearsonᵢ²hᵢ/[p(1−hᵢ)²]인 GLM 1단계 근사를 사용합니다. Firth는 편향 감소 적합점의 Fisher 정보를 사용합니다. 규제 모델은 선택된 변수와 절편으로 만든 설계 행렬에 L2 Hessian을 더한 국소 근사를 사용하며 변수 선택을 고정합니다. 식별 불가능한 활성 변수나 h=1에서는 계산 불가능한 진단값을 비웁니다.

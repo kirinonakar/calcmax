@@ -134,6 +134,8 @@ class MachineLearningTests(unittest.TestCase):
             self.assertAlmostEqual(float(report["auc"]), 1)
             self.assertEqual(report["accuracy"], 1)
             self.assertTrue(math.isfinite(report["logLoss"]))
+            self.assertEqual(report['influenceMethod'],'glm-penalized-approximate')
+            self.assertTrue(all(0 <= float(r['leverage']) <= 1 and float(r['cook']) >= 0 for r in report['residuals']))
             coefficients = [float(v) for _, v in engine.regression_parameters]
             predictions = [float(r["fitted"]) for r in report["residuals"]]
             self.assertAlmostEqual(sum(row[-1]-q for row, q in zip(rows, predictions)), 0, places=6)
@@ -143,6 +145,26 @@ class MachineLearningTests(unittest.TestCase):
                 beta = coefficients[j+1]*scale
                 gradient = sum((row[j]-mean)/scale*(row[-1]-q) for row, q in zip(rows, predictions))/len(rows)-.1*(1-ratio)*beta
                 self.assertLess(abs(gradient-math.copysign(.1*ratio, beta)) if beta else max(abs(gradient)-.1*ratio, 0), 1e-7)
+
+    def test_regularized_logistic_or_uses_original_units_and_zero_coefficients_give_one(self):
+        rows = [[x, 7, int(x>0)] for x in (-3, -2, -1, 1, 2, 3)]
+        for mode in ("logisticridge", "logisticlasso", "logisticelasticnet"):
+            options = [.1, .5] if mode.endswith("elasticnet") else .1
+            engine, _ = fit(rows, mode, options)
+            scaled, _ = fit([[100*x, z, y] for x, z, y in rows], mode, options)
+            coefficients = engine.regression_report["coefficients"]
+            self.assertNotIn("oddsRatio", coefficients[0])
+            for coefficient in coefficients[1:]:
+                self.assertAlmostEqual(float(coefficient["oddsRatio"]), math.exp(float(coefficient["estimate"])))
+                self.assertNotIn("oddsLow", coefficient)
+                self.assertNotIn("oddsHigh", coefficient)
+            self.assertEqual(float(coefficients[2]["oddsRatio"]), 1)
+            scaled_coefficient = scaled.regression_report["coefficients"][1]
+            self.assertAlmostEqual(math.log(float(scaled_coefficient["oddsRatio"]))*100,
+                                   math.log(float(coefficients[1]["oddsRatio"])))
+        # Strong LASSO shrinks an otherwise informative predictor to zero.
+        shrunk, _ = fit(rows, "logisticlasso", 1)
+        self.assertEqual(float(shrunk.regression_report["coefficients"][1]["oddsRatio"]), 1)
 
     def test_forest_reproducibility_importance_and_oob_predictions(self):
         rows = [[x, 7, x*x] for x in range(-12, 13)]

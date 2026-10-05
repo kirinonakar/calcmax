@@ -21,17 +21,19 @@ export function renderRegressionReport(container,report,digits=10,parameterLabel
   const metrics=[['R²','rSquared'],['Adjusted R²','adjustedRSquared'],['RMSE','rmse'],['Log loss','logLoss'],['Accuracy','accuracy'],['Sensitivity','sensitivity'],['Specificity','specificity'],['OOB C-statistic (AUC)','oobAuc'],['OOB sensitivity','oobSensitivity'],['OOB specificity','oobSpecificity'],['OOB accuracy','oobAccuracy'],['OOB R²','oobRSquared'],['OOB RMSE','oobRMSE'],['Residual SE','residualSE'],['C-statistic (AUC)','auc'],['McFadden R²','pseudoRSquared'],['Deviance','deviance'],['AIC','aic'],['LR p','likelihoodP'],['Durbin–Watson','durbinWatson'],['Residual Shapiro p','shapiroP']];
   summary.textContent=`n=${report.n} · ${report.df==null?'':`df=${report.df} · `}`+metrics.filter(([,key])=>report[key]!=null||['rSquared','adjustedRSquared'].includes(key)&&key in report).map(([name,key])=>`${t(name)}=${number(report[key])}`).join(' · ');
   container.append(summary);
-  const note=machineLearning?'Training fit; ordinary coefficient inference is unavailable.':report.fitScale==='binomial'?'Binomial MLE; Wald intervals.':report.fitScale==='log(y)'?'Inference in log(y); R² and RMSE in original y units.':report.approximate?'Local Jacobian approximation; independent errors with constant variance.':'OLS inference; independent errors with constant variance.';
+  const note=report.method==='firth'?'Firth logistic regression; approximate Wald intervals.':machineLearning?'Training fit; ordinary coefficient inference is unavailable.':report.fitScale==='binomial'?'Binomial MLE; Wald intervals.':report.fitScale==='log(y)'?'Inference in log(y); R² and RMSE in original y units.':report.approximate?'Local Jacobian approximation; independent errors with constant variance.':'OLS inference; independent errors with constant variance.';
   container.append(element('p',t(note)));
   if(machineLearning)container.append(element('p',forest?`${t('Random Forest')} · ${t(report.task==='classification'?'Binary classification':'Regression')} · ${t('Trees')}: ${report.trees} · ${t('Max depth')}: ${report.maxDepth} · ${t('Random seed')}: ${report.seed} · OOB n=${report.oobN}/${report.n}`:`${t(report.model.replace('logistic',''))} · α=${number(report.alpha)} · ${t('Selected predictors')}: ${report.selectedPredictors} · L1=${number(report.l1Ratio)}`));
   for(const warning of report.warnings||[])container.append(element('p',t(warning)));
   const wrapper=element('div');wrapper.style.overflowX='auto';
   const table=element('table');table.setAttribute('aria-label',t(forest?'Feature importance':machineLearning?'Fitted parameters':'Coefficient inference'));
   const hasVif=(report.coefficients||[]).some(c=>c.vif!=null);
-  const head=element('tr');for(const label of [...(machineLearning?['Parameter',forest?'Feature importance':'Estimate']:['Parameter','Estimate','SE','95% CI','p']),...(hasVif?['VIF']:[]),...(report.fitScale==='binomial'?['Odds ratio','OR 95% CI']:[])])head.append(element('th',t(label)));
+  const hasOdds=report.fitScale==='binomial'||(report.coefficients||[]).some(c=>c.oddsRatio!=null);
+  const hasOddsCI=report.fitScale==='binomial';
+  const head=element('tr');for(const label of [...(machineLearning?['Parameter',forest?'Feature importance':'Estimate']:['Parameter','Estimate','SE','95% CI','p']),...(hasVif?['VIF']:[]),...(hasOdds?['Odds ratio']:[]),...(hasOddsCI?['OR 95% CI']:[])])head.append(element('th',t(label)));
   const thead=element('thead');thead.append(head);table.append(thead);
   const body=element('tbody');
-  for(const c of (forest?report.featureImportance:report.coefficients)||[]){const row=element('tr');for(const label of [regressionParameterName(c.name,parameterLabels),number(c.estimate),...(machineLearning?[]:[number(c.se),`${number(c.low)} … ${number(c.high)}`,number(c.p)]),...(hasVif?[number(c.vif)]:[]),...(report.fitScale==='binomial'?[number(c.oddsRatio),`${number(c.oddsLow)} … ${number(c.oddsHigh)}`]:[])])row.append(element('td',label));body.append(row);}
+  for(const c of (forest?report.featureImportance:report.coefficients)||[]){const row=element('tr');for(const label of [regressionParameterName(c.name,parameterLabels),number(c.estimate),...(machineLearning?[]:[number(c.se),`${number(c.low)} … ${number(c.high)}`,number(c.p)]),...(hasVif?[number(c.vif)]:[]),...(hasOdds?[number(c.oddsRatio)]:[]),...(hasOddsCI?[`${number(c.oddsLow)} … ${number(c.oddsHigh)}`]:[])])row.append(element('td',label));body.append(row);}
   table.append(body);wrapper.append(table);container.append(wrapper);
   if(forest&&report.permutationImportance){const info=element('p',`${t(report.permutationMetric==='auc'?'Permutation importance (OOB ΔAUC)':'Permutation importance (OOB ΔR²)')} · n=${report.permutationN} · ${t('Repeats')}: ${report.permutationRepeats}`);container.append(info);const table=element('table'),head=element('tr');for(const label of ['Parameter',report.permutationMetric==='auc'?'Permutation importance (OOB ΔAUC)':'Permutation importance (OOB ΔR²)'])head.append(element('th',t(label)));table.append(head);for(const c of report.permutationImportance){const row=element('tr');row.append(element('td',regressionParameterName(c.name,parameterLabels)),element('td',number(c.estimate)));table.append(row);}container.append(table);}
   if(report.roc){const roc=regressionROC(report,digits);if(roc)container.append(roc);}
@@ -46,8 +48,9 @@ export function renderRegressionReport(container,report,digits=10,parameterLabel
     const oob=report.oobClassification&&regressionROC(report.oobClassification,digits,{oob:true});if(oob)container.append(oob);
   }
   const details=element('details'),label=element('summary',t('Residual diagnostics'));details.append(label);
-  details.append(element('p',t(report.fitScale==='binomial'?'Deviance residual vs fitted probability.':machineLearning?'Residual vs fitted':'Residual vs fitted; Durbin–Watson uses input row order.')));
-  const binomial=report.fitScale==='binomial';
+  details.append(element('p',t(report.fitScale==='binomial'||report.model?.startsWith('logistic')?'Deviance residual vs fitted probability.':machineLearning?'Residual vs fitted':'Residual vs fitted; Durbin–Watson uses input row order.')));
+  const binomial=report.fitScale==='binomial'||report.model?.startsWith('logistic');
+  if(binomial)details.append(element('p',t("Logistic leverage and Cook's D use a one-step GLM approximation.")));
   const rows=report.residuals||[],points=rows.map(r=>[Number(r.fitted),Number(binomial?r.deviance:r.residual),r]).filter(p=>p.slice(0,2).every(Number.isFinite));
   if(points.length){
     const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg');svg.setAttribute('viewBox','0 0 600 200');svg.setAttribute('role','img');svg.setAttribute('aria-label',t('Residual vs fitted'));svg.style.width='100%';
@@ -57,9 +60,9 @@ export function renderRegressionReport(container,report,digits=10,parameterLabel
     const axis=document.createElementNS(ns,'text');axis.setAttribute('x','300');axis.setAttribute('y','195');axis.setAttribute('text-anchor','middle');axis.setAttribute('fill','currentColor');axis.textContent=t('Fitted value');svg.append(axis);details.append(svg);
   }
   const residualWrapper=element('div');residualWrapper.style.overflowX='auto';
-  const labels=machineLearning?['Observation','Observed','Fitted value','Residual']:binomial?['Observation','Observed','Fitted value','Residual','Pearson residual','Deviance residual']:['Observation','Observed','Fitted value','Residual','Standardized','Leverage',"Cook's D"];
+  const labels=binomial?['Observation','Observed','Fitted value','Residual','Pearson residual','Deviance residual','Leverage',"Cook's D"]:machineLearning?['Observation','Observed','Fitted value','Residual']:['Observation','Observed','Fitted value','Residual','Standardized','Leverage',"Cook's D"];
   const residualTable=element('table'),residualHead=element('tr');for(const label of labels)residualHead.append(element('th',t(label)));residualTable.append(residualHead);
-  for(const r of rows.slice(0,100)){const row=element('tr');for(const v of [r.row,r.observed,r.fitted,r.residual,...(machineLearning?[]:[r.standardized,...(binomial?[r.deviance]:[r.leverage,r.cook])])])row.append(element('td',number(v)));residualTable.append(row);}
+  for(const r of rows.slice(0,100)){const row=element('tr');for(const v of [r.row,r.observed,r.fitted,r.residual,...(binomial?[r.standardized,r.deviance,r.leverage,r.cook]:machineLearning?[]:[r.standardized,r.leverage,r.cook])])row.append(element('td',number(v)));residualTable.append(row);}
   residualWrapper.append(residualTable);details.append(residualWrapper);
   if(rows.length>100)details.append(element('p',t('Showing first 100 rows; export includes all rows.')));
   container.append(details);

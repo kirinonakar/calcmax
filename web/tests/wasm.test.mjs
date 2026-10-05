@@ -14,6 +14,7 @@ import {createStatisticsWorkspace} from '../statistics-workspace.js';
 import {createAppUI} from '../app-ui.js';
 import {createAppState,restoreFields} from '../app-state.js';
 import {getLanguage,setLanguage,translateDOM} from '../i18n.js';
+import {renderRegressionReport,regressionResidualCSV} from '../regression-report.js';
 
 // Reuse the interpreter for sequential integration scenarios. The cold solver
 // scenario below explicitly loads its own interpreter to keep startup coverage.
@@ -24,6 +25,69 @@ async function loadRuntime(){
   return py;
 }
 function runtime(){return sharedRuntime??=loadRuntime();}
+
+test('complete separation switches to Firth and logistic influence values render and export in WASM',async t=>{
+  const py=await runtime(),dom=new JSDOM('<div id="report"></div>');
+  const previousLanguage=getLanguage(),original=Object.getOwnPropertyDescriptor(globalThis,'document');
+  Object.defineProperty(globalThis,'document',{value:dom.window.document,configurable:true});
+  t.after(()=>{setLanguage(previousLanguage);dom.window.close();if(original)Object.defineProperty(globalThis,'document',original);else delete globalThis.document;});
+  const container=document.getElementById('report');
+  const evaluate=data=>{
+    const source=statisticsCommand(data,{op:'regression',kind:'xy',regression:'logistic'});
+    py.globals.set('payload',JSON.stringify({tree:parse(latexInput(source)),precision:30}));
+    const result=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));
+    assert.equal(result.ok,true,result.error);return result;
+  };
+  const firth=evaluate([...Array(4).fill('0,0'),...Array(6).fill('1,1')].join('\n'));
+  assert.equal(firth.regression.method,'firth');assert.equal(firth.regression.separation,'complete');
+  assert.match(firth.note,/Firth/);assert.ok(Math.abs(Number(firth.regression.coefficients[1].oddsRatio)-117)<1e-10);
+  assert.equal(firth.regression.intervalMethod,'wald');assert.equal(firth.regression.aic,undefined);
+  const csv=regressionResidualCSV(firth.regression).split('\n').map(line=>line.split(','));
+  assert.equal(csv.length,11);
+  assert.ok(Math.abs(Number(csv[1][csv[0].indexOf('leverage')])-.25)<1e-12);
+  assert.ok(Number(csv[1][csv[0].indexOf('cook')])>0);
+  const ordinary=evaluate('-3,0\n-2,0\n-1,1\n0,0\n0,1\n1,0\n2,1\n3,1');
+  assert.equal(ordinary.regression.method,'mle');assert.ok(Math.abs(Number(ordinary.regression.coefficients[1].estimate)-.7324875300102196)<1e-12);
+  for(const language of ['en','ko'])for(const result of [firth,ordinary]){
+    setLanguage(language);renderRegressionReport(container,result.regression,10);
+    const details=container.querySelector('details'),headings=[...details.querySelectorAll('th')].map(cell=>cell.textContent);
+    assert.ok(headings.includes(language==='en'?'Leverage':'레버리지'));
+    assert.ok(headings.includes(language==='en'?"Cook's D":'Cook 거리'));
+    assert.equal(details.querySelector('table tr:last-child').children.length,8);
+    assert.ok(result.regression.residuals.every(row=>Number(row.leverage)>=0&&Number(row.leverage)<=1&&Number(row.cook)>=0));
+    if(result===firth){assert.match(container.textContent,/Firth/);assert.doesNotMatch(container.textContent,/Binomial MLE/);}
+  }
+});
+
+test('regularized logistic OR values and rendered columns match original-unit coefficients in WASM',async t=>{
+  const py=await runtime(),dom=new JSDOM('<div id="report"></div>');
+  const previousLanguage=getLanguage(),original=Object.getOwnPropertyDescriptor(globalThis,'document');
+  Object.defineProperty(globalThis,'document',{value:dom.window.document,configurable:true});
+  t.after(()=>{setLanguage(previousLanguage);dom.window.close();if(original)Object.defineProperty(globalThis,'document',original);else delete globalThis.document;});
+  const container=document.getElementById('report');
+  for(const mode of ['logisticlasso','logisticridge','logisticelasticnet']){
+    const data=[-3,-2,-1,1,2,3].map(x=>[100*x,7,Number(x>0)].join(',')).join('\n');
+    const source=statisticsCommand(data,{op:'regression',kind:'xyz',regression:mode});
+    py.globals.set('payload',JSON.stringify({tree:parse(latexInput(source)),precision:30}));
+    const result=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));
+    assert.equal(result.ok,true,result.error);
+    const coefficients=result.regression.coefficients;
+    assert.equal(coefficients[0].oddsRatio,undefined);
+    for(const coefficient of coefficients.slice(1)){
+      assert.ok(Math.abs(Number(coefficient.oddsRatio)-Math.exp(Number(coefficient.estimate)))<1e-12);
+      assert.equal(coefficient.oddsLow,undefined);assert.equal(coefficient.oddsHigh,undefined);
+    }
+    assert.equal(Number(coefficients[2].oddsRatio),1);
+    for(const language of ['en','ko']){
+      setLanguage(language);renderRegressionReport(container,result.regression,10,{b0:'Intercept',b1:'Age',b2:'Constant'});
+      const table=container.querySelector('table');
+      assert.equal(table.querySelectorAll('th').length,3);
+      assert.equal(table.querySelector('th:last-child').textContent,'Odds ratio');
+      assert.equal(table.querySelectorAll('tbody tr')[2].lastElementChild.textContent,'1');
+      assert.doesNotMatch(table.textContent,/OR 95% CI|Wald/);
+    }
+  }
+});
 
 test('forest classification controls show ROC, C-statistic, confusion matrices and threshold metrics in real WASM',async t=>{
   const py=await runtime(),dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));
