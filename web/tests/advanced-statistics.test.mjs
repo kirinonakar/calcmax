@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {JSDOM} from 'jsdom';
 import {advancedStatisticsSchema as schema} from '../advanced-statistics-schema.js';
-import {advancedStatisticsCommand,advancedStatisticsRows,createAdvancedStatistics,guidedStatisticsCommand} from '../advanced-statistics.js';
+import {advancedStatisticsCommand,advancedStatisticsRows,createAdvancedStatistics,guidedStatisticsCommand,survivalAnalysisPlan} from '../advanced-statistics.js';
+import {survivalStepPoints,survivalNumber} from '../survival-report.js';
 import {parse,latexInput} from '../parser.js';
 import {requiresExplicitEvaluation} from '../evaluation-policy.js';
 import {setLanguage} from '../i18n.js';
@@ -25,6 +26,47 @@ test('advanced data shapes preserve subjects, censoring, categories and missing 
 
 test('all advanced examples parse and require explicit evaluation',()=>{
   for(const item of schema){const tree=parse(latexInput(item.example));assert.equal(tree.value,item.id);assert.equal(requiresExplicitEvaluation(tree),true,item.id);}
+});
+
+test('survival plans validate distinct roles, preserve labels and omit unselected cells',()=>{
+  const plan=survivalAnalysisPlan([['1','yes','A','30',''],['2','no','B','40','']],{eventValue:'yes',cox:'1',predictors:'3'},['time','status','arm','age','unused']);
+  assert.deepEqual(plan,{expression:'survivalanalysis([[1,1,1,30],[2,0,2,40]],1)',groups:['A','B'],predictors:['age']});
+  assert.throws(()=>survivalAnalysisPlan([['1','1','A']],{group:'1'}),/different columns/);
+  assert.throws(()=>survivalAnalysisPlan([['1','1','A']],{cox:'1',predictors:'2'}),/distinct analysis columns/);
+  assert.throws(()=>survivalAnalysisPlan([['1','1','A'],['2','','B']]),/Complete selected rows/);
+  assert.deepEqual(survivalStepPoints([[1,4,1,1,.75,.4,.9],[2,2,1,0,.375,.1,.7]],4),[[0,1],[1,1],[1,.75],[2,.75],[2,.375]]);
+  assert.equal(survivalNumber(0.0000012345), '0.0000012345');
+  assert.equal(survivalNumber(0.000000012345), '1.2345e-8');
+  assert.equal(survivalNumber(1.310050946), '1.3101');
+});
+
+test('survival suite renders labeled steps, CI, censoring and HR and invalidates stale results',t=>{
+  const dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));
+  const original=Object.getOwnPropertyDescriptor(globalThis,'document');
+  Object.defineProperty(globalThis,'document',{value:dom.window.document,configurable:true});
+  t.after(()=>{setLanguage('en');dom.window.close();if(original)Object.defineProperty(globalThis,'document',original);else delete globalThis.document;});
+  setLanguage('en');
+  const state={fields:{'statistics-advanced-kind':'survivalanalysis','statistics-advanced-input':'current'}};
+  let data='time,status,arm\n1,1,<A>\n2,0,B';
+  const api=createAdvancedStatistics({state,persist:()=>{},data:()=>data});
+  const $=id=>document.getElementById(id),context=api.context();
+  const result={ok:true,survival:{groups:[{id:1,n:1,events:1,median:1,curve:[[1,1,1,0,0,0,0]]},{id:2,n:1,events:0,median:null,curve:[[2,1,0,1,1,1,1]]}],logrank:{chi2:1,df:1,p:.3},cox:{coefficients:[{term:'group:1',HR:2,'HR CI95':[1,4],p:.1}]}}};
+  api.showResult(result,context);
+  const report=$('statistics-survival-result');
+  assert.equal(report.hidden,false);
+  assert.equal(report.querySelectorAll('[data-survival-curve]').length,2);
+  assert.equal(report.querySelectorAll('[data-ci-band]').length,2);
+  assert.equal(report.querySelectorAll('[data-censored]').length,1);
+  assert.match(report.textContent,/B \/ <A>/);
+  assert.equal(report.querySelector('a'),null);
+  $('statistics-survival-band').checked=false;$('statistics-survival-band').onchange();
+  assert.equal(report.querySelectorAll('[data-ci-band]').length,0);
+  setLanguage('ko');api.render();assert.match(report.textContent,/미도달/);
+  const event=$('statistics-form-survivalanalysis-eventValue');event.value='0';event.oninput();
+  assert.equal(report.hidden,true);
+  api.showResult(result,context);assert.equal(report.hidden,true,'late response for previous settings is ignored');
+  data='time,status,arm\n3,1,<A>\n4,0,B';api.render();
+  assert.equal(report.hidden,true);
 });
 
 test('Android and Web shared form cases select roles, groups, methods and independent samples',()=>{

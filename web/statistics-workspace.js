@@ -220,5 +220,5 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
   }
   advanced=createAdvancedStatistics({state,persist,data:()=>value('statistics-data')});
   statisticsControls();
-  return {datasetsList,expression:statisticsExpression,advancedExpression:advanced.expression,analysisSummary,render:()=>{render();advanced.render();},showRegression,runRegression};
+  return {datasetsList,expression:statisticsExpression,advancedExpression:advanced.expression,advancedContext:advanced.context,showAdvancedResult:advanced.showResult,analysisSummary,render:()=>{render();advanced.render();},showRegression,runRegression};
 }

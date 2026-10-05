@@ -4,6 +4,7 @@ import org.json.JSONObject
 
 /** Construct the same selected-column analysis plan used by the Web form. */
 internal fun guidedStatisticsCommand(definition:JSONObject,rows:List<List<String>>,settings:JSONObject=JSONObject()):String {
+    if(definition.getString("id")=="survivalanalysis")return survivalAnalysisPlan(rows,settings).command
     if(!definition.has("controls"))return advancedStatisticsCommand(definition,rows)
     require(rows.any {row->row.any(String::isNotBlank)}) {"Enter data first"}
     val n=rows.maxOf {it.size};val id=definition.getString("id");val controls=definition.getJSONArray("controls")
@@ -68,4 +69,29 @@ internal fun guidedStatisticsCommand(definition:JSONObject,rows:List<List<String
         }
         else->error("Unknown analysis form")
     }
+}
+
+internal data class SurvivalPlan(val command:String,val groups:List<String>,val predictors:List<String>)
+
+internal fun survivalAnalysisPlan(rows:List<List<String>>,settings:JSONObject=JSONObject(),labels:List<String> = emptyList()):SurvivalPlan {
+    require(rows.isNotEmpty()) {"Enter data first"}
+    val n=rows.maxOf {it.size}
+    fun option(key:String,default:String)=settings.optString(key,default)
+    fun col(key:String,default:String):Int {val i=option(key,default).toIntOrNull();require(i!=null&&i in 0 until n) {"Choose valid data columns"};return i}
+    val grouping=option("grouping","groups");val cox=option("cox","0")
+    require(grouping in listOf("groups","all")&&cox in listOf("0","1")) {"Invalid analysis option"}
+    val time=col("time","0");val event=col("event","1");val group=if(grouping=="groups")col("group","2") else null
+    val reserved=listOfNotNull(time,event,group)
+    require(reserved.distinct().size==reserved.size) {"Roles must use different columns"}
+    val predictors=if(cox=="1")option("predictors","").split(',').filter(String::isNotBlank).map {it.toIntOrNull() ?: -1} else emptyList()
+    require(predictors.distinct().size==predictors.size&&predictors.all {it in 0 until n&&it !in reserved}) {"Choose distinct analysis columns"}
+    val selected=rows.map {row->(reserved+predictors).map {row.getOrElse(it){""}.trim()}}
+    require(selected.all {row->row.all(String::isNotBlank)}) {"Complete selected rows required"}
+    val eventValue=option("eventValue","1").trim();require(eventValue.isNotBlank()) {"Enter the event value"}
+    val states=selected.map {it[1]}.distinct();require(states.size<=2) {"Event column must have at most two values"}
+    require(states.size==1||eventValue in states) {"Event value does not occur in the selected column"}
+    val groups=if(group==null)emptyList() else selected.map {it[2]}.distinct()
+    val encoded=selected.map {row->listOf(row[0],if(row[1]==eventValue)"1" else "0",if(group==null)"1" else (groups.indexOf(row[2])+1).toString())+row.drop(reserved.size)}
+    val table=encoded.joinToString(",","[","]") {it.joinToString(",","[","]")}
+    return SurvivalPlan("survivalanalysis($table,$cox)",groups,predictors.map {labels.getOrNull(it) ?: listOf("x","y","z").getOrNull(it) ?: "x${it+1}"})
 }

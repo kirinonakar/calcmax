@@ -42,6 +42,18 @@ test('guided statistics UI runs every new form and correction method in real WAS
         py.globals.set('payload',JSON.stringify({tree:parse(latexInput(source)),precision:20,budget:30}));
         const result=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));
         assert.equal(result.ok,true,`${language} ${definition.id}: ${result.error}`);
+        if(definition.id==='survivalanalysis'){
+          api.showResult(result,api.context());
+          assert.equal(document.querySelectorAll('[data-survival-curve]').length,2);
+          assert.equal(document.querySelectorAll('[data-ci-band]').length,2);
+          assert.ok(result.survival.logrank.p>0);
+          const cox=document.getElementById('statistics-form-survivalanalysis-cox');cox.value='1';cox.onchange();
+          py.globals.set('payload',JSON.stringify({tree:parse(api.expression()),precision:20,budget:30}));
+          const fitted=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));
+          assert.equal(fitted.ok,true);assert.equal(fitted.survival.cox.coefficients.length,1);
+          api.showResult(fitted,api.context());
+          assert.match(document.getElementById('statistics-survival-result').textContent,/B \/ A/);
+        }
         if(mode)assert.match(result.exact,new RegExp('method: '+mode));
       }
     }

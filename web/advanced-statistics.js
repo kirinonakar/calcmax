@@ -2,8 +2,32 @@ import {advancedStatisticsSchema} from './advanced-statistics-schema.js';
 import {csvRows,statisticsCsvHasHeader} from './workspace-commands.js';
 import {$,element} from './app-ui.js';
 import {getLanguage,t} from './i18n.js';
+import {renderSurvivalReport} from './survival-report.js';
+
+export function survivalAnalysisPlan(rows,settings={},columnLabels=[]) {
+  const opts={time:'0',event:'1',eventValue:'1',grouping:'groups',group:'2',cox:'0',predictors:'',...settings};
+  const n=Math.max(0,...rows.map(row=>row.length));
+  const col=key=>{const i=Number(opts[key]);if(!Number.isInteger(i)||i<0||i>=n)throw new Error('Choose valid data columns');return i;};
+  if(!rows.length)throw new Error('Enter data first');
+  if(!['groups','all'].includes(opts.grouping)||!['0','1'].includes(String(opts.cox)))throw new Error('Invalid analysis option');
+  const time=col('time'),event=col('event'),group=opts.grouping==='groups'?col('group'):null;
+  const reserved=[time,event,...(group===null?[]:[group])];
+  if(new Set(reserved).size!==reserved.length)throw new Error('Roles must use different columns');
+  const predictors=String(opts.cox)==='1'?String(opts.predictors).split(',').filter(Boolean).map(Number):[];
+  if(new Set(predictors).size!==predictors.length||predictors.some(i=>!Number.isInteger(i)||i<0||i>=n||reserved.includes(i)))throw new Error('Choose distinct analysis columns');
+  const selected=rows.map(row=>[...reserved,...predictors].map(i=>(row[i]||'').trim()));
+  if(selected.some(row=>row.some(cell=>!cell)))throw new Error('Complete selected rows required');
+  const states=new Set(selected.map(row=>row[1])),eventValue=String(opts.eventValue).trim();
+  if(!eventValue)throw new Error('Enter the event value');
+  if(states.size>2)throw new Error('Event column must have at most two values');
+  if(states.size>1&&!states.has(eventValue))throw new Error('Event value does not occur in the selected column');
+  const groups=group===null?[]:[...new Set(selected.map(row=>row[2]))];
+  const encoded=selected.map(row=>[row[0],row[1]===eventValue?'1':'0',group===null?'1':String(groups.indexOf(row[2])+1),...row.slice(reserved.length)]);
+  return {expression:`survivalanalysis([${encoded.map(row=>`[${row.join(',')}]`).join(',')}],${opts.cox})`,groups,predictors:predictors.map(i=>columnLabels[i]||['x','y','z'][i]||`x${i+1}`)};
+}
 
 export function guidedStatisticsCommand(definition,rows,settings={}) {
+  if(definition.id==='survivalanalysis')return survivalAnalysisPlan(rows,settings).expression;
   if(!definition.controls)return advancedStatisticsCommand(definition,rows);
   if(!rows.some(row=>row.some(cell=>cell.trim())))throw new Error('Enter data first');
   const n=Math.max(...rows.map(row=>row.length)),id=definition.id;
@@ -111,9 +135,13 @@ export function createAdvancedStatistics({state,persist,data}) {
   if(!source.value)source.value=selected().example;
   input.value=state.fields[input.id]||((state.fields[source.id]&&source.value!==selected().example)||!selected().controls?'expression':data().trim()?'current':'example');
   let signature='';
+  const report=$('statistics-survival-result');
+  let displayed=null,reportKey='';
   const fieldId=key=>`statistics-form-${selected().id}-${key}`;
   const settings=()=>Object.fromEntries((selected().controls||[]).map(field=>[field.key,state.fields[fieldId(field.key)]??field.default]));
   const currentRows=()=>input.value==='example'?selected().exampleRows:advancedStatisticsRows(data());
+  const context=()=>selected().id==='survivalanalysis'&&input.value!=='expression'?survivalAnalysisPlan(currentRows(),settings(),columnNames()):{expression:expression(),groups:[],predictors:[]};
+  function columnNames(){if(input.value!=='current'||!data().trim())return [];const rows=csvRows(data(),{skipHeader:false});return statisticsCsvHasHeader(rows)?rows[0]:[];}
   const expression=()=>selected().controls&&input.value!=='expression'?guidedStatisticsCommand(selected(),currentRows(),settings()):source.value.trim();
   const preview=()=>{
     if(selected().controls&&input.value!=='expression'){
@@ -124,6 +152,9 @@ export function createAdvancedStatistics({state,persist,data}) {
   const update=()=>{
     const definition=selected();
     const korean=getLanguage()==='ko';
+    const suite=definition.id==='survivalanalysis';
+    $('statistics-survival-tools').hidden=!suite;
+    if(displayed){let key='';try{key=JSON.stringify(context());}catch{}if(key!==reportKey){displayed=null;report.replaceChildren();report.hidden=true;}else renderSurvivalReport(report,displayed.result,{...displayed.context,band:$('statistics-survival-band').checked,digits:state.digits});}
     help.textContent=definition.controls&&input.value!=='expression'?(korean?definition.formHelpKo:definition.formHelp):(korean?definition.helpKo:definition.help);
     for(const option of select.options){const item=advancedStatisticsSchema.find(item=>item.id===option.value);option.textContent=korean?item.ko:item.label;}
     $('statistics-advanced-data').disabled=definition.input==='none';
@@ -146,13 +177,14 @@ export function createAdvancedStatistics({state,persist,data}) {
           const caption=korean?field.ko:field.label,id=fieldId(field.key),value=opts[field.key];
           const changed=newValue=>{
             state.fields[id]=newValue;
-            if(['time','event','subject','response'].includes(field.key))state.fields[fieldId('predictors')]='auto';
-            if(field.type==='number')preview();else {signature='';update();}
+            if(['time','event','subject','response','group','grouping'].includes(field.key))state.fields[fieldId('predictors')]=definition.id==='survivalanalysis'?'':'auto';
+            if(field.type!=='number')signature='';update();
             persist();
           };
           if(field.type==='columns'){
             const group=element('fieldset'),legend=element('legend',caption);group.append(legend);group.className='form-row statistics-form-columns';
-            const reserved=field.key==='predictors'?(definition.id==='cox'?['time','event']:['subject','response']).map(key=>Number(opts[key])===-1?count-1:Number(opts[key])):[];
+            const roles=definition.id==='survivalanalysis'?['time','event',...(opts.grouping==='groups'?['group']:[])]:definition.id==='cox'?['time','event']:['subject','response'];
+            const reserved=field.key==='predictors'?roles.map(key=>Number(opts[key])===-1?count-1:Number(opts[key])):[];
             const columns=value==='auto'?Array.from({length:count},(_,i)=>i).filter(i=>!reserved.includes(i)):String(value).split(',').filter(Boolean).map(Number);
             const store=element('input');store.type='hidden';store.id=id;store.value=String(value);group.append(store);
             for(let i=0;i<count;i++)if(!reserved.includes(i)){
@@ -187,6 +219,15 @@ export function createAdvancedStatistics({state,persist,data}) {
     catch(exc){help.textContent=exc.message;}
   };
   $('statistics-data').addEventListener('input',update);
+  globalThis.addEventListener?.('resize',()=>{if(displayed)update();});
+  $('statistics-survival-open').onclick=()=>{select.value='survivalanalysis';select.onchange();};
+  $('statistics-survival-band').checked=state.fields['statistics-survival-band']!==false;
+  $('statistics-survival-band').onchange=()=>{state.fields['statistics-survival-band']=$('statistics-survival-band').checked;update();persist();};
   update();
-  return {expression,render:update};
+  return {expression,context,render:update,showResult:(result,runContext)=>{
+    if(!result.ok||!result.survival)return;
+    try{if(JSON.stringify(context())!==JSON.stringify(runContext))return;}catch{return;}
+    displayed={result:result.survival,context:runContext};reportKey=JSON.stringify(runContext);
+    renderSurvivalReport(report,result.survival,{...runContext,band:$('statistics-survival-band').checked,digits:state.digits});
+  }};
 }

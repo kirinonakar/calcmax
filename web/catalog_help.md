@@ -652,6 +652,8 @@ Example: mcnemar([[20,8],[2,15]],exact)
 `kaplanmeier` — Rows: time, event (1=event, 0=censored); confidence level.
 Example: kaplanmeier([[1,1],[2,0],[3,1],[4,1],[5,0],[6,1]],0.95)
 
+`survivalanalysis(rows,cox=0)` — Kaplan–Meier curves with pointwise Greenwood log-log 95% CI, multi-group log-rank, optional Cox HR and 95% CI. Rows: time, event 0/1, numeric group ID, optional predictors. Cox=1 includes first-group-reference dummy variables and selected predictors; Breslow ties. The UI accepts text group labels. PH assumption is not tested.
+
 `logrank` — Two time/event tables. Current data: time, event, group (exactly two groups).
 Example: logrank([[1,1],[3,1],[4,0],[6,1]],[[2,0],[4,1],[5,1],[7,0]])
 

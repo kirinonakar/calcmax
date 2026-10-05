@@ -67,6 +67,12 @@ internal fun advancedStatisticsRows(data:String):List<List<String>> {
     var input by rememberSaveable {mutableStateOf(m.advancedStatisticsDraft.optString("input",if(definition.has("controls")&&source==definition.getString("example"))if(data.isBlank())"example" else "current" else "expression"))}
     var formsText by rememberSaveable {mutableStateOf(m.advancedStatisticsDraft.optJSONObject("forms")?.toString() ?: "{}")}
     var message by remember {mutableStateOf("")}
+    var menuOpen by remember {mutableStateOf(false)}
+    var band by rememberSaveable {mutableStateOf(m.advancedStatisticsDraft.optBoolean("band",true))}
+    var survivalReport by remember {mutableStateOf<JSONObject?>(null)}
+    var reportPlan by remember {mutableStateOf<SurvivalPlan?>(null)}
+    var previousResult by remember {mutableStateOf<JSONObject?>(null)}
+    var pending by remember {mutableStateOf(false)}
     val forms=JSONObject(formsText)
     val settings=forms.optJSONObject(selected) ?: JSONObject()
     val currentRows=runCatching {advancedStatisticsRows(data)}
@@ -80,17 +86,25 @@ internal fun advancedStatisticsRows(data:String):List<List<String>> {
     }}
     fun setOption(key:String,value:String) {
         val next=JSONObject(settings.toString()).put(key,value)
-        if(key in listOf("time","event","subject","response"))next.put("predictors","auto")
+        if(key in listOf("time","event","subject","response","group","grouping"))next.put("predictors",if(selected=="survivalanalysis")"" else "auto")
         formsText=JSONObject(formsText).put(selected,next).toString();message=""
     }
-    LaunchedEffect(selected,source,input,formsText) {m.updateAdvancedStatisticsDraft(JSONObject().put("kind",selected).put("source",source).put("input",input).put("forms",JSONObject(formsText)))}
+    LaunchedEffect(selected,source,input,formsText,band) {m.updateAdvancedStatisticsDraft(JSONObject().put("kind",selected).put("source",source).put("input",input).put("forms",JSONObject(formsText)).put("band",band))}
+    LaunchedEffect(selected,source,input,formsText,data) {survivalReport=null;pending=false}
+    LaunchedEffect(m.result,m.busy) {
+        if(pending&&!m.busy&&m.result!=null&&m.result!==previousResult){survivalReport=m.result?.optJSONObject("survival");pending=false}
+    }
     HorizontalDivider()
     SmallAction(if(ko)"고급 분석" else "Advanced analysis"){expanded=!expanded}
     if(expanded) {
-        val labels=definitions.map {it.getString(if(ko)"ko" else "label")}
-        Choices(labels,definition.getString(if(ko)"ko" else "label"),{label->
-            val next=definitions[labels.indexOf(label)];selected=next.getString("id");source=next.getString("example");input=if(next.has("controls"))if(data.isBlank())"example" else "current" else "expression";message=""
-        },translate=false)
+        fun choose(next:JSONObject) {selected=next.getString("id");source=next.getString("example");input=if(next.has("controls"))if(data.isBlank())"example" else "current" else "expression";message="";menuOpen=false;survivalReport=null;pending=false}
+        Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+            Box {
+                OutlinedButton(onClick={menuOpen=true}){Text(definition.getString(if(ko)"ko" else "label"))}
+                DropdownMenu(expanded=menuOpen,onDismissRequest={menuOpen=false}) {definitions.forEach {item->DropdownMenuItem(text={Text(item.getString(if(ko)"ko" else "label"))},onClick={choose(item)})}}
+            }
+            if(selected!="survivalanalysis")SmallAction(if(ko)"생존분석" else "Survival analysis"){choose(definitions.first {it.getString("id")=="survivalanalysis"})}
+        }
         Text(definition.getString(if(definition.has("controls")&&input!="expression")if(ko)"formHelpKo" else "formHelp" else if(ko)"helpKo" else "help"),fontSize=11.sp,color=LocalInstrument.current.muted)
         if(definition.has("controls")) {
             val ids=listOf("current","example","expression")
@@ -112,10 +126,18 @@ internal fun advancedStatisticsRows(data:String):List<List<String>> {
                 if(definition.has("controls")){input="current";message=""}
                 else runCatching {advancedStatisticsCommand(definition,advancedStatisticsRows(data))}.onSuccess {source=it;message=""}.onFailure {message=it.message.orEmpty()}
             }
-            Button(onClick={command.getOrNull()?.let {m.edit(Editor(it));m.calculate()}},enabled=command.isSuccess&&command.getOrDefault("").isNotBlank()&&!m.busy,modifier=Modifier.testTag("statistics-advanced-run")){Text(if(ko)"분석" else "Analyze")}
+            Button(onClick={command.getOrNull()?.let {
+                survivalReport=null;previousResult=m.result;pending=selected=="survivalanalysis"
+                reportPlan=if(pending&&input!="expression")survivalAnalysisPlan(rows,settings,columns) else null
+                m.edit(Editor(it));m.calculate()
+            }},enabled=command.isSuccess&&command.getOrDefault("").isNotBlank()&&!m.busy,modifier=Modifier.testTag("statistics-advanced-run")){Text(if(ko)"분석" else "Analyze")}
             SmallAction(if(ko)"계산기로" else "Insert expression"){command.getOrNull()?.let {m.edit(Editor(it));m.mode="Scientific/CAS"}}
         }
         if(message.isNotBlank())Text(message,color=MaterialTheme.colorScheme.error,fontSize=12.sp)
+        if(selected=="survivalanalysis") {
+            Row(verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) {Checkbox(band,{band=it},modifier=Modifier.testTag("statistics-survival-band"));Text(if(ko)"95% 신뢰구간 밴드" else "95% CI band",fontSize=12.sp)}
+            survivalReport?.let {SurvivalReport(it,reportPlan,band)}
+        }
     }
 }
 
@@ -140,7 +162,7 @@ internal fun advancedStatisticsRows(data:String):List<List<String>> {
                 Choices(columns,columns.getOrNull(selected ?: -1).orEmpty(),{name->onChange(key,columns.indexOf(name).toString())},translate=false)
             }
             "columns"->{
-                val excluded=if(key=="predictors")if(definition.getString("id")=="cox")listOf("time","event") else listOf("subject","response") else emptyList()
+                val excluded=if(key=="predictors")when(definition.getString("id")){"cox"->listOf("time","event");"survivalanalysis"->listOf("time","event")+if(option("grouping")=="groups")listOf("group") else emptyList();else->listOf("subject","response")} else emptyList()
                 val reserved=excluded.mapNotNull {option(it).toIntOrNull()?.let {value->if(value==-1)columns.lastIndex else value}}
                 val selected=if(value=="auto")columns.indices.filter {it !in reserved} else value.split(',').mapNotNull(String::toIntOrNull)
                 Text(label,fontSize=11.sp,color=LocalInstrument.current.muted)

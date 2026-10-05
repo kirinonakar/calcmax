@@ -651,6 +651,8 @@ Example: mcnemar([[20,8],[2,15]],exact)
 `kaplanmeier` — 열: 시간, 사건(1=발생, 0=중도절단); 신뢰수준.
 Example: kaplanmeier([[1,1],[2,0],[3,1],[4,1],[5,0],[6,1]],0.95)
 
+`survivalanalysis(rows,cox=0)` — Kaplan–Meier 생존곡선·시점별 Greenwood log-log 95% 신뢰구간, 다중 그룹 log-rank, 선택적 Cox HR·95% 신뢰구간. 열: 시간, 사건 0/1, 숫자 그룹 ID, 추가 설명변수. Cox=1이면 첫 그룹 기준 더미변수와 선택한 설명변수를 사용하며 Breslow 동률 처리를 적용합니다. UI는 문자열 그룹명도 지원합니다. 비례위험 가정은 검정하지 않습니다.
+
 `logrank` — 두 시간/사건 표. 현재 데이터 열: 시간, 사건, 그룹(2개).
 Example: logrank([[1,1],[3,1],[4,0],[6,1]],[[2,0],[4,1],[5,1],[7,0]])
 

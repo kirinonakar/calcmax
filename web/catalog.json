@@ -303,6 +303,7 @@
     "levene([],[])",
     "bartlett([],[])",
     "mcnemar([],exact)",
+    "survivalanalysis([],0)",
     "kaplanmeier([],0.95)",
     "logrank([],[])",
     "cox([])",

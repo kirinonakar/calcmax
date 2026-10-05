@@ -115,7 +115,7 @@ print(calc.integrate(x**2, x, 0, 1))</textarea></label>
       <p id="regression-data-help" hidden>Last column is response; previous columns are predictors. Logistic response: 0 or 1.</p><div id="regression-caption" class="formula-preview"></div><div id="regression-inference"></div><button id="regression-export" hidden>Export residual CSV</button></section>
       <div class="form-row"><label>Plot type<select id="statistics-plot-type"><option value="scatter">Scatter</option><option value="histogram">Histogram</option><option value="box">Box plot</option></select></label><label id="statistics-plot-grouping-label" hidden>Plot grouping<select id="statistics-plot-grouping"><option value="columns">Columns</option><option value="first">first</option><option value="last">last</option></select></label><button id="statistics-plot-run">Plot data</button></div><div id="statistics-plot" class="plot" hidden=""></div>
       <details id="statistics-advanced" open><summary>Advanced analysis</summary>
-        <div class="form-row"><label>Analyze<select id="statistics-advanced-kind"></select></label><button id="statistics-advanced-example">Example</button><button id="statistics-advanced-data">Use current data</button></div>
+        <div class="form-row"><label>Analyze<select id="statistics-advanced-kind"></select></label><button id="statistics-survival-open">Survival analysis</button><button id="statistics-advanced-example">Example</button><button id="statistics-advanced-data">Use current data</button></div>
         <p id="statistics-advanced-help" class="hint"></p>
         <label>Input source<select id="statistics-advanced-input"><option value="current">Current data</option><option value="example">Example</option><option value="expression">Expression</option></select></label>
         <div id="statistics-advanced-controls" class="form-row"></div>
@@ -123,6 +123,8 @@ print(calc.integrate(x**2, x, 0, 1))</textarea></label>
         <p id="statistics-advanced-status" class="hint" role="status" aria-live="polite"></p>
         <label id="statistics-advanced-expression">Analysis expression<textarea id="statistics-advanced-source" rows="3" spellcheck="false"></textarea></label>
         <button data-run="statistics-advanced">Analyze</button>
+        <div id="statistics-survival-tools" class="form-row" hidden><span class="hint">Kaplan–Meier · log-rank · Cox</span><label class="check"><input id="statistics-survival-band" type="checkbox" checked>95% CI band</label></div>
+        <section id="statistics-survival-result" class="survival-report" aria-live="polite" hidden></section>
       </details>
     </section>
     <section class="workspace" data-mode="programmer" hidden="">

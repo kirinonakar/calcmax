@@ -98,6 +98,8 @@ def _dispatch(payload, control=None):
                     "conditions":[readable(c.lhs)+" ≠ "+readable(c.rhs) if isinstance(c,s.Unequality) else str(c) for c in dict.fromkeys(engine.conditions)],"symbolic":bool(getattr(value,"free_symbols",False))}
             result["approximate"]=bool(getattr(display_value,"has",lambda *_:False)(s.Float))
             result["decimalTree"]=display_tree(decimal_value)
+            if request["tree"].get("value")=="survivalanalysis" and hasattr(engine,"survival_report"):
+                result["survival"]=engine.survival_report
             if dms_result:
                 result["tree"]=dms_tree(display_value)
                 result["decimalTree"]=dms_tree(decimal_value)

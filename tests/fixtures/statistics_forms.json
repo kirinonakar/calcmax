@@ -362,5 +362,54 @@
       "scale": "4"
     },
     "expected": "kstest([4,5],uniform,3,4)"
+  },
+  {
+    "id": "survivalanalysis",
+    "rows": [
+      [
+        "yes",
+        "1",
+        "A",
+        "30"
+      ],
+      [
+        "no",
+        "2",
+        "B",
+        "40"
+      ],
+      [
+        "yes",
+        "3",
+        "A",
+        "50"
+      ]
+    ],
+    "settings": {
+      "time": "1",
+      "event": "0",
+      "eventValue": "yes",
+      "group": "2",
+      "cox": "1",
+      "predictors": "3"
+    },
+    "expected": "survivalanalysis([[1,1,1,30],[2,0,2,40],[3,1,1,50]],1)"
+  },
+  {
+    "id": "survivalanalysis",
+    "rows": [
+      [
+        "1",
+        "1"
+      ],
+      [
+        "2",
+        "0"
+      ]
+    ],
+    "settings": {
+      "grouping": "all"
+    },
+    "expected": "survivalanalysis([[1,1,1],[2,0,1]],0)"
   }
 ]

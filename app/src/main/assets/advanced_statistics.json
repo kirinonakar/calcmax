@@ -341,6 +341,145 @@
     ]
   },
   {
+    "id": "survivalanalysis",
+    "label": "Survival analysis",
+    "ko": "생존분석",
+    "input": "table",
+    "suffix": ",0",
+    "example": "survivalanalysis([[1,1,1],[2,1,2],[3,0,1],[4,1,2],[5,1,1],[6,0,2],[7,1,2],[8,1,1]],0)",
+    "help": "Rows: time, event (0/1), group ID, optional Cox predictors; Cox 0=off, 1=on.",
+    "helpKo": "열: 시간, 사건(0/1), 그룹 ID, 선택적 Cox 설명변수. Cox: 0=끔, 1=켬.",
+    "formHelp": "Kaplan–Meier · 95% CI · log-rank · Cox. Other event values are censored.",
+    "formHelpKo": "Kaplan–Meier · 95% 신뢰구간 · log-rank · Cox. 발생 값 이외는 중도절단입니다.",
+    "exampleRows": [
+      [
+        "1",
+        "1",
+        "A"
+      ],
+      [
+        "2",
+        "1",
+        "B"
+      ],
+      [
+        "3",
+        "0",
+        "A"
+      ],
+      [
+        "4",
+        "1",
+        "B"
+      ],
+      [
+        "5",
+        "1",
+        "A"
+      ],
+      [
+        "6",
+        "0",
+        "B"
+      ],
+      [
+        "7",
+        "1",
+        "B"
+      ],
+      [
+        "8",
+        "1",
+        "A"
+      ]
+    ],
+    "controls": [
+      {
+        "key": "time",
+        "label": "Time",
+        "ko": "시간 열",
+        "type": "column",
+        "default": 0
+      },
+      {
+        "key": "event",
+        "label": "Event",
+        "ko": "사건 열",
+        "type": "column",
+        "default": 1
+      },
+      {
+        "key": "eventValue",
+        "label": "Event value",
+        "ko": "사건 발생 값",
+        "type": "number",
+        "default": "1"
+      },
+      {
+        "key": "grouping",
+        "label": "Group",
+        "ko": "그룹",
+        "type": "choice",
+        "default": "groups",
+        "choices": [
+          {
+            "id": "groups",
+            "label": "By group",
+            "ko": "그룹별"
+          },
+          {
+            "id": "all",
+            "label": "All subjects",
+            "ko": "전체"
+          }
+        ]
+      },
+      {
+        "key": "group",
+        "label": "Group column",
+        "ko": "그룹 열",
+        "type": "column",
+        "default": 2,
+        "when": {
+          "grouping": [
+            "groups"
+          ]
+        }
+      },
+      {
+        "key": "cox",
+        "label": "Cox model",
+        "ko": "Cox 모형",
+        "type": "choice",
+        "default": "0",
+        "choices": [
+          {
+            "id": "0",
+            "label": "Off",
+            "ko": "끔"
+          },
+          {
+            "id": "1",
+            "label": "On",
+            "ko": "켬"
+          }
+        ]
+      },
+      {
+        "key": "predictors",
+        "label": "Additional Cox predictors",
+        "ko": "추가 Cox 설명변수",
+        "type": "columns",
+        "default": "",
+        "when": {
+          "cox": [
+            "1"
+          ]
+        }
+      }
+    ]
+  },
+  {
     "id": "kaplanmeier",
     "label": "Kaplan–Meier",
     "ko": "Kaplan–Meier",

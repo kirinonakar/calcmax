@@ -11,7 +11,7 @@ import sympy as s
 from calc_shared import MathError, require
 from calc_statistics import _chisq_sf, _f_sf, _normal_sf
 
-FUNCTIONS = set('padjust cohend eta2 levene bartlett mcnemar kaplanmeier logrank cox repeatedanova mixedmodel gee multinomial ordinal poissonreg nbreg bootstrapci testpower samplesize kstest crossvalidate pca kmeans impute'.split())
+FUNCTIONS = set('padjust cohend eta2 levene bartlett mcnemar kaplanmeier logrank cox survivalanalysis repeatedanova mixedmodel gee multinomial ordinal poissonreg nbreg bootstrapci testpower samplesize kstest crossvalidate pca kmeans impute'.split())
 
 
 def number(x):
@@ -260,7 +260,7 @@ def advanced(engine, name, a):
     """Entry point shared by calculator expressions and Python catalog."""
     engine.note = 'Numerical statistics use binary64 precision.'
     arities = {'padjust':(1,3),'cohend':(2,3),'eta2':(2,20),'levene':(2,20),'bartlett':(2,20),'mcnemar':(1,2),
-               'kaplanmeier':(1,2),'logrank':(2,2),'cox':(1,1),'repeatedanova':(1,1),'mixedmodel':(1,1),'gee':(1,2),
+               'kaplanmeier':(1,2),'logrank':(2,2),'cox':(1,1),'survivalanalysis':(1,2),'repeatedanova':(1,1),'mixedmodel':(1,1),'gee':(1,2),
                'multinomial':(1,1),'ordinal':(1,1),'poissonreg':(1,1),'nbreg':(1,1),'bootstrapci':(1,5),
                'testpower':(2,4),'samplesize':(1,4),'kstest':(2,4),'crossvalidate':(1,3),'pca':(1,3),'kmeans':(2,3),'impute':(1,2)}
     low,high = arities[name]; require(low <= len(a) <= high, name+' argument count mismatch')
@@ -270,6 +270,7 @@ def advanced(engine, name, a):
 
 
 def calculate(engine,name,a):
+    if name=='survivalanalysis': return survival_analysis(engine,a)
     if name == 'padjust':
         vals = vector(a[0]); method = option(a,1,'holm'); alpha = number(a[2]) if len(a)>2 else .05
         require(all(0 <= p <= 1 for p in vals) and 0<alpha<1, 'p values must lie in [0,1]; alpha in (0,1)')
@@ -319,7 +320,7 @@ def calculate(engine,name,a):
         engine.note += ' McNemar tests paired counts; exact two-sided binomial is the default.'
         return {'discordant pairs':n,'chi2':chi,'p':p,'method':method}
     if name=='kaplanmeier':
-        rows=table(a[0],2,2); require(len(rows[0])==2,'Rows are [time,event]'); survival(rows)
+        rows=table(a[0],1,2); require(len(rows[0])==2,'Rows are [time,event]'); survival(rows)
         level=number(a[1]) if len(a)>1 else .95; require(0<level<1,'Confidence level must lie in (0,1)')
         z=statistics.NormalDist().inv_cdf((1+level)/2); prob=1; greenwood=0; curve=[]; median=None
         for time in sorted(set(r[0] for r in rows)):
@@ -377,6 +378,62 @@ def calculate(engine,name,a):
     if name in ('bootstrapci','testpower','samplesize','kstest'): return resampling(engine,name,a)
     if name in ('crossvalidate','pca','kmeans','impute'): return learning(engine,name,a)
     raise MathError('Unknown advanced analysis')
+
+
+def survival_analysis(engine,a):
+    """Rows: time, event, numeric group ID, optional numeric covariates.
+
+    The UI encodes labels in first-occurrence order. Cox includes treatment
+    dummies (first group as reference), plus the selected covariates.
+    Subtest failures preserve valid KM curves and are explicitly reported.
+    """
+    rows=table(a[0],2,3); survival(rows)
+    fit=integer(a[1],0,1) if len(a)>1 else 0
+    ids=list(dict.fromkeys(r[2] for r in rows))
+    require(len(ids)<=20,'Survival analysis limit: 20 groups')
+    groups=[]
+    for label in ids:
+        sample=[r[:2] for r in rows if r[2]==label]
+        km=calculate(engine,'kaplanmeier',[sample,.95])
+        groups.append({'id':label,'n':len(sample),'events':int(sum(r[1] for r in sample)),
+                       'median':km['median survival'],'curve':km['survival table']})
+    report={'groups':groups,'level':.95,'logrank':None,'cox':None}
+    if len(ids)>1:
+        try:
+            k=len(ids); score=[0.0]*k; covariance=[[0.0]*k for _ in ids]
+            for time in sorted(set(r[0] for r in rows if r[1])):
+                risk=[sum(r[0]>=time and r[2]==label for r in rows) for label in ids]
+                events=[sum(r[0]==time and r[1] and r[2]==label for r in rows) for label in ids]
+                n=sum(risk); d=sum(events)
+                for i in range(k):
+                    score[i]+=events[i]-d*risk[i]/n
+                    for j in range(k):
+                        if n>1: covariance[i][j]+=d*(n-d)/(n-1)*((risk[i]/n if i==j else 0)-risk[i]*risk[j]/n**2)
+            reduced=mp.matrix([r[:-1] for r in covariance[:-1]]); v=mp.matrix(score[:-1])
+            require(min(float(x) for x in mp.eigsy(reduced,eigvals_only=True))>1e-12,'Log-rank needs informative events in all risk sets')
+            chi=max(0,float((v.T*inverse(reduced)*v)[0]))
+            report['logrank']={'chi2':chi,'df':k-1,'p':float(_chisq_sf(chi,k-1))}
+        except MathError as exc: report['logrank']={'error':str(exc)}
+    if fit:
+        try:
+            coxrows=[r[:2]+[float(r[2]==label) for label in ids[1:]]+r[3:] for r in rows]
+            require(len(coxrows[0])>2,'Choose Cox predictors or at least two groups')
+            report['cox']=calculate(engine,'cox',[coxrows])
+            for index,term in enumerate(report['cox']['coefficients']):
+                term['term']='group:'+str(index+1) if index<len(ids)-1 else 'predictor:'+str(index-len(ids)+1)
+                term['HR']=term['exp(coef)']
+                term['HR CI95']=[math.exp(v) if v<709 else math.inf for v in term['CI95']] if term['CI95'] else None
+        except MathError as exc: report['cox']={'error':str(exc)}
+    # Raw JSON metadata is separate from the compact reusable calculator result.
+    def json_numbers(value):
+        if isinstance(value,dict): return {k:json_numbers(v) for k,v in value.items()}
+        if isinstance(value,list): return [json_numbers(v) for v in value]
+        if isinstance(value,float) and not math.isfinite(value): return None
+        return value
+    engine.survival_report=json_numbers(report)
+    engine.note += ' Survival analysis: pointwise Greenwood log-log 95% CI; log-rank; Cox Breslow ties, first group as reference. Proportional hazards assumption is not tested.'
+    return {'groups':len(ids),'observations':len(rows),'events':int(sum(r[1] for r in rows)),
+            'log-rank':report['logrank'] or 'one group','Cox':report['cox'] or 'off'}
 
 
 def clustered(engine,name,a):

@@ -63,6 +63,50 @@ class AdvancedStatisticsTests(unittest.TestCase):
         self.assertEqual(run('kaplanmeier',[[1,0],[2,0]])['median survival'],'unavailable')
         self.assertEqual(float(run('kaplanmeier',[[1,1],[1,1]])['survival table'][0][4]),0)
 
+    def test_survival_suite_preserves_ties_ci_and_two_group_logrank(self):
+        rows=[[1,1,1],[1,0,1],[2,1,1],[3,0,1],[1,0,2],[2,1,2],[3,1,2],[4,0,2]]
+        report=evaluate('survivalanalysis('+str(rows)+',0)')['survival']
+        curve=report['groups'][0]['curve']
+        self.assertEqual(curve[0][:5],[1,4,1,1,.75])
+        reference=run('kaplanmeier',[r[:2] for r in rows if r[2]==1])['survival table']
+        for actual,expected in zip(curve,reference):
+            for x,y in zip(actual,expected):self.assertAlmostEqual(x,float(y),places=12)
+        lr=run('logrank',[r[:2] for r in rows if r[2]==1],[r[:2] for r in rows if r[2]==2])
+        for key in ['chi2','df','p']:self.assertAlmostEqual(report['logrank'][key],float(lr[key]),places=12)
+
+    def test_survival_multigroup_is_invariant_to_label_and_row_order(self):
+        rows=[[1,1,1],[2,0,1],[2,1,2],[4,1,2],[3,1,3],[5,0,3]]
+        first=evaluate('survivalanalysis('+str(rows)+')')['survival']
+        second=evaluate('survivalanalysis('+str([[t,e,4-g] for t,e,g in reversed(rows)])+')')['survival']
+        self.assertEqual(first['logrank']['df'],2)
+        self.assertGreater(first['logrank']['chi2'],0)
+        self.assertAlmostEqual(first['logrank']['chi2'],second['logrank']['chi2'],places=12)
+        self.assertAlmostEqual(first['logrank']['p'],second['logrank']['p'],places=12)
+
+    def test_survival_censor_only_and_single_subject_groups_keep_curves(self):
+        report=evaluate('survivalanalysis([[1,0,1],[2,0,2]],1)')['survival']
+        self.assertIn('error',report['logrank'])
+        self.assertIn('error',report['cox'])
+        for group in report['groups']:
+            self.assertIsNone(group['median'])
+            self.assertEqual(group['curve'][0][1],1)
+            self.assertEqual(group['curve'][0][4:],[1,1,1])
+        report=evaluate('survivalanalysis([[0,1,1],[2,0,2]])')['survival']
+        self.assertEqual(report['groups'][0]['curve'][0],[0,1,1,0,0,0,0])
+        self.assertEqual(report['groups'][0]['median'],0)
+
+    def test_survival_cox_group_dummy_matches_reference_and_exponentiates_ci(self):
+        fixture=next(x for x in json.loads((ROOT/'tests/fixtures/advanced_statistics_reference.json').read_text()) if x['name']=='cox')
+        original=fixture['arguments'][0]
+        rows=[r[:2]+[1+r[2]] for r in original]
+        report=evaluate('survivalanalysis('+str(rows)+',1)')['survival']
+        actual=report['cox']['coefficients'][0]
+        expected=run('cox',original)['coefficients'][0]
+        self.assertAlmostEqual(actual['HR'],float(expected['exp(coef)']),places=7)
+        self.assertEqual(actual['term'],'group:1')
+        for x,y in zip(actual['HR CI95'],expected['CI95']):self.assertAlmostEqual(x,math.exp(float(y)),places=7)
+        with self.assertRaises(AssertionError):evaluate('survivalanalysis([[1,2,1],[2,0,2]])')
+
     def test_ks_exact_separated_samples_and_identical_ties(self):
         result=run('kstest',[1,2,3],[4,5,6])
         self.assertAlmostEqual(float(result['D']),1)
