@@ -19,9 +19,9 @@ import kotlin.math.ln
 import kotlin.math.max
 import kotlin.math.roundToLong
 
-@Composable internal fun StatisticsPlot(type:String,points:List<Pair<Double,Double>>,values:List<Double>,secondary:List<Double> = emptyList(),curve:List<Pair<Double,Double>> = emptyList(),fitLabel:String="",displayDigits:Int=10,showCorrelation:Boolean=false,correlation:Double?=null,tertiary:List<Double> = emptyList(),xDateOrigin:LocalDate?=null,xAxisLabel:String="x",yAxisLabel:String="y",fitPrefix:String="y ≈ ",fitVariables:Map<String,String> = emptyMap(),allColumns:List<Pair<String,List<Double>>> = emptyList()) {
+@Composable internal fun StatisticsPlot(type:String,points:List<Pair<Double,Double>>,values:List<Double>,secondary:List<Double> = emptyList(),curve:List<Pair<Double,Double>> = emptyList(),fitLabel:String="",displayDigits:Int=10,showCorrelation:Boolean=false,correlation:Double?=null,tertiary:List<Double> = emptyList(),xDateOrigin:LocalDate?=null,xAxisLabel:String="x",yAxisLabel:String="y",fitPrefix:String="y ≈ ",fitVariables:Map<String,String> = emptyMap(),allColumns:List<Pair<String,List<Double>>>? = null) {
     val c=LocalInstrument.current
-    val series=if(allColumns.isNotEmpty())allColumns.mapIndexed {index,(name,observations)->Triple(if(allColumns.size==1)"" else name,observations,c.curves[index%c.curves.size])}.filter {it.second.isNotEmpty()} else (if(secondary.isEmpty()&&tertiary.isEmpty())listOf(Triple("",values,c.accent)) else listOf(Triple("x",values,c.accent),Triple("y",secondary,c.danger),Triple("z",tertiary,c.curves[2]))).filter {it.second.isNotEmpty()}
+    val series=if(allColumns!=null)allColumns.mapIndexed {index,(name,observations)->Triple(name,observations,c.curves[index%c.curves.size])}.filter {it.second.isNotEmpty()} else (if(secondary.isEmpty()&&tertiary.isEmpty())listOf(Triple("",values,c.accent)) else listOf(Triple("x",values,c.accent),Triple("y",secondary,c.danger),Triple("z",tertiary,c.curves[2]))).filter {it.second.isNotEmpty()}
     val fitEquation=remember(fitLabel,displayDigits,fitVariables) {if(fitLabel.isBlank())null else regressionFormulaDisplayTree(fitLabel,displayDigits,fitVariables)}
     Canvas(Modifier.fillMaxWidth().height(if(type=="Box plot")(series.size*70+70).coerceAtLeast(220).dp else 220.dp).background(c.display)) {
         val left=38.dp.toPx();val right=12.dp.toPx();val top=14.dp.toPx();val bottom=28.dp.toPx()
@@ -61,12 +61,7 @@ import kotlin.math.roundToLong
                 val h=height*count/peak
                 drawRect(series[seriesIndex].third.copy(alpha=.78f),Offset(left+index*bar+1+lane*seriesIndex,top+height-h),androidx.compose.ui.geometry.Size((lane-1).coerceAtLeast(1f),h))
             }}
-            if(series.size==1&&series[0].first.isEmpty())drawContext.canvas.nativeCanvas.drawText("${values.size} values · $bins bins",left,top+11.dp.toPx(),text)
-            else {
-                var cursor=left
-                series.forEach {entry->val paint=Paint(Paint.ANTI_ALIAS_FLAG).apply {color=entry.third.toArgb();textSize=10.sp.toPx()};val label="${entry.first} ${entry.second.size}";drawContext.canvas.nativeCanvas.drawText(label,cursor,top+11.dp.toPx(),paint);cursor+=paint.measureText(label)+8.dp.toPx()}
-                drawContext.canvas.nativeCanvas.drawText("· $bins bins",cursor,top+11.dp.toPx(),text)
-            }
+            drawContext.canvas.nativeCanvas.drawText("${all.size} values · $bins bins",left,top+11.dp.toPx(),text)
             drawContext.canvas.nativeCanvas.drawText("%.4g".format(lo),left,top+height+16.dp.toPx(),text)
             drawContext.canvas.nativeCanvas.drawText("%.4g".format(hi),left+width-34.dp.toPx(),top+height+16.dp.toPx(),text)
         } else {
@@ -92,6 +87,9 @@ import kotlin.math.roundToLong
                 drawContext.canvas.nativeCanvas.drawText(prefix+summary,left,top+(13+index*14).dp.toPx(),paint)
             }
         }
+    }
+    if(type=="Histogram"&&series.isNotEmpty())Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(16.dp)) {
+        series.forEach {entry->Text("${entry.first.ifBlank {"value"}} (n=${entry.second.size})",fontSize=11.sp,color=entry.third,maxLines=1)}
     }
     if(type=="Scatter" && fitEquation!=null)CompositionLocalProvider(LocalMathMinimumSize provides 8f) {
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal=10.dp,vertical=3.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(5.dp)) {

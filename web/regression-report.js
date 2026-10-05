@@ -3,7 +3,15 @@ import {t} from './i18n.js';
 import {roundNumber} from './display-format.js';
 import {regressionROC} from './regression-roc.js';
 
-export function renderRegressionReport(container,report,digits=10) {
+export function regressionParameterLabels(mode,columns,responseColumn){
+  const predictors=columns.filter((_,i)=>i!==responseColumn);if(!predictors.length)return {};
+  if(['multiple','logistic'].includes(mode))return {b0:'Intercept',...Object.fromEntries(predictors.map((name,i)=>[`b${i+1}`,name]))};
+  if(['linear','quadratic','polynomial'].includes(mode))return {b0:'Intercept',...Object.fromEntries(Array.from({length:10},(_,i)=>[`b${i+1}`,predictors[0]+(i?String(i+1).replace(/\d/g,digit=>'⁰¹²³⁴⁵⁶⁷⁸⁹'[Number(digit)]):'')]))};
+  return {};
+}
+export function regressionParameterName(name,labels={}){return labels[name]==='Intercept'?t('Intercept'):labels[name]||name;}
+
+export function renderRegressionReport(container,report,digits=10,parameterLabels={}) {
   container.replaceChildren();
   if(!report)return;
   const number=value=>value===null||value===undefined?'—':roundNumber(String(value),digits);
@@ -16,10 +24,11 @@ export function renderRegressionReport(container,report,digits=10) {
   for(const warning of report.warnings||[])container.append(element('p',t(warning)));
   const wrapper=element('div');wrapper.style.overflowX='auto';
   const table=element('table');table.setAttribute('aria-label',t('Coefficient inference'));
-  const head=element('tr');for(const label of ['Parameter','Estimate','SE','95% CI','p',...(report.fitScale==='binomial'?['Odds ratio','OR 95% CI']:[])])head.append(element('th',t(label)));
+  const hasVif=(report.coefficients||[]).some(c=>c.vif!=null);
+  const head=element('tr');for(const label of ['Parameter','Estimate','SE','95% CI','p',...(hasVif?['VIF']:[]),...(report.fitScale==='binomial'?['Odds ratio','OR 95% CI']:[])])head.append(element('th',t(label)));
   const thead=element('thead');thead.append(head);table.append(thead);
   const body=element('tbody');
-  for(const c of report.coefficients||[]){const row=element('tr');for(const label of [c.name,number(c.estimate),number(c.se),`${number(c.low)} … ${number(c.high)}`,number(c.p),...(report.fitScale==='binomial'?[number(c.oddsRatio),`${number(c.oddsLow)} … ${number(c.oddsHigh)}`]:[])])row.append(element('td',label));body.append(row);}
+  for(const c of report.coefficients||[]){const row=element('tr');for(const label of [regressionParameterName(c.name,parameterLabels),number(c.estimate),number(c.se),`${number(c.low)} … ${number(c.high)}`,number(c.p),...(hasVif?[number(c.vif)]:[]),...(report.fitScale==='binomial'?[number(c.oddsRatio),`${number(c.oddsLow)} … ${number(c.oddsHigh)}`]:[])])row.append(element('td',label));body.append(row);}
   table.append(body);wrapper.append(table);container.append(wrapper);
   if(report.roc){const roc=regressionROC(report,digits);if(roc)container.append(roc);}
   const details=element('details'),label=element('summary',t('Residual diagnostics'));details.append(label);

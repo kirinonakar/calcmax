@@ -22,6 +22,35 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class StatisticsDataSourceTest {
+    @Test fun directInputDetectsArbitraryHeadersWithoutRemovingFirstExpressionsOrGroups() {
+        val source="Treatment,Measurement\nA,1\nB,2\nA,3"
+        val rows=com.kirinonakar.symvacas.ui.statisticsRows(source)
+        assertEquals(listOf(listOf("A","1"),listOf("B","2"),listOf("A","3")),rows)
+        assertEquals(listOf("A" to listOf(1.0,3.0),"B" to listOf(2.0)),com.kirinonakar.symvacas.ui.statisticsPlotPanels(rows,"xy","first")[0].series)
+        assertEquals("[[1,2],[2,4]]",statisticsDataSource("Time,Outcome\n1,2\n2,4","xy"))
+        assertEquals(listOf(listOf("1/2"),listOf("2")),com.kirinonakar.symvacas.ui.statisticsRows("Value label\n1/2\n2"))
+        assertEquals(listOf(listOf("sqrt(2)"),listOf("3")),com.kirinonakar.symvacas.ui.statisticsRows("sqrt(2)\n3"))
+        assertEquals(listOf(listOf("pi"),listOf("2")),com.kirinonakar.symvacas.ui.statisticsRows("pi\n2"))
+        assertEquals(listOf(listOf("A",""),listOf("B","2")),com.kirinonakar.symvacas.ui.statisticsRows("A,\nB,2"))
+        assertEquals(listOf(listOf("1"),listOf("2")),com.kirinonakar.symvacas.ui.statisticsRows("\uFEFF1\n2"))
+        assertTrue(previewStatisticsCsv(source).hasHeader)
+    }
+
+    @Test fun plotGroupsKeepRawLabelsAndExcludeOnlyMissingOrNonfiniteObservations() {
+        val source="A,1,10\nB,2,20\nA,,30\n,99,99\nB,NaN,40"
+        assertEquals(listOf("A · y" to listOf(1.0),"A · z" to listOf(10.0,30.0),"B · y" to listOf(2.0),"B · z" to listOf(20.0,40.0)),
+            com.kirinonakar.symvacas.ui.statisticsPlotSeries(com.kirinonakar.symvacas.ui.statisticsRows(source),"xyz","first"))
+        val panels=com.kirinonakar.symvacas.ui.statisticsPlotPanels(com.kirinonakar.symvacas.ui.statisticsRows(source),"xyz","first")
+        assertEquals(listOf("y","z"),panels.map {it.label})
+        assertEquals(listOf("A" to listOf(1.0),"B" to listOf(2.0)),panels[0].series)
+        assertEquals(listOf("A" to listOf(10.0,30.0),"B" to listOf(20.0,40.0)),panels[1].series)
+        val last=listOf(listOf("1","A"),listOf("2","B"),listOf("3","A"))
+        assertEquals(listOf("A" to listOf(1.0,3.0),"B" to listOf(2.0)),com.kirinonakar.symvacas.ui.statisticsPlotSeries(last,"xy","last"))
+        val dates=listOf(listOf("2024-01-01","1,234"),listOf("2024-01-01",""),listOf("2","5"))
+        assertEquals(listOf("2024-01-01" to listOf(1234.0),"2" to listOf(5.0)),com.kirinonakar.symvacas.ui.statisticsPlotSeries(dates,"xy","first"))
+        assertEquals(emptyList<Pair<String,List<Double>>>(),com.kirinonakar.symvacas.ui.statisticsPlotSeries(listOf(listOf("","7")),"xy","first"))
+    }
+
     @Test fun nColumnsPreserveImportStorageAnalysisAndRegressionOrder() {
         val csv="1,2,3,4\n5,6,7,8"
         assertEquals("[[1,2,3,4],[5,6,7,8]]",statisticsDataSource(csv,"columns:4"))
@@ -156,6 +185,18 @@ class StatisticsTestCommandsTest {
 }
 
 class RegressionFormulaTest {
+    @Test fun coefficientLabelsTrackHeaderColumnsAndSelectedResponse() {
+        fun labels(kind:String,mode:String,response:Int,csv:String="")=com.kirinonakar.symvacas.ui.statisticsRegressionParameterLabels(kind,mode,response,csv)
+        assertEquals(mapOf("b0" to "Intercept","b1" to "Age (y)","b2" to "Weight (z)"),labels("xyz","logistic",0,"Outcome,Age,Weight\n0,20,50\n1,30,60"))
+        assertEquals(mapOf("b0" to "Intercept","b1" to "x","b2" to "y"),labels("xyz","multiple",2))
+        assertEquals(mapOf("b0" to "Intercept","b1" to "x","b2" to "z"),labels("xyz","multiple",1))
+        val polynomial=labels("xy","polynomial",0)
+        assertEquals("y",polynomial["b1"])
+        assertEquals("y²",polynomial["b2"])
+        assertEquals("y¹⁰",polynomial["b10"])
+        assertTrue(labels("xy","custom",1).isEmpty())
+    }
+
     @Test fun logisticResponseChoiceReordersOnlyCompleteRowsAndMapsThePredictors() {
         val rows=listOf(listOf("0","10","20"),listOf("1","11","21"),listOf("","12","22"),listOf("0","13","23"),listOf("1","14","24"))
         assertEquals("[[10,20,0],[11,21,1],[13,23,0],[14,24,1]]",statisticsRegressionTable(rows,"xyz","logistic",0))

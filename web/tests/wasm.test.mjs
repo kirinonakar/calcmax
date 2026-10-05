@@ -76,6 +76,7 @@ test('Korean regression selections and restored labels execute the selected mode
     if(coefficients)current.forEach((value,i)=>assert.ok(Math.abs(value-coefficients[i])<1e-12));else coefficients=current;
     const report=results.at(-1).regression;
     if(auc!==undefined){assert.equal(report.auc,auc);assert.deepEqual(report.roc,roc);}else{auc=report.auc;roc=report.roc;}
+    assert.deepEqual([...$('regression-inference').querySelectorAll('table tbody tr')].slice(1,3).map(row=>row.firstElementChild.textContent),['x','y','z'].filter((_,i)=>i!==response));
     assert.match($('regression-inference').textContent,/C-statistic \(AUC\)/);
     assert.equal($('regression-inference').querySelectorAll('[data-roc-curve]').length,1);
     assert.equal($('statistics-data').value,original,'fitting does not reorder the visible table');
@@ -111,9 +112,13 @@ test('regression inference and rank tests run through real WASM and workspace co
   assert.equal(wide.regression.coefficients.length,4);
   wide.regression.coefficients.forEach((c,i)=>assert.ok(Math.abs(Number(c.estimate)-[1,2,3,4][i])<1e-10));
   const multiple=evaluate(statisticsCommand('0,0,1\n1,0,3\n0,1,4\n1,1,7\n2,1,8',{op:'regression',kind:'xyz',regression:'multiple'}));
+  const vif=evaluate(statisticsCommand('-1,-2,-7\n-1,0,-1\n1,0,3\n1,2,9',{op:'regression',kind:'xyz',regression:'multiple'}));
+  assert.equal(vif.regression.coefficients[0].vif,null);
+  assert.deepEqual(vif.regression.coefficients.slice(1).map(c=>Number(c.vif)),[2,2]);
   assert.equal(multiple.regression.coefficients.length,3);assert.equal(multiple.curve.length,0);
   const logistic=evaluate(statisticsCommand('-3,0\n-2,0\n-1,1\n0,0\n0,1\n1,0\n2,1\n3,1',{op:'regression',kind:'xy',regression:'logistic'}));
   assert.ok(Math.abs(Number(logistic.regression.coefficients[1].estimate)-.7324875300102196)<1e-12);
+  assert.equal(Number(logistic.regression.coefficients[1].vif),1);
   assert.equal(Number(logistic.regression.auc),.78125);
   assert.deepEqual(logistic.regression.roc.map(point=>point.map(Number)).at(-1),[1,1]);
   assert.ok(logistic.curve.every(([,prob])=>prob>=0&&prob<=1));

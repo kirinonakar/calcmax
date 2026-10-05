@@ -219,6 +219,7 @@ internal class StatisticsState(private val prefs:SharedPreferences) {
     var statisticsCustomFormula by mutableStateOf((prefs.getString("statisticsCustomFormula","exp(-b*ADC)") ?: "exp(-b*ADC)").let {if(it=="S0*exp(-b*ADC)")"exp(-b*ADC)" else it})
     var statisticsCustomVariable by mutableStateOf(prefs.getString("statisticsCustomVariable","b") ?: "b")
     var statisticsCustomInitials by mutableStateOf(prefs.getString("statisticsCustomInitials","") ?: "")
+    var statisticsPlotGrouping by mutableStateOf(prefs.getString("statisticsPlotGrouping","columns")?.takeIf {it in listOf("columns","first","last")} ?: "columns")
     var statisticsPlot by mutableStateOf(prefs.getString("statisticsPlot","Histogram") ?: "Histogram")
     var statisticsSelected by mutableStateOf(prefs.getString("statisticsSelected","") ?: "")
     var statisticsIsNew by mutableStateOf(prefs.getBoolean("statisticsIsNew",false))
@@ -236,7 +237,7 @@ internal class StatisticsState(private val prefs:SharedPreferences) {
 
     fun saveDataSet(name:String,csv:String,kind:String) {
         require(name.matches(Regex("[A-Za-z][A-Za-z0-9_]*"))) {"Use a letter followed by letters, digits or underscores for the dataset name"}
-        require(kind in listOf("list","xy","xyz")) {"Unknown dataset type"}
+        require(kind in listOf("list","xy","xyz")||Regex("columns:[0-9]+").matches(kind)&&kind.substringAfter(":").toIntOrNull() in 1..100) {"Unknown dataset type"}
         dataSets=JSONObject(dataSets.toString()).put(name,JSONObject().put("csv",csv).put("kind",kind))
     }
 
@@ -250,7 +251,7 @@ internal class StatisticsState(private val prefs:SharedPreferences) {
 
     fun saveSelection() {
         prefs.edit().putString("statisticsName",statisticsName).putString("statisticsData",statisticsData).putString("statisticsKind",statisticsKind)
-            .putString("statisticsLogisticResponse",statisticsLogisticResponse).putString("statisticsPolynomialDegree",statisticsPolynomialDegree).putString("statisticsRegression",statisticsRegression).putString("statisticsPlot",statisticsPlot).putBoolean("statisticsCsv",statisticsCsv)
+            .putString("statisticsLogisticResponse",statisticsLogisticResponse).putString("statisticsPolynomialDegree",statisticsPolynomialDegree).putString("statisticsRegression",statisticsRegression).putString("statisticsPlot",statisticsPlot).putString("statisticsPlotGrouping",statisticsPlotGrouping).putBoolean("statisticsCsv",statisticsCsv)
             .putString("statisticsCustomFormula",statisticsCustomFormula).putString("statisticsCustomVariable",statisticsCustomVariable).putString("statisticsCustomInitials",statisticsCustomInitials)
             .putString("statisticsSelected",statisticsSelected).putBoolean("statisticsIsNew",statisticsIsNew).apply()
     }
@@ -260,7 +261,7 @@ internal class StatisticsState(private val prefs:SharedPreferences) {
     fun writeTo(editor:SharedPreferences.Editor) {
         editor.putString("dataSets",dataSets.toString())
             .putString("statisticsName",statisticsName).putString("statisticsData",statisticsData).putString("statisticsKind",statisticsKind)
-            .putString("statisticsLogisticResponse",statisticsLogisticResponse).putString("statisticsPolynomialDegree",statisticsPolynomialDegree).putString("statisticsRegression",statisticsRegression).putString("statisticsPlot",statisticsPlot).putString("statisticsSelected",statisticsSelected)
+            .putString("statisticsLogisticResponse",statisticsLogisticResponse).putString("statisticsPolynomialDegree",statisticsPolynomialDegree).putString("statisticsRegression",statisticsRegression).putString("statisticsPlot",statisticsPlot).putString("statisticsPlotGrouping",statisticsPlotGrouping).putString("statisticsSelected",statisticsSelected)
             .putString("statisticsCustomFormula",statisticsCustomFormula).putString("statisticsCustomVariable",statisticsCustomVariable).putString("statisticsCustomInitials",statisticsCustomInitials)
             .putBoolean("statisticsIsNew",statisticsIsNew).putBoolean("statisticsCsv",statisticsCsv)
             .putString("regressionFit",regressionFit).putString("regressionData",regressionData)

@@ -210,7 +210,7 @@ private val korean = mapOf(
     "Enter values once, then summarize, test, or plot the current dataset." to "데이터를 입력한 뒤 요약, 검정 또는 그래프로 분석합니다.",
     "Dataset name" to "데이터 이름", "Add row" to "행 추가", "One value per line" to "한 줄에 값 하나", "x,y,z data" to "x,y,z 데이터",
     "Direct input" to "직접 입력", "Table editor" to "표 편집",
-    "Quick summaries" to "빠른 요약", "Visualize" to "시각화", "first" to "처음", "last" to "마지막", "Visualize & regression" to "시각화 & 회귀", "n columns" to "Column n개", "Column count (1–100)" to "열 개수 (1–100)", "Blank cells are omitted. Group comparisons use all columns." to "빈 셀은 제외하며, 그룹 비교에는 모든 열을 사용합니다.", "Summarize y" to "y 요약",
+    "Quick summaries" to "빠른 요약", "Visualize" to "시각화", "first" to "처음", "last" to "마지막", "Intercept" to "절편", "Plot grouping" to "그래프 그룹", "Visualize & regression" to "시각화 & 회귀", "n columns" to "Column n개", "Column count (1–100)" to "열 개수 (1–100)", "Blank cells are omitted. Group comparisons use all columns." to "빈 셀은 제외하며, 그룹 비교에는 모든 열을 사용합니다.", "Summarize y" to "y 요약",
     "Correlation coefficient (r)" to "상관계수 (r)",
     "Clear regression" to "회귀선 지우기", "Graph fitted expression" to "적합식 그래프로 보기",
     "Independent variable" to "독립변수", "Initial values and bounds (optional)" to "시작값과 범위 (선택)",

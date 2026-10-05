@@ -240,7 +240,7 @@ def fit_multivariate(engine, rows, logistic=False):
         scales = [mp.sqrt(mp.fsum((row[j]-centers[j])**2 for row in values)/n) for j in range(p-1)]
         require(all(v>0 for v in scales), "Regression parameters are not identifiable")
         design = [[mp.mpf(1)]+[(row[j]-centers[j])/scales[j] for j in range(p-1)] for row in values]
-        _covariance(design)
+        predictor_inverse = _covariance(design)
         target = [row[-1] for row in values]
         transform = mp.eye(p)
         for j in range(1,p): transform[0,j]=-centers[j-1]/scales[j-1]; transform[j,j]=1/scales[j-1]
@@ -309,7 +309,12 @@ def fit_multivariate(engine, rows, logistic=False):
             # Original design provides covariance in the original predictor units.
             regression_report(engine,target,predicted,[[1]+row[:-1] for row in values],
                               ["b"+str(i) for i in range(p)],list(coefficients),
-                              information_inverse=transform*_covariance(design)*transform.T)
+                              information_inverse=transform*predictor_inverse*transform.T)
+        # Standardized predictors have centered sum of squares n. Therefore
+        # diag((X'X)^-1)*n = 1/(1-R_j^2), using unweighted predictor OLS
+        # for both linear and logistic models. The intercept has no VIF.
+        for j, coefficient in enumerate(engine.regression_report["coefficients"]):
+            coefficient["vif"] = None if j == 0 else mp.nstr(max(mp.mpf(1), n*predictor_inverse[j,j]),engine.precision)
         variables=[engine.symbol("x" if p==2 else "x"+str(j)) for j in range(1,p)]
         expression=_mp_result(coefficients[0],engine)+sum(_mp_result(coefficients[j],engine)*variables[j-1] for j in range(1,p))
         return 1/(1+s.exp(-expression)) if logistic else expression

@@ -16,3 +16,16 @@ internal fun statisticsRegressionVariables(kind:String,responseColumn:Int):Map<S
     val predictors=statisticsRegressionColumns(kind).filterIndexed {index,_->index!=responseColumn}
     return predictors.mapIndexed {index,name->(if(statisticsColumnCount(kind)==2)"x" else "x${index+1}") to name}.toMap()
 }
+
+/** Coefficient IDs stay stable in saved reports; only their visible labels change. */
+internal fun statisticsRegressionParameterLabels(kind:String,mode:String,responseColumn:Int,csv:String=""):Map<String,String> {
+    val predictors=statisticsColumnLabels(csv,kind).filterIndexed {index,_->index!=responseColumn}
+    if(predictors.isEmpty())return emptyMap()
+    return when(mode) {
+        "multiple","logistic"->mapOf("b0" to "Intercept")+predictors.mapIndexed {index,name->"b${index+1}" to name}
+        "linear","quadratic","polynomial"->mapOf("b0" to "Intercept")+(1..10).associate {power->
+            "b$power" to (predictors.first()+if(power==1)"" else power.toString().map {"⁰¹²³⁴⁵⁶⁷⁸⁹"[it.digitToInt()]}.joinToString(""))
+        }
+        else->emptyMap()
+    }
+}

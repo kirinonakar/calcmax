@@ -5,12 +5,27 @@ function csvRecordDelimiter(source,start){
   for(let i=start;i<source.length;i++){const ch=source[i];if(ch==='"')quoted=!quoted;else if(!quoted){if(ch==='\t')return '\t';if(ch==='\n'||ch==='\r')break;}}
   return ',';
 }
+export function statisticsCsvHasHeader(rows){
+  const first=rows[0];if(!first?.some(Boolean))return false;
+  const labels=first.map(cell=>cell.toLowerCase());
+  if(['x','n','value','y','x,y','group,value','date,value','date,y','x,y,z'].includes(labels.join(','))||labels.length>3&&labels.every((cell,i)=>cell===statisticsColumnNames(labels.length)[i]))return true;
+  function dataCell(cell){
+    if(!cell)return false;
+    const normalized=cell.replace(/,/g,'');
+    if(['pi','π','e','E','tau','τ','∞'].includes(cell)||Number.isFinite(Number(normalized))||/^(?:NaN|[+-]?Infinity)$/i.test(cell)||/^\d{4}([-/.])\d{1,2}\1\d{1,2}$/.test(cell))return true;
+    if(/^[\p{L}_][\p{L}\p{N}_]*(?:\s+[\p{L}_][\p{L}\p{N}_]*)*$/u.test(cell))return false;
+    try{return parse(latexInput(cell)).kind!=='symbol';}catch{return false;}
+  }
+  return first.every(Boolean)&&first.every(cell=>!dataCell(cell))&&rows.slice(1).some(row=>row.length===first.length&&row.some(dataCell));
+}
+
 export function csvRows(source,{maxColumns=100,skipHeader=true,preserveEmptyRows=false}={}){
+  source=source.replace(/^\uFEFF/,'');
   const rows=[];let row=[],cell='',quoted=false,delimiter=csvRecordDelimiter(source,0);
   for(let i=0;i<source.length;i++){const ch=source[i];if(ch==='"'){if(quoted&&source[i+1]==='"'){cell+='"';i++;}else quoted=!quoted;}else if(!quoted&&ch===delimiter){row.push(cell.trim());cell='';}else if(!quoted&&(ch==='\n'||ch==='\r')){if(ch==='\r'&&source[i+1]==='\n')i++;row.push(cell.trim());if(row.some(Boolean)||preserveEmptyRows)rows.push(row);row=[];cell='';delimiter=csvRecordDelimiter(source,i+1);}else cell+=ch;}
   if(quoted)throw new Error('Unclosed CSV quote');row.push(cell.trim());if(row.some(Boolean)||preserveEmptyRows&&source.length&&!/[\r\n]$/.test(source))rows.push(row);
   if(!rows.length||rows.length>5000)throw new Error('Enter 1–5000 data rows');
-  if(skipHeader&&['x','n','value','y','x,y','group,value','date,value','date,y','x,y,z'].includes(rows[0].map(s=>s.toLowerCase()).join(',')))rows.shift();
+  if(skipHeader&&statisticsCsvHasHeader(rows))rows.shift();
   if(!rows.length)throw new Error('Enter data below the header');
   const columns=Math.max(...rows.map(r=>r.length));if(columns>maxColumns)throw new Error(`Use up to ${maxColumns} data columns`);return rows.map(r=>Array.from({length:columns},(_,i)=>r[i]||''));
 }
@@ -20,6 +35,11 @@ export function statisticsColumnCount(kind){
   return match&&Number(match[1])>=1&&Number(match[1])<=100?Number(match[1]):0;
 }
 export function statisticsColumnNames(count){return Array.from({length:count},(_,i)=>['x','y','z'][i]||`x${i+1}`);}
+export function statisticsColumnLabels(source,kind){
+  const names=statisticsColumnNames(statisticsColumnCount(kind));
+  try{const raw=csvRows(source,{skipHeader:false});if(statisticsCsvHasHeader(raw))return names.map((name,i)=>raw[0][i]&&raw[0][i]!==name?`${raw[0][i]} (${name})`:name);}catch{}
+  return names;
+}
 export function statisticsKindForColumns(count){return ['list','xy','xyz'][count-1]||`columns:${count}`;}
 export function statisticsDataRows(source,kind){
   const columns=statisticsColumnCount(kind);

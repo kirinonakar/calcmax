@@ -69,10 +69,11 @@ import kotlin.math.max
     var customFormula by rememberSaveable {mutableStateOf(m.statisticsCustomFormula)}
     var customVariable by rememberSaveable {mutableStateOf(m.statisticsCustomVariable)}
     var customInitials by rememberSaveable {mutableStateOf(m.statisticsCustomInitials)}
+    var plotGrouping by rememberSaveable {mutableStateOf(m.statisticsPlotGrouping)}
     var plotType by rememberSaveable {mutableStateOf(m.statisticsPlot)}
     var csv by rememberSaveable {mutableStateOf(m.statisticsCsv)}
     var importPreview by remember {mutableStateOf<StatisticsCsvImport?>(null)}
-    LaunchedEffect(data,datasetName,dataKind,regression,plotType,csv,selected,isNew,customFormula,customVariable,customInitials,polynomialDegree,logisticResponse) {m.saveStatistics(datasetName,data,dataKind,regression,plotType,csv,selected,isNew,customFormula,customVariable,customInitials,polynomialDegree,logisticResponse)}
+    LaunchedEffect(data,datasetName,dataKind,regression,plotType,plotGrouping,csv,selected,isNew,customFormula,customVariable,customInitials,polynomialDegree,logisticResponse) {m.statisticsPlotGrouping=plotGrouping;m.saveStatistics(datasetName,data,dataKind,regression,plotType,csv,selected,isNew,customFormula,customVariable,customInitials,polynomialDegree,logisticResponse)}
     val importCsv=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {uri->
         if(uri!=null)scope.launch {
             val content=withContext(Dispatchers.IO) {runCatching {context.contentResolver.openInputStream(uri)?.bufferedReader()?.use {it.readText()}}.getOrNull()}
@@ -233,15 +234,24 @@ import kotlin.math.max
                 },enabled=customFormula.isNotBlank()&&customVariable.matches(Regex("[A-Za-z][A-Za-z0-9_]*"))&&paired.size>=2&&!m.regressionBusy){Text(tr("Fit custom model"))}
             }
             Choices(if(dataKind=="xy")listOf("Scatter","Histogram","Box plot") else listOf("Histogram","Box plot"),plotType,{plotType=it})
+            if(plotType!="Scatter"&&dataColumns.size>1) {
+                Text(tr("Plot grouping"),fontSize=11.sp,color=LocalInstrument.current.muted)
+                Choices(listOf("Columns","first","last"),if(plotGrouping=="columns")"Columns" else plotGrouping,{plotGrouping=if(it=="Columns")"columns" else it})
+            }
         }
         val fittedResponse=if(m.regressionMode in listOf("multiple","logistic","polynomial"))m.regressionResponseColumn?.takeIf {it in regressionColumns.indices} ?: regressionColumns.lastIndex else regressionColumns.lastIndex
         val fittedVariables=statisticsRegressionVariables(dataKind,fittedResponse)
+        val parameterLabels=statisticsRegressionParameterLabels(dataKind,m.regressionMode,fittedResponse,data)
         val fittedResponseName=regressionColumns.getOrNull(fittedResponse).orEmpty()
         val fitVisible=dataKind=="xy"&&plotType=="Scatter"&&m.regressionData==data&&m.regressionFit.isNotBlank()
         val plotPairs=if(fitVisible&&m.regressionMode in listOf("logistic","polynomial")&&fittedResponse==0)paired.map {(x,y)->y to x} else paired
-        StatisticsPlot(plotType,if(plotType=="Scatter")plotPairs else xValues.mapIndexed {i,v->i.toDouble() to v},xValues,yValues,if(fitVisible)m.regressionCurve.orEmpty() else emptyList(),if(fitVisible)m.regressionFit else "",m.displayDigits,fitVisible&&m.regressionMode=="linear",m.regressionCorrelation,tertiary=zValues,allColumns=dataColumns.mapIndexed {index,name->name to numericRows.mapNotNull {it.getOrNull(index)?.toDoubleOrNull()?.takeIf(Double::isFinite)}},xDateOrigin=if(fitVisible&&fittedResponse==0)null else dateAxis?.origin,
-            xAxisLabel=if(fitVisible)fittedVariables["x"] ?: "x" else "x",yAxisLabel=if(fitVisible)fittedResponseName else "y",
-            fitPrefix=if(fitVisible&&m.regressionMode=="logistic")"P($fittedResponseName = 1) = " else if(fitVisible)"$fittedResponseName ≈ " else "y ≈ ",fitVariables=if(fitVisible&&m.regressionMode in listOf("logistic","polynomial"))fittedVariables else emptyMap())
+        val plotPanels=if(plotType=="Scatter")listOf(StatisticsPlotPanel("",emptyList())) else statisticsPlotPanels(parsedRows,dataKind,plotGrouping)
+        plotPanels.forEach {panel->
+            if(panel.label.isNotBlank())Text(panel.label,style=MaterialTheme.typography.titleSmall)
+            StatisticsPlot(plotType,if(plotType=="Scatter")plotPairs else xValues.mapIndexed {i,v->i.toDouble() to v},xValues,yValues,if(fitVisible)m.regressionCurve.orEmpty() else emptyList(),if(fitVisible)m.regressionFit else "",m.displayDigits,fitVisible&&m.regressionMode=="linear",m.regressionCorrelation,tertiary=zValues,allColumns=panel.series,xDateOrigin=if(fitVisible&&fittedResponse==0)null else dateAxis?.origin,
+                xAxisLabel=if(fitVisible)fittedVariables["x"] ?: "x" else "x",yAxisLabel=if(fitVisible)fittedResponseName else "y",
+                fitPrefix=if(fitVisible&&m.regressionMode=="logistic")"P($fittedResponseName = 1) = " else if(fitVisible)"$fittedResponseName ≈ " else "y ≈ ",fitVariables=if(fitVisible&&m.regressionMode in listOf("logistic","polynomial"))fittedVariables else emptyMap())
+        }
         if(dateAxis!=null&&plotType=="Scatter")Text((if(isKorean())"회귀식의 x: ${dateAxis.origin.plusDays(1)} = 1일째" else "Regression x: ${dateAxis.origin.plusDays(1)} = day 1"),fontSize=11.sp,color=LocalInstrument.current.muted)
         if(dataKind!="list"&&m.regressionData==data&&m.regressionFit.isNotBlank()) {
             Column(verticalArrangement=Arrangement.spacedBy(0.dp)) {
@@ -258,12 +268,12 @@ import kotlin.math.max
                         }
                     }
                 }
-                m.regressionReport?.let {RegressionInference(it,m.displayDigits)}
+                m.regressionReport?.let {RegressionInference(it,m.displayDigits,parameterLabels)}
                 if(m.regressionParameters.isNotEmpty()) {
                     Text(tr("Fitted parameters"),fontSize=12.sp,fontWeight=FontWeight.SemiBold)
                     Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(16.dp)) {
                         m.regressionParameters.sortedWith(compareBy({listOf("f","ADC","D","Dstar").indexOf(it.first).let {index->if(index<0)Int.MAX_VALUE else index}},{it.first})).forEach {(name,value)->
-                            val label=if(name=="Dstar")"D*" else name
+                            val label=parameterLabels[name]?.let {if(it=="Intercept")tr(it) else it} ?: if(name=="Dstar")"D*" else name
                             val displayedValue=ResultDisplayFormat.formatText(value,m.resultDisplayMode,m.thousandsSeparator,maxFractionDigits=m.displayDigits)
                             val korean=isKorean()
                             TextButton(onClick={

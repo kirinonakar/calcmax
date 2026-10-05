@@ -20,7 +20,7 @@ import com.kirinonakar.symvacas.calculator.ResultDisplayMode
 import org.json.JSONObject
 import kotlin.math.abs
 
-@Composable internal fun RegressionInference(report:JSONObject,digits:Int) {
+@Composable internal fun RegressionInference(report:JSONObject,digits:Int,parameterLabels:Map<String,String> = emptyMap()) {
     val colors=LocalInstrument.current
     val clipboard=LocalClipboardManager.current
     var expanded by remember(report) {mutableStateOf(false)}
@@ -39,13 +39,16 @@ import kotlin.math.abs
         else->"OLS inference; independent errors with constant variance."
     }),fontSize=11.sp,color=colors.muted)
     report.optJSONArray("warnings")?.let {warnings->repeat(warnings.length()){Text(tr(warnings.optString(it)),fontSize=11.sp,color=colors.muted)}}
+    val interceptLabel=tr("Intercept")
+    fun parameterName(coefficient:JSONObject):String=parameterLabels[coefficient.optString("name")]?.let {if(it=="Intercept")interceptLabel else it} ?: coefficient.optString("name")
     val coefficients=report.optJSONArray("coefficients")?.let {array->
         (0 until array.length()).mapNotNull {array.optJSONObject(it)}
     }.orEmpty()
-    val headers=listOf("Parameter","Estimate","SE","95% CI","p").map {tr(it)}
+    val hasVif=coefficients.any {it.has("vif")&&!it.isNull("vif")}
+    val headers=(listOf("Parameter","Estimate","SE","95% CI","p")+if(hasVif)listOf("VIF") else emptyList()).map {tr(it)}
     val coefficientRows=coefficients.map {coefficient->
-        listOf(coefficient.optString("name"),value(coefficient,"estimate"),value(coefficient,"se"),
-            "${value(coefficient,"low")} … ${value(coefficient,"high")}",value(coefficient,"p"))
+        listOf(parameterName(coefficient),value(coefficient,"estimate"),value(coefficient,"se"),
+            "${value(coefficient,"low")} … ${value(coefficient,"high")}",value(coefficient,"p")) + if(hasVif)listOf(value(coefficient,"vif")) else emptyList()
     }
     Column(Modifier.horizontalScroll(rememberScrollState())) {
         Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
@@ -60,7 +63,7 @@ import kotlin.math.abs
             }
         }
         coefficients.forEach {coefficient->
-            if(coefficient.has("oddsRatio"))Text("${coefficient.optString("name")} · ${tr("Odds ratio")}: ${value(coefficient,"oddsRatio")} · ${tr("OR 95% CI")}: ${value(coefficient,"oddsLow")} … ${value(coefficient,"oddsHigh")}",fontSize=11.sp)
+            if(coefficient.has("oddsRatio"))Text("${parameterName(coefficient)} · ${tr("Odds ratio")}: ${value(coefficient,"oddsRatio")} · ${tr("OR 95% CI")}: ${value(coefficient,"oddsLow")} … ${value(coefficient,"oddsHigh")}",fontSize=11.sp)
         }
     }
     RegressionRoc(report,digits)

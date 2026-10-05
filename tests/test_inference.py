@@ -85,6 +85,22 @@ class InferenceTests(unittest.TestCase):
         self.assertIsNotNone(scaled['coefficients'][0]['se'])
         with self.assertRaises(MathError):fit([(1,2,3),(2,4,5),(3,6,8),(4,8,10)],'multiple')
 
+    def test_vif_uses_predictors_only_and_is_invariant_to_units_and_response(self):
+        predictors=[(-1,-2),(-1,0),(1,0),(1,2)]
+        rows=[(a,b,1+2*a+3*b) for a,b in predictors]
+        _,report=fit(rows,'multiple')
+        self.assertIsNone(report['coefficients'][0]['vif'])
+        for coefficient in report['coefficients'][1:]:
+            self.assertAlmostEqual(float(coefficient['vif']),2,places=12)
+        changed=[(10**9+s.Rational(a,10**6),b*10**6,y*y) for a,b,y in rows]
+        _,scaled=fit(changed,'multiple')
+        self.assertEqual([c['vif'] for c in report['coefficients']], [c['vif'] for c in scaled['coefficients']])
+        _,logistic=fit([(a,b,response) for a,b in predictors for response in (0,1)],'logistic')
+        for coefficient in logistic['coefficients'][1:]:
+            self.assertAlmostEqual(float(coefficient['vif']),2,places=12)
+        _,single=fit([(-3,0),(-2,0),(-1,1),(0,0),(0,1),(1,0),(2,1),(3,1)],'logistic')
+        self.assertEqual(float(single['coefficients'][1]['vif']),1)
+
     def test_logistic_inference_matches_statsmodels_and_rejects_separation(self):
         rows=[(-3,0),(-2,0),(-1,1),(0,0),(0,1),(1,0),(2,1),(3,1)]
         result,report=fit(rows,'logistic')

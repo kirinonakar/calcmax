@@ -5,7 +5,8 @@ import {JSDOM} from 'jsdom';
 import {createAppUI} from '../app-ui.js';
 import {setLanguage,translateDOM,t as translate} from '../i18n.js';
 import {createStatisticsWorkspace} from '../statistics-workspace.js';
-import {statisticsCommand} from '../workspace-commands.js';
+import {statisticsPlotSeries} from '../statistics-plot.js';
+import {statisticsCommand,csvRows,statisticsDatasetSource} from '../workspace-commands.js';
 import {regressionResidualCSV,renderRegressionReport} from '../regression-report.js';
 import {restoreFields} from '../app-state.js';
 
@@ -332,4 +333,74 @@ test('polynomial first/last response controls reorder data and orient the displa
   assert.match($('regression-caption').textContent,/x.*y/);
   assert.equal($('statistics-plot').querySelector('[data-axis-label="x"]').textContent,'y');
   assert.equal($('statistics-plot').querySelector('[data-axis-label="y"]').textContent,'x');
+});
+
+
+test('histogram and box plots group by first or last using categorical labels and independent numeric cells',t=>{
+  const {$,statistics,state}=workspace(t,{'statistics-kind':'xyz','statistics-plot-type':'histogram','statistics-plot-grouping':'first','statistics-data':'A,1,10\nB,2,20\nA,,30\n,99,99\nB,NaN,40'});
+  $('statistics-plot-run').click();
+  const legend=[...$('statistics-plot').querySelectorAll('.statistics-plot-legend span')].map(el=>el.textContent);
+  assert.deepEqual(legend,['A (n=1)','B (n=1)','A (n=2)','B (n=2)']);
+  assert.deepEqual([...new Set([...$('statistics-plot').querySelectorAll('rect[data-series]')].map(el=>el.dataset.series))],['A','B']);
+  assert.deepEqual([...$('statistics-plot').querySelectorAll('.statistics-plot-panel')].map(panel=>panel.dataset.column),['y','z']);
+  $('statistics-plot-type').value='box';$('statistics-plot-type').dispatchEvent(new document.defaultView.Event('change'));
+  assert.deepEqual([...$('statistics-plot').querySelectorAll('.statistics-plot-panel')].map(panel=>panel.querySelectorAll('rect').length),[2,2]);
+  $('statistics-kind').value='xy';$('statistics-kind').dispatchEvent(new document.defaultView.Event('change'));
+  $('statistics-data').value='1,A\n2,B\n3,A';$('statistics-plot-type').value='box';$('statistics-plot-grouping').value='last';$('statistics-plot-grouping').dispatchEvent(new document.defaultView.Event('change'));
+  assert.equal($('statistics-plot').querySelectorAll('rect').length,2);
+  assert.match($('statistics-plot').textContent,/A/);assert.match($('statistics-plot').textContent,/B/);
+  assert.deepEqual(statisticsPlotSeries([['2024-01-01','1,234'],['2','5'],['','9']],{grouping:'first'}),[{label:'2024-01-01',values:[1234]},{label:'2',values:[5]}]);
+  $('statistics-data').value=',7';$('statistics-plot-run').click();assert.equal($('statistics-plot').querySelectorAll('svg').length,0);
+  $('statistics-plot-type').value='scatter';$('statistics-plot-type').dispatchEvent(new document.defaultView.Event('change'));
+  assert.equal($('statistics-plot-grouping-label').hidden,true);
+  assert.equal($('statistics-plot-grouping').value,'last','scatter temporarily hides the saved grouping choice');
+});
+
+test('VIF displays beside the matching predictor and omits the intercept value',t=>{
+  const {$}=workspace(t),container=$('regression-inference');
+  renderRegressionReport(container,{n:8,df:5,coefficients:[{name:'b0',estimate:'1',vif:null},{name:'b1',estimate:'2',vif:'2.0'},{name:'b2',estimate:'3',vif:'2.0'}]},10);
+  const table=container.querySelector('table');
+  assert.deepEqual([...table.querySelectorAll('thead th')].map(el=>el.textContent),['Parameter','Estimate','SE','95% CI','p','VIF']);
+  assert.deepEqual([...table.querySelectorAll('tbody tr')].map(row=>row.lastElementChild.textContent),['—','2','2']);
+});
+
+
+test('arbitrary first-row headers are excluded consistently from analysis, plots, table editing and variable storage',t=>{
+  const source='\uFEFFTreatment,Measurement\r\nA,1\r\nB,2\r\nA,3';
+  const {$,statistics}=workspace(t,{'statistics-data':source,'statistics-plot-type':'histogram','statistics-plot-grouping':'first'});
+  assert.equal(statisticsCommand(source,{kind:'xy',op:'mean',column:1}),'mean([1,2,3])');
+  assert.deepEqual(csvRows(source),[['A','1'],['B','2'],['A','3']]);
+  assert.equal(statisticsDatasetSource('Time,Outcome\n1,2\n2,4','xy'),'[[1,2],[2,4]]');
+  assert.equal(statisticsCommand('Output,Input\n1,0\n4,1\n9,2',{kind:'xy',op:'regression',regression:'polynomial',degree:'2',responseColumn:0}),'regression([[0,1],[1,4],[2,9]],polynomial,2)');
+  $('statistics-table-toggle').click();assert.equal($('statistics-grid').querySelectorAll('tbody tr').length,3);
+  $('statistics-plot-run').click();assert.deepEqual([...$('statistics-plot').querySelectorAll('.statistics-plot-legend span')].map(el=>el.textContent),['A (n=2)','B (n=1)']);
+  assert.deepEqual(csvRows('Value label\n1/2\n2'),[['1/2'],['2']]);
+  assert.deepEqual(csvRows('1/2,3/4\n1,2'),[['1/2','3/4'],['1','2']]);
+  assert.deepEqual(csvRows('sqrt(2)\n3'),[['sqrt(2)'],['3']]);
+  assert.deepEqual(csvRows('A,\nB,2'),[['A',''],['B','2']]);
+  assert.deepEqual(csvRows('\uFEFF1\n2'),[['1'],['2']]);
+  assert.deepEqual(csvRows('pi\n2'),[['pi'],['2']]);
+  assert.deepEqual(csvRows('A,1\nB,2'),[['A','1'],['B','2']]);
+  assert.equal(csvRows('Label,Value\nA,1',{skipHeader:false})[0][0],'Label');
+});
+
+
+test('coefficient, odds ratio, VIF and fitted-parameter labels track header columns and response order without renaming engine IDs',t=>{
+  const {$,statistics}=workspace(t,{'statistics-kind':'xyz','regression-kind':'logistic','statistics-data':'Outcome,Age,Weight\n0,20,50\n1,30,60'});
+  const report={n:8,df:5,fitScale:'binomial',coefficients:[{name:'b0',estimate:'1',oddsRatio:'2',vif:null},{name:'b1',estimate:'3',oddsRatio:'4',vif:'1.2'},{name:'b2',estimate:'5',oddsRatio:'6',vif:'1.3'}]};
+  $('regression-response').value='0';$('regression-response').dispatchEvent(new document.defaultView.Event('change'));
+  statistics.showRegression({decimal:'1/(1+exp(-x1-x2))',regression:report,parameters:[['b0','1'],['b1','3'],['b2','5']]});
+  const cells=()=>[...$('regression-inference').querySelectorAll('table[aria-label="Coefficient inference"] tbody tr')].map(row=>[...row.children].map(cell=>cell.textContent));
+  assert.deepEqual(cells().map(row=>row[0]),['Intercept','Age (y)','Weight (z)']);
+  assert.deepEqual(cells().map(row=>row[6]),['2','4','6']);
+  assert.deepEqual(cells().map(row=>row[5]),['—','1.2','1.3']);
+  assert.deepEqual([...$('regression-caption').querySelectorAll('.regression-parameter')].map(el=>el.textContent),['Intercept = 1','Age (y) = 3','Weight (z) = 5']);
+  assert.deepEqual(report.coefficients.map(c=>c.name),['b0','b1','b2']);
+  setLanguage('ko');translateDOM();statistics.render();
+  assert.equal($('regression-inference').querySelector('tbody tr td').textContent,'절편');
+  assert.match($('regression-inference').textContent,/Age \(y\)/);
+  setLanguage('en');translateDOM();
+  $('statistics-data').value='20,50,0\n30,60,1';$('regression-response').value='2';$('regression-response').dispatchEvent(new document.defaultView.Event('change'));
+  statistics.showRegression({decimal:'x1+x2',regression:report});
+  assert.deepEqual(cells().map(row=>row[0]),['Intercept','x','y']);
 });

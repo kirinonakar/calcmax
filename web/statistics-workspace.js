@@ -1,14 +1,14 @@
 import {$,value,element,control} from './app-ui.js';
 import {t,setText} from './i18n.js';
 import {downloadFile} from './storage.js';
-import {statisticsCommand,statisticsAnalysisData,distributionCommand,csvRows,statisticsDataRows,statisticsDatasetSource,numericStatisticsRows,statisticsColumnCount,statisticsColumnNames,statisticsKindForColumns} from './workspace-commands.js';
-import {statisticsPlot} from './statistics-plot.js';
+import {statisticsCommand,statisticsAnalysisData,distributionCommand,csvRows,statisticsDataRows,statisticsDatasetSource,numericStatisticsRows,statisticsColumnCount,statisticsColumnNames,statisticsKindForColumns,statisticsCsvHasHeader,statisticsColumnLabels} from './workspace-commands.js';
+import {statisticsPlot,statisticsPlotPanels} from './statistics-plot.js';
 import {renderFormulas} from './formula-preview.js';
 import {editableTable} from './editable-table.js';
 import {parse,latexInput} from './parser.js';
 import {astSource} from './ast-source.js';
 import {roundNumber} from './display-format.js';
-import {renderRegressionReport,regressionResidualCSV} from './regression-report.js';
+import {renderRegressionReport,regressionResidualCSV,regressionParameterLabels,regressionParameterName} from './regression-report.js';
 
 export function regressionGraphSource(source,digits=10,variable='x') {
   function rounded(node){return {...node,value:node.kind==='number'?roundNumber(node.value,digits):node.kind==='symbol'&&node.value===variable?'x':node.value,args:node.args.map(rounded)};}
@@ -58,7 +58,7 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
     const selectedColumns=()=>columns.map((input,i)=>input.checked?i:null).filter(i=>i!==null);
     function updatePreview(){const selected=selectedColumns();preview.textContent=selected.length?rows.slice(header.checked?1:0).slice(0,3).map(row=>selected.map(i=>row[i]).join('  |  ')).join('\n'):'';}
     preview.setAttribute('aria-live','polite');
-    header.type='checkbox';header.checked=rows[0].every(cell=>cell!==''&&!Number.isFinite(Number(cell)))&&rows.slice(1).some(row=>row.some(cell=>cell!==''&&Number.isFinite(Number(cell))));
+    header.type='checkbox';header.checked=statisticsCsvHasHeader(rows);
     header.onchange=updatePreview;
     const headerLabel=element('label','Skip header row','check');headerLabel.append(header);content.append(headerLabel);
     for(let index=0;index<rows[0].length;index++){
@@ -131,6 +131,7 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
     $('regression-data-help').hidden=!['multiple','logistic','polynomial'].includes(value('regression-kind'));
     $('regression-response').closest('label').hidden=!['multiple','logistic','polynomial'].includes(value('regression-kind'));
     filterMenu('statistics-plot-type',plot=>plot!=='scatter'||kind==='xy',kind==='xy'?'scatter':'histogram');
+    $('statistics-plot-grouping-label').hidden=value('statistics-plot-type')==='scatter'||columns<2;
     setText($('statistics-data-label'),kind==='list'?'One value per line':kind==='xy'?'x, y values':kind==='xyz'?'x, y, z values':statisticsColumnNames(columns).join(', '));
     try{$('statistics-samples').textContent=analysisSummary();}catch{setText($('statistics-samples'),'Enter data to see analyzed groups');}
   }
@@ -167,14 +168,26 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
   $('statistics-data').addEventListener('change',()=>{invalidateRegression();statisticsControls();if(!$('statistics-grid').hidden)statisticsGrid();});
   $('statistics-store').onclick=async()=>{const name=value('dataset-name').trim();if(!/^[A-Za-z][A-Za-z0-9_]*$/.test(name)){error('Dataset name must be a valid variable name');return;}try{await storeExpression(name,statisticsDatasetSource(value('statistics-data'),dataKind()));}catch(exc){error(exc.message);}};
   $('statistics-plot-run').onclick=()=>{try{statisticsGraph={...statisticsGraph,rows:numericStatisticsRows(dataRows()),curve:statisticsGraph?.curve||[]};$('statistics-plot').hidden=false;drawStatisticsGraph();}catch(exc){error(exc.message);}};
-  $('statistics-plot-type').onchange=()=>$('statistics-plot-run').click();
+  $('statistics-plot-type').onchange=()=>{statisticsControls();$('statistics-plot-run').click();};
+  $('statistics-plot-grouping').onchange=()=>{$('statistics-plot-run').click();persist();};
   $('regression-transfer').onclick=()=>{if(!statisticsGraph?.fit)return;try{const source=regressionGraphSource(statisticsGraph.fit,state.digits,statisticsGraph.variable);$('graph-kind').value='cartesian';$('graph-source').value=source;changeMode('graph');graphs.run();}catch(exc){error(exc.message);}};
 
-  function drawStatisticsGraph(){statisticsPlot($('statistics-plot'),value('statistics-plot-type')==='scatter'?statisticsGraph.plotRows||statisticsGraph.rows:statisticsGraph.rows,{type:value('statistics-plot-type'),digits:state.digits,curve:statisticsGraph.curve,xAxisLabel:statisticsGraph.xAxisLabel||'x',yAxisLabel:statisticsGraph.yAxisLabel||'y'});}
-  function render(){statisticsControls();if(!$('statistics-grid').hidden)statisticsGrid();if(statisticsGraph){drawStatisticsGraph();if(statisticsGraph.captions)renderFormulas($('regression-caption'),statisticsGraph.captions,{digits:state.digits});renderRegressionReport($('regression-inference'),statisticsGraph.report,state.digits);}}
+  function drawStatisticsGraph(){
+    const container=$('statistics-plot'),type=value('statistics-plot-type'),options={type,digits:state.digits,curve:statisticsGraph.curve,xAxisLabel:statisticsGraph.xAxisLabel||'x',yAxisLabel:statisticsGraph.yAxisLabel||'y'};
+    if(type==='scatter'){statisticsPlot(container,statisticsGraph.plotRows||statisticsGraph.rows,options);return;}
+    const panels=statisticsPlotPanels(dataRows(),{grouping:value('statistics-plot-grouping'),columnCount:dataColumns()});
+    if(panels.length===1&&!panels[0].label){statisticsPlot(container,statisticsGraph.rows,{...options,series:panels[0].series});return;}
+    container.replaceChildren(...panels.map(panel=>{
+      const section=element('section','','statistics-plot-panel'),chart=element('div');
+      section.dataset.column=panel.label;section.append(element('h3',panel.label),chart);
+      statisticsPlot(chart,statisticsGraph.rows,{...options,series:panel.series});return section;
+    }));
+  }
+  function render(){statisticsControls();if(!$('statistics-grid').hidden)statisticsGrid();if(statisticsGraph){drawStatisticsGraph();if(statisticsGraph.captions)renderFormulas($('regression-caption'),statisticsGraph.captions,{digits:state.digits});for(const [name,n] of statisticsGraph.parameters||[])$('regression-caption').append(element('span',`${regressionParameterName(name,statisticsGraph.parameterLabels)} = ${roundNumber(String(n),state.digits)}`,'regression-parameter'));renderRegressionReport($('regression-inference'),statisticsGraph.report,state.digits,statisticsGraph.parameterLabels);}}
   function showRegression(result) {
     const rows=numericStatisticsRows(dataRows()),names=statisticsColumnNames(dataColumns()),logistic=value('regression-kind')==='logistic';
     const response=['multiple','logistic','polynomial'].includes(value('regression-kind'))?Number(value('regression-response')):names.length-1,predictors=names.filter((_,i)=>i!==response);
+    const parameterLabels=regressionParameterLabels(value('regression-kind'),statisticsColumnLabels(value('statistics-data'),dataKind()),response);
     const variables=Object.fromEntries(predictors.map((name,i)=>[names.length===2?'x':`x${i+1}`,name]));
     let displayed=result.decimal||result.exact;
     if(logistic||value('regression-kind')==='polynomial'||names.length>2){
@@ -182,8 +195,8 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
       try{displayed=astSource(renamed(parse(latexInput(displayed))));}catch{}
     }
 
-    statisticsGraph={rows,plotRows:['polynomial','logistic'].includes(value('regression-kind'))&&names.length===2?rows.map(row=>[row[1-response],row[response]]):rows,xAxisLabel:predictors[0],yAxisLabel:names[response],curve:result.curve||[],fit:result.decimal||result.exact,report:result.regression,variable:value('regression-kind')==='custom'?value('regression-variable'):'x',
-      captions:[`${logistic?`P(${names[response]}=1)`:names[response]}=${displayed}`,...(result.correlation!==null&&result.correlation!==undefined?[`r=${result.correlation}`]:[]),...(result.parameters||[]).map(([name,n])=>`${name}=${n}`)]};
+    statisticsGraph={rows,plotRows:['polynomial','logistic'].includes(value('regression-kind'))&&names.length===2?rows.map(row=>[row[1-response],row[response]]):rows,xAxisLabel:predictors[0],yAxisLabel:names[response],curve:result.curve||[],fit:result.decimal||result.exact,report:result.regression,parameterLabels,parameters:(result.parameters||[]).filter(([name])=>parameterLabels[name]),variable:value('regression-kind')==='custom'?value('regression-variable'):'x',
+      captions:[`${logistic?`P(${names[response]}=1)`:names[response]}=${displayed}`,...(result.correlation!==null&&result.correlation!==undefined?[`r=${result.correlation}`]:[]),...(result.parameters||[]).filter(([name])=>!parameterLabels[name]).map(([name,n])=>`${name}=${n}`)]};
     $('statistics-plot').hidden=false;render();
     $('regression-transfer').hidden=dataColumns()!==2;
     $('regression-export').hidden=!result.regression;

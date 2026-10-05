@@ -247,3 +247,7 @@ input:disabled,select:disabled{opacity:.45;cursor:default}
 #graph-help{margin-bottom:12px}
 #graph-help>summary{cursor:pointer;color:var(--muted)}
 #graph-help[open]>summary{margin-bottom:8px}
+
+.statistics-plot-legend{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12px;margin:6px 0}
+
+.regression-parameter{display:inline-block;margin-right:16px;font-size:12px}

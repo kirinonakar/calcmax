@@ -1,6 +1,7 @@
 package com.kirinonakar.symvacas.ui
 
 import com.kirinonakar.symvacas.math.Editor
+import com.kirinonakar.symvacas.math.Parser
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 
@@ -9,15 +10,54 @@ internal fun statisticsColumnCount(kind:String):Int = when(kind) {
     else->kind.removePrefix("columns:").toIntOrNull()?.coerceIn(1,100) ?: 1
 }
 internal fun statisticsColumnNames(kind:String):List<String> = List(statisticsColumnCount(kind)) {listOf("x","y","z").getOrNull(it) ?: "x${it+1}"}
+internal fun statisticsColumnLabels(csv:String,kind:String):List<String> {
+    val names=statisticsColumnNames(kind)
+    val raw=csv.removePrefix("\uFEFF").replace("\r\n","\n").replace('\r','\n').split('\n').map {it.splitCsvRecord()}
+    if(!statisticsHasHeader(raw))return names
+    return names.mapIndexed {index,name->raw.first().getOrNull(index)?.trim()?.takeIf {it.isNotBlank()&&it!=name}?.let {"$it ($name)"} ?: name}
+}
 internal fun statisticsKindForColumns(count:Int):String = when(count) {1->"list";2->"xy";3->"xyz";else->"columns:${count.coerceIn(1,100)}"}
 
+/** Group labels stay categorical, including numeric and date labels. */
+internal fun statisticsPlotSeries(rows:List<List<String>>,kind:String,grouping:String="columns"):List<Pair<String,List<Double>>> {
+    val names=statisticsColumnNames(kind)
+    fun number(value:String?)=value?.statisticsNumericCell()?.toDoubleOrNull()?.takeIf(Double::isFinite)
+    if(grouping !in listOf("first","last")||names.size<2) {
+        val numeric=statisticsNumericRows(rows,if(names.size>1)statisticsDateAxis(rows) else null)
+        return names.mapIndexed {index,name->(if(names.size==1)"" else name) to numeric.mapNotNull {number(it.getOrNull(index))}}
+    }
+    val groupColumn=if(grouping=="first")0 else names.lastIndex
+    val groups=linkedMapOf<String,List<MutableList<Double>>>()
+    rows.forEach {row->
+        val group=row.getOrNull(groupColumn)?.trim().orEmpty()
+        if(group.isNotEmpty()) {
+            val samples=groups.getOrPut(group){List(names.size){mutableListOf()}}
+            names.indices.filter {it!=groupColumn}.forEach {index->number(row.getOrNull(index))?.let {samples[index].add(it)}}
+        }
+    }
+    return groups.flatMap {(group,samples)->names.indices.filter {it!=groupColumn}.map {index->
+        (if(names.size==2)group else "$group · ${names[index]}") to samples[index].toList()
+    }}
+}
+
+internal data class StatisticsPlotPanel(val label:String,val series:List<Pair<String,List<Double>>>)
+internal fun statisticsPlotPanels(rows:List<List<String>>,kind:String,grouping:String):List<StatisticsPlotPanel> {
+    val names=statisticsColumnNames(kind)
+    if(grouping !in listOf("first","last")||names.size<2)return listOf(StatisticsPlotPanel("",statisticsPlotSeries(rows,kind)))
+    val groupColumn=if(grouping=="first")0 else names.lastIndex
+    return names.indices.filter {it!=groupColumn}.map {column->
+        val pairs=rows.map {row->listOf(row.getOrNull(groupColumn).orEmpty(),row.getOrNull(column).orEmpty())}
+        StatisticsPlotPanel(names[column],statisticsPlotSeries(pairs,"xy","first"))
+    }
+}
+
 internal fun statisticsRows(csv:String):List<List<String>> {
-    val normalized=csv.replace("\r\n","\n").replace('\r','\n')
+    val normalized=csv.removePrefix("\uFEFF").replace("\r\n","\n").replace('\r','\n')
     val lines=mutableListOf<String>();var start=0
     normalized.forEachIndexed {index,char->if(char=='\n'){lines+=normalized.substring(start,index);start=index+1}}
     lines+=normalized.substring(start)
-    return lines.map {it.splitCsvRecord().map(String::trim)}
-        .filterIndexed {index,row->index!=0||!statisticsHeader(row)}
+    val rows=lines.map {it.splitCsvRecord().map(String::trim)}
+    return if(statisticsHasHeader(rows))rows.drop(1) else rows
 }
 
 internal data class StatisticsCsvImport(val rows:List<List<String>>,val hasHeader:Boolean,val columnCount:Int) {
@@ -30,11 +70,7 @@ internal data class StatisticsCsvImport(val rows:List<List<String>>,val hasHeade
 internal fun previewStatisticsCsv(csv:String):StatisticsCsvImport {
     val rows=csv.replace("\r\n","\n").replace('\r','\n').removePrefix("\uFEFF")
         .lineSequence().filter(String::isNotBlank).map {it.splitCsvRecord()}.toList()
-    val first=rows.firstOrNull().orEmpty()
-    val knownHeader=first.isNotEmpty()&&statisticsHeader(first)
-    val inferredHeader=first.any(String::isNotBlank)&&first.all {it.isBlank()||it.statisticsNumericCell().toDoubleOrNull()==null}&&
-        rows.drop(1).any {row->row.size==first.size&&row.any {it.statisticsNumericCell().toDoubleOrNull()!=null}}
-    return StatisticsCsvImport(rows,knownHeader||inferredHeader,rows.maxOfOrNull(List<String>::size)?:0)
+    return StatisticsCsvImport(rows,statisticsHasHeader(rows),rows.maxOfOrNull(List<String>::size)?:0)
 }
 
 internal fun importStatisticsCsv(preview:StatisticsCsvImport,columns:List<Int>,skipHeader:Boolean):String {
@@ -71,6 +107,20 @@ internal fun statisticsDateAxis(rows:List<List<String>>):StatisticsDateAxis? {
 internal fun parseStatisticsDate(value:String):LocalDate? {
     val match=Regex("^(\\d{4})([-/.])(\\d{1,2})\\2(\\d{1,2})$").matchEntire(value.trim())?:return null
     return runCatching {LocalDate.of(match.groupValues[1].toInt(),match.groupValues[3].toInt(),match.groupValues[4].toInt())}.getOrNull()
+}
+
+internal fun statisticsHasHeader(rows:List<List<String>>):Boolean {
+    val first=rows.firstOrNull() ?: return false
+    if(first.none(String::isNotBlank))return false
+    if(statisticsHeader(first))return true
+    fun dataCell(value:String):Boolean {
+        if(value.isBlank())return false
+        if(value.statisticsNumericCell().toDoubleOrNull()?.isFinite()==true||value in listOf("pi","π","e","E","tau","τ","∞")||
+            value.matches(Regex("(?i)(NaN|[+-]?Infinity)"))||parseStatisticsDate(value)!=null)return true
+        if(value.matches(Regex("[\\p{L}_][\\p{L}\\p{N}_]*(?:\\s+[\\p{L}_][\\p{L}\\p{N}_]*)*")))return false
+        return runCatching {Parser(value).parse().kind!="symbol"}.getOrDefault(false)
+    }
+    return first.all(String::isNotBlank)&&first.none(::dataCell)&&rows.drop(1).any {row->row.size==first.size&&row.any(::dataCell)}
 }
 
 private fun statisticsHeader(row:List<String>):Boolean {

@@ -339,6 +339,9 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     var statisticsCustomInitials
         get()=statisticsState.statisticsCustomInitials
         set(value) {statisticsState.statisticsCustomInitials=value}
+    var statisticsPlotGrouping
+        get()=statisticsState.statisticsPlotGrouping
+        set(value) {statisticsState.statisticsPlotGrouping=value}
     var statisticsPlot
         get()=statisticsState.statisticsPlot
         set(value) {statisticsState.statisticsPlot=value}
