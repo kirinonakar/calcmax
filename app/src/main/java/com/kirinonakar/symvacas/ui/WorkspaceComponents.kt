@@ -30,17 +30,17 @@ import com.kirinonakar.symvacas.ui.theme.LocalInstrument
     Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)) { values.forEach { value->FilterChip(selected==value,onClick={choose(value)},label={Text(if(translate)tr(value) else value,fontSize=12.sp)}) } }
 }
 /** Repeat relocation as the IME opens: requesting only on focus uses the old viewport. */
-internal fun Modifier.keepInputVisible():Modifier=composed {
+internal fun Modifier.keepInputVisible(includeDescendants:Boolean=false,contentKey:Any?=null):Modifier=composed {
     val requester=remember {BringIntoViewRequester()}
     var focused by remember {mutableStateOf(false)}
     val imeBottom=WindowInsets.ime.getBottom(LocalDensity.current)
-    LaunchedEffect(focused,imeBottom) {
+    LaunchedEffect(focused,imeBottom,contentKey) {
         if(focused) {
             withFrameNanos {}
             requester.bringIntoView()
         }
     }
-    this.bringIntoViewRequester(requester).onFocusChanged {focused=it.isFocused}
+    this.bringIntoViewRequester(requester).onFocusChanged {focused=if(includeDescendants)it.hasFocus else it.isFocused}
 }
 
 @Composable fun Field(value: String,label: String,modifier: Modifier=Modifier,enabled: Boolean=true,translate:Boolean=true,onValue: (String)->Unit) { OutlinedTextField(value,onValue,modifier=modifier.keepInputVisible(),label={Text(if(translate)tr(label) else label)},singleLine=true,enabled=enabled) }

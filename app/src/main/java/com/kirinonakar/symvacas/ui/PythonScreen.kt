@@ -17,6 +17,9 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontFamily
@@ -27,7 +30,7 @@ import com.kirinonakar.symvacas.calculator.CalculatorModel
 import com.kirinonakar.symvacas.math.BracketAutoClose
 import com.kirinonakar.symvacas.ui.theme.LocalInstrument
 
-@Composable fun PythonScreen(m:CalculatorModel) {
+@Composable fun PythonScreen(m:CalculatorModel,imeInsets:WindowInsets=WindowInsets.ime) {
     val context=LocalContext.current
     val clipboard=LocalClipboardManager.current
     val c=LocalInstrument.current
@@ -78,76 +81,84 @@ import com.kirinonakar.symvacas.ui.theme.LocalInstrument
     val suggestions=remember(editor.text,position,editor.selection) {
         if(editor.selection.collapsed)PythonEditorTools.completions(editor.text,position) else emptyList()
     }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal=12.dp,vertical=8.dp),verticalArrangement=Arrangement.spacedBy(5.dp)) {
-        Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("PYTHON",style=MaterialTheme.typography.titleMedium,color=c.ink)
-                Text(m.pythonFileName+if(m.pythonDirty) if(isKorean())"  • 저장 안 됨" else "  • unsaved" else "",fontSize=11.sp,color=c.muted,maxLines=1)
+    val imeBottom=imeInsets.getBottom(LocalDensity.current)
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        // A focused editor and its completion row must fit together in the resized viewport.
+        // The outer scroller can move the file/tool rows out of the way on short screens.
+        val editorHeight=if(imeBottom>0)minOf(320.dp,(maxHeight-80.dp).coerceAtLeast(56.dp))else 320.dp
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal=12.dp,vertical=8.dp),verticalArrangement=Arrangement.spacedBy(5.dp)) {
+            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("PYTHON",style=MaterialTheme.typography.titleMedium,color=c.ink)
+                    Text(m.pythonFileName+if(m.pythonDirty) if(isKorean())"  • 저장 안 됨" else "  • unsaved" else "",fontSize=11.sp,color=c.muted,maxLines=1)
+                }
+                Button(onClick={m.runPython()},enabled=!m.pythonBusy,contentPadding=PaddingValues(horizontal=16.dp)) {Text(if(isKorean())"▶ 실행" else "▶ Run")}
+                if(m.pythonBusy)SmallAction("Stop") {m.stopPython()}
             }
-            Button(onClick={m.runPython()},enabled=!m.pythonBusy,contentPadding=PaddingValues(horizontal=16.dp)) {Text(if(isKorean())"▶ 실행" else "▶ Run")}
-            if(m.pythonBusy)SmallAction("Stop") {m.stopPython()}
-        }
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
-            SmallAction("New") {if(m.pythonDirty)confirm="new" else {m.newPythonFile();editor=TextFieldValue("")}}
-            SmallAction("Open .py") {if(m.pythonDirty)confirm="open" else open.launch(arrayOf("*/*"))}
-            SmallAction("Save") {if(m.pythonUri.isBlank())create.launch(m.pythonFileName) else write(Uri.parse(m.pythonUri))}
-            SmallAction("Save as") {create.launch(m.pythonFileName)}
-            val hasSelection=editor.selection.min<editor.selection.max
-            TextButton(onClick={
-                val a=editor.selection.min;val b=editor.selection.max
-                clipboard.setText(AnnotatedString(editor.text.substring(a,b)))
-                apply(PythonEditorTools.replace(editor.text,a,b,""))
-            },enabled=hasSelection,contentPadding=PaddingValues(horizontal=8.dp,vertical=0.dp)) {
-                Text(tr("Cut"),fontSize=11.sp)
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+                SmallAction("New") {if(m.pythonDirty)confirm="new" else {m.newPythonFile();editor=TextFieldValue("")}}
+                SmallAction("Open .py") {if(m.pythonDirty)confirm="open" else open.launch(arrayOf("*/*"))}
+                SmallAction("Save") {if(m.pythonUri.isBlank())create.launch(m.pythonFileName) else write(Uri.parse(m.pythonUri))}
+                SmallAction("Save as") {create.launch(m.pythonFileName)}
+                val hasSelection=editor.selection.min<editor.selection.max
+                TextButton(onClick={
+                    val a=editor.selection.min;val b=editor.selection.max
+                    clipboard.setText(AnnotatedString(editor.text.substring(a,b)))
+                    apply(PythonEditorTools.replace(editor.text,a,b,""))
+                },enabled=hasSelection,contentPadding=PaddingValues(horizontal=8.dp,vertical=0.dp)) {
+                    Text(tr("Cut"),fontSize=11.sp)
+                }
+                SmallAction("Copy") {
+                    val a=editor.selection.min;val b=editor.selection.max
+                    clipboard.setText(AnnotatedString(if(a==b)editor.text else editor.text.substring(a,b)))
+                }
+                SmallAction("Paste") {clipboard.getText()?.text?.let {apply(PythonEditorTools.replace(editor.text,editor.selection.min,editor.selection.max,it))}}
+                Box {
+                    SmallAction("Import ▾",translate=false) {importsOpen=true}
+                    DropdownMenu(importsOpen,{importsOpen=false}) {PythonEditorTools.imports.forEach {line->DropdownMenuItem(text={Text(line)},onClick={apply(PythonEditorTools.insertImport(editor.text,editor.selection.start,line));importsOpen=false})}}
+                }
+                Box {
+                    SmallAction("Function ▾",translate=false) {templatesOpen=true}
+                    DropdownMenu(templatesOpen,{templatesOpen=false}) {PythonEditorTools.snippets.forEach {snippet->DropdownMenuItem(text={Text(snippet.label)},onClick={apply(PythonEditorTools.insertSnippet(editor.text,editor.selection.min,editor.selection.max,snippet));templatesOpen=false})}}
+                }
             }
-            SmallAction("Copy") {
-                val a=editor.selection.min;val b=editor.selection.max
-                clipboard.setText(AnnotatedString(if(a==b)editor.text else editor.text.substring(a,b)))
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+                SmallAction("Indent") {apply(PythonEditorTools.indent(editor.text,editor.selection.start,editor.selection.end))}
+                SmallAction("Outdent") {apply(PythonEditorTools.indent(editor.text,editor.selection.start,editor.selection.end,outdent=true))}
             }
-            SmallAction("Paste") {clipboard.getText()?.text?.let {apply(PythonEditorTools.replace(editor.text,editor.selection.min,editor.selection.max,it))}}
-            Box {
-                SmallAction("Import ▾",translate=false) {importsOpen=true}
-                DropdownMenu(importsOpen,{importsOpen=false}) {PythonEditorTools.imports.forEach {line->DropdownMenuItem(text={Text(line)},onClick={apply(PythonEditorTools.insertImport(editor.text,editor.selection.start,line));importsOpen=false})}}
+            Column(Modifier.fillMaxWidth().keepInputVisible(includeDescendants=true,contentKey=editorHeight to suggestions.isNotEmpty()),verticalArrangement=Arrangement.spacedBy(5.dp)) {
+                OutlinedTextField(editor,::typed,Modifier.fillMaxWidth().height(editorHeight).focusRequester(editorFocus).onPreviewKeyEvent {event->
+                    if(event.key==Key.Backspace && event.type==KeyEventType.KeyDown && !event.isCtrlPressed && !event.isAltPressed && !event.isMetaPressed && !event.isShiftPressed && editor.composition==null) {
+                        val edit=PythonEditorTools.backspace(editor.text,editor.selection.start,editor.selection.end)
+                        if(edit!=null) {apply(edit);true} else false
+                    } else if(event.key==Key.Tab && !event.isCtrlPressed && !event.isAltPressed && !event.isMetaPressed) {
+                        if(event.type==KeyEventType.KeyDown)apply(PythonEditorTools.tab(editor.text,editor.selection.start,editor.selection.end,event.isShiftPressed))
+                        true
+                    } else false
+                },textStyle=MaterialTheme.typography.bodyMedium.copy(fontFamily=FontFamily.Monospace),label={Text(tr("Python code"))},placeholder={Text("print('Hello, world!')")},singleLine=false,
+                    keyboardOptions=KeyboardOptions(capitalization=KeyboardCapitalization.None,autoCorrectEnabled=false))
+                if(suggestions.isNotEmpty())Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).semantics {contentDescription="Python completions"}) {
+                    suggestions.forEach {candidate->SmallAction(candidate,translate=false) {
+                        apply(PythonEditorTools.complete(editor.text,position,candidate))
+                    }}
+                }
             }
-            Box {
-                SmallAction("Function ▾",translate=false) {templatesOpen=true}
-                DropdownMenu(templatesOpen,{templatesOpen=false}) {PythonEditorTools.snippets.forEach {snippet->DropdownMenuItem(text={Text(snippet.label)},onClick={apply(PythonEditorTools.insertSnippet(editor.text,editor.selection.min,editor.selection.max,snippet));templatesOpen=false})}}
+            HorizontalDivider()
+            Text(tr(if(m.pythonBusy)"Running…" else "Output"),fontSize=13.sp,color=c.muted)
+            Box(Modifier.fillMaxWidth().heightIn(min=160.dp,max=320.dp).background(c.display).verticalScroll(rememberScrollState()).padding(10.dp)) {
+                SelectionContainer {
+                    Text(buildString {
+                        append(m.pythonOutput)
+                        if(m.pythonError.isNotBlank()) {if(isNotEmpty())append('\n');append(m.pythonError)}
+                        if(isEmpty()&&!m.pythonBusy)append(if(isKorean()) {if(m.pythonHasRun)"완료(출력 없음)." else "스크립트를 실행하면 출력이 여기에 표시됩니다."} else if(m.pythonHasRun)"Finished (no output)." else "Run a script to see its output here.")
+                    },fontFamily=FontFamily.Monospace,fontSize=15.sp,lineHeight=22.sp,color=if(m.pythonError.isNotBlank())c.danger else c.ink)
+                }
             }
-        }
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
-            SmallAction("Indent") {apply(PythonEditorTools.indent(editor.text,editor.selection.start,editor.selection.end))}
-            SmallAction("Outdent") {apply(PythonEditorTools.indent(editor.text,editor.selection.start,editor.selection.end,outdent=true))}
-        }
-        OutlinedTextField(editor,::typed,Modifier.fillMaxWidth().height(320.dp).focusRequester(editorFocus).onPreviewKeyEvent {event->
-            if(event.key==Key.Backspace && event.type==KeyEventType.KeyDown && !event.isCtrlPressed && !event.isAltPressed && !event.isMetaPressed && !event.isShiftPressed && editor.composition==null) {
-                val edit=PythonEditorTools.backspace(editor.text,editor.selection.start,editor.selection.end)
-                if(edit!=null) {apply(edit);true} else false
-            } else if(event.key==Key.Tab && !event.isCtrlPressed && !event.isAltPressed && !event.isMetaPressed) {
-                if(event.type==KeyEventType.KeyDown)apply(PythonEditorTools.tab(editor.text,editor.selection.start,editor.selection.end,event.isShiftPressed))
-                true
-            } else false
-        },textStyle=MaterialTheme.typography.bodyMedium.copy(fontFamily=FontFamily.Monospace),label={Text(tr("Python code"))},placeholder={Text("print('Hello, world!')")},singleLine=false,
-            keyboardOptions=KeyboardOptions(capitalization=KeyboardCapitalization.None,autoCorrectEnabled=false))
-        if(suggestions.isNotEmpty())Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
-            suggestions.forEach {candidate->SmallAction(candidate,translate=false) {
-                apply(PythonEditorTools.complete(editor.text,position,candidate))
-            }}
-        }
-        HorizontalDivider()
-        Text(tr(if(m.pythonBusy)"Running…" else "Output"),fontSize=13.sp,color=c.muted)
-        Box(Modifier.fillMaxWidth().heightIn(min=160.dp,max=320.dp).background(c.display).verticalScroll(rememberScrollState()).padding(10.dp)) {
-            SelectionContainer {
-                Text(buildString {
-                    append(m.pythonOutput)
-                    if(m.pythonError.isNotBlank()) {if(isNotEmpty())append('\n');append(m.pythonError)}
-                    if(isEmpty()&&!m.pythonBusy)append(if(isKorean()) {if(m.pythonHasRun)"완료(출력 없음)." else "스크립트를 실행하면 출력이 여기에 표시됩니다."} else if(m.pythonHasRun)"Finished (no output)." else "Run a script to see its output here.")
-                },fontFamily=FontFamily.Monospace,fontSize=15.sp,lineHeight=22.sp,color=if(m.pythonError.isNotBlank())c.danger else c.ink)
-            }
-        }
-        m.pythonInputPrompt?.let { prompt ->
-            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(inputText,{inputText=it},Modifier.weight(1f).keepInputVisible(),label={Text(prompt.ifEmpty { tr("Input") })},singleLine=true)
-                Button(onClick={m.submitPythonInput(inputText);inputText=""}) {Text(tr("Enter"))}
+            m.pythonInputPrompt?.let { prompt ->
+                Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(inputText,{inputText=it},Modifier.weight(1f).keepInputVisible(),label={Text(prompt.ifEmpty { tr("Input") })},singleLine=true)
+                    Button(onClick={m.submitPythonInput(inputText);inputText=""}) {Text(tr("Enter"))}
+                }
             }
         }
     }

@@ -70,11 +70,11 @@ private val LocalCalculatorOverlay=staticCompositionLocalOf<(String)->Unit> { {}
     val workspaces=rememberSaveableStateHolder()
     val context=LocalContext.current
     val avoidKeyboard=m.mode!="Scientific/CAS"
-    DisposableEffect(context,avoidKeyboard) {
+    DisposableEffect(context) {
         val window=(context as? Activity)?.window
         val previous=window?.attributes?.softInputMode
         if(previous!=null)window?.setSoftInputMode((previous and WindowManager.LayoutParams.SOFT_INPUT_MASK_ADJUST.inv()) or
-            if(avoidKeyboard)WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE else WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
+            WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
         onDispose {if(previous!=null)window?.setSoftInputMode(previous)}
     }
     LaunchedEffect(m.mode){m.save()}
@@ -115,21 +115,7 @@ private val LocalCalculatorOverlay=staticCompositionLocalOf<(String)->Unit> { {}
                 "Constants"->ConstantsScreen(m)
                 "Tip"->TipScreen()
                 "Currency"->CurrencyScreen(m)
-                else->BoxWithConstraints(Modifier.fillMaxSize()) {
-                    val keyboardHeight=minOf(520.dp,maxHeight*.68f)
-                    val landscape=maxWidth>650.dp && maxHeight<500.dp
-                    val fullKeypadHeight=if(landscape)maxHeight else keyboardHeight
-                    // Keep each numeric row the same height after removing the upper keypad rows.
-                    val numericRowHeight=(fullKeypadHeight-36.dp)/9f
-                    val numericKeypadHeight=numericRowHeight*4f+20.dp
-                    if(landscape) Row(Modifier.fillMaxSize(),verticalAlignment=Alignment.Bottom) {
-                        CalculationTape(m,Modifier.weight(1f).fillMaxHeight(),screenExpanded){screenExpanded=!screenExpanded}
-                        Keypad(m,Modifier.weight(if(screenExpanded) .7f else 1f).height(if(screenExpanded)numericKeypadHeight else fullKeypadHeight),screenExpanded,numericRowHeight,{overlay=it})
-                    } else Column(Modifier.fillMaxSize()) {
-                        CalculationTape(m,Modifier.weight(1f),screenExpanded){screenExpanded=!screenExpanded}
-                        Keypad(m,Modifier.fillMaxWidth().height(if(screenExpanded)numericKeypadHeight else fullKeypadHeight),screenExpanded,numericRowHeight,{overlay=it})
-                    }
-                }
+                else->ScientificWorkspace(m,screenExpanded,{screenExpanded=!screenExpanded},{overlay=it})
             }
         }}
         if(m.mode !in listOf("Scientific/CAS","Equations","Probability") && m.error.isNotBlank()) Text(m.error,Modifier.fillMaxWidth().padding(8.dp),fontSize=12.sp,color=c.danger)
@@ -149,6 +135,31 @@ private val LocalCalculatorOverlay=staticCompositionLocalOf<(String)->Unit> { {}
             TextButton(onClick={m.resetSetup();m.clearMemory();m.clearHistory();overlay=""}){Text(if(isKorean()) "3 · 모두" else "3 · All")}
         }},confirmButton={TextButton(onClick={overlay=""}){Text(tr("Close"))}})
     }
+    }
+}
+
+@Composable internal fun ScientificWorkspace(m:CalculatorModel,screenExpanded:Boolean,onToggleScreen:()->Unit,onOverlay:(String)->Unit,
+    imeInsets:WindowInsets=WindowInsets.ime) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val keyboardHeight=minOf(520.dp,maxHeight*.68f)
+        val landscape=maxWidth>650.dp && maxHeight<500.dp
+        val fullKeypadHeight=if(landscape)maxHeight else keyboardHeight
+        // Keep each numeric row the same height after removing the upper keypad rows.
+        val numericRowHeight=(fullKeypadHeight-36.dp)/9f
+        val numericKeypadHeight=numericRowHeight*4f+20.dp
+        val keypadHeight=if(screenExpanded)numericKeypadHeight else fullKeypadHeight
+        // The root already consumes system bars. Let the IME cover the keypad, and reserve
+        // only its remaining overlap inside the tape; neither keypad height nor position changes.
+        val remainingIme=imeInsets.exclude(WindowInsets.systemBars.union(WindowInsets.displayCutout))
+        val imeHeight=with(LocalDensity.current){remainingIme.getBottom(this).toDp()}
+        val tapeBottomPadding=(imeHeight-if(landscape)0.dp else keypadHeight).coerceAtLeast(0.dp)
+        if(landscape) Row(Modifier.fillMaxSize(),verticalAlignment=Alignment.Bottom) {
+            CalculationTape(m,Modifier.weight(1f).fillMaxHeight().padding(bottom=tapeBottomPadding),screenExpanded,onToggleScreen)
+            Keypad(m,Modifier.weight(if(screenExpanded) .7f else 1f).height(keypadHeight),screenExpanded,numericRowHeight,onOverlay)
+        } else Column(Modifier.fillMaxSize()) {
+            CalculationTape(m,Modifier.weight(1f).padding(bottom=tapeBottomPadding),screenExpanded,onToggleScreen)
+            Keypad(m,Modifier.fillMaxWidth().height(keypadHeight),screenExpanded,numericRowHeight,onOverlay)
+        }
     }
 }
 

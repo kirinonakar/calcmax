@@ -32,11 +32,11 @@ import org.junit.runner.RunWith
 class CalculatorInstrumentedTest {
     @get:Rule val compose=createAndroidComposeRule<MainActivity>()
     private fun model()=ViewModelProvider(compose.activity)[CalculatorModel::class.java]
-    @Test fun workspaceKeyboardPolicyPreservesScientificKeypadOverlayAcrossModeChanges() {
+    @Test fun workspaceKeyboardPolicyDeliversImeInsetsAcrossModeChanges() {
         for(mode in listOf("Scientific/CAS","Graph","Equations","Matrix","Statistics","Python","Graph","Scientific/CAS")) {
             compose.runOnIdle {model().mode=mode}
             compose.runOnIdle {
-                val expected=if(mode=="Scientific/CAS")android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING else android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+                val expected=android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
                 assertEquals(mode,expected,compose.activity.window.attributes.softInputMode and android.view.WindowManager.LayoutParams.SOFT_INPUT_MASK_ADJUST)
             }
         }
