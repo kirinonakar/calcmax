@@ -78,6 +78,7 @@ diff(sin(x^2),x)
 integrate(x^2*exp(x),x)
 integrate(x^2,x,0,1)
 integrate(exp(-x^2)*cos(2x),(x,0,oo))
+(-1 + y^2/b^2 + x^2/a^2)^3 - x^2*y^3/(a^2*b^3)=0
 limit(sin(x)/x,x,0)
 limit(1/x,x,0,left)
 series(exp(x),x,0,6)
