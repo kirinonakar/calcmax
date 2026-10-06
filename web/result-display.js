@@ -32,11 +32,11 @@ export function resultMathParts(tree) {
 
 export function resultMathDisplay(tree,digits=10,decimal=false,options={}) {
   const parts=resultMathParts(tree);
-  if(parts.length===1)return mathDisplay(tree,digits,decimal,options);
   const flow=document.createElement('span');flow.className='result-flow';
   for(const nodes of parts) {
     const part=document.createElement('span');part.className='result-part';
-    part.append(mathDisplay({kind:'implicit-product',args:nodes},digits,decimal,options));
+    // Every part scrolls horizontally, including a single wide result.
+    part.append(parts.length===1?mathDisplay(tree,digits,decimal,options):mathDisplay({kind:'implicit-product',args:nodes},digits,decimal,options));
     flow.append(part);
   }
   return flow;
