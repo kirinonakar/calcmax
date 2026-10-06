@@ -355,6 +355,9 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     var statisticsPlotGrouping
         get()=statisticsState.statisticsPlotGrouping
         set(value) {statisticsState.statisticsPlotGrouping=value}
+    var statisticsPlotOrientation
+        get()=statisticsState.statisticsPlotOrientation
+        set(value) {statisticsState.statisticsPlotOrientation=value}
     var statisticsPlot
         get()=statisticsState.statisticsPlot
         set(value) {statisticsState.statisticsPlot=value}

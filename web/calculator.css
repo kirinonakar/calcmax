@@ -251,5 +251,6 @@ input:disabled,select:disabled{opacity:.45;cursor:default}
 #graph-help[open]>summary{margin-bottom:8px}
 
 .statistics-plot-legend{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12px;margin:6px 0}
+.statistics-heatmap-scroll{overflow:auto;max-height:420px}.plot svg.statistics-heatmap{min-width:100%;max-height:none}.statistics-heatmap-legend{display:flex;align-items:center;gap:10px;margin:10px 16px;font-size:12px}.statistics-heatmap-scale{height:12px;flex:1;background:linear-gradient(to right,rgb(59,112,189),rgb(241,241,235),rgb(180,55,72))}.plot svg.statistics-distribution{max-height:none}.statistics-distribution-scroll{overflow-x:auto}.statistics-distribution-scroll svg{min-width:100%}
 
 .regression-parameter{display:inline-block;margin-right:16px;font-size:12px}

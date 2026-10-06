@@ -6,6 +6,19 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class WorkspaceStatesTest {
+    @Test fun distributionOrientationPersistsInSelectionAndWorkspaceState() {
+        val prefs=MemoryPreferences()
+        val state=com.kirinonakar.symvacas.calculator.StatisticsState(prefs)
+        assertEquals("horizontal",state.statisticsPlotOrientation)
+        state.statisticsPlotOrientation="vertical";state.statisticsPlot="Box plot";state.saveSelection()
+        val restored=com.kirinonakar.symvacas.calculator.StatisticsState(prefs)
+        assertEquals("vertical",restored.statisticsPlotOrientation);assertEquals("Box plot",restored.statisticsPlot)
+        restored.statisticsPlotOrientation="horizontal";restored.statisticsPlot="Violin + points"
+        val editor=prefs.edit();restored.writeTo(editor);editor.apply()
+        val next=com.kirinonakar.symvacas.calculator.StatisticsState(prefs)
+        assertEquals("horizontal",next.statisticsPlotOrientation);assertEquals("Violin + points",next.statisticsPlot)
+        assertEquals("horizontal",com.kirinonakar.symvacas.calculator.StatisticsState(MemoryPreferences(mapOf("statisticsPlotOrientation" to "invalid"))).statisticsPlotOrientation)
+    }
     @Test fun typedParametersPreservePrecisionCenterRangesAndPersist() {
         val prefs=MemoryPreferences(mapOf("graphParameters" to "{\"a\":{\"value\":1,\"min\":-5,\"max\":5,\"animate\":false}}"))
         val state=GraphState(prefs)

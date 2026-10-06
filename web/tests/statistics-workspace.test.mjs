@@ -264,19 +264,19 @@ for(const language of ['en','ko'])test(`data type changes remove incompatible me
   assert.deepEqual(options('regression-kind'),['multiple','logistic','randomforest']);
   assert.equal($('regression-kind').value,'multiple');
   assert.equal($('regression-custom').hidden,true);
-  assert.deepEqual(options('statistics-plot-type'),['histogram','box']);
+  assert.deepEqual(options('statistics-plot-type'),['histogram','box','violin','heatmap','correlationheatmap']);
   assert.deepEqual(options('statistics-grouping'),['columns']);
   $('regression-kind').value='logistic';changeKind('xy');
   assert.equal($('regression-kind').value,'logistic','a model compatible with both shapes stays selected');
   assert.deepEqual(options('regression-kind'),xyModels);
-  assert.deepEqual(options('statistics-plot-type'),['scatter','histogram','box']);
+  assert.deepEqual(options('statistics-plot-type'),['scatter','histogram','box','violin','heatmap','correlationheatmap']);
   $('statistics-op').value='anova';changeKind('list');
   assert.equal($('regression-section').hidden,true);
   assert.deepEqual(options('regression-kind'),[]);
   assert.equal($('statistics-op').value,'stats');
   for(const invalid of ['correlation','ttestpaired','ttest2','ztest2','anova','tukey','mannwhitney','kruskal','chi2independence','fisherexact'])assert.ok(!options('statistics-op').includes(invalid),`${invalid} is absent for a List`);
   assert.ok(options('statistics-op').includes('wilcoxon'),'one-sample signed ranks remain available');
-  assert.deepEqual(options('statistics-plot-type'),['histogram','box']);
+  assert.deepEqual(options('statistics-plot-type'),['histogram','box','violin','heatmap','correlationheatmap']);
   changeKind('xyz');
   assert.deepEqual(options('regression-kind'),['multiple','logistic','randomforest']);
   assert.deepEqual([...$('regression-kind').options].map(option=>option.textContent),['multiple','logistic','Random Forest'].map(translate));
@@ -300,6 +300,83 @@ test('independent comparisons omit the first group from second-group choices and
   assert.deepEqual([...$('statistics-grouping').options].map(option=>option.value),['columns']);
   $('statistics-op').value='mannwhitney';change('statistics-op');
   assert.deepEqual([...$('statistics-grouping').options].map(option=>option.value),['columns','groups']);
+});
+
+for(const language of ['en','ko'])test(`violin, raw heat map and Pearson heat map render through workspace menus (${language})`,t=>{
+  const {$,statistics,errors}=workspace(t,{'statistics-kind':'xyz'});
+  setLanguage(language);translateDOM();statistics.render();
+  const change=id=>$(id).dispatchEvent(new document.defaultView.Event('change'));
+  $('statistics-data').value='A,1,2\nB,2,4\nA,3,6\nB,,8';
+  $('statistics-plot-grouping').value='first';$('statistics-plot-type').value='violin';change('statistics-plot-type');
+  assert.equal($('statistics-plot').querySelectorAll('.statistics-plot-panel').length,2);
+  assert.equal($('statistics-plot').querySelectorAll('[data-raw-point]').length,7);
+  assert.ok($('statistics-plot').querySelector('[data-violin]'));
+  for(const point of $('statistics-plot').querySelectorAll('[data-raw-point]'))assert.ok(Number.isFinite(Number(point.getAttribute('cx'))));
+  $('statistics-plot-type').value='heatmap';change('statistics-plot-type');
+  assert.equal($('statistics-plot').querySelectorAll('.statistics-plot-panel').length,0);
+  const cells=[...$('statistics-plot').querySelectorAll('rect[data-value]')];
+  assert.deepEqual(cells.map(cell=>cell.dataset.value),['1','2','2','4','3','6','','8']);
+  assert.match($('statistics-plot').textContent,/A.*B.*A.*B/);
+  $('statistics-plot-type').value='correlationheatmap';change('statistics-plot-type');
+  assert.equal($('statistics-plot-grouping-label').hidden,true);
+  assert.equal($('statistics-plot').querySelectorAll('rect[data-value]').length,4);
+  assert.ok(Math.abs(Number($('statistics-plot').querySelector('rect[data-row="0"][data-column="1"]').dataset.value)-1)<1e-12);
+  assert.match($('statistics-plot').querySelector('rect[data-row="0"][data-column="1"] title').textContent,/n=3/);
+  assert.equal($('statistics-plot').querySelector('svg').getAttribute('aria-label'),translate('Correlation heat map'));
+  assert.deepEqual(errors,[]);
+});
+
+test('constant and singleton violin groups retain every point without invalid density paths',t=>{
+  const {$,errors}=workspace(t);
+  $('statistics-data').value='A,5\nA,5\nB,8';$('statistics-plot-grouping').value='first';$('statistics-plot-type').value='violin';
+  $('statistics-plot-type').dispatchEvent(new document.defaultView.Event('change'));
+  assert.equal($('statistics-plot').querySelectorAll('[data-raw-point]').length,3);
+  assert.equal($('statistics-plot').querySelectorAll('[data-violin]').length,0);
+  assert.doesNotMatch($('statistics-plot').innerHTML,/NaN|Infinity/);assert.deepEqual(errors,[]);
+});
+
+test('violin beeswarms preserve values and avoid collisions in both orientations, including repeated observations',t=>{
+  const {$,errors}=workspace(t),values=[...Array(20).fill('1'),...Array(7).fill('1.001'),...Array(7).fill('1.002'),'2'];
+  $('statistics-data').value=[...values.map(value=>`A,${value}`),'B,3'].join('\n');
+  $('statistics-plot-grouping').value='first';$('statistics-plot-type').value='violin';
+  for(const orientation of ['horizontal','vertical']){
+    $('statistics-plot-orientation').value=orientation;$('statistics-plot-type').dispatchEvent(new document.defaultView.Event('change'));
+    const svg=$('statistics-plot').querySelector('svg');assert.equal(svg.dataset.rawLayout,'beeswarm');
+    const points=[...svg.querySelectorAll('[data-raw-point="A"]')];assert.deepEqual(points.map(point=>point.dataset.value),values);
+    const circles=points.map(point=>({x:Number(point.getAttribute('cx')),y:Number(point.getAttribute('cy')),r:Number(point.getAttribute('r'))}));
+    circles.forEach((circle,i)=>{assert.ok(circle.r>0);for(let j=0;j<i;j++)assert.ok(Math.hypot(circle.x-circles[j].x,circle.y-circles[j].y)>=circle.r+circles[j].r-1e-8,'rendered circles must not overlap');});
+    assert.ok(circles[0].r<3,'dense groups shrink markers instead of losing observations');
+    assert.equal(new Set(points.slice(0,20).map(point=>point.getAttribute(orientation==='horizontal'?'cx':'cy'))).size,1,'duplicate values keep identical value-axis positions');
+    const minimumTick=svg.querySelector('[data-value-tick="1"]');
+    assert.equal(orientation==='horizontal'?circles[0].x:circles[0].y,Number(minimumTick.getAttribute(orientation==='horizontal'?'x':'y'))-(orientation==='vertical'?5:0));
+    const previous=points.map(point=>point.outerHTML);$('statistics-plot-run').click();
+    assert.deepEqual([...$('statistics-plot').querySelectorAll('[data-raw-point="A"]')].map(point=>point.outerHTML),previous,'redraw does not shuffle observations');
+  }
+  assert.deepEqual(errors,[]);
+});
+
+for(const language of ['en','ko'])test(`distribution orientation restores, swaps geometry and persists across plot types (${language})`,t=>{
+  const context=workspace(t,{'statistics-plot-type':'box','statistics-plot-orientation':'vertical','statistics-data':'A,1\nA,2\nA,3\nA,4\nA,5\nB,8','statistics-plot-grouping':'first'});
+  const {$,statistics}=context,change=id=>$(id).dispatchEvent(new document.defaultView.Event('change'));
+  setLanguage(language);translateDOM();statistics.render();$('statistics-plot-run').click();
+  assert.equal($('statistics-plot-orientation').value,'vertical');assert.equal($('statistics-plot-orientation-label').hidden,false);
+  assert.deepEqual([...$('statistics-plot-orientation').options].map(option=>option.textContent),['Horizontal','Vertical'].map(translate));
+  const median=()=>$('statistics-plot').querySelector('[data-median="3"]');
+  assert.equal(median().getAttribute('y1'),median().getAttribute('y2'));assert.notEqual(median().getAttribute('x1'),median().getAttribute('x2'));
+  const box=$('statistics-plot').querySelector('[data-box="A"]');assert.ok(Number(box.getAttribute('height'))>Number(box.getAttribute('width')));
+  $('statistics-plot-orientation').value='horizontal';const saves=context.saves;change('statistics-plot-orientation');
+  assert.ok(context.saves>saves);assert.equal(median().getAttribute('x1'),median().getAttribute('x2'));assert.notEqual(median().getAttribute('y1'),median().getAttribute('y2'));
+  $('statistics-plot-type').value='violin';change('statistics-plot-type');
+  const points=()=>[...$('statistics-plot').querySelectorAll('[data-raw-point]')],values=points().map(point=>point.dataset.value);
+  assert.deepEqual(values,['1','2','3','4','5','8']);assert.equal($('statistics-plot').querySelector('svg').dataset.orientation,'horizontal');
+  $('statistics-plot-orientation').value='vertical';change('statistics-plot-orientation');
+  assert.equal($('statistics-plot').querySelector('svg').dataset.orientation,'vertical');assert.deepEqual(points().map(point=>point.dataset.value),values);
+  assert.ok(Number(points()[0].getAttribute('cy'))>Number(points()[4].getAttribute('cy')),'larger observations move upward');
+  const minTick=$('statistics-plot').querySelector('[data-value-tick="1"]');assert.equal(Number(points()[0].getAttribute('cy')),Number(minTick.getAttribute('y'))-5);
+  $('statistics-plot-type').value='histogram';change('statistics-plot-type');assert.equal($('statistics-plot-orientation-label').hidden,true);
+  $('statistics-plot-type').value='box';change('statistics-plot-type');assert.equal($('statistics-plot-orientation').value,'vertical');assert.equal($('statistics-plot').querySelector('svg').dataset.orientation,'vertical');
+  $('statistics-plot-type').value='heatmap';change('statistics-plot-type');assert.equal($('statistics-plot-orientation-label').hidden,true);
+  assert.deepEqual(context.errors,[]);
 });
 
 test('regression exposes Cancel immediately and cancelled results cannot return; a new fit succeeds',async t=>{

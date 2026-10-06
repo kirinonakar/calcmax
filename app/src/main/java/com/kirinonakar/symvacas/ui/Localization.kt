@@ -7,6 +7,9 @@ import androidx.compose.runtime.staticCompositionLocalOf
 val LocalLanguage = staticCompositionLocalOf { "en" }
 
 private val korean = mapOf(
+    "Orientation" to "방향", "Horizontal" to "가로", "Vertical" to "세로",
+    "Violin + points" to "바이올린 + 원자료", "Heat map" to "히트맵", "Correlation heat map" to "상관관계 히트맵",
+    "Rows × columns · color = value" to "행 × 열 · 색 = 값", "Pearson r · pairwise complete observations" to "Pearson r · 각 열 쌍의 결측값 제외",
     "Input source" to "자료 선택", "Current data" to "현재 데이터", "Expression" to "분석 식",
     "Enter data first" to "데이터를 입력하세요", "Choose valid data columns" to "자료 열을 선택하세요", "Choose distinct analysis columns" to "서로 다른 분석 열을 선택하세요",
     "Roles must use different columns" to "각 역할에 서로 다른 열을 선택하세요", "Complete selected rows required" to "선택한 열의 빈 셀을 채우세요", "Choose at least two groups" to "그룹을 둘 이상 선택하세요",

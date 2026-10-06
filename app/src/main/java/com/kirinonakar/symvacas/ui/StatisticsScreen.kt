@@ -79,10 +79,11 @@ import kotlin.math.max
     var customVariable by rememberSaveable {mutableStateOf(m.statisticsCustomVariable)}
     var customInitials by rememberSaveable {mutableStateOf(m.statisticsCustomInitials)}
     var plotGrouping by rememberSaveable {mutableStateOf(m.statisticsPlotGrouping)}
+    var plotOrientation by rememberSaveable {mutableStateOf(m.statisticsPlotOrientation)}
     var plotType by rememberSaveable {mutableStateOf(m.statisticsPlot)}
     var csv by rememberSaveable {mutableStateOf(m.statisticsCsv)}
     var importPreview by remember {mutableStateOf<StatisticsCsvImport?>(null)}
-    LaunchedEffect(data,datasetName,dataKind,regression,plotType,plotGrouping,csv,selected,isNew,customFormula,customVariable,customInitials,polynomialDegree,logisticResponse,lassoAlpha,forestTrees,forestDepth,forestSeed,regularization,l1Ratio,forestTask) {m.statisticsPlotGrouping=plotGrouping;m.saveStatistics(datasetName,data,dataKind,regression,plotType,csv,selected,isNew,customFormula,customVariable,customInitials,polynomialDegree,logisticResponse,lassoAlpha,forestTrees,forestDepth,forestSeed,regularization,l1Ratio,forestTask)}
+    LaunchedEffect(data,datasetName,dataKind,regression,plotType,plotGrouping,plotOrientation,csv,selected,isNew,customFormula,customVariable,customInitials,polynomialDegree,logisticResponse,lassoAlpha,forestTrees,forestDepth,forestSeed,regularization,l1Ratio,forestTask) {m.statisticsPlotGrouping=plotGrouping;m.statisticsPlotOrientation=plotOrientation;m.saveStatistics(datasetName,data,dataKind,regression,plotType,csv,selected,isNew,customFormula,customVariable,customInitials,polynomialDegree,logisticResponse,lassoAlpha,forestTrees,forestDepth,forestSeed,regularization,l1Ratio,forestTask)}
     val importCsv=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {uri->
         if(uri!=null)scope.launch {
             val content=withContext(Dispatchers.IO) {runCatching {context.contentResolver.openInputStream(uri)?.bufferedReader()?.use {it.readText()}}.getOrNull()}
@@ -267,8 +268,12 @@ import kotlin.math.max
                     m.fitRegression("regression($table,custom,$customFormula,$customVariable$guesses)",data)
                 },enabled=customFormula.isNotBlank()&&customVariable.matches(Regex("[A-Za-z][A-Za-z0-9_]*"))&&paired.size>=2&&!m.regressionBusy){Text(tr("Fit custom model"))}
             }
-            Choices(if(dataKind=="xy")listOf("Scatter","Histogram","Box plot") else listOf("Histogram","Box plot"),plotType,{plotType=it})
-            if(plotType!="Scatter"&&dataColumns.size>1) {
+            Choices(if(dataKind=="xy")listOf("Scatter","Histogram","Box plot","Violin + points","Heat map","Correlation heat map") else listOf("Histogram","Box plot","Violin + points","Heat map","Correlation heat map"),plotType,{plotType=it})
+            if(plotType in listOf("Box plot","Violin + points")) {
+                Text(tr("Orientation"),fontSize=11.sp,color=LocalInstrument.current.muted)
+                Choices(listOf("Horizontal","Vertical"),if(plotOrientation=="vertical")"Vertical" else "Horizontal",{plotOrientation=if(it=="Vertical")"vertical" else "horizontal"})
+            }
+            if(plotType !in listOf("Scatter","Correlation heat map")&&dataColumns.size>1) {
                 Text(tr("Plot grouping"),fontSize=11.sp,color=LocalInstrument.current.muted)
                 Choices(listOf("Columns","first","last"),if(plotGrouping=="columns")"Columns" else plotGrouping,{plotGrouping=if(it=="Columns")"columns" else it})
             }
@@ -279,12 +284,18 @@ import kotlin.math.max
         val fittedResponseName=regressionColumns.getOrNull(fittedResponse).orEmpty()
         val fitVisible=dataKind=="xy"&&plotType=="Scatter"&&m.regressionData==data&&m.regressionFit.isNotBlank()
         val plotPairs=if(fitVisible&&m.regressionMode in listOf("logistic","polynomial","ridge","lasso","elasticnet","logisticridge","logisticlasso","logisticelasticnet","randomforest","randomforestclassifier","randomforestregressor")&&fittedResponse==0)paired.map {(x,y)->y to x} else paired
-        val plotPanels=if(plotType=="Scatter")listOf(StatisticsPlotPanel("",emptyList())) else statisticsPlotPanels(parsedRows,dataKind,plotGrouping)
+        val heatMap=remember(parsedRows,dataKind,plotGrouping,plotType) {when(plotType) {
+            "Heat map"->statisticsHeatMapData(parsedRows,dataKind,plotGrouping)
+            "Correlation heat map"->statisticsCorrelationHeatMap(parsedRows,dataKind)
+            else->null
+        }}
+        heatMap?.let {StatisticsHeatMap(it,m.displayDigits)}
+        val plotPanels=if(heatMap!=null)emptyList() else if(plotType=="Scatter")listOf(StatisticsPlotPanel("",emptyList())) else statisticsPlotPanels(parsedRows,dataKind,plotGrouping)
         plotPanels.forEach {panel->
             if(panel.label.isNotBlank())Text(panel.label,style=MaterialTheme.typography.titleSmall)
             StatisticsPlot(plotType,if(plotType=="Scatter")plotPairs else xValues.mapIndexed {i,v->i.toDouble() to v},xValues,yValues,if(fitVisible)m.regressionCurve.orEmpty() else emptyList(),if(fitVisible&&!m.regressionMode.startsWith("randomforest"))m.regressionFit else "",m.displayDigits,fitVisible&&m.regressionMode=="linear",m.regressionCorrelation,tertiary=zValues,allColumns=panel.series,xDateOrigin=if(fitVisible&&fittedResponse==0)null else dateAxis?.origin,
                 xAxisLabel=if(fitVisible)fittedVariables["x"] ?: "x" else "x",yAxisLabel=if(fitVisible)fittedResponseName else "y",
-                fitPrefix=if(fitVisible&&m.regressionMode.startsWith("logistic"))"P($fittedResponseName = 1) = " else if(fitVisible)"$fittedResponseName ≈ " else "y ≈ ",fitVariables=if(fitVisible&&m.regressionMode in listOf("logistic","polynomial","ridge","lasso","elasticnet","logisticridge","logisticlasso","logisticelasticnet","randomforest","randomforestclassifier","randomforestregressor"))fittedVariables else emptyMap())
+                fitPrefix=if(fitVisible&&m.regressionMode.startsWith("logistic"))"P($fittedResponseName = 1) = " else if(fitVisible)"$fittedResponseName ≈ " else "y ≈ ",fitVariables=if(fitVisible&&m.regressionMode in listOf("logistic","polynomial","ridge","lasso","elasticnet","logisticridge","logisticlasso","logisticelasticnet","randomforest","randomforestclassifier","randomforestregressor"))fittedVariables else emptyMap(),orientation=plotOrientation)
         }
         if(dateAxis!=null&&plotType=="Scatter")Text((if(isKorean())"회귀식의 x: ${dateAxis.origin.plusDays(1)} = 1일째" else "Regression x: ${dateAxis.origin.plusDays(1)} = day 1"),fontSize=11.sp,color=LocalInstrument.current.muted)
         if(dataKind!="list"&&m.regressionData==data&&m.regressionFit.isNotBlank()) {

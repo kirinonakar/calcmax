@@ -1,4 +1,12 @@
 export const nativeKorean = {
+  "Orientation": "방향",
+  "Horizontal": "가로",
+  "Vertical": "세로",
+  "Violin + points": "바이올린 + 원자료",
+  "Heat map": "히트맵",
+  "Correlation heat map": "상관관계 히트맵",
+  "Rows × columns · color = value": "행 × 열 · 색 = 값",
+  "Pearson r · pairwise complete observations": "Pearson r · 각 열 쌍의 결측값 제외",
   "Input source": "자료 선택",
   "Current data": "현재 데이터",
   "Expression": "분석 식",

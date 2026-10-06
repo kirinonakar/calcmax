@@ -3,6 +3,7 @@ import {t,setText} from './i18n.js';
 import {downloadFile} from './storage.js';
 import {statisticsCommand,statisticsAnalysisData,csvRows,statisticsDataRows,statisticsDatasetSource,numericStatisticsRows,statisticsColumnCount,statisticsColumnNames,statisticsKindForColumns,statisticsCsvHasHeader,statisticsColumnLabels} from './workspace-commands.js';
 import {statisticsPlot,statisticsPlotPanels} from './statistics-plot.js';
+import {statisticsHeatMapData,statisticsCorrelationHeatMap} from './statistics-plot-data.js';
 import {createAdvancedStatistics} from './advanced-statistics.js';
 import {renderFormulas} from './formula-preview.js';
 import {editableTable} from './editable-table.js';
@@ -133,7 +134,8 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
     $('regression-data-help').hidden=!['multiple','logistic','polynomial','ridge','lasso','elasticnet','logisticridge','logisticlasso','logisticelasticnet','randomforest','randomforestclassifier','randomforestregressor'].includes(regressionMode());
     $('regression-response').closest('label').hidden=!['multiple','logistic','polynomial','ridge','lasso','elasticnet','logisticridge','logisticlasso','logisticelasticnet','randomforest','randomforestclassifier','randomforestregressor'].includes(regressionMode());
     filterMenu('statistics-plot-type',plot=>plot!=='scatter'||kind==='xy',kind==='xy'?'scatter':'histogram');
-    $('statistics-plot-grouping-label').hidden=value('statistics-plot-type')==='scatter'||columns<2;
+    $('statistics-plot-grouping-label').hidden=['scatter','correlationheatmap'].includes(value('statistics-plot-type'))||columns<2;
+    $('statistics-plot-orientation-label').hidden=!['box','violin'].includes(value('statistics-plot-type'));
     setText($('statistics-data-label'),kind==='list'?'One value per line':kind==='xy'?'x, y values':kind==='xyz'?'x, y, z values':statisticsColumnNames(columns).join(', '));
     try{$('statistics-samples').textContent=analysisSummary();}catch{setText($('statistics-samples'),'Enter data to see analyzed groups');}
     advanced?.render();
@@ -173,11 +175,14 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
   $('statistics-plot-run').onclick=()=>{try{statisticsGraph={...statisticsGraph,rows:numericStatisticsRows(dataRows()),curve:statisticsGraph?.curve||[]};$('statistics-plot').hidden=false;drawStatisticsGraph();}catch(exc){error(exc.message);}};
   $('statistics-plot-type').onchange=()=>{statisticsControls();$('statistics-plot-run').click();};
   $('statistics-plot-grouping').onchange=()=>{$('statistics-plot-run').click();persist();};
+  $('statistics-plot-orientation').onchange=()=>{$('statistics-plot-run').click();persist();};
   $('regression-transfer').onclick=()=>{if(!statisticsGraph?.fit)return;try{const source=regressionGraphSource(statisticsGraph.fit,state.digits,statisticsGraph.variable);$('graph-kind').value='cartesian';$('graph-source').value=source;changeMode('graph');graphs.run();}catch(exc){error(exc.message);}};
 
   function drawStatisticsGraph(){
-    const container=$('statistics-plot'),type=value('statistics-plot-type'),options={type,digits:state.digits,curve:statisticsGraph.curve,xAxisLabel:statisticsGraph.xAxisLabel||'x',yAxisLabel:statisticsGraph.yAxisLabel||'y'};
+    const container=$('statistics-plot'),type=value('statistics-plot-type'),options={type,orientation:value('statistics-plot-orientation'),digits:state.digits,curve:statisticsGraph.curve,xAxisLabel:statisticsGraph.xAxisLabel||'x',yAxisLabel:statisticsGraph.yAxisLabel||'y'};
     if(type==='scatter'){statisticsPlot(container,statisticsGraph.plotRows||statisticsGraph.rows,options);return;}
+    if(type==='heatmap'){statisticsPlot(container,statisticsGraph.rows,{...options,heatMap:statisticsHeatMapData(dataRows(),{grouping:value('statistics-plot-grouping'),columnCount:dataColumns()})});return;}
+    if(type==='correlationheatmap'){statisticsPlot(container,statisticsGraph.rows,{...options,heatMap:statisticsCorrelationHeatMap(dataRows(),{columnCount:dataColumns()})});return;}
     const panels=statisticsPlotPanels(dataRows(),{grouping:value('statistics-plot-grouping'),columnCount:dataColumns()});
     if(panels.length===1&&!panels[0].label){statisticsPlot(container,statisticsGraph.rows,{...options,series:panels[0].series});return;}
     container.replaceChildren(...panels.map(panel=>{

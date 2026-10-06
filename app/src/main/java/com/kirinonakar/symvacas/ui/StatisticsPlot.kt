@@ -18,13 +18,21 @@ import kotlin.math.floor
 import kotlin.math.ln
 import kotlin.math.max
 import kotlin.math.roundToLong
+import kotlin.math.abs
 
-@Composable internal fun StatisticsPlot(type:String,points:List<Pair<Double,Double>>,values:List<Double>,secondary:List<Double> = emptyList(),curve:List<Pair<Double,Double>> = emptyList(),fitLabel:String="",displayDigits:Int=10,showCorrelation:Boolean=false,correlation:Double?=null,tertiary:List<Double> = emptyList(),xDateOrigin:LocalDate?=null,xAxisLabel:String="x",yAxisLabel:String="y",fitPrefix:String="y ≈ ",fitVariables:Map<String,String> = emptyMap(),allColumns:List<Pair<String,List<Double>>>? = null) {
+@Composable internal fun StatisticsPlot(type:String,points:List<Pair<Double,Double>>,values:List<Double>,secondary:List<Double> = emptyList(),curve:List<Pair<Double,Double>> = emptyList(),fitLabel:String="",displayDigits:Int=10,showCorrelation:Boolean=false,correlation:Double?=null,tertiary:List<Double> = emptyList(),xDateOrigin:LocalDate?=null,xAxisLabel:String="x",yAxisLabel:String="y",fitPrefix:String="y ≈ ",fitVariables:Map<String,String> = emptyMap(),allColumns:List<Pair<String,List<Double>>>? = null,orientation:String="horizontal") {
     val c=LocalInstrument.current
     val series=if(allColumns!=null)allColumns.mapIndexed {index,(name,observations)->Triple(name,observations,c.curves[index%c.curves.size])}.filter {it.second.isNotEmpty()} else (if(secondary.isEmpty()&&tertiary.isEmpty())listOf(Triple("",values,c.accent)) else listOf(Triple("x",values,c.accent),Triple("y",secondary,c.danger),Triple("z",tertiary,c.curves[2]))).filter {it.second.isNotEmpty()}
     val fitEquation=remember(fitLabel,displayDigits,fitVariables) {if(fitLabel.isBlank())null else regressionFormulaDisplayTree(fitLabel,displayDigits,fitVariables)}
-    Canvas(Modifier.fillMaxWidth().height(if(type=="Box plot")(series.size*70+70).coerceAtLeast(220).dp else 220.dp).background(c.display)) {
-        val left=38.dp.toPx();val right=12.dp.toPx();val top=14.dp.toPx();val bottom=28.dp.toPx()
+    val densities=remember(type,series.map {it.second}) {if(type=="Violin + points")series.map {violinDensity(it.second)} else emptyList()}
+    val distribution=type in listOf("Box plot","Violin + points")
+    val vertical=distribution&&orientation=="vertical"
+    val swarmCache=remember(series.map {it.second},vertical) {mutableMapOf<Int,Pair<Triple<List<Double>,Double,Double>,StatisticsBeeswarm>>()}
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+    val chartWidth=if(vertical)maxOf(maxWidth,(series.size*70+82).dp) else maxWidth
+    Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+    Canvas(Modifier.width(chartWidth).height(if(vertical)300.dp else if(distribution)(series.size*70+70).coerceAtLeast(220).dp else 220.dp).background(c.display)) {
+        val left=(if(vertical)70 else 38).dp.toPx();val right=12.dp.toPx();val top=14.dp.toPx();val bottom=(if(vertical)48 else 28).dp.toPx()
         val width=size.width-left-right;val height=size.height-top-bottom
         val text=Paint(Paint.ANTI_ALIAS_FLAG).apply {color=c.muted.toArgb();textSize=10.sp.toPx()}
         drawLine(c.grid,Offset(left,top+height),Offset(left+width,top+height),1.dp.toPx())
@@ -64,29 +72,68 @@ import kotlin.math.roundToLong
             drawContext.canvas.nativeCanvas.drawText("${all.size} values · $bins bins",left,top+11.dp.toPx(),text)
             drawContext.canvas.nativeCanvas.drawText("%.4g".format(lo),left,top+height+16.dp.toPx(),text)
             drawContext.canvas.nativeCanvas.drawText("%.4g".format(hi),left+width-34.dp.toPx(),top+height+16.dp.toPx(),text)
-        } else {
-            fun quantile(data:List<Double>,p:Double):Double {val position=(data.size-1)*p;val low=floor(position).toInt();val high=ceil(position).toInt();return data[low]+(data[high]-data[low])*(position-low)}
-            val all=series.flatMap {it.second}
-            var minValue=all.min();var maxValue=all.max();if(minValue==maxValue){minValue-=.5;maxValue+=.5}
-            fun px(value:Double)=left+((value-minValue)/(maxValue-minValue)).toFloat()*width
+        } else if(distribution) {
+            val all=series.flatMap {it.second};val scale=all.maxOf {abs(it)}.takeIf {it>0} ?: 1.0
+            val lo=all.min();val hi=all.max();val span=hi/scale-lo/scale
+            fun fraction(value:Double)=if(span==0.0).5f else ((value/scale-lo/scale)/span).toFloat()
+            fun position(value:Double,index:Int,offset:Float=0f):Offset=if(vertical)Offset(left+width*(index+.5f)/series.size+offset,top+height*(1-fraction(value))) else Offset(left+width*fraction(value),top+height*(index+.5f)/series.size+offset)
+            fun quantile(data:List<Double>,p:Double):Double {val at=(data.size-1)*p;val low=floor(at).toInt();val high=ceil(at).toInt();val f=at-low;return data[low]*(1-f)+data[high]*f}
             series.forEachIndexed {index,entry->
-                val sorted=entry.second.sorted()
-                val lo=sorted.first();val q1=quantile(sorted,.25);val median=quantile(sorted,.5);val q3=quantile(sorted,.75);val hi=sorted.last()
-                val single=series.size==1
-                val y=if(single)top+height/2 else top+height*(index+.5f)/series.size
-                val half=if(single)20.dp.toPx() else 15.dp.toPx()
-                drawLine(c.muted,Offset(px(lo),y),Offset(px(hi),y),2.dp.toPx())
-                drawLine(c.muted,Offset(px(lo),y-9.dp.toPx()),Offset(px(lo),y+9.dp.toPx()),2.dp.toPx())
-                drawLine(c.muted,Offset(px(hi),y-9.dp.toPx()),Offset(px(hi),y+9.dp.toPx()),2.dp.toPx())
-                drawRect(entry.third.copy(alpha=.24f),Offset(px(q1),y-half),androidx.compose.ui.geometry.Size((px(q3)-px(q1)).coerceAtLeast(1f),half*2))
-                drawRect(entry.third,Offset(px(q1),y-half),androidx.compose.ui.geometry.Size((px(q3)-px(q1)).coerceAtLeast(1f),half*2),style=Stroke(1.5.dp.toPx()))
-                drawLine(c.danger,Offset(px(median),y-half),Offset(px(median),y+half),2.dp.toPx())
-                val prefix=if(entry.first.isEmpty())"" else entry.first+"  "
-                val paint=if(entry.first.isEmpty())text else Paint(Paint.ANTI_ALIAS_FLAG).apply {color=entry.third.toArgb();textSize=10.sp.toPx()}
-                val summary="min %.4g   Q1 %.4g   median %.4g   Q3 %.4g   max %.4g".format(lo,q1,median,q3,hi)
-                drawContext.canvas.nativeCanvas.drawText(prefix+summary,left,top+(13+index*14).dp.toPx(),paint)
+                val half=minOf(23.dp.toPx(),(if(vertical)width else height)/series.size*.35f)
+                val density=if(type=="Violin + points")densities[index] else emptyList()
+                if(type=="Box plot") {
+                    val sorted=entry.second.sorted();val low=sorted.first();val q1=quantile(sorted,.25);val median=quantile(sorted,.5);val q3=quantile(sorted,.75);val high=sorted.last()
+                    drawLine(c.muted,position(low,index),position(high,index),2.dp.toPx())
+                    for(value in listOf(low,high))drawLine(c.muted,position(value,index,-half*.6f),position(value,index,half*.6f),2.dp.toPx())
+                    val a=position(q1,index,-half);val b=position(q3,index,half)
+                    val origin=Offset(minOf(a.x,b.x),minOf(a.y,b.y));val boxSize=androidx.compose.ui.geometry.Size(abs(b.x-a.x).coerceAtLeast(1f),abs(b.y-a.y).coerceAtLeast(1f))
+                    drawRect(entry.third.copy(alpha=.24f),origin,boxSize);drawRect(entry.third,origin,boxSize,style=Stroke(1.5.dp.toPx()))
+                    drawLine(c.danger,position(median,index,-half),position(median,index,half),2.dp.toPx())
+                    val at=position(median,index,half+12.dp.toPx());val label="%.4g".format(java.util.Locale.US,median)
+                    drawContext.canvas.nativeCanvas.drawText(label,if(vertical)at.x else at.x-text.measureText(label)/2,at.y+3.dp.toPx(),text)
+                } else if(density.isNotEmpty()) {
+                    val path=androidx.compose.ui.graphics.Path()
+                    density.forEachIndexed {i,(value,fraction)->val at=position(value,index,-fraction.toFloat()*half);if(i==0)path.moveTo(at.x,at.y) else path.lineTo(at.x,at.y)}
+                    density.asReversed().forEach {(value,fraction)->val at=position(value,index,fraction.toFloat()*half);path.lineTo(at.x,at.y)}
+                    path.close();drawPath(path,entry.third.copy(alpha=.24f));drawPath(path,entry.third,style=Stroke(1.dp.toPx()))
+                }
+                if(type=="Violin + points") {
+                    val axes=entry.second.map {value->val at=position(value,index);(if(vertical)at.y else at.x).toDouble()}
+                    val key=Triple(axes,2.5.dp.toPx().toDouble(),half.toDouble())
+                    val cached=swarmCache[index]
+                    val swarm=if(cached?.first==key)cached.second else beeswarmLayout(axes,key.second,key.third).also {swarmCache[index]=key to it}
+                    entry.second.forEachIndexed {i,value->
+                        drawCircle(entry.third.copy(alpha=.75f),swarm.radius.toFloat(),position(value,index,swarm.offsets[i].toFloat()))
+                    }
+                }
+                val label="${entry.first.ifBlank {"value"}} (n=${entry.second.size})"
+                if(vertical) {
+                    val center=left+width*(index+.5f)/series.size
+                    var shown=entry.first.ifBlank {"value"};val available=width/series.size-4.dp.toPx()
+                    while(shown.length>1&&text.measureText(shown)>available)shown=shown.dropLast(1)
+                    if(shown!=entry.first.ifBlank {"value"})shown=shown.dropLast(1)+"…"
+                    drawContext.canvas.nativeCanvas.drawText(shown,center-text.measureText(shown)/2,top+height+17.dp.toPx(),text)
+                    val count="n=${entry.second.size}";drawContext.canvas.nativeCanvas.drawText(count,center-text.measureText(count)/2,top+height+32.dp.toPx(),text)
+                } else drawContext.canvas.nativeCanvas.drawText(label,left,top+height*(index+.5f)/series.size-half-4.dp.toPx(),text)
+            }
+            for(index in 0..(if(span==0.0)0 else 4)) {
+                val fraction=if(span==0.0).5 else index/4.0
+                val value=(lo/scale*(1-fraction)+hi/scale*fraction)*scale
+                val label="%.4g".format(java.util.Locale.US,value)
+                val at=(left+fraction.toFloat()*width-text.measureText(label)/2).coerceIn(0f,(size.width-text.measureText(label)).coerceAtLeast(0f))
+                drawContext.canvas.nativeCanvas.drawText(label,if(vertical)left-text.measureText(label)-6.dp.toPx() else at,if(vertical)top+height*(1-fraction.toFloat())+3.dp.toPx() else top+height+16.dp.toPx(),text)
             }
         }
+    }
+    }
+    }
+    if(type=="Box plot")series.forEach {entry->
+        val summary=remember(entry.second) {
+            val sorted=entry.second.sorted()
+            fun q(p:Double):Double {val at=(sorted.size-1)*p;val low=floor(at).toInt();val high=ceil(at).toInt();val f=at-low;return sorted[low]*(1-f)+sorted[high]*f}
+            "min %.4g   Q1 %.4g   median %.4g   Q3 %.4g   max %.4g".format(java.util.Locale.US,sorted.first(),q(.25),q(.5),q(.75),sorted.last())
+        }
+        Text(entry.first.takeIf {it.isNotBlank()}?.let {"$it  $summary"} ?: summary,Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),fontSize=10.sp,color=entry.third,maxLines=1)
     }
     if(type=="Histogram"&&series.isNotEmpty())Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(16.dp)) {
         series.forEach {entry->Text("${entry.first.ifBlank {"value"}} (n=${entry.second.size})",fontSize=11.sp,color=entry.third,maxLines=1)}
