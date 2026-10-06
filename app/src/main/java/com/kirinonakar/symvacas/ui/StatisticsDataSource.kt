@@ -64,12 +64,31 @@ internal fun statisticsPlotPanels(rows:List<List<String>>,kind:String,grouping:S
 }
 
 internal fun statisticsRows(csv:String):List<List<String>> {
+    val rows=statisticsCsvRows(csv)
+    return if(statisticsHasHeader(rows))rows.drop(1) else rows
+}
+
+/** Every stored row, a detected header included, so table column edits keep header labels with their column. */
+internal fun statisticsCsvRows(csv:String):List<List<String>> {
     val normalized=csv.removePrefix("\uFEFF").replace("\r\n","\n").replace('\r','\n')
     val lines=mutableListOf<String>();var start=0
     normalized.forEachIndexed {index,char->if(char=='\n'){lines+=normalized.substring(start,index);start=index+1}}
     lines+=normalized.substring(start)
-    val rows=lines.map {it.splitCsvRecord().map(String::trim)}
-    return if(statisticsHasHeader(rows))rows.drop(1) else rows
+    return lines.map {it.splitCsvRecord().map(String::trim)}
+}
+
+internal fun statisticsRemoveColumn(csv:String,column:Int):String {
+    val rows=statisticsCsvRows(csv)
+    return rows.joinToString("\n") {row->statisticsCsvLine(if(column in row.indices)row.filterIndexed {index,_->index!=column} else row)}
+}
+
+internal fun statisticsMoveColumn(csv:String,column:Int,delta:Int):String {
+    val rows=statisticsCsvRows(csv)
+    return rows.joinToString("\n") {row->
+        val target=column+delta
+        if(column !in row.indices||target !in row.indices)statisticsCsvLine(row)
+        else statisticsCsvLine(row.toMutableList().apply {val value=this[column];this[column]=this[target];this[target]=value})
+    }
 }
 
 internal data class StatisticsCsvImport(val rows:List<List<String>>,val hasHeader:Boolean,val columnCount:Int) {

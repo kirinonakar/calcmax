@@ -56,6 +56,13 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
     }
 }
 
+@Composable private fun StatColumnAction(label:String,enabled:Boolean,description:String,modifier:Modifier=Modifier,onClick:()->Unit) {
+    val c=LocalInstrument.current
+    Box(modifier.fillMaxHeight().clickable(enabled=enabled,onClick=onClick).semantics {contentDescription=description},contentAlignment=Alignment.Center) {
+        Text(label,fontSize=13.sp,color=if(enabled)c.ink else c.muted.copy(alpha=.35f))
+    }
+}
+
 @Composable fun StatisticsScreen(m: CalculatorModel) {
     val context=LocalContext.current
     val clipboard=LocalClipboardManager.current
@@ -207,6 +214,29 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
                             StatHeader("",Modifier.width(48.dp))
                         }
                         HorizontalDivider(color=grid,thickness=1.dp)
+                        if(tableColumns.size>1) {
+                            Row(Modifier.fillMaxWidth().height(30.dp).background(LocalInstrument.current.scientific)) {
+                                Box(Modifier.width(30.dp).fillMaxHeight()); VerticalDivider(color=grid,thickness=1.dp)
+                                tableColumns.forEachIndexed {column,_->
+                                    Row(Modifier.weight(1f).fillMaxHeight()) {
+                                        StatColumnAction("◀",column>0,tr("Move column left"),Modifier.weight(1f)) {data=statisticsMoveColumn(data,column,-1)}
+                                        StatColumnAction("▶",column<tableColumns.lastIndex,tr("Move column right"),Modifier.weight(1f)) {data=statisticsMoveColumn(data,column,1)}
+                                        StatColumnAction("−",true,tr("Delete column"),Modifier.weight(1f)) {
+                                            val remaining=tableColumns.size-1
+                                            data=statisticsRemoveColumn(data,column)
+                                            m.clearRegression()
+                                            if(!autoColumns||!selectedDataKind.startsWith("columns:")) {
+                                                columnCount=remaining.toString();selectedDataKind=statisticsKindForColumns(remaining)
+                                                if(selectedDataKind!="xy"&&plotType=="Scatter")plotType="Histogram"
+                                            }
+                                        }
+                                    }
+                                    VerticalDivider(color=grid,thickness=1.dp)
+                                }
+                                Box(Modifier.width(48.dp).fillMaxHeight())
+                            }
+                            HorizontalDivider(color=grid,thickness=1.dp)
+                        }
                         parsedRows.forEachIndexed {index,row->
                             val cellFocus=remember(index,tableColumns.size) {List(tableColumns.size){FocusRequester()} }
                             Row(Modifier.fillMaxWidth().height(44.dp)) {
@@ -448,10 +478,12 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
 }
 
 @Composable private fun StatisticsCsvImportDialog(preview:StatisticsCsvImport,onDismiss:()->Unit,onImport:(List<Int>,Boolean)->Unit) {
+    val maxColumns=minOf(100,preview.columnCount)
     var skipHeader by remember(preview) {mutableStateOf(preview.hasHeader)}
-    var columnCount by remember(preview) {mutableIntStateOf(minOf(3,preview.columnCount))}
-    var columns by remember(preview) {mutableStateOf((0 until minOf(100,preview.columnCount)).toList())}
-    val names=List(minOf(100,preview.columnCount)){listOf("x","y","z").getOrNull(it) ?: "x${it+1}"}
+    var columnCount by remember(preview) {mutableIntStateOf(minOf(3,maxColumns))}
+    var columnText by remember(preview) {mutableStateOf(minOf(3,maxColumns).toString())}
+    var columns by remember(preview) {mutableStateOf((0 until maxColumns).toList())}
+    val names=List(maxColumns){listOf("x","y","z").getOrNull(it) ?: "x${it+1}"}
     AlertDialog(onDismissRequest=onDismiss,title={Text(tr("Import CSV/XLSX"))},text={
         Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment=Alignment.CenterVertically) {
@@ -460,7 +492,12 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
             }
             Text(if(preview.hasHeader)tr("Header detected automatically") else tr("No header detected"),style=MaterialTheme.typography.bodySmall)
             Text(tr("Import as"),style=MaterialTheme.typography.titleSmall)
-            Field(columnCount.toString(),"Column count (1–100)",Modifier.fillMaxWidth()){text->text.toIntOrNull()?.takeIf {it in 1..minOf(100,preview.columnCount)}?.let {columnCount=it}}
+            Field(columnText,"Column count (1–100)",Modifier.fillMaxWidth()){text->
+                val digits=text.filter(Char::isDigit).take(3)
+                val count=digits.toIntOrNull()?.coerceIn(1,maxColumns)
+                columnText=count?.toString() ?: digits
+                if(count!=null)columnCount=count
+            }
             Text(tr("Choose a column for each variable"),style=MaterialTheme.typography.bodySmall)
             Column(verticalArrangement=Arrangement.spacedBy(2.dp)) {
                 repeat(columnCount) {index->

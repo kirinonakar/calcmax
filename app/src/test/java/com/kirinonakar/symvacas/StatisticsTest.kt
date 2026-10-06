@@ -9,6 +9,9 @@ import com.kirinonakar.symvacas.ui.multivariateRegressionDisplayTree
 import com.kirinonakar.symvacas.ui.statisticsRegressionTable
 import com.kirinonakar.symvacas.ui.statisticsRegressionVariables
 import com.kirinonakar.symvacas.ui.statisticsCsvLine
+import com.kirinonakar.symvacas.ui.statisticsCsvRows
+import com.kirinonakar.symvacas.ui.statisticsMoveColumn
+import com.kirinonakar.symvacas.ui.statisticsRemoveColumn
 import com.kirinonakar.symvacas.ui.statisticsDataSource
 import com.kirinonakar.symvacas.ui.statisticsDateAxis
 import com.kirinonakar.symvacas.ui.statisticsGroupedValues
@@ -122,6 +125,17 @@ class StatisticsDataSourceTest {
         assertEquals(literal,statisticsRecallSource(Editor(mean,mean.indexOf("[]")+1),csv,"xy"))
         val regression="regression([],linear)"
         assertEquals(literal,statisticsRecallSource(Editor(regression,regression.indexOf("[]")+1),csv,"xy",committed=true))
+    }
+
+    @Test fun tableColumnEditsKeepHeaderLabelsAndNeighbouringValues() {
+        val csv="Treatment,Measurement\nA,1\nB,2"
+        assertEquals("Measurement\n1\n2",statisticsRemoveColumn(csv,0))
+        assertEquals("Measurement,Treatment\n1,A\n2,B",statisticsMoveColumn(csv,0,1))
+        assertEquals(csv,statisticsMoveColumn(csv,0,-1))
+        assertEquals("1,3\n4,6",statisticsRemoveColumn("1,2,3\n4,5,6",1))
+        assertEquals("2,1\n5,4",statisticsMoveColumn("1,2\n4,5",0,1))
+        assertEquals("\"a,b\",1\n4,3",statisticsMoveColumn("1,\"a,b\"\n3,4",0,1))
+        assertEquals(listOf(listOf("1","2"),listOf("2","4")),statisticsCsvRows("1,2\n2,4"))
     }
 }
 
