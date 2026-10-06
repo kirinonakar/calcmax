@@ -591,7 +591,7 @@ Probability mode's **Normal parameter solver** finds μ or σ from P(X≤x)=q or
 Example: regression([[0,1],[1,3],[2,9],[3,25],[4,57]],polynomial,3)
 `regression(data,multiple)` — Multiple linear regression with an intercept. Last column is response; preceding columns are predictors (up to eight). The x,y,z workspace uses x and y to predict z; the formula names them x1 and x2.
 Example: regression([[0,0,1],[1,0,3],[0,1,4],[1,1,7],[2,1,8]],multiple)
-`regression(data,logistic)` — Binomial logistic regression with an intercept and binary 0/1 response in the last column. Reports probability, Wald coefficient/odds-ratio intervals, McFadden R², deviance, AIC and likelihood-ratio p. Complete separation automatically triggers Firth bias reduction. Singular designs are rejected.
+`regression(data,logistic)` — Binomial logistic regression with an intercept and binary 0/1 response in the last column. Reports probability, coefficient/odds-ratio intervals, McFadden R², deviance, AIC and likelihood-ratio p. Complete separation automatically triggers Firth bias reduction; `regression(data,logistic,firth)` always applies Firth with profile penalized-likelihood intervals. Singular designs are rejected.
 Example: regression([[-3,0],[-2,0],[-1,1],[0,0],[0,1],[1,0],[2,1],[3,1]],logistic)
 `wilcoxon(differences)` — Signed-rank test against zero; zeros omitted. Also accepts paired x,y lists. Exact conditional sign permutation through 50 nonzero differences (including ties), otherwise tie-corrected normal approximation with continuity correction.
 Example: wilcoxon([1,2,3,4,5])
@@ -629,7 +629,7 @@ Example: regression([[-3,0],[-2,0],[-1,0],[1,1],[2,1],[3,1]],randomforestclassif
 
 Regularized logistic regression (Ridge/LASSO/Elastic Net) also reports predictor Odds ratio=exp(beta), using original-unit coefficients for a one-unit predictor increase with other predictors held fixed. A coefficient shrunk to zero by LASSO has OR=1. The intercept is not shown as a predictor OR. Ordinary Wald OR confidence intervals are unavailable for penalized estimates.
 
-Unregularized logistic regression automatically applies Firth bias reduction (log L + 0.5 log|X′WX|) when a strictly separating coefficient vector certifies complete separation; ordinary datasets retain MLE. Results explicitly identify Firth and include finite coefficients, OR, probabilities and ROC/AUC. Coefficient/OR 95% intervals and p values are approximate Wald inference, not profile penalized-likelihood inference. Ordinary MLE AIC and likelihood-ratio tests are omitted for Firth fits. Constant responses and singular designs remain invalid; Ridge/LASSO/Elastic Net keep their selected penalty.
+Unregularized logistic regression automatically applies Firth bias reduction (log L + 0.5 log|X′WX|) when a strictly separating coefficient vector certifies complete separation; ordinary datasets retain MLE. Passing `firth` as the third argument applies the same estimator to ordinary datasets. Results explicitly identify Firth and include finite coefficients, OR, probabilities and ROC/AUC. Coefficient/OR 95% intervals come from the profile penalized likelihood; p values remain Wald. Ordinary MLE AIC and likelihood-ratio tests are omitted for Firth fits. Constant responses and singular designs remain invalid; Ridge/LASSO/Elastic Net keep their selected penalty, and `cv` selects the penalty alpha by five-fold cross-validation.
 Logistic residual diagnostics and full CSV include leverage and Cook's distance. The one-step GLM approximation uses hᵢ=wᵢxᵢ′(X′WX)⁻¹xᵢ and Cook Dᵢ=Pearsonᵢ²hᵢ/[p(1−hᵢ)²]. Firth uses Fisher information at the bias-reduced fit. Penalized models use a local active-predictor design including the intercept and the L2 Hessian, holding predictor selection fixed. Singular active designs or h=1 leave unavailable diagnostics empty.
 References: [Firth logistic regression](https://search.r-project.org/CRAN/refmans/logistf/html/logistf.html), [GLM influence diagnostics](https://www.statsmodels.org/stable/generated/statsmodels.stats.outliers_influence.GLMInfluence.html).
 
@@ -658,22 +658,23 @@ Example: mcnemar([[20,8],[2,15]],exact)
 `kaplanmeier` — Rows: time, event (1=event, 0=censored); confidence level.
 Example: kaplanmeier([[1,1],[2,0],[3,1],[4,1],[5,0],[6,1]],0.95)
 
-`survivalanalysis(rows,cox=0)` — Kaplan–Meier curves with pointwise Greenwood log-log 95% CI, multi-group log-rank, optional Cox HR and 95% CI. Rows: time, event 0/1, numeric group ID, optional predictors. Cox=1 includes first-group-reference dummy variables and selected predictors; Breslow ties. The UI accepts text group labels. PH assumption is not tested.
-
 `logrank` — Two time/event tables. Current data: time, event, group (exactly two groups).
 Example: logrank([[1,1],[3,1],[4,0],[6,1]],[[2,0],[4,1],[5,1],[7,0]])
 
-`cox` — Rows: time, event 0/1, predictors. Breslow ties; no intercept.
-Example: cox([[1,1,0],[2,1,1],[3,0,0],[4,1,1],[5,1,0],[6,0,1],[7,1,1],[8,1,0]])
+`survivalanalysis` — Rows: time, event (0/1), group ID, optional Cox predictors; Cox 0=off, 1=on; then ties and the PH check.
+Example: survivalanalysis([[1,1,1],[2,1,2],[3,0,1],[4,1,2],[5,1,1],[6,0,2],[7,1,2],[8,1,1]],0,breslow,-1,1)
 
-`repeatedanova` — Rows=subjects, columns=conditions; one factor, complete balanced data. Includes GG correction.
-Example: repeatedanova([[2,4,5],[3,4,7],[4,7,8],[2,3,6],[5,6,7]])
+`cox` — Rows: time, event 0/1, predictors. Ties breslow/efron; entry column for left truncation (-1 none); PH check 0/1.
+Example: cox([[1,1,0],[2,1,1],[3,0,0],[4,1,1],[5,1,0],[6,0,1],[7,1,1],[8,1,0]],breslow,-1,1)
 
-`mixedmodel` — Rows: subject ID, predictors, response. Gaussian random intercept ML; ≤300 rows.
-Example: mixedmodel([[1,0,2],[1,1,4],[1,2,4],[2,0,3],[2,1,4],[2,2,6],[3,0,1],[3,1,3],[3,2,4],[4,0,4],[4,1,5],[4,2,8]])
+`repeatedanova` — Rows=subjects, columns=conditions. Second-factor levels: 1 = one-way, 2+ = two-way (first factor slowest); GG corrections.
+Example: repeatedanova([[2,4,5],[3,4,7],[4,7,8],[2,3,6],[5,6,7]],1)
 
-`gee` — Rows: cluster ID, predictors, response. gaussian / binomial / poisson; independent working correlation, sandwich SE.
-Example: gee([[1,0,2],[1,1,4],[1,2,4],[2,0,3],[2,1,4],[2,2,6],[3,0,1],[3,1,3],[3,2,4],[4,0,4],[4,1,5],[4,2,8]],gaussian)
+`mixedmodel` — Rows: subject ID, predictors, response. Gaussian random intercept ML; second argument selects a random slope (0 none); ≤300 rows.
+Example: mixedmodel([[1,0,2],[1,1,4],[1,2,4],[2,0,3],[2,1,4],[2,2,6],[3,0,1],[3,1,3],[3,2,4],[4,0,4],[4,1,5],[4,2,8]],0)
+
+`gee` — Rows: cluster ID, predictors, response. gaussian / binomial / poisson; working correlation independent / exchangeable / ar1; sandwich SE.
+Example: gee([[1,0,2],[1,1,4],[1,2,4],[2,0,3],[2,1,4],[2,2,6],[3,0,1],[3,1,3],[3,2,4],[4,0,4],[4,1,5],[4,2,8]],gaussian,independence)
 
 `multinomial` — Rows: predictors, numeric category response. Smallest category is reference.
 Example: multinomial([[-2,0],[-2,1],[-1,0],[-1,2],[0,0],[0,1],[0,2],[1,1],[1,2],[2,1],[2,2],[2,0]])
@@ -711,4 +712,4 @@ Example: kmeans([[1,1],[1,2],[2,1],[8,8],[8,9],[9,8]],2,0)
 `impute` — NA for missing cells; mean / median / mode. Single imputation.
 Example: impute([[1,NA],[2,4],[NA,6],[4,8]],mean)
 
-Models return errors on failed convergence or non-identifiability. Cox assumes proportional hazards; ordinal logistic assumes proportional odds. Mixed models support random intercepts only; GEE supports independent working correlation only. GG adjusts repeated-measures degrees of freedom for nonsphericity. Single imputation does not propagate imputation uncertainty. Cross-validation supports OLS only, without grouped/time-series splits or hyperparameter search. Bootstrap CIs use the percentile method, not BCa.
+Models return errors on failed convergence or non-identifiability. Cox supports Breslow/Efron ties, optional left truncation and an approximate time-rank proportional-hazards check; ordinal logistic assumes proportional odds. Mixed models support a random intercept plus at most one random slope; GEE supports independent, exchangeable and AR(1) working correlations. Repeated-measures ANOVA covers balanced one- and two-way within-subject designs with GG corrections. Single imputation does not propagate imputation uncertainty. Cross-validation covers OLS splits and regularized alpha selection, without grouped or time-series splits. Firth inference uses profile penalized-likelihood intervals; bootstrap CIs use the percentile method, not BCa.

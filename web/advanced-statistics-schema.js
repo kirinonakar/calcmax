@@ -341,145 +341,6 @@ export const advancedStatisticsSchema = [
     ]
   },
   {
-    "id": "survivalanalysis",
-    "label": "Survival analysis",
-    "ko": "생존분석",
-    "input": "table",
-    "suffix": ",0",
-    "example": "survivalanalysis([[1,1,1],[2,1,2],[3,0,1],[4,1,2],[5,1,1],[6,0,2],[7,1,2],[8,1,1]],0)",
-    "help": "Rows: time, event (0/1), group ID, optional Cox predictors; Cox 0=off, 1=on.",
-    "helpKo": "열: 시간, 사건(0/1), 그룹 ID, 선택적 Cox 설명변수. Cox: 0=끔, 1=켬.",
-    "formHelp": "Kaplan–Meier · 95% CI · log-rank · Cox. Other event values are censored.",
-    "formHelpKo": "Kaplan–Meier · 95% 신뢰구간 · log-rank · Cox. 발생 값 이외는 중도절단입니다.",
-    "exampleRows": [
-      [
-        "1",
-        "1",
-        "A"
-      ],
-      [
-        "2",
-        "1",
-        "B"
-      ],
-      [
-        "3",
-        "0",
-        "A"
-      ],
-      [
-        "4",
-        "1",
-        "B"
-      ],
-      [
-        "5",
-        "1",
-        "A"
-      ],
-      [
-        "6",
-        "0",
-        "B"
-      ],
-      [
-        "7",
-        "1",
-        "B"
-      ],
-      [
-        "8",
-        "1",
-        "A"
-      ]
-    ],
-    "controls": [
-      {
-        "key": "time",
-        "label": "Time",
-        "ko": "시간 열",
-        "type": "column",
-        "default": 0
-      },
-      {
-        "key": "event",
-        "label": "Event",
-        "ko": "사건 열",
-        "type": "column",
-        "default": 1
-      },
-      {
-        "key": "eventValue",
-        "label": "Event value",
-        "ko": "사건 발생 값",
-        "type": "number",
-        "default": "1"
-      },
-      {
-        "key": "grouping",
-        "label": "Group",
-        "ko": "그룹",
-        "type": "choice",
-        "default": "groups",
-        "choices": [
-          {
-            "id": "groups",
-            "label": "By group",
-            "ko": "그룹별"
-          },
-          {
-            "id": "all",
-            "label": "All subjects",
-            "ko": "전체"
-          }
-        ]
-      },
-      {
-        "key": "group",
-        "label": "Group column",
-        "ko": "그룹 열",
-        "type": "column",
-        "default": 2,
-        "when": {
-          "grouping": [
-            "groups"
-          ]
-        }
-      },
-      {
-        "key": "cox",
-        "label": "Cox model",
-        "ko": "Cox 모형",
-        "type": "choice",
-        "default": "0",
-        "choices": [
-          {
-            "id": "0",
-            "label": "Off",
-            "ko": "끔"
-          },
-          {
-            "id": "1",
-            "label": "On",
-            "ko": "켬"
-          }
-        ]
-      },
-      {
-        "key": "predictors",
-        "label": "Additional Cox predictors",
-        "ko": "추가 Cox 설명변수",
-        "type": "columns",
-        "default": "",
-        "when": {
-          "cox": [
-            "1"
-          ]
-        }
-      }
-    ]
-  },
-  {
     "id": "kaplanmeier",
     "label": "Kaplan–Meier",
     "ko": "Kaplan–Meier",
@@ -632,14 +493,196 @@ export const advancedStatisticsSchema = [
     ]
   },
   {
+    "id": "survivalanalysis",
+    "label": "Survival analysis",
+    "ko": "생존분석",
+    "input": "table",
+    "suffix": ",0,breslow,-1,1",
+    "example": "survivalanalysis([[1,1,1],[2,1,2],[3,0,1],[4,1,2],[5,1,1],[6,0,2],[7,1,2],[8,1,1]],0,breslow,-1,1)",
+    "help": "Rows: time, event (0/1), group ID, optional Cox predictors; Cox 0=off, 1=on; then ties and the PH check.",
+    "helpKo": "열: 시간, 사건(0/1), 그룹 ID, 선택적 Cox 설명변수. Cox 0=끔, 1=켬; 이어서 동률 처리와 PH 검정.",
+    "controls": [
+      {
+        "key": "time",
+        "label": "Time",
+        "ko": "시간 열",
+        "type": "column",
+        "default": 0
+      },
+      {
+        "key": "event",
+        "label": "Event",
+        "ko": "사건 열",
+        "type": "column",
+        "default": 1
+      },
+      {
+        "key": "eventValue",
+        "label": "Event value",
+        "ko": "사건 발생 값",
+        "type": "number",
+        "default": "1"
+      },
+      {
+        "key": "grouping",
+        "label": "Groups",
+        "ko": "그룹",
+        "type": "choice",
+        "default": "groups",
+        "choices": [
+          {
+            "id": "groups",
+            "label": "Group column",
+            "ko": "그룹 열"
+          },
+          {
+            "id": "all",
+            "label": "All subjects",
+            "ko": "전체 대상"
+          }
+        ]
+      },
+      {
+        "key": "group",
+        "label": "Group column",
+        "ko": "그룹 열",
+        "type": "column",
+        "default": 2,
+        "when": {
+          "grouping": [
+            "groups"
+          ]
+        }
+      },
+      {
+        "key": "cox",
+        "label": "Cox model",
+        "ko": "Cox 모형",
+        "type": "choice",
+        "default": "0",
+        "choices": [
+          {
+            "id": "0",
+            "label": "Off",
+            "ko": "끔"
+          },
+          {
+            "id": "1",
+            "label": "On",
+            "ko": "켬"
+          }
+        ]
+      },
+      {
+        "key": "predictors",
+        "label": "Cox predictors",
+        "ko": "Cox 설명변수 열",
+        "type": "columns",
+        "default": "auto",
+        "when": {
+          "cox": [
+            "1"
+          ]
+        }
+      },
+      {
+        "key": "ties",
+        "label": "Tie handling",
+        "ko": "동률 처리",
+        "type": "choice",
+        "default": "breslow",
+        "choices": [
+          {
+            "id": "breslow",
+            "label": "Breslow",
+            "ko": "Breslow"
+          },
+          {
+            "id": "efron",
+            "label": "Efron",
+            "ko": "Efron"
+          }
+        ]
+      },
+      {
+        "key": "ph",
+        "label": "Proportional-hazards check",
+        "ko": "비례위험 검정",
+        "type": "choice",
+        "default": "test",
+        "choices": [
+          {
+            "id": "test",
+            "label": "Time-rank test",
+            "ko": "시간순위 검정"
+          },
+          {
+            "id": "none",
+            "label": "Skip",
+            "ko": "생략"
+          }
+        ],
+        "when": {
+          "cox": [
+            "1"
+          ]
+        }
+      }
+    ],
+    "formHelp": "Kaplan–Meier curves · log-rank · Cox; other event values are censored.",
+    "formHelpKo": "Kaplan–Meier 곡선 · log-rank · Cox. 발생 값 이외는 중도절단입니다.",
+    "exampleRows": [
+      [
+        "1",
+        "1",
+        "1"
+      ],
+      [
+        "2",
+        "1",
+        "2"
+      ],
+      [
+        "3",
+        "0",
+        "1"
+      ],
+      [
+        "4",
+        "1",
+        "2"
+      ],
+      [
+        "5",
+        "1",
+        "1"
+      ],
+      [
+        "6",
+        "0",
+        "2"
+      ],
+      [
+        "7",
+        "1",
+        "2"
+      ],
+      [
+        "8",
+        "1",
+        "1"
+      ]
+    ]
+  },
+  {
     "id": "cox",
     "label": "Cox regression",
     "ko": "Cox 회귀",
     "input": "table",
-    "suffix": "",
-    "example": "cox([[1,1,0],[2,1,1],[3,0,0],[4,1,1],[5,1,0],[6,0,1],[7,1,1],[8,1,0]])",
-    "help": "Rows: time, event 0/1, predictors. Breslow ties; no intercept.",
-    "helpKo": "열: 시간, 사건 0/1, 설명변수. Breslow 동률 처리; 절편 없음.",
+    "suffix": ",breslow,-1,1",
+    "example": "cox([[1,1,0],[2,1,1],[3,0,0],[4,1,1],[5,1,0],[6,0,1],[7,1,1],[8,1,0]],breslow,-1,1)",
+    "help": "Rows: time, event 0/1, predictors. Ties breslow/efron; entry column for left truncation (-1 none); PH check 0/1.",
+    "helpKo": "열: 시간, 사건 0/1, 설명변수. 동률 breslow/efron, 좌측 절단 진입시간 열(-1 없음), PH 검정 0/1.",
     "controls": [
       {
         "key": "time",
@@ -668,10 +711,79 @@ export const advancedStatisticsSchema = [
         "ko": "설명변수 열",
         "type": "columns",
         "default": "auto"
+      },
+      {
+        "key": "ties",
+        "label": "Tie handling",
+        "ko": "동률 처리",
+        "type": "choice",
+        "default": "breslow",
+        "choices": [
+          {
+            "id": "breslow",
+            "label": "Breslow",
+            "ko": "Breslow"
+          },
+          {
+            "id": "efron",
+            "label": "Efron",
+            "ko": "Efron"
+          }
+        ]
+      },
+      {
+        "key": "truncation",
+        "label": "Left truncation",
+        "ko": "좌측 절단",
+        "type": "choice",
+        "default": "none",
+        "choices": [
+          {
+            "id": "none",
+            "label": "None",
+            "ko": "없음"
+          },
+          {
+            "id": "entry",
+            "label": "Entry-time column",
+            "ko": "진입시간 열"
+          }
+        ]
+      },
+      {
+        "key": "entry",
+        "label": "Entry time",
+        "ko": "진입시간 열",
+        "type": "column",
+        "default": 2,
+        "when": {
+          "truncation": [
+            "entry"
+          ]
+        }
+      },
+      {
+        "key": "ph",
+        "label": "Proportional-hazards check",
+        "ko": "비례위험 검정",
+        "type": "choice",
+        "default": "test",
+        "choices": [
+          {
+            "id": "test",
+            "label": "Time-rank test",
+            "ko": "시간순위 검정"
+          },
+          {
+            "id": "none",
+            "label": "Skip",
+            "ko": "생략"
+          }
+        ]
       }
     ],
-    "formHelp": "Proportional hazards; Breslow ties. Choose time, event, and predictors.",
-    "formHelpKo": "비례위험·Breslow 동률 처리. 시간·사건·설명변수를 선택합니다.",
+    "formHelp": "Proportional hazards; Breslow/Efron ties, optional entry column for left truncation and a time-rank PH check.",
+    "formHelpKo": "비례위험; Breslow/Efron 동률, 선택적 진입시간 열(좌측 절단), 시간순위 PH 검정.",
     "exampleRows": [
       [
         "1",
@@ -720,10 +832,10 @@ export const advancedStatisticsSchema = [
     "label": "Repeated-measures ANOVA",
     "ko": "반복측정 ANOVA",
     "input": "table",
-    "suffix": "",
-    "example": "repeatedanova([[2,4,5],[3,4,7],[4,7,8],[2,3,6],[5,6,7]])",
-    "help": "Rows=subjects, columns=conditions; one factor, complete balanced data. Includes GG correction.",
-    "helpKo": "행=대상, 열=조건; 일요인 완전 균형자료. GG 보정 포함.",
+    "suffix": ",1",
+    "example": "repeatedanova([[2,4,5],[3,4,7],[4,7,8],[2,3,6],[5,6,7]],1)",
+    "help": "Rows=subjects, columns=conditions. Second-factor levels: 1 = one-way, 2+ = two-way (first factor slowest); GG corrections.",
+    "helpKo": "행=대상, 열=조건. 둘째 요인 수준: 1=일요인, 2 이상=이요인(첫 요인 최외곽); GG 보정.",
     "controls": [
       {
         "key": "columns",
@@ -731,10 +843,17 @@ export const advancedStatisticsSchema = [
         "ko": "조건 열",
         "type": "columns",
         "default": "auto"
+      },
+      {
+        "key": "factor2",
+        "label": "Second-factor levels",
+        "ko": "둘째 요인 수준",
+        "type": "number",
+        "default": "1"
       }
     ],
-    "formHelp": "One row per subject; one-factor ANOVA with GG correction.",
-    "formHelpKo": "행마다 한 대상. 일요인 반복측정·GG 보정입니다.",
+    "formHelp": "One row per subject; one or two within factors with GG corrections.",
+    "formHelpKo": "행마다 한 대상. 일·이요인 반복측정·GG 보정입니다.",
     "exampleRows": [
       [
         "2",
@@ -768,10 +887,10 @@ export const advancedStatisticsSchema = [
     "label": "Mixed model",
     "ko": "혼합모형",
     "input": "table",
-    "suffix": "",
-    "example": "mixedmodel([[1,0,2],[1,1,4],[1,2,4],[2,0,3],[2,1,4],[2,2,6],[3,0,1],[3,1,3],[3,2,4],[4,0,4],[4,1,5],[4,2,8]])",
-    "help": "Rows: subject ID, predictors, response. Gaussian random intercept ML; ≤300 rows.",
-    "helpKo": "열: 대상 ID, 설명변수, 반응. Gaussian 랜덤 절편 ML; 최대 300행.",
+    "suffix": ",0",
+    "example": "mixedmodel([[1,0,2],[1,1,4],[1,2,4],[2,0,3],[2,1,4],[2,2,6],[3,0,1],[3,1,3],[3,2,4],[4,0,4],[4,1,5],[4,2,8]],0)",
+    "help": "Rows: subject ID, predictors, response. Gaussian random intercept ML; second argument selects a random slope (0 none); ≤300 rows.",
+    "helpKo": "열: 대상 ID, 설명변수, 반응. Gaussian 랜덤 절편 ML; 둘째 인수는 랜덤 기울기 위치(0 없음); 최대 300행.",
     "controls": [
       {
         "key": "subject",
@@ -793,10 +912,17 @@ export const advancedStatisticsSchema = [
         "ko": "설명변수 열",
         "type": "columns",
         "default": "auto"
+      },
+      {
+        "key": "slope",
+        "label": "Random-slope predictor",
+        "ko": "랜덤 기울기 변수",
+        "type": "number",
+        "default": "0"
       }
     ],
-    "formHelp": "Gaussian random-intercept model (ML).",
-    "formHelpKo": "Gaussian 랜덤 절편 모형 (ML)입니다.",
+    "formHelp": "Gaussian random intercept with an optional random slope (ML).",
+    "formHelpKo": "Gaussian 랜덤 절편과 선택적 랜덤 기울기 (ML)입니다.",
     "exampleRows": [
       [
         "1",
@@ -865,10 +991,10 @@ export const advancedStatisticsSchema = [
     "label": "GEE",
     "ko": "GEE",
     "input": "table",
-    "suffix": ",gaussian",
-    "example": "gee([[1,0,2],[1,1,4],[1,2,4],[2,0,3],[2,1,4],[2,2,6],[3,0,1],[3,1,3],[3,2,4],[4,0,4],[4,1,5],[4,2,8]],gaussian)",
-    "help": "Rows: cluster ID, predictors, response. gaussian / binomial / poisson; independent working correlation, sandwich SE.",
-    "helpKo": "열: 군집 ID, 설명변수, 반응. gaussian / binomial / poisson; 독립 작업상관, 강건 SE.",
+    "suffix": ",gaussian,independence",
+    "example": "gee([[1,0,2],[1,1,4],[1,2,4],[2,0,3],[2,1,4],[2,2,6],[3,0,1],[3,1,3],[3,2,4],[4,0,4],[4,1,5],[4,2,8]],gaussian,independence)",
+    "help": "Rows: cluster ID, predictors, response. gaussian / binomial / poisson; working correlation independent / exchangeable / ar1; sandwich SE.",
+    "helpKo": "열: 군집 ID, 설명변수, 반응. gaussian / binomial / poisson; 작업상관 independence / exchangeable / ar1; 강건 SE.",
     "controls": [
       {
         "key": "subject",
@@ -914,10 +1040,34 @@ export const advancedStatisticsSchema = [
             "ko": "포아송"
           }
         ]
+      },
+      {
+        "key": "corr",
+        "label": "Working correlation",
+        "ko": "작업상관",
+        "type": "choice",
+        "default": "independence",
+        "choices": [
+          {
+            "id": "independence",
+            "label": "Independent",
+            "ko": "독립"
+          },
+          {
+            "id": "exchangeable",
+            "label": "Exchangeable",
+            "ko": "교환가능"
+          },
+          {
+            "id": "ar1",
+            "label": "AR(1)",
+            "ko": "AR(1)"
+          }
+        ]
       }
     ],
-    "formHelp": "Independent working correlation; cluster-robust SE.",
-    "formHelpKo": "독립 작업상관·군집 강건 표준오차입니다.",
+    "formHelp": "Working correlation independent / exchangeable / AR(1); cluster-robust SE.",
+    "formHelpKo": "작업상관 independent / exchangeable / AR(1); 군집 강건 표준오차입니다.",
     "exampleRows": [
       [
         "1",

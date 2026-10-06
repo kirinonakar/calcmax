@@ -62,7 +62,7 @@ class AdvancedStatisticsTest {
     @Test fun survivalPlanPreservesLabelsAndIgnoresUnusedCells() {
         val rows=listOf(listOf("1","yes","A","30",""),listOf("2","no","B","40",""))
         val plan=survivalAnalysisPlan(rows,JSONObject().put("eventValue","yes").put("cox","1").put("predictors","3"),listOf("time","status","arm","age","unused"))
-        assertEquals("survivalanalysis([[1,1,1,30],[2,0,2,40]],1)",plan.command)
+        assertEquals("survivalanalysis([[1,1,1,30],[2,0,2,40]],1,breslow,-1,1)",plan.command)
         assertEquals(listOf("A","B"),plan.groups)
         assertEquals(listOf("age"),plan.predictors)
         assertEquals(listOf(0.0 to 1.0,1.0 to 1.0,1.0 to .75,2.0 to .75,2.0 to .375),survivalStepPoints(JSONArray("[[1,4,1,1,.75,.4,.9],[2,2,1,0,.375,.1,.7]]"),4))

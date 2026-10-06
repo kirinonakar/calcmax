@@ -81,6 +81,8 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
     var regularization by rememberSaveable {mutableStateOf(m.statisticsRegularization)}
     var l1Ratio by rememberSaveable {mutableStateOf(m.statisticsL1Ratio)}
     var lassoAlpha by rememberSaveable {mutableStateOf(m.statisticsLassoAlpha)}
+    var lassoAlphaCv by rememberSaveable {mutableStateOf(false)}
+    var firthMode by rememberSaveable {mutableStateOf("auto")}
     var forestTask by rememberSaveable {mutableStateOf(m.statisticsForestTask)}
     var forestTrees by rememberSaveable {mutableStateOf(m.statisticsForestTrees)}
     var forestDepth by rememberSaveable {mutableStateOf(m.statisticsForestDepth)}
@@ -104,6 +106,8 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
     var heatMapYColumns by rememberSaveable {mutableStateOf(m.statisticsHeatMapYColumns)}
     var heatMapClustering by rememberSaveable {mutableStateOf(m.statisticsHeatMapClustering||m.statisticsPlot=="Clustered heatmap")}
     var heatMapFit by rememberSaveable {mutableStateOf(m.statisticsHeatMapFit)}
+    var heatMapLinkage by rememberSaveable {mutableStateOf("average")}
+    var heatMapMetric by rememberSaveable {mutableStateOf("euclidean")}
     var csv by rememberSaveable {mutableStateOf(m.statisticsCsv)}
     var importPreview by remember {mutableStateOf<StatisticsCsvImport?>(null)}
     var importSheets by remember {mutableStateOf<List<StatisticsXlsxSheet>?>(null)}
@@ -257,6 +261,10 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
             if(dataColumns.size>1&&(regularized||regression=="randomforest")) {
                 if(regularized) {
                     Field(lassoAlpha,"Regularization α",Modifier.fillMaxWidth()){m.clearRegression();lassoAlpha=it}
+                    Row(verticalAlignment=Alignment.CenterVertically) {
+                        Checkbox(lassoAlphaCv,{m.clearRegression();lassoAlphaCv=it},Modifier.size(38.dp))
+                        Text(tr("Cross-validate α (5 folds)"),fontSize=12.sp,color=LocalInstrument.current.ink)
+                    }
                     if(regularization=="elasticnet")Field(l1Ratio,"L1 ratio (0–1)",Modifier.fillMaxWidth()){m.clearRegression();l1Ratio=it}
                     Text(tr("Predictors standardized; coefficients in original units."),fontSize=11.sp,color=LocalInstrument.current.muted)
                 } else {
@@ -270,10 +278,10 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
                     Field(forestSeed,"Random seed",Modifier.fillMaxWidth()){m.clearRegression();forestSeed=it}
                 }
                 val table=statisticsRegressionTable(numericRows,dataKind,fitMode,responseColumn)
-                val validOptions=if(regularized)lassoAlpha.toDoubleOrNull()?.let {it.isFinite()&&it>0}==true&&(regularization!="elasticnet"||l1Ratio.toDoubleOrNull()?.let {it in 0.0..1.0}==true)
+                val validOptions=if(regularized)(lassoAlphaCv||lassoAlpha.toDoubleOrNull()?.let {it.isFinite()&&it>0}==true)&&(regularization!="elasticnet"||l1Ratio.toDoubleOrNull()?.let {it in 0.0..1.0}==true)
                     else forestTrees.toIntOrNull() in 1..200&&forestDepth.toIntOrNull() in 1..20&&forestSeed.toLongOrNull() in 0L..2147483647L
                 Button(onClick={table?.let {
-                    val options=if(regularized){if(regularization=="elasticnet")"[$lassoAlpha,$l1Ratio]" else lassoAlpha} else "[$forestTrees,$forestDepth,$forestSeed]"
+                    val options=if(regularized){val penalty=if(lassoAlphaCv)"cv" else lassoAlpha;if(regularization=="elasticnet")"[$penalty,$l1Ratio]" else penalty} else "[$forestTrees,$forestDepth,$forestSeed]"
                     m.fitRegression("regression($it,$fitMode,$options)",data,responseColumn)
                 }},enabled=table!=null&&validOptions&&!m.regressionBusy){Text(tr("Analyze"))}
             }
@@ -291,8 +299,12 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
                 Text(tr("Dependent variable"),fontSize=11.sp,color=LocalInstrument.current.muted)
                 if(regression in listOf("polynomial","logistic"))Choices(listOf("first","last"),if(responseColumn==0)"first" else "last",{position->m.clearRegression();logisticResponse=if(position=="first")"0" else ""})
                 else Choices(regressionColumns,regressionColumns.getOrNull(responseColumn).orEmpty(),{name->m.clearRegression();logisticResponse=regressionColumns.indexOf(name).toString()},translate=false)
+                if(regression=="logistic"&&regularization=="none") {
+                    Text(tr("Firth correction"),fontSize=11.sp,color=LocalInstrument.current.muted)
+                    Choices(listOf("Auto","Always"),if(firthMode=="firth")"Always" else "Auto",{m.clearRegression();firthMode=if(it=="Always")"firth" else "auto"})
+                }
                 val table=statisticsRegressionTable(numericRows,dataKind,fitMode,responseColumn)
-                if(!regularized&&regression !in listOf("polynomial","randomforest"))Button(onClick={table?.let {m.fitRegression("regression($it,$regression)",data,responseColumn)}},enabled=table!=null&&!m.regressionBusy){Text(tr("Analyze"))}
+                if(!regularized&&regression !in listOf("polynomial","randomforest"))Button(onClick={table?.let {m.fitRegression("regression($it,$regression${if(regression=="logistic"&&firthMode=="firth")",firth" else ""})",data,responseColumn)}},enabled=table!=null&&!m.regressionBusy){Text(tr("Analyze"))}
             }
             if(m.regressionBusy)Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
                 Text(if(isKorean())"회귀 적합 중…" else "Fitting regression…",Modifier.weight(1f),fontSize=11.sp,color=LocalInstrument.current.muted)
@@ -326,6 +338,12 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
                 Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(4.dp)) {
                     Checkbox(heatMapClustering,{heatMapClustering=it},Modifier.size(38.dp))
                     Text(tr("Hierarchical clustering"),fontSize=12.sp,color=LocalInstrument.current.ink)
+                }
+                if(heatMapClustering) {
+                    Text(tr("Cluster linkage"),fontSize=11.sp,color=LocalInstrument.current.muted)
+                    Choices(listOf("Single","Average","Complete","Ward"),when(heatMapLinkage){"single"->"Single";"complete"->"Complete";"ward"->"Ward";else->"Average"},{heatMapLinkage=when(it){"Single"->"single";"Complete"->"complete";"Ward"->"ward";else->"average"}})
+                    Text(tr("Distance metric"),fontSize=11.sp,color=LocalInstrument.current.muted)
+                    Choices(listOf("Euclidean","Manhattan","Correlation (1 − r)"),when(heatMapMetric){"manhattan"->"Manhattan";"correlation"->"Correlation (1 − r)";else->"Euclidean"},{heatMapMetric=when(it){"Manhattan"->"manhattan";"Correlation (1 − r)"->"correlation";else->"euclidean"}})
                 }
                 Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(4.dp)) {
                     Checkbox(heatMapFit,{heatMapFit=it},Modifier.size(38.dp))
@@ -367,9 +385,9 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
             }
         }
         val clusterRequest=heatMapInput?.takeIf {heatMapClustering}
-        val clustered by produceState<Pair<StatisticsHeatMapData,StatisticsHeatMapData>?>(null,clusterRequest) {
+        val clustered by produceState<Pair<StatisticsHeatMapData,StatisticsHeatMapData>?>(null,clusterRequest,heatMapLinkage,heatMapMetric) {
             value=null
-            clusterRequest?.let {request->value=request to withContext(Dispatchers.Default){clusteredHeatMap(request)}}
+            clusterRequest?.let {request->value=request to withContext(Dispatchers.Default){clusteredHeatMap(request,heatMapLinkage,heatMapMetric)}}
         }
         val heatMap=if(heatMapClustering)clustered?.takeIf {it.first==clusterRequest}?.second else heatMapInput
         if(plotType=="Heat map"&&heatMapClustering&&heatMap==null)Text(tr("Clustering…"),fontSize=12.sp,color=LocalInstrument.current.muted)

@@ -226,7 +226,7 @@ def _binary_roc(target, scores):
     return area,points
 
 
-def fit_multivariate(engine, rows, logistic=False):
+def fit_multivariate(engine, rows, logistic=False, firth_mode="auto"):
     from calc_statistics import _mpf, _mp_result, _normal_sf, _quantile, _normal_cdf, _chisq_sf
     require(isinstance(rows,(list,tuple)) and len(rows)>=3 and all(isinstance(row,(list,tuple)) for row in rows), "Enter regression data rows")
     width = len(rows[0])
@@ -245,8 +245,9 @@ def fit_multivariate(engine, rows, logistic=False):
         transform = mp.eye(p)
         for j in range(1,p): transform[0,j]=-centers[j-1]/scales[j-1]; transform[j,j]=1/scales[j-1]
         if logistic:
-            from calc_firth import complete_separation, fit_firth
+            from calc_firth import complete_separation, fit_firth, profile_intervals
             require(all(v in (0,1) for v in target) and 0<sum(target)<n, "Logistic response must contain both 0 and 1")
+            require(firth_mode in ('auto','always'), "Firth option must be auto or always")
             sigmoid = lambda v: 1/(1+mp.exp(-v)) if v>=0 else mp.exp(v)/(1+mp.exp(v))
             softplus = lambda v: max(v,0)+mp.log1p(mp.exp(-abs(v)))
             def evaluate(beta):
@@ -257,10 +258,12 @@ def fit_multivariate(engine, rows, logistic=False):
             beta = mp.matrix([mp.log(sum(target)/(n-sum(target)))]+[0]*(p-1))
             tolerance = mp.power(10,-min(engine.precision,30))
             converged = False
-            firth = False
+            firth = firth_mode == 'always'
+            separated = False
             for _ in range(150):
                 linear, probabilities, loss = evaluate(beta)
-                if complete_separation(rows, design, target, beta, transform):
+                if complete_separation(rows, design, target, beta, transform): separated = True
+                if firth or separated:
                     firth = True
                     break
                 # Finite fits may have extreme logits at distant observations.
@@ -279,9 +282,17 @@ def fit_multivariate(engine, rows, logistic=False):
                     if max(abs(v) for v in gradient)<mp.sqrt(tolerance): converged=True
                     break
                 beta += rate*step
+            profile = [None]*p
             if firth:
                 beta, normalized_covariance, penalized_loglik, firth_iterations = fit_firth(design, target, engine.precision)
-                engine.note = "Complete separation detected; Firth bias reduction applied."
+                engine.note = ("Firth bias reduction requested; profile penalized-likelihood intervals."
+                               if firth_mode == 'always' and not separated else
+                               "Complete separation detected; Firth bias reduction applied with profile penalized-likelihood intervals.")
+                try:
+                    profile = profile_intervals(design, transform, target, beta, engine.precision)
+                except (MathError, ValueError, ZeroDivisionError):
+                    profile = [None]*p
+                    engine.note += " Profile intervals were unavailable; Wald intervals are shown."
             else:
                 require(converged, "Logistic fit is separated or did not converge; finite inference unavailable")
             linear,probabilities,loss = evaluate(beta)
@@ -298,9 +309,10 @@ def fit_multivariate(engine, rows, logistic=False):
                       "pseudoRSquared":mp.nstr(1-loss/null_loss,engine.precision), "deviance":mp.nstr(2*loss,engine.precision),
                       "aic":mp.nstr(2*loss+2*p,engine.precision),"likelihoodRatio":mp.nstr(lr,engine.precision),
                       "likelihoodP":mp.nstr(_chisq_sf(lr,p-1),engine.precision),"coefficients":[],"residuals":[]}
-            report.update(method="firth" if firth else "mle", intervalMethod="wald")
+            report.update(method="firth" if firth else "mle", intervalMethod="profile" if firth else "wald")
             if firth:
-                report.update(separation="complete", penalizedLogLikelihood=mp.nstr(penalized_loglik,engine.precision), iterations=firth_iterations)
+                report.update(penalizedLogLikelihood=mp.nstr(penalized_loglik,engine.precision), iterations=firth_iterations)
+                if separated: report.update(separation="complete")
                 report["warnings"].append(engine.note)
                 # The ordinary MLE AIC and LR test do not apply to this estimator.
                 for key in ("aic", "likelihoodRatio", "likelihoodP"):
@@ -310,6 +322,7 @@ def fit_multivariate(engine, rows, logistic=False):
             report["roc"]=[[mp.nstr(x,engine.precision),mp.nstr(y,engine.precision)] for x,y in roc]
             for j,value in enumerate(coefficients):
                 se=mp.sqrt(covariance[j,j]); low=value-critical*se; high=value+critical*se
+                if profile[j] is not None: low, high = profile[j]
                 out=lambda v: mp.nstr(v,engine.precision)
                 report["coefficients"].append({"name":"b0" if j==0 else "b"+str(j),"estimate":out(value),"se":out(se),
                                                 "low":out(low),"high":out(high),"p":out(2*_normal_sf(abs(value/se))),

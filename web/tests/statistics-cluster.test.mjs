@@ -37,7 +37,28 @@ test('the module worker computes the same clustered matrix as the direct impleme
   const target=new URL('../statistics-cluster-worker.js',import.meta.url).href;
   const script=`import {parentPort} from 'node:worker_threads';globalThis.postMessage=data=>parentPort.postMessage(data);await import(${JSON.stringify(target)});parentPort.on('message',data=>globalThis.onmessage({data}));`;
   const worker=new Worker(new URL(`data:text/javascript,${encodeURIComponent(script)}`));t.after(()=>worker.terminate());
-  const data={columns:['a','b'],rows:[{label:'1',values:[0,10]},{label:'2',values:[11,21]},{label:'3',values:[1,11]}]};
+  const data={columns:['a','b'],rows:[{label:'1',values:[0,10]},{label:'2',values:[11,21]},{label:'3',values:[1,11]}]},options={linkage:'average'};
   const result=new Promise((resolve,reject)=>{worker.once('message',resolve);worker.once('error',reject);});
-  worker.postMessage(data);assert.deepEqual(await result,{result:clusteredHeatMap(data)});
+  worker.postMessage({data,options});assert.deepEqual(await result,{result:clusteredHeatMap(data,options)});
+});
+
+test('average, complete and Ward linkages follow their Lance–Williams merge heights',()=>{
+  const average=statisticsHierarchy([[0],[10],[1],[11]],{linkage:'average'});
+  assert.deepEqual(average.order,[0,2,1,3]);
+  assert.ok(Math.abs(average.links[0].height-1/11)<1e-12);
+  assert.ok(Math.abs(average.links[1].height-1/11)<1e-12);
+  assert.ok(Math.abs(average.links[2].height-10/11)<1e-12);
+  const complete=statisticsHierarchy([[0],[10],[1],[11]],{linkage:'complete'});
+  assert.ok(Math.abs(complete.links[2].height-1)<1e-12);
+  const ward=statisticsHierarchy([[0],[2],[10],[12]],{linkage:'ward'});
+  assert.deepEqual(ward.order,[0,1,2,3]);
+  assert.ok(Math.abs(ward.links[0].height-1/6)<1e-12);
+  assert.ok(Math.abs(ward.links[1].height-1/6)<1e-12);
+  assert.ok(Math.abs(ward.links[2].height-Math.sqrt(25/18))<1e-12);
+});
+
+test('distance metrics scale pairwise-complete cells and can be correlation based',()=>{
+  assert.ok(Math.abs(statisticsHierarchy([[0,0],[3,4]]).links[0].height-1.25)<1e-12);
+  assert.ok(Math.abs(statisticsHierarchy([[0,0],[3,4]],{metric:'manhattan'}).links[0].height-1.75)<1e-12);
+  assert.ok(Math.abs(statisticsHierarchy([[1,2,3],[2,4,6]],{metric:'correlation'}).links[0].height)<1e-12);
 });

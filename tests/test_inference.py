@@ -139,7 +139,10 @@ class InferenceTests(unittest.TestCase):
         _,report=fit(rows,'logistic')
         self.assertEqual(report['method'],'firth')
         self.assertEqual(report['separation'],'complete')
-        self.assertEqual(report['intervalMethod'],'wald')
+        self.assertEqual(report['intervalMethod'],'profile')
+        estimate=float(report['coefficients'][1]['estimate'])
+        self.assertLess(float(report['coefficients'][1]['low']),estimate)
+        self.assertGreater(float(report['coefficients'][1]['high']),estimate)
         # The saturated binary-predictor Firth solution adds 1/2 to each cell.
         self.assertAlmostEqual(float(report['coefficients'][0]['estimate']),math.log(1/9),places=12)
         self.assertAlmostEqual(float(report['coefficients'][1]['estimate']),math.log(117),places=12)

@@ -1,7 +1,8 @@
 """Portable advanced statistics (binary64 numerics; no native dependencies).
 
-Models intentionally expose their specification in result notes: Breslow Cox,
-proportional odds, NB2, Gaussian random intercept ML, independence-working GEE.
+Models intentionally expose their specification in result notes: Efron/Breslow
+Cox with optional left truncation and a PH check, proportional odds, NB2,
+Gaussian random intercept/slope ML, working-correlation GEE.
 """
 import math
 import random
@@ -160,8 +161,11 @@ def oneway(g):
     return {'F':f,'df1':len(g)-1,'df2':n-len(g),'p':float(_f_sf(f,len(g)-1,n-len(g))), 'eta2':between/(between+within)}
 
 
-def survival(rows):
+def survival(rows, entry=-1):
     require(all(r[0] >= 0 and r[1] in (0,1) for r in rows), 'Survival rows: nonnegative time, event 0/1, then predictors')
+    if entry >= 0:
+        require(entry < len(rows[0]), 'Entry column is out of range')
+        require(all(0 <= r[entry] < r[0] for r in rows), 'Entry time must be nonnegative and earlier than the exit time')
 
 
 def regression_data(rows):
@@ -260,7 +264,7 @@ def advanced(engine, name, a):
     """Entry point shared by calculator expressions and Python catalog."""
     engine.note = 'Numerical statistics use binary64 precision.'
     arities = {'padjust':(1,3),'cohend':(2,3),'eta2':(2,20),'levene':(2,20),'bartlett':(2,20),'mcnemar':(1,2),
-               'kaplanmeier':(1,2),'logrank':(2,2),'cox':(1,1),'survivalanalysis':(1,2),'repeatedanova':(1,1),'mixedmodel':(1,1),'gee':(1,2),
+               'kaplanmeier':(1,3),'logrank':(2,2),'cox':(1,4),'survivalanalysis':(1,5),'repeatedanova':(1,2),'mixedmodel':(1,2),'gee':(1,3),
                'multinomial':(1,1),'ordinal':(1,1),'poissonreg':(1,1),'nbreg':(1,1),'bootstrapci':(1,5),
                'testpower':(2,4),'samplesize':(1,4),'kstest':(2,4),'crossvalidate':(1,3),'pca':(1,3),'kmeans':(2,3),'impute':(1,2)}
     low,high = arities[name]; require(low <= len(a) <= high, name+' argument count mismatch')
@@ -320,11 +324,13 @@ def calculate(engine,name,a):
         engine.note += ' McNemar tests paired counts; exact two-sided binomial is the default.'
         return {'discordant pairs':n,'chi2':chi,'p':p,'method':method}
     if name=='kaplanmeier':
-        rows=table(a[0],1,2); require(len(rows[0])==2,'Rows are [time,event]'); survival(rows)
-        level=number(a[1]) if len(a)>1 else .95; require(0<level<1,'Confidence level must lie in (0,1)')
+        rows=table(a[0],1,2); level=number(a[1]) if len(a)>1 else .95; require(0<level<1,'Confidence level must lie in (0,1)')
+        entry=integer(a[2],-1,19) if len(a)>2 else -1
+        require(entry>=0 or len(rows[0])==2,'Rows are [time,event]')
+        survival(rows,entry); starts=[r[entry] for r in rows] if entry>=0 else None
         z=statistics.NormalDist().inv_cdf((1+level)/2); prob=1; greenwood=0; curve=[]; median=None
         for time in sorted(set(r[0] for r in rows)):
-            risk=sum(r[0]>=time for r in rows); events=sum(r[0]==time and r[1]==1 for r in rows); cens=sum(r[0]==time and r[1]==0 for r in rows)
+            risk=sum(r[0]>=time and (starts is None or starts[i]<time) for i,r in enumerate(rows)); events=sum(r[0]==time and r[1]==1 for r in rows); cens=sum(r[0]==time and r[1]==0 for r in rows)
             prob *= 1-events/risk
             if events and risk>events: greenwood+=events/(risk*(risk-events))
             lo=hi=prob
@@ -347,30 +353,101 @@ def calculate(engine,name,a):
         chi=(observed-expected)**2/var
         return {'chi2':chi,'df':1,'p':float(_chisq_sf(chi,1)),'observed group 1':observed,'expected group 1':expected}
     if name=='cox':
-        rows=table(a[0],3,3); survival(rows); x=[r[2:] for r in rows]; p=len(x[0]); require(sum(r[1] for r in rows)>p,'More events than predictors are required')
+        rows=table(a[0],3,3)
+        ties=option(a,1,'breslow'); require(ties in ('breslow','efron'),'Cox ties: breslow or efron')
+        entry=integer(a[2],-1,19) if len(a)>2 else -1
+        check=integer(a[3],0,1) if len(a)>3 else 1
+        survival(rows,entry)
+        columns=[j for j in range(len(rows[0])) if j not in (0,1) and j!=entry]
+        require(columns,'Choose at least one predictor')
+        x=[[r[j] for j in columns] for r in rows]; p=len(x[0]); require(sum(r[1] for r in rows)>p,'More events than predictors are required')
+        ends=[r[0] for r in rows]; observed=[r[1] for r in rows]; starts=[r[entry] for r in rows] if entry>=0 else None
         design,_,_,scales=standardized_design([[1]+r for r in x]); x=[r[1:] for r in design]
-        times=sorted(set(r[0] for r in rows if r[1]))
-        def objective(b):
-            z=[dot(row,b) for row in x]; total=0
+        times=sorted(set(t for t,e in zip(ends,observed) if e))
+        def risk_at(time): return [i for i in range(len(rows)) if ends[i]>=time and (starts is None or starts[i]<time)]
+        def partial(z):
+            total=0
             for time in times:
-                events=[i for i,r in enumerate(rows) if r[0]==time and r[1]]; risk=[z[i] for i,r in enumerate(rows) if r[0]>=time]; top=max(risk)
-                total+=len(events)*(top+math.log(sum(math.exp(v-top) for v in risk)))-sum(z[i] for i in events)
+                risk=risk_at(time); index=[i for i in risk if ends[i]==time and observed[i]]; top=max(z[i] for i in risk)
+                if ties=='breslow': total+=len(index)*(top+math.log(math.fsum(math.exp(z[i]-top) for i in risk)))-sum(z[i] for i in index)
+                else:
+                    chosen=set(index); inside=math.fsum(math.exp(z[i]-top) for i in risk if i not in chosen); unique=math.fsum(math.exp(z[i]-top) for i in index); count=len(index)
+                    total-=sum(z[i] for i in index)
+                    for draw in range(count): total+=top+math.log(inside+(1-draw/count)*unique)
             return total
+        def objective(b): return partial([dot(row,b) for row in x])
         b,cov,ll,it=optimize(objective,[0.0]*p)
         b=[v/scale for v,scale in zip(b,scales)]; cov=mp.matrix([[cov[i,j]/(scales[i]*scales[j]) for j in range(p)] for i in range(p)])
-        engine.note += ' Cox proportional hazards, Breslow ties; no intercept, no left truncation. exp(coef) is hazard ratio.'
-        return {'coefficients':inference(b,cov,['x'+str(i+1) for i in range(p)],True),'partial log likelihood':-ll,'iterations':it}
+        result={'coefficients':inference(b,cov,['x'+str(i+1) for i in range(p)],True),'partial log likelihood':-ll,'iterations':it}
+        engine.note += ' Cox proportional hazards, '+('Efron' if ties=='efron' else 'Breslow')+' ties; no intercept'+(', left truncation at the entry column' if entry>=0 else '')+'. exp(coef) is hazard ratio.'
+        if check and 2*p<=30:
+            try:
+                ranks={time:(rank+1)/(len(times)+1) for rank,time in enumerate(times)}
+                def time_varying(q):
+                    beta=q[:p]; gamma=q[p:]; total=0
+                    for time in times:
+                        risk=risk_at(time); events=[j for j,i in enumerate(risk) if ends[i]==time and observed[i]]; scale=ranks[time]
+                        z=[dot(x[i],beta)+scale*dot(x[i],gamma) for i in risk]; top=max(z)
+                        if ties=='breslow': total+=len(events)*(top+math.log(math.fsum(math.exp(v-top) for v in z)))-sum(z[j] for j in events)
+                        else:
+                            chosen=set(events); inside=math.fsum(math.exp(z[j]-top) for j in range(len(z)) if j not in chosen); unique=math.fsum(math.exp(z[j]-top) for j in events); count=len(events)
+                            total-=sum(z[j] for j in events)
+                            for draw in range(count): total+=top+math.log(inside+(1-draw/count)*unique)
+                    return total
+                q,_,llq,_=optimize(time_varying,[0.0]*(2*p))
+                chi=max(0.0,2*(ll-llq))
+                result['PH test chi2']=chi; result['PH test df']=p; result['PH test p']=float(_chisq_sf(chi,p))
+                engine.note += ' Proportional-hazards check by time-rank interaction likelihood ratio (approximate).'
+            except (MathError,OverflowError) as exc: result['PH test']='unavailable: '+str(exc)
+        return result
     if name=='repeatedanova':
-        rows=table(a[0],2,2); n=len(rows); k=len(rows[0]); overall=mean(sum(rows,[])); cols=list(zip(*rows))
-        total=sum((v-overall)**2 for r in rows for v in r); sscondition=n*sum((mean(c)-overall)**2 for c in cols); sssubject=k*sum((mean(r)-overall)**2 for r in rows); error=total-sscondition-sssubject
-        require(error>1e-12, 'Repeated-measures residual variation is required')
-        df1=k-1; df2=(n-1)*(k-1); f=(sscondition/df1)/(error/df2)
-        # Greenhouse–Geisser epsilon from double-centered covariance.
-        cov=[[sum((rows[t][i]-mean(cols[i]))*(rows[t][j]-mean(cols[j])) for t in range(n))/(n-1) for j in range(k)] for i in range(k)]
-        cm=[mean(r) for r in cov]; gm=mean(cm); centered=[[cov[i][j]-cm[i]-cm[j]+gm for j in range(k)] for i in range(k)]
-        epsilon=min(1,max(1/df1,sum(centered[i][i] for i in range(k))**2/(df1*sum(v*v for r in centered for v in r))))
-        engine.note += ' Balanced one-factor repeated measures: rows=subjects, columns=conditions. Includes Greenhouse–Geisser correction.'
-        return {'F':f,'df1':df1,'df2':df2,'p':float(_f_sf(f,df1,df2)),'partial eta2':sscondition/(sscondition+error),'GG epsilon':epsilon,'GG p':float(_f_sf(f,df1*epsilon,df2*epsilon))}
+        rows=table(a[0],2,2); n=len(rows); k=len(rows[0])
+        factor2=integer(a[1],1,20) if len(a)>1 else 1
+        if factor2==1:
+            overall=mean(sum(rows,[])); cols=list(zip(*rows))
+            total=sum((v-overall)**2 for r in rows for v in r); sscondition=n*sum((mean(c)-overall)**2 for c in cols); sssubject=k*sum((mean(r)-overall)**2 for r in rows); error=total-sscondition-sssubject
+            require(error>1e-12, 'Repeated-measures residual variation is required')
+            df1=k-1; df2=(n-1)*(k-1); f=(sscondition/df1)/(error/df2)
+            # Greenhouse–Geisser epsilon from double-centered covariance.
+            cov=[[sum((rows[t][i]-mean(cols[i]))*(rows[t][j]-mean(cols[j])) for t in range(n))/(n-1) for j in range(k)] for i in range(k)]
+            cm=[mean(r) for r in cov]; gm=mean(cm); centered=[[cov[i][j]-cm[i]-cm[j]+gm for j in range(k)] for i in range(k)]
+            epsilon=min(1,max(1/df1,sum(centered[i][i] for i in range(k))**2/(df1*sum(v*v for r in centered for v in r))))
+            engine.note += ' Balanced one-factor repeated measures: rows=subjects, columns=conditions. Includes Greenhouse–Geisser correction.'
+            return {'F':f,'df1':df1,'df2':df2,'p':float(_f_sf(f,df1,df2)),'partial eta2':sscondition/(sscondition+error),'GG epsilon':epsilon,'GG p':float(_f_sf(f,df1*epsilon,df2*epsilon))}
+        require(k%factor2==0,'Condition count must be divisible by the second-factor levels')
+        second=k//factor2; require(second>=2 and factor2>=2,'Two-way repeated measures need two or more levels per factor')
+        overall=mean(sum(rows,[]))
+        cells=[[mean([rows[s][i*factor2+j] for s in range(n)]) for j in range(factor2)] for i in range(second)]
+        first_means=[mean(cells[i]) for i in range(second)]; second_means=[mean([cells[i][j] for i in range(second)]) for j in range(factor2)]
+        subject_means=[mean(r) for r in rows]; subject_first=[[mean(rows[s][i*factor2:(i+1)*factor2]) for i in range(second)] for s in range(n)]
+        subject_second=[[mean(rows[s][j::factor2]) for j in range(factor2)] for s in range(n)]
+        total=sum((v-overall)**2 for r in rows for v in r); subject_ss=k*sum((v-overall)**2 for v in subject_means)
+        first_ss=n*factor2*sum((v-overall)**2 for v in first_means); second_ss=n*second*sum((v-overall)**2 for v in second_means)
+        interaction_ss=n*sum((cells[i][j]-first_means[i]-second_means[j]+overall)**2 for i in range(second) for j in range(factor2))
+        first_error=factor2*sum((subject_first[s][i]-first_means[i]-subject_means[s]+overall)**2 for s in range(n) for i in range(second))
+        second_error=second*sum((subject_second[s][j]-second_means[j]-subject_means[s]+overall)**2 for s in range(n) for j in range(factor2))
+        within=total-subject_ss; interaction_error=within-first_ss-second_ss-interaction_ss-first_error-second_error
+        require(min(first_error,second_error,interaction_error)>1e-12,'Repeated-measures residual variation is required')
+        def epsilon(variables,dimension):
+            size=len(variables[0]); columns=list(zip(*variables))
+            centered=[[sum((variables[t][i]-mean(columns[i]))*(variables[t][j]-mean(columns[j])) for t in range(len(variables)))/(len(variables)-1) for j in range(size)] for i in range(size)]
+            rows_mean=[mean(r) for r in centered]; grand=mean(rows_mean)
+            starred=[[centered[i][j]-rows_mean[i]-rows_mean[j]+grand for j in range(size)] for i in range(size)]
+            require(sum(v*v for r in starred for v in r)>0,'Greenhouse–Geisser correction needs contrast variation')
+            return min(1,max(1/dimension,sum(starred[i][i] for i in range(size))**2/(dimension*sum(v*v for r in starred for v in r))))
+        def helmert(levels): return [[1/math.sqrt(u*(u+1)) if j<u else -u/math.sqrt(u*(u+1)) if j==u else 0.0 for j in range(levels)] for u in range(1,levels)]
+        contrasts_first,contrasts_second=helmert(second),helmert(factor2)
+        residual_rows=[[rows[s][i*factor2+j]-subject_first[s][i]-subject_second[s][j]+subject_means[s] for i in range(second) for j in range(factor2)] for s in range(n)]
+        interaction_variables=[[sum(contrasts_first[u][i]*contrasts_second[v][j]*row[i*factor2+j] for i in range(second) for j in range(factor2)) for v in range(factor2-1) for u in range(second-1)] for row in residual_rows]
+        effects={'A':(first_ss,second-1,first_error,(n-1)*(second-1)),'B':(second_ss,factor2-1,second_error,(n-1)*(factor2-1)),'AB':(interaction_ss,(second-1)*(factor2-1),interaction_error,(n-1)*(second-1)*(factor2-1))}
+        adjustments={'A':epsilon(subject_first,second-1),'B':epsilon(subject_second,factor2-1),'AB':epsilon(interaction_variables,(second-1)*(factor2-1))}
+        result={'first factor levels':second,'second factor levels':factor2,'subject df':n-1}
+        for key,(effect,degree1,error,degree2) in effects.items():
+            value=(effect/degree1)/(error/degree2)
+            result[key+' F']=value; result[key+' df1']=degree1; result[key+' df2']=degree2; result[key+' p']=float(_f_sf(value,degree1,degree2))
+            result[key+' GG epsilon']=adjustments[key]; result[key+' GG p']=float(_f_sf(value,degree1*adjustments[key],degree2*adjustments[key]))
+        engine.note += ' Balanced two-way within-subjects ANOVA: rows=subjects, columns list the first factor (slowest) crossed with the second factor. Greenhouse–Geisser corrections per effect.'
+        return result
     if name in ('multinomial','ordinal','poissonreg','nbreg'):
         engine.note += {'ordinal':' Proportional-odds cumulative logit; ascending numeric categories.', 'multinomial':' Multinomial logit; smallest category is reference.', 'poissonreg':' Poisson log-link regression; exp(coef) is incidence rate ratio.', 'nbreg':' Negative binomial NB2 log-link; dispersion alpha is jointly estimated.'}[name]+' Rows: predictors then response. Wald 95% CI.'
         return model(table(a[0],3,2),name)
@@ -381,29 +458,35 @@ def calculate(engine,name,a):
 
 
 def survival_analysis(engine,a):
-    """Rows: time, event, numeric group ID, optional numeric covariates.
+    """Rows: time, event, optional entry time, numeric group ID, covariates.
 
     The UI encodes labels in first-occurrence order. Cox includes treatment
-    dummies (first group as reference), plus the selected covariates.
-    Subtest failures preserve valid KM curves and are explicitly reported.
+    dummies (first group as reference), plus the selected covariates. Left
+    truncation, tied-event handling and the proportional-hazards check follow
+    the Cox options. Subtest failures preserve valid KM curves.
     """
-    rows=table(a[0],2,3); survival(rows)
-    fit=integer(a[1],0,1) if len(a)>1 else 0
-    ids=list(dict.fromkeys(r[2] for r in rows))
+    rows=table(a[0],2,3); fit=integer(a[1],0,1) if len(a)>1 else 0
+    ties=option(a,2,'breslow'); require(ties in ('breslow','efron'),'Cox ties: breslow or efron')
+    entry=integer(a[3],-1,19) if len(a)>3 else -1; require(entry in (-1,2),'Entry time follows the event column')
+    check=integer(a[4],0,1) if len(a)>4 else 1
+    survival(rows,entry)
+    base=3 if entry>=0 else 2
+    ids=list(dict.fromkeys(r[base] for r in rows))
     require(len(ids)<=20,'Survival analysis limit: 20 groups')
+    def truncated(r,time): return entry<0 or r[entry]<time
     groups=[]
     for label in ids:
-        sample=[r[:2] for r in rows if r[2]==label]
-        km=calculate(engine,'kaplanmeier',[sample,.95])
+        sample=[r[:2]+([r[entry]] if entry>=0 else []) for r in rows if r[base]==label]
+        km=calculate(engine,'kaplanmeier',[sample,.95]+([entry] if entry>=0 else []))
         groups.append({'id':label,'n':len(sample),'events':int(sum(r[1] for r in sample)),
                        'median':km['median survival'],'curve':km['survival table']})
-    report={'groups':groups,'level':.95,'logrank':None,'cox':None}
+    report={'groups':groups,'level':.95,'logrank':None,'cox':None,'ties':ties,'truncation':entry>=0,'ph':bool(check and fit)}
     if len(ids)>1:
         try:
             k=len(ids); score=[0.0]*k; covariance=[[0.0]*k for _ in ids]
             for time in sorted(set(r[0] for r in rows if r[1])):
-                risk=[sum(r[0]>=time and r[2]==label for r in rows) for label in ids]
-                events=[sum(r[0]==time and r[1] and r[2]==label for r in rows) for label in ids]
+                risk=[sum(r[0]>=time and truncated(r,time) and r[base]==label for r in rows) for label in ids]
+                events=[sum(r[0]==time and r[1] and r[base]==label for r in rows) for label in ids]
                 n=sum(risk); d=sum(events)
                 for i in range(k):
                     score[i]+=events[i]-d*risk[i]/n
@@ -416,9 +499,9 @@ def survival_analysis(engine,a):
         except MathError as exc: report['logrank']={'error':str(exc)}
     if fit:
         try:
-            coxrows=[r[:2]+[float(r[2]==label) for label in ids[1:]]+r[3:] for r in rows]
+            coxrows=[r[:2]+([r[entry]] if entry>=0 else [])+[float(r[base]==label) for label in ids[1:]]+list(r[base+1:]) for r in rows]
             require(len(coxrows[0])>2,'Choose Cox predictors or at least two groups')
-            report['cox']=calculate(engine,'cox',[coxrows])
+            report['cox']=calculate(engine,'cox',[coxrows,ties,2 if entry>=0 else -1,check])
             for index,term in enumerate(report['cox']['coefficients']):
                 term['term']='group:'+str(index+1) if index<len(ids)-1 else 'predictor:'+str(index-len(ids)+1)
                 term['HR']=term['exp(coef)']
@@ -431,9 +514,90 @@ def survival_analysis(engine,a):
         if isinstance(value,float) and not math.isfinite(value): return None
         return value
     engine.survival_report=json_numbers(report)
-    engine.note += ' Survival analysis: pointwise Greenwood log-log 95% CI; log-rank; Cox Breslow ties, first group as reference. Proportional hazards assumption is not tested.'
+    engine.note += ' Survival analysis: pointwise Greenwood log-log 95% CI; log-rank'+(' with left-truncated risk sets' if entry>=0 else '')+'; Cox '+('Efron' if ties=='efron' else 'Breslow')+' ties, first group as reference'+(', proportional-hazards check by time-rank interaction' if check and fit else '')+'.'
     return {'groups':len(ids),'observations':len(rows),'events':int(sum(r[1] for r in rows)),
             'log-rank':report['logrank'] or 'one group','Cox':report['cox'] or 'off'}
+
+
+def nelder_mead(objective,start,step,iterations=160):
+    """Deterministic direct search for small profile objectives with boundaries."""
+    size=len(start); simplex=[list(start)]
+    for i in range(size):
+        point=list(start); point[i]+=step[i]; simplex.append(point)
+    values=[objective(point) for point in simplex]
+    for _ in range(iterations):
+        order=sorted(range(size+1),key=lambda i:values[i]); simplex=[simplex[i] for i in order]; values=[values[i] for i in order]
+        if max(abs(simplex[i][j]-simplex[0][j]) for i in range(1,size+1) for j in range(size))<1e-7: break
+        centroid=[sum(simplex[i][j] for i in range(size))/size for j in range(size)]
+        reflected=[2*centroid[j]-simplex[size][j] for j in range(size)]; value=objective(reflected)
+        if value<values[0]:
+            expanded=[centroid[j]+2*(reflected[j]-centroid[j]) for j in range(size)]; trial=objective(expanded)
+            if trial<value: simplex[size],values[size]=expanded,trial
+            else: simplex[size],values[size]=reflected,value
+        elif value<values[size-1]: simplex[size],values[size]=reflected,value
+        else:
+            contracted=[centroid[j]+.5*(simplex[size][j]-centroid[j]) for j in range(size)]; trial=objective(contracted)
+            if trial<values[size]: simplex[size],values[size]=contracted,trial
+            else:
+                for i in range(1,size+1):
+                    simplex[i]=[(simplex[i][j]+simplex[0][j])/2 for j in range(size)]; values[i]=objective(simplex[i])
+    return simplex[0],values[0]
+
+
+def mixed_slope(engine,x,y,clusters,ids,slope,guess):
+    """Gaussian random-intercept and random-slope ML with Woodbury per-cluster algebra."""
+    n=len(y); p=len(x[0])
+    def pieces(parameters):
+        first,second,third=parameters
+        if max(abs(first),abs(second),abs(third))>8: return None
+        theta=[[math.exp(2*first),math.exp(first)*second],[math.exp(first)*second,second*second+math.exp(2*third)]]
+        determinant=theta[0][0]*theta[1][1]-theta[0][1]**2
+        if not determinant>1e-18: return None
+        inverse_theta=[[theta[1][1]/determinant,-theta[0][1]/determinant],[-theta[0][1]/determinant,theta[0][0]/determinant]]
+        matrix=mp.zeros(p); right=mp.zeros(p,1); quadratic=mp.mpf(0); logdet=0.0
+        for c in clusters:
+            count=len(c); rotations=0.0; second_moment=0.0; weighted=[0.0,0.0]; projected=[[0.0]*p for _ in range(2)]
+            for i in c:
+                rotations+=x[i][slope]; second_moment+=x[i][slope]**2; weighted[0]+=y[i]; weighted[1]+=x[i][slope]*y[i]
+                for j in range(p): projected[0][j]+=x[i][j]; projected[1][j]+=x[i][slope]*x[i][j]
+            core=[[inverse_theta[0][0]+count,inverse_theta[0][1]+rotations],[inverse_theta[1][0]+rotations,inverse_theta[1][1]+second_moment]]
+            core_determinant=core[0][0]*core[1][1]-core[0][1]*core[1][0]
+            if not core_determinant>1e-18: return None
+            inverse_core=[[core[1][1]/core_determinant,-core[0][1]/core_determinant],[-core[1][0]/core_determinant,core[0][0]/core_determinant]]
+            product=[[count*theta[0][0]+rotations*theta[1][0],count*theta[0][1]+rotations*theta[1][1]],[rotations*theta[0][0]+second_moment*theta[1][0],rotations*theta[0][1]+second_moment*theta[1][1]]]
+            logdet+=math.log((1+product[0][0])*(1+product[1][1])-product[0][1]*product[1][0])
+            for i in range(p):
+                total=math.fsum(x[t][i]*y[t] for t in c)
+                for u in range(2):
+                    for v in range(2): total-=projected[u][i]*inverse_core[u][v]*weighted[v]
+                right[i]+=total
+                for j in range(i,p):
+                    total=math.fsum(x[t][i]*x[t][j] for t in c)
+                    for u in range(2):
+                        for v in range(2): total-=projected[u][i]*inverse_core[u][v]*projected[v][j]
+                    matrix[i,j]+=total
+                    if i!=j: matrix[j,i]+=total
+            total=math.fsum(y[t]**2 for t in c)
+            for u in range(2):
+                for v in range(2): total-=weighted[u]*inverse_core[u][v]*weighted[v]
+            quadratic+=total
+        beta=inverse(matrix)*right
+        value=float(quadratic-(right.T*beta)[0])
+        if not math.isfinite(value) or value<=1e-12: return None
+        return n*math.log(value/n)+logdet,beta,value/n,matrix,theta
+    def objective(parameters):
+        result=pieces(parameters)
+        return math.inf if result is None else result[0]
+    start=min(max(math.log(max(guess,1e-3)),-7.0),7.0); best=None
+    for initial in ([start,0.0,start],[start,0.0,math.log(.25)],[math.log(.5),0.0,math.log(.1)]):
+        parameters,value=nelder_mead(objective,initial,[.4,.4,.4],160)
+        if math.isfinite(value) and (best is None or value<best[1]): best=(parameters,value)
+    require(best is not None,'Random-slope model did not converge')
+    chosen=pieces(best[0]); require(chosen is not None,'Random-slope model did not converge')
+    _,beta,sigma,matrix,theta=chosen
+    covariance=inverse(matrix)*sigma
+    engine.note += ' Gaussian random-intercept and random-slope mixed model, maximum likelihood (ML), Wald inference. Random slope on x'+str(slope)+'. Rows: subject ID, predictors, response.'
+    return {'coefficients':inference(list(map(float,beta)),covariance,['Intercept']+['x'+str(i) for i in range(1,p)]),'residual variance':sigma,'random intercept variance':sigma*theta[0][0],'random slope variance':sigma*theta[1][1],'intercept-slope correlation':theta[0][1]/math.sqrt(theta[0][0]*theta[1][1]),'ICC':theta[0][0]/(1+theta[0][0]),'subjects':len(ids)}
 
 
 def clustered(engine,name,a):
@@ -441,8 +605,9 @@ def clustered(engine,name,a):
     require(len(clusters)>=3,'At least three subject/cluster IDs are required')
     x,y=regression_data([r[1:] for r in rows]); n=len(y); p=len(x[0]); X=mp.matrix(x); Y=mp.matrix(y)
     if name=='mixedmodel':
-        require(n<=300,'Random-intercept model limit: 300 observations')
+        require(n<=300,'Mixed model limit: 300 observations')
         require(any(len(c)>1 for c in clusters),'Random intercept requires repeated subjects')
+        slope=integer(a[1],0,19) if len(a)>1 else 0
         def fit(ratio):
             W=mp.eye(n); logdet=0.0
             for c in clusters:
@@ -461,10 +626,14 @@ def clustered(engine,name,a):
             else: lo,u,fu=u,v,fv; v=lo+golden*(hi-lo); fv=objective(v)
         ratio=math.exp((lo+hi)/2); chosen=fit(ratio); zero=fit(0)
         if zero[0]<=chosen[0]: ratio=0; chosen=zero
-        obj,b,cov,sigma=chosen
-        engine.note += ' Gaussian random-intercept mixed model, maximum likelihood (ML), Wald inference. Rows: subject ID, predictors, response.'
-        return {'coefficients':inference(list(map(float,b)),cov*sigma,['Intercept']+['x'+str(i) for i in range(1,p)]),'residual variance':sigma,'random intercept variance':ratio*sigma,'ICC':ratio/(1+ratio),'subjects':len(ids)}
+        if slope==0:
+            obj,b,cov,sigma=chosen
+            engine.note += ' Gaussian random-intercept mixed model, maximum likelihood (ML), Wald inference. Rows: subject ID, predictors, response.'
+            return {'coefficients':inference(list(map(float,b)),cov*sigma,['Intercept']+['x'+str(i) for i in range(1,p)]),'residual variance':sigma,'random intercept variance':ratio*sigma,'ICC':ratio/(1+ratio),'subjects':len(ids)}
+        require(1<=slope<p,'Random-slope predictor position is out of range')
+        return mixed_slope(engine,x,y,clusters,ids,slope,ratio)
     family=option(a,1,'gaussian'); require(family in ('gaussian','binomial','poisson'),'GEE family: gaussian, binomial, or poisson')
+    corr=option(a,2,'independence'); require(corr in ('independence','exchangeable','ar1'),'GEE working correlation: independence, exchangeable, or ar1')
     x,transform,_,_=standardized_design(x); X=mp.matrix(x)
     if family=='binomial': require(all(v in (0,1) for v in y),'Binomial GEE response must be 0/1')
     if family=='poisson': require(all(v>=0 and v.is_integer() for v in y),'Poisson GEE response must be integer counts')
@@ -477,13 +646,84 @@ def clustered(engine,name,a):
         if family=='binomial':
             margins=[(2*v-1)*dot(r,b) for r,v in zip(x,y)]
             require(not (min(margins)>=-1e-8 and max(margins)>1e-8),'Complete or quasi separation: binomial GEE estimates are not finite')
-    bread=inverse([[sum(weights[t]*x[t][i]*x[t][j] for t in range(n)) for j in range(p)] for i in range(p)]); meat=mp.zeros(p)
-    for c in clusters:
-        score=mp.matrix([sum(x[t][i]*(y[t]-mu[t]) for t in c) for i in range(p)]); meat+=score*score.T
+    if corr=='independence':
+        bread=inverse([[sum(weights[t]*x[t][i]*x[t][j] for t in range(n)) for j in range(p)] for i in range(p)]); meat=mp.zeros(p)
+        for c in clusters:
+            score=mp.matrix([sum(x[t][i]*(y[t]-mu[t]) for t in c) for i in range(p)]); meat+=score*score.T
+        cov=bread*meat*bread
+        b=list(map(float,transform*mp.matrix(b))); cov=transform*cov*transform.T
+        engine.note += ' GEE: independent working correlation, cluster sandwich covariance, asymptotic Wald inference. Rows: cluster ID, predictors, response. Zero robust SE leaves p/CI unavailable.'
+        return {'coefficients':inference(b,cov,['Intercept']+['x'+str(i) for i in range(1,p)],family!='gaussian'),'clusters':len(ids),'family':family}
+    largest=max(len(c) for c in clusters)
+    def moments(alpha,beta):
+        mean_values=[]; variances=[]; derivatives=[]
+        for row in x:
+            linear=dot(row,beta)
+            if family=='gaussian': mean_values.append(linear); variances.append(1.0); derivatives.append(1.0)
+            else:
+                value=logistic(linear) if family=='binomial' else math.exp(linear)
+                mean_values.append(value); variances.append(value*(1-value) if family=='binomial' else value); derivatives.append(value*(1-value) if family=='binomial' else value)
+        require(all(math.isfinite(v) for v in mean_values),'GEE mean function exceeded the numeric range')
+        correlation=alpha
+        if corr=='exchangeable' and largest>1: correlation=max(correlation,-1/(largest-1)+1e-6)
+        fisher=mp.zeros(p); scores=[]; standardized=[0.0]*n
+        for c in clusters:
+            size=len(c); scaled=[]; residual=[]
+            for i in c:
+                divided=derivatives[i]/math.sqrt(variances[i])
+                scaled.append(mp.matrix([x[i][j]*divided for j in range(p)]))
+                residual.append((y[i]-mean_values[i])/math.sqrt(variances[i])); standardized[i]=residual[-1]
+            if corr=='exchangeable':
+                first=1/(1-correlation); second=correlation/((1-correlation)*(1+(size-1)*correlation))
+                columns_sum=mp.matrix([mp.fsum(scaled[k][j,0] for k in range(size)) for j in range(p)])
+                gram=mp.zeros(p)
+                for k in range(size): gram+=scaled[k]*scaled[k].T
+                score=first*mp.matrix([mp.fsum(scaled[k][j,0]*residual[k] for k in range(size)) for j in range(p)])-second*math.fsum(residual)*columns_sum
+                fisher+=first*gram-second*columns_sum*columns_sum.T
+            else:
+                if size==1: coefficient=1.0; diagonals=[1.0]
+                else:
+                    coefficient=1/(1-correlation*correlation); diagonals=[1.0]*size
+                    for k in range(1,size-1): diagonals[k]=1+correlation*correlation
+                vector=mp.matrix([mp.fsum(diagonals[k]*scaled[k][j,0]*residual[k] for k in range(size)) for j in range(p)])
+                gram=mp.zeros(p)
+                for k in range(size): gram+=diagonals[k]*(scaled[k]*scaled[k].T)
+                if size>1:
+                    for k in range(size-1):
+                        vector-=correlation*mp.matrix([scaled[k][j,0]*residual[k+1]+scaled[k+1][j,0]*residual[k] for j in range(p)])
+                        gram-=correlation*(scaled[k]*scaled[k+1].T+scaled[k+1]*scaled[k].T)
+                score=coefficient*vector; fisher+=coefficient*gram
+            scores.append(score)
+        return fisher,scores,standardized
+    def update(standardized):
+        numerator=0.0; denominator=0.0
+        if corr=='exchangeable':
+            for c in clusters:
+                values=[standardized[i] for i in c]; numerator+=math.fsum(values[i]*values[j] for i in range(len(values)) for j in range(i+1,len(values))); denominator+=len(values)*(len(values)-1)/2
+        else:
+            for c in clusters:
+                values=[standardized[i] for i in c]; numerator+=math.fsum(values[k]*values[k+1] for k in range(len(values)-1)); denominator+=max(0,len(values)-1)
+        if denominator<=0: return 0.0
+        lower=-1/(largest-1)+1e-6 if corr=='exchangeable' and largest>1 else -0.9999
+        return max(lower,min(0.9999,numerator/denominator))
+    alpha=0.0
+    for iteration in range(200):
+        fisher,scores,standardized=moments(alpha,b)
+        alpha=update(standardized)
+        total=mp.zeros(p,1)
+        for vector in scores: total+=vector
+        step=inverse(fisher)*total
+        if max(abs(float(step[j,0])) for j in range(p))<1e-9: break
+        b=[b[j]+float(step[j,0]) for j in range(p)]
+        require(max(abs(v) for v in b)<40,'GEE estimates diverged; simplify the working correlation')
+    else: raise MathError('GEE did not converge; simplify the working correlation')
+    fisher,scores,standardized=moments(alpha,b)
+    bread=inverse(fisher); meat=mp.zeros(p)
+    for vector in scores: meat+=vector*vector.T
     cov=bread*meat*bread
     b=list(map(float,transform*mp.matrix(b))); cov=transform*cov*transform.T
-    engine.note += ' GEE: independent working correlation, cluster sandwich covariance, asymptotic Wald inference. Rows: cluster ID, predictors, response. Zero robust SE leaves p/CI unavailable.'
-    return {'coefficients':inference(b,cov,['Intercept']+['x'+str(i) for i in range(1,p)],family!='gaussian'),'clusters':len(ids),'family':family}
+    engine.note += ' GEE: '+corr+' working correlation'+(' (moment estimate alpha='+format(alpha,'.4g')+')' if corr!='independence' else '')+', cluster sandwich covariance, asymptotic Wald inference. Rows: cluster ID, predictors, response'+('; AR(1) uses the within-cluster row order as the time order' if corr=='ar1' else '')+'. Zero robust SE leaves p/CI unavailable.'
+    return {'coefficients':inference(b,cov,['Intercept']+['x'+str(i) for i in range(1,p)],family!='gaussian'),'clusters':len(ids),'family':family,'working correlation':corr,'alpha':alpha}
 
 
 def resampling(engine,name,a):

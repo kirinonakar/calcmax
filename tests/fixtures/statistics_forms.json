@@ -224,7 +224,59 @@
       "eventValue": "died",
       "predictors": "0"
     },
-    "expected": "cox([[9,1,1],[12,0,2]])"
+    "expected": "cox([[9,1,1],[12,0,2]],breslow,-1,1)"
+  },
+  {
+    "id": "cox",
+    "rows": [
+      [
+        "1",
+        "9",
+        "died",
+        ""
+      ],
+      [
+        "2",
+        "12",
+        "alive",
+        ""
+      ]
+    ],
+    "settings": {
+      "time": "1",
+      "event": "2",
+      "eventValue": "died",
+      "predictors": "0",
+      "ties": "efron",
+      "ph": "none"
+    },
+    "expected": "cox([[9,1,1],[12,0,2]],efron,-1,0)"
+  },
+  {
+    "id": "cox",
+    "rows": [
+      [
+        "1",
+        "9",
+        "died",
+        "5"
+      ],
+      [
+        "2",
+        "12",
+        "alive",
+        "6"
+      ]
+    ],
+    "settings": {
+      "time": "1",
+      "event": "2",
+      "eventValue": "died",
+      "truncation": "entry",
+      "entry": "0",
+      "predictors": "3"
+    },
+    "expected": "cox([[9,1,1,5],[12,0,2,6]],breslow,2,1)"
   },
   {
     "id": "repeatedanova",
@@ -245,7 +297,35 @@
     "settings": {
       "columns": "1,3"
     },
-    "expected": "repeatedanova([[2,5],[3,7]])"
+    "expected": "repeatedanova([[2,5],[3,7]],1)"
+  },
+  {
+    "id": "repeatedanova",
+    "rows": [
+      [
+        "A",
+        "2",
+        "4",
+        "5",
+        "7",
+        "8",
+        "9"
+      ],
+      [
+        "B",
+        "3",
+        "4",
+        "7",
+        "6",
+        "9",
+        "10"
+      ]
+    ],
+    "settings": {
+      "columns": "1,2,3,4,5,6",
+      "factor2": "3"
+    },
+    "expected": "repeatedanova([[2,4,5,7,8,9],[3,4,7,6,9,10]],3)"
   },
   {
     "id": "mixedmodel",
@@ -271,7 +351,34 @@
       "response": "0",
       "predictors": "2"
     },
-    "expected": "mixedmodel([[1,0,2],[1,1,4],[2,0,3]])"
+    "expected": "mixedmodel([[1,0,2],[1,1,4],[2,0,3]],0)"
+  },
+  {
+    "id": "mixedmodel",
+    "rows": [
+      [
+        "2",
+        "A",
+        "0"
+      ],
+      [
+        "4",
+        "A",
+        "1"
+      ],
+      [
+        "3",
+        "B",
+        "0"
+      ]
+    ],
+    "settings": {
+      "subject": "1",
+      "response": "0",
+      "predictors": "2",
+      "slope": "1"
+    },
+    "expected": "mixedmodel([[1,0,2],[1,1,4],[2,0,3]],1)"
   },
   {
     "id": "gee",
@@ -298,7 +405,35 @@
       "predictors": "2",
       "family": "poisson"
     },
-    "expected": "gee([[1,0,2],[1,1,4],[2,0,3]],poisson)"
+    "expected": "gee([[1,0,2],[1,1,4],[2,0,3]],poisson,independence)"
+  },
+  {
+    "id": "gee",
+    "rows": [
+      [
+        "2",
+        "A",
+        "0"
+      ],
+      [
+        "4",
+        "A",
+        "1"
+      ],
+      [
+        "3",
+        "B",
+        "0"
+      ]
+    ],
+    "settings": {
+      "subject": "1",
+      "response": "0",
+      "predictors": "2",
+      "family": "binomial",
+      "corr": "exchangeable"
+    },
+    "expected": "gee([[1,0,2],[1,1,4],[2,0,3]],binomial,exchangeable)"
   },
   {
     "id": "kstest",
@@ -362,54 +497,5 @@
       "scale": "4"
     },
     "expected": "kstest([4,5],uniform,3,4)"
-  },
-  {
-    "id": "survivalanalysis",
-    "rows": [
-      [
-        "yes",
-        "1",
-        "A",
-        "30"
-      ],
-      [
-        "no",
-        "2",
-        "B",
-        "40"
-      ],
-      [
-        "yes",
-        "3",
-        "A",
-        "50"
-      ]
-    ],
-    "settings": {
-      "time": "1",
-      "event": "0",
-      "eventValue": "yes",
-      "group": "2",
-      "cox": "1",
-      "predictors": "3"
-    },
-    "expected": "survivalanalysis([[1,1,1,30],[2,0,2,40],[3,1,1,50]],1)"
-  },
-  {
-    "id": "survivalanalysis",
-    "rows": [
-      [
-        "1",
-        "1"
-      ],
-      [
-        "2",
-        "0"
-      ]
-    ],
-    "settings": {
-      "grouping": "all"
-    },
-    "expected": "survivalanalysis([[1,1,1],[2,0,1]],0)"
   }
 ]

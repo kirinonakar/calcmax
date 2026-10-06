@@ -45,7 +45,7 @@ import kotlin.math.abs
         "Durbin–Watson" to "durbinWatson","Residual Shapiro p" to "shapiroP")
     Text("n=${report.optInt("n")} · "+(if(report.isNull("df"))"" else "df=${report.optInt("df")} · ")+metrics.filter {report.has(it.second)&&(!report.isNull(it.second)||it.second in listOf("rSquared","adjustedRSquared"))}.map {"${tr(it.first)}=${value(report,it.second)}"}.joinToString(" · "),fontSize=11.sp)
     Text(tr(when {
-        report.optString("method")=="firth"->"Firth logistic regression; approximate Wald intervals."
+        report.optString("method")=="firth"->"Firth logistic regression; profile penalized-likelihood intervals."
         machineLearning->"Training fit; ordinary coefficient inference is unavailable."
         report.optString("fitScale")=="binomial"->"Binomial MLE; Wald intervals."
         report.optString("fitScale")=="log(y)"->"Inference in log(y); R² and RMSE in original y units."

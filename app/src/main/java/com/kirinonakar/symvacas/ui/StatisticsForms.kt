@@ -54,13 +54,21 @@ internal fun guidedStatisticsCommand(definition:JSONObject,rows:List<List<String
             require(labels.size==2) {"Log-rank requires exactly two groups"}
             "logrank(${labels.joinToString(",") {label->table(selected.filter {it[2]==label}.map {it.take(2)})}})"
         }
-        "cox"->"cox(${table(eventRows(multiple("predictors",listOf(col("time"),col("event")))))})"
-        "repeatedanova"->{val indices=multiple("columns");require(indices.size>=2) {"Choose at least two conditions"};"repeatedanova(${table(complete(indices))})"}
+        "cox"->{
+            val time=col("time");val event=col("event");val entry=if(opts["truncation"]=="entry")col("entry") else null
+            val reserved=listOfNotNull(time,event,entry)
+            val selected=eventRows(listOfNotNull(entry)+multiple("predictors",reserved))
+            "cox(${table(selected)},${opts["ties"]},${if(entry==null)-1 else 2},${if(opts["ph"]=="test")1 else 0})"
+        }
+        "repeatedanova"->{val indices=multiple("columns");require(indices.size>=2) {"Choose at least two conditions"};"repeatedanova(${table(complete(indices))},${opts["factor2"]})"}
         "mixedmodel","gee"->{
             val subject=col("subject");val response=col("response");distinct(listOf(subject,response))
             val selected=complete(listOf(subject)+multiple("predictors",listOf(subject,response))+response);val labels=selected.map {it[0]}.distinct()
             val mapped=selected.map {row->listOf((labels.indexOf(row[0])+1).toString())+row.drop(1)}
-            "$id(${table(mapped)}${if(id=="gee")",${opts["family"]}" else ""})"
+            if(id=="gee")"gee(${table(mapped)},${opts["family"]},${opts["corr"]})" else {
+                val slope=opts["slope"]?.toIntOrNull() ?: 0
+                "mixedmodel(${table(mapped)},$slope)"
+            }
         }
         "kstest"->{
             val first=col("first")
@@ -93,5 +101,6 @@ internal fun survivalAnalysisPlan(rows:List<List<String>>,settings:JSONObject=JS
     val groups=if(group==null)emptyList() else selected.map {it[2]}.distinct()
     val encoded=selected.map {row->listOf(row[0],if(row[1]==eventValue)"1" else "0",if(group==null)"1" else (groups.indexOf(row[2])+1).toString())+row.drop(reserved.size)}
     val table=encoded.joinToString(",","[","]") {it.joinToString(",","[","]")}
-    return SurvivalPlan("survivalanalysis($table,$cox)",groups,predictors.map {labels.getOrNull(it) ?: listOf("x","y","z").getOrNull(it) ?: "x${it+1}"})
+    val ties=option("ties","breslow");val ph=if(option("ph","test")=="test")1 else 0
+    return SurvivalPlan("survivalanalysis($table,$cox,$ties,-1,$ph)",groups,predictors.map {labels.getOrNull(it) ?: listOf("x","y","z").getOrNull(it) ?: "x${it+1}"})
 }

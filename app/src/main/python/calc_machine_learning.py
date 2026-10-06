@@ -47,6 +47,124 @@ def _report(engine, ys, fitted, mode, coefficients=()):
     return report
 
 
+def _linear_core(columns, active, target, penalty, ridge, beta=None, residual=None, tolerance=1e-8, limit=10000):
+    """Cyclic coordinate descent for the standardized elastic-net linear problem."""
+    size=len(target); values=[0.0]*len(columns) if beta is None else list(beta)
+    errors=list(target) if residual is None else list(residual)
+    converged=False
+    for iteration in range(limit):
+        for j, col in enumerate(columns):
+            if not active[j]:
+                continue
+            correlation = math.fsum(v*r/size for v, r in zip(col, errors))+values[j]
+            updated = math.copysign(max(abs(correlation)-penalty, 0.0), correlation)/(1+ridge)
+            delta = updated-values[j]
+            if delta:
+                errors = [r-delta*v for r, v in zip(errors, col)]
+                values[j] = updated
+        violation = 0.0
+        for b, col in zip(values, columns):
+            gradient = math.fsum(v*r/size for v, r in zip(col, errors))
+            violation = max(violation, abs(gradient-ridge*b-math.copysign(penalty, b)) if b
+                            else max(abs(gradient)-penalty, 0.0))
+        if violation <= tolerance:
+            converged = True
+            break
+    return values, errors, iteration+1, converged
+
+
+def _logistic_core(columns, active, ys, l1, l2, intercept=None, beta=None, tolerance=1e-8, limit=10000):
+    """Cyclic coordinate descent for the standardized elastic-net logistic problem."""
+    n, p = len(ys), len(columns)
+    if intercept is None:
+        prevalence = math.fsum(ys)/n
+        intercept = math.log(prevalence/(1-prevalence))
+    values = [0.0]*p if beta is None else list(beta)
+    eta = [intercept+math.fsum(columns[j][i]*values[j] for j in range(p)) for i in range(n)]
+    for iteration in range(limit):
+        for j in range(-1, p):
+            if j >= 0 and not active[j]:
+                continue
+            col = [1.0]*n if j < 0 else columns[j]
+            old = intercept if j < 0 else values[j]
+            gradient = math.fsum(v*(y-_sigmoid(z))/n for v, y, z in zip(col, ys, eta))
+            candidate = old+gradient/0.25
+            updated = candidate if j < 0 else math.copysign(max(abs(candidate)-l1/0.25, 0), candidate)/(1+l2/0.25)
+            if updated != old:
+                eta = [z+(updated-old)*v for z, v in zip(eta, col)]
+                if j < 0: intercept = updated
+                else: values[j] = updated
+        residual = [y-_sigmoid(z) for y, z in zip(ys, eta)]
+        violation = abs(math.fsum(residual)/n)
+        for b, col in zip(values, columns):
+            gradient = math.fsum(v*r/n for v, r in zip(col, residual))-l2*b
+            violation = max(violation, abs(gradient-math.copysign(l1, b)) if b else max(abs(gradient)-l1, 0))
+        if violation <= tolerance:
+            return intercept, values, eta, iteration+1, True
+    return intercept, values, eta, limit, False
+
+
+def _select_alpha(xs, ys, columns, scales, ratio, penalty_mode, logistic):
+    """Choose the penalty by shuffled five-fold cross-validation over a geometric path."""
+    n, p = len(xs), len(columns)
+    require(n*p <= 20000, "Cross-validated alpha supports at most 20000 rows x predictors")
+    folds = 5 if n >= 10 else 2
+    order = list(range(n)); random.Random(0).shuffle(order)
+    assignment = [0]*n
+    for position, index in enumerate(order): assignment[index] = position % folds
+    test_sets = [[i for i in range(n) if assignment[i] == fold] for fold in range(folds)]
+    train_sets = [[i for i in range(n) if assignment[i] != fold] for fold in range(folds)]
+    active = [scale > 0 for scale in scales]
+    if logistic:
+        mean = math.fsum(ys)/n; scaling = 1.0
+        gradient = [math.fsum(columns[j][i]*(ys[i]-mean) for i in range(n))/n for j in range(p)]
+    else:
+        origin = ys[0]; offset = [v-origin for v in ys]; center = math.fsum(offset)/n
+        target = [v-center for v in offset]; scaling = max(map(abs, target)) or 1.0
+        scaled = [v/scaling for v in target]
+        gradient = [math.fsum(columns[j][i]*scaled[i] for i in range(n))/n for j in range(p)]
+    peak = max(map(abs, gradient)) or 1.0
+    alphas = [peak*scaling/max(ratio, .05)*10**(-step/4) for step in range(17)]
+    warm = {}; scores = []
+    for alpha in alphas:
+        l1 = alpha*ratio if logistic else alpha*ratio/scaling
+        l2 = alpha*(1-ratio)
+        total = 0.0; count = 0; failed = False
+        for fold in range(folds):
+            train = train_sets[fold]; test = test_sets[fold]
+            training = [[column[i] for i in train] for column in columns]
+            state = warm.get(fold)
+            if logistic:
+                values_target = [ys[i] for i in train]
+                intercept, values, eta, steps, converged = _logistic_core(training, active, values_target, l1, l2,
+                    intercept=None if state is None else state[0], beta=None if state is None else state[1], tolerance=1e-7)
+                if not converged: failed = True; break
+                warm[fold] = (intercept, list(values))
+                for i in test:
+                    linear = intercept+math.fsum(columns[j][i]*values[j] for j in range(p))
+                    probability = min(1-1e-12, max(1e-12, _sigmoid(linear)))
+                    total += -math.log(probability) if ys[i] else -math.log(1-probability)
+                    count += 1
+            else:
+                fold_mean = math.fsum(ys[i] for i in train)/len(train)
+                fitted = [(ys[i]-fold_mean)/scaling for i in train]
+                residual = fitted if state is None else [fitted[k]-math.fsum(training[j][k]*state[j] for j in range(p)) for k in range(len(train))]
+                values, errors, steps, converged = _linear_core(training, active, fitted, l1, l2,
+                    beta=state, residual=residual, tolerance=1e-7)
+                if not converged: failed = True; break
+                warm[fold] = list(values)
+                shift = math.fsum(values[j]*math.fsum(columns[j][i] for i in train)/len(train) for j in range(p))
+                for i in test:
+                    predicted = fold_mean+scaling*(math.fsum(columns[j][i]*values[j] for j in range(p))-shift)
+                    total += (ys[i]-predicted)**2; count += 1
+        scores.append([alpha, math.inf if failed or not count else total/count])
+    usable = [entry for entry in scores if math.isfinite(entry[1])]
+    require(usable, "Cross-validation did not converge for any penalty; increase the data or use a fixed alpha")
+    chosen = min(usable, key=lambda entry: (entry[1], entry[0]))
+    return chosen[0], {'alphaSelection': "cross-validation", 'cvFolds': folds, 'cvMetric': "deviance" if logistic else "mse",
+                       'cvScores': [[entry[0], None if not math.isfinite(entry[1]) else entry[1]] for entry in scores]}
+
+
 def fit_regularized(engine, rows, mode, options=None):
     logistic = mode.startswith("logistic")
     penalty_mode = mode.removeprefix("logistic")
@@ -59,10 +177,11 @@ def fit_regularized(engine, rows, mode, options=None):
         else:
             alpha = options
     xs, ys = _data(rows)
-    require(getattr(alpha, "is_real", False) and alpha.is_finite and alpha > 0,
-            "Regularization alpha must be a positive finite number")
-    alpha = float(alpha)
-    require(math.isfinite(alpha) and alpha > 0, "Regularization alpha must be a positive finite number")
+    cross_validated = str(alpha) == "cv"
+    require(cross_validated or (getattr(alpha, "is_real", False) and alpha.is_finite and alpha > 0),
+            "Regularization alpha must be a positive finite number or cv")
+    alpha = 0.0 if cross_validated else float(alpha)
+    require(cross_validated or (math.isfinite(alpha) and alpha > 0), "Regularization alpha must be a positive finite number or cv")
     require(getattr(ratio, "is_real", False) and ratio.is_finite and 0 <= ratio <= 1,
             "Elastic Net L1 ratio must be from 0 to 1")
     ratio = 0.0 if penalty_mode == "ridge" else 1.0 if penalty_mode == "lasso" else float(ratio)
@@ -78,8 +197,12 @@ def fit_regularized(engine, rows, mode, options=None):
     require(all(math.isfinite(v) for v in means+scales), "Regression data range is too large")
     columns = [[v/scale for v in col] if scale else [0.0]*n
                for col, scale in zip(columns, scales)]
+    if cross_validated:
+        alpha, cv = _select_alpha(xs, ys, columns, scales, ratio, penalty_mode, logistic)
     if logistic:
-        return _fit_logistic(engine, xs, ys, columns, origins, means, scales, mode, alpha, ratio)
+        expression = _fit_logistic(engine, xs, ys, columns, origins, means, scales, mode, alpha, ratio)
+        if cross_validated: engine.regression_report.update(cv)
+        return expression
     yorigin = ys[0]
     yoffset = [v-yorigin for v in ys]
     ymean = math.fsum(v/n for v in yoffset)
@@ -89,27 +212,7 @@ def fit_regularized(engine, rows, mode, options=None):
     residual = [v/yscale for v in target]
     penalty = alpha*ratio/yscale
     ridge = alpha*(1-ratio)
-    beta = [0.0]*p
-    converged = False
-    for iteration in range(10000):
-        for j, col in enumerate(columns):
-            if not scales[j]:
-                continue
-            correlation = math.fsum(v*r/n for v, r in zip(col, residual))+beta[j]
-            updated = math.copysign(max(abs(correlation)-penalty, 0.0), correlation)/(1+ridge)
-            delta = updated-beta[j]
-            if delta:
-                residual = [r-delta*v for r, v in zip(residual, col)]
-                beta[j] = updated
-        # Check optimality, including coefficients that were shrunk to zero.
-        violation = 0.0
-        for b, col in zip(beta, columns):
-            gradient = math.fsum(v*r/n for v, r in zip(col, residual))
-            violation = max(violation, abs(gradient-ridge*b-math.copysign(penalty, b)) if b
-                            else max(abs(gradient)-penalty, 0.0))
-        if violation <= 1e-8:
-            converged = True
-            break
+    beta, residual, iterations, converged = _linear_core(columns, [scale > 0 for scale in scales], residual, penalty, ridge)
     require(converged, "Regularized regression did not converge; increase alpha or remove nearly duplicate predictors")
     coefficients = [b*yscale/scale if scale else 0.0 for b, scale in zip(beta, scales)]
     intercept = math.fsum([yorigin, ymean]+[-b*(origin+mean)
@@ -117,8 +220,9 @@ def fit_regularized(engine, rows, mode, options=None):
     require(all(math.isfinite(v) for v in [intercept]+coefficients), "Regression coefficients exceed numeric range")
     fitted = [yorigin+ymean+(t-r)*yscale for t, r in zip([v/yscale for v in target], residual)]
     report = _report(engine, ys, fitted, mode, [intercept]+coefficients)
-    report.update(alpha=alpha, l1Ratio=ratio, standardized=True, iterations=iteration+1,
+    report.update(alpha=alpha, l1Ratio=ratio, standardized=True, iterations=iterations,
                   selectedPredictors=sum(b != 0 for b in coefficients))
+    if cross_validated: report.update(cv)
     variables = [engine.symbol("x" if p == 1 else "x"+str(j+1)) for j in range(p)]
     return s.Float(intercept, 16)+sum(s.Float(b, 16)*x for b, x in zip(coefficients, variables))
 
@@ -134,34 +238,8 @@ def _fit_logistic(engine, xs, ys, columns, origins, means, scales, mode, alpha, 
     from calc_inference import _binary_roc
     require(set(ys) == {0.0, 1.0}, "Logistic response must contain both 0 and 1")
     n, p = len(xs), len(columns)
-    prevalence = math.fsum(ys)/n
-    intercept = math.log(prevalence/(1-prevalence))
-    beta = [0.0]*p
-    eta = [intercept]*n
     l1, l2 = alpha*ratio, alpha*(1-ratio)
-    converged = False
-    for iteration in range(10000):
-        for j in range(-1, p):
-            if j >= 0 and not scales[j]:
-                continue
-            col = [1.0]*n if j < 0 else columns[j]
-            old = intercept if j < 0 else beta[j]
-            gradient = math.fsum(v*(y-_sigmoid(z))/n for v, y, z in zip(col, ys, eta))
-            candidate = old+gradient/0.25
-            updated = candidate if j < 0 else math.copysign(max(abs(candidate)-l1/0.25, 0), candidate)/(1+l2/0.25)
-            eta = [z+(updated-old)*v for z, v in zip(eta, col)]
-            if j < 0:
-                intercept = updated
-            else:
-                beta[j] = updated
-        residual = [y-_sigmoid(z) for y, z in zip(ys, eta)]
-        violation = abs(math.fsum(residual)/n)
-        for b, col in zip(beta, columns):
-            gradient = math.fsum(v*r/n for v, r in zip(col, residual))-l2*b
-            violation = max(violation, abs(gradient-math.copysign(l1, b)) if b else max(abs(gradient)-l1, 0))
-        if violation <= 1e-8:
-            converged = True
-            break
+    intercept, beta, eta, iterations, converged = _logistic_core(columns, [scale > 0 for scale in scales], ys, l1, l2)
     require(converged, "Regularized logistic regression did not converge; increase alpha")
     coefficients = [b/scale if scale else 0.0 for b, scale in zip(beta, scales)]
     original_intercept = math.fsum([intercept]+[-b*(origin+mean) for b, origin, mean in zip(coefficients, origins, means)])
@@ -172,7 +250,7 @@ def _fit_logistic(engine, xs, ys, columns, origins, means, scales, mode, alpha, 
     with mp.workdps(30):
         for coefficient in report["coefficients"][1:]:
             coefficient["oddsRatio"] = mp.nstr(mp.exp(mp.mpf(coefficient["estimate"])), 16)
-    report.update(alpha=alpha, l1Ratio=ratio, standardized=True, iterations=iteration+1,
+    report.update(alpha=alpha, l1Ratio=ratio, standardized=True, iterations=iterations,
                   selectedPredictors=sum(b != 0 for b in coefficients),
                   logLoss=math.fsum((max(z, 0)-y*z+math.log1p(math.exp(-abs(z))))/n for z, y in zip(eta, ys)),
                   accuracy=sum((v >= .5) == bool(y) for v, y in zip(fitted, ys))/n)

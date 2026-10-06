@@ -93,7 +93,7 @@ export function statisticsAnalysisData(source,{op='stats',column=0,grouping='col
   const samples=paired?['x','y'].map((label,i)=>({label,values:pairs.map(row=>row[i])})):['anova','tukey','kruskal'].includes(op)?names.map((label,i)=>({label,values:values[i]})):['ttest2','ztest2','mannwhitney'].includes(op)?[first,second].map(i=>({label:names[i],values:values[i]})):[{label:names[selected],values:values[selected]}];
   return {rows,groups,pairs,paired,categorical,first,second,samples};
 }
-export function statisticsCommand(source,{op='stats',column=0,extra='0',tail='two',sigma='1',sigmaY='1',yatesCorrection=true,regression='linear',degree='3',alpha='0.1',l1Ratio='0.5',trees='100',maxDepth='10',seed='0',responseColumn,formula='A*exp(-k*x)+C',variable='x',initials='',grouping='columns',firstGroup='',secondGroup='',kind}={}){
+export function statisticsCommand(source,{op='stats',column=0,extra='0',tail='two',sigma='1',sigmaY='1',yatesCorrection=true,regression='linear',firth='auto',degree='3',alpha='0.1',l1Ratio='0.5',trees='100',maxDepth='10',seed='0',responseColumn,formula='A*exp(-k*x)+C',variable='x',initials='',grouping='columns',firstGroup='',secondGroup='',kind}={}){
   if(op==='regression'&&kind&&kind!=='xy'&&!(statisticsColumnCount(kind)>1&&['multiple','logistic','ridge','lasso','elasticnet','logisticridge','logisticlasso','logisticelasticnet','randomforest','randomforestclassifier','randomforestregressor'].includes(regression)))throw new Error('Regression needs x,y data');
   const {rows,groups,pairs,categorical,first,second,samples:activeSamples}=statisticsAnalysisData(source,{op,column,grouping,firstGroup,secondGroup,kind});
   const samples=activeSamples.map(sample=>sample.values),data=samples[0];
@@ -107,7 +107,8 @@ export function statisticsCommand(source,{op='stats',column=0,extra='0',tail='tw
       const response=responseColumn===undefined?rows[0].length-1:Number(responseColumn);
       if(!Number.isInteger(response)||response<0||response>=rows[0].length)throw new Error('Select a dependent variable column');
       const order=rows[0].map((_,i)=>i).filter(i=>i!==response).concat(response);
-      return `regression(${vector(complete.map(row=>vector(order.map(i=>row[i]))))},${regression}${['elasticnet','logisticelasticnet'].includes(regression)?`,[${alpha},${l1Ratio}]`:['ridge','lasso','logisticridge','logisticlasso'].includes(regression)?','+alpha:regression.startsWith('randomforest')?`,[${trees},${maxDepth},${seed}]`:''})`;
+      const regressionOptions=['elasticnet','logisticelasticnet'].includes(regression)?`,[${alpha},${l1Ratio}]`:['ridge','lasso','logisticridge','logisticlasso'].includes(regression)?','+alpha:regression.startsWith('randomforest')?`,[${trees},${maxDepth},${seed}]`:regression==='logistic'&&firth==='firth'?',firth':'';
+      return `regression(${vector(complete.map(row=>vector(order.map(i=>row[i]))))},${regression}${regressionOptions})`;
     }
     if(pairs.length<2)throw new Error('Regression needs at least two complete x,y rows');
     return `regression(${vector(pairs.map(p=>vector(regression==='polynomial'&&Number(responseColumn)===0?[p[1],p[0]]:p.slice(0,2))))},${regression}${regression==='polynomial'?','+degree:regression==='custom'?`,${formula},${variable}${initials.trim()?','+initials:''}`:''})`;

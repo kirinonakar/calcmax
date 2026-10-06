@@ -752,7 +752,9 @@ def fit_regression(engine, rows, mode, degree=None):
         return fit_random_forest(engine, rows, degree, {"randomforestclassifier": "classification", "randomforestregressor": "regression"}.get(mode, "auto"))
     from calc_inference import regression_report, fit_multivariate, _numbers
     if mode in ("multiple", "logistic"):
-        return fit_multivariate(engine, rows, logistic=mode=="logistic")
+        require(mode == "logistic" or degree is None, "Options require a supported regression mode")
+        if degree is not None: require(str(degree) == "firth", "Logistic options must be firth")
+        return fit_multivariate(engine, rows, logistic=mode=="logistic", firth_mode="always" if degree is not None else "auto")
     require(len(rows)>=2 and all(len(row)==2 for row in rows),"Regression requires x,y pairs")
     for row in rows: _numbers(row)
     xs,ys = zip(*rows)

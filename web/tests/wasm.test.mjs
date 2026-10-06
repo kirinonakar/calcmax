@@ -95,7 +95,7 @@ test('complete separation switches to Firth and logistic influence values render
   const firth=evaluate([...Array(4).fill('0,0'),...Array(6).fill('1,1')].join('\n'));
   assert.equal(firth.regression.method,'firth');assert.equal(firth.regression.separation,'complete');
   assert.match(firth.note,/Firth/);assert.ok(Math.abs(Number(firth.regression.coefficients[1].oddsRatio)-117)<1e-10);
-  assert.equal(firth.regression.intervalMethod,'wald');assert.equal(firth.regression.aic,undefined);
+  assert.equal(firth.regression.intervalMethod,'profile');assert.equal(firth.regression.aic,undefined);
   const csv=regressionResidualCSV(firth.regression).split('\n').map(line=>line.split(','));
   assert.equal(csv.length,11);
   assert.ok(Math.abs(Number(csv[1][csv[0].indexOf('leverage')])-.25)<1e-12);

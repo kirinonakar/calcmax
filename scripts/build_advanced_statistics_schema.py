@@ -18,10 +18,11 @@ specs = [
     ('mcnemar','McNemar','McNemar','table',',exact','[[20,8],[2,15]]','Paired 2×2 count table; exact / corrected / asymptotic.','대응 2×2 빈도표; exact / corrected / asymptotic.'),
     ('kaplanmeier','Kaplan–Meier','Kaplan–Meier','table',',0.95',SURVIVAL,'Rows: time, event (1=event, 0=censored); confidence level.','열: 시간, 사건(1=발생, 0=중도절단); 신뢰수준.'),
     ('logrank','Log-rank','로그순위 검정','survivalgroups','','[[1,1],[3,1],[4,0],[6,1]],[[2,0],[4,1],[5,1],[7,0]]','Two time/event tables. Current data: time, event, group (exactly two groups).','두 시간/사건 표. 현재 데이터 열: 시간, 사건, 그룹(2개).'),
-    ('cox','Cox regression','Cox 회귀','table','','[[1,1,0],[2,1,1],[3,0,0],[4,1,1],[5,1,0],[6,0,1],[7,1,1],[8,1,0]]','Rows: time, event 0/1, predictors. Breslow ties; no intercept.','열: 시간, 사건 0/1, 설명변수. Breslow 동률 처리; 절편 없음.'),
-    ('repeatedanova','Repeated-measures ANOVA','반복측정 ANOVA','table','','[[2,4,5],[3,4,7],[4,7,8],[2,3,6],[5,6,7]]','Rows=subjects, columns=conditions; one factor, complete balanced data. Includes GG correction.','행=대상, 열=조건; 일요인 완전 균형자료. GG 보정 포함.'),
-    ('mixedmodel','Mixed model','혼합모형','table','',CLUSTERS,'Rows: subject ID, predictors, response. Gaussian random intercept ML; ≤300 rows.','열: 대상 ID, 설명변수, 반응. Gaussian 랜덤 절편 ML; 최대 300행.'),
-    ('gee','GEE','GEE','table',',gaussian',CLUSTERS,'Rows: cluster ID, predictors, response. gaussian / binomial / poisson; independent working correlation, sandwich SE.','열: 군집 ID, 설명변수, 반응. gaussian / binomial / poisson; 독립 작업상관, 강건 SE.'),
+    ('survivalanalysis','Survival analysis','생존분석','table',',0,breslow,-1,1','[[1,1,1],[2,1,2],[3,0,1],[4,1,2],[5,1,1],[6,0,2],[7,1,2],[8,1,1]]','Rows: time, event (0/1), group ID, optional Cox predictors; Cox 0=off, 1=on; then ties and the PH check.','열: 시간, 사건(0/1), 그룹 ID, 선택적 Cox 설명변수. Cox 0=끔, 1=켬; 이어서 동률 처리와 PH 검정.'),
+    ('cox','Cox regression','Cox 회귀','table',',breslow,-1,1','[[1,1,0],[2,1,1],[3,0,0],[4,1,1],[5,1,0],[6,0,1],[7,1,1],[8,1,0]]','Rows: time, event 0/1, predictors. Ties breslow/efron; entry column for left truncation (-1 none); PH check 0/1.','열: 시간, 사건 0/1, 설명변수. 동률 breslow/efron, 좌측 절단 진입시간 열(-1 없음), PH 검정 0/1.'),
+    ('repeatedanova','Repeated-measures ANOVA','반복측정 ANOVA','table',',1','[[2,4,5],[3,4,7],[4,7,8],[2,3,6],[5,6,7]]','Rows=subjects, columns=conditions. Second-factor levels: 1 = one-way, 2+ = two-way (first factor slowest); GG corrections.','행=대상, 열=조건. 둘째 요인 수준: 1=일요인, 2 이상=이요인(첫 요인 최외곽); GG 보정.'),
+    ('mixedmodel','Mixed model','혼합모형','table',',0',CLUSTERS,'Rows: subject ID, predictors, response. Gaussian random intercept ML; second argument selects a random slope (0 none); ≤300 rows.','열: 대상 ID, 설명변수, 반응. Gaussian 랜덤 절편 ML; 둘째 인수는 랜덤 기울기 위치(0 없음); 최대 300행.'),
+    ('gee','GEE','GEE','table',',gaussian,independence',CLUSTERS,'Rows: cluster ID, predictors, response. gaussian / binomial / poisson; working correlation independent / exchangeable / ar1; sandwich SE.','열: 군집 ID, 설명변수, 반응. gaussian / binomial / poisson; 작업상관 independence / exchangeable / ar1; 강건 SE.'),
     ('multinomial','Multinomial logistic','다항 로지스틱','table','',CATEGORIES,'Rows: predictors, numeric category response. Smallest category is reference.','열: 설명변수, 숫자 범주 반응. 가장 작은 범주가 기준.'),
     ('ordinal','Ordinal logistic','순서형 로지스틱','table','',CATEGORIES,'Rows: predictors, ordered numeric response. Proportional-odds cumulative logit.','열: 설명변수, 순서가 있는 숫자 반응. 비례오즈 누적 로짓.'),
     ('poissonreg','Poisson regression','포아송 회귀','table','',COUNTS,'Rows: predictors, integer count response. Log link.','열: 설명변수, 정수 빈도 반응. 로그 연결함수.'),
@@ -53,10 +54,20 @@ forms={
     'mcnemar':[field('layout','Data','자료 형태','choice','counts',[('counts','2×2 counts','2×2 빈도표'),('pairs','Paired observations','대응 관측값')]),col('first','Before / first','이전·첫째 열',0),col('second','After / second','이후·둘째 열',1),field('method','Method','검정 방법','choice','exact',[('exact','Exact','정확 검정'),('corrected','Continuity corrected','연속성 보정'),('asymptotic','Asymptotic','점근 검정')])],
     'kaplanmeier':survival_fields+[field('level','Confidence level','신뢰수준','number','0.95')],
     'logrank':survival_fields+[col('group','Group','그룹 열',2)],
-    'cox':survival_fields+[multi('predictors','Predictors','설명변수 열')],
-    'repeatedanova':[multi('columns','Condition columns','조건 열')],
-    'mixedmodel':cluster_fields,
-    'gee':cluster_fields+[field('family','Family','분포','choice','gaussian',[('gaussian','Gaussian','Gaussian'),('binomial','Binomial (0/1)','이항 (0/1)'),('poisson','Poisson','포아송')])],
+    'survivalanalysis':survival_fields+[field('grouping','Groups','그룹','choice','groups',[('groups','Group column','그룹 열'),('all','All subjects','전체 대상')]),
+        dict(col('group','Group column','그룹 열',2),when={'grouping':['groups']}),
+        field('cox','Cox model','Cox 모형','choice','0',[('0','Off','끔'),('1','On','켬')]),
+        dict(multi('predictors','Cox predictors','Cox 설명변수 열'),when={'cox':['1']}),
+        field('ties','Tie handling','동률 처리','choice','breslow',[('breslow','Breslow','Breslow'),('efron','Efron','Efron')]),
+        dict(field('ph','Proportional-hazards check','비례위험 검정','choice','test',[('test','Time-rank test','시간순위 검정'),('none','Skip','생략')]),when={'cox':['1']})],
+    'cox':survival_fields+[multi('predictors','Predictors','설명변수 열'),
+        field('ties','Tie handling','동률 처리','choice','breslow',[('breslow','Breslow','Breslow'),('efron','Efron','Efron')]),
+        field('truncation','Left truncation','좌측 절단','choice','none',[('none','None','없음'),('entry','Entry-time column','진입시간 열')]),
+        dict(col('entry','Entry time','진입시간 열',2),when={'truncation':['entry']}),
+        field('ph','Proportional-hazards check','비례위험 검정','choice','test',[('test','Time-rank test','시간순위 검정'),('none','Skip','생략')])],
+    'repeatedanova':[multi('columns','Condition columns','조건 열'),field('factor2','Second-factor levels','둘째 요인 수준','number','1')],
+    'mixedmodel':cluster_fields+[field('slope','Random-slope predictor','랜덤 기울기 변수','number','0')],
+    'gee':cluster_fields+[field('family','Family','분포','choice','gaussian',[('gaussian','Gaussian','Gaussian'),('binomial','Binomial (0/1)','이항 (0/1)'),('poisson','Poisson','포아송')]),field('corr','Working correlation','작업상관','choice','independence',[('independence','Independent','독립'),('exchangeable','Exchangeable','교환가능'),('ar1','AR(1)','AR(1)')])],
     'kstest':[field('mode','Samples / distribution','표본·분포','choice','two',[('two','Two samples','두 표본'),('normal','Normal','정규분포'),('uniform','Uniform','균등분포')]),col('first','Sample column','표본 열',0),dict(col('second','Second sample','둘째 표본 열',1),when={'mode':['two']}),dict(field('location','Mean / lower bound','평균·하한','number','0'),when={'mode':['normal','uniform']}),dict(field('scale','SD / width','표준편차·폭','number','1'),when={'mode':['normal','uniform']})]
 }
 form_help={
@@ -66,10 +77,11 @@ form_help={
  'mcnemar':('Use two paired category columns or a 2×2 count table.','두 대응 범주 열 또는 2×2 빈도표를 사용합니다.'),
  'kaplanmeier':('Choose time and event columns; other event values are censored.','시간·사건 열을 선택합니다. 발생 값 이외는 중도절단입니다.'),
  'logrank':('Compare exactly two groups; other event values are censored.','두 그룹을 비교합니다. 발생 값 이외는 중도절단입니다.'),
- 'cox':('Proportional hazards; Breslow ties. Choose time, event, and predictors.','비례위험·Breslow 동률 처리. 시간·사건·설명변수를 선택합니다.'),
- 'repeatedanova':('One row per subject; one-factor ANOVA with GG correction.','행마다 한 대상. 일요인 반복측정·GG 보정입니다.'),
- 'mixedmodel':('Gaussian random-intercept model (ML).','Gaussian 랜덤 절편 모형 (ML)입니다.'),
- 'gee':('Independent working correlation; cluster-robust SE.','독립 작업상관·군집 강건 표준오차입니다.'),
+ 'survivalanalysis':('Kaplan–Meier curves · log-rank · Cox; other event values are censored.','Kaplan–Meier 곡선 · log-rank · Cox. 발생 값 이외는 중도절단입니다.'),
+ 'cox':('Proportional hazards; Breslow/Efron ties, optional entry column for left truncation and a time-rank PH check.','비례위험; Breslow/Efron 동률, 선택적 진입시간 열(좌측 절단), 시간순위 PH 검정.'),
+ 'repeatedanova':('One row per subject; one or two within factors with GG corrections.','행마다 한 대상. 일·이요인 반복측정·GG 보정입니다.'),
+ 'mixedmodel':('Gaussian random intercept with an optional random slope (ML).','Gaussian 랜덤 절편과 선택적 랜덤 기울기 (ML)입니다.'),
+ 'gee':('Working correlation independent / exchangeable / AR(1); cluster-robust SE.','작업상관 independent / exchangeable / AR(1); 군집 강건 표준오차입니다.'),
  'kstest':('Compare two samples or a specified continuous distribution.','두 표본 또는 지정한 연속분포와 비교합니다.')
 }
 for item in schema:
@@ -93,10 +105,15 @@ cases=[
  dict(id='mcnemar',rows=[['No','Yes'],['Yes','Yes'],['No','No'],['Yes','No']],settings=dict(layout='pairs',method='corrected'),expected='mcnemar([[1,1],[1,1]],corrected)'),
  dict(id='kaplanmeier',rows=[['died','9','ignored'],['alive','12','']],settings=dict(time='1',event='0',eventValue='died',level='0.9'),expected='kaplanmeier([[9,1],[12,0]],0.9)'),
  dict(id='logrank',rows=[['A','died','1'],['B','alive','2'],['A','alive','3'],['B','died','4']],settings=dict(time='2',event='1',group='0',eventValue='died'),expected='logrank([[1,1],[3,0]],[[2,0],[4,1]])'),
- dict(id='cox',rows=[['1','9','died',''],['2','12','alive','']],settings=dict(time='1',event='2',eventValue='died',predictors='0'),expected='cox([[9,1,1],[12,0,2]])'),
- dict(id='repeatedanova',rows=[['A','2','4','5'],['B','3','4','7']],settings=dict(columns='1,3'),expected='repeatedanova([[2,5],[3,7]])'),
- dict(id='mixedmodel',rows=[['2','A','0'],['4','A','1'],['3','B','0']],settings=dict(subject='1',response='0',predictors='2'),expected='mixedmodel([[1,0,2],[1,1,4],[2,0,3]])'),
- dict(id='gee',rows=[['2','A','0'],['4','A','1'],['3','B','0']],settings=dict(subject='1',response='0',predictors='2',family='poisson'),expected='gee([[1,0,2],[1,1,4],[2,0,3]],poisson)'),
+ dict(id='cox',rows=[['1','9','died',''],['2','12','alive','']],settings=dict(time='1',event='2',eventValue='died',predictors='0'),expected='cox([[9,1,1],[12,0,2]],breslow,-1,1)'),
+ dict(id='cox',rows=[['1','9','died',''],['2','12','alive','']],settings=dict(time='1',event='2',eventValue='died',predictors='0',ties='efron',ph='none'),expected='cox([[9,1,1],[12,0,2]],efron,-1,0)'),
+ dict(id='cox',rows=[['1','9','died','5'],['2','12','alive','6']],settings=dict(time='1',event='2',eventValue='died',truncation='entry',entry='0',predictors='3'),expected='cox([[9,1,1,5],[12,0,2,6]],breslow,2,1)'),
+ dict(id='repeatedanova',rows=[['A','2','4','5'],['B','3','4','7']],settings=dict(columns='1,3'),expected='repeatedanova([[2,5],[3,7]],1)'),
+ dict(id='repeatedanova',rows=[['A','2','4','5','7','8','9'],['B','3','4','7','6','9','10']],settings=dict(columns='1,2,3,4,5,6',factor2='3'),expected='repeatedanova([[2,4,5,7,8,9],[3,4,7,6,9,10]],3)'),
+ dict(id='mixedmodel',rows=[['2','A','0'],['4','A','1'],['3','B','0']],settings=dict(subject='1',response='0',predictors='2'),expected='mixedmodel([[1,0,2],[1,1,4],[2,0,3]],0)'),
+ dict(id='mixedmodel',rows=[['2','A','0'],['4','A','1'],['3','B','0']],settings=dict(subject='1',response='0',predictors='2',slope='1'),expected='mixedmodel([[1,0,2],[1,1,4],[2,0,3]],1)'),
+ dict(id='gee',rows=[['2','A','0'],['4','A','1'],['3','B','0']],settings=dict(subject='1',response='0',predictors='2',family='poisson'),expected='gee([[1,0,2],[1,1,4],[2,0,3]],poisson,independence)'),
+ dict(id='gee',rows=[['2','A','0'],['4','A','1'],['3','B','0']],settings=dict(subject='1',response='0',predictors='2',family='binomial',corr='exchangeable'),expected='gee([[1,0,2],[1,1,4],[2,0,3]],binomial,exchangeable)'),
  dict(id='kstest',rows=[['1','4'],['2',''],['3','5']],settings=dict(first='1',second='0',mode='two'),expected='kstest([4,5],[1,2,3])'),
  dict(id='kstest',rows=[['1','4'],['2','5']],settings=dict(first='1',mode='normal',location='5',scale='2'),expected='kstest([4,5],normal,5,2)'),
  dict(id='kstest',rows=[['1','4'],['2','5']],settings=dict(first='1',mode='uniform',location='3',scale='4'),expected='kstest([4,5],uniform,3,4)')
@@ -111,5 +128,5 @@ for language in ('','_ko'):
     text+='\n## '+heading+'\n\n'+intro+'\n\n'
     for item in schema:
         text+=f"`{item['id']}` — {item['helpKo'] if language else item['help']}\nExample: {item['example']}\n\n"
-    text+=('모형은 수렴하지 않거나 식별 불가능하면 오류를 반환합니다. Cox는 비례위험, 순서형 로지스틱은 비례오즈를 가정합니다. 혼합모형은 랜덤 절편만 지원하며 GEE는 독립 작업상관만 지원합니다. GG 보정은 반복측정의 구형성 위반을 보완합니다. 단일 대체 후 추론은 대체 불확실성을 반영하지 않습니다. 교차검증은 OLS만 지원하며 시계열·군집 분할이나 하이퍼파라미터 탐색은 포함하지 않습니다. 부트스트랩은 백분위 신뢰구간이며 BCa는 지원하지 않습니다.\n' if language else 'Models return errors on failed convergence or non-identifiability. Cox assumes proportional hazards; ordinal logistic assumes proportional odds. Mixed models support random intercepts only; GEE supports independent working correlation only. GG adjusts repeated-measures degrees of freedom for nonsphericity. Single imputation does not propagate imputation uncertainty. Cross-validation supports OLS only, without grouped/time-series splits or hyperparameter search. Bootstrap CIs use the percentile method, not BCa.\n')
+    text+=('모형은 수렴하지 않거나 식별 불가능하면 오류를 반환합니다. Cox는 Breslow/Efron 동률, 선택적 좌측 절단, 시간순위 비례위험 검정을 지원하며 순서형 로지스틱은 비례오즈를 가정합니다. 혼합모형은 랜덤 절편과 최대 하나의 랜덤 기울기를, GEE는 독립·교환가능·AR(1) 작업상관을 지원합니다. 반복측정 ANOVA는 GG 보정이 포함된 균형 일·이요인 설계를 다룹니다. 단일 대체 후 추론은 대체 불확실성을 반영하지 않습니다. 교차검증은 OLS 분할과 규제 α 선택을 지원하며 시계열·군집 분할은 포함하지 않습니다. Firth 추론은 프로파일 페널티 우도 신뢰구간을, 부트스트랩은 백분위 구간을 사용합니다(BCa 없음).\n' if language else 'Models return errors on failed convergence or non-identifiability. Cox supports Breslow/Efron ties, optional left truncation and an approximate time-rank proportional-hazards check; ordinal logistic assumes proportional odds. Mixed models support a random intercept plus at most one random slope; GEE supports independent, exchangeable and AR(1) working correlations. Repeated-measures ANOVA covers balanced one- and two-way within-subject designs with GG corrections. Single imputation does not propagate imputation uncertainty. Cross-validation covers OLS splits and regularized alpha selection, without grouped or time-series splits. Firth inference uses profile penalized-likelihood intervals; bootstrap CIs use the percentile method, not BCa.\n')
     path.write_text(text,encoding='utf-8')

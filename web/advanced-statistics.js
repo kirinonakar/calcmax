@@ -5,7 +5,7 @@ import {getLanguage,t} from './i18n.js';
 import {renderSurvivalReport} from './survival-report.js';
 
 export function survivalAnalysisPlan(rows,settings={},columnLabels=[]) {
-  const opts={time:'0',event:'1',eventValue:'1',grouping:'groups',group:'2',cox:'0',predictors:'',...settings};
+  const opts={time:'0',event:'1',eventValue:'1',grouping:'groups',group:'2',cox:'0',predictors:'',ties:'breslow',ph:'test',...settings};
   const n=Math.max(0,...rows.map(row=>row.length));
   const col=key=>{const i=Number(opts[key]);if(!Number.isInteger(i)||i<0||i>=n)throw new Error('Choose valid data columns');return i;};
   if(!rows.length)throw new Error('Enter data first');
@@ -23,7 +23,7 @@ export function survivalAnalysisPlan(rows,settings={},columnLabels=[]) {
   if(states.size>1&&!states.has(eventValue))throw new Error('Event value does not occur in the selected column');
   const groups=group===null?[]:[...new Set(selected.map(row=>row[2]))];
   const encoded=selected.map(row=>[row[0],row[1]===eventValue?'1':'0',group===null?'1':String(groups.indexOf(row[2])+1),...row.slice(reserved.length)]);
-  return {expression:`survivalanalysis([${encoded.map(row=>`[${row.join(',')}]`).join(',')}],${opts.cox})`,groups,predictors:predictors.map(i=>columnLabels[i]||['x','y','z'][i]||`x${i+1}`)};
+  return {expression:`survivalanalysis([${encoded.map(row=>`[${row.join(',')}]`).join(',')}],${opts.cox},${opts.ties},-1,${opts.ph==='test'?1:0})`,groups,predictors:predictors.map(i=>columnLabels[i]||['x','y','z'][i]||`x${i+1}`)};
 }
 
 export function guidedStatisticsCommand(definition,rows,settings={}) {
@@ -73,15 +73,21 @@ export function guidedStatisticsCommand(definition,rows,settings={}) {
     if(labels.length!==2)throw new Error('Log-rank requires exactly two groups');
     return `logrank(${labels.map(label=>table(selected.filter(row=>row[2]===label).map(row=>row.slice(0,2)))).join(',')})`;
   }
-  if(id==='cox')return `cox(${table(eventRows(multiple('predictors',[column('time'),column('event')])) )})`;
+  if(id==='cox'){
+    const time=column('time'),event=column('event'),entry=opts.truncation==='entry'?column('entry'):null;
+    const reserved=[time,event,...(entry===null?[]:[entry])];
+    const selected=eventRows([...(entry===null?[]:[entry]),...multiple('predictors',reserved)]);
+    return `cox(${table(selected)},${opts.ties},${entry===null?-1:2},${opts.ph==='test'?1:0})`;
+  }
   if(id==='repeatedanova'){
-    const cols=multiple('columns');if(cols.length<2)throw new Error('Choose at least two conditions');return `repeatedanova(${table(complete(cols))})`;
+    const cols=multiple('columns');if(cols.length<2)throw new Error('Choose at least two conditions');return `repeatedanova(${table(complete(cols))},${opts.factor2})`;
   }
   if(['mixedmodel','gee'].includes(id)){
     const subject=column('subject'),response=column('response');distinct([subject,response]);
     const selected=complete([subject,...multiple('predictors',[subject,response]),response]);const labels=[...new Set(selected.map(row=>row[0]))];
     const mapped=selected.map(row=>[String(labels.indexOf(row[0])+1),...row.slice(1)]);
-    return `${id}(${table(mapped)}${id==='gee'?','+opts.family:''})`;
+    if(id==='gee')return `gee(${table(mapped)},${opts.family},${opts.corr})`;
+    return `mixedmodel(${table(mapped)},${Number(opts.slope)||0})`;
   }
   if(id==='kstest'){
     const first=column('first');

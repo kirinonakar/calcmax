@@ -112,7 +112,7 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
   });
   $('csv-save').onclick=()=>downloadFile(`${value('dataset-name')||'symvacas-data'}.csv`,value('statistics-data'),'text/csv');
   function dataRows(){return statisticsDataRows(value('statistics-data'),dataKind());}
-  function statisticsExpression(op=value('statistics-op')){return statisticsCommand(value('statistics-data'),{op,kind:dataKind(),column:Number(value('statistics-column')),extra:value('statistics-extra')||'0',tail:value('statistics-tail'),sigma:value('statistics-sigma'),sigmaY:value('statistics-sigma-y'),yatesCorrection:$('statistics-yates').checked,regression:regressionMode(),degree:value('regression-degree'),alpha:value('regression-alpha'),l1Ratio:value('regression-ratio'),trees:value('regression-trees'),maxDepth:value('regression-depth'),seed:value('regression-seed'),responseColumn:Number(value('regression-response')),formula:value('regression-formula'),variable:value('regression-variable'),initials:value('regression-initials'),grouping:value('statistics-grouping'),firstGroup:value('statistics-first-group'),secondGroup:value('statistics-second-group')});}
+  function statisticsExpression(op=value('statistics-op')){return statisticsCommand(value('statistics-data'),{op,kind:dataKind(),column:Number(value('statistics-column')),extra:value('statistics-extra')||'0',tail:value('statistics-tail'),sigma:value('statistics-sigma'),sigmaY:value('statistics-sigma-y'),yatesCorrection:$('statistics-yates').checked,regression:regressionMode(),degree:value('regression-degree'),alpha:$('regression-alpha-cv').checked?'cv':value('regression-alpha'),l1Ratio:value('regression-ratio'),trees:value('regression-trees'),maxDepth:value('regression-depth'),seed:value('regression-seed'),responseColumn:Number(value('regression-response')),formula:value('regression-formula'),variable:value('regression-variable'),initials:value('regression-initials'),grouping:value('statistics-grouping'),firstGroup:value('statistics-first-group'),secondGroup:value('statistics-second-group'),firth:value('regression-firth')});}
   function analysisSummary(){
     const plan=statisticsAnalysisData(value('statistics-data'),{op:value('statistics-op'),kind:dataKind(),column:Number(value('statistics-column')),grouping:value('statistics-grouping'),firstGroup:value('statistics-first-group'),secondGroup:value('statistics-second-group')});
     if(plan.paired)return `${t('Compared columns')}: x ↔ y · ${t('Complete pairs')}: ${plan.pairs.length}`;
@@ -169,6 +169,8 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
     if(filterMenu('regression-kind',model=>kind==='xyz'||kind.startsWith('columns:')?columns>1&&['multiple','logistic','randomforest'].includes(model):kind==='xy'&&model!=='multiple',kind==='xyz'||kind.startsWith('columns:')?'multiple':'linear'))$('regression-kind').onchange();
     $('regression-data-help').hidden=!['multiple','logistic','polynomial','ridge','lasso','elasticnet','logisticridge','logisticlasso','logisticelasticnet','randomforest','randomforestclassifier','randomforestregressor'].includes(regressionMode());
     $('regression-response').closest('label').hidden=!['multiple','logistic','polynomial','ridge','lasso','elasticnet','logisticridge','logisticlasso','logisticelasticnet','randomforest','randomforestclassifier','randomforestregressor'].includes(regressionMode());
+    $('regression-firth-label').hidden=regressionMode()!=='logistic';
+    $('regression-alpha').disabled=$('regression-alpha-cv').checked;
     if(value('statistics-plot-type')==='clusteredheatmap'||value('statistics-plot-type')==='correlationheatmap'){
       if(value('statistics-plot-type')==='correlationheatmap')$('statistics-heatmap-mode').value='correlation';
       if(value('statistics-plot-type')==='clusteredheatmap')$('statistics-heatmap-clustering').checked=true;
@@ -179,6 +181,9 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
     $('statistics-heatmap-options').hidden=!heatMap;
     $('statistics-heatmap-correlation-label').hidden=!correlation;
     $('statistics-heatmap-axes').hidden=!correlation;
+    const clusteringOn=$('statistics-heatmap-clustering').checked;
+    $('statistics-heatmap-linkage-label').hidden=!clusteringOn;
+    $('statistics-heatmap-metric-label').hidden=!clusteringOn;
     $('statistics-plot-grouping-label').hidden=value('statistics-plot-type')==='scatter'||correlation||columns<2;
     $('statistics-plot-orientation-label').hidden=!['box','violin'].includes(value('statistics-plot-type'));
     if(correlation){
@@ -268,7 +273,7 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
   $('statistics-plot-type').onchange=()=>{statisticsControls();$('statistics-plot-run').click();persist();};
   $('statistics-plot-grouping').onchange=()=>{$('statistics-plot-run').click();persist();};
   $('statistics-plot-orientation').onchange=()=>{$('statistics-plot-run').click();persist();};
-  for(const id of ['statistics-heatmap-mode','statistics-heatmap-correlation','statistics-heatmap-clustering','statistics-heatmap-fit'])$(id).onchange=()=>{statisticsControls();$('statistics-plot-run').click();persist();};
+  for(const id of ['statistics-heatmap-mode','statistics-heatmap-correlation','statistics-heatmap-clustering','statistics-heatmap-fit','statistics-heatmap-linkage','statistics-heatmap-metric'])$(id).onchange=()=>{statisticsControls();$('statistics-plot-run').click();persist();};
   $('regression-transfer').onclick=()=>{if(!statisticsGraph?.fit)return;try{const source=regressionGraphSource(statisticsGraph.fit,state.digits,statisticsGraph.variable);$('graph-kind').value='cartesian';$('graph-source').value=source;changeMode('graph');graphs.run();}catch(exc){error(exc.message);}};
 
   function drawStatisticsGraph(){
@@ -277,16 +282,16 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
     if(type!=='heatmap'||!cluster)cancelClustering();
     if(type==='scatter'){statisticsPlot(container,statisticsGraph.plotRows||statisticsGraph.rows,options);return;}
     if(type==='heatmap'){
-      const rows=dataRows(),columnNames=statisticsHeatMapColumnNames(value('statistics-data'),dataKind()),mode=value('statistics-heatmap-mode'),method=value('statistics-heatmap-correlation');
+      const rows=dataRows(),columnNames=statisticsHeatMapColumnNames(value('statistics-data'),dataKind()),mode=value('statistics-heatmap-mode'),method=value('statistics-heatmap-correlation'),clusterOptions={linkage:value('statistics-heatmap-linkage'),metric:value('statistics-heatmap-metric')};
       const axisSelection=id=>[...$(id).querySelectorAll('input:checked')].map(input=>Number(input.value));
       const xColumns=axisSelection('statistics-heatmap-x-axis'),yColumns=axisSelection('statistics-heatmap-y-axis');
       const data=mode==='correlation'?statisticsCorrelationHeatMap(rows,{columnCount:dataColumns(),columnNames,xColumns,yColumns,method}):statisticsHeatMapData(rows,{grouping:value('statistics-plot-grouping'),columnCount:dataColumns(),columnNames,mode});
       if(!cluster){statisticsPlot(container,statisticsGraph.rows,{...options,heatMap:data});return;}
-      const key=JSON.stringify([value('statistics-data'),dataKind(),value('statistics-plot-grouping'),mode,method,xColumns,yColumns]);
+      const key=JSON.stringify([value('statistics-data'),dataKind(),value('statistics-plot-grouping'),mode,method,xColumns,yColumns,clusterOptions]);
       if(statisticsGraph.clusterKey===key&&statisticsGraph.clusterData){cancelClustering();statisticsPlot(container,statisticsGraph.rows,{...options,heatMap:statisticsGraph.clusterData});return;}
       setText(container,'Clustering…');if(clusterRun?.key===key){clusterRun.graph=statisticsGraph;return;}
       cancelClustering();
-      if(typeof Worker==='undefined'){statisticsGraph.clusterKey=key;statisticsGraph.clusterData=clusteredHeatMap(data);statisticsPlot(container,statisticsGraph.rows,{...options,heatMap:statisticsGraph.clusterData});return;}
+      if(typeof Worker==='undefined'){statisticsGraph.clusterKey=key;statisticsGraph.clusterData=clusteredHeatMap(data,clusterOptions);statisticsPlot(container,statisticsGraph.rows,{...options,heatMap:statisticsGraph.clusterData});return;}
       const worker=new Worker(new URL('./statistics-cluster-worker.js',import.meta.url),{type:'module'}),run={worker,key,graph:statisticsGraph};clusterRun=run;
       worker.onmessage=({data:message})=>{
         if(clusterRun!==run||statisticsGraph!==run.graph||value('statistics-plot-type')!=='heatmap'||!$('statistics-heatmap-clustering').checked)return;
@@ -295,7 +300,7 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
         statisticsPlot(container,statisticsGraph.rows,{...options,digits:state.digits,heatMap:message.result});
       };
       worker.onerror=event=>{if(clusterRun!==run)return;cancelClustering();container.replaceChildren();error(event.message||'Clustering failed');};
-      worker.postMessage(data);return;
+      worker.postMessage({data,options:clusterOptions});return;
     }
     const panels=statisticsPlotPanels(dataRows(),{grouping:value('statistics-plot-grouping'),columnCount:dataColumns()});
     if(panels.length===1&&!panels[0].label){statisticsPlot(container,statisticsGraph.rows,{...options,series:panels[0].series});return;}

@@ -30,7 +30,7 @@ test('all advanced examples parse and require explicit evaluation',()=>{
 
 test('survival plans validate distinct roles, preserve labels and omit unselected cells',()=>{
   const plan=survivalAnalysisPlan([['1','yes','A','30',''],['2','no','B','40','']],{eventValue:'yes',cox:'1',predictors:'3'},['time','status','arm','age','unused']);
-  assert.deepEqual(plan,{expression:'survivalanalysis([[1,1,1,30],[2,0,2,40]],1)',groups:['A','B'],predictors:['age']});
+  assert.deepEqual(plan,{expression:'survivalanalysis([[1,1,1,30],[2,0,2,40]],1,breslow,-1,1)',groups:['A','B'],predictors:['age']});
   assert.throws(()=>survivalAnalysisPlan([['1','1','A']],{group:'1'}),/different columns/);
   assert.throws(()=>survivalAnalysisPlan([['1','1','A']],{cox:'1',predictors:'2'}),/distinct analysis columns/);
   assert.throws(()=>survivalAnalysisPlan([['1','1','A'],['2','','B']]),/Complete selected rows/);
@@ -100,7 +100,7 @@ test('guided UI selects correction, survival roles and GEE family, and restores 
   assert.equal(api.expression(),'logrank([[1,1],[3,0]],[[2,0],[4,1]])');
   data=schema.find(d=>d.id==='gee').exampleRows.map(row=>row.join(',')).join('\n');
   change('statistics-advanced-kind','gee');change('statistics-form-gee-family','poisson');
-  assert.match(api.expression(),/,poisson\)$/);
+  assert.match(api.expression(),/,poisson,independence\)$/);
   change('statistics-advanced-kind','padjust');
   assert.equal($('statistics-form-padjust-method').value,'fdr');
   assert.equal($('statistics-form-padjust-column').value,'1');
