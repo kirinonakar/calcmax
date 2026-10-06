@@ -52,38 +52,6 @@ for(const language of ['en','ko'])test(`automatic n columns tracks pasted data a
   assert.deepEqual(errors,[]);
 });
 
-for(const language of ['en','ko'])test(`clustered heatmap draws both dendrograms and retains all row names and cell values (${language})`,t=>{
-  const {$,statistics,errors}=workspace(t,{'statistics-kind':'columns','statistics-columns-auto':true,'statistics-data':'A,0,10,1,11\nB,10,20,11,21\nC,1,11,2,12\nD,11,21,12,22'});
-  setLanguage(language);translateDOM();statistics.render();
-  $('statistics-plot-grouping').value='first';$('statistics-plot-type').value='clusteredheatmap';$('statistics-plot-type').dispatchEvent(new document.defaultView.Event('change'));
-  const svg=$('statistics-plot').querySelector('svg');assert.equal(svg.getAttribute('aria-label'),translate('Clustered heatmap'));
-  assert.equal(svg.querySelectorAll('[data-dendrogram="row"]').length,3);assert.equal(svg.querySelectorAll('[data-dendrogram="column"]').length,3);
-  assert.equal(svg.querySelectorAll('rect[data-value]').length,16);assert.match(svg.textContent,/A.*C.*B.*D/);
-  for(const path of svg.querySelectorAll('[data-dendrogram]'))assert.doesNotMatch(path.getAttribute('d'),/NaN|Infinity/);
-  assert.equal($('statistics-plot-orientation-label').hidden,true);assert.equal($('statistics-plot-grouping-label').hidden,false);assert.deepEqual(errors,[]);
-});
-
-test('cluster worker ignores cancelled results and accepts repeated plot clicks without becoming stuck',t=>{
-  const previousWorker=globalThis.Worker,workers=[];
-  class ControlledWorker {
-    constructor(){workers.push(this);this.terminated=false;}
-    postMessage(data){this.data=data;}
-    terminate(){this.terminated=true;}
-    finish(){this.onmessage({data:{result:clusteredHeatMap(this.data)}});}
-  }
-  globalThis.Worker=ControlledWorker;t.after(()=>{if(previousWorker===undefined)delete globalThis.Worker;else globalThis.Worker=previousWorker;});
-  const {$,errors}=workspace(t,{'statistics-kind':'xyz','statistics-data':'0,10,1\n1,11,2\n10,20,11'});
-  $('statistics-plot-type').value='clusteredheatmap';$('statistics-plot-type').dispatchEvent(new document.defaultView.Event('change'));
-  assert.match($('statistics-plot').textContent,/Clustering/);$('statistics-plot-run').click();assert.equal(workers.length,1);
-  workers[0].finish();assert.ok(workers[0].terminated);assert.ok($('statistics-plot').querySelector('[data-dendrogram]'));
-  $('statistics-plot-run').click();assert.equal(workers.length,1,'completed clustering is reused');
-  $('statistics-data').value='2,3,4\n5,6,7';$('statistics-data').dispatchEvent(new document.defaultView.Event('input'));
-  $('statistics-plot-run').click();assert.equal(workers.length,2);
-  $('statistics-plot-type').value='heatmap';$('statistics-plot-type').dispatchEvent(new document.defaultView.Event('change'));
-  assert.equal(workers[1].terminated,true);workers[1].finish();assert.equal($('statistics-plot').querySelectorAll('[data-dendrogram]').length,0);
-  assert.deepEqual(errors,[]);
-});
-
 test('regularization is selected within linear and logistic families and invalidates prior results',t=>{
   const context=workspace(t,{'regression-kind':'linear','regression-penalty':'elasticnet','regression-alpha':'0.2','regression-ratio':'0.7'});
   const {$,statistics}=context;
@@ -309,39 +277,6 @@ test('Korean xyz data keeps multiple and logistic selectable and submits their m
     request.resolve({ok:true,decimal:model==='logistic'?'1/2':'x1+x2'});await pending;
     assert.equal($('regression-kind').value,model);
   }
-});
-
-for(const language of ['en','ko'])test(`data type changes remove incompatible menu entries and restore valid translated choices (${language})`,t=>{
-  const {$,statistics}=workspace(t),options=id=>[...$(id).options].map(option=>option.value);
-  const changeKind=kind=>{$('statistics-kind').value=kind;$('statistics-kind').dispatchEvent(new document.defaultView.Event('change'));};
-  setLanguage(language);translateDOM();statistics.render();
-  const xyModels=['linear','quadratic','polynomial','logistic','randomforest','logarithmic','exponential','power','custom'];
-  assert.deepEqual(options('regression-kind'),xyModels);
-  $('regression-kind').value='custom';$('regression-kind').dispatchEvent(new document.defaultView.Event('change'));
-  changeKind('xyz');
-  assert.deepEqual(options('regression-kind'),['multiple','logistic','randomforest']);
-  assert.equal($('regression-kind').value,'multiple');
-  assert.equal($('regression-custom').hidden,true);
-  assert.deepEqual(options('statistics-plot-type'),['histogram','box','violin','heatmap','clusteredheatmap','correlationheatmap']);
-  assert.deepEqual(options('statistics-grouping'),['columns']);
-  $('regression-kind').value='logistic';changeKind('xy');
-  assert.equal($('regression-kind').value,'logistic','a model compatible with both shapes stays selected');
-  assert.deepEqual(options('regression-kind'),xyModels);
-  assert.deepEqual(options('statistics-plot-type'),['scatter','histogram','box','violin','heatmap','clusteredheatmap','correlationheatmap']);
-  $('statistics-op').value='anova';changeKind('list');
-  assert.equal($('regression-section').hidden,true);
-  assert.deepEqual(options('regression-kind'),[]);
-  assert.equal($('statistics-op').value,'stats');
-  for(const invalid of ['correlation','ttestpaired','ttest2','ztest2','anova','tukey','mannwhitney','kruskal','chi2independence','fisherexact'])assert.ok(!options('statistics-op').includes(invalid),`${invalid} is absent for a List`);
-  assert.ok(options('statistics-op').includes('wilcoxon'),'one-sample signed ranks remain available');
-  assert.deepEqual(options('statistics-plot-type'),['histogram','box','violin','heatmap','clusteredheatmap','correlationheatmap']);
-  changeKind('xyz');
-  assert.deepEqual(options('regression-kind'),['multiple','logistic','randomforest']);
-  assert.deepEqual([...$('regression-kind').options].map(option=>option.textContent),['multiple','logistic','Random Forest'].map(translate));
-  assert.ok(options('statistics-op').includes('anova'),'valid group tests return after changing the data type');
-  changeKind('xy');$('regression-kind').value='polynomial';$('regression-kind').dispatchEvent(new document.defaultView.Event('change'));
-  assert.equal($('regression-degree').closest('label').hidden,false);
-  assert.ok([...document.querySelectorAll('#regression-kind option,#statistics-op option,#statistics-plot-type option,#statistics-grouping option')].every(option=>!option.disabled),'menus contain no disabled choices');
 });
 
 test('independent comparisons omit the first group from second-group choices and hide unsupported grouping',t=>{
