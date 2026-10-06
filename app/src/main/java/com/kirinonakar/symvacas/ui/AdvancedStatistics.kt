@@ -95,7 +95,7 @@ internal fun advancedStatisticsRows(data:String):List<List<String>> {
         if(pending&&!m.busy&&m.result!=null&&m.result!==previousResult){survivalReport=m.result?.optJSONObject("survival");pending=false}
     }
     HorizontalDivider()
-    SmallAction(if(ko)"고급 분석" else "Advanced analysis"){expanded=!expanded}
+    SmallAction(if(ko)"고급 분석" else "Advanced analysis",active=true,shaded=expanded,fontSize=12.sp){expanded=!expanded}
     if(expanded) {
         fun choose(next:JSONObject) {selected=next.getString("id");source=next.getString("example");input=if(next.has("controls"))if(data.isBlank())"example" else "current" else "expression";message="";menuOpen=false;survivalReport=null;pending=false}
         Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
