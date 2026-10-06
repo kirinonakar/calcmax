@@ -53,7 +53,7 @@ export function renderSurvivalReport(container,report,{groups=[],predictors=[],b
       const termName=term=>term.startsWith('group:')?`${names[Number(term.split(':')[1])]} / ${names[0]}`:predictors[Number(term.split(':')[1])]||term;
       table([text('Term','변수'),'HR','95% CI','p'],report.cox.coefficients.map(row=>[termName(row.term),number(row.HR),row['HR CI95']?row['HR CI95'].map(number).join(' – '):'—',number(row.p)]));
       const phP=report.cox['PH test p'];
-      const summary=[text('Reference: first group','기준: 첫 그룹'),`${report.ties==='efron'?'Efron':'Breslow'} ${text('ties','동률 처리')}`,...(report.truncation?[text('left truncation','좌측 절단')]:[]),...(report.ph?(phP===undefined?[text('PH test unavailable','PH 검정 계산 불가')]:[`PH χ²=${number(report.cox['PH test chi2'])} · p=${number(phP)}`]):[text('PH test off','PH 검정 생략')])];
+      const summary=[text('Reference: first group','기준: 첫 그룹'),`${report.ties==='breslow'?'Breslow':'Efron'} ${text('ties','동률 처리')}`,...(report.truncation?[text('left truncation','좌측 절단')]:[]),...(report.ph?(phP===undefined?[text('PH test unavailable','PH 검정 계산 불가')]:[`PH χ²=${number(report.cox['PH test chi2'])} · p=${number(phP)}`]):[text('PH test off','PH 검정 생략')])];
       container.append(element('p',summary.join(' · '),'hint'));
     }
   }

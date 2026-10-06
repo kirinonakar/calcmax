@@ -30,7 +30,7 @@ test('all advanced examples parse and require explicit evaluation',()=>{
 
 test('survival plans validate distinct roles, preserve labels and omit unselected cells',()=>{
   const plan=survivalAnalysisPlan([['1','yes','A','30',''],['2','no','B','40','']],{eventValue:'yes',cox:'1',predictors:'3'},['time','status','arm','age','unused']);
-  assert.deepEqual(plan,{expression:'survivalanalysis([[1,1,1,30],[2,0,2,40]],1,breslow,-1,1)',groups:['A','B'],predictors:['age']});
+  assert.deepEqual(plan,{expression:'survivalanalysis([[1,1,1,30],[2,0,2,40]],1,efron,-1,1)',groups:['A','B'],predictors:['age']});
   assert.throws(()=>survivalAnalysisPlan([['1','1','A']],{group:'1'}),/different columns/);
   assert.throws(()=>survivalAnalysisPlan([['1','1','A']],{cox:'1',predictors:'2'}),/distinct analysis columns/);
   assert.throws(()=>survivalAnalysisPlan([['1','1','A'],['2','','B']]),/Complete selected rows/);

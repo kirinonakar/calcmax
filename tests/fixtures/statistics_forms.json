@@ -224,7 +224,7 @@
       "eventValue": "died",
       "predictors": "0"
     },
-    "expected": "cox([[9,1,1],[12,0,2]],breslow,-1,1)"
+    "expected": "cox([[9,1,1],[12,0,2]],efron,-1,1)"
   },
   {
     "id": "cox",
@@ -247,10 +247,10 @@
       "event": "2",
       "eventValue": "died",
       "predictors": "0",
-      "ties": "efron",
+      "ties": "breslow",
       "ph": "none"
     },
-    "expected": "cox([[9,1,1],[12,0,2]],efron,-1,0)"
+    "expected": "cox([[9,1,1],[12,0,2]],breslow,-1,0)"
   },
   {
     "id": "cox",
@@ -276,7 +276,7 @@
       "entry": "0",
       "predictors": "3"
     },
-    "expected": "cox([[9,1,1,5],[12,0,2,6]],breslow,2,1)"
+    "expected": "cox([[9,1,1,5],[12,0,2,6]],efron,2,1)"
   },
   {
     "id": "repeatedanova",

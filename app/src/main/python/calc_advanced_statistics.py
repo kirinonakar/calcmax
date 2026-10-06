@@ -354,7 +354,7 @@ def calculate(engine,name,a):
         return {'chi2':chi,'df':1,'p':float(_chisq_sf(chi,1)),'observed group 1':observed,'expected group 1':expected}
     if name=='cox':
         rows=table(a[0],3,3)
-        ties=option(a,1,'breslow'); require(ties in ('breslow','efron'),'Cox ties: breslow or efron')
+        ties=option(a,1,'efron'); require(ties in ('breslow','efron'),'Cox ties: breslow or efron')
         entry=integer(a[2],-1,19) if len(a)>2 else -1
         check=integer(a[3],0,1) if len(a)>3 else 1
         survival(rows,entry)
@@ -466,7 +466,7 @@ def survival_analysis(engine,a):
     the Cox options. Subtest failures preserve valid KM curves.
     """
     rows=table(a[0],2,3); fit=integer(a[1],0,1) if len(a)>1 else 0
-    ties=option(a,2,'breslow'); require(ties in ('breslow','efron'),'Cox ties: breslow or efron')
+    ties=option(a,2,'efron'); require(ties in ('breslow','efron'),'Cox ties: breslow or efron')
     entry=integer(a[3],-1,19) if len(a)>3 else -1; require(entry in (-1,2),'Entry time follows the event column')
     check=integer(a[4],0,1) if len(a)>4 else 1
     survival(rows,entry)

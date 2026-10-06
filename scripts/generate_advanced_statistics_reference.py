@@ -56,7 +56,7 @@ for name in ('poissonreg','nbreg','multinomial','ordinal'):
         cuts=fit.model.transform_threshold_params(fit.params)[1:-1]
         expected += [[['cutpoints',i],float(v)] for i,v in enumerate(cuts)]
     add(name,[rows],expected,2e-4)
-rows=data('cox'); arr=np.asarray(rows,float); fit=sm.PHReg(arr[:,0],arr[:,2:],status=arr[:,1],ties='breslow').fit()
+rows=data('cox'); arr=np.asarray(rows,float); fit=sm.PHReg(arr[:,0],arr[:,2:],status=arr[:,1],ties='efron').fit()
 add('cox',[rows],[[['coefficients',0,'estimate'],float(fit.params[0])],[['coefficients',0,'SE'],float(fit.bse[0])],[['partial log likelihood'],float(fit.llf)]],1e-5)
 rows=data('mixedmodel'); arr=np.asarray(rows,float); x=sm.add_constant(arr[:,1:-1]); y=arr[:,-1]
 fit=sm.MixedLM(y,x,groups=arr[:,0]).fit(reml=False,method='powell',disp=False)

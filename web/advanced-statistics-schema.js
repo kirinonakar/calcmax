@@ -497,8 +497,8 @@ export const advancedStatisticsSchema = [
     "label": "Survival analysis",
     "ko": "생존분석",
     "input": "table",
-    "suffix": ",0,breslow,-1,1",
-    "example": "survivalanalysis([[1,1,1],[2,1,2],[3,0,1],[4,1,2],[5,1,1],[6,0,2],[7,1,2],[8,1,1]],0,breslow,-1,1)",
+    "suffix": ",0,efron,-1,1",
+    "example": "survivalanalysis([[1,1,1],[2,1,2],[3,0,1],[4,1,2],[5,1,1],[6,0,2],[7,1,2],[8,1,1]],0,efron,-1,1)",
     "help": "Rows: time, event (0/1), group ID, optional Cox predictors; Cox 0=off, 1=on; then ties and the PH check.",
     "helpKo": "열: 시간, 사건(0/1), 그룹 ID, 선택적 Cox 설명변수. Cox 0=끔, 1=켬; 이어서 동률 처리와 PH 검정.",
     "controls": [
@@ -590,17 +590,17 @@ export const advancedStatisticsSchema = [
         "label": "Tie handling",
         "ko": "동률 처리",
         "type": "choice",
-        "default": "breslow",
+        "default": "efron",
         "choices": [
-          {
-            "id": "breslow",
-            "label": "Breslow",
-            "ko": "Breslow"
-          },
           {
             "id": "efron",
             "label": "Efron",
             "ko": "Efron"
+          },
+          {
+            "id": "breslow",
+            "label": "Breslow",
+            "ko": "Breslow"
           }
         ]
       },
@@ -679,10 +679,10 @@ export const advancedStatisticsSchema = [
     "label": "Cox regression",
     "ko": "Cox 회귀",
     "input": "table",
-    "suffix": ",breslow,-1,1",
-    "example": "cox([[1,1,0],[2,1,1],[3,0,0],[4,1,1],[5,1,0],[6,0,1],[7,1,1],[8,1,0]],breslow,-1,1)",
-    "help": "Rows: time, event 0/1, predictors. Ties breslow/efron; entry column for left truncation (-1 none); PH check 0/1.",
-    "helpKo": "열: 시간, 사건 0/1, 설명변수. 동률 breslow/efron, 좌측 절단 진입시간 열(-1 없음), PH 검정 0/1.",
+    "suffix": ",efron,-1,1",
+    "example": "cox([[1,1,0],[2,1,1],[3,0,0],[4,1,1],[5,1,0],[6,0,1],[7,1,1],[8,1,0]],efron,-1,1)",
+    "help": "Rows: time, event 0/1, predictors. Ties efron (default) or breslow; entry column for left truncation (-1 none); PH check 0/1.",
+    "helpKo": "열: 시간, 사건 0/1, 설명변수. 동률 efron(기본)/breslow, 좌측 절단 진입시간 열(-1 없음), PH 검정 0/1.",
     "controls": [
       {
         "key": "time",
@@ -717,17 +717,17 @@ export const advancedStatisticsSchema = [
         "label": "Tie handling",
         "ko": "동률 처리",
         "type": "choice",
-        "default": "breslow",
+        "default": "efron",
         "choices": [
-          {
-            "id": "breslow",
-            "label": "Breslow",
-            "ko": "Breslow"
-          },
           {
             "id": "efron",
             "label": "Efron",
             "ko": "Efron"
+          },
+          {
+            "id": "breslow",
+            "label": "Breslow",
+            "ko": "Breslow"
           }
         ]
       },

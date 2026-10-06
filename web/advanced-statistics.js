@@ -5,7 +5,7 @@ import {getLanguage,t} from './i18n.js';
 import {renderSurvivalReport} from './survival-report.js';
 
 export function survivalAnalysisPlan(rows,settings={},columnLabels=[]) {
-  const opts={time:'0',event:'1',eventValue:'1',grouping:'groups',group:'2',cox:'0',predictors:'',ties:'breslow',ph:'test',...settings};
+  const opts={time:'0',event:'1',eventValue:'1',grouping:'groups',group:'2',cox:'0',predictors:'',ties:'efron',ph:'test',...settings};
   const n=Math.max(0,...rows.map(row=>row.length));
   const col=key=>{const i=Number(opts[key]);if(!Number.isInteger(i)||i<0||i>=n)throw new Error('Choose valid data columns');return i;};
   if(!rows.length)throw new Error('Enter data first');

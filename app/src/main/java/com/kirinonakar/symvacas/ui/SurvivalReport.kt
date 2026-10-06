@@ -73,7 +73,7 @@ internal fun survivalStepPoints(curve:JSONArray,index:Int):List<Pair<Double,Doub
                 val ci=row.optJSONArray("HR CI95")
                 listOf(name,value(row,"HR"),if(ci==null)"—" else (0 until ci.length()).joinToString(" – "){number(ci.optDouble(it,Double.NaN))},value(row,"p"))
             })
-            val parts=mutableListOf(label("Reference: first group","기준: 첫 그룹"),(if(report.optString("ties")=="efron")"Efron" else "Breslow")+" "+label("ties","동률 처리"))
+            val parts=mutableListOf(label("Reference: first group","기준: 첫 그룹"),(if(report.optString("ties")=="breslow")"Breslow" else "Efron")+" "+label("ties","동률 처리"))
             if(report.optBoolean("truncation",false))parts.add(label("left truncation","좌측 절단"))
             parts.add(when {
                 !report.optBoolean("ph",false)->label("PH test off","PH 검정 생략")

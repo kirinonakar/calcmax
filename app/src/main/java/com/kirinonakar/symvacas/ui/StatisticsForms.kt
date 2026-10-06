@@ -101,6 +101,6 @@ internal fun survivalAnalysisPlan(rows:List<List<String>>,settings:JSONObject=JS
     val groups=if(group==null)emptyList() else selected.map {it[2]}.distinct()
     val encoded=selected.map {row->listOf(row[0],if(row[1]==eventValue)"1" else "0",if(group==null)"1" else (groups.indexOf(row[2])+1).toString())+row.drop(reserved.size)}
     val table=encoded.joinToString(",","[","]") {it.joinToString(",","[","]")}
-    val ties=option("ties","breslow");val ph=if(option("ph","test")=="test")1 else 0
+    val ties=option("ties","efron");val ph=if(option("ph","test")=="test")1 else 0
     return SurvivalPlan("survivalanalysis($table,$cox,$ties,-1,$ph)",groups,predictors.map {labels.getOrNull(it) ?: listOf("x","y","z").getOrNull(it) ?: "x${it+1}"})
 }
