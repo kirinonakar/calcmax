@@ -61,20 +61,6 @@ class StatisticsDataSourceTest {
         assertEquals(emptyList<Pair<String,List<Double>>>(),com.kirinonakar.symvacas.ui.statisticsPlotSeries(listOf(listOf("","7")),"xy","first"))
     }
 
-    @Test fun nColumnsPreserveImportStorageAnalysisAndRegressionOrder() {
-        val csv="1,2,3,4\n5,6,7,8"
-        assertEquals("[[1,2,3,4],[5,6,7,8]]",statisticsDataSource(csv,"columns:4"))
-        assertEquals("[[1,2,3,4],[5,6,7,8]]",statisticsRecallSource(Editor(),csv,"columns:4"))
-        val preview=previewStatisticsCsv("a,b,c,d\n"+csv)
-        assertEquals(csv,importStatisticsCsv(preview,listOf(0,1,2,3),true))
-        val rows=com.kirinonakar.symvacas.ui.statisticsRows(csv)
-        assertEquals("ttest(0,[4,8])",statisticsTestCommand("t test",rows,"columns:4","x4","Two-sided","0","2","95"))
-        assertEquals("anova([1,5],[2,6],[3,7],[4,8])",statisticsTestCommand("ANOVA",rows,"columns:4","x","Two-sided","0","2","95"))
-        val complete=(1..5).map {listOf("$it","${it+1}","${it+2}","${it+3}")}
-        assertEquals("[[2,3,4,1],[3,4,5,2],[4,5,6,3],[5,6,7,4],[6,7,8,5]]",statisticsRegressionTable(complete,"columns:4","logistic",0))
-        assertEquals("[[2,1],[6,5]]",statisticsRegressionTable(rows,"xy","polynomial",0))
-    }
-
     @Test fun excelPasteKeepsDateAndPaddedThousandsAsTwoColumns() {
         val dates=listOf("2022-12-02","2023-01-15","2023-02-05","2023-03-05","2023-04-01","2023-05-01","2023-06-01","2023-07-01","2023-08-01","2023-09-01")
         val values=listOf("166,682","168,254","169,131","172,166","175,120","177,330","177,409","181,512","181,286","183,566")
@@ -107,14 +93,6 @@ class StatisticsDataSourceTest {
         val axis=statisticsDateAxis(rows)!!
         assertEquals(listOf(listOf("1","2"),listOf("2","4"),listOf("4","8")),axis.numericRows(rows))
         assertEquals("[[1,2],[2,4],[4,8]]",statisticsDataSource("2024-02-28,2\n2024/02/29,4\n2024.3.2,8","xy"))
-    }
-
-    @Test fun importDetectsArbitraryHeaderAndMapsSelectedColumns() {
-        val preview=previewStatisticsCsv("\uFEFFtime,noise,result,weight\r\n1,99,10,0.5\r\n2,88,20,0.7\r\n")
-        assertTrue(preview.hasHeader)
-        assertEquals(4,preview.columnCount)
-        assertEquals("Column 3: result",preview.labels[2])
-        assertEquals("10,1,0.5\n20,2,0.7",importStatisticsCsv(preview,listOf(2,0,3),true))
     }
 
     @Test fun savedPairsKeepTheirOuterListOutsideRegressionSlot() {

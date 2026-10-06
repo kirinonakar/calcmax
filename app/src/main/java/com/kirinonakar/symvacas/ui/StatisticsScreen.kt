@@ -480,8 +480,8 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
 @Composable private fun StatisticsCsvImportDialog(preview:StatisticsCsvImport,onDismiss:()->Unit,onImport:(List<Int>,Boolean)->Unit) {
     val maxColumns=minOf(100,preview.columnCount)
     var skipHeader by remember(preview) {mutableStateOf(preview.hasHeader)}
-    var columnCount by remember(preview) {mutableIntStateOf(minOf(3,maxColumns))}
-    var columnText by remember(preview) {mutableStateOf(minOf(3,maxColumns).toString())}
+    var columnCount by remember(preview) {mutableIntStateOf(minOf(2,maxColumns))}
+    var columnText by remember(preview) {mutableStateOf(minOf(2,maxColumns).toString())}
     var columns by remember(preview) {mutableStateOf((0 until maxColumns).toList())}
     val names=List(maxColumns){listOf("x","y","z").getOrNull(it) ?: "x${it+1}"}
     AlertDialog(onDismissRequest=onDismiss,title={Text(tr("Import CSV/XLSX"))},text={
