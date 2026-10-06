@@ -59,12 +59,12 @@ forms={
         field('cox','Cox model','Cox 모형','choice','0',[('0','Off','끔'),('1','On','켬')]),
         dict(multi('predictors','Cox predictors','Cox 설명변수 열'),when={'cox':['1']}),
         field('ties','Tie handling','동률 처리','choice','efron',[('efron','Efron','Efron'),('breslow','Breslow','Breslow')]),
-        dict(field('ph','Proportional-hazards check','비례위험 검정','choice','test',[('test','Time-rank test','시간순위 검정'),('none','Skip','생략')]),when={'cox':['1']})],
+        dict(field('ph','Proportional-hazards check','비례위험 검정','choice','test',[('test','Schoenfeld test','Schoenfeld 검정'),('none','Skip','생략')]),when={'cox':['1']})],
     'cox':survival_fields+[multi('predictors','Predictors','설명변수 열'),
         field('ties','Tie handling','동률 처리','choice','efron',[('efron','Efron','Efron'),('breslow','Breslow','Breslow')]),
         field('truncation','Left truncation','좌측 절단','choice','none',[('none','None','없음'),('entry','Entry-time column','진입시간 열')]),
         dict(col('entry','Entry time','진입시간 열',2),when={'truncation':['entry']}),
-        field('ph','Proportional-hazards check','비례위험 검정','choice','test',[('test','Time-rank test','시간순위 검정'),('none','Skip','생략')])],
+        field('ph','Proportional-hazards check','비례위험 검정','choice','test',[('test','Schoenfeld test','Schoenfeld 검정'),('none','Skip','생략')])],
     'repeatedanova':[multi('columns','Condition columns','조건 열'),field('factor2','Second-factor levels','둘째 요인 수준','number','1')],
     'mixedmodel':cluster_fields+[field('slope','Random-slope predictor','랜덤 기울기 변수','number','0')],
     'gee':cluster_fields+[field('family','Family','분포','choice','gaussian',[('gaussian','Gaussian','Gaussian'),('binomial','Binomial (0/1)','이항 (0/1)'),('poisson','Poisson','포아송')]),field('corr','Working correlation','작업상관','choice','independence',[('independence','Independent','독립'),('exchangeable','Exchangeable','교환가능'),('ar1','AR(1)','AR(1)')]),field('interactions','Interactions (columns or names)','상호작용 (열·이름)','number','')],
@@ -78,7 +78,7 @@ form_help={
  'kaplanmeier':('Choose time and event columns; other event values are censored.','시간·사건 열을 선택합니다. 발생 값 이외는 중도절단입니다.'),
  'logrank':('Compare exactly two groups; other event values are censored.','두 그룹을 비교합니다. 발생 값 이외는 중도절단입니다.'),
  'survivalanalysis':('Kaplan–Meier curves · log-rank · Cox; other event values are censored.','Kaplan–Meier 곡선 · log-rank · Cox. 발생 값 이외는 중도절단입니다.'),
- 'cox':('Proportional hazards; Breslow/Efron ties, optional entry column for left truncation and a time-rank PH check.','비례위험; Breslow/Efron 동률, 선택적 진입시간 열(좌측 절단), 시간순위 PH 검정.'),
+ 'cox':('Proportional hazards; Breslow/Efron ties, optional entry column for left truncation and a scaled-Schoenfeld PH check.','비례위험; Breslow/Efron 동률, 선택적 진입시간 열(좌측 절단), 스케일된 Schoenfeld PH 검정.'),
  'repeatedanova':('One row per subject; one or two within factors with GG corrections.','행마다 한 대상. 일·이요인 반복측정·GG 보정입니다.'),
  'mixedmodel':('Gaussian random intercept with an optional random slope (ML).','Gaussian 랜덤 절편과 선택적 랜덤 기울기 (ML)입니다.'),
  'gee':('Working correlation independent / exchangeable / AR(1); cluster-robust SE. Interactions accept header names (age,weight), the shown column letters or labels (y,z / age (y),weight (z)), column numbers (2,3) or predictor order (p1,p2); separate pairs with ;.','작업상관 independent / exchangeable / AR(1); 군집 강건 표준오차. 상호작용은 열 이름(age,weight), 표시된 열 문자·라벨(y,z / age (y),weight (z)), 열 번호(2,3), 설명변수 순서(p1,p2)로 입력하고 쌍은 ;로 구분합니다.'),
@@ -130,5 +130,5 @@ for language in ('','_ko'):
     text+='\n## '+heading+'\n\n'+intro+'\n\n'
     for item in schema:
         text+=f"`{item['id']}` — {item['helpKo'] if language else item['help']}\nExample: {item['example']}\n\n"
-    text+=('모형은 수렴하지 않거나 식별 불가능하면 오류를 반환합니다. Cox는 Breslow/Efron 동률, 선택적 좌측 절단, 시간순위 비례위험 검정을 지원하며 순서형 로지스틱은 비례오즈를 가정합니다. 혼합모형은 랜덤 절편과 최대 하나의 랜덤 기울기를, GEE는 독립·교환가능·AR(1) 작업상관을 지원합니다. 반복측정 ANOVA는 GG 보정이 포함된 균형 일·이요인 설계를 다룹니다. 단일 대체 후 추론은 대체 불확실성을 반영하지 않습니다. 교차검증은 OLS 분할과 규제 α 선택을 지원하며 시계열·군집 분할은 포함하지 않습니다. Firth 추론은 프로파일 페널티 우도 신뢰구간을, 부트스트랩은 백분위 구간을 사용합니다(BCa 없음).\n' if language else 'Models return errors on failed convergence or non-identifiability. Cox supports Breslow/Efron ties, optional left truncation and an approximate time-rank proportional-hazards check; ordinal logistic assumes proportional odds. Mixed models support a random intercept plus at most one random slope; GEE supports independent, exchangeable and AR(1) working correlations. Repeated-measures ANOVA covers balanced one- and two-way within-subject designs with GG corrections. Single imputation does not propagate imputation uncertainty. Cross-validation covers OLS splits and regularized alpha selection, without grouped or time-series splits. Firth inference uses profile penalized-likelihood intervals; bootstrap CIs use the percentile method, not BCa.\n')
+    text+=('모형은 수렴하지 않거나 식별 불가능하면 오류를 반환합니다. Cox는 Breslow/Efron 동률, 선택적 좌측 절단, Grambsch–Therneau 스케일된 Schoenfeld 비례위험 검정을 지원하며 순서형 로지스틱은 비례오즈를 가정합니다. 혼합모형은 랜덤 절편과 최대 하나의 랜덤 기울기를, GEE는 독립·교환가능·AR(1) 작업상관을 지원합니다. 반복측정 ANOVA는 GG 보정이 포함된 균형 일·이요인 설계를 다룹니다. 단일 대체 후 추론은 대체 불확실성을 반영하지 않습니다. 교차검증은 OLS 분할과 규제 α 선택을 지원하며 시계열·군집 분할은 포함하지 않습니다. Firth 추론은 프로파일 페널티 우도 신뢰구간을, 부트스트랩은 백분위 구간을 사용합니다(BCa 없음).\n' if language else 'Models return errors on failed convergence or non-identifiability. Cox supports Breslow/Efron ties, optional left truncation and a Grambsch–Therneau scaled-Schoenfeld proportional-hazards check; ordinal logistic assumes proportional odds. Mixed models support a random intercept plus at most one random slope; GEE supports independent, exchangeable and AR(1) working correlations. Repeated-measures ANOVA covers balanced one- and two-way within-subject designs with GG corrections. Single imputation does not propagate imputation uncertainty. Cross-validation covers OLS splits and regularized alpha selection, without grouped or time-series splits. Firth inference uses profile penalized-likelihood intervals; bootstrap CIs use the percentile method, not BCa.\n')
     path.write_text(text,encoding='utf-8')

@@ -1,8 +1,9 @@
 """Portable advanced statistics (binary64 numerics; no native dependencies).
 
 Models intentionally expose their specification in result notes: Efron/Breslow
-Cox with optional left truncation and a PH check, proportional odds, NB2,
-Gaussian random intercept/slope ML, working-correlation GEE.
+Cox with optional left truncation and a Grambsch–Therneau PH check,
+proportional odds and NB2, Gaussian random intercept/slope ML, and
+working-correlation GEE.
 """
 import math
 import random
@@ -138,6 +139,45 @@ def optimize(f, start):
     return beta, inverse(hess), value, iteration+1
 
 
+def newton(start, exact):
+    """Damped Newton with an exact score and observed information.
+
+    exact(beta) returns (objective, score, information). Poisson, multinomial
+    logit and Cox partial-likelihood models use this so the estimate and the
+    reported covariance come from analytic derivatives instead of differences.
+    """
+    beta = start[:]; n = len(beta)
+    require(n <= 30, 'Model limit: 30 parameters')
+    try: value, grad, info = exact(beta)
+    except (OverflowError, ValueError): raise MathError('Model did not converge; check separation, scaling and identifiability')
+    require(math.isfinite(value), 'Model did not converge; check separation, scaling and identifiability')
+    for iteration in range(100):
+        require(all(math.isfinite(v) for v in grad), 'Model did not converge; check separation, scaling and identifiability')
+        scaled = inverse(info)*mp.matrix(grad)
+        if max(map(abs, grad)) < 2e-5:
+            # A vanishing score with positive information and a small
+            # information-scaled step separates a stationary point from a
+            # boundary estimate (separation, monotone Cox).
+            require(min(float(v) for v in mp.eigsy(mp.matrix(info),eigvals_only=True)) > 1e-8, 'Model information is singular; possible separation or boundary estimate')
+            if max(abs(float(v)) for v in scaled) < 1e-3: break
+        direction = [-float(v) for v in scaled]
+        step = 1.0
+        for _ in range(40):
+            candidate = [b+step*d for b, d in zip(beta, direction)]
+            try: trial = exact(candidate)[0]
+            except (OverflowError, ValueError): trial = math.inf
+            if math.isfinite(trial) and trial <= value+1e-4*step*dot(grad, direction): break
+            step *= .5
+        else: raise MathError('Model did not converge; check separation, scaling and identifiability')
+        try: value, grad, info = exact(candidate)
+        except (OverflowError, ValueError): raise MathError('Model exceeded the numeric range; check separation or scaling')
+        beta = candidate
+    else: raise MathError('Model did not converge in 100 iterations')
+    require(max(map(abs, beta)) < 50, 'Unbounded estimates: possible separation or non-identifiability')
+    require(min(float(v) for v in mp.eigsy(mp.matrix(info),eigvals_only=True)) > 1e-8, 'Model information is singular; estimates are not identifiable')
+    return beta, inverse(info), value, iteration+1
+
+
 def inference(beta, covariance, names, ratio=False):
     rows = []
     for i,b in enumerate(beta):
@@ -197,17 +237,33 @@ def model(rows, mode):
     if mode in ('poissonreg','nbreg'):
         require(all(v >= 0 and v.is_integer() for v in y) and sum(y)>0, 'Response must be nonnegative integer counts with at least one event')
         start = [math.log(mean(y))]+[0.0]*(p-1)+([0.0] if mode=='nbreg' else [])
-        def objective(b):
-            try:
-                total = 0.0
-                r = math.exp(-b[-1]) if mode=='nbreg' else None
+        if mode == 'poissonreg':
+            def exact(b):
+                # Log-link Poisson: the score and the observed information
+                # (equal to the Fisher information for the canonical link) are
+                # analytic, so standard errors come from X'WX, not differences.
+                value = 0.0; score = [0.0]*p; information = [[0.0]*p for _ in range(p)]
                 for row,v in zip(x,y):
-                    z = dot(row,b[:p]); mu = math.exp(z)
-                    total += (mu-v*z+math.lgamma(v+1) if r is None else
-                              math.lgamma(r)-math.lgamma(v+r)+math.lgamma(v+1)+r*math.log1p(mu/r)+v*(math.log(r+mu)-z))
-                return total
-            except (OverflowError,ValueError): return math.inf
-        b,cov,ll,it = optimize(objective,start)
+                    z = dot(row,b); mu = math.exp(z)
+                    value += mu-v*z+math.lgamma(v+1)
+                    for j in range(p):
+                        score[j] += row[j]*(mu-v)
+                        for k in range(j,p): information[j][k] += row[j]*row[k]*mu
+                for j in range(1,p):
+                    for k in range(j): information[j][k] = information[k][j]
+                return value,score,information
+            b,cov,ll,it = newton(start,exact)
+        else:
+            def objective(b):
+                try:
+                    total = 0.0
+                    r = math.exp(-b[-1])
+                    for row,v in zip(x,y):
+                        z = dot(row,b[:p]); mu = math.exp(z)
+                        total += math.lgamma(r)-math.lgamma(v+r)+math.lgamma(v+1)+r*math.log1p(mu/r)+v*(math.log(r+mu)-z)
+                    return total
+                except (OverflowError,ValueError): return math.inf
+            b,cov,ll,it = optimize(objective,start)
         coefficients=list(map(float,transform*mp.matrix(b[:p])))
         coefficient_cov=transform*cov[:p,:p]*transform.T
         result = {'coefficients':inference(coefficients,coefficient_cov,names,True),'log likelihood':-ll,'AIC':2*len(b)+2*ll,'iterations':it}
@@ -217,13 +273,25 @@ def model(rows, mode):
     require(2 <= k <= 10, 'Enter 2 to 10 numeric response categories')
     labels = [categories.index(v) for v in y]
     if mode == 'multinomial':
-        def objective(b):
-            total = 0.0
+        def exact(b):
+            # Softmax cross-entropy: the score and block observed information
+            # are analytic, so standard errors avoid finite differences.
+            value = 0.0; score = [0.0]*len(b); information = [[0.0]*len(b) for _ in b]
             for row,c in zip(x,labels):
                 z = [0.0]+[dot(row,b[j*p:(j+1)*p]) for j in range(k-1)]
-                top = max(z); total += top+math.log(sum(math.exp(v-top) for v in z))-z[c]
-            return total
-        b,cov,ll,it = optimize(objective,[0.0]*((k-1)*p))
+                top = max(z); weights = [math.exp(v-top) for v in z]; total = math.fsum(weights)
+                value += top+math.log(total)-z[c]
+                probabilities = [v/total for v in weights]
+                for j in range(k-1):
+                    delta = probabilities[j+1]-(1.0 if c==j+1 else 0.0)
+                    for t in range(p): score[j*p+t] += row[t]*delta
+                    for l in range(k-1):
+                        factor = probabilities[j+1]*(1-probabilities[j+1]) if j==l else -probabilities[j+1]*probabilities[l+1]
+                        if factor == 0.0: continue
+                        for a in range(p):
+                            for d in range(p): information[j*p+a][l*p+d] += factor*row[a]*row[d]
+            return value,score,information
+        b,cov,ll,it = newton([0.0]*((k-1)*p),exact)
         margins=[]
         for row,c in zip(x,labels):
             logits=[0.0]+[dot(row,b[j*p:(j+1)*p]) for j in range(k-1)]
@@ -365,40 +433,63 @@ def calculate(engine,name,a):
         design,_,_,scales=standardized_design([[1]+r for r in x]); x=[r[1:] for r in design]
         times=sorted(set(t for t,e in zip(ends,observed) if e))
         def risk_at(time): return [i for i in range(len(rows)) if ends[i]>=time and (starts is None or starts[i]<time)]
-        def partial(z):
-            total=0
+        def accumulate(beta,transform=None):
+            """Partial log-likelihood derivatives at beta.
+
+            Returns the negative partial log likelihood, the score and the
+            observed information. A time transform adds the Grambsch–Therneau
+            blocks of a time-varying coefficient: the weighted score residual
+            vector and the g- and g^2-weighted information terms.
+            """
+            z=[dot(row,beta) for row in x]
+            value=0.0; score=[0.0]*p; information=[[0.0]*p for _ in range(p)]
+            if transform is not None: residual=[0.0]*p; cross=[[0.0]*p for _ in range(p)]; square=[[0.0]*p for _ in range(p)]
             for time in times:
-                risk=risk_at(time); index=[i for i in risk if ends[i]==time and observed[i]]; top=max(z[i] for i in risk)
-                if ties=='breslow': total+=len(index)*(top+math.log(math.fsum(math.exp(z[i]-top) for i in risk)))-sum(z[i] for i in index)
-                else:
-                    chosen=set(index); inside=math.fsum(math.exp(z[i]-top) for i in risk if i not in chosen); unique=math.fsum(math.exp(z[i]-top) for i in index); count=len(index)
-                    total-=sum(z[i] for i in index)
-                    for draw in range(count): total+=top+math.log(inside+(1-draw/count)*unique)
-            return total
-        def objective(b): return partial([dot(row,b) for row in x])
-        b,cov,ll,it=optimize(objective,[0.0]*p)
+                risk=risk_at(time); events=[i for i in risk if ends[i]==time and observed[i]]; top=max(z[i] for i in risk)
+                members=[(math.exp(z[i]-top),i) for i in risk]; selected=[(math.exp(z[i]-top),i) for i in events]
+                count=len(selected); factor=count if ties=='breslow' else 1
+                s0=math.fsum(w for w,_ in members); s1=[math.fsum(w*x[i][j] for w,i in members) for j in range(p)]; s2=[[math.fsum(w*x[i][j]*x[i][k] for w,i in members) for k in range(p)] for j in range(p)]
+                e0=math.fsum(w for w,_ in selected); e1=[math.fsum(w*x[i][j] for w,i in selected) for j in range(p)]; e2=[[math.fsum(w*x[i][j]*x[i][k] for w,i in selected) for k in range(p)] for j in range(p)]
+                value+=count*top-math.fsum(z[i] for i in events)
+                at=[math.fsum(x[i][j] for i in events) for j in range(p)]; bt=[[0.0]*p for _ in range(p)]
+                for draw in range(1 if ties=='breslow' else count):
+                    share=0.0 if ties=='breslow' else draw/count
+                    denominator=s0-share*e0; numerator=[s1[j]-share*e1[j] for j in range(p)]
+                    value+=factor*math.log(denominator)
+                    for j in range(p):
+                        at[j]-=factor*numerator[j]/denominator
+                        for k in range(p): bt[j][k]+=factor*((s2[j][k]-share*e2[j][k])/denominator-numerator[j]*numerator[k]/denominator**2)
+                for j in range(p):
+                    score[j]-=at[j]
+                    for k in range(p): information[j][k]+=bt[j][k]
+                if transform is not None:
+                    g=transform[time]
+                    for j in range(p):
+                        residual[j]+=g*at[j]
+                        for k in range(p): cross[j][k]+=g*bt[j][k]; square[j][k]+=g*g*bt[j][k]
+            if transform is not None: return value,score,information,residual,cross,square
+            return value,score,information
+        b,cov,ll,it=newton([0.0]*p,lambda beta:accumulate(beta))
+        engine.note += ' Cox proportional hazards, '+('Efron' if ties=='efron' else 'Breslow')+' ties; no intercept'+(', left truncation at the entry column' if entry>=0 else '')+'. Analytic score and observed information (Newton-Raphson); exp(coef) is hazard ratio.'
+        ph={}
+        if check:
+            try:
+                ranks={time:rank+1 for rank,time in enumerate(times)}
+                counts={}
+                for t,e in zip(ends,observed):
+                    if e: counts[t]=counts.get(t,0)+1
+                centre=sum(ranks[t]*counts[t] for t in times)/sum(counts.values())
+                _,_,_,residual,cross,square=accumulate(b,{time:ranks[time]-centre for time in times})
+                schur=mp.matrix(square)-mp.matrix(cross)*cov*mp.matrix(cross).T
+                require(min(float(v) for v in mp.eigsy(schur,eigvals_only=True))>1e-12,'Proportional-hazards check is not estimable for this data')
+                statistic=mp.matrix(residual); chi=max(0.0,float((statistic.T*inverse(schur)*statistic)[0]))
+                ph={'PH test chi2':chi,'PH test df':p,'PH test p':float(_chisq_sf(chi,p)),
+                    'PH test per covariate':[{'term':'x'+str(j+1),'chi2':max(0.0,float(residual[j])**2/float(schur[j,j])),'df':1,'p':float(_chisq_sf(max(0.0,float(residual[j])**2/float(schur[j,j])),1))} for j in range(p)]}
+                engine.note += ' Proportional-hazards check: Grambsch–Therneau scaled-Schoenfeld score test on event-time ranks.'
+            except (MathError,OverflowError,ValueError) as exc: ph={'PH test':'unavailable: '+str(exc)}
         b=[v/scale for v,scale in zip(b,scales)]; cov=mp.matrix([[cov[i,j]/(scales[i]*scales[j]) for j in range(p)] for i in range(p)])
         result={'coefficients':inference(b,cov,['x'+str(i+1) for i in range(p)],True),'partial log likelihood':-ll,'iterations':it}
-        engine.note += ' Cox proportional hazards, '+('Efron' if ties=='efron' else 'Breslow')+' ties; no intercept'+(', left truncation at the entry column' if entry>=0 else '')+'. exp(coef) is hazard ratio.'
-        if check and 2*p<=30:
-            try:
-                ranks={time:(rank+1)/(len(times)+1) for rank,time in enumerate(times)}
-                def time_varying(q):
-                    beta=q[:p]; gamma=q[p:]; total=0
-                    for time in times:
-                        risk=risk_at(time); events=[j for j,i in enumerate(risk) if ends[i]==time and observed[i]]; scale=ranks[time]
-                        z=[dot(x[i],beta)+scale*dot(x[i],gamma) for i in risk]; top=max(z)
-                        if ties=='breslow': total+=len(events)*(top+math.log(math.fsum(math.exp(v-top) for v in z)))-sum(z[j] for j in events)
-                        else:
-                            chosen=set(events); inside=math.fsum(math.exp(z[j]-top) for j in range(len(z)) if j not in chosen); unique=math.fsum(math.exp(z[j]-top) for j in events); count=len(events)
-                            total-=sum(z[j] for j in events)
-                            for draw in range(count): total+=top+math.log(inside+(1-draw/count)*unique)
-                    return total
-                q,_,llq,_=optimize(time_varying,[0.0]*(2*p))
-                chi=max(0.0,2*(ll-llq))
-                result['PH test chi2']=chi; result['PH test df']=p; result['PH test p']=float(_chisq_sf(chi,p))
-                engine.note += ' Proportional-hazards check by time-rank interaction likelihood ratio (approximate).'
-            except (MathError,OverflowError) as exc: result['PH test']='unavailable: '+str(exc)
+        result.update(ph)
         return result
     if name=='repeatedanova':
         rows=table(a[0],2,2); n=len(rows); k=len(rows[0])
@@ -514,7 +605,7 @@ def survival_analysis(engine,a):
         if isinstance(value,float) and not math.isfinite(value): return None
         return value
     engine.survival_report=json_numbers(report)
-    engine.note += ' Survival analysis: pointwise Greenwood log-log 95% CI; log-rank'+(' with left-truncated risk sets' if entry>=0 else '')+'; Cox '+('Efron' if ties=='efron' else 'Breslow')+' ties, first group as reference'+(', proportional-hazards check by time-rank interaction' if check and fit else '')+'.'
+    engine.note += ' Survival analysis: pointwise Greenwood log-log 95% CI; log-rank'+(' with left-truncated risk sets' if entry>=0 else '')+'; Cox '+('Efron' if ties=='efron' else 'Breslow')+' ties, first group as reference'+(', proportional-hazards check by scaled-Schoenfeld score test' if check and fit else '')+'.'
     return {'groups':len(ids),'observations':len(rows),'events':int(sum(r[1] for r in rows)),
             'log-rank':report['logrank'] or 'one group','Cox':report['cox'] or 'off'}
 

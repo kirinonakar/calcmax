@@ -107,6 +107,46 @@ class AdvancedStatisticsTests(unittest.TestCase):
         for x,y in zip(actual['HR CI95'],expected['CI95']):self.assertAlmostEqual(x,math.exp(float(y)),places=7)
         with self.assertRaises(AssertionError):evaluate('survivalanalysis([[1,2,1],[2,0,2]])')
 
+
+    def test_survival_ph_check_is_scaled_schoenfeld_score(self):
+        rows=[[1,1,0],[2,1,1],[3,0,0],[4,1,1],[5,1,0],[6,0,1],[7,1,1],[8,1,0]]
+        fit=run('cox',rows,'efron',-1,1)
+        self.assertEqual(int(fit['PH test df']),1)
+        self.assertEqual([term['term'] for term in fit['PH test per covariate']],['x1'])
+        self.assertAlmostEqual(float(fit['PH test chi2']),float(fit['PH test per covariate'][0]['chi2']),places=12)
+        # The rank time transform keeps the statistic invariant to rescaled times.
+        moved=run('cox',[[5*t+1000,e,x] for t,e,x in rows],'efron',-1,1)
+        self.assertAlmostEqual(float(fit['PH test chi2']),float(moved['PH test chi2']),places=10)
+
+    def test_survival_ph_check_reports_per_covariate_statistics(self):
+        rows=[[1,1,0,1],[2,1,1,0],[3,0,0,1],[4,1,1,1],[5,1,0,1],[6,0,1,0],[7,1,1,0],[8,1,0,1],[9,1,1,1],[10,0,0,0],[11,1,1,1],[12,1,0,0]]
+        fit=run('cox',rows,'efron',-1,1)
+        self.assertEqual(int(fit['PH test df']),2)
+        terms=fit['PH test per covariate']
+        self.assertEqual([term['term'] for term in terms],['x1','x2'])
+        self.assertTrue(all(int(term['df'])==1 for term in terms))
+        report=evaluate('survivalanalysis('+str([[r[0],r[1],1+r[2],r[3]] for r in rows])+',1)')['survival']
+        self.assertIn('PH test p',report['cox'])
+
+    def test_survival_ph_check_distinguishes_crossing_from_proportional_hazards(self):
+        crossing=[[1,1,1],[2,1,1],[3,1,1],[4,1,1],[5,1,1],[6,1,0],[7,1,0],[8,1,0],[9,1,0],[10,1,0],[11,0,1],[12,0,0]]
+        holding=[[1,1,0],[2,1,1],[3,0,0],[4,1,1],[5,1,0],[6,0,1],[7,1,1],[8,1,0],[9,1,0],[10,1,1],[11,1,0],[12,0,1],[13,1,1],[14,1,0],[15,0,0],[16,1,1]]
+        bad=run('cox',crossing,'efron',-1,1); good=run('cox',holding,'efron',-1,1)
+        self.assertGreater(float(bad['PH test chi2']),float(good['PH test chi2']))
+        self.assertLess(float(bad['PH test p']),.05)
+        self.assertGreater(float(good['PH test p']),.2)
+        self.assertLess(float(run('cox',crossing,'breslow',-1,1)['PH test p']),.05)
+
+    def test_poisson_standard_errors_use_analytic_information(self):
+        rows=[[0,1],[0,0],[1,3],[1,1],[2,2],[2,5],[3,4],[3,8],[4,6],[4,10]]
+        result=run('poissonreg',rows)
+        beta=[float(c['estimate']) for c in result['coefficients']]
+        means=[math.exp(beta[0]+beta[1]*r[0]) for r in rows]
+        information=[[sum(m*(1.0 if i==0 else r[0])*(1.0 if j==0 else r[0]) for r,m in zip(rows,means)) for j in range(2)] for i in range(2)]
+        determinant=information[0][0]*information[1][1]-information[0][1]*information[1][0]
+        for index,coefficient in enumerate(result['coefficients']):
+            self.assertAlmostEqual(float(coefficient['SE']),math.sqrt(information[1-index][1-index]/determinant),places=12)
+
     def test_ks_exact_separated_samples_and_identical_ties(self):
         result=run('kstest',[1,2,3],[4,5,6])
         self.assertAlmostEqual(float(result['D']),1)

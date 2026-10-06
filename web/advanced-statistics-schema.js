@@ -613,8 +613,8 @@ export const advancedStatisticsSchema = [
         "choices": [
           {
             "id": "test",
-            "label": "Time-rank test",
-            "ko": "시간순위 검정"
+            "label": "Schoenfeld test",
+            "ko": "Schoenfeld 검정"
           },
           {
             "id": "none",
@@ -771,8 +771,8 @@ export const advancedStatisticsSchema = [
         "choices": [
           {
             "id": "test",
-            "label": "Time-rank test",
-            "ko": "시간순위 검정"
+            "label": "Schoenfeld test",
+            "ko": "Schoenfeld 검정"
           },
           {
             "id": "none",
@@ -782,8 +782,8 @@ export const advancedStatisticsSchema = [
         ]
       }
     ],
-    "formHelp": "Proportional hazards; Breslow/Efron ties, optional entry column for left truncation and a time-rank PH check.",
-    "formHelpKo": "비례위험; Breslow/Efron 동률, 선택적 진입시간 열(좌측 절단), 시간순위 PH 검정.",
+    "formHelp": "Proportional hazards; Breslow/Efron ties, optional entry column for left truncation and a scaled-Schoenfeld PH check.",
+    "formHelpKo": "비례위험; Breslow/Efron 동률, 선택적 진입시간 열(좌측 절단), 스케일된 Schoenfeld PH 검정.",
     "exampleRows": [
       [
         "1",
