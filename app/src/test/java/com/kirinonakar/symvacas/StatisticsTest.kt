@@ -43,6 +43,8 @@ class StatisticsDataSourceTest {
         assertEquals(listOf(listOf("pi"),listOf("2")),com.kirinonakar.symvacas.ui.statisticsRows("pi\n2"))
         assertEquals(listOf(listOf("A",""),listOf("B","2")),com.kirinonakar.symvacas.ui.statisticsRows("A,\nB,2"))
         assertEquals(listOf(listOf("1"),listOf("2")),com.kirinonakar.symvacas.ui.statisticsRows("\uFEFF1\n2"))
+        assertEquals(listOf(listOf("1200","5000"),listOf("1250","5200")),com.kirinonakar.symvacas.ui.statisticsRows("환율,금융자산(만원)\n1200,5000\n1250,5200"))
+        assertEquals(listOf(listOf("1","2")),com.kirinonakar.symvacas.ui.statisticsRows("SBP (mmHg),DBP (mmHg)\n1,2"))
         assertTrue(previewStatisticsCsv(source).hasHeader)
     }
 

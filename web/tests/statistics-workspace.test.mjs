@@ -508,6 +508,8 @@ test('arbitrary first-row headers are excluded consistently from analysis, plots
   assert.deepEqual(csvRows('A,\nB,2'),[['A',''],['B','2']]);
   assert.deepEqual(csvRows('\uFEFF1\n2'),[['1'],['2']]);
   assert.deepEqual(csvRows('pi\n2'),[['pi'],['2']]);
+  assert.deepEqual(csvRows('환율,금융자산(만원)\n1200,5000\n1250,5200'),[['1200','5000'],['1250','5200']]);
+  assert.deepEqual(csvRows('SBP (mmHg),DBP (mmHg)\n1,2'),[['1','2']]);
   assert.deepEqual(csvRows('A,1\nB,2'),[['A','1'],['B','2']]);
   assert.equal(csvRows('Label,Value\nA,1',{skipHeader:false})[0][0],'Label');
 });

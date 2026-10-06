@@ -14,6 +14,8 @@ export function statisticsCsvHasHeader(rows){
     const normalized=cell.replace(/,/g,'');
     if(['pi','π','e','E','tau','τ','∞'].includes(cell)||Number.isFinite(Number(normalized))||/^(?:NaN|[+-]?Infinity)$/i.test(cell)||/^\d{4}([-/.])\d{1,2}\1\d{1,2}$/.test(cell))return true;
     if(/^[\p{L}_][\p{L}\p{N}_]*(?:\s+[\p{L}_][\p{L}\p{N}_]*)*$/u.test(cell))return false;
+    // Column names may carry a parenthesized unit (e.g. 자산(만원)); numeric calls such as sqrt(2) stay data.
+    if(/^[\p{L}_][\p{L}\p{N}_]*(?:\s+[\p{L}_][\p{L}\p{N}_]*)*\s*\([^()]*[\p{L}%][^()]*\)$/u.test(cell))return false;
     try{return parse(latexInput(cell)).kind!=='symbol';}catch{return false;}
   }
   return first.every(Boolean)&&first.every(cell=>!dataCell(cell))&&rows.slice(1).some(row=>row.length===first.length&&row.some(dataCell));

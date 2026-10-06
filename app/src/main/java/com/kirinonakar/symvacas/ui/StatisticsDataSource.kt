@@ -187,6 +187,8 @@ internal fun statisticsHasHeader(rows:List<List<String>>):Boolean {
         if(value.statisticsNumericCell().toDoubleOrNull()?.isFinite()==true||value in listOf("pi","π","e","E","tau","τ","∞")||
             value.matches(Regex("(?i)(NaN|[+-]?Infinity)"))||parseStatisticsDate(value)!=null)return true
         if(value.matches(Regex("[\\p{L}_][\\p{L}\\p{N}_]*(?:\\s+[\\p{L}_][\\p{L}\\p{N}_]*)*")))return false
+        // Column names may carry a parenthesized unit (e.g. 자산(만원)); numeric calls such as sqrt(2) stay data.
+        if(value.matches(Regex("[\\p{L}_][\\p{L}\\p{N}_]*(?:\\s+[\\p{L}_][\\p{L}\\p{N}_]*)*\\s*\\([^()]*[\\p{L}%][^()]*\\)")))return false
         return runCatching {Parser(value).parse().kind!="symbol"}.getOrDefault(false)
     }
     return first.all(String::isNotBlank)&&first.none(::dataCell)&&rows.drop(1).any {row->row.size==first.size&&row.any(::dataCell)}

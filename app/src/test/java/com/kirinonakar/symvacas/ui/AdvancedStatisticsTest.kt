@@ -56,6 +56,11 @@ class AdvancedStatisticsTest {
         val wide=(1..25).joinToString(",")
         advancedStatisticsRows("$wide\n$wide",25)
     }
+    @Test fun excludesParenthesizedUnitHeadersFromAnalysis() {
+        val rows=advancedStatisticsRows("환율,금융자산(만원)\n1200,5000\n1250,5200",2)
+        assertEquals(listOf(listOf("1200","5000"),listOf("1250","5200")),rows)
+        assertEquals("cohend([1200,1250],[5000,5200],independent)",advancedStatisticsCommand(definition("cohend","groups",",independent"),rows))
+    }
     @Test fun sharedExamplesParseOnAndroidAndWaitForExplicitEvaluation() {
         val schema=JSONArray(File("src/main/assets/advanced_statistics.json").readText())
         for(i in 0 until schema.length()) {

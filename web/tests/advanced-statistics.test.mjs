@@ -25,6 +25,9 @@ test('advanced data shapes preserve subjects, censoring, categories and missing 
   assert.deepEqual(advancedStatisticsRows('1,2,9\n3,4,8',2),[['1','2'],['3','4']]);
   assert.deepEqual(advancedStatisticsRows('x,y,z\n1,2,3\n4,5,6',2),[['1','2'],['4','5']]);
   assert.deepEqual(advancedStatisticsRows('NA,NA,7\n1,2,3',2),[['NA','NA'],['1','2']]);
+  assert.deepEqual(advancedStatisticsRows('환율,금융자산(만원)\n1200,5000\n1250,5200',2),[['1200','5000'],['1250','5200']]);
+  assert.deepEqual(advancedStatisticsRows('SBP (mmHg),DBP (mmHg)\n1,2',2),[['1','2']]);
+  assert.deepEqual(advancedStatisticsRows('sqrt(2)\n3',1),[['sqrt(2)'],['3']]);
 });
 
 test('all advanced examples parse and require explicit evaluation',()=>{
