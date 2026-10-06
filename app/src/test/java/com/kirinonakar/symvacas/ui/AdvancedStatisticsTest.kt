@@ -23,6 +23,11 @@ class AdvancedStatisticsTest {
         val expected="gee([[1,0,0,47,0,1],[1,1,0,47,0,1],[2,0,1,60,1,0],[2,1,1,60,1,0]],binomial,independence,[[1,2]])"
         for(interactions in listOf("y,z","time, treatment","time (y), treatment (z)"))
             assertEquals(interactions,expected,guidedStatisticsCommand(definition,rows,JSONObject(base.toString()).put("interactions",interactions),labels))
+        val shifted="gee([[1,0,0,47,0,1],[1,1,0,47,0,1],[2,0,1,60,1,0],[2,1,1,60,1,0]],binomial,independence,[[3,4]])"
+        for(interactions in listOf("x4,x5"))
+            assertEquals(interactions,shifted,guidedStatisticsCommand(definition,rows,JSONObject(base.toString()).put("interactions",interactions),labels))
+        val subset="gee([[1,47,0,1],[1,47,0,1],[2,60,1,0],[2,60,1,0]],binomial,independence,[[1,2]])"
+        assertEquals("x4,x5",subset,guidedStatisticsCommand(definition,rows,JSONObject(base.toString()).put("predictors","3,4").put("interactions","x4,x5"),labels))
         for(interactions in listOf("1,2","id (x),time (y)"))
             assertTrue(interactions,runCatching {guidedStatisticsCommand(definition,rows,JSONObject(base.toString()).put("interactions",interactions),labels)}.exceptionOrNull() is IllegalArgumentException)
     }

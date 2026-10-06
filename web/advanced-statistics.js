@@ -37,10 +37,10 @@ export function interactionPairs(value,predictors=[],columnLabels=[]){
       if(byName>=0)return positionOf(byName);
       throw new Error('Unknown interaction column');
     }
-    // Bare column letters x, y, z shown next to the header names.
-    if(['x','y','z'].includes(lower)){
-      const letter=aliasColumn(lower);
-      if(predictors.includes(letter))return positionOf(letter);
+    // Shown column letters (x, y, z, x4, x5, ...) address the Nth data column.
+    const alias=aliasColumn(lower);
+    if(alias!==null&&alias>=0){
+      if(predictors.includes(alias))return positionOf(alias);
       const byName=names.indexOf(lower);
       if(byName>=0)return positionOf(byName);
       const byHeader=headers.indexOf(lower);
@@ -51,7 +51,7 @@ export function interactionPairs(value,predictors=[],columnLabels=[]){
     if(name>=0)return positionOf(name);
     const header=headers.indexOf(lower);
     if(header>=0)return positionOf(header);
-    const named=/^[px](\d+)$/.exec(lower);
+    const named=/^p(\d+)$/.exec(lower);
     if(named){
       const at=Number(named[1]);
       if(!(at>=1&&at<=predictors.length))throw new Error('Interaction positions must be within the selected predictors');

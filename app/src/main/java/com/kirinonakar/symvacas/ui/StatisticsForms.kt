@@ -119,9 +119,10 @@ internal fun interactionPairs(value:String?,predictors:List<Int> = emptyList(),c
             require(byName>=0) {"Unknown interaction column"}
             return positionOf(byName)
         }
-        if(lower=="x"||lower=="y"||lower=="z") {
-            val letter=aliasColumn(lower)!!
-            if(letter in predictors)return positionOf(letter)
+        // Shown column letters (x, y, z, x4, x5, ...) address the Nth data column.
+        val alias=aliasColumn(lower)
+        if(alias!=null&&alias>=0) {
+            if(alias in predictors)return positionOf(alias)
             val byName=names.indexOf(lower)
             if(byName>=0)return positionOf(byName)
             val byHeader=headers.indexOf(lower)
@@ -132,7 +133,7 @@ internal fun interactionPairs(value:String?,predictors:List<Int> = emptyList(),c
         if(name>=0)return positionOf(name)
         val header=headers.indexOf(lower)
         if(header>=0)return positionOf(header)
-        val named=Regex("^[px](\\d+)\$").find(lower)
+        val named=Regex("^p(\\d+)\$").find(lower)
         if(named!=null) {
             val at=named.groupValues[1].toInt()
             require(at in 1..predictors.size) {"Interaction positions must be within the selected predictors"}
