@@ -141,7 +141,6 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
         }
     }
     fun rows():List<List<String>> = statisticsRows(data)
-    fun variableSource():String=statisticsDataSource(data,dataKind)
     fun startNew() {
         var index=1;val existing=names.toSet();while("D$index" in existing)index++
         datasetName="D$index";data=",".repeat(dataColumns.size-1);isNew=true;selected=""
@@ -163,7 +162,7 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
     val yValues=if(dataKind!="list")numericRows.mapNotNull {it.getOrNull(1)?.toDoubleOrNull()?.takeIf {v->v.isFinite()}} else emptyList()
     val zValues=if(dataColumns.size>=3)numericRows.mapNotNull {it.getOrNull(2)?.toDoubleOrNull()?.takeIf {v->v.isFinite()}} else emptyList()
     val paired=numericRows.mapNotNull {row->val x=row.getOrNull(0)?.toDoubleOrNull();val y=row.getOrNull(1)?.toDoubleOrNull();if(x!=null&&y!=null&&x.isFinite()&&y.isFinite())x to y else null}
-    Panel("Data & statistics","Enter values once, then summarize, test, or plot the current dataset.",panelScroll) {
+    Panel("Data & statistics","",panelScroll) {
         if(names.isNotEmpty())Choices(names,activeName,{name->m.clearRegression();selected=name;isNew=false;m.dataSets.optJSONObject(name)?.let {item->datasetName=name;data=item.optString("csv");selectedDataKind=item.optString("kind","list");columnCount=if(selectedDataKind.startsWith("columns:"))statisticsColumnCount(selectedDataKind).toString() else "4";plotType=if(selectedDataKind=="xy")"Scatter" else "Histogram"}})
         Row(horizontalArrangement=Arrangement.spacedBy(6.dp),verticalAlignment=Alignment.CenterVertically) {
             Field(datasetName,"Dataset name",Modifier.weight(1f)){datasetName=it}
@@ -186,7 +185,6 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
         Row(Modifier.horizontalScroll(rememberScrollState())) {
             SmallAction("Import CSV/XLSX"){importCsv.launch(arrayOf("text/csv","text/comma-separated-values","text/plain","application/vnd.ms-excel","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))}
             SmallAction("Export CSV"){exportCsv.launch("${datasetName.ifBlank {"dataset"}}.csv")}
-            SmallAction("Store as $datasetName"){if(datasetName.matches(Regex("[A-Za-z][A-Za-z0-9_]*")))m.store(datasetName,variableSource(),false)else m.error="Dataset name must be a valid variable name"}
             SmallAction(if(csv)"Table editor" else "Direct input"){csv=!csv}
             SmallAction("Add row"){if(parsedRows.size<999)data+="\n"+",".repeat(dataColumns.size-1)}
         }
