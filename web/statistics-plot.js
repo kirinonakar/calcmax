@@ -115,7 +115,7 @@ function drawHeatMap(container,data,digits){
   if(!data.rows.length||!data.columns.length||!finite.length&&!data.correlation){container.replaceChildren();return;}
   const minimum=data.range?.[0]??finite.reduce((a,b)=>Math.min(a,b)),maximum=data.range?.[1]??finite.reduce((a,b)=>Math.max(a,b));
   const left=data.clustered?180:100,top=data.clustered?120:45,width=Math.max(600,left+20+data.columns.length*80),cellWidth=(width-left-20)/data.columns.length;
-  const {svg,node}=svgChart(data.clustered?'Clustered heatmap':data.correlation?'Correlation heat map':'Heat map',width,top+data.rows.length*30);
+  const {svg,node}=svgChart('Heat map',width,top+data.rows.length*30);
   svg.style.width=`${width}px`;svg.classList.add('statistics-heatmap');
   if(data.clustered){
     const rowPeak=data.rowLinks.reduce((peak,link)=>Math.max(peak,link.height),0)||1,columnPeak=data.columnLinks.reduce((peak,link)=>Math.max(peak,link.height),0)||1;
@@ -141,7 +141,10 @@ function drawHeatMap(container,data,digits){
   low.textContent=displayNumber(minimum,digits);high.textContent=displayNumber(maximum,digits);bar.className='statistics-heatmap-scale';
   if(minimum===maximum)bar.style.background=heatMapColor(minimum,minimum,maximum);
   legend.append(low,bar,high);
-  const caption=document.createElement('div');caption.className='statistics-plot-legend';caption.textContent=t(data.clustered?'Single linkage · Euclidean':data.correlation?'Pearson r · pairwise complete observations':'Rows × columns · color = value');
+  const caption=document.createElement('div');caption.className='statistics-plot-legend';
+  const methodName={pearson:'Pearson',spearman:'Spearman',kendall:'Kendall'}[data.method]||'Pearson';
+  const captionKey=data.correlation?`${methodName} correlation · pairwise complete observations`:data.mode==='zrow'?'Row z-scores · color = z-score':data.mode==='zcolumn'?'Column z-scores · color = z-score':'Raw values · rows × columns';
+  caption.textContent=t(captionKey)+(data.clustered?` · ${t('Hierarchical clustering')}`:'');
   container.replaceChildren(caption,scroll,legend);
 }
 

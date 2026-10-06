@@ -69,13 +69,29 @@ export function beeswarmLayout(axisPositions,preferredRadius,halfWidth){
   return {radius,offsets};
 }
 
-export function statisticsHeatMapData(rows,{grouping='columns',columnCount=rows[0]?.length||1}={}){
+export function statisticsHeatMapData(rows,{grouping='columns',columnCount=rows[0]?.length||1,mode='raw',columnNames=statisticsColumnNames(columnCount)}={}){
   const groupColumn=columnCount>1&&['first','last'].includes(grouping)?(grouping==='first'?0:columnCount-1):-1;
-  const indices=Array.from({length:columnCount},(_,i)=>i).filter(i=>i!==groupColumn),names=statisticsColumnNames(columnCount);
-  return {columns:indices.map(i=>names[i]),rows:rows.map((row,i)=>({
+  const indices=Array.from({length:columnCount},(_,i)=>i).filter(i=>i!==groupColumn),columns=indices.map(i=>columnNames[i]||statisticsColumnNames(columnCount)[i]);
+  const values=rows.map(row=>indices.map(column=>statisticsPlotNumber(row[column])));
+  if(mode==='zrow')for(const row of values)standardizeHeatMapValues(row);
+  else if(mode==='zcolumn')for(let column=0;column<indices.length;column++){
+    const standardized=values.map(row=>row[column]);standardizeHeatMapValues(standardized);standardized.forEach((value,row)=>{values[row][column]=value;});
+  }
+  const data={columns,rows:rows.map((row,i)=>({
     label:groupColumn<0?String(i+1):String(row[groupColumn]??'').trim()||String(i+1),
-    values:indices.map(column=>statisticsPlotNumber(row[column]))
+    values:values[i]
   }))};
+  if(mode!=='raw')data.mode=mode;
+  return data;
+}
+
+function standardizeHeatMapValues(values){
+  const finite=values.map((value,index)=>value===null?null:{value,index}).filter(item=>item!==null);
+  if(!finite.length)return;
+  const scale=finite.reduce((peak,item)=>Math.max(peak,Math.abs(item.value)),0)||1;
+  const mean=finite.reduce((sum,item)=>sum+item.value/scale/finite.length,0);
+  const deviation=Math.sqrt(finite.reduce((sum,item)=>sum+((item.value/scale-mean)**2)/finite.length,0));
+  finite.forEach(({value,index})=>{values[index]=deviation===0?0:(value/scale-mean)/deviation;});
 }
 
 // Shared blue -> neutral -> red scale, including a stable midpoint for constants.
@@ -88,16 +104,50 @@ export function heatMapColor(value,minimum,maximum){
   return `rgb(${a.map((v,i)=>Math.round(v+(b[i]-v)*f)).join(',')})`;
 }
 
-export function statisticsCorrelationHeatMap(rows,{columnCount=rows[0]?.length||1}={}){
-  const names=statisticsColumnNames(columnCount),columns=names.map((label,i)=>({label,values:rows.map(row=>statisticsPlotNumber(row[i]))})).filter(column=>column.values.some(value=>value!==null));
-  const cells=columns.map(a=>columns.map(b=>{
-    const pairs=a.values.flatMap((value,i)=>value!==null&&b.values[i]!==null?[[value,b.values[i]]]:[]),n=pairs.length;
-    if(n<2||pairs.every(p=>p[0]===pairs[0][0])||pairs.every(p=>p[1]===pairs[0][1]))return {value:null,n};
-    const sx=pairs.reduce((peak,p)=>Math.max(peak,Math.abs(p[0])),0)||1,sy=pairs.reduce((peak,p)=>Math.max(peak,Math.abs(p[1])),0)||1;
-    const mx=pairs.reduce((sum,p)=>sum+p[0]/sx/n,0),my=pairs.reduce((sum,p)=>sum+p[1]/sy/n,0);
-    let xx=0,yy=0,xy=0;
-    for(const [x,y] of pairs){const dx=x/sx-mx,dy=y/sy-my;xx+=dx*dx;yy+=dy*dy;xy+=dx*dy;}
-    return {value:xx>0&&yy>0?(a===b?1:Math.max(-1,Math.min(1,xy/(Math.sqrt(xx)*Math.sqrt(yy))))):null,n};
+export function statisticsCorrelationHeatMap(rows,{columnCount=rows[0]?.length||1,columnNames=statisticsColumnNames(columnCount),xColumns,yColumns,method='pearson'}={}){
+  const indices=Array.from({length:columnCount},(_,i)=>i),usable=indices.filter(i=>rows.some(row=>statisticsPlotNumber(row[i])!==null));
+  const x=(xColumns||usable).filter(i=>usable.includes(i)),y=(yColumns||usable).filter(i=>usable.includes(i));
+  const cells=y.map(yi=>x.map(xi=>{
+    const pairs=rows.flatMap(row=>{const a=statisticsPlotNumber(row[xi]),b=statisticsPlotNumber(row[yi]);return a===null||b===null?[]:[[a,b]];});
+    return {value:correlationCoefficient(pairs,method),n:pairs.length};
   }));
-  return {columns:columns.map(column=>column.label),rows:columns.map((column,i)=>({label:column.label,values:cells[i].map(cell=>cell.value),counts:cells[i].map(cell=>cell.n)})),range:[-1,1],correlation:true};
+  return {columns:x.map(i=>columnNames[i]||statisticsColumnNames(columnCount)[i]),rows:y.map((index,i)=>({label:columnNames[index]||statisticsColumnNames(columnCount)[index],values:cells[i].map(cell=>cell.value),counts:cells[i].map(cell=>cell.n)})),range:[-1,1],correlation:true,method};
+}
+
+function correlationCoefficient(pairs,method){
+  const n=pairs.length;if(n<2)return null;
+  if(method==='spearman')pairs=rankPairs(pairs);
+  if(method==='kendall')return kendallTauB(pairs);
+  const [x,y]=[0,1].map(axis=>pairs.map(pair=>pair[axis]));
+  if(x.every(value=>value===x[0])||y.every(value=>value===y[0]))return null;
+  const sx=Math.max(...x.map(Math.abs))||1,sy=Math.max(...y.map(Math.abs))||1;
+  const mx=x.reduce((sum,value)=>sum+value/sx/n,0),my=y.reduce((sum,value)=>sum+value/sy/n,0);
+  let xx=0,yy=0,xy=0;
+  for(let i=0;i<n;i++){const dx=x[i]/sx-mx,dy=y[i]/sy-my;xx+=dx*dx;yy+=dy*dy;xy+=dx*dy;}
+  return xx>0&&yy>0?Math.max(-1,Math.min(1,xy/Math.sqrt(xx*yy))):null;
+}
+
+function rankPairs(pairs){
+  const ranks=pairs.map((pair,index)=>({x:pair[0],y:pair[1],index,rx:0,ry:0}));
+  for(const key of ['x','y']){
+    const ordered=[...ranks].sort((a,b)=>a[key]-b[key]||a.index-b.index);
+    for(let start=0;start<ordered.length;){let end=start+1;while(end<ordered.length&&ordered[end][key]===ordered[start][key])end++;const rank=(start+1+end)/2;for(let i=start;i<end;i++)ordered[i][`r${key}`]=rank;start=end;}
+  }
+  return ranks.map(row=>[row.rx,row.ry]);
+}
+
+function kendallTauB(pairs){
+  const n=pairs.length,total=n*(n-1)/2;
+  const tiedPairs=axis=>{const counts=new Map();for(const pair of pairs)counts.set(pair[axis],(counts.get(pair[axis])||0)+1);return [...counts.values()].reduce((sum,count)=>sum+count*(count-1)/2,0);};
+  const tiesX=tiedPairs(0),tiesY=tiedPairs(1);
+  const ys=[...new Set(pairs.map(pair=>pair[1]))].sort((a,b)=>a-b),rank=new Map(ys.map((value,index)=>[value,index+1])),tree=new Float64Array(ys.length+1);
+  const query=index=>{let sum=0;for(let i=index;i>0;i-=i&-i)sum+=tree[i];return sum;};
+  const add=index=>{for(let i=index;i<tree.length;i+=i&-i)tree[i]++;};
+  const sorted=[...pairs].sort((a,b)=>a[0]-b[0]||a[1]-b[1]);let previous=0,concordantMinusDiscordant=0;
+  for(let start=0;start<sorted.length;){let end=start+1;while(end<sorted.length&&sorted[end][0]===sorted[start][0])end++;
+    for(let i=start;i<end;i++){const yRank=rank.get(sorted[i][1]);concordantMinusDiscordant+=query(yRank-1)-(previous-query(yRank));}
+    for(let i=start;i<end;i++){add(rank.get(sorted[i][1]));previous++;}start=end;
+  }
+  const denominator=Math.sqrt((total-tiesX)*(total-tiesY));
+  return denominator>0?Math.max(-1,Math.min(1,concordantMinusDiscordant/denominator)):null;
 }

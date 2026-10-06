@@ -31,7 +31,16 @@ private fun heatColor(value:Double,lo:Double,hi:Double):Color {
     if(data.rows.isEmpty()||data.columns.isEmpty()||finite.isEmpty()&&!data.correlation)return
     val lo=if(data.correlation)-1.0 else finite.min();val hi=if(data.correlation)1.0 else finite.max()
     fun formatted(value:Double)=String.format(Locale.US,"%.${displayDigits.coerceIn(1,6)}g",value)
-    val caption=tr(if(data.clustered)"Single linkage · Euclidean" else if(data.correlation)"Pearson r · pairwise complete observations" else "Rows × columns · color = value")
+    val captionKey=if(data.correlation)when(data.correlationMethod) {
+        "spearman"->"Spearman correlation · pairwise complete observations"
+        "kendall"->"Kendall correlation · pairwise complete observations"
+        else->"Pearson correlation · pairwise complete observations"
+    } else when(data.mode) {
+        "zrow"->"Row z-scores · color = z-score"
+        "zcolumn"->"Column z-scores · color = z-score"
+        else->"Raw values · rows × columns"
+    }
+    val caption=tr(captionKey)+(if(data.clustered)" · ${tr("Hierarchical clustering")}" else "")
     Text(caption,fontSize=11.sp,color=c.muted)
     val description=buildString {
         append(caption)

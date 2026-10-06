@@ -355,6 +355,21 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     var statisticsPlotGrouping
         get()=statisticsState.statisticsPlotGrouping
         set(value) {statisticsState.statisticsPlotGrouping=value}
+    var statisticsHeatMapMode
+        get()=statisticsState.statisticsHeatMapMode
+        set(value) {statisticsState.statisticsHeatMapMode=value}
+    var statisticsHeatMapCorrelation
+        get()=statisticsState.statisticsHeatMapCorrelation
+        set(value) {statisticsState.statisticsHeatMapCorrelation=value}
+    var statisticsHeatMapXColumns
+        get()=statisticsState.statisticsHeatMapXColumns
+        set(value) {statisticsState.statisticsHeatMapXColumns=value}
+    var statisticsHeatMapYColumns
+        get()=statisticsState.statisticsHeatMapYColumns
+        set(value) {statisticsState.statisticsHeatMapYColumns=value}
+    var statisticsHeatMapClustering
+        get()=statisticsState.statisticsHeatMapClustering
+        set(value) {statisticsState.statisticsHeatMapClustering=value}
     var statisticsPlotOrientation
         get()=statisticsState.statisticsPlotOrientation
         set(value) {statisticsState.statisticsPlotOrientation=value}

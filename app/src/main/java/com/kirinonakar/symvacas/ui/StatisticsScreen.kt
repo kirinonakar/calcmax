@@ -31,7 +31,18 @@ import kotlinx.coroutines.withContext
 import kotlin.math.max
 
 @Composable private fun StatHeader(text:String,modifier:Modifier) { val c=LocalInstrument.current; Box(modifier.fillMaxHeight(),contentAlignment=Alignment.Center){Text(text,fontSize=11.sp,color=c.muted,fontWeight=FontWeight.SemiBold)} }
-private data class StatisticsClusterRequest(val rows:List<List<String>>,val kind:String,val grouping:String)
+@Composable private fun HeatMapAxisPicker(title:String,columns:List<Pair<Int,String>>,selected:Set<Int>,onToggle:(Int)->Unit) {
+    Text(tr(title),fontSize=11.sp,color=LocalInstrument.current.muted)
+    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(5.dp)) {
+        columns.forEach {(index,name)->FilterChip(index in selected,onClick={onToggle(index)},label={Text(name,fontSize=12.sp)})}
+    }
+}
+private fun parseHeatMapSelection(value:String,count:Int,defaults:Set<Int>):Set<Int> = when {
+    value.isBlank()->defaults
+    value=="-"->emptySet()
+    else->value.split(',').mapNotNull {it.toIntOrNull()?.takeIf {index->index in 0 until count}}.toSet().ifEmpty {defaults}
+}
+private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinToString(",").ifEmpty {"-"}
 
 @Composable private fun StatCell(value:String,modifier:Modifier,focus:FocusRequester,tag:String,onValue:(String)->Unit) {
     val c=LocalInstrument.current
@@ -84,10 +95,14 @@ private data class StatisticsClusterRequest(val rows:List<List<String>>,val kind
     var customInitials by rememberSaveable {mutableStateOf(m.statisticsCustomInitials)}
     var plotGrouping by rememberSaveable {mutableStateOf(m.statisticsPlotGrouping)}
     var plotOrientation by rememberSaveable {mutableStateOf(m.statisticsPlotOrientation)}
-    var plotType by rememberSaveable {mutableStateOf(m.statisticsPlot)}
+    var plotType by rememberSaveable {mutableStateOf(if(m.statisticsPlot in listOf("Clustered heatmap","Correlation heat map"))"Heat map" else m.statisticsPlot)}
+    var heatMapMode by rememberSaveable {mutableStateOf(if(m.statisticsPlot=="Correlation heat map")"correlation" else m.statisticsHeatMapMode)}
+    var heatMapCorrelation by rememberSaveable {mutableStateOf(m.statisticsHeatMapCorrelation)}
+    var heatMapXColumns by rememberSaveable {mutableStateOf(m.statisticsHeatMapXColumns)}
+    var heatMapYColumns by rememberSaveable {mutableStateOf(m.statisticsHeatMapYColumns)}
+    var heatMapClustering by rememberSaveable {mutableStateOf(m.statisticsHeatMapClustering||m.statisticsPlot=="Clustered heatmap")}
     var csv by rememberSaveable {mutableStateOf(m.statisticsCsv)}
     var importPreview by remember {mutableStateOf<StatisticsCsvImport?>(null)}
-    LaunchedEffect(data,datasetName,dataKind,regression,plotType,plotGrouping,plotOrientation,autoColumns,csv,selected,isNew,customFormula,customVariable,customInitials,polynomialDegree,logisticResponse,lassoAlpha,forestTrees,forestDepth,forestSeed,regularization,l1Ratio,forestTask) {m.statisticsAutoColumns=autoColumns;m.statisticsPlotGrouping=plotGrouping;m.statisticsPlotOrientation=plotOrientation;m.saveStatistics(datasetName,data,dataKind,regression,plotType,csv,selected,isNew,customFormula,customVariable,customInitials,polynomialDegree,logisticResponse,lassoAlpha,forestTrees,forestDepth,forestSeed,regularization,l1Ratio,forestTask)}
     val importCsv=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {uri->
         if(uri!=null)scope.launch {
             val content=withContext(Dispatchers.IO) {runCatching {context.contentResolver.openInputStream(uri)?.bufferedReader()?.use {it.readText()}}.getOrNull()}
@@ -119,6 +134,15 @@ private data class StatisticsClusterRequest(val rows:List<List<String>>,val kind
         datasetName="D$index";data=",".repeat(dataColumns.size-1);isNew=true;selected=""
     }
     val parsedRows=rows()
+    val heatMapColumnNames=remember(data,dataKind) {statisticsHeatMapColumnNames(data,dataKind)}
+    val heatMapAxisIndices=remember(parsedRows,dataKind) {dataColumns.indices.filter {column->parsedRows.any {statisticsPlotNumber(it.getOrNull(column))!=null}}}
+    val validHeatMapAxes=heatMapAxisIndices.toSet()
+    val heatMapAxisSplit=(heatMapAxisIndices.size+1)/2
+    val defaultHeatMapX=heatMapAxisIndices.take(heatMapAxisSplit).toSet()
+    val defaultHeatMapY=heatMapAxisIndices.drop(heatMapAxisSplit).toSet()
+    val heatMapXSelection=parseHeatMapSelection(heatMapXColumns,dataColumns.size,defaultHeatMapX).intersect(validHeatMapAxes)
+    val heatMapYSelection=parseHeatMapSelection(heatMapYColumns,dataColumns.size,defaultHeatMapY).intersect(validHeatMapAxes)-heatMapXSelection
+    LaunchedEffect(data,datasetName,dataKind,regression,plotType,plotGrouping,plotOrientation,heatMapMode,heatMapCorrelation,heatMapXColumns,heatMapYColumns,heatMapClustering,autoColumns,csv,selected,isNew,customFormula,customVariable,customInitials,polynomialDegree,logisticResponse,lassoAlpha,forestTrees,forestDepth,forestSeed,regularization,l1Ratio,forestTask) {m.statisticsAutoColumns=autoColumns;m.statisticsPlotGrouping=plotGrouping;m.statisticsPlotOrientation=plotOrientation;m.statisticsHeatMapMode=heatMapMode;m.statisticsHeatMapCorrelation=heatMapCorrelation;m.statisticsHeatMapXColumns=if(heatMapAxisIndices.size<2)"" else encodeHeatMapSelection(heatMapXSelection);m.statisticsHeatMapYColumns=if(heatMapAxisIndices.size<2)"" else encodeHeatMapSelection(heatMapYSelection);m.statisticsHeatMapClustering=heatMapClustering;m.saveStatistics(datasetName,data,dataKind,regression,plotType,csv,selected,isNew,customFormula,customVariable,customInitials,polynomialDegree,logisticResponse,lassoAlpha,forestTrees,forestDepth,forestSeed,regularization,l1Ratio,forestTask)}
     val dateAxis=if(dataColumns.size>1)statisticsDateAxis(parsedRows) else null
     val numericRows=statisticsNumericRows(parsedRows,dateAxis)
     fun vector(column:Int)=numericRows.mapNotNull {it.getOrNull(column)?.takeIf(String::isNotBlank)}.joinToString(",","[","]")
@@ -279,12 +303,37 @@ private data class StatisticsClusterRequest(val rows:List<List<String>>,val kind
                     m.fitRegression("regression($table,custom,$customFormula,$customVariable$guesses)",data)
                 },enabled=customFormula.isNotBlank()&&customVariable.matches(Regex("[A-Za-z][A-Za-z0-9_]*"))&&paired.size>=2&&!m.regressionBusy){Text(tr("Fit custom model"))}
             }
-            Choices(if(dataKind=="xy")listOf("Scatter","Histogram","Box plot","Violin + points","Heat map","Clustered heatmap","Correlation heat map") else listOf("Histogram","Box plot","Violin + points","Heat map","Clustered heatmap","Correlation heat map"),plotType,{plotType=it})
+            Choices(if(dataKind=="xy")listOf("Scatter","Histogram","Box plot","Violin + points","Heat map") else listOf("Histogram","Box plot","Violin + points","Heat map"),plotType,{plotType=it})
             if(plotType in listOf("Box plot","Violin + points")) {
                 Text(tr("Orientation"),fontSize=11.sp,color=LocalInstrument.current.muted)
                 Choices(listOf("Horizontal","Vertical"),if(plotOrientation=="vertical")"Vertical" else "Horizontal",{plotOrientation=if(it=="Vertical")"vertical" else "horizontal"})
             }
-            if(plotType !in listOf("Scatter","Correlation heat map")&&dataColumns.size>1) {
+            if(plotType=="Heat map") {
+                Text(tr("Heat map data"),fontSize=11.sp,color=LocalInstrument.current.muted)
+                Choices(listOf("Raw values","Z-score by row","Z-score by column","Correlation"),when(heatMapMode){"zrow"->"Z-score by row";"zcolumn"->"Z-score by column";"correlation"->"Correlation";else->"Raw values"},{heatMapMode=when(it){"Z-score by row"->"zrow";"Z-score by column"->"zcolumn";"Correlation"->"correlation";else->"raw"}})
+                Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(4.dp)) {
+                    Checkbox(heatMapClustering,{heatMapClustering=it},Modifier.size(38.dp))
+                    Text(tr("Hierarchical clustering"),fontSize=12.sp,color=LocalInstrument.current.ink)
+                }
+                if(heatMapMode=="correlation") {
+                    Text(tr("Correlation method"),fontSize=11.sp,color=LocalInstrument.current.muted)
+                    Choices(listOf("Pearson (p)","Spearman (s)","Kendall (k)"),when(heatMapCorrelation){"spearman"->"Spearman (s)";"kendall"->"Kendall (k)";else->"Pearson (p)"},{heatMapCorrelation=when(it){"Spearman (s)"->"spearman";"Kendall (k)"->"kendall";else->"pearson"}})
+                    if(heatMapAxisIndices.isEmpty())Text(tr("No numeric columns"),fontSize=11.sp,color=LocalInstrument.current.muted)
+                    HeatMapAxisPicker("X axis variables",heatMapAxisIndices.map {it to heatMapColumnNames[it]},heatMapXSelection) {index->
+                        val adding=index !in heatMapXSelection
+                        val next=if(adding)heatMapXSelection+index else heatMapXSelection-index
+                        heatMapXColumns=encodeHeatMapSelection(next)
+                        heatMapYColumns=encodeHeatMapSelection(heatMapYSelection-index)
+                    }
+                    HeatMapAxisPicker("Y axis variables",heatMapAxisIndices.map {it to heatMapColumnNames[it]},heatMapYSelection) {index->
+                        val adding=index !in heatMapYSelection
+                        val next=if(adding)heatMapYSelection+index else heatMapYSelection-index
+                        heatMapYColumns=encodeHeatMapSelection(next)
+                        heatMapXColumns=encodeHeatMapSelection(heatMapXSelection-index)
+                    }
+                }
+            }
+            if(plotType!="Scatter"&&!(plotType=="Heat map"&&heatMapMode=="correlation")&&dataColumns.size>1) {
                 Text(tr("Plot grouping"),fontSize=11.sp,color=LocalInstrument.current.muted)
                 Choices(listOf("Columns","first","last"),if(plotGrouping=="columns")"Columns" else plotGrouping,{plotGrouping=if(it=="Columns")"columns" else it})
             }
@@ -295,20 +344,21 @@ private data class StatisticsClusterRequest(val rows:List<List<String>>,val kind
         val fittedResponseName=regressionColumns.getOrNull(fittedResponse).orEmpty()
         val fitVisible=dataKind=="xy"&&plotType=="Scatter"&&m.regressionData==data&&m.regressionFit.isNotBlank()
         val plotPairs=if(fitVisible&&m.regressionMode in listOf("logistic","polynomial","ridge","lasso","elasticnet","logisticridge","logisticlasso","logisticelasticnet","randomforest","randomforestclassifier","randomforestregressor")&&fittedResponse==0)paired.map {(x,y)->y to x} else paired
-        val clusterRequest=remember(parsedRows,dataKind,plotGrouping,plotType) {if(plotType=="Clustered heatmap")StatisticsClusterRequest(parsedRows,dataKind,plotGrouping) else null}
-        val clustered by produceState<Pair<StatisticsClusterRequest,StatisticsHeatMapData>?>(null,clusterRequest) {
-            value=null
-            clusterRequest?.let {request->value=request to withContext(Dispatchers.Default){clusteredHeatMap(statisticsHeatMapData(request.rows,request.kind,request.grouping))}}
+        val heatMapInput=remember(parsedRows,dataKind,data,plotGrouping,plotType,heatMapMode,heatMapCorrelation,heatMapXColumns,heatMapYColumns) {
+            if(plotType!="Heat map")null else {
+                if(heatMapMode=="correlation")statisticsCorrelationHeatMap(parsedRows,dataKind,heatMapCorrelation,heatMapXSelection.toList().sorted(),heatMapYSelection.toList().sorted(),heatMapColumnNames)
+                else statisticsHeatMapData(parsedRows,dataKind,plotGrouping,heatMapMode,heatMapColumnNames)
+            }
         }
-        val plainHeatMap=remember(parsedRows,dataKind,plotGrouping,plotType) {when(plotType) {
-            "Heat map"->statisticsHeatMapData(parsedRows,dataKind,plotGrouping)
-            "Correlation heat map"->statisticsCorrelationHeatMap(parsedRows,dataKind)
-            else->null
-        }}
-        val heatMap=if(plotType=="Clustered heatmap")clustered?.takeIf {it.first==clusterRequest}?.second else plainHeatMap
-        if(plotType=="Clustered heatmap"&&heatMap==null)Text(tr("Clustering…"),fontSize=12.sp,color=LocalInstrument.current.muted)
+        val clusterRequest=heatMapInput?.takeIf {heatMapClustering}
+        val clustered by produceState<Pair<StatisticsHeatMapData,StatisticsHeatMapData>?>(null,clusterRequest) {
+            value=null
+            clusterRequest?.let {request->value=request to withContext(Dispatchers.Default){clusteredHeatMap(request)}}
+        }
+        val heatMap=if(heatMapClustering)clustered?.takeIf {it.first==clusterRequest}?.second else heatMapInput
+        if(plotType=="Heat map"&&heatMapClustering&&heatMap==null)Text(tr("Clustering…"),fontSize=12.sp,color=LocalInstrument.current.muted)
         heatMap?.let {StatisticsHeatMap(it,m.displayDigits)}
-        val plotPanels=if(plotType in listOf("Heat map","Clustered heatmap","Correlation heat map"))emptyList() else if(plotType=="Scatter")listOf(StatisticsPlotPanel("",emptyList())) else statisticsPlotPanels(parsedRows,dataKind,plotGrouping)
+        val plotPanels=if(plotType=="Heat map")emptyList() else if(plotType=="Scatter")listOf(StatisticsPlotPanel("",emptyList())) else statisticsPlotPanels(parsedRows,dataKind,plotGrouping)
         plotPanels.forEach {panel->
             if(panel.label.isNotBlank())Text(panel.label,style=MaterialTheme.typography.titleSmall)
             StatisticsPlot(plotType,if(plotType=="Scatter")plotPairs else xValues.mapIndexed {i,v->i.toDouble() to v},xValues,yValues,if(fitVisible)m.regressionCurve.orEmpty() else emptyList(),if(fitVisible&&!m.regressionMode.startsWith("randomforest"))m.regressionFit else "",m.displayDigits,fitVisible&&m.regressionMode=="linear",m.regressionCorrelation,tertiary=zValues,allColumns=panel.series,xDateOrigin=if(fitVisible&&fittedResponse==0)null else dateAxis?.origin,

@@ -76,32 +76,93 @@ internal fun beeswarmLayout(axisPositions:List<Double>,preferredRadius:Double,ha
 }
 
 internal data class StatisticsHeatMapRow(val label:String,val values:List<Double?>,val counts:List<Int>?=null)
-internal data class StatisticsHeatMapData(val columns:List<String>,val rows:List<StatisticsHeatMapRow>,val correlation:Boolean=false,val clustered:Boolean=false,val rowLinks:List<StatisticsClusterLink> = emptyList(),val columnLinks:List<StatisticsClusterLink> = emptyList())
-private fun plotNumber(value:String?)=value?.statisticsNumericCell()?.toDoubleOrNull()?.takeIf(Double::isFinite)
+internal data class StatisticsHeatMapData(val columns:List<String>,val rows:List<StatisticsHeatMapRow>,val correlation:Boolean=false,val clustered:Boolean=false,val rowLinks:List<StatisticsClusterLink> = emptyList(),val columnLinks:List<StatisticsClusterLink> = emptyList(),val mode:String="raw",val correlationMethod:String="pearson")
+internal fun statisticsPlotNumber(value:String?)=value?.statisticsNumericCell()?.toDoubleOrNull()?.takeIf(Double::isFinite)
 
-internal fun statisticsHeatMapData(rows:List<List<String>>,kind:String,grouping:String="columns"):StatisticsHeatMapData {
+internal fun statisticsHeatMapData(rows:List<List<String>>,kind:String,grouping:String="columns",mode:String="raw",columnNames:List<String> = statisticsColumnNames(kind)):StatisticsHeatMapData {
     val names=statisticsColumnNames(kind)
     val groupColumn=if(names.size>1&&grouping in listOf("first","last")) {if(grouping=="first")0 else names.lastIndex} else -1
     val indices=names.indices.filter {it!=groupColumn}
-    return StatisticsHeatMapData(indices.map {names[it]},rows.mapIndexed {index,row->
-        StatisticsHeatMapRow(if(groupColumn<0)(index+1).toString() else row.getOrNull(groupColumn)?.trim().orEmpty().ifBlank {(index+1).toString()},indices.map {plotNumber(row.getOrNull(it))})
-    })
+    val values=rows.map {row->indices.map {statisticsPlotNumber(row.getOrNull(it))}.toMutableList()}.toMutableList()
+    when(mode) {
+        "zrow"->values.forEach(::standardizeHeatMapValues)
+        "zcolumn"->indices.indices.forEach {column->
+            val standardized=values.map {it[column]}.toMutableList();standardizeHeatMapValues(standardized)
+            standardized.forEachIndexed {row,value->values[row][column]=value}
+        }
+    }
+    return StatisticsHeatMapData(indices.map {columnNames.getOrNull(it)?.takeIf(String::isNotBlank) ?: names[it]},rows.mapIndexed {index,row->
+        StatisticsHeatMapRow(if(groupColumn<0)(index+1).toString() else row.getOrNull(groupColumn)?.trim().orEmpty().ifBlank {(index+1).toString()},values[index])
+    },mode=mode)
 }
 
-internal fun statisticsCorrelationHeatMap(rows:List<List<String>>,kind:String):StatisticsHeatMapData {
-    val columns=statisticsColumnNames(kind).mapIndexed {index,name->name to rows.map {plotNumber(it.getOrNull(index))}}.filter {it.second.any {value->value!=null}}
-    val cells=columns.map {a->columns.map {b->
-        val pairs=a.second.mapIndexedNotNull {index,x->val y=b.second[index];if(x!=null&&y!=null)x to y else null}
-        val n=pairs.size
-        if(n<2||pairs.all {it.first==pairs[0].first}||pairs.all {it.second==pairs[0].second})null to n else {
-            val sx=pairs.maxOf {abs(it.first)}.takeIf {it>0} ?: 1.0;val sy=pairs.maxOf {abs(it.second)}.takeIf {it>0} ?: 1.0
-            val mx=pairs.sumOf {it.first/sx/n};val my=pairs.sumOf {it.second/sy/n}
-            var xx=0.0;var yy=0.0;var xy=0.0
-            pairs.forEach {(x,y)->val dx=x/sx-mx;val dy=y/sy-my;xx+=dx*dx;yy+=dy*dy;xy+=dx*dy}
-            (if(xx>0&&yy>0) {if(a===b)1.0 else (xy/(sqrt(xx)*sqrt(yy))).coerceIn(-1.0,1.0)} else null) to n
-        }
+private fun standardizeHeatMapValues(values:MutableList<Double?>) {
+    val finite=values.mapIndexedNotNull {index,value->value?.let {index to it}}
+    if(finite.isEmpty())return
+    val scale=finite.maxOf {abs(it.second)}.takeIf {it>0} ?: 1.0
+    val mean=finite.sumOf {it.second/scale/finite.size}
+    val deviation=sqrt(finite.sumOf {(it.second/scale-mean).pow(2)/finite.size})
+    finite.forEach {(index,value)->values[index]=if(deviation==0.0)0.0 else (value/scale-mean)/deviation}
+}
+
+internal fun statisticsCorrelationHeatMap(rows:List<List<String>>,kind:String,method:String="pearson",xColumns:List<Int>?=null,yColumns:List<Int>?=null,columnNames:List<String> = statisticsColumnNames(kind)):StatisticsHeatMapData {
+    val defaults=statisticsColumnNames(kind)
+    val usable=defaults.indices.filter {column->rows.any {statisticsPlotNumber(it.getOrNull(column))!=null}}
+    val x=(xColumns?:usable).filter(usable::contains);val y=(yColumns?:usable).filter(usable::contains)
+    val cells=y.map {yi->x.map {xi->
+        val pairs=rows.mapNotNull {row->val a=statisticsPlotNumber(row.getOrNull(xi));val b=statisticsPlotNumber(row.getOrNull(yi));if(a==null||b==null)null else a to b}
+        correlationCoefficient(pairs,method) to pairs.size
     }}
-    return StatisticsHeatMapData(columns.map {it.first},columns.mapIndexed {index,column->StatisticsHeatMapRow(column.first,cells[index].map {it.first},cells[index].map {it.second})},true)
+    return StatisticsHeatMapData(x.map {columnNames.getOrNull(it)?.takeIf(String::isNotBlank) ?: defaults[it]},y.mapIndexed {index,column->
+        StatisticsHeatMapRow(columnNames.getOrNull(column)?.takeIf(String::isNotBlank) ?: defaults[column],cells[index].map {it.first},cells[index].map {it.second})
+    },correlation=true,mode="correlation",correlationMethod=method)
+}
+
+private fun correlationCoefficient(source:List<Pair<Double,Double>>,method:String):Double? {
+    if(source.size<2)return null
+    val pairs=when(method) {"spearman"->rankPairs(source);"kendall"->return kendallTauB(source);else->source}
+    val x=pairs.map {it.first};val y=pairs.map {it.second}
+    if(x.all {it==x.first()}||y.all {it==y.first()})return null
+    val sx=x.maxOf {abs(it)}.takeIf {it>0} ?: 1.0;val sy=y.maxOf {abs(it)}.takeIf {it>0} ?: 1.0
+    val mx=x.sumOf {it/sx/x.size};val my=y.sumOf {it/sy/y.size}
+    var xx=0.0;var yy=0.0;var xy=0.0
+    pairs.forEach {(a,b)->val dx=a/sx-mx;val dy=b/sy-my;xx+=dx*dx;yy+=dy*dy;xy+=dx*dy}
+    return if(xx>0&&yy>0)(xy/sqrt(xx*yy)).coerceIn(-1.0,1.0) else null
+}
+
+private fun rankPairs(pairs:List<Pair<Double,Double>>):List<Pair<Double,Double>> {
+    val ranks=Array(pairs.size){DoubleArray(2)}
+    for(axis in 0..1) {
+        val ordered=pairs.indices.sortedWith(compareBy<Int> {if(axis==0)pairs[it].first else pairs[it].second}.thenBy {it})
+        var start=0
+        while(start<ordered.size) {
+            val first=if(axis==0)pairs[ordered[start]].first else pairs[ordered[start]].second
+            var end=start+1
+            while(end<ordered.size&&(if(axis==0)pairs[ordered[end]].first else pairs[ordered[end]].second)==first)end++
+            val averageRank=(start+1+end)/2.0
+            for(index in start until end)ranks[ordered[index]][axis]=averageRank
+            start=end
+        }
+    }
+    return ranks.map {it[0] to it[1]}
+}
+
+private fun kendallTauB(pairs:List<Pair<Double,Double>>):Double? {
+    val n=pairs.size;val total=n.toDouble()*(n-1)/2.0
+    fun ties(axis:Int)=pairs.groupingBy {if(axis==0)it.first else it.second}.eachCount().values.sumOf {it.toDouble()*(it-1)/2.0}
+    val tiesX=ties(0);val tiesY=ties(1);val sortedY=pairs.map {it.second}.distinct().sorted();val ranks=sortedY.withIndex().associate {(index,value)->value to index+1}
+    val tree=DoubleArray(sortedY.size+1)
+    fun query(index:Int):Double {var i=index;var sum=0.0;while(i>0){sum+=tree[i];i-=i and -i};return sum}
+    fun add(index:Int){var i=index;while(i<tree.size){tree[i]++;i+=i and -i}}
+    val sorted=pairs.sortedWith(compareBy<Pair<Double,Double>> {it.first}.thenBy {it.second});var previous=0.0;var score=0.0;var start=0
+    while(start<sorted.size) {
+        var end=start+1;while(end<sorted.size&&sorted[end].first==sorted[start].first)end++
+        for(index in start until end){val rank=ranks.getValue(sorted[index].second);score+=query(rank-1)-(previous-query(rank))}
+        for(index in start until end){add(ranks.getValue(sorted[index].second));previous++}
+        start=end
+    }
+    val denominator=sqrt((total-tiesX)*(total-tiesY))
+    return if(denominator>0)(score/denominator).coerceIn(-1.0,1.0) else null
 }
 
 internal fun heatMapFraction(value:Double,minimum:Double,maximum:Double):Double {

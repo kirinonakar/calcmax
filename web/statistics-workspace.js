@@ -1,9 +1,9 @@
 import {$,value,element,control} from './app-ui.js';
 import {t,setText} from './i18n.js';
 import {downloadFile} from './storage.js';
-import {statisticsCommand,statisticsAnalysisData,csvRows,statisticsDataRows,statisticsDatasetSource,numericStatisticsRows,statisticsColumnCount,statisticsColumnNames,statisticsKindForColumns,statisticsCsvHasHeader,statisticsColumnLabels,statisticsDetectedColumns} from './workspace-commands.js';
+import {statisticsCommand,statisticsAnalysisData,csvRows,statisticsDataRows,statisticsDatasetSource,numericStatisticsRows,statisticsColumnCount,statisticsColumnNames,statisticsKindForColumns,statisticsCsvHasHeader,statisticsColumnLabels,statisticsHeatMapColumnNames,statisticsDetectedColumns} from './workspace-commands.js';
 import {statisticsPlot,statisticsPlotPanels} from './statistics-plot.js';
-import {statisticsHeatMapData,statisticsCorrelationHeatMap} from './statistics-plot-data.js';
+import {statisticsHeatMapData,statisticsCorrelationHeatMap,statisticsPlotNumber} from './statistics-plot-data.js';
 import {clusteredHeatMap} from './statistics-cluster.js';
 import {createAdvancedStatistics} from './advanced-statistics.js';
 import {renderFormulas} from './formula-preview.js';
@@ -25,7 +25,14 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
   let regressionRun=null;
   let detectedColumnSource=null,detectedColumnCount=null;
   let clusterRun=null;
+  let heatMapNumericColumnCount=null;
   function cancelClustering(){const run=clusterRun;clusterRun=null;run?.worker.terminate();}
+  const oldPlotType=state.fields['statistics-plot-type'];
+  if(oldPlotType==='clusteredheatmap'||oldPlotType==='correlationheatmap'){
+    $('statistics-plot-type').value='heatmap';state.fields['statistics-plot-type']='heatmap';
+    if(oldPlotType==='correlationheatmap')$('statistics-heatmap-mode').value='correlation';
+    if(oldPlotType==='clusteredheatmap')$('statistics-heatmap-clustering').checked=true;
+  }
   const menus=Object.fromEntries(['statistics-op','statistics-grouping','regression-kind','regression-response','statistics-plot-type'].map(id=>
     [id,[...$(id).options].map(option=>({option,label:option.textContent}))]));
   function filterMenu(id,available,fallback){
@@ -84,7 +91,8 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
     content.append(element('h3','Preview'),preview);updatePreview();
     content.append(control('Import CSV',()=>{
       const selected=selectedColumns();if(!selected.length){toast(t('Select at least one column'));return;}
-      $('statistics-data').value=rows.slice(header.checked?1:0).map(row=>selected.map(i=>/[",\r\n\t]/.test(row[i])?'"'+row[i].replace(/"/g,'""')+'"':row[i]).join(',')).join('\n');
+      const body=rows.slice(header.checked?1:0),imported=header.checked?[rows[0],...body]:body;
+      $('statistics-data').value=imported.map(row=>selected.map(i=>/[",\r\n\t]/.test(row[i])?'"'+row[i].replace(/"/g,'""')+'"':row[i]).join(',')).join('\n');
       $('dataset-name').value=file.name.replace(/\.(csv|tsv)$/i,'');setDataKind(statisticsKindForColumns(selected.length));dataKindChange();persist();$('dialog').close();
     }));openDialog('Import CSV',content);
   });
@@ -147,12 +155,61 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
     if(filterMenu('regression-kind',model=>kind==='xyz'||kind.startsWith('columns:')?columns>1&&['multiple','logistic','randomforest'].includes(model):kind==='xy'&&model!=='multiple',kind==='xyz'||kind.startsWith('columns:')?'multiple':'linear'))$('regression-kind').onchange();
     $('regression-data-help').hidden=!['multiple','logistic','polynomial','ridge','lasso','elasticnet','logisticridge','logisticlasso','logisticelasticnet','randomforest','randomforestclassifier','randomforestregressor'].includes(regressionMode());
     $('regression-response').closest('label').hidden=!['multiple','logistic','polynomial','ridge','lasso','elasticnet','logisticridge','logisticlasso','logisticelasticnet','randomforest','randomforestclassifier','randomforestregressor'].includes(regressionMode());
+    if(value('statistics-plot-type')==='clusteredheatmap'||value('statistics-plot-type')==='correlationheatmap'){
+      if(value('statistics-plot-type')==='correlationheatmap')$('statistics-heatmap-mode').value='correlation';
+      if(value('statistics-plot-type')==='clusteredheatmap')$('statistics-heatmap-clustering').checked=true;
+      $('statistics-plot-type').value='heatmap';
+    }
     filterMenu('statistics-plot-type',plot=>plot!=='scatter'||kind==='xy',kind==='xy'?'scatter':'histogram');
-    $('statistics-plot-grouping-label').hidden=['scatter','correlationheatmap'].includes(value('statistics-plot-type'))||columns<2;
+    const heatMap=value('statistics-plot-type')==='heatmap',correlation=heatMap&&value('statistics-heatmap-mode')==='correlation';
+    $('statistics-heatmap-options').hidden=!heatMap;
+    $('statistics-heatmap-correlation-label').hidden=!correlation;
+    $('statistics-heatmap-axes').hidden=!correlation;
+    $('statistics-plot-grouping-label').hidden=value('statistics-plot-type')==='scatter'||correlation||columns<2;
     $('statistics-plot-orientation-label').hidden=!['box','violin'].includes(value('statistics-plot-type'));
+    if(correlation){
+      let heatMapRows=[];try{heatMapRows=dataRows();}catch{}
+      const names=statisticsHeatMapColumnNames(value('statistics-data'),kind);
+      const numericCount=names.filter((_,index)=>heatMapRows.some(row=>statisticsPlotNumber(row[index])!==null)).length;
+      if(heatMapNumericColumnCount!==null&&heatMapNumericColumnCount<2&&numericCount>=2){$('statistics-heatmap-x-axis').replaceChildren();$('statistics-heatmap-y-axis').replaceChildren();}
+      updateHeatMapAxis('statistics-heatmap-x-axis',names,heatMapRows);
+      const selectedX=new Set([...$('statistics-heatmap-x-axis').querySelectorAll('input:checked')].map(input=>Number(input.value)));
+      updateHeatMapAxis('statistics-heatmap-y-axis',names,heatMapRows,selectedX);
+      heatMapNumericColumnCount=numericCount;
+      if(numericCount>=2)saveHeatMapAxisSelections();
+      else{delete state.fields['statistics-heatmap-x-columns'];delete state.fields['statistics-heatmap-y-columns'];}
+    }
     setText($('statistics-data-label'),kind==='list'?'One value per line':kind==='xy'?'x, y values':kind==='xyz'?'x, y, z values':statisticsColumnNames(columns).join(', '));
     try{$('statistics-samples').textContent=analysisSummary();}catch{setText($('statistics-samples'),'Enter data to see analyzed groups');}
     advanced?.render();
+  }
+  function updateHeatMapAxis(id,names,rows,excluded=new Set()){
+    const container=$(id),axis=id.endsWith('x-axis')?'x':'y',stateField=`statistics-heatmap-${axis}-columns`,existing=[...container.querySelectorAll('input:checked')].map(input=>Number(input.value)),hadChoices=container.querySelectorAll('input').length>0;
+    const savedText=String(state.fields[stateField]||''),hasSaved=Object.hasOwn(state.fields,stateField)&&savedText!=='',saved=new Set(savedText==='-'?[]:savedText.split(',').map(Number).filter(Number.isInteger));
+    const available=names.map((name,index)=>({name,index})).filter(({index})=>rows.some(row=>statisticsPlotNumber(row[index])!==null));
+    const split=Math.ceil(available.length/2),defaults=new Set((axis==='x'?available.slice(0,split):available.slice(split)).map(({index})=>index));
+    let selected=hadChoices?new Set(existing):hasSaved?saved:defaults;
+    if(hasSaved&&savedText!=='-'&&!available.some(({index})=>selected.has(index)))selected=defaults;
+    selected=new Set([...selected].filter(index=>available.some(option=>option.index===index)&&!excluded.has(index)));
+    const choices=available.map(({name,index})=>{
+      const input=element('input');input.type='checkbox';input.value=String(index);input.checked=selected.has(index);
+      const label=element('label',name,'check');label.append(input);input.onchange=()=>{
+        if(input.checked){
+          const otherId=axis==='x'?'statistics-heatmap-y-axis':'statistics-heatmap-x-axis';
+          const other=[...$(otherId).querySelectorAll('input')].find(item=>item.value===input.value);if(other)other.checked=false;
+        }
+        saveHeatMapAxisSelections();
+        $('statistics-plot-run').click();persist();
+      };
+      return label;
+    });
+    if(choices.length)container.replaceChildren(...choices);else container.replaceChildren(element('span',t('No numeric columns')));
+  }
+  function saveHeatMapAxisSelections(){
+    for(const [axis,id] of [['x','statistics-heatmap-x-axis'],['y','statistics-heatmap-y-axis']]){
+      const selected=[...$(id).querySelectorAll('input:checked')].map(input=>input.value);
+      state.fields[`statistics-heatmap-${axis}-columns`]=selected.join(',')||'-';
+    }
   }
   function dataKindChange(){cancelClustering();cancelRegression();statisticsGraph=null;$('regression-caption').replaceChildren();$('regression-inference').replaceChildren();$('regression-export').hidden=true;$('regression-transfer').hidden=true;$('statistics-plot').replaceChildren();$('statistics-plot-type').value=dataKind()==='xy'?'scatter':'histogram';render();refreshWorkspaceMath();}
   $('statistics-kind').onchange=dataKindChange;
@@ -188,26 +245,31 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
   $('statistics-data').addEventListener('change',()=>{invalidateRegression();statisticsControls();if(!$('statistics-grid').hidden)statisticsGrid();});
   $('statistics-store').onclick=async()=>{const name=value('dataset-name').trim();if(!/^[A-Za-z][A-Za-z0-9_]*$/.test(name)){error('Dataset name must be a valid variable name');return;}try{await storeExpression(name,statisticsDatasetSource(value('statistics-data'),dataKind()));}catch(exc){error(exc.message);}};
   $('statistics-plot-run').onclick=()=>{try{statisticsGraph={...statisticsGraph,rows:numericStatisticsRows(dataRows()),curve:statisticsGraph?.curve||[]};$('statistics-plot').hidden=false;drawStatisticsGraph();}catch(exc){error(exc.message);}};
-  $('statistics-plot-type').onchange=()=>{statisticsControls();$('statistics-plot-run').click();};
+  $('statistics-plot-type').onchange=()=>{statisticsControls();$('statistics-plot-run').click();persist();};
   $('statistics-plot-grouping').onchange=()=>{$('statistics-plot-run').click();persist();};
   $('statistics-plot-orientation').onchange=()=>{$('statistics-plot-run').click();persist();};
+  for(const id of ['statistics-heatmap-mode','statistics-heatmap-correlation','statistics-heatmap-clustering'])$(id).onchange=()=>{statisticsControls();$('statistics-plot-run').click();persist();};
   $('regression-transfer').onclick=()=>{if(!statisticsGraph?.fit)return;try{const source=regressionGraphSource(statisticsGraph.fit,state.digits,statisticsGraph.variable);$('graph-kind').value='cartesian';$('graph-source').value=source;changeMode('graph');graphs.run();}catch(exc){error(exc.message);}};
 
   function drawStatisticsGraph(){
     const container=$('statistics-plot'),type=value('statistics-plot-type'),options={type,orientation:value('statistics-plot-orientation'),digits:state.digits,curve:statisticsGraph.curve,xAxisLabel:statisticsGraph.xAxisLabel||'x',yAxisLabel:statisticsGraph.yAxisLabel||'y'};
-    if(type!=='clusteredheatmap')cancelClustering();
+    const cluster=$('statistics-heatmap-clustering').checked;
+    if(type!=='heatmap'||!cluster)cancelClustering();
     if(type==='scatter'){statisticsPlot(container,statisticsGraph.plotRows||statisticsGraph.rows,options);return;}
-    if(type==='heatmap'){statisticsPlot(container,statisticsGraph.rows,{...options,heatMap:statisticsHeatMapData(dataRows(),{grouping:value('statistics-plot-grouping'),columnCount:dataColumns()})});return;}
-    if(type==='clusteredheatmap'){
-      const key=JSON.stringify([value('statistics-data'),dataKind(),value('statistics-plot-grouping')]);
+    if(type==='heatmap'){
+      const rows=dataRows(),columnNames=statisticsHeatMapColumnNames(value('statistics-data'),dataKind()),mode=value('statistics-heatmap-mode'),method=value('statistics-heatmap-correlation');
+      const axisSelection=id=>[...$(id).querySelectorAll('input:checked')].map(input=>Number(input.value));
+      const xColumns=axisSelection('statistics-heatmap-x-axis'),yColumns=axisSelection('statistics-heatmap-y-axis');
+      const data=mode==='correlation'?statisticsCorrelationHeatMap(rows,{columnCount:dataColumns(),columnNames,xColumns,yColumns,method}):statisticsHeatMapData(rows,{grouping:value('statistics-plot-grouping'),columnCount:dataColumns(),columnNames,mode});
+      if(!cluster){statisticsPlot(container,statisticsGraph.rows,{...options,heatMap:data});return;}
+      const key=JSON.stringify([value('statistics-data'),dataKind(),value('statistics-plot-grouping'),mode,method,xColumns,yColumns]);
       if(statisticsGraph.clusterKey===key&&statisticsGraph.clusterData){cancelClustering();statisticsPlot(container,statisticsGraph.rows,{...options,heatMap:statisticsGraph.clusterData});return;}
       setText(container,'Clustering…');if(clusterRun?.key===key){clusterRun.graph=statisticsGraph;return;}
       cancelClustering();
-      const data=statisticsHeatMapData(dataRows(),{grouping:value('statistics-plot-grouping'),columnCount:dataColumns()});
       if(typeof Worker==='undefined'){statisticsGraph.clusterKey=key;statisticsGraph.clusterData=clusteredHeatMap(data);statisticsPlot(container,statisticsGraph.rows,{...options,heatMap:statisticsGraph.clusterData});return;}
       const worker=new Worker(new URL('./statistics-cluster-worker.js',import.meta.url),{type:'module'}),run={worker,key,graph:statisticsGraph};clusterRun=run;
       worker.onmessage=({data:message})=>{
-        if(clusterRun!==run||statisticsGraph!==run.graph||value('statistics-plot-type')!=='clusteredheatmap')return;
+        if(clusterRun!==run||statisticsGraph!==run.graph||value('statistics-plot-type')!=='heatmap'||!$('statistics-heatmap-clustering').checked)return;
         cancelClustering();if(message.error){container.replaceChildren();error(message.error);return;}
         statisticsGraph.clusterKey=key;statisticsGraph.clusterData=message.result;
         statisticsPlot(container,statisticsGraph.rows,{...options,digits:state.digits,heatMap:message.result});
@@ -215,7 +277,6 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
       worker.onerror=event=>{if(clusterRun!==run)return;cancelClustering();container.replaceChildren();error(event.message||'Clustering failed');};
       worker.postMessage(data);return;
     }
-    if(type==='correlationheatmap'){statisticsPlot(container,statisticsGraph.rows,{...options,heatMap:statisticsCorrelationHeatMap(dataRows(),{columnCount:dataColumns()})});return;}
     const panels=statisticsPlotPanels(dataRows(),{grouping:value('statistics-plot-grouping'),columnCount:dataColumns()});
     if(panels.length===1&&!panels[0].label){statisticsPlot(container,statisticsGraph.rows,{...options,series:panels[0].series});return;}
     container.replaceChildren(...panels.map(panel=>{

@@ -44,6 +44,11 @@ export function statisticsColumnLabels(source,kind){
   try{const raw=csvRows(source,{skipHeader:false});if(statisticsCsvHasHeader(raw))return names.map((name,i)=>raw[0][i]&&raw[0][i]!==name?`${raw[0][i]} (${name})`:name);}catch{}
   return names;
 }
+export function statisticsHeatMapColumnNames(source,kind){
+  const names=statisticsColumnNames(statisticsColumnCount(kind));
+  try{const rows=csvRows(source,{skipHeader:false});if(statisticsCsvHasHeader(rows))return names.map((name,index)=>rows[0][index]||name);}catch{}
+  return names;
+}
 export function statisticsKindForColumns(count){return ['list','xy','xyz'][count-1]||`columns:${count}`;}
 export function statisticsDataRows(source,kind){
   const columns=statisticsColumnCount(kind);

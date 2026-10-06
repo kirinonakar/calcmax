@@ -16,6 +16,12 @@ internal fun statisticsColumnLabels(csv:String,kind:String):List<String> {
     if(!statisticsHasHeader(raw))return names
     return names.mapIndexed {index,name->raw.first().getOrNull(index)?.trim()?.takeIf {it.isNotBlank()&&it!=name}?.let {"$it ($name)"} ?: name}
 }
+internal fun statisticsHeatMapColumnNames(csv:String,kind:String):List<String> {
+    val names=statisticsColumnNames(kind)
+    val raw=csv.removePrefix("\uFEFF").replace("\r\n","\n").replace('\r','\n').split('\n').map {it.splitCsvRecord()}
+    if(!statisticsHasHeader(raw))return names
+    return names.mapIndexed {index,name->raw.firstOrNull()?.getOrNull(index)?.trim()?.takeIf(String::isNotBlank) ?: name}
+}
 internal fun statisticsKindForColumns(count:Int):String = when(count) {1->"list";2->"xy";3->"xyz";else->"columns:${count.coerceIn(1,100)}"}
 internal fun statisticsDetectedColumns(source:String):Int {
     if(source.isBlank())return 1
@@ -82,7 +88,9 @@ internal fun previewStatisticsCsv(csv:String):StatisticsCsvImport {
 internal fun importStatisticsCsv(preview:StatisticsCsvImport,columns:List<Int>,skipHeader:Boolean):String {
     require(columns.isNotEmpty()&&columns.size<=100&&columns.distinct().size==columns.size)
     require(columns.all {it in 0 until preview.columnCount})
-    return preview.rows.drop(if(skipHeader)1 else 0).joinToString("\n") {row->statisticsCsvLine(columns.map {index->row.getOrNull(index).orEmpty()})}
+    val body=preview.rows.drop(if(skipHeader)1 else 0)
+    val keptHeader=if(skipHeader)preview.rows.take(1)+body else body
+    return keptHeader.joinToString("\n") {row->statisticsCsvLine(columns.map {index->row.getOrNull(index).orEmpty()})}
 }
 
 internal fun statisticsCsvLine(cells:List<String>):String=cells.joinToString(",") {it.csvCell()}

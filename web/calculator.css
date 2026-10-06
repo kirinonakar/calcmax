@@ -252,5 +252,6 @@ input:disabled,select:disabled{opacity:.45;cursor:default}
 
 .statistics-plot-legend{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12px;margin:6px 0}
 .statistics-heatmap-scroll{overflow:auto;max-height:420px}.plot svg.statistics-heatmap{min-width:100%;max-height:none}.statistics-heatmap-legend{display:flex;align-items:center;gap:10px;margin:10px 16px;font-size:12px}.statistics-heatmap-scale{height:12px;flex:1;background:linear-gradient(to right,rgb(59,112,189),rgb(241,241,235),rgb(180,55,72))}.plot svg.statistics-distribution{max-height:none}.statistics-distribution-scroll{overflow-x:auto}.statistics-distribution-scroll svg{min-width:100%}
+.statistics-heatmap-axes{flex-basis:100%;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}.statistics-heatmap-axis{min-width:0}.statistics-heatmap-axis>strong{display:block;margin-bottom:5px}.statistics-heatmap-variable-options{display:flex;flex-wrap:wrap;gap:4px;max-height:150px;overflow:auto;padding:4px;border:1px solid var(--line);border-radius:8px}.statistics-heatmap-variable-options label{font-size:12px;white-space:nowrap}
 
 .regression-parameter{display:inline-block;margin-right:16px;font-size:12px}
