@@ -158,7 +158,30 @@ export function guidedStatisticsCommand(definition,rows,settings={},columnLabels
       if(new Set(pairs.map(pair=>pair.join(','))).size!==pairs.length)throw new Error('Interaction pairs must be distinct');
       return `gee(${table(mapped)},${opts.family},${opts.corr}${pairs.length?','+JSON.stringify(pairs):''})`;
     }
-    return `mixedmodel(${table(mapped)},${Number(opts.slope)||0})`;
+    const positions=String(opts.slope).split(',').map(value=>value.trim()).filter(Boolean);
+    if(!positions.length||positions.some(value=>!Number.isInteger(Number(value))))throw new Error('Enter random-slope positions like 0 or 1,2');
+    const numbers=positions.map(Number).filter(value=>value!==0);
+    if(numbers.some(value=>value<1||value>19)||new Set(numbers).size!==numbers.length)throw new Error('Random-slope positions must be distinct predictor numbers');
+    const argument=numbers.length===0?'0':numbers.length===1?String(numbers[0]):'['+numbers.join(',')+']';
+    return `mixedmodel(${table(mapped)},${argument}${opts.method==='reml'?',reml':''})`;
+  }
+  if(id==='impute'){
+    const width=Math.max(...rows.map(row=>row.length));
+    const cells=rows.map(row=>Array.from({length:width},(_,index)=>String(row[index]??'').trim()||'NA'));
+    const method=opts.method||'mean';
+    const neighbors=method==='knn'?','+String(opts.k).trim():'';
+    return `impute(${table(cells)},${method}${neighbors})`;
+  }
+  if(id==='crossvalidate'){
+    const width=Math.max(...rows.map(row=>row.length));
+    const cells=rows.map(row=>Array.from({length:width},(_,index)=>String(row[index]??'').trim()));
+    if(cells.some(row=>row.some(cell=>!cell)))throw new Error('Complete rows required');
+    const folds=Number(opts.folds),seed=Number(opts.seed);
+    if(!Number.isInteger(folds)||folds<2||folds>cells.length)throw new Error('Folds must be between 2 and the row count');
+    if(!Number.isInteger(seed)||seed<0)throw new Error('Seed must be a nonnegative integer');
+    const penalty=opts.model==='elasticnet'?`,[${String(opts.alpha).trim()},${String(opts.ratio).trim()}]`:opts.model==='linear'?'':`,${String(opts.alpha).trim()}`;
+    const suffix=opts.split==='random'&&opts.model==='linear'?'':`,${opts.split},${opts.model}${penalty}`;
+    return `crossvalidate(${table(cells)},${folds},${seed}${suffix})`;
   }
   if(id==='kstest'){
     const first=column('first');

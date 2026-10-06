@@ -72,14 +72,44 @@ internal fun guidedStatisticsCommand(definition:JSONObject,rows:List<List<String
                 val suffix=if(pairs.isEmpty())"" else ","+pairs.joinToString(",","[","]") {pair->"[${pair.first},${pair.second}]"}
                 "gee(${table(mapped)},${opts["family"]},${opts["corr"]}$suffix)"
             } else {
-                val slope=opts["slope"]?.toIntOrNull() ?: 0
-                "mixedmodel(${table(mapped)},$slope)"
+                val positions=(opts["slope"] ?: "0").split(',').map(String::trim).filter(String::isNotBlank)
+                require(positions.all {it.toIntOrNull()!=null}) {"Enter random-slope positions like 0 or 1,2"}
+                val numbers=positions.mapNotNull {it.toIntOrNull()}.filter {it!=0}
+                require(numbers.all {it in 1..19}&&numbers.distinct().size==numbers.size) {"Random-slope positions must be distinct predictor numbers"}
+                val argument=when(numbers.size) {0->"0";1->numbers[0].toString();else->"["+numbers.joinToString(",")+"]"}
+                val method=if(opts["method"]=="reml")",reml" else ""
+                "mixedmodel(${table(mapped)},$argument$method)"
             }
         }
         "kstest"->{
             val first=col("first")
             if(opts["mode"]=="two") {val second=col("second");distinct(listOf(first,second));"kstest(${vector(values(first))},${vector(values(second))})"}
             else "kstest(${vector(values(first))},${opts["mode"]},${opts["location"]},${opts["scale"]})"
+        }
+        "impute"->{
+            val width=rows.maxOf {it.size}
+            val cells=rows.map {row->List(width){index->row.getOrElse(index){""}.trim().ifBlank{"NA"}}}
+            val method=opts.getValue("method")
+            require(method in listOf("mean","median","mode","regression","knn")) {"Invalid imputation method"}
+            val neighbors=if(method=="knn") {val k=opts.getValue("k").trim();require(k.toIntOrNull()?.let {it in 1..100}==true) {"Enter 1-100 neighbours"};",$k"} else ""
+            "impute(${table(cells)},$method$neighbors)"
+        }
+        "crossvalidate"->{
+            val width=rows.maxOf {it.size}
+            val cells=rows.map {row->List(width){index->row.getOrElse(index){""}.trim()}}
+            require(cells.all {row->row.all(String::isNotBlank)}) {"Complete rows required"}
+            val folds=opts.getValue("folds").trim();require(folds.toIntOrNull()?.let {it>=2&&it<=rows.size}==true) {"Folds must be between 2 and the row count"}
+            val seed=opts.getValue("seed").trim();require(seed.toLongOrNull()?.let {it>=0}==true) {"Seed must be a nonnegative integer"}
+            val model=opts.getValue("model");val split=opts.getValue("split")
+            require(model in listOf("linear","ridge","lasso","elasticnet","logistic")) {"Invalid cross-validation model"}
+            require(split in listOf("random","blocked","stratified")) {"Invalid cross-validation split"}
+            val penalty=when(model) {
+                "elasticnet"->",["+opts.getValue("alpha").trim()+","+opts.getValue("ratio").trim()+"]"
+                "linear"->""
+                else->","+opts.getValue("alpha").trim()
+            }
+            val suffix=if(split=="random"&&model=="linear")"" else ",$split,$model$penalty"
+            "crossvalidate(${table(cells)},$folds,$seed$suffix)"
         }
         else->error("Unknown analysis form")
     }

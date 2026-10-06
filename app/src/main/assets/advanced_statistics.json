@@ -889,8 +889,8 @@
     "input": "table",
     "suffix": ",0",
     "example": "mixedmodel([[1,0,2],[1,1,4],[1,2,4],[2,0,3],[2,1,4],[2,2,6],[3,0,1],[3,1,3],[3,2,4],[4,0,4],[4,1,5],[4,2,8]],0)",
-    "help": "Rows: subject ID, predictors, response. Gaussian random intercept ML; second argument selects a random slope (0 none); ≤300 rows.",
-    "helpKo": "열: 대상 ID, 설명변수, 반응. Gaussian 랜덤 절편 ML; 둘째 인수는 랜덤 기울기 위치(0 없음); 최대 300행.",
+    "help": "Rows: subject ID, predictors, response. Gaussian random intercept with up to three random slopes (0 none, a predictor position, or [1,2]); third argument ml (default) or reml; up to 5000 rows.",
+    "helpKo": "열: 대상 ID, 설명변수, 반응. Gaussian 랜덤 절편 + 최대 3개 랜덤 기울기(0 없음, 변수 위치, 또는 [1,2]); 셋째 인수 ml(기본)·reml; 최대 5000행.",
     "controls": [
       {
         "key": "subject",
@@ -915,14 +915,33 @@
       },
       {
         "key": "slope",
-        "label": "Random-slope predictor",
+        "label": "Random-slope predictors",
         "ko": "랜덤 기울기 변수",
         "type": "number",
         "default": "0"
+      },
+      {
+        "key": "method",
+        "label": "Estimation",
+        "ko": "추정 방법",
+        "type": "choice",
+        "default": "ml",
+        "choices": [
+          {
+            "id": "ml",
+            "label": "ML",
+            "ko": "ML"
+          },
+          {
+            "id": "reml",
+            "label": "REML",
+            "ko": "REML"
+          }
+        ]
       }
     ],
-    "formHelp": "Gaussian random intercept with an optional random slope (ML).",
-    "formHelpKo": "Gaussian 랜덤 절편과 선택적 랜덤 기울기 (ML)입니다.",
+    "formHelp": "Gaussian random intercept with up to three random slopes under ML or REML. Random-slope positions accept 0, a number or a list such as 1,2.",
+    "formHelpKo": "Gaussian 랜덤 절편 + 최대 3개 랜덤 기울기, ML·REML 추정입니다. 랜덤 기울기 위치는 0, 번호, 또는 1,2 같은 목록입니다.",
     "exampleRows": [
       [
         "1",
@@ -1195,8 +1214,8 @@
     "input": "none",
     "suffix": "",
     "example": "testpower(0.5,64,0.05,independent)",
-    "help": "Cohen d, n per group/pairs, alpha, independent / paired / onesample. Two-sided normal approximation.",
-    "helpKo": "Cohen d, 그룹별 n/쌍 수, 유의수준, independent / paired / onesample. 양측 정규근사."
+    "help": "Cohen d, n per group/pairs, alpha, independent / paired / onesample, alternative two (default) / greater / less. Exact noncentral-t power.",
+    "helpKo": "Cohen d, 그룹별 n/쌍 수, 유의수준, independent / paired / onesample, 대립가설 two(기본) / greater / less. 정확 noncentral-t 검정력."
   },
   {
     "id": "samplesize",
@@ -1205,8 +1224,8 @@
     "input": "none",
     "suffix": "",
     "example": "samplesize(0.5,0.8,0.05,independent)",
-    "help": "Cohen d, target power, alpha, design. Two-sided normal approximation.",
-    "helpKo": "Cohen d, 목표 검정력, 유의수준, 설계. 양측 정규근사."
+    "help": "Cohen d, target power, alpha, design, alternative. Exact noncentral-t power.",
+    "helpKo": "Cohen d, 목표 검정력, 유의수준, 설계, 대립가설. 정확 noncentral-t 검정력."
   },
   {
     "id": "kstest",
@@ -1316,8 +1335,149 @@
     "input": "table",
     "suffix": ",3,0",
     "example": "crossvalidate([[0,1],[1,3],[2,4],[3,7],[4,8],[5,11],[6,12],[7,15],[8,16]],3,0)",
-    "help": "Rows: predictors, response; folds, seed. Shuffled k-fold OLS.",
-    "helpKo": "열: 설명변수, 반응; 폴드 수, 시드. 무작위 k-fold OLS."
+    "help": "Rows: predictors, response; folds, seed; split random (default) / blocked / stratified; model linear (default) / ridge / lasso / elasticnet / logistic; penalty alpha or [alpha,l1 ratio].",
+    "helpKo": "열: 설명변수, 반응; 폴드 수, 시드; 분할 random(기본) / blocked / stratified; 모형 linear(기본) / ridge / lasso / elasticnet / logistic; 벌점 alpha 또는 [alpha,l1 비율].",
+    "controls": [
+      {
+        "key": "folds",
+        "label": "Folds",
+        "ko": "폴드 수",
+        "type": "number",
+        "default": "3"
+      },
+      {
+        "key": "seed",
+        "label": "Seed",
+        "ko": "시드",
+        "type": "number",
+        "default": "0"
+      },
+      {
+        "key": "split",
+        "label": "Split",
+        "ko": "분할",
+        "type": "choice",
+        "default": "random",
+        "choices": [
+          {
+            "id": "random",
+            "label": "Random",
+            "ko": "무작위"
+          },
+          {
+            "id": "blocked",
+            "label": "Blocked",
+            "ko": "블록"
+          },
+          {
+            "id": "stratified",
+            "label": "Stratified",
+            "ko": "층화"
+          }
+        ]
+      },
+      {
+        "key": "model",
+        "label": "Model",
+        "ko": "모형",
+        "type": "choice",
+        "default": "linear",
+        "choices": [
+          {
+            "id": "linear",
+            "label": "Linear (OLS)",
+            "ko": "선형 (OLS)"
+          },
+          {
+            "id": "ridge",
+            "label": "Ridge",
+            "ko": "Ridge"
+          },
+          {
+            "id": "lasso",
+            "label": "Lasso",
+            "ko": "Lasso"
+          },
+          {
+            "id": "elasticnet",
+            "label": "Elastic net",
+            "ko": "Elastic net"
+          },
+          {
+            "id": "logistic",
+            "label": "Logistic (0/1)",
+            "ko": "로지스틱 (0/1)"
+          }
+        ]
+      },
+      {
+        "key": "alpha",
+        "label": "Penalty α",
+        "ko": "벌점 α",
+        "type": "number",
+        "default": "0.1",
+        "when": {
+          "model": [
+            "ridge",
+            "lasso",
+            "elasticnet",
+            "logistic"
+          ]
+        }
+      },
+      {
+        "key": "ratio",
+        "label": "L1 ratio",
+        "ko": "L1 비율",
+        "type": "number",
+        "default": "0.5",
+        "when": {
+          "model": [
+            "elasticnet"
+          ]
+        }
+      }
+    ],
+    "formHelp": "Held-out folds fitted on training rows only; choose split, model and penalty.",
+    "formHelpKo": "훈련 행으로만 적합하는 홀드아웃 폴드; 분할·모형·벌점을 선택합니다.",
+    "exampleRows": [
+      [
+        "0",
+        "1"
+      ],
+      [
+        "1",
+        "3"
+      ],
+      [
+        "2",
+        "4"
+      ],
+      [
+        "3",
+        "7"
+      ],
+      [
+        "4",
+        "8"
+      ],
+      [
+        "5",
+        "11"
+      ],
+      [
+        "6",
+        "12"
+      ],
+      [
+        "7",
+        "15"
+      ],
+      [
+        "8",
+        "16"
+      ]
+    ]
   },
   {
     "id": "pca",
@@ -1346,7 +1506,75 @@
     "input": "table",
     "suffix": ",mean",
     "example": "impute([[1,NA],[2,4],[NA,6],[4,8]],mean)",
-    "help": "NA for missing cells; mean / median / mode. Single imputation.",
-    "helpKo": "결측값은 NA; mean / median / mode. 단일 대체."
+    "help": "NA for missing cells; mean / median / mode / regression / knn with neighbours (default 5). Single imputation.",
+    "helpKo": "결측값은 NA; mean / median / mode / regression / knn(이웃 수 기본 5). 단일 대체.",
+    "controls": [
+      {
+        "key": "method",
+        "label": "Method",
+        "ko": "대체 방법",
+        "type": "choice",
+        "default": "mean",
+        "choices": [
+          {
+            "id": "mean",
+            "label": "Mean",
+            "ko": "평균"
+          },
+          {
+            "id": "median",
+            "label": "Median",
+            "ko": "중앙값"
+          },
+          {
+            "id": "mode",
+            "label": "Mode",
+            "ko": "최빈값"
+          },
+          {
+            "id": "regression",
+            "label": "Regression",
+            "ko": "회귀"
+          },
+          {
+            "id": "knn",
+            "label": "k-NN",
+            "ko": "k-NN"
+          }
+        ]
+      },
+      {
+        "key": "k",
+        "label": "Neighbours",
+        "ko": "이웃 수",
+        "type": "number",
+        "default": "5",
+        "when": {
+          "method": [
+            "knn"
+          ]
+        }
+      }
+    ],
+    "formHelp": "Fill missing NA cells by mean, median, mode, regression or k-NN.",
+    "formHelpKo": "결측값(NA)을 평균·중앙값·최빈값·회귀·k-NN으로 대체합니다.",
+    "exampleRows": [
+      [
+        "1",
+        "NA"
+      ],
+      [
+        "2",
+        "4"
+      ],
+      [
+        "NA",
+        "6"
+      ],
+      [
+        "4",
+        "8"
+      ]
+    ]
   }
 ]

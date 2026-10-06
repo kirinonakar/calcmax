@@ -669,7 +669,7 @@ Example: cox([[1,1,0],[2,1,1],[3,0,0],[4,1,1],[5,1,0],[6,0,1],[7,1,1],[8,1,0]],e
 `repeatedanova` — 행=대상, 열=조건. 둘째 요인 수준: 1=일요인, 2 이상=이요인(첫 요인 최외곽); GG 보정.
 Example: repeatedanova([[2,4,5],[3,4,7],[4,7,8],[2,3,6],[5,6,7]],1)
 
-`mixedmodel` — 열: 대상 ID, 설명변수, 반응. Gaussian 랜덤 절편 ML; 둘째 인수는 랜덤 기울기 위치(0 없음); 최대 300행.
+`mixedmodel` — 열: 대상 ID, 설명변수, 반응. Gaussian 랜덤 절편 + 최대 3개 랜덤 기울기(0 없음, 변수 위치, 또는 [1,2]); 셋째 인수 ml(기본)·reml; 최대 5000행.
 Example: mixedmodel([[1,0,2],[1,1,4],[1,2,4],[2,0,3],[2,1,4],[2,2,6],[3,0,1],[3,1,3],[3,2,4],[4,0,4],[4,1,5],[4,2,8]],0)
 
 `gee` — 열: 군집 ID, 설명변수, 반응. gaussian / binomial / poisson; 작업상관 independence / exchangeable / ar1; 넷째 인수 [i,j] 상호작용 쌍; 강건 SE.
@@ -690,16 +690,16 @@ Example: nbreg([[0,0],[0,0],[0,1],[0,8],[1,0],[1,1],[1,3],[1,15],[2,0],[2,2],[2,
 `bootstrapci` — 통계량 mean / median / stdev, 신뢰수준, 재추출 수, 시드. IID 백분위 방식.
 Example: bootstrapci([1,2,3,4,5,8],mean,0.95,2000,0)
 
-`testpower` — Cohen d, 그룹별 n/쌍 수, 유의수준, independent / paired / onesample. 양측 정규근사.
+`testpower` — Cohen d, 그룹별 n/쌍 수, 유의수준, independent / paired / onesample, 대립가설 two(기본) / greater / less. 정확 noncentral-t 검정력.
 Example: testpower(0.5,64,0.05,independent)
 
-`samplesize` — Cohen d, 목표 검정력, 유의수준, 설계. 양측 정규근사.
+`samplesize` — Cohen d, 목표 검정력, 유의수준, 설계, 대립가설. 정확 noncentral-t 검정력.
 Example: samplesize(0.5,0.8,0.05,independent)
 
 `kstest` — 두 표본 목록 또는 kstest(data,normal,평균,SD) / kstest(data,uniform,하한,폭). 연속분포 가정; 일표본 p는 근사.
 Example: kstest([1,2,4,5],[2,3,5,8])
 
-`crossvalidate` — 열: 설명변수, 반응; 폴드 수, 시드. 무작위 k-fold OLS.
+`crossvalidate` — 열: 설명변수, 반응; 폴드 수, 시드; 분할 random(기본) / blocked / stratified; 모형 linear(기본) / ridge / lasso / elasticnet / logistic; 벌점 alpha 또는 [alpha,l1 비율].
 Example: crossvalidate([[0,1],[1,3],[2,4],[3,7],[4,8],[5,11],[6,12],[7,15],[8,16]],3,0)
 
 `pca` — 행=관측, 열=변수; 주성분 수, 표준화 1/0.
@@ -708,7 +708,7 @@ Example: pca([[1,2],[2,1],[3,4],[4,3],[5,7]],2,1)
 `kmeans` — 숫자 변수 행; k, 시드. 유클리드 거리, 10회 초기화, 원래 변수 척도.
 Example: kmeans([[1,1],[1,2],[2,1],[8,8],[8,9],[9,8]],2,0)
 
-`impute` — 결측값은 NA; mean / median / mode. 단일 대체.
+`impute` — 결측값은 NA; mean / median / mode / regression / knn(이웃 수 기본 5). 단일 대체.
 Example: impute([[1,NA],[2,4],[NA,6],[4,8]],mean)
 
-모형은 수렴하지 않거나 식별 불가능하면 오류를 반환합니다. Cox는 Breslow/Efron 동률, 선택적 좌측 절단, Grambsch–Therneau 스케일된 Schoenfeld 비례위험 검정을 지원하며 순서형 로지스틱은 비례오즈를 가정합니다. 혼합모형은 랜덤 절편과 최대 하나의 랜덤 기울기를, GEE는 독립·교환가능·AR(1) 작업상관을 지원합니다. 반복측정 ANOVA는 GG 보정이 포함된 균형 일·이요인 설계를 다룹니다. 단일 대체 후 추론은 대체 불확실성을 반영하지 않습니다. 교차검증은 OLS 분할과 규제 α 선택을 지원하며 시계열·군집 분할은 포함하지 않습니다. Firth 추론은 프로파일 페널티 우도 신뢰구간을, 부트스트랩은 백분위 구간을 사용합니다(BCa 없음).
+모형은 수렴하지 않거나 식별 불가능하면 오류를 반환합니다. Cox는 Breslow/Efron 동률, 선택적 좌측 절단, Grambsch–Therneau 스케일된 Schoenfeld 비례위험 검정을 지원하며 순서형 로지스틱은 비례오즈를 가정합니다. 혼합모형은 랜덤 절편과 최대 세 개의 랜덤 기울기(ML·REML)를, GEE는 독립·교환가능·AR(1) 작업상관을 지원합니다. 반복측정 ANOVA는 GG 보정이 포함된 균형 일·이요인 설계를 다룹니다. 단일 대체(mean·median·mode·회귀·k-NN) 후 추론은 대체 불확실성을 반영하지 않습니다. 교차검증은 linear·ridge·lasso·elasticnet·logistic 모형과 random·blocked·stratified 분할을 지원합니다. Firth 추론은 프로파일 페널티 우도 신뢰구간을, 부트스트랩은 백분위 구간을 사용합니다(BCa 없음).

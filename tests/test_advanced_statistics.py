@@ -160,7 +160,13 @@ class AdvancedStatisticsTests(unittest.TestCase):
             result=run('samplesize',.5,.8,.05,design); n=int(result['n per group / pairs'])
             self.assertGreaterEqual(float(run('testpower',.5,n,.05,design)['power']),.8)
             self.assertLess(float(run('testpower',.5,n-1,.05,design)['power']),.8)
-        self.assertEqual(int(run('samplesize',.5,.8)['n per group / pairs']),63)
+        # Exact noncentral-t minimum: 64 independent, 34 paired or one-sample (R power.t.test).
+        self.assertEqual(int(run('samplesize',.5,.8)['n per group / pairs']),64)
+        self.assertAlmostEqual(float(run('testpower',.5,64,.05)['power']),.8014595579,places=6)
+        two=float(run('testpower',.5,64,.05)['power']); one=float(run('testpower',.5,64,.05,'independent','greater')['power'])
+        self.assertGreater(one,two)
+        self.assertAlmostEqual(float(run('testpower',.5,64,.05,'independent','less')['power']),4.131985367258805e-06,places=9)
+        self.assertLess(int(run('samplesize',.5,.8,.05,'independent','greater')['n per group / pairs']),64)
 
     def test_bootstrap_seed_and_constant_sample(self):
         a=run('bootstrapci',[1,2,3,4],'median',.95,500,7)
@@ -190,6 +196,56 @@ class AdvancedStatisticsTests(unittest.TestCase):
         self.assertLess(float(result['MSE']),1e-20)
         changed=run('crossvalidate',[[i,100 if i==0 else y] for i,y in rows],3,0)
         self.assertAlmostEqual(float(changed['out-of-fold predictions'][0]),1)
+
+    def test_imputation_methods_use_complete_cases(self):
+        NA=s.Symbol('NA')
+        rows=[[1,2],[2,4],[3,NA],[4,8],[5,10]]
+        for method,figure in (('mean',6.0),('median',6.0),('mode',2.0),('regression',6.0),('knn',6.0)):
+            result=run('impute',rows,method)
+            self.assertAlmostEqual(float(result['data'][2][1]),figure,places=9,msg=method)
+            self.assertEqual(int(result['imputed cells']),1)
+            self.assertEqual(result['method'],method)
+            for i,row in enumerate(result['data']):
+                for j,value in enumerate(row):
+                    if rows[i][j] is not NA: self.assertAlmostEqual(float(value),float(rows[i][j]),places=9)
+        self.assertAlmostEqual(float(run('impute',rows,'knn',2)['data'][2][1]),6.0,places=9)
+
+    def test_crossvalidation_models_splits_and_metrics(self):
+        rows=[[i,1+2*i] for i in range(12)]
+        exact=run('crossvalidate',rows,3,0)
+        self.assertLess(float(exact['MSE']),1e-20)
+        self.assertAlmostEqual(float(exact['R2']),1,places=9)
+        for model,penalty in (('ridge',.5),('lasso',.05),('elasticnet',[.1,.5])):
+            result=run('crossvalidate',rows,3,0,'random',model,penalty)
+            self.assertEqual(result['model'],model)
+            self.assertLess(float(result['MSE']),20.0)
+            self.assertIn('MAE',result)
+        self.assertEqual(run('crossvalidate',rows,3,0,'blocked','ridge',.5)['split'],'blocked')
+        logistic=[[float(i%5),float(1 if i%5>=2 else 0)] for i in range(20)]
+        result=run('crossvalidate',logistic,4,0,'stratified','logistic',.5)
+        self.assertGreater(float(result['accuracy']),.6)
+        self.assertGreater(float(result['AUC']),.8)
+        self.assertIn('log loss',result)
+
+    def test_mixed_model_rows_slopes_and_reml(self):
+        rows=[]
+        for subject in range(1,41):
+            intercept=(subject%5-2)*0.6
+            effect=(subject%7-3)*0.2
+            for point in range(8):
+                rows.append([subject,point,2.0+0.5*point+intercept+effect*point+((subject*3+point)%5-2)*0.05])
+        self.assertEqual(len(rows),320)
+        ml=run('mixedmodel',rows,0)
+        self.assertEqual(int(ml['subjects']),40)
+        self.assertAlmostEqual(float(ml['coefficients'][0]['estimate']),2.0,places=3)
+        self.assertAlmostEqual(float(ml['coefficients'][1]['estimate']),0.5,places=3)
+        self.assertEqual(ml['estimation'],'ML')
+        reml=run('mixedmodel',rows,0,'reml')
+        self.assertEqual(reml['estimation'],'REML')
+        self.assertGreater(float(reml['random intercept variance']),0)
+        slopes=run('mixedmodel',rows,[1])
+        self.assertGreater(float(slopes['random slope variance']),.02)
+        self.assertLess(float(slopes['random slope variance']),.6)
 
     def test_regression_coefficients_transform_back_from_scaled_units(self):
         for name in ('poissonreg','nbreg','multinomial','ordinal','cox'):
@@ -230,7 +286,8 @@ class AdvancedStatisticsTests(unittest.TestCase):
                  'poissonreg([[1,-1],[2,2],[3,4]])','impute([[NA,1],[NA,2]])','pca([[1,2],[1,3]])','cohend([1,2],[3,4,5],paired)',
                  'crossvalidate([[0,1],[1,3],[2,5]],3)','gee([[1,0,1],[1,1,2],[2,0,3],[2,1,4]])','cox([[1,1,1],[2,1,1],[3,1,1],[4,1,1]])',
                  'multinomial([[-2,0],[-1,0],[1,1],[2,1]])','cox([[1,1,3],[2,1,2],[3,1,1],[4,0,0]])',
-                 'poissonreg([[0,0],[0,0],[1,2],[1,3],[1,1]])']
+                 'poissonreg([[0,0],[0,0],[1,2],[1,3],[1,1]])','impute([[1,NA],[2,NA]],regression)',
+                 'crossvalidate([[0,1],[1,3],[2,5]],3,0,random,ridge,0)']
         for source in sources:
             with self.subTest(source=source):
                 result=json.loads(dispatch(json.dumps({'tree':tree(source),'budget':30})))

@@ -332,9 +332,9 @@ def advanced(engine, name, a):
     """Entry point shared by calculator expressions and Python catalog."""
     engine.note = 'Numerical statistics use binary64 precision.'
     arities = {'padjust':(1,3),'cohend':(2,3),'eta2':(2,20),'levene':(2,20),'bartlett':(2,20),'mcnemar':(1,2),
-               'kaplanmeier':(1,3),'logrank':(2,2),'cox':(1,4),'survivalanalysis':(1,5),'repeatedanova':(1,2),'mixedmodel':(1,2),'gee':(1,4),
+               'kaplanmeier':(1,3),'logrank':(2,2),'cox':(1,4),'survivalanalysis':(1,5),'repeatedanova':(1,2),'mixedmodel':(1,3),'gee':(1,4),
                'multinomial':(1,1),'ordinal':(1,1),'poissonreg':(1,1),'nbreg':(1,1),'bootstrapci':(1,5),
-               'testpower':(2,4),'samplesize':(1,4),'kstest':(2,4),'crossvalidate':(1,3),'pca':(1,3),'kmeans':(2,3),'impute':(1,2)}
+               'testpower':(2,5),'samplesize':(1,5),'kstest':(2,4),'crossvalidate':(1,6),'pca':(1,3),'kmeans':(2,3),'impute':(1,3)}
     low,high = arities[name]; require(low <= len(a) <= high, name+' argument count mismatch')
     with mp.workdps(25):
         result = calculate(engine,name,a)
@@ -649,64 +649,194 @@ def nelder_mead(objective,start,step,iterations=160):
     return simplex[0],values[0]
 
 
-def mixed_slope(engine,x,y,clusters,ids,slope,guess):
-    """Gaussian random-intercept and random-slope ML with Woodbury per-cluster algebra."""
+def numeric_rank(values,tolerance=1e-10):
+    """Column rank of a numeric design by scaled Gaussian elimination (no symbolic cost)."""
+    matrix=[[float(v) for v in row] for row in values]; height=len(matrix); width=len(matrix[0])
+    scales=[max(abs(row[j]) for row in matrix) or 1.0 for j in range(width)]
+    matrix=[[row[j]/scales[j] for j in range(width)] for row in matrix]
+    rank=0; position=0
+    for column in range(width):
+        if position>=height: break
+        pivot=max(range(position,height),key=lambda i:abs(matrix[i][column]))
+        if abs(matrix[pivot][column])<=tolerance: continue
+        matrix[position],matrix[pivot]=matrix[pivot],matrix[position]
+        leading=matrix[position]
+        for i in range(position+1,height):
+            row=matrix[i]; factor=row[column]/leading[column]
+            if factor:
+                for j in range(column,width): row[j]-=factor*leading[j]
+        rank+=1; position+=1
+    return rank
+
+
+def clustered_design(rows):
+    """Intercept design and response for clustered models with a numeric collinearity check."""
+    design=[[1.0]+[float(v) for v in row[1:-1]] for row in rows]; response=[float(row[-1]) for row in rows]
+    require(len(design)>len(design[0]),'More observations than coefficients are required')
+    require(numeric_rank(design)==len(design[0]),'Predictors are collinear')
+    return design,response
+
+
+def small_logdet(values):
+    """log|A| of a small positive-definite matrix by elimination with partial pivoting."""
+    size=len(values); work=[[float(values[i][j]) for j in range(size)] for i in range(size)]; total=0.0
+    for column in range(size):
+        pivot=max(range(column,size),key=lambda i:abs(work[i][column]))
+        if abs(work[pivot][column])<=1e-300: return None
+        if pivot!=column: work[column],work[pivot]=work[pivot],work[column]
+        total+=math.log(abs(work[column][column]))
+        for i in range(column+1,size):
+            factor=work[i][column]/work[column][column]
+            for j in range(column+1,size): work[i][j]-=factor*work[column][j]
+    return total
+
+
+def small_inverse(values):
+    """Inverse of a small matrix by Gauss-Jordan elimination with partial pivoting."""
+    size=len(values)
+    work=[[float(values[i][j]) for j in range(size)]+[1.0 if i==j else 0.0 for j in range(size)] for i in range(size)]
+    for column in range(size):
+        pivot=max(range(column,size),key=lambda i:abs(work[i][column]))
+        if abs(work[pivot][column])<=1e-300: return None
+        work[column],work[pivot]=work[pivot],work[column]
+        divisor=work[column][column]
+        work[column]=[v/divisor for v in work[column]]
+        for i in range(size):
+            if i==column: continue
+            factor=work[i][column]
+            if factor: work[i]=[v-factor*w for v,w in zip(work[i],work[column])]
+    return [[work[i][size+j] for j in range(size)] for i in range(size)]
+
+
+def intercept_fit(x,y,clusters,method):
+    """Gaussian random-intercept ML/REML fit with per-cluster algebra (no n x n matrices)."""
     n=len(y); p=len(x[0])
-    def pieces(parameters):
-        first,second,third=parameters
-        if max(abs(first),abs(second),abs(third))>8: return None
-        theta=[[math.exp(2*first),math.exp(first)*second],[math.exp(first)*second,second*second+math.exp(2*third)]]
-        determinant=theta[0][0]*theta[1][1]-theta[0][1]**2
-        if not determinant>1e-18: return None
-        inverse_theta=[[theta[1][1]/determinant,-theta[0][1]/determinant],[-theta[0][1]/determinant,theta[0][0]/determinant]]
-        matrix=mp.zeros(p); right=mp.zeros(p,1); quadratic=mp.mpf(0); logdet=0.0
-        for c in clusters:
-            count=len(c); rotations=0.0; second_moment=0.0; weighted=[0.0,0.0]; projected=[[0.0]*p for _ in range(2)]
-            for i in c:
-                rotations+=x[i][slope]; second_moment+=x[i][slope]**2; weighted[0]+=y[i]; weighted[1]+=x[i][slope]*y[i]
-                for j in range(p): projected[0][j]+=x[i][j]; projected[1][j]+=x[i][slope]*x[i][j]
-            core=[[inverse_theta[0][0]+count,inverse_theta[0][1]+rotations],[inverse_theta[1][0]+rotations,inverse_theta[1][1]+second_moment]]
-            core_determinant=core[0][0]*core[1][1]-core[0][1]*core[1][0]
-            if not core_determinant>1e-18: return None
-            inverse_core=[[core[1][1]/core_determinant,-core[0][1]/core_determinant],[-core[1][0]/core_determinant,core[0][0]/core_determinant]]
-            product=[[count*theta[0][0]+rotations*theta[1][0],count*theta[0][1]+rotations*theta[1][1]],[rotations*theta[0][0]+second_moment*theta[1][0],rotations*theta[0][1]+second_moment*theta[1][1]]]
-            logdet+=math.log((1+product[0][0])*(1+product[1][1])-product[0][1]*product[1][0])
+    gram=[[math.fsum(r[i]*r[j] for r in x) for j in range(p)] for i in range(p)]
+    right=[math.fsum(r[i]*v for r,v in zip(x,y)) for i in range(p)]
+    energy=math.fsum(v*v for v in y)
+    pieces=[(len(cluster),[math.fsum(x[i][j] for i in cluster) for j in range(p)],math.fsum(y[i] for i in cluster)) for cluster in clusters]
+    def fit(ratio):
+        matrix=[row[:] for row in gram]; vector=list(right); total=energy; logdet=0.0
+        for size,moment,outcome in pieces:
+            factor=ratio/(1+size*ratio); logdet+=math.log1p(size*ratio)
+            total-=factor*outcome*outcome
             for i in range(p):
-                total=math.fsum(x[t][i]*y[t] for t in c)
-                for u in range(2):
-                    for v in range(2): total-=projected[u][i]*inverse_core[u][v]*weighted[v]
-                right[i]+=total
+                vector[i]-=factor*moment[i]*outcome
                 for j in range(i,p):
-                    total=math.fsum(x[t][i]*x[t][j] for t in c)
-                    for u in range(2):
-                        for v in range(2): total-=projected[u][i]*inverse_core[u][v]*projected[v][j]
-                    matrix[i,j]+=total
-                    if i!=j: matrix[j,i]+=total
-            total=math.fsum(y[t]**2 for t in c)
-            for u in range(2):
-                for v in range(2): total-=weighted[u]*inverse_core[u][v]*weighted[v]
-            quadratic+=total
-        beta=inverse(matrix)*right
-        value=float(quadratic-(right.T*beta)[0])
-        if not math.isfinite(value) or value<=1e-12: return None
-        return n*math.log(value/n)+logdet,beta,value/n,matrix,theta
+                    matrix[i][j]-=factor*moment[i]*moment[j]
+                    if i!=j: matrix[j][i]=matrix[i][j]
+        information=mp.matrix(matrix); beta=inverse(information)*mp.matrix(vector)
+        rss=total-float((mp.matrix(vector).T*beta)[0])
+        require(rss>1e-12,'Mixed model requires residual variation')
+        if method=='reml':
+            extra=small_logdet(matrix); require(extra is not None,'Mixed model information is singular')
+            objective=(n-p)*math.log(rss/(n-p))+logdet+extra
+        else: objective=n*math.log(rss/n)+logdet
+        return objective,beta,information,rss,ratio
+    def objective(z): return fit(math.exp(z))[0]
+    low,high=-16.0,16.0; golden=(math.sqrt(5)-1)/2
+    u=high-golden*(high-low); v=low+golden*(high-low); fu,fv=objective(u),objective(v)
+    for _ in range(60):
+        if fu<fv: high,v,fv=v,u,fu; u=high-golden*(high-low); fu=objective(u)
+        else: low,u,fu=u,v,fv; v=low+golden*(high-low); fv=objective(v)
+    chosen=fit(math.exp((low+high)/2)); boundary=fit(0)
+    return boundary if boundary[0]<=chosen[0] else chosen
+
+
+def mixed_intercept(engine,x,y,clusters,ids,method):
+    _,beta,information,rss,ratio=intercept_fit(x,y,clusters,method)
+    sigma=rss/(len(y)-len(x[0])) if method=='reml' else rss/len(y)
+    engine.note += ' Gaussian random-intercept mixed model, '+('restricted maximum likelihood (REML)' if method=='reml' else 'maximum likelihood (ML)')+', Wald inference. Rows: subject ID, predictors, response.'
+    return {'coefficients':inference(list(map(float,beta)),inverse(information)*sigma,['Intercept']+['x'+str(i) for i in range(1,len(x[0]))]),'residual variance':sigma,'random intercept variance':ratio*sigma,'ICC':ratio/(1+ratio),'subjects':len(ids),'estimation':method.upper()}
+
+
+def mixed_random_effects(engine,x,y,clusters,ids,slopes,method):
+    """Gaussian random intercept plus up to three random slopes (ML or REML)."""
+    n=len(y); p=len(x[0]); count=1+len(slopes); pairs=[(i,j) for i in range(count) for j in range(i+1)]
+    blocks=[]
+    for cluster in clusters:
+        members=list(cluster); design=[[1.0]+[x[i][s] for s in slopes] for i in members]
+        products=[[math.fsum(design[t][a]*design[t][b] for t in range(len(members))) for b in range(count)] for a in range(count)]
+        cross=[[math.fsum(design[t][a]*x[i][j] for t,i in enumerate(members)) for j in range(p)] for a in range(count)]
+        outcome=[math.fsum(design[t][a]*y[i] for t,i in enumerate(members)) for a in range(count)]
+        gram=[[math.fsum(x[i][a]*x[i][b] for i in members) for b in range(p)] for a in range(p)]
+        moments=[math.fsum(x[i][a]*y[i] for i in members) for a in range(p)]
+        blocks.append((products,cross,outcome,gram,moments,math.fsum(y[i]*y[i] for i in members)))
+    def evaluate(parameters):
+        if max(abs(v) for v in parameters)>8: return None
+        lower=mp.zeros(count); position=0
+        for i in range(count):
+            for j in range(i+1):
+                lower[i,j]=mp.exp(parameters[position]) if i==j else parameters[position]; position+=1
+        theta=lower*lower.T
+        try: theta_inverse=inverse(theta)
+        except MathError: return None
+        logdet=len(blocks)*2*math.fsum(math.log(float(lower[i,i])) for i in range(count))
+        information=[[0.0]*p for _ in range(p)]; vector=[0.0]*p; total=0.0
+        for products,cross,outcome,gram,moments,energy in blocks:
+            core=[[float(theta_inverse[a,b])+products[a][b] for b in range(count)] for a in range(count)]
+            values=small_inverse(core)
+            if values is None: return None
+            if any(not math.isfinite(v) for row in values for v in row): return None
+            entry=small_logdet(core)
+            if entry is None: return None
+            logdet+=entry
+            for a in range(p):
+                for b in range(a,p):
+                    subtotal=gram[a][b]
+                    for u in range(count):
+                        for v in range(count): subtotal-=cross[u][a]*values[u][v]*cross[v][b]
+                    information[a][b]+=subtotal
+                    if a!=b: information[b][a]+=subtotal
+                adjustment=moments[a]
+                for u in range(count):
+                    for v in range(count): adjustment-=cross[u][a]*values[u][v]*outcome[v]
+                vector[a]+=adjustment
+            quadratic=0.0
+            for u in range(count):
+                for v in range(count): quadratic+=outcome[u]*values[u][v]*outcome[v]
+            total+=energy-quadratic
+        matrix=mp.matrix(information); beta=inverse(matrix)*mp.matrix(vector)
+        rss=total-float((mp.matrix(vector).T*beta)[0])
+        if not math.isfinite(rss) or rss<=1e-12: return None
+        if method=='reml':
+            extra=small_logdet(information)
+            if extra is None: return None
+            objective=(n-p)*math.log(rss/(n-p))+logdet+extra
+        else: objective=n*math.log(rss/n)+logdet
+        return objective,beta,matrix,rss,theta
     def objective(parameters):
-        result=pieces(parameters)
+        result=evaluate(parameters)
         return math.inf if result is None else result[0]
-    start=min(max(math.log(max(guess,1e-3)),-7.0),7.0); best=None
-    for initial in ([start,0.0,start],[start,0.0,math.log(.25)],[math.log(.5),0.0,math.log(.1)]):
-        parameters,value=nelder_mead(objective,initial,[.4,.4,.4],160)
-        if math.isfinite(value) and (best is None or value<best[1]): best=(parameters,value)
+    seed=intercept_fit(x,y,clusters,method)[4]
+    start=0.5*math.log(max(1e-3,seed))
+    best=None
+    for scale in (start,math.log(.25),math.log(.1)):
+        parameters=[start if i==0 and j==0 else scale if i==j else 0.0 for i,j in pairs]
+        candidate,value=nelder_mead(objective,parameters,[.4]*len(parameters),160+80*max(0,len(parameters)-3))
+        if math.isfinite(value) and (best is None or value<best[1]): best=(candidate,value)
     require(best is not None,'Random-slope model did not converge')
-    chosen=pieces(best[0]); require(chosen is not None,'Random-slope model did not converge')
-    _,beta,sigma,matrix,theta=chosen
-    covariance=inverse(matrix)*sigma
-    engine.note += ' Gaussian random-intercept and random-slope mixed model, maximum likelihood (ML), Wald inference. Random slope on x'+str(slope)+'. Rows: subject ID, predictors, response.'
-    return {'coefficients':inference(list(map(float,beta)),covariance,['Intercept']+['x'+str(i) for i in range(1,p)]),'residual variance':sigma,'random intercept variance':sigma*theta[0][0],'random slope variance':sigma*theta[1][1],'intercept-slope correlation':theta[0][1]/math.sqrt(theta[0][0]*theta[1][1]),'ICC':theta[0][0]/(1+theta[0][0]),'subjects':len(ids)}
+    fields=evaluate(best[0]); require(fields is not None,'Random-slope model did not converge')
+    _,beta,information,rss,theta=fields
+    sigma=rss/(n-p) if method=='reml' else rss/n
+    result={'coefficients':inference(list(map(float,beta)),inverse(information)*sigma,['Intercept']+['x'+str(i) for i in range(1,p)]),'residual variance':sigma,'random intercept variance':sigma*float(theta[0,0])}
+    for index,slope in enumerate(slopes):
+        result['random slope variance x'+str(slope)]=sigma*float(theta[index+1,index+1])
+        result['intercept-slope correlation x'+str(slope)]=float(theta[0,index+1])/math.sqrt(float(theta[0,0])*float(theta[index+1,index+1]))
+    if count==2:
+        result['random slope variance']=result['random slope variance x'+str(slopes[0])]
+        result['intercept-slope correlation']=result['intercept-slope correlation x'+str(slopes[0])]
+    result['ICC']=float(theta[0,0])/(1+float(theta[0,0]))
+    result['subjects']=len(ids); result['estimation']=method.upper()
+    engine.note += ' Gaussian random intercept with random slopes on '+', '.join('x'+str(s) for s in slopes)+', '+('restricted maximum likelihood (REML)' if method=='reml' else 'maximum likelihood (ML)')+', Wald inference. Rows: subject ID, predictors, response.'
+    return result
 
 
 def clustered(engine,name,a):
-    rows=table(a[0],4,3); ids=sorted(set(r[0] for r in rows)); clusters=[[i for i,r in enumerate(rows) if r[0]==id_] for id_ in ids]
+    rows=table(a[0],4,3)
+    grouped={}
+    for index,row in enumerate(rows): grouped.setdefault(row[0],[]).append(index)
+    ids=sorted(grouped); clusters=[grouped[id_] for id_ in ids]
     require(len(clusters)>=3,'At least three subject/cluster IDs are required')
     pairs=[]; names=[]; terms=''
     if name=='gee':
@@ -717,35 +847,20 @@ def clustered(engine,name,a):
         names=['Intercept']+['x'+str(i) for i in range(1,width+1)]+[('x'+str(i)+'^2') if i==j else ('x'+str(i)+':x'+str(j)) for i,j in pairs]
         terms=', '.join(('x'+str(i)+'^2') if i==j else ('x'+str(i)+':x'+str(j)) for i,j in pairs)
         if pairs: rows=[row[:1]+row[1:-1]+[row[i]*row[j] for i,j in pairs]+row[-1:] for row in rows]
-    x,y=regression_data([r[1:] for r in rows]); n=len(y); p=len(x[0]); X=mp.matrix(x); Y=mp.matrix(y)
+    x,y=clustered_design(rows); n=len(y); p=len(x[0]); Y=mp.matrix(y)
     if name=='mixedmodel':
-        require(n<=300,'Mixed model limit: 300 observations')
+        argument=a[1] if len(a)>1 else 0
+        if isinstance(argument,(list,tuple)):
+            slopes=[integer(v,1,19) for v in argument]
+            require(slopes and len(slopes)<=3 and len(set(slopes))==len(slopes),'Use 0, a predictor position, or up to three distinct positions such as [1,2]')
+        else:
+            selected=integer(argument,0,19); slopes=[] if selected==0 else [selected]
+        method=option(a,2,'ml'); require(method in ('ml','reml'),'Estimation: ml or reml')
         require(any(len(c)>1 for c in clusters),'Random intercept requires repeated subjects')
-        slope=integer(a[1],0,19) if len(a)>1 else 0
-        def fit(ratio):
-            W=mp.eye(n); logdet=0.0
-            for c in clusters:
-                factor=ratio/(1+len(c)*ratio); logdet+=math.log1p(len(c)*ratio)
-                for i in c:
-                    for j in c: W[i,j]-=factor
-            cov=inverse(X.T*W*X); b=cov*X.T*W*Y; residual=Y-X*b; rss=float((residual.T*W*residual)[0]); require(rss>1e-12,'Mixed model requires residual variation')
-            objective=n*math.log(rss/n)+logdet
-            return objective,b,cov,rss/n
-        # Search variance ratio including exact zero boundary; avoids n×n inversion.
-        def objective(z): return fit(math.exp(z))[0]
-        lo,hi=-16.0,16.0; golden=(math.sqrt(5)-1)/2
-        u=hi-golden*(hi-lo); v=lo+golden*(hi-lo); fu,fv=objective(u),objective(v)
-        for _ in range(60):
-            if fu<fv: hi,v,fv=v,u,fu; u=hi-golden*(hi-lo); fu=objective(u)
-            else: lo,u,fu=u,v,fv; v=lo+golden*(hi-lo); fv=objective(v)
-        ratio=math.exp((lo+hi)/2); chosen=fit(ratio); zero=fit(0)
-        if zero[0]<=chosen[0]: ratio=0; chosen=zero
-        if slope==0:
-            obj,b,cov,sigma=chosen
-            engine.note += ' Gaussian random-intercept mixed model, maximum likelihood (ML), Wald inference. Rows: subject ID, predictors, response.'
-            return {'coefficients':inference(list(map(float,b)),cov*sigma,['Intercept']+['x'+str(i) for i in range(1,p)]),'residual variance':sigma,'random intercept variance':ratio*sigma,'ICC':ratio/(1+ratio),'subjects':len(ids)}
-        require(1<=slope<p,'Random-slope predictor position is out of range')
-        return mixed_slope(engine,x,y,clusters,ids,slope,ratio)
+        for slope in slopes: require(1<=slope<p,'Random-slope predictor position is out of range')
+        if not slopes: return mixed_intercept(engine,x,y,clusters,ids,method)
+        require(len(clusters)*(p*(len(slopes)+1))**2<=20000,'Random-slope model is too large; reduce predictors, random effects, or subjects')
+        return mixed_random_effects(engine,x,y,clusters,ids,slopes,method)
     x,transform,_,_=standardized_design(x); X=mp.matrix(x)
     if pairs: engine.note += ' GEE interactions: '+terms+'.'
     if family=='binomial': require(all(v in (0,1) for v in y),'Binomial GEE response must be 0/1')
@@ -853,6 +968,162 @@ def clustered(engine,name,a):
     return {'coefficients':inference(b,cov,names,family!='gaussian'),'clusters':len(ids),'family':family,'working correlation':corr,'alpha':alpha}
 
 
+def t_quantile(level,df):
+    """Central Student-t quantile by bisection on the regularized incomplete beta."""
+    with mp.workdps(30):
+        target=mp.mpf(level); nu=mp.mpf(df)
+        def cdf(value): return 1-mp.betainc(nu/2,mp.mpf('.5'),0,nu/(nu+value*value),regularized=True)/2
+        low,high=mp.mpf(0),mp.mpf(4)
+        while cdf(high)<target: high*=2
+        for _ in range(70):
+            middle=(low+high)/2
+            if cdf(middle)<target: low=middle
+            else: high=middle
+        return float((low+high)/2)
+
+
+def t_test_power(effect,size,alpha,kind,sides):
+    """Exact noncentral-t power integrated over the chi-square mass of the scale mixture."""
+    independent=kind=='independent'
+    degrees=2*size-2 if independent else size-1
+    shift=effect*math.sqrt(size/2 if independent else size)
+    critical=t_quantile(1-alpha/2 if sides=='two' else 1-alpha,degrees)
+    with mp.workdps(30):
+        nu=mp.mpf(degrees); delta=mp.mpf(shift); cutoff=mp.mpf(critical)
+        low=max(mp.mpf(0),nu-12*mp.sqrt(2*nu)-50); high=nu+12*mp.sqrt(2*nu)+50
+        constant=mp.power(2,nu/2)*mp.gamma(nu/2)
+        def integrand(weight):
+            density=mp.power(weight,nu/2-1)*mp.exp(-weight/2)/constant
+            scaled=mp.sqrt(weight/nu)
+            if sides=='two': return (mp.ncdf(-cutoff*scaled-delta)+mp.ncdf(delta-cutoff*scaled))*density
+            if sides=='greater': return mp.ncdf(delta-cutoff*scaled)*density
+            return mp.ncdf(-cutoff*scaled-delta)*density
+        return float(mp.quad(integrand,[low,high],maxdegree=8))
+
+
+def least_squares(design,target):
+    """Normal-equation least squares with ridge escalation for degenerate imputation designs."""
+    size=len(design[0])
+    gram=[[math.fsum(row[i]*row[j] for row in design) for j in range(size)] for i in range(size)]
+    right=[math.fsum(row[i]*v for row,v in zip(design,target)) for i in range(size)]
+    for ridge in (0.0,1e-10,1e-7):
+        matrix=mp.matrix([[gram[i][j]+(ridge*gram[j][j] if i==j else 0.0) for j in range(size)] for i in range(size)])
+        try: return [float(v) for v in inverse(matrix)*mp.matrix(right)]
+        except MathError: continue
+    raise MathError('Imputation predictors are collinear; remove duplicate columns')
+
+
+def regression_imputation(values):
+    """Iterated conditional-mean (single) regression imputation."""
+    n=len(values); columns=len(values[0])
+    filled=[list(row) for row in values]
+    for j in range(columns):
+        fill=mean([row[j] for row in values if row[j] is not None])
+        for i in range(n):
+            if filled[i][j] is None: filled[i][j]=fill
+    incomplete=[j for j in range(columns) if any(row[j] is None for row in values)]
+    sweeps=0
+    for sweep in range(40):
+        largest=0.0
+        for j in incomplete:
+            predictors=[c for c in range(columns) if c!=j]
+            observed=[i for i in range(n) if values[i][j] is not None]
+            require(len(observed)>len(predictors),'Regression imputation needs more observed rows than predictors')
+            centers=[]; scales=[]
+            for c in predictors:
+                sample=[filled[i][c] for i in observed]
+                centers.append(mean(sample)); scales.append(math.sqrt(variance(sample)) if len(sample)>1 else 0.0)
+            def standardize(i): return [1.0]+[(filled[i][c]-center)/scale if scale else 0.0 for c,center,scale in zip(predictors,centers,scales)]
+            beta=least_squares([standardize(i) for i in observed],[values[i][j] for i in observed])
+            for i in range(n):
+                if values[i][j] is not None: continue
+                prediction=dot(standardize(i),beta)
+                require(math.isfinite(prediction),'Regression imputation prediction is outside the numeric range')
+                largest=max(largest,abs(prediction-filled[i][j])); filled[i][j]=prediction
+        sweeps=sweep+1
+        if largest<1e-12: break
+    return filled,sweeps
+
+
+def neighbor_imputation(values,neighbors):
+    """k-nearest-neighbour (single) imputation on standardized observed coordinates."""
+    n=len(values); columns=len(values[0])
+    require(sum(1 for row in values for v in row if v is None)*n*columns<=8000000,'k-NN imputation is too large; use regression or mean for this table')
+    centers=[]; scales=[]
+    for j in range(columns):
+        sample=[row[j] for row in values if row[j] is not None]
+        centers.append(mean(sample)); scales.append(math.sqrt(variance(sample)) if len(sample)>1 else 0.0)
+    standardized=[[None if v is None else (v-centers[j])/scales[j] if scales[j] else 0.0 for j,v in enumerate(row)] for row in values]
+    filled=[list(row) for row in values]
+    for i in range(n):
+        for j in range(columns):
+            if values[i][j] is not None: continue
+            candidates=[]
+            for h in range(n):
+                if values[h][j] is None: continue
+                distance=0.0; shared=False
+                for c in range(columns):
+                    if c==j: continue
+                    a=standardized[i][c]; b=standardized[h][c]
+                    if a is None or b is None: continue
+                    distance+=(a-b)**2; shared=True
+                candidates.append((0 if shared else 1,distance,h))
+            require(candidates,'k-NN imputation needs observed values in every column')
+            candidates.sort()
+            filled[i][j]=mean([values[h][j] for _,_,h in candidates[:neighbors]])
+    return filled,neighbors
+
+
+def machine_fit(train,model,alpha,ratio):
+    """Penalized linear or logistic fit on standardized columns; returns a predictor for new rows."""
+    from calc_machine_learning import _linear_core, _logistic_core
+    xs=[[float(v) for v in row[:-1]] for row in train]; ys=[float(row[-1]) for row in train]
+    size=len(xs); width=len(xs[0])
+    require(size>=2 and width>=1,'Cross-validation needs complete predictor rows')
+    origins=xs[0]
+    offsets=[[row[j]-origins[j] for j in range(width)] for row in xs]
+    centers=[math.fsum(row[j]/size for row in offsets) for j in range(width)]
+    centered=[[row[j]-centers[j] for row in offsets] for j in range(width)]
+    scales=[]
+    for column in centered:
+        extreme=max(map(abs,column))
+        scales.append(extreme*math.sqrt(math.fsum((v/extreme)**2/size for v in column)) if extreme else 0.0)
+    require(all(math.isfinite(v) for v in centers+scales),'Regression data range is too large')
+    standardized=[[v/scale for v in column] if scale else [0.0]*size for column,scale in zip(centered,scales)]
+    active=[scale>0 for scale in scales]
+    def design(row): return [(row[j]-origins[j]-centers[j])/scales[j] if scales[j] else 0.0 for j in range(width)]
+    if model=='logistic':
+        require(set(ys)<={0.0,1.0} and 0<sum(ys)<size,'Each logistic fold needs both 0 and 1 responses')
+        intercept,beta,_,_,converged=_logistic_core(standardized,active,ys,0.0,alpha)
+        require(converged,'Logistic fit did not converge; increase the penalty')
+        def predict(row):
+            linear=intercept+math.fsum(b*v for b,v in zip(beta,design(row)))
+            return 1.0/(1.0+math.exp(-max(-30.0,min(30.0,linear))))
+        return predict
+    yorigin=ys[0]; shifted=[v-yorigin for v in ys]; ymean=math.fsum(v/size for v in shifted)
+    target=[v-ymean for v in shifted]; yscale=max(map(abs,target)) or 1.0
+    residual=[v/yscale for v in target]
+    beta,_,_,converged=_linear_core(standardized,active,residual,alpha*ratio/yscale,alpha*(1-ratio))
+    require(converged,'Regularized regression did not converge; increase the penalty')
+    def predict(row): return yorigin+ymean+yscale*math.fsum(b*v for b,v in zip(beta,design(row)))
+    return predict
+
+
+def binary_auc(labels,scores):
+    """Rank-based AUC with average ranks for ties; None when a class is missing."""
+    positive=sum(1 for v in labels if v); count=len(labels)-positive
+    if not positive or not count: return None
+    order=sorted(range(len(labels)),key=scores.__getitem__)
+    ranks=[0.0]*len(order); position=0
+    while position<len(order):
+        end=position
+        while end+1<len(order) and scores[order[end+1]]==scores[order[position]]: end+=1
+        average=(position+end)/2+1
+        for index in range(position,end+1): ranks[order[index]]=average
+        position=end+1
+    return (sum(ranks[i] for i in range(len(labels)) if labels[i])-positive*(positive+1)/2)/(positive*count)
+
+
 def resampling(engine,name,a):
     if name=='bootstrapci':
         x=vector(a[0],2); statistic=option(a,1,'mean'); level=number(a[2]) if len(a)>2 else .95; count=integer(a[3],100,20000) if len(a)>3 else 2000; seed=integer(a[4],0,2**32-1) if len(a)>4 else 0
@@ -863,23 +1134,30 @@ def resampling(engine,name,a):
         engine.note += ' Nonparametric percentile bootstrap CI; IID observations, deterministic seed.'
         return {'estimate':f(x),'lower':quantile((1-level)/2),'upper':quantile((1+level)/2),'confidence level':level,'resamples':count,'seed':seed}
     if name in ('testpower','samplesize'):
-        effect=abs(number(a[0])); alpha=number(a[2]) if len(a)>2 else .05; kind=option(a,3,'independent')
+        effect=abs(number(a[0])); alpha=number(a[2]) if len(a)>2 else .05; kind=option(a,3,'independent'); sides=option(a,4,'two')
         require(effect>0 and 0<alpha<1 and kind in ('independent','paired','onesample'),'Positive Cohen d, alpha in (0,1), and independent/paired/onesample required')
-        z=statistics.NormalDist().inv_cdf(1-alpha/2)
-        def power(n):
-            shift=effect*math.sqrt(n/(2 if kind=='independent' else 1)); return float(_normal_sf(z-shift)+_normal_sf(z+shift))
-        engine.note += ' Two-sided normal-approximation power for standardized mean differences; equal independent groups. n is per group or number of pairs. This is not exact noncentral-t power.'
+        require(sides in ('two','greater','less'),'Alternative: two, greater, or less')
+        engine.note += ' Exact noncentral-t power for standardized mean differences; equal independent groups. n is per group or number of pairs.'
         if name=='testpower':
-            n=integer(a[1],2,10000000); return {'power':power(n),'n per group / pairs':n,'alpha':alpha}
+            n=integer(a[1],2,10000000); return {'power':t_test_power(effect,n,alpha,kind,sides),'n per group / pairs':n,'alpha':alpha,'alternative':sides}
         target=number(a[1]) if len(a)>1 else .8
-        # samplesize(d,power,alpha,kind), unlike testpower(d,n,alpha,kind).
-        alpha=number(a[2]) if len(a)>2 else .05; kind=option(a,3,'independent'); require(0<target<1 and 0<alpha<1 and kind in ('independent','paired','onesample'),'Invalid target power, alpha or design')
-        z=statistics.NormalDist().inv_cdf(1-alpha/2); low,high=2,10000000; require(power(high)>=target,'Required sample size exceeds limit')
+        # samplesize(d,target,alpha,kind,alternative), unlike testpower(d,n,alpha,kind,alternative).
+        require(0<target<1,'Target power must lie in (0,1)')
+        z=statistics.NormalDist().inv_cdf(1-alpha/(2 if sides=='two' else 1)); zpower=statistics.NormalDist().inv_cdf(target)
+        estimate=int(math.ceil(2*((z+zpower)/effect)**2 if kind=='independent' else ((z+zpower)/effect)**2))
+        require(estimate<=10000000,'Required sample size exceeds limit')
+        low=max(2,estimate-8); high=max(2,estimate+8)
+        if t_test_power(effect,low,alpha,kind,sides)>=target:
+            low,high=2,max(2,estimate)
+        else:
+            while t_test_power(effect,high,alpha,kind,sides)<target:
+                low=high+1; high*=2
+                require(high<=20000000,'Required sample size exceeds limit')
         while low<high:
-            mid=(low+high)//2
-            if power(mid)>=target: high=mid
-            else: low=mid+1
-        return {'n per group / pairs':low,'total n':low*2 if kind=='independent' else low,'achieved power':power(low),'target power':target,'alpha':alpha}
+            middle=(low+high)//2
+            if t_test_power(effect,middle,alpha,kind,sides)>=target: high=middle
+            else: low=middle+1
+        return {'n per group / pairs':low,'total n':low*2 if kind=='independent' else low,'achieved power':t_test_power(effect,low,alpha,kind,sides),'target power':target,'alpha':alpha,'alternative':sides}
     x=sorted(vector(a[0],2))
     if isinstance(a[1],(list,tuple)):
         require(len(a)==2,'Two-sample KS takes two lists')
@@ -918,24 +1196,79 @@ def learning(engine,name,a):
     if name=='impute':
         require(isinstance(a[0],list) and len(a[0])>=2 and all(isinstance(r,list) for r in a[0]),'Enter a rectangular table; use NA for missing cells')
         rows=a[0]; require(all(len(r)==len(rows[0]) for r in rows) and len(rows[0])>0,'Enter a nonempty rectangular table')
-        method=option(a,1,'mean'); require(method in ('mean','median','mode'),'Use mean, median, or mode')
+        method=option(a,1,'mean'); require(method in ('mean','median','mode','regression','knn'),'Use mean, median, mode, regression, or knn')
+        neighbors=integer(a[2],1,100) if len(a)>2 else 5
         missing=lambda v: str(v) in ('NA','nan')
-        fills=[]
-        for col in zip(*rows):
-            vals=[number(v) for v in col if not missing(v)]; require(vals,'Cannot impute a completely missing column')
-            fills.append(mean(vals) if method=='mean' else statistics.median(vals) if method=='median' else statistics.multimode(vals)[0])
-        engine.note += ' Single columnwise imputation; does not account for imputation uncertainty. NA denotes missing. Mode ties use first appearance.'
-        return {'data':[[fills[i] if missing(v) else number(v) for i,v in enumerate(r)] for r in rows],'fill values':fills,'imputed cells':sum(missing(v) for r in rows for v in r)}
+        values=[[None if missing(v) else number(v) for v in row] for row in rows]
+        for column in zip(*values): require(any(v is not None for v in column),'Cannot impute a completely missing column')
+        count=sum(v is None for row in values for v in row)
+        if method in ('mean','median','mode'):
+            fills=[]
+            for column in zip(*values):
+                observed=[v for v in column if v is not None]
+                fills.append(mean(observed) if method=='mean' else statistics.median(observed) if method=='median' else statistics.multimode(observed)[0])
+            engine.note += ' Single columnwise imputation; does not account for imputation uncertainty. NA denotes missing. Mode ties use first appearance.'
+            return {'data':[[fills[i] if v is None else v for i,v in enumerate(row)] for row in values],'fill values':fills,'imputed cells':count,'method':method}
+        if method=='regression':
+            filled,sweeps=regression_imputation(values)
+            engine.note += ' Single regression imputation with iterated conditional means (chained equations); does not account for imputation uncertainty.'
+            return {'data':filled,'imputed cells':count,'sweeps':sweeps,'method':method}
+        filled,neighbors=neighbor_imputation(values,neighbors)
+        engine.note += ' Single k-nearest-neighbour imputation on standardized observed coordinates; does not account for imputation uncertainty.'
+        return {'data':filled,'imputed cells':count,'neighbors':neighbors,'method':method}
     rows=table(a[0]); n=len(rows); p=len(rows[0])
     if name=='crossvalidate':
-        require(p>=2,'Rows: predictors then response'); k=integer(a[1],2,n) if len(a)>1 else min(5,n); seed=integer(a[2],0,2**32-1) if len(a)>2 else 0
-        order=list(range(n)); random.Random(seed).shuffle(order); errors=[]; predictions=[0.0]*n
+        require(p>=2,'Rows: predictors then response')
+        k=integer(a[1],2,n) if len(a)>1 else min(5,n); seed=integer(a[2],0,2**32-1) if len(a)>2 else 0
+        split=option(a,3,'random'); require(split in ('random','blocked','stratified'),'Split: random, blocked, or stratified')
+        model=option(a,4,'linear'); require(model in ('linear','ridge','lasso','elasticnet','logistic'),'Model: linear, ridge, lasso, elasticnet, or logistic')
+        alpha,ratio=0.0,0.0
+        if model in ('ridge','lasso','logistic'):
+            alpha=number(a[5]) if len(a)>5 else .1; require(alpha>0,'Penalty alpha must be positive')
+        elif model=='elasticnet':
+            if len(a)>5:
+                require(isinstance(a[5],(list,tuple)) and len(a[5])==2,'Elastic net options are [alpha,l1 ratio]')
+                alpha=number(a[5][0]); ratio=number(a[5][1])
+            else: alpha,ratio=.1,.5
+            require(alpha>0 and 0<=ratio<=1,'Elastic net needs positive alpha and an L1 ratio from 0 to 1')
+        responses=[row[-1] for row in rows]
+        if split=='stratified': require(set(responses)<={0.0,1.0},'Stratified folds require a 0/1 response')
+        generator=random.Random(seed)
+        if split=='blocked':
+            bounds=[f*n//k for f in range(k+1)]; folds=[list(range(bounds[f],bounds[f+1])) for f in range(k)]
+        elif split=='stratified':
+            assignment=[0]*n
+            for label in (0.0,1.0):
+                group=[i for i in range(n) if responses[i]==label]; generator.shuffle(group)
+                for position,i in enumerate(group): assignment[i]=position%k
+            folds=[[i for i in range(n) if assignment[i]==f] for f in range(k)]
+        else:
+            order=list(range(n)); generator.shuffle(order); folds=[order[f::k] for f in range(k)]
+        predictions=[0.0]*n; errors=[]
         for fold in range(k):
-            test=order[fold::k]; train=[i for i in order if i not in test]; x,y=regression_data([rows[i] for i in train]); X=mp.matrix(x); b=inverse(X.T*X)*X.T*mp.matrix(y)
-            for i in test: predictions[i]=float(dot([1]+rows[i][:-1],b))
-            errors.append(mean([(rows[i][-1]-predictions[i])**2 for i in test]))
-        engine.note += ' Shuffled k-fold ordinary least-squares regression. Fits use training rows only. Not suitable for grouped or time-series data.'
-        return {'out-of-fold predictions':predictions,'fold MSE':errors,'MSE':mean([(r[-1]-pred)**2 for r,pred in zip(rows,predictions)]),'RMSE':math.sqrt(mean([(r[-1]-pred)**2 for r,pred in zip(rows,predictions)])),'folds':k,'seed':seed}
+            test=folds[fold]; member=set(test); train=[i for i in range(n) if i not in member]
+            require(len(train)>p,'Each training fold needs more rows than predictors')
+            if model=='linear':
+                x,y=regression_data([rows[i] for i in train]); X=mp.matrix(x); b=inverse(X.T*X)*X.T*mp.matrix(y)
+                for i in test: predictions[i]=float(dot([1]+rows[i][:-1],b))
+                errors.append(mean([(rows[i][-1]-predictions[i])**2 for i in test]))
+                continue
+            fit=machine_fit([rows[i] for i in train],model,alpha,ratio)
+            for i in test: predictions[i]=fit(rows[i])
+            errors.append(mean([-(math.log(max(1e-12,predictions[i])) if rows[i][-1] else math.log(max(1e-12,1-predictions[i]))) for i in test]) if model=='logistic' else mean([(rows[i][-1]-predictions[i])**2 for i in test]))
+        if model=='logistic':
+            clipped=[min(1-1e-12,max(1e-12,v)) for v in predictions]
+            result={'out-of-fold probabilities':predictions,'fold log loss':errors,'log loss':mean([-(math.log(clipped[i]) if responses[i] else math.log(1-clipped[i])) for i in range(n)]),'accuracy':mean([(v>=.5)==bool(responses[i]) for i,v in enumerate(predictions)]),'Brier score':mean([(responses[i]-predictions[i])**2 for i in range(n)]),'model':model,'split':split,'folds':k,'seed':seed}
+            score=binary_auc(responses,predictions)
+            if score is not None: result['AUC']=score
+            engine.note += ' Out-of-fold validation of an L2-penalized logistic regression; folds use training rows only. Reports accuracy, AUC, log loss and the Brier score.'
+            return result
+        residuals=[(rows[i][-1]-predictions[i])**2 for i in range(n)]
+        center=mean(responses); total=sum((value-center)**2 for value in responses)
+        result={'out-of-fold predictions':predictions,'fold MSE':errors,'MSE':mean(residuals),'RMSE':math.sqrt(mean(residuals)),'MAE':mean([abs(rows[i][-1]-predictions[i]) for i in range(n)]),'model':model,'split':split,'folds':k,'seed':seed}
+        if total>0: result['R2']=1-sum(residuals)/total
+        engine.note += ' k-fold out-of-fold validation with training-only fits; blocked splits keep the row order. Grouped data still needs cluster-aware splits.'
+        return result
     centers=[mean(c) for c in zip(*rows)]
     if name=='pca':
         count=integer(a[1],1,p) if len(a)>1 else p; standard=integer(a[2],0,1) if len(a)>2 else 1; scales=[math.sqrt(variance(c)) if standard else 1 for c in zip(*rows)]

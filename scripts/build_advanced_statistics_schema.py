@@ -21,20 +21,20 @@ specs = [
     ('survivalanalysis','Survival analysis','생존분석','table',',0,efron,-1,1','[[1,1,1],[2,1,2],[3,0,1],[4,1,2],[5,1,1],[6,0,2],[7,1,2],[8,1,1]]','Rows: time, event (0/1), group ID, optional Cox predictors; Cox 0=off, 1=on; then ties and the PH check.','열: 시간, 사건(0/1), 그룹 ID, 선택적 Cox 설명변수. Cox 0=끔, 1=켬; 이어서 동률 처리와 PH 검정.'),
     ('cox','Cox regression','Cox 회귀','table',',efron,-1,1','[[1,1,0],[2,1,1],[3,0,0],[4,1,1],[5,1,0],[6,0,1],[7,1,1],[8,1,0]]','Rows: time, event 0/1, predictors. Ties efron (default) or breslow; entry column for left truncation (-1 none); PH check 0/1.','열: 시간, 사건 0/1, 설명변수. 동률 efron(기본)/breslow, 좌측 절단 진입시간 열(-1 없음), PH 검정 0/1.'),
     ('repeatedanova','Repeated-measures ANOVA','반복측정 ANOVA','table',',1','[[2,4,5],[3,4,7],[4,7,8],[2,3,6],[5,6,7]]','Rows=subjects, columns=conditions. Second-factor levels: 1 = one-way, 2+ = two-way (first factor slowest); GG corrections.','행=대상, 열=조건. 둘째 요인 수준: 1=일요인, 2 이상=이요인(첫 요인 최외곽); GG 보정.'),
-    ('mixedmodel','Mixed model','혼합모형','table',',0',CLUSTERS,'Rows: subject ID, predictors, response. Gaussian random intercept ML; second argument selects a random slope (0 none); ≤300 rows.','열: 대상 ID, 설명변수, 반응. Gaussian 랜덤 절편 ML; 둘째 인수는 랜덤 기울기 위치(0 없음); 최대 300행.'),
+    ('mixedmodel','Mixed model','혼합모형','table',',0',CLUSTERS,'Rows: subject ID, predictors, response. Gaussian random intercept with up to three random slopes (0 none, a predictor position, or [1,2]); third argument ml (default) or reml; up to 5000 rows.','열: 대상 ID, 설명변수, 반응. Gaussian 랜덤 절편 + 최대 3개 랜덤 기울기(0 없음, 변수 위치, 또는 [1,2]); 셋째 인수 ml(기본)·reml; 최대 5000행.'),
     ('gee','GEE','GEE','table',',gaussian,independence',CLUSTERS,'Rows: cluster ID, predictors, response. gaussian / binomial / poisson; working correlation independent / exchangeable / ar1; fourth argument [i,j] interaction pairs; sandwich SE.','열: 군집 ID, 설명변수, 반응. gaussian / binomial / poisson; 작업상관 independence / exchangeable / ar1; 넷째 인수 [i,j] 상호작용 쌍; 강건 SE.'),
     ('multinomial','Multinomial logistic','다항 로지스틱','table','',CATEGORIES,'Rows: predictors, numeric category response. Smallest category is reference.','열: 설명변수, 숫자 범주 반응. 가장 작은 범주가 기준.'),
     ('ordinal','Ordinal logistic','순서형 로지스틱','table','',CATEGORIES,'Rows: predictors, ordered numeric response. Proportional-odds cumulative logit.','열: 설명변수, 순서가 있는 숫자 반응. 비례오즈 누적 로짓.'),
     ('poissonreg','Poisson regression','포아송 회귀','table','',COUNTS,'Rows: predictors, integer count response. Log link.','열: 설명변수, 정수 빈도 반응. 로그 연결함수.'),
     ('nbreg','Negative binomial regression','음이항 회귀','table','','[[0,0],[0,0],[0,1],[0,8],[1,0],[1,1],[1,3],[1,15],[2,0],[2,2],[2,5],[2,23],[3,1],[3,3],[3,10],[3,35]]','Rows: predictors, integer count response. NB2 with estimated dispersion.','열: 설명변수, 정수 빈도 반응. NB2 과산포 모수 추정.'),
     ('bootstrapci','Bootstrap confidence interval','부트스트랩 신뢰구간','list',',mean,0.95,2000,0','[1,2,3,4,5,8]','Statistic mean / median / stdev, confidence level, resamples, seed. Percentile IID bootstrap.','통계량 mean / median / stdev, 신뢰수준, 재추출 수, 시드. IID 백분위 방식.'),
-    ('testpower','Power','검정력','none','', '0.5,64,0.05,independent','Cohen d, n per group/pairs, alpha, independent / paired / onesample. Two-sided normal approximation.','Cohen d, 그룹별 n/쌍 수, 유의수준, independent / paired / onesample. 양측 정규근사.'),
-    ('samplesize','Sample size','표본수','none','','0.5,0.8,0.05,independent','Cohen d, target power, alpha, design. Two-sided normal approximation.','Cohen d, 목표 검정력, 유의수준, 설계. 양측 정규근사.'),
+    ('testpower','Power','검정력','none','', '0.5,64,0.05,independent','Cohen d, n per group/pairs, alpha, independent / paired / onesample, alternative two (default) / greater / less. Exact noncentral-t power.','Cohen d, 그룹별 n/쌍 수, 유의수준, independent / paired / onesample, 대립가설 two(기본) / greater / less. 정확 noncentral-t 검정력.'),
+    ('samplesize','Sample size','표본수','none','','0.5,0.8,0.05,independent','Cohen d, target power, alpha, design, alternative. Exact noncentral-t power.','Cohen d, 목표 검정력, 유의수준, 설계, 대립가설. 정확 noncentral-t 검정력.'),
     ('kstest','Kolmogorov–Smirnov','Kolmogorov–Smirnov','groups','',GROUPS,'Two sample lists, or kstest(data,normal,mu,sigma) / kstest(data,uniform,lower,width). Continuous null; one-sample p is asymptotic.','두 표본 목록 또는 kstest(data,normal,평균,SD) / kstest(data,uniform,하한,폭). 연속분포 가정; 일표본 p는 근사.'),
-    ('crossvalidate','Cross-validation','교차검증','table',',3,0','[[0,1],[1,3],[2,4],[3,7],[4,8],[5,11],[6,12],[7,15],[8,16]]','Rows: predictors, response; folds, seed. Shuffled k-fold OLS.','열: 설명변수, 반응; 폴드 수, 시드. 무작위 k-fold OLS.'),
+    ('crossvalidate','Cross-validation','교차검증','table',',3,0','[[0,1],[1,3],[2,4],[3,7],[4,8],[5,11],[6,12],[7,15],[8,16]]','Rows: predictors, response; folds, seed; split random (default) / blocked / stratified; model linear (default) / ridge / lasso / elasticnet / logistic; penalty alpha or [alpha,l1 ratio].','열: 설명변수, 반응; 폴드 수, 시드; 분할 random(기본) / blocked / stratified; 모형 linear(기본) / ridge / lasso / elasticnet / logistic; 벌점 alpha 또는 [alpha,l1 비율].'),
     ('pca','PCA','주성분 분석','table',',2,1','[[1,2],[2,1],[3,4],[4,3],[5,7]]','Rows=observations, columns=features; components, standardize 1/0.','행=관측, 열=변수; 주성분 수, 표준화 1/0.'),
     ('kmeans','K-means clustering','K-means 군집','table',',2,0','[[1,1],[1,2],[2,1],[8,8],[8,9],[9,8]]','Numeric feature rows; k, seed. Euclidean distance, 10 restarts, raw feature scale.','숫자 변수 행; k, 시드. 유클리드 거리, 10회 초기화, 원래 변수 척도.'),
-    ('impute','Missing-value imputation','결측치 대체','table',',mean','[[1,NA],[2,4],[NA,6],[4,8]]','NA for missing cells; mean / median / mode. Single imputation.','결측값은 NA; mean / median / mode. 단일 대체.'),
+    ('impute','Missing-value imputation','결측치 대체','table',',mean','[[1,NA],[2,4],[NA,6],[4,8]]','NA for missing cells; mean / median / mode / regression / knn with neighbours (default 5). Single imputation.','결측값은 NA; mean / median / mode / regression / knn(이웃 수 기본 5). 단일 대체.'),
 ]
 schema = [{'id':id_,'label':label,'ko':ko,'input':layout,'suffix':suffix,'example':f'{id_}({data}{suffix})','help':help_,'helpKo':helpko} for id_,label,ko,layout,suffix,data,help_,helpko in specs]
 def field(key,label,ko,type_,default,choices=None,when=None):
@@ -66,9 +66,15 @@ forms={
         dict(col('entry','Entry time','진입시간 열',2),when={'truncation':['entry']}),
         field('ph','Proportional-hazards check','비례위험 검정','choice','test',[('test','Schoenfeld test','Schoenfeld 검정'),('none','Skip','생략')])],
     'repeatedanova':[multi('columns','Condition columns','조건 열'),field('factor2','Second-factor levels','둘째 요인 수준','number','1')],
-    'mixedmodel':cluster_fields+[field('slope','Random-slope predictor','랜덤 기울기 변수','number','0')],
+    'mixedmodel':cluster_fields+[field('slope','Random-slope predictors','랜덤 기울기 변수','number','0'),field('method','Estimation','추정 방법','choice','ml',[('ml','ML','ML'),('reml','REML','REML')])],
     'gee':cluster_fields+[field('family','Family','분포','choice','gaussian',[('gaussian','Gaussian','Gaussian'),('binomial','Binomial (0/1)','이항 (0/1)'),('poisson','Poisson','포아송')]),field('corr','Working correlation','작업상관','choice','independence',[('independence','Independent','독립'),('exchangeable','Exchangeable','교환가능'),('ar1','AR(1)','AR(1)')]),field('interactions','Interactions (columns or names)','상호작용 (열·이름)','number','')],
-    'kstest':[field('mode','Samples / distribution','표본·분포','choice','two',[('two','Two samples','두 표본'),('normal','Normal','정규분포'),('uniform','Uniform','균등분포')]),col('first','Sample column','표본 열',0),dict(col('second','Second sample','둘째 표본 열',1),when={'mode':['two']}),dict(field('location','Mean / lower bound','평균·하한','number','0'),when={'mode':['normal','uniform']}),dict(field('scale','SD / width','표준편차·폭','number','1'),when={'mode':['normal','uniform']})]
+    'kstest':[field('mode','Samples / distribution','표본·분포','choice','two',[('two','Two samples','두 표본'),('normal','Normal','정규분포'),('uniform','Uniform','균등분포')]),col('first','Sample column','표본 열',0),dict(col('second','Second sample','둘째 표본 열',1),when={'mode':['two']}),dict(field('location','Mean / lower bound','평균·하한','number','0'),when={'mode':['normal','uniform']}),dict(field('scale','SD / width','표준편차·폭','number','1'),when={'mode':['normal','uniform']})],
+    'impute':[field('method','Method','대체 방법','choice','mean',[('mean','Mean','평균'),('median','Median','중앙값'),('mode','Mode','최빈값'),('regression','Regression','회귀'),('knn','k-NN','k-NN')]),dict(field('k','Neighbours','이웃 수','number','5'),when={'method':['knn']})],
+    'crossvalidate':[field('folds','Folds','폴드 수','number','3'),field('seed','Seed','시드','number','0'),
+        field('split','Split','분할','choice','random',[('random','Random','무작위'),('blocked','Blocked','블록'),('stratified','Stratified','층화')]),
+        field('model','Model','모형','choice','linear',[('linear','Linear (OLS)','선형 (OLS)'),('ridge','Ridge','Ridge'),('lasso','Lasso','Lasso'),('elasticnet','Elastic net','Elastic net'),('logistic','Logistic (0/1)','로지스틱 (0/1)')]),
+        dict(field('alpha','Penalty α','벌점 α','number','0.1'),when={'model':['ridge','lasso','elasticnet','logistic']}),
+        dict(field('ratio','L1 ratio','L1 비율','number','0.5'),when={'model':['elasticnet']})]
 }
 form_help={
  'padjust':('Adjust p values from the selected column.','선택한 열의 p값을 보정합니다.'),
@@ -80,20 +86,28 @@ form_help={
  'survivalanalysis':('Kaplan–Meier curves · log-rank · Cox; other event values are censored.','Kaplan–Meier 곡선 · log-rank · Cox. 발생 값 이외는 중도절단입니다.'),
  'cox':('Proportional hazards; Breslow/Efron ties, optional entry column for left truncation and a scaled-Schoenfeld PH check.','비례위험; Breslow/Efron 동률, 선택적 진입시간 열(좌측 절단), 스케일된 Schoenfeld PH 검정.'),
  'repeatedanova':('One row per subject; one or two within factors with GG corrections.','행마다 한 대상. 일·이요인 반복측정·GG 보정입니다.'),
- 'mixedmodel':('Gaussian random intercept with an optional random slope (ML).','Gaussian 랜덤 절편과 선택적 랜덤 기울기 (ML)입니다.'),
+ 'mixedmodel':('Gaussian random intercept with up to three random slopes under ML or REML. Random-slope positions accept 0, a number or a list such as 1,2.','Gaussian 랜덤 절편 + 최대 3개 랜덤 기울기, ML·REML 추정입니다. 랜덤 기울기 위치는 0, 번호, 또는 1,2 같은 목록입니다.'),
  'gee':('Working correlation independent / exchangeable / AR(1); cluster-robust SE. Interactions accept header names (age,weight), the shown column letters or labels (y,z / age (y),weight (z)), column numbers (2,3) or predictor order (p1,p2); separate pairs with ;.','작업상관 independent / exchangeable / AR(1); 군집 강건 표준오차. 상호작용은 열 이름(age,weight), 표시된 열 문자·라벨(y,z / age (y),weight (z)), 열 번호(2,3), 설명변수 순서(p1,p2)로 입력하고 쌍은 ;로 구분합니다.'),
- 'kstest':('Compare two samples or a specified continuous distribution.','두 표본 또는 지정한 연속분포와 비교합니다.')
+ 'kstest':('Compare two samples or a specified continuous distribution.','두 표본 또는 지정한 연속분포와 비교합니다.'),
+ 'impute':('Fill missing NA cells by mean, median, mode, regression or k-NN.','결측값(NA)을 평균·중앙값·최빈값·회귀·k-NN으로 대체합니다.'),
+ 'crossvalidate':('Held-out folds fitted on training rows only; choose split, model and penalty.','훈련 행으로만 적합하는 홀드아웃 폴드; 분할·모형·벌점을 선택합니다.')
 }
+def literal(node):
+    if isinstance(node,ast.Name) and node.id=='NA': return 'NA'
+    if isinstance(node,(ast.List,ast.Tuple)): return [literal(element) for element in node.elts]
+    return ast.literal_eval(node)
+
+
 for item in schema:
     if item['id'] not in forms: continue
     item['controls']=forms[item['id']]
     item['formHelp'],item['formHelpKo']=form_help[item['id']]
     arguments=ast.parse(item['example'],mode='eval').body.args
-    first=ast.literal_eval(arguments[0])
+    first=literal(arguments[0])
     if item['id']=='padjust': rows=[[v] for v in first]
     elif item['id'] in ('levene','bartlett','kstest'):
-        samples=[ast.literal_eval(arg) for arg in arguments]; rows=[[sample[i] if i<len(sample) else '' for sample in samples] for i in range(max(map(len,samples)))]
-    elif item['id']=='logrank': rows=[r+[i+1] for i,arg in enumerate(arguments) for r in ast.literal_eval(arg)]
+        samples=[literal(arg) for arg in arguments]; rows=[[sample[i] if i<len(sample) else '' for sample in samples] for i in range(max(map(len,samples)))]
+    elif item['id']=='logrank': rows=[r+[i+1] for i,arg in enumerate(arguments) for r in literal(arg)]
     else: rows=first
     item['exampleRows']=[[str(v) for v in row] for row in rows]
 (ROOT/'tests/fixtures').mkdir(exist_ok=True)
@@ -118,7 +132,14 @@ cases=[
  dict(id='gee',rows=[['A','2','0','1'],['A','4','1','2'],['B','3','0','3']],settings=dict(subject='0',response='3',predictors='1,2',interactions='p1,p2'),expected='gee([[1,2,0,1],[1,4,1,2],[2,3,0,3]],gaussian,independence,[[1,2]])'),
  dict(id='kstest',rows=[['1','4'],['2',''],['3','5']],settings=dict(first='1',second='0',mode='two'),expected='kstest([4,5],[1,2,3])'),
  dict(id='kstest',rows=[['1','4'],['2','5']],settings=dict(first='1',mode='normal',location='5',scale='2'),expected='kstest([4,5],normal,5,2)'),
- dict(id='kstest',rows=[['1','4'],['2','5']],settings=dict(first='1',mode='uniform',location='3',scale='4'),expected='kstest([4,5],uniform,3,4)')
+ dict(id='kstest',rows=[['1','4'],['2','5']],settings=dict(first='1',mode='uniform',location='3',scale='4'),expected='kstest([4,5],uniform,3,4)'),
+ dict(id='mixedmodel',rows=[['2','A','0'],['4','A','1'],['3','B','0']],settings=dict(subject='1',response='0',predictors='2',slope='0',method='reml'),expected='mixedmodel([[1,0,2],[1,1,4],[2,0,3]],0,reml)'),
+ dict(id='mixedmodel',rows=[['2','A','7','0'],['4','A','9','1'],['3','B','5','0'],['5','B','6','1']],settings=dict(subject='1',response='0',predictors='2,3',slope='1,2'),expected='mixedmodel([[1,7,0,2],[1,9,1,4],[2,5,0,3],[2,6,1,5]],[1,2])'),
+ dict(id='impute',rows=[['1','NA'],['2','4'],['NA','6'],['4','8']],settings=dict(method='knn',k='3'),expected='impute([[1,NA],[2,4],[NA,6],[4,8]],knn,3)'),
+ dict(id='impute',rows=[['1',''],['2','4'],['','6'],['4','8']],settings=dict(method='median'),expected='impute([[1,NA],[2,4],[NA,6],[4,8]],median)'),
+ dict(id='crossvalidate',rows=[['0','1'],['1','3'],['2','4'],['3','7']],settings=dict(folds='2',seed='7',split='blocked',model='ridge',alpha='0.25'),expected='crossvalidate([[0,1],[1,3],[2,4],[3,7]],2,7,blocked,ridge,0.25)'),
+ dict(id='crossvalidate',rows=[['0','1'],['1','0'],['2','1'],['3','1']],settings=dict(folds='2',seed='0',split='random',model='logistic',alpha='0.5'),expected='crossvalidate([[0,1],[1,0],[2,1],[3,1]],2,0,random,logistic,0.5)'),
+ dict(id='crossvalidate',rows=[['0','1'],['1','2'],['2','3'],['3','5']],settings=dict(folds='2',seed='0',split='random',model='elasticnet',alpha='0.2',ratio='0.25'),expected='crossvalidate([[0,1],[1,2],[2,3],[3,5]],2,0,random,elasticnet,[0.2,0.25])')
 ]
 (ROOT/'tests/fixtures/statistics_forms.json').write_text(json.dumps(cases,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
 (ROOT/'app/src/main/assets/advanced_statistics.json').write_text(json.dumps(schema,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
@@ -130,5 +151,5 @@ for language in ('','_ko'):
     text+='\n## '+heading+'\n\n'+intro+'\n\n'
     for item in schema:
         text+=f"`{item['id']}` — {item['helpKo'] if language else item['help']}\nExample: {item['example']}\n\n"
-    text+=('모형은 수렴하지 않거나 식별 불가능하면 오류를 반환합니다. Cox는 Breslow/Efron 동률, 선택적 좌측 절단, Grambsch–Therneau 스케일된 Schoenfeld 비례위험 검정을 지원하며 순서형 로지스틱은 비례오즈를 가정합니다. 혼합모형은 랜덤 절편과 최대 하나의 랜덤 기울기를, GEE는 독립·교환가능·AR(1) 작업상관을 지원합니다. 반복측정 ANOVA는 GG 보정이 포함된 균형 일·이요인 설계를 다룹니다. 단일 대체 후 추론은 대체 불확실성을 반영하지 않습니다. 교차검증은 OLS 분할과 규제 α 선택을 지원하며 시계열·군집 분할은 포함하지 않습니다. Firth 추론은 프로파일 페널티 우도 신뢰구간을, 부트스트랩은 백분위 구간을 사용합니다(BCa 없음).\n' if language else 'Models return errors on failed convergence or non-identifiability. Cox supports Breslow/Efron ties, optional left truncation and a Grambsch–Therneau scaled-Schoenfeld proportional-hazards check; ordinal logistic assumes proportional odds. Mixed models support a random intercept plus at most one random slope; GEE supports independent, exchangeable and AR(1) working correlations. Repeated-measures ANOVA covers balanced one- and two-way within-subject designs with GG corrections. Single imputation does not propagate imputation uncertainty. Cross-validation covers OLS splits and regularized alpha selection, without grouped or time-series splits. Firth inference uses profile penalized-likelihood intervals; bootstrap CIs use the percentile method, not BCa.\n')
+    text+=('모형은 수렴하지 않거나 식별 불가능하면 오류를 반환합니다. Cox는 Breslow/Efron 동률, 선택적 좌측 절단, Grambsch–Therneau 스케일된 Schoenfeld 비례위험 검정을 지원하며 순서형 로지스틱은 비례오즈를 가정합니다. 혼합모형은 랜덤 절편과 최대 세 개의 랜덤 기울기(ML·REML)를, GEE는 독립·교환가능·AR(1) 작업상관을 지원합니다. 반복측정 ANOVA는 GG 보정이 포함된 균형 일·이요인 설계를 다룹니다. 단일 대체(mean·median·mode·회귀·k-NN) 후 추론은 대체 불확실성을 반영하지 않습니다. 교차검증은 linear·ridge·lasso·elasticnet·logistic 모형과 random·blocked·stratified 분할을 지원합니다. Firth 추론은 프로파일 페널티 우도 신뢰구간을, 부트스트랩은 백분위 구간을 사용합니다(BCa 없음).\n' if language else 'Models return errors on failed convergence or non-identifiability. Cox supports Breslow/Efron ties, optional left truncation and a Grambsch–Therneau scaled-Schoenfeld proportional-hazards check; ordinal logistic assumes proportional odds. Mixed models support a random intercept plus up to three random slopes under ML or REML; GEE supports independent, exchangeable and AR(1) working correlations. Repeated-measures ANOVA covers balanced one- and two-way within-subject designs with GG corrections. Single imputation (mean, median, mode, regression or k-NN) does not propagate imputation uncertainty. Cross-validation covers linear, ridge, lasso, elastic-net and logistic fits with random, blocked or stratified splits. Firth inference uses profile penalized-likelihood intervals; bootstrap CIs use the percentile method, not BCa.\n')
     path.write_text(text,encoding='utf-8')

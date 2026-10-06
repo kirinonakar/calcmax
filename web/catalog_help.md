@@ -670,7 +670,7 @@ Example: cox([[1,1,0],[2,1,1],[3,0,0],[4,1,1],[5,1,0],[6,0,1],[7,1,1],[8,1,0]],e
 `repeatedanova` — Rows=subjects, columns=conditions. Second-factor levels: 1 = one-way, 2+ = two-way (first factor slowest); GG corrections.
 Example: repeatedanova([[2,4,5],[3,4,7],[4,7,8],[2,3,6],[5,6,7]],1)
 
-`mixedmodel` — Rows: subject ID, predictors, response. Gaussian random intercept ML; second argument selects a random slope (0 none); ≤300 rows.
+`mixedmodel` — Rows: subject ID, predictors, response. Gaussian random intercept with up to three random slopes (0 none, a predictor position, or [1,2]); third argument ml (default) or reml; up to 5000 rows.
 Example: mixedmodel([[1,0,2],[1,1,4],[1,2,4],[2,0,3],[2,1,4],[2,2,6],[3,0,1],[3,1,3],[3,2,4],[4,0,4],[4,1,5],[4,2,8]],0)
 
 `gee` — Rows: cluster ID, predictors, response. gaussian / binomial / poisson; working correlation independent / exchangeable / ar1; fourth argument [i,j] interaction pairs; sandwich SE.
@@ -691,16 +691,16 @@ Example: nbreg([[0,0],[0,0],[0,1],[0,8],[1,0],[1,1],[1,3],[1,15],[2,0],[2,2],[2,
 `bootstrapci` — Statistic mean / median / stdev, confidence level, resamples, seed. Percentile IID bootstrap.
 Example: bootstrapci([1,2,3,4,5,8],mean,0.95,2000,0)
 
-`testpower` — Cohen d, n per group/pairs, alpha, independent / paired / onesample. Two-sided normal approximation.
+`testpower` — Cohen d, n per group/pairs, alpha, independent / paired / onesample, alternative two (default) / greater / less. Exact noncentral-t power.
 Example: testpower(0.5,64,0.05,independent)
 
-`samplesize` — Cohen d, target power, alpha, design. Two-sided normal approximation.
+`samplesize` — Cohen d, target power, alpha, design, alternative. Exact noncentral-t power.
 Example: samplesize(0.5,0.8,0.05,independent)
 
 `kstest` — Two sample lists, or kstest(data,normal,mu,sigma) / kstest(data,uniform,lower,width). Continuous null; one-sample p is asymptotic.
 Example: kstest([1,2,4,5],[2,3,5,8])
 
-`crossvalidate` — Rows: predictors, response; folds, seed. Shuffled k-fold OLS.
+`crossvalidate` — Rows: predictors, response; folds, seed; split random (default) / blocked / stratified; model linear (default) / ridge / lasso / elasticnet / logistic; penalty alpha or [alpha,l1 ratio].
 Example: crossvalidate([[0,1],[1,3],[2,4],[3,7],[4,8],[5,11],[6,12],[7,15],[8,16]],3,0)
 
 `pca` — Rows=observations, columns=features; components, standardize 1/0.
@@ -709,7 +709,7 @@ Example: pca([[1,2],[2,1],[3,4],[4,3],[5,7]],2,1)
 `kmeans` — Numeric feature rows; k, seed. Euclidean distance, 10 restarts, raw feature scale.
 Example: kmeans([[1,1],[1,2],[2,1],[8,8],[8,9],[9,8]],2,0)
 
-`impute` — NA for missing cells; mean / median / mode. Single imputation.
+`impute` — NA for missing cells; mean / median / mode / regression / knn with neighbours (default 5). Single imputation.
 Example: impute([[1,NA],[2,4],[NA,6],[4,8]],mean)
 
-Models return errors on failed convergence or non-identifiability. Cox supports Breslow/Efron ties, optional left truncation and a Grambsch–Therneau scaled-Schoenfeld proportional-hazards check; ordinal logistic assumes proportional odds. Mixed models support a random intercept plus at most one random slope; GEE supports independent, exchangeable and AR(1) working correlations. Repeated-measures ANOVA covers balanced one- and two-way within-subject designs with GG corrections. Single imputation does not propagate imputation uncertainty. Cross-validation covers OLS splits and regularized alpha selection, without grouped or time-series splits. Firth inference uses profile penalized-likelihood intervals; bootstrap CIs use the percentile method, not BCa.
+Models return errors on failed convergence or non-identifiability. Cox supports Breslow/Efron ties, optional left truncation and a Grambsch–Therneau scaled-Schoenfeld proportional-hazards check; ordinal logistic assumes proportional odds. Mixed models support a random intercept plus up to three random slopes under ML or REML; GEE supports independent, exchangeable and AR(1) working correlations. Repeated-measures ANOVA covers balanced one- and two-way within-subject designs with GG corrections. Single imputation (mean, median, mode, regression or k-NN) does not propagate imputation uncertainty. Cross-validation covers linear, ridge, lasso, elastic-net and logistic fits with random, blocked or stratified splits. Firth inference uses profile penalized-likelihood intervals; bootstrap CIs use the percentile method, not BCa.
