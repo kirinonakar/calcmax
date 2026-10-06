@@ -345,7 +345,7 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
     }catch(exc){if(regressionRun===run)error(exc.message);}
     finally{if(regressionRun===run){regressionRun=null;regressionBusy(false);}}
   }
-  advanced=createAdvancedStatistics({state,persist,data:()=>value('statistics-data')});
+  advanced=createAdvancedStatistics({state,persist,data:()=>value('statistics-data'),columnLimit:()=>dataColumns()});
   statisticsControls();
   return {datasetsList,expression:statisticsExpression,advancedExpression:advanced.expression,advancedContext:advanced.context,showAdvancedResult:advanced.showResult,analysisSummary,render:()=>{render();advanced.render();},showRegression,runRegression};
 }

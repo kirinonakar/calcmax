@@ -46,10 +46,12 @@ internal fun advancedStatisticsCommand(definition:JSONObject,rows:List<List<Stri
     return "$id($data${definition.getString("suffix")})"
 }
 
-internal fun advancedStatisticsRows(data:String):List<List<String>> {
+/** Only the columns selected on the statistics screen are analyzed; extra pasted cells are ignored. */
+internal fun advancedStatisticsRows(data:String,columnLimit:Int?=null):List<List<String>> {
     val normalized=data.removePrefix("\uFEFF").replace("\r\n","\n").replace('\r','\n').trimEnd('\n')
     val rows=normalized.split('\n').map {line->line.splitCsvRecord().map(String::trim)}
-    val columns=rows.maxOfOrNull {it.size} ?: 0
+    val width=rows.maxOfOrNull {it.size} ?: 0
+    val columns=if(columnLimit==null)width else minOf(width,columnLimit)
     require(columns<=20&&rows.size<=5000) {"Limit: 5000 rows and 20 columns"}
     val rectangular=rows.map {row->List(columns){row.getOrElse(it){""}}}
     return if(statisticsHasHeader(rectangular)&&rectangular.first().none {it=="NA"})rectangular.drop(1) else rectangular
@@ -75,7 +77,8 @@ internal fun advancedStatisticsRows(data:String):List<List<String>> {
     var pending by remember {mutableStateOf(false)}
     val forms=JSONObject(formsText)
     val settings=forms.optJSONObject(selected) ?: JSONObject()
-    val currentRows=runCatching {advancedStatisticsRows(data)}
+    val columnLimit=statisticsColumnCount(kind)
+    val currentRows=runCatching {advancedStatisticsRows(data,columnLimit)}
     val rows=if(input=="example"&&definition.has("exampleRows"))definition.getJSONArray("exampleRows").let {array->List(array.length()){i->array.getJSONArray(i).let {row->List(row.length()){row.getString(it)}}}} else currentRows.getOrDefault(emptyList())
     val count=rows.maxOfOrNull {it.size} ?: statisticsColumnCount(kind)
     val labels=if(input=="example")statisticsColumnNames(statisticsKindForColumns(count)) else statisticsColumnLabels(data,statisticsKindForColumns(count))
@@ -124,7 +127,7 @@ internal fun advancedStatisticsRows(data:String):List<List<String>> {
             if(!definition.has("controls"))SmallAction(if(ko)"예제" else "Example"){source=definition.getString("example");message=""}
             if(definition.getString("input")!="none")SmallAction(if(ko)"현재 데이터" else "Use current data"){
                 if(definition.has("controls")){input="current";message=""}
-                else runCatching {advancedStatisticsCommand(definition,advancedStatisticsRows(data))}.onSuccess {source=it;message=""}.onFailure {message=it.message.orEmpty()}
+                else runCatching {advancedStatisticsCommand(definition,advancedStatisticsRows(data,columnLimit))}.onSuccess {source=it;message=""}.onFailure {message=it.message.orEmpty()}
             }
             Button(onClick={command.getOrNull()?.let {
                 survivalReport=null;previousResult=m.result;pending=selected=="survivalanalysis"

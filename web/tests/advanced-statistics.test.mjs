@@ -22,6 +22,9 @@ test('advanced data shapes preserve subjects, censoring, categories and missing 
   assert.deepEqual(advancedStatisticsRows('time,event,x\n1,0,2\n2,1,3\n'),[['1','0','2'],['2','1','3']]);
   assert.deepEqual(advancedStatisticsRows('NA,NA\n1,2'),[['NA','NA'],['1','2']]);
   assert.deepEqual(advancedStatisticsRows('1,2\n\n3,4'),[['1','2'],['',''],['3','4']]);
+  assert.deepEqual(advancedStatisticsRows('1,2,9\n3,4,8',2),[['1','2'],['3','4']]);
+  assert.deepEqual(advancedStatisticsRows('x,y,z\n1,2,3\n4,5,6',2),[['1','2'],['4','5']]);
+  assert.deepEqual(advancedStatisticsRows('NA,NA,7\n1,2,3',2),[['NA','NA'],['1','2']]);
 });
 
 test('all advanced examples parse and require explicit evaluation',()=>{
@@ -144,4 +147,16 @@ test('advanced controls restore selection and edited source, switch locale, and 
   assert.match(document.getElementById('statistics-advanced-help').textContent,/결측값/);
   assert.equal(document.querySelector('#statistics-advanced-kind option[value="impute"]').textContent,'결측치 대체');
   assert.equal(saves,1);
+});
+
+test('advanced statistics ignore columns beyond the selected data kind',t=>{
+  const dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));
+  const original=Object.getOwnPropertyDescriptor(globalThis,'document');
+  Object.defineProperty(globalThis,'document',{value:dom.window.document,configurable:true});
+  t.after(()=>{setLanguage('en');dom.window.close();if(original)Object.defineProperty(globalThis,'document',original);else delete globalThis.document;});
+  setLanguage('en');
+  const state={fields:{'statistics-advanced-kind':'padjust','statistics-advanced-input':'current'}};
+  const api=createAdvancedStatistics({state,persist:()=>{},data:()=>'p,ignored\n.01,5\n.04,6\n.2,7',columnLimit:()=>1});
+  assert.equal(document.querySelectorAll('#statistics-form-padjust-column option').length,1);
+  assert.equal(api.expression(),'padjust([.01,.04,.2],holm,0.05)');
 });

@@ -219,13 +219,18 @@ export function advancedStatisticsCommand(definition,rows) {
   return `${definition.id}(${data}${definition.suffix})`;
 }
 
-export function advancedStatisticsRows(source){
-  let rows=csvRows(source,{preserveEmptyRows:true,skipHeader:false,maxColumns:20});
-  if(statisticsCsvHasHeader(rows)&&!rows[0].some(cell=>cell==='NA'))rows=rows.slice(1);
-  return rows;
+// Only the columns selected by the statistics data kind are used; extra cells are ignored.
+export function advancedStatisticsRows(source,columnLimit){
+  const limit=Number.isInteger(columnLimit)&&columnLimit>0?columnLimit:null;
+  const rows=csvRows(source,{preserveEmptyRows:true,skipHeader:false,maxColumns:limit===null?20:100});
+  const columns=Math.min(limit??Infinity,Math.max(...rows.map(row=>row.length)));
+  if(columns>20)throw new Error('Use up to 20 data columns');
+  const selected=rows.map(row=>Array.from({length:columns},(_,index)=>row[index]||''));
+  if(statisticsCsvHasHeader(selected)&&!selected[0].some(cell=>cell==='NA'))return selected.slice(1);
+  return selected;
 }
 
-export function createAdvancedStatistics({state,persist,data}) {
+export function createAdvancedStatistics({state,persist,data,columnLimit}) {
   const select=$('statistics-advanced-kind'),source=$('statistics-advanced-source'),help=$('statistics-advanced-help'),input=$('statistics-advanced-input'),form=$('statistics-advanced-controls'),status=$('statistics-advanced-status');
   const selected=()=>advancedStatisticsSchema.find(item=>item.id===select.value)||advancedStatisticsSchema[0];
   const previous=state.fields['statistics-advanced-kind']||select.value;
@@ -239,7 +244,8 @@ export function createAdvancedStatistics({state,persist,data}) {
   let displayed=null,reportKey='';
   const fieldId=key=>`statistics-form-${selected().id}-${key}`;
   const settings=()=>Object.fromEntries((selected().controls||[]).map(field=>[field.key,state.fields[fieldId(field.key)]??field.default]));
-  const currentRows=()=>input.value==='example'?selected().exampleRows:advancedStatisticsRows(data());
+  const limit=()=>{const value=Number(columnLimit?.());return Number.isInteger(value)&&value>0?value:null;};
+  const currentRows=()=>input.value==='example'?selected().exampleRows:advancedStatisticsRows(data(),limit());
   const context=()=>selected().id==='survivalanalysis'&&input.value!=='expression'?survivalAnalysisPlan(currentRows(),settings(),columnNames()):{expression:expression(),groups:[],predictors:[]};
   function columnNames(){if(input.value!=='current'||!data().trim())return [];const rows=csvRows(data(),{skipHeader:false});return statisticsCsvHasHeader(rows)?rows[0]:[];}
   const expression=()=>selected().controls&&input.value!=='expression'?guidedStatisticsCommand(selected(),currentRows(),settings(),columnNames()):source.value.trim();
@@ -315,7 +321,7 @@ export function createAdvancedStatistics({state,persist,data}) {
   input.onchange=()=>{if(input.value==='expression'&&!source.value)source.value=selected().example;signature='';update();persist();};
   $('statistics-advanced-example').onclick=()=>{source.value=selected().example;if(selected().controls)input.value='example';signature='';update();persist();};
   $('statistics-advanced-data').onclick=()=>{
-    try{if(selected().controls){input.value='current';signature='';update();}else source.value=advancedStatisticsCommand(selected(),advancedStatisticsRows(data()));persist();}
+    try{if(selected().controls){input.value='current';signature='';update();}else source.value=advancedStatisticsCommand(selected(),advancedStatisticsRows(data(),limit()));persist();}
     catch(exc){help.textContent=exc.message;}
   };
   $('statistics-data').addEventListener('input',update);

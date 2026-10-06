@@ -46,6 +46,16 @@ class AdvancedStatisticsTest {
         assertEquals(listOf(listOf("NA","NA"),listOf("1","2")),advancedStatisticsRows("NA,NA\n1,2"))
         assertEquals(listOf(listOf("1","2"),listOf("",""),listOf("3","4")),advancedStatisticsRows("1,2\n\n3,4"))
     }
+    @Test fun usesOnlyTheSelectedDataColumns() {
+        assertEquals(listOf(listOf("1","2"),listOf("3","4")),advancedStatisticsRows("1,2,9\n3,4,8",2))
+        assertEquals(listOf(listOf("1","2"),listOf("4","5")),advancedStatisticsRows("x,y,z\n1,2,3\n4,5,6",2))
+        val wide=(1..25).joinToString(",")
+        assertEquals(listOf(listOf("1","2"),listOf("1","2")),advancedStatisticsRows("$wide\n$wide",2))
+    }
+    @Test(expected=IllegalArgumentException::class) fun keepsTheColumnCapWithinTheSelectedRange() {
+        val wide=(1..25).joinToString(",")
+        advancedStatisticsRows("$wide\n$wide",25)
+    }
     @Test fun sharedExamplesParseOnAndroidAndWaitForExplicitEvaluation() {
         val schema=JSONArray(File("src/main/assets/advanced_statistics.json").readText())
         for(i in 0 until schema.length()) {
