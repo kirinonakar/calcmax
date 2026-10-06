@@ -175,6 +175,8 @@ input:disabled,select:disabled{opacity:.45;cursor:default}
 @media(max-width:600px){.graph-surface-appearance{grid-template-columns:repeat(2,minmax(0,1fr))}.graph-surface-density{grid-column:1/-1}.graph-surface-camera{grid-template-columns:minmax(0,1fr);gap:8px}.graph-surface-camera label{display:grid;grid-template-columns:84px minmax(0,1fr);align-items:center;gap:12px}}
 :root[data-workspace="scientific"] footer{display:none}
 .keypad{--keypad-font-height:100cqh;height:100%;min-height:0;display:flex;flex-direction:column;gap:4px}
+/* Use the face-only pressed effect below, including on Samsung Internet. */
+.keypad,.keypad *{-webkit-tap-highlight-color:transparent}
 .keypad-top{flex:2;min-height:0;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));column-gap:4px;row-gap:4px}
 .keypad-row{flex:1;min-height:0;display:grid;gap:5px;grid-template-columns:repeat(6,minmax(0,1fr))}
 .keypad-row.numeric-row{grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
