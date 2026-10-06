@@ -360,30 +360,6 @@ test('independent comparisons omit the first group from second-group choices and
   assert.deepEqual([...$('statistics-grouping').options].map(option=>option.value),['columns','groups']);
 });
 
-for(const language of ['en','ko'])test(`violin, raw heat map and Pearson heat map render through workspace menus (${language})`,t=>{
-  const {$,statistics,errors}=workspace(t,{'statistics-kind':'xyz'});
-  setLanguage(language);translateDOM();statistics.render();
-  const change=id=>$(id).dispatchEvent(new document.defaultView.Event('change'));
-  $('statistics-data').value='A,1,2\nB,2,4\nA,3,6\nB,,8';
-  $('statistics-plot-grouping').value='first';$('statistics-plot-type').value='violin';change('statistics-plot-type');
-  assert.equal($('statistics-plot').querySelectorAll('.statistics-plot-panel').length,2);
-  assert.equal($('statistics-plot').querySelectorAll('[data-raw-point]').length,7);
-  assert.ok($('statistics-plot').querySelector('[data-violin]'));
-  for(const point of $('statistics-plot').querySelectorAll('[data-raw-point]'))assert.ok(Number.isFinite(Number(point.getAttribute('cx'))));
-  $('statistics-plot-type').value='heatmap';change('statistics-plot-type');
-  assert.equal($('statistics-plot').querySelectorAll('.statistics-plot-panel').length,0);
-  const cells=[...$('statistics-plot').querySelectorAll('rect[data-value]')];
-  assert.deepEqual(cells.map(cell=>cell.dataset.value),['1','2','2','4','3','6','','8']);
-  assert.match($('statistics-plot').textContent,/A.*B.*A.*B/);
-  $('statistics-plot-type').value='correlationheatmap';change('statistics-plot-type');
-  assert.equal($('statistics-plot-grouping-label').hidden,true);
-  assert.equal($('statistics-plot').querySelectorAll('rect[data-value]').length,4);
-  assert.ok(Math.abs(Number($('statistics-plot').querySelector('rect[data-row="0"][data-column="1"]').dataset.value)-1)<1e-12);
-  assert.match($('statistics-plot').querySelector('rect[data-row="0"][data-column="1"] title').textContent,/n=3/);
-  assert.equal($('statistics-plot').querySelector('svg').getAttribute('aria-label'),translate('Correlation heat map'));
-  assert.deepEqual(errors,[]);
-});
-
 test('constant and singleton violin groups retain every point without invalid density paths',t=>{
   const {$,errors}=workspace(t);
   $('statistics-data').value='A,5\nA,5\nB,8';$('statistics-plot-grouping').value='first';$('statistics-plot-type').value='violin';

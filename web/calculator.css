@@ -255,3 +255,7 @@ input:disabled,select:disabled{opacity:.45;cursor:default}
 .statistics-heatmap-axes{flex-basis:100%;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}.statistics-heatmap-axis{min-width:0}.statistics-heatmap-axis>strong{display:block;margin-bottom:5px}.statistics-heatmap-variable-options{display:flex;flex-wrap:wrap;gap:4px;max-height:150px;overflow:auto;padding:4px;border:1px solid var(--line);border-radius:8px}.statistics-heatmap-variable-options label{font-size:12px;white-space:nowrap}
 
 .regression-parameter{display:inline-block;margin-right:16px;font-size:12px}
+
+/* Heat map fit-to-screen: scale the whole chart into the viewport instead of scrolling. */
+.statistics-heatmap-fit-scroll{overflow:visible;max-height:none}
+.plot svg.statistics-heatmap.statistics-heatmap-fit{min-width:0;max-width:100%}

@@ -268,11 +268,11 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
   $('statistics-plot-type').onchange=()=>{statisticsControls();$('statistics-plot-run').click();persist();};
   $('statistics-plot-grouping').onchange=()=>{$('statistics-plot-run').click();persist();};
   $('statistics-plot-orientation').onchange=()=>{$('statistics-plot-run').click();persist();};
-  for(const id of ['statistics-heatmap-mode','statistics-heatmap-correlation','statistics-heatmap-clustering'])$(id).onchange=()=>{statisticsControls();$('statistics-plot-run').click();persist();};
+  for(const id of ['statistics-heatmap-mode','statistics-heatmap-correlation','statistics-heatmap-clustering','statistics-heatmap-fit'])$(id).onchange=()=>{statisticsControls();$('statistics-plot-run').click();persist();};
   $('regression-transfer').onclick=()=>{if(!statisticsGraph?.fit)return;try{const source=regressionGraphSource(statisticsGraph.fit,state.digits,statisticsGraph.variable);$('graph-kind').value='cartesian';$('graph-source').value=source;changeMode('graph');graphs.run();}catch(exc){error(exc.message);}};
 
   function drawStatisticsGraph(){
-    const container=$('statistics-plot'),type=value('statistics-plot-type'),options={type,orientation:value('statistics-plot-orientation'),digits:state.digits,curve:statisticsGraph.curve,xAxisLabel:statisticsGraph.xAxisLabel||'x',yAxisLabel:statisticsGraph.yAxisLabel||'y'};
+    const container=$('statistics-plot'),type=value('statistics-plot-type'),options={type,orientation:value('statistics-plot-orientation'),digits:state.digits,heatMapFit:$('statistics-heatmap-fit').checked,curve:statisticsGraph.curve,xAxisLabel:statisticsGraph.xAxisLabel||'x',yAxisLabel:statisticsGraph.yAxisLabel||'y'};
     const cluster=$('statistics-heatmap-clustering').checked;
     if(type!=='heatmap'||!cluster)cancelClustering();
     if(type==='scatter'){statisticsPlot(container,statisticsGraph.plotRows||statisticsGraph.rows,options);return;}

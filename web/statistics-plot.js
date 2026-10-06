@@ -28,8 +28,8 @@ export function statisticsPlotPanels(rows,{grouping='columns',columnCount=rows[0
   }]);
 }
 
-export function statisticsPlot(container,rows,{type='scatter',digits=10,curve=[],xAxisLabel='x',yAxisLabel='y',series=statisticsPlotSeries(rows),heatMap,orientation='horizontal'}={}){
-  if(['heatmap','correlationheatmap','clusteredheatmap'].includes(type)){drawHeatMap(container,heatMap||(type==='correlationheatmap'?statisticsCorrelationHeatMap(rows):type==='clusteredheatmap'?clusteredHeatMap(statisticsHeatMapData(rows)):statisticsHeatMapData(rows)),digits);return;}
+export function statisticsPlot(container,rows,{type='scatter',digits=10,curve=[],xAxisLabel='x',yAxisLabel='y',series=statisticsPlotSeries(rows),heatMap,heatMapFit=false,orientation='horizontal'}={}){
+  if(['heatmap','correlationheatmap','clusteredheatmap'].includes(type)){drawHeatMap(container,heatMap||(type==='correlationheatmap'?statisticsCorrelationHeatMap(rows):type==='clusteredheatmap'?clusteredHeatMap(statisticsHeatMapData(rows)):statisticsHeatMapData(rows)),digits,heatMapFit);return;}
   if(type==='violin'||type==='box'){drawDistribution(container,series,digits,type,orientation);return;}
   const columns=series.map(entry=>entry.values);
   if(type==='scatter'){
@@ -110,13 +110,18 @@ function drawDistribution(container,series,digits,type,orientation){
   else container.replaceChildren(svg);
 }
 
-function drawHeatMap(container,data,digits){
+function drawHeatMap(container,data,digits,fitToScreen=false){
   const finite=data.rows.flatMap(row=>row.values).filter(value=>value!==null);
   if(!data.rows.length||!data.columns.length||!finite.length&&!data.correlation){container.replaceChildren();return;}
   const minimum=data.range?.[0]??finite.reduce((a,b)=>Math.min(a,b)),maximum=data.range?.[1]??finite.reduce((a,b)=>Math.max(a,b));
   const left=data.clustered?180:100,top=data.clustered?120:45,width=Math.max(600,left+20+data.columns.length*80),cellWidth=(width-left-20)/data.columns.length;
-  const {svg,node}=svgChart('Heat map',width,top+data.rows.length*30);
-  svg.style.width=`${width}px`;svg.classList.add('statistics-heatmap');
+  const height=top+data.rows.length*30;
+  const {svg,node}=svgChart('Heat map',width,height);
+  if(fitToScreen){
+    const availableWidth=container.clientWidth||width,scale=Math.min(1,availableWidth/width,420/height);
+    svg.style.width=`${Math.max(1,Math.round(width*scale))}px`;svg.style.height=`${Math.max(1,Math.round(height*scale))}px`;
+    svg.classList.add('statistics-heatmap','statistics-heatmap-fit');
+  }else{svg.style.width=`${width}px`;svg.classList.add('statistics-heatmap');}
   if(data.clustered){
     const rowPeak=data.rowLinks.reduce((peak,link)=>Math.max(peak,link.height),0)||1,columnPeak=data.columnLinks.reduce((peak,link)=>Math.max(peak,link.height),0)||1;
     for(const link of data.rowLinks){const a=top+(link.left+.5)*30,b=top+(link.right+.5)*30,x=78-link.height/rowPeak*70;
@@ -135,7 +140,7 @@ function drawHeatMap(container,data,digits){
       node('text',{x:left+(column+.5)*cellWidth,y:top+i*30+20,fill:value===null?'var(--muted)':heatMapTextColor(value,minimum,maximum),'text-anchor':'middle','font-size':12},displayed.length>10?`${displayed.slice(0,9)}…`:displayed);
     });
   });
-  const scroll=document.createElement('div');scroll.className='statistics-heatmap-scroll';scroll.tabIndex=0;scroll.setAttribute('aria-label',t('Heat map'));scroll.append(svg);
+  const scroll=document.createElement('div');scroll.className=fitToScreen?'statistics-heatmap-scroll statistics-heatmap-fit-scroll':'statistics-heatmap-scroll';scroll.tabIndex=0;scroll.setAttribute('aria-label',t('Heat map'));scroll.append(svg);
   const legend=document.createElement('div');legend.className='statistics-heatmap-legend';
   const low=document.createElement('span'),bar=document.createElement('span'),high=document.createElement('span');
   low.textContent=displayNumber(minimum,digits);high.textContent=displayNumber(maximum,digits);bar.className='statistics-heatmap-scale';

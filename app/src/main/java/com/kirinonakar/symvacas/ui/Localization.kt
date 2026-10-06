@@ -13,7 +13,7 @@ private val korean = mapOf(
     "Violin + points" to "바이올린 + 원자료", "Heat map" to "히트맵", "Correlation heat map" to "상관관계 히트맵",
     "Heat map data" to "히트맵 자료", "Raw values" to "원자료", "Z-score by row" to "행 기준 Z 점수", "Z-score by column" to "열 기준 Z 점수",
     "Correlation" to "상관관계", "Correlation method" to "상관계수 방식", "Pearson (p)" to "Pearson (p)", "Spearman (s)" to "Spearman (s)", "Kendall (k)" to "Kendall (k)",
-    "Hierarchical clustering" to "계층 군집", "X axis variables" to "x축 항목", "Y axis variables" to "y축 항목", "No numeric columns" to "수치 열이 없습니다",
+    "Hierarchical clustering" to "계층 군집", "Fit to screen" to "화면에 맞춤", "X axis variables" to "x축 항목", "Y axis variables" to "y축 항목", "No numeric columns" to "수치 열이 없습니다",
     "Raw values · rows × columns" to "원자료 · 행 × 열", "Row z-scores · color = z-score" to "행 기준 Z 점수 · 색 = Z 점수", "Column z-scores · color = z-score" to "열 기준 Z 점수 · 색 = Z 점수",
     "Pearson correlation · pairwise complete observations" to "Pearson 상관계수 · 각 열 쌍의 결측값 제외", "Spearman correlation · pairwise complete observations" to "Spearman 상관계수 · 각 열 쌍의 결측값 제외", "Kendall correlation · pairwise complete observations" to "Kendall 상관계수 · 각 열 쌍의 결측값 제외",
     "Rows × columns · color = value" to "행 × 열 · 색 = 값", "Pearson r · pairwise complete observations" to "Pearson r · 각 열 쌍의 결측값 제외",

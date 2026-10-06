@@ -370,6 +370,9 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     var statisticsHeatMapClustering
         get()=statisticsState.statisticsHeatMapClustering
         set(value) {statisticsState.statisticsHeatMapClustering=value}
+    var statisticsHeatMapFit
+        get()=statisticsState.statisticsHeatMapFit
+        set(value) {statisticsState.statisticsHeatMapFit=value}
     var statisticsPlotOrientation
         get()=statisticsState.statisticsPlotOrientation
         set(value) {statisticsState.statisticsPlotOrientation=value}

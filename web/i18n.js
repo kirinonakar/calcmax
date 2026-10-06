@@ -137,6 +137,7 @@ Object.assign(korean,nativeKorean,{
   "Spearman (s)": "Spearman (s)",
   "Kendall (k)": "Kendall (k)",
   "Hierarchical clustering": "계층 군집",
+  "Fit to screen": "화면에 맞춤",
   "X axis variables": "x축 항목",
   "Y axis variables": "y축 항목",
   "No numeric columns": "수치 열이 없습니다",
