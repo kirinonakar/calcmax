@@ -993,8 +993,8 @@
     "input": "table",
     "suffix": ",gaussian,independence",
     "example": "gee([[1,0,2],[1,1,4],[1,2,4],[2,0,3],[2,1,4],[2,2,6],[3,0,1],[3,1,3],[3,2,4],[4,0,4],[4,1,5],[4,2,8]],gaussian,independence)",
-    "help": "Rows: cluster ID, predictors, response. gaussian / binomial / poisson; working correlation independent / exchangeable / ar1; sandwich SE.",
-    "helpKo": "열: 군집 ID, 설명변수, 반응. gaussian / binomial / poisson; 작업상관 independence / exchangeable / ar1; 강건 SE.",
+    "help": "Rows: cluster ID, predictors, response. gaussian / binomial / poisson; working correlation independent / exchangeable / ar1; fourth argument [i,j] interaction pairs; sandwich SE.",
+    "helpKo": "열: 군집 ID, 설명변수, 반응. gaussian / binomial / poisson; 작업상관 independence / exchangeable / ar1; 넷째 인수 [i,j] 상호작용 쌍; 강건 SE.",
     "controls": [
       {
         "key": "subject",
@@ -1064,10 +1064,17 @@
             "ko": "AR(1)"
           }
         ]
+      },
+      {
+        "key": "interactions",
+        "label": "Interactions (columns or names)",
+        "ko": "상호작용 (열·이름)",
+        "type": "number",
+        "default": ""
       }
     ],
-    "formHelp": "Working correlation independent / exchangeable / AR(1); cluster-robust SE.",
-    "formHelpKo": "작업상관 independent / exchangeable / AR(1); 군집 강건 표준오차입니다.",
+    "formHelp": "Working correlation independent / exchangeable / AR(1); cluster-robust SE. Interactions accept header names (age,weight), the shown column letters or labels (y,z / age (y),weight (z)), column numbers (2,3) or predictor order (p1,p2); separate pairs with ;.",
+    "formHelpKo": "작업상관 independent / exchangeable / AR(1); 군집 강건 표준오차. 상호작용은 열 이름(age,weight), 표시된 열 문자·라벨(y,z / age (y),weight (z)), 열 번호(2,3), 설명변수 순서(p1,p2)로 입력하고 쌍은 ;로 구분합니다.",
     "exampleRows": [
       [
         "1",

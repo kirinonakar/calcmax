@@ -4,6 +4,72 @@ import {$,element} from './app-ui.js';
 import {getLanguage,t} from './i18n.js';
 import {renderSurvivalReport} from './survival-report.js';
 
+export function interactionPairs(value,predictors=[],columnLabels=[]){
+  const text=String(value??'').trim();
+  if(!text)return [];
+  const names=(columnLabels||[]).map(label=>String(label??'').trim().toLowerCase());
+  const aliasColumn=token=>{
+    if(['x','y','z'].includes(token))return ['x','y','z'].indexOf(token);
+    const numbered=/^x(\d+)$/.exec(token);
+    return numbered?Number(numbered[1])-1:null;
+  };
+  const splitLabel=label=>{
+    const match=/^(.+?)\s*\(\s*([^()]*?)\s*\)$/.exec(label);
+    return match?{name:match[1].trim(),alias:aliasColumn(match[2].trim())}:{name:label,alias:null};
+  };
+  const headers=names.map(label=>{const parts=splitLabel(label);return parts.alias===null?label:parts.name;});
+  const positionOf=column=>{
+    const position=predictors.indexOf(column);
+    if(position<0)throw new Error('Interaction columns must be among the selected predictors');
+    return position+1;
+  };
+  const resolve=token=>{
+    const raw=token.trim(),lower=raw.toLowerCase();
+    if(!raw)throw new Error('Use interaction pairs like age,weight;2,3');
+    // Form labels such as "time (y)" resolve through the shown column letter.
+    const labelled=splitLabel(lower);
+    if(labelled.alias!==null){
+      const column=labelled.alias;
+      if(headers[column]===labelled.name||names[column]===labelled.name||names[column]===lower)return positionOf(column);
+      const byHeader=headers.indexOf(labelled.name);
+      if(byHeader>=0)return positionOf(byHeader);
+      const byName=names.indexOf(lower);
+      if(byName>=0)return positionOf(byName);
+      throw new Error('Unknown interaction column');
+    }
+    // Bare column letters x, y, z shown next to the header names.
+    if(['x','y','z'].includes(lower)){
+      const letter=aliasColumn(lower);
+      if(predictors.includes(letter))return positionOf(letter);
+      const byName=names.indexOf(lower);
+      if(byName>=0)return positionOf(byName);
+      const byHeader=headers.indexOf(lower);
+      if(byHeader>=0)return positionOf(byHeader);
+      throw new Error('Interaction columns must be among the selected predictors');
+    }
+    const name=names.indexOf(lower);
+    if(name>=0)return positionOf(name);
+    const header=headers.indexOf(lower);
+    if(header>=0)return positionOf(header);
+    const named=/^[px](\d+)$/.exec(lower);
+    if(named){
+      const at=Number(named[1]);
+      if(!(at>=1&&at<=predictors.length))throw new Error('Interaction positions must be within the selected predictors');
+      return at;
+    }
+    const spelled=/^column\s*(\d+)$/.exec(lower),digits=/^#?(\d+)$/.exec(raw);
+    const column=spelled?Number(spelled[1]):digits?Number(digits[1]):null;
+    if(column===null)throw new Error('Unknown interaction column');
+    return positionOf(column-1);
+  };
+  return text.split(';').map(group=>{
+    const tokens=group.split(/[,+]+/).filter(Boolean);
+    if(tokens.length!==2)throw new Error('Use interaction pairs like age,weight;2,3');
+    const [first,second]=tokens.map(resolve);
+    return first<=second?[first,second]:[second,first];
+  });
+}
+
 export function survivalAnalysisPlan(rows,settings={},columnLabels=[]) {
   const opts={time:'0',event:'1',eventValue:'1',grouping:'groups',group:'2',cox:'0',predictors:'',ties:'efron',ph:'test',...settings};
   const n=Math.max(0,...rows.map(row=>row.length));
@@ -26,7 +92,7 @@ export function survivalAnalysisPlan(rows,settings={},columnLabels=[]) {
   return {expression:`survivalanalysis([${encoded.map(row=>`[${row.join(',')}]`).join(',')}],${opts.cox},${opts.ties},-1,${opts.ph==='test'?1:0})`,groups,predictors:predictors.map(i=>columnLabels[i]||['x','y','z'][i]||`x${i+1}`)};
 }
 
-export function guidedStatisticsCommand(definition,rows,settings={}) {
+export function guidedStatisticsCommand(definition,rows,settings={},columnLabels=[]) {
   if(definition.id==='survivalanalysis')return survivalAnalysisPlan(rows,settings).expression;
   if(!definition.controls)return advancedStatisticsCommand(definition,rows);
   if(!rows.some(row=>row.some(cell=>cell.trim())))throw new Error('Enter data first');
@@ -84,9 +150,14 @@ export function guidedStatisticsCommand(definition,rows,settings={}) {
   }
   if(['mixedmodel','gee'].includes(id)){
     const subject=column('subject'),response=column('response');distinct([subject,response]);
-    const selected=complete([subject,...multiple('predictors',[subject,response]),response]);const labels=[...new Set(selected.map(row=>row[0]))];
+    const selectedColumns=multiple('predictors',[subject,response]);
+    const selected=complete([subject,...selectedColumns,response]);const labels=[...new Set(selected.map(row=>row[0]))];
     const mapped=selected.map(row=>[String(labels.indexOf(row[0])+1),...row.slice(1)]);
-    if(id==='gee')return `gee(${table(mapped)},${opts.family},${opts.corr})`;
+    if(id==='gee'){
+      const pairs=interactionPairs(opts.interactions,selectedColumns,columnLabels);
+      if(new Set(pairs.map(pair=>pair.join(','))).size!==pairs.length)throw new Error('Interaction pairs must be distinct');
+      return `gee(${table(mapped)},${opts.family},${opts.corr}${pairs.length?','+JSON.stringify(pairs):''})`;
+    }
     return `mixedmodel(${table(mapped)},${Number(opts.slope)||0})`;
   }
   if(id==='kstest'){
@@ -148,7 +219,7 @@ export function createAdvancedStatistics({state,persist,data}) {
   const currentRows=()=>input.value==='example'?selected().exampleRows:advancedStatisticsRows(data());
   const context=()=>selected().id==='survivalanalysis'&&input.value!=='expression'?survivalAnalysisPlan(currentRows(),settings(),columnNames()):{expression:expression(),groups:[],predictors:[]};
   function columnNames(){if(input.value!=='current'||!data().trim())return [];const rows=csvRows(data(),{skipHeader:false});return statisticsCsvHasHeader(rows)?rows[0]:[];}
-  const expression=()=>selected().controls&&input.value!=='expression'?guidedStatisticsCommand(selected(),currentRows(),settings()):source.value.trim();
+  const expression=()=>selected().controls&&input.value!=='expression'?guidedStatisticsCommand(selected(),currentRows(),settings(),columnNames()):source.value.trim();
   const preview=()=>{
     if(selected().controls&&input.value!=='expression'){
       try{source.value=expression();status.textContent=`${currentRows().length} ${getLanguage()==='ko'?'행':'rows'}`;}

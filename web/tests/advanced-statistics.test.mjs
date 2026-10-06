@@ -107,6 +107,22 @@ test('guided UI selects correction, survival roles and GEE family, and restores 
   assert.ok(saves>=7);
 });
 
+test('GEE interactions accept column numbers, names, letters and shown labels',()=>{
+  const definition=schema.find(item=>item.id==='gee'),labels=['id','age','weight','bmi'];
+  const rows=[['1','2','0','1'],['1','4','1','2'],['2','3','0','3']],base={'subject':'0','response':'3','predictors':'1,2'};
+  const expected='gee([[1,2,0,1],[1,4,1,2],[2,3,0,3]],gaussian,independence,[[1,2]])';
+  for(const interactions of ['2,3','#2,#3','age,weight','age+weight','Column 2,Column 3','p1,p2','x1,x2','y,z','age (y),weight (z)','age (y)+weight (z)'])
+    assert.equal(guidedStatisticsCommand(definition,rows,{...base,interactions},labels),expected,interactions);
+  for(const interactions of ['1,2','age,bmi','2,p9','3','id (x),weight (z)'])
+    assert.throws(()=>guidedStatisticsCommand(definition,rows,{...base,interactions},labels),/nteraction/,interactions);
+  const clinicalRows=[['1','0','0','47','0','1'],['1','1','0','47','0','1'],['2','0','1','60','1','0'],['2','1','1','60','1','0']];
+  const clinicalBase={'subject':'0','response':'5','predictors':'1,2,3,4','family':'binomial'};
+  const clinicalExpected='gee([[1,0,0,47,0,1],[1,1,0,47,0,1],[2,0,1,60,1,0],[2,1,1,60,1,0]],binomial,independence,[[1,2]])';
+  for(const clinicalLabels of [['id','time','treatment','age','sex','y'],['id (x)','time (y)','treatment (z)','age (x4)','sex (x5)','y (x6)']])
+    for(const interactions of ['y,z','time, treatment','time (y), treatment (z)'])
+      assert.equal(guidedStatisticsCommand(definition,clinicalRows,{...clinicalBase,interactions},clinicalLabels),clinicalExpected,`${clinicalLabels[1]}: ${interactions}`);
+});
+
 test('advanced controls restore selection and edited source, switch locale, and load raw data',t=>{
   const dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));
   const original=Object.getOwnPropertyDescriptor(globalThis,'document');

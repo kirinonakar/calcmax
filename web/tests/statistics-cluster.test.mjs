@@ -62,3 +62,9 @@ test('distance metrics scale pairwise-complete cells and can be correlation base
   assert.ok(Math.abs(statisticsHierarchy([[0,0],[3,4]],{metric:'manhattan'}).links[0].height-1.75)<1e-12);
   assert.ok(Math.abs(statisticsHierarchy([[1,2,3],[2,4,6]],{metric:'correlation'}).links[0].height)<1e-12);
 });
+
+test('Ward linkage pins the distance metric to Euclidean',()=>{
+  const ward=statisticsHierarchy([[0],[2],[10],[12]],{linkage:'ward'});
+  assert.deepEqual(statisticsHierarchy([[0],[2],[10],[12]],{linkage:'ward',metric:'manhattan'}),ward);
+  assert.deepEqual(statisticsHierarchy([[0],[2],[10],[12]],{linkage:'ward',metric:'correlation'}),ward);
+});

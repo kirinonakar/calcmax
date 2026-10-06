@@ -436,6 +436,66 @@
     "expected": "gee([[1,0,2],[1,1,4],[2,0,3]],binomial,exchangeable)"
   },
   {
+    "id": "gee",
+    "rows": [
+      [
+        "A",
+        "2",
+        "0",
+        "1"
+      ],
+      [
+        "A",
+        "4",
+        "1",
+        "2"
+      ],
+      [
+        "B",
+        "3",
+        "0",
+        "3"
+      ]
+    ],
+    "settings": {
+      "subject": "0",
+      "response": "3",
+      "predictors": "1,2",
+      "interactions": "2,3"
+    },
+    "expected": "gee([[1,2,0,1],[1,4,1,2],[2,3,0,3]],gaussian,independence,[[1,2]])"
+  },
+  {
+    "id": "gee",
+    "rows": [
+      [
+        "A",
+        "2",
+        "0",
+        "1"
+      ],
+      [
+        "A",
+        "4",
+        "1",
+        "2"
+      ],
+      [
+        "B",
+        "3",
+        "0",
+        "3"
+      ]
+    ],
+    "settings": {
+      "subject": "0",
+      "response": "3",
+      "predictors": "1,2",
+      "interactions": "p1,p2"
+    },
+    "expected": "gee([[1,2,0,1],[1,4,1,2],[2,3,0,3]],gaussian,independence,[[1,2]])"
+  },
+  {
     "id": "kstest",
     "rows": [
       [

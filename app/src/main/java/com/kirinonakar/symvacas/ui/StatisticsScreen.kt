@@ -341,9 +341,9 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
                 }
                 if(heatMapClustering) {
                     Text(tr("Cluster linkage"),fontSize=11.sp,color=LocalInstrument.current.muted)
-                    Choices(listOf("Single","Average","Complete","Ward"),when(heatMapLinkage){"single"->"Single";"complete"->"Complete";"ward"->"Ward";else->"Average"},{heatMapLinkage=when(it){"Single"->"single";"Complete"->"complete";"Ward"->"ward";else->"average"}})
+                    Choices(listOf("Single","Average","Complete","Ward"),when(heatMapLinkage){"single"->"Single";"complete"->"Complete";"ward"->"Ward";else->"Average"},{heatMapLinkage=when(it){"Single"->"single";"Complete"->"complete";"Ward"->"ward";else->"average"};if(heatMapLinkage=="ward")heatMapMetric="euclidean"})
                     Text(tr("Distance metric"),fontSize=11.sp,color=LocalInstrument.current.muted)
-                    Choices(listOf("Euclidean","Manhattan","Correlation (1 − r)"),when(heatMapMetric){"manhattan"->"Manhattan";"correlation"->"Correlation (1 − r)";else->"Euclidean"},{heatMapMetric=when(it){"Manhattan"->"manhattan";"Correlation (1 − r)"->"correlation";else->"euclidean"}})
+                    Choices(listOf("Euclidean","Manhattan","Correlation (1 − r)"),when(heatMapMetric){"manhattan"->"Manhattan";"correlation"->"Correlation (1 − r)";else->"Euclidean"},{heatMapMetric=when(it){"Manhattan"->"manhattan";"Correlation (1 − r)"->"correlation";else->"euclidean"}},enabled=heatMapLinkage!="ward")
                 }
                 Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(4.dp)) {
                     Checkbox(heatMapFit,{heatMapFit=it},Modifier.size(38.dp))

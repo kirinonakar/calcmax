@@ -1,13 +1,14 @@
 // Hierarchical clustering for heat maps. Missing cells only use shared
 // dimensions. Single linkage keeps the linear-memory minimum spanning forest;
 // average, complete and Ward use cached nearest-neighbour Lance–Williams merges.
+// Ward is only defined for squared Euclidean distances, so it pins the metric.
 const LINKAGES=['single','average','complete','ward'];
 const METRICS=['euclidean','manhattan','correlation'];
 const MATRIX_LIMIT=800;
 
 export function clusteringOptions(options={}){
-  return {linkage:LINKAGES.includes(options.linkage)?options.linkage:'single',
-    metric:METRICS.includes(options.metric)?options.metric:'euclidean'};
+  const linkage=LINKAGES.includes(options.linkage)?options.linkage:'single';
+  return {linkage,metric:linkage==='ward'||!METRICS.includes(options.metric)?'euclidean':options.metric};
 }
 
 function distanceFunction(data,dimensions,metric){

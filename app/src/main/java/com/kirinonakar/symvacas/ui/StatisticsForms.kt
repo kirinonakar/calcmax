@@ -3,8 +3,8 @@ package com.kirinonakar.symvacas.ui
 import org.json.JSONObject
 
 /** Construct the same selected-column analysis plan used by the Web form. */
-internal fun guidedStatisticsCommand(definition:JSONObject,rows:List<List<String>>,settings:JSONObject=JSONObject()):String {
-    if(definition.getString("id")=="survivalanalysis")return survivalAnalysisPlan(rows,settings).command
+internal fun guidedStatisticsCommand(definition:JSONObject,rows:List<List<String>>,settings:JSONObject=JSONObject(),columnLabels:List<String> = emptyList()):String {
+    if(definition.getString("id")=="survivalanalysis")return survivalAnalysisPlan(rows,settings,columnLabels).command
     if(!definition.has("controls"))return advancedStatisticsCommand(definition,rows)
     require(rows.any {row->row.any(String::isNotBlank)}) {"Enter data first"}
     val n=rows.maxOf {it.size};val id=definition.getString("id");val controls=definition.getJSONArray("controls")
@@ -63,9 +63,15 @@ internal fun guidedStatisticsCommand(definition:JSONObject,rows:List<List<String
         "repeatedanova"->{val indices=multiple("columns");require(indices.size>=2) {"Choose at least two conditions"};"repeatedanova(${table(complete(indices))},${opts["factor2"]})"}
         "mixedmodel","gee"->{
             val subject=col("subject");val response=col("response");distinct(listOf(subject,response))
-            val selected=complete(listOf(subject)+multiple("predictors",listOf(subject,response))+response);val labels=selected.map {it[0]}.distinct()
+            val selectedColumns=multiple("predictors",listOf(subject,response))
+            val selected=complete(listOf(subject)+selectedColumns+response);val labels=selected.map {it[0]}.distinct()
             val mapped=selected.map {row->listOf((labels.indexOf(row[0])+1).toString())+row.drop(1)}
-            if(id=="gee")"gee(${table(mapped)},${opts["family"]},${opts["corr"]})" else {
+            if(id=="gee") {
+                val pairs=interactionPairs(opts["interactions"],selectedColumns,columnLabels)
+                require(pairs.distinct().size==pairs.size) {"Interaction pairs must be distinct"}
+                val suffix=if(pairs.isEmpty())"" else ","+pairs.joinToString(",","[","]") {pair->"[${pair.first},${pair.second}]"}
+                "gee(${table(mapped)},${opts["family"]},${opts["corr"]}$suffix)"
+            } else {
                 val slope=opts["slope"]?.toIntOrNull() ?: 0
                 "mixedmodel(${table(mapped)},$slope)"
             }
@@ -76,6 +82,73 @@ internal fun guidedStatisticsCommand(definition:JSONObject,rows:List<List<String
             else "kstest(${vector(values(first))},${opts["mode"]},${opts["location"]},${opts["scale"]})"
         }
         else->error("Unknown analysis form")
+    }
+}
+
+/** Parse "age,weight", "age (y)", "y,z", "2,3" (column numbers) or "p1,p2" (predictor order) interaction pairs. */
+internal fun interactionPairs(value:String?,predictors:List<Int> = emptyList(),columnLabels:List<String> = emptyList()):List<Pair<Int,Int>> {
+    val text=value.orEmpty().trim()
+    if(text.isEmpty())return emptyList()
+    val names=columnLabels.map {it.trim().lowercase()}
+    fun aliasColumn(alias:String):Int? = when(alias) {
+        "x"->0
+        "y"->1
+        "z"->2
+        else->Regex("^x(\\d+)\$").find(alias)?.groupValues?.get(1)?.toInt()?.minus(1)
+    }
+    fun splitLabel(label:String):Pair<String,Int?> {
+        val found=Regex("^(.+?)\\s*\\(\\s*([^()]*?)\\s*\\)\$").find(label)
+        if(found==null)return label to null
+        return found.groupValues[1].trim() to aliasColumn(found.groupValues[2].trim())
+    }
+    val headers=names.map {label->val parts=splitLabel(label);if(parts.second==null)label else parts.first}
+    fun positionOf(column:Int):Int {
+        val position=predictors.indexOf(column)
+        require(position>=0) {"Interaction columns must be among the selected predictors"}
+        return position+1
+    }
+    fun resolve(token:String):Int {
+        val raw=token.trim();val lower=raw.lowercase()
+        require(raw.isNotEmpty()) {"Use interaction pairs like age,weight;2,3"}
+        val labelled=splitLabel(lower);val column=labelled.second
+        if(column!=null) {
+            if(headers.getOrNull(column)==labelled.first||names.getOrNull(column)==labelled.first||names.getOrNull(column)==lower)return positionOf(column)
+            val byHeader=headers.indexOf(labelled.first)
+            if(byHeader>=0)return positionOf(byHeader)
+            val byName=names.indexOf(lower)
+            require(byName>=0) {"Unknown interaction column"}
+            return positionOf(byName)
+        }
+        if(lower=="x"||lower=="y"||lower=="z") {
+            val letter=aliasColumn(lower)!!
+            if(letter in predictors)return positionOf(letter)
+            val byName=names.indexOf(lower)
+            if(byName>=0)return positionOf(byName)
+            val byHeader=headers.indexOf(lower)
+            if(byHeader>=0)return positionOf(byHeader)
+            throw IllegalArgumentException("Interaction columns must be among the selected predictors")
+        }
+        val name=names.indexOf(lower)
+        if(name>=0)return positionOf(name)
+        val header=headers.indexOf(lower)
+        if(header>=0)return positionOf(header)
+        val named=Regex("^[px](\\d+)\$").find(lower)
+        if(named!=null) {
+            val at=named.groupValues[1].toInt()
+            require(at in 1..predictors.size) {"Interaction positions must be within the selected predictors"}
+            return at
+        }
+        val spelled=Regex("^column\\s*(\\d+)\$").find(lower)?.groupValues?.get(1)
+        val digits=raw.removePrefix("#").takeIf {it.isNotEmpty()&&it.all(Char::isDigit)}
+        val number=(spelled?:digits)?.toInt() ?: -1
+        require(number>=1) {"Unknown interaction column"}
+        return positionOf(number-1)
+    }
+    return text.split(';').map {group->
+        val tokens=group.split(',','+').filter(String::isNotBlank)
+        require(tokens.size==2) {"Use interaction pairs like age,weight;2,3"}
+        val first=resolve(tokens[0]);val second=resolve(tokens[1])
+        if(first<=second)first to second else second to first
     }
 }
 

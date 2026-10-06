@@ -14,6 +14,18 @@ class AdvancedStatisticsTest {
         assertEquals("impute([[1,NA],[NA,2]],mean)",advancedStatisticsCommand(definition("impute","table",",mean"),listOf(listOf("1",""),listOf("","2"))))
         assertEquals("gee([[1,0,2],[1,1,4]],gaussian)",advancedStatisticsCommand(definition("gee","table",",gaussian"),listOf(listOf("1","0","2"),listOf("1","1","4"))))
     }
+    @Test fun geeInteractionsAcceptLettersNamesAndShownLabels() {
+        val definitions=JSONArray(File("src/main/assets/advanced_statistics.json").readText())
+        val definition=(0 until definitions.length()).map {definitions.getJSONObject(it)}.first {it.getString("id")=="gee"}
+        val labels=listOf("id (x)","time (y)","treatment (z)","age (x4)","sex (x5)","y (x6)")
+        val rows=listOf(listOf("1","0","0","47","0","1"),listOf("1","1","0","47","0","1"),listOf("2","0","1","60","1","0"),listOf("2","1","1","60","1","0"))
+        val base=JSONObject().put("subject","0").put("response","5").put("predictors","1,2,3,4").put("family","binomial")
+        val expected="gee([[1,0,0,47,0,1],[1,1,0,47,0,1],[2,0,1,60,1,0],[2,1,1,60,1,0]],binomial,independence,[[1,2]])"
+        for(interactions in listOf("y,z","time, treatment","time (y), treatment (z)"))
+            assertEquals(interactions,expected,guidedStatisticsCommand(definition,rows,JSONObject(base.toString()).put("interactions",interactions),labels))
+        for(interactions in listOf("1,2","id (x),time (y)"))
+            assertTrue(interactions,runCatching {guidedStatisticsCommand(definition,rows,JSONObject(base.toString()).put("interactions",interactions),labels)}.exceptionOrNull() is IllegalArgumentException)
+    }
     @Test fun separatesSurvivalGroupsWithoutLosingCensoring() {
         val rows=listOf(listOf("1","1","A"),listOf("2","0","B"),listOf("3","0","A"),listOf("4","1","B"))
         assertEquals("logrank([[1,1],[3,0]],[[2,0],[4,1]])",advancedStatisticsCommand(definition("logrank","survivalgroups"),rows))

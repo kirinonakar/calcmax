@@ -82,7 +82,7 @@ internal fun advancedStatisticsRows(data:String):List<List<String>> {
     val columns=List(count){i->labels.getOrNull(i) ?: "x${i+1}"}
     val command=runCatching {if(input=="expression"||!definition.has("controls"))source else {
         if(input=="current")currentRows.getOrThrow()
-        guidedStatisticsCommand(definition,rows,settings)
+        guidedStatisticsCommand(definition,rows,settings,columns)
     }}
     fun setOption(key:String,value:String) {
         val next=JSONObject(settings.toString()).put(key,value)

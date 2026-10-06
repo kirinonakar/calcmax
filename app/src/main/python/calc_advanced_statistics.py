@@ -264,7 +264,7 @@ def advanced(engine, name, a):
     """Entry point shared by calculator expressions and Python catalog."""
     engine.note = 'Numerical statistics use binary64 precision.'
     arities = {'padjust':(1,3),'cohend':(2,3),'eta2':(2,20),'levene':(2,20),'bartlett':(2,20),'mcnemar':(1,2),
-               'kaplanmeier':(1,3),'logrank':(2,2),'cox':(1,4),'survivalanalysis':(1,5),'repeatedanova':(1,2),'mixedmodel':(1,2),'gee':(1,3),
+               'kaplanmeier':(1,3),'logrank':(2,2),'cox':(1,4),'survivalanalysis':(1,5),'repeatedanova':(1,2),'mixedmodel':(1,2),'gee':(1,4),
                'multinomial':(1,1),'ordinal':(1,1),'poissonreg':(1,1),'nbreg':(1,1),'bootstrapci':(1,5),
                'testpower':(2,4),'samplesize':(1,4),'kstest':(2,4),'crossvalidate':(1,3),'pca':(1,3),'kmeans':(2,3),'impute':(1,2)}
     low,high = arities[name]; require(low <= len(a) <= high, name+' argument count mismatch')
@@ -519,6 +519,20 @@ def survival_analysis(engine,a):
             'log-rank':report['logrank'] or 'one group','Cox':report['cox'] or 'off'}
 
 
+def interaction_pairs(value, width):
+    """Normalize [i,j] predictor-pair interactions into distinct ascending pairs."""
+    if value is None:
+        return []
+    require(isinstance(value, (list, tuple)) and len(value) >= 1, 'Interactions must be a list of [i,j] predictor pairs')
+    pairs = []
+    for item in value:
+        require(isinstance(item, (list, tuple)) and len(item) == 2, 'Interactions must be a list of [i,j] predictor pairs')
+        first, second = integer(item[0], 1, width), integer(item[1], 1, width)
+        pairs.append((min(first, second), max(first, second)))
+    require(len(set(pairs)) == len(pairs), 'Interaction pairs must be distinct')
+    return pairs
+
+
 def nelder_mead(objective,start,step,iterations=160):
     """Deterministic direct search for small profile objectives with boundaries."""
     size=len(start); simplex=[list(start)]
@@ -603,6 +617,15 @@ def mixed_slope(engine,x,y,clusters,ids,slope,guess):
 def clustered(engine,name,a):
     rows=table(a[0],4,3); ids=sorted(set(r[0] for r in rows)); clusters=[[i for i,r in enumerate(rows) if r[0]==id_] for id_ in ids]
     require(len(clusters)>=3,'At least three subject/cluster IDs are required')
+    pairs=[]; names=[]; terms=''
+    if name=='gee':
+        family=option(a,1,'gaussian'); require(family in ('gaussian','binomial','poisson'),'GEE family: gaussian, binomial, or poisson')
+        corr=option(a,2,'independence'); require(corr in ('independence','exchangeable','ar1'),'GEE working correlation: independence, exchangeable, or ar1')
+        width=len(rows[0])-2; require(width>=1,'Choose at least one predictor')
+        pairs=interaction_pairs(a[3] if len(a)>3 else None,width)
+        names=['Intercept']+['x'+str(i) for i in range(1,width+1)]+[('x'+str(i)+'^2') if i==j else ('x'+str(i)+':x'+str(j)) for i,j in pairs]
+        terms=', '.join(('x'+str(i)+'^2') if i==j else ('x'+str(i)+':x'+str(j)) for i,j in pairs)
+        if pairs: rows=[row[:1]+row[1:-1]+[row[i]*row[j] for i,j in pairs]+row[-1:] for row in rows]
     x,y=regression_data([r[1:] for r in rows]); n=len(y); p=len(x[0]); X=mp.matrix(x); Y=mp.matrix(y)
     if name=='mixedmodel':
         require(n<=300,'Mixed model limit: 300 observations')
@@ -632,9 +655,8 @@ def clustered(engine,name,a):
             return {'coefficients':inference(list(map(float,b)),cov*sigma,['Intercept']+['x'+str(i) for i in range(1,p)]),'residual variance':sigma,'random intercept variance':ratio*sigma,'ICC':ratio/(1+ratio),'subjects':len(ids)}
         require(1<=slope<p,'Random-slope predictor position is out of range')
         return mixed_slope(engine,x,y,clusters,ids,slope,ratio)
-    family=option(a,1,'gaussian'); require(family in ('gaussian','binomial','poisson'),'GEE family: gaussian, binomial, or poisson')
-    corr=option(a,2,'independence'); require(corr in ('independence','exchangeable','ar1'),'GEE working correlation: independence, exchangeable, or ar1')
     x,transform,_,_=standardized_design(x); X=mp.matrix(x)
+    if pairs: engine.note += ' GEE interactions: '+terms+'.'
     if family=='binomial': require(all(v in (0,1) for v in y),'Binomial GEE response must be 0/1')
     if family=='poisson': require(all(v>=0 and v.is_integer() for v in y),'Poisson GEE response must be integer counts')
     if family=='gaussian': b=list(map(float,inverse(X.T*X)*X.T*Y)); mu=[dot(r,b) for r in x]; weights=[1.0]*n
@@ -653,7 +675,7 @@ def clustered(engine,name,a):
         cov=bread*meat*bread
         b=list(map(float,transform*mp.matrix(b))); cov=transform*cov*transform.T
         engine.note += ' GEE: independent working correlation, cluster sandwich covariance, asymptotic Wald inference. Rows: cluster ID, predictors, response. Zero robust SE leaves p/CI unavailable.'
-        return {'coefficients':inference(b,cov,['Intercept']+['x'+str(i) for i in range(1,p)],family!='gaussian'),'clusters':len(ids),'family':family}
+        return {'coefficients':inference(b,cov,names,family!='gaussian'),'clusters':len(ids),'family':family}
     largest=max(len(c) for c in clusters)
     def moments(alpha,beta):
         mean_values=[]; variances=[]; derivatives=[]
@@ -723,7 +745,7 @@ def clustered(engine,name,a):
     cov=bread*meat*bread
     b=list(map(float,transform*mp.matrix(b))); cov=transform*cov*transform.T
     engine.note += ' GEE: '+corr+' working correlation'+(' (moment estimate alpha='+format(alpha,'.4g')+')' if corr!='independence' else '')+', cluster sandwich covariance, asymptotic Wald inference. Rows: cluster ID, predictors, response'+('; AR(1) uses the within-cluster row order as the time order' if corr=='ar1' else '')+'. Zero robust SE leaves p/CI unavailable.'
-    return {'coefficients':inference(b,cov,['Intercept']+['x'+str(i) for i in range(1,p)],family!='gaussian'),'clusters':len(ids),'family':family,'working correlation':corr,'alpha':alpha}
+    return {'coefficients':inference(b,cov,names,family!='gaussian'),'clusters':len(ids),'family':family,'working correlation':corr,'alpha':alpha}
 
 
 def resampling(engine,name,a):

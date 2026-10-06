@@ -163,6 +163,17 @@ class AdvancedStatisticsTests(unittest.TestCase):
             self.assertAlmostEqual(float(actual['coefficients'][slope]['estimate'])*1e-6,float(baseline['coefficients'][slope]['estimate']),delta=2e-5)
         self.assertEqual(float(run('eta2',[1,1],[2,2])['eta2']),1)
 
+    def test_gee_interaction_terms_expand_the_design_in_original_units(self):
+        base=[[0,0,1],[1,0,3],[0,1,4],[1,1,10]]
+        rows=[[cluster]+row for cluster in (1,2,3) for row in base]
+        result=run('gee',rows,'gaussian','independence',[[1,2]])
+        self.assertEqual([term['term'] for term in result['coefficients']],['Intercept','x1','x2','x1:x2'])
+        for actual,expected in zip(result['coefficients'],[1,2,3,4]):
+            self.assertAlmostEqual(float(actual['estimate']),expected,places=8)
+        from calc_shared import MathError
+        for invalid in ([1,3],[[1,1],[1,1]]):
+            with self.assertRaises(MathError):run('gee',rows,'gaussian','independence',invalid)
+
     def test_independent_reference_fixtures(self):
         fixtures=ROOT/'tests/fixtures/advanced_statistics_reference.json'
         if not fixtures.exists(): self.fail('Reference fixtures must be checked in')

@@ -26,8 +26,8 @@ import com.kirinonakar.symvacas.ui.theme.LocalInstrument
         Text(tr(title),style=MaterialTheme.typography.titleLarge); if(subtitle.isNotBlank())Text(tr(subtitle),color=LocalInstrument.current.muted,fontSize=12.sp); content()
     }
 }
-@Composable fun Choices(values: List<String>,selected: String,choose: (String)->Unit,translate:Boolean=true) {
-    Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)) { values.forEach { value->FilterChip(selected==value,onClick={choose(value)},label={Text(if(translate)tr(value) else value,fontSize=12.sp)}) } }
+@Composable fun Choices(values: List<String>,selected: String,choose: (String)->Unit,translate:Boolean=true,enabled:Boolean=true) {
+    Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)) { values.forEach { value->FilterChip(selected==value,onClick={choose(value)},label={Text(if(translate)tr(value) else value,fontSize=12.sp)},enabled=enabled) } }
 }
 /** Repeat relocation as the IME opens: requesting only on focus uses the old viewport. */
 internal fun Modifier.keepInputVisible(includeDescendants:Boolean=false,contentKey:Any?=null):Modifier=composed {

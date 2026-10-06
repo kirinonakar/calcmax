@@ -8,10 +8,12 @@ import kotlin.math.sqrt
 internal data class StatisticsClusterLink(val left:Double,val right:Double,val leftHeight:Double,val rightHeight:Double,val height:Double)
 internal data class StatisticsHierarchy(val order:List<Int>,val links:List<StatisticsClusterLink>)
 
-/** Hierarchical clustering; single linkage keeps the linear-memory spanning forest. */
+/** Hierarchical clustering; single linkage keeps the linear-memory spanning forest.
+ *  Ward is only defined for squared Euclidean distances, so it pins the metric. */
 internal fun statisticsHierarchy(vectors:List<List<Double?>>,linkage:String="single",metric:String="euclidean"):StatisticsHierarchy {
     val n=vectors.size;val dimensions=vectors.firstOrNull()?.size ?: 0
     if(n==0)return StatisticsHierarchy(emptyList(),emptyList())
+    val effectiveMetric=if(linkage=="ward")"euclidean" else metric
     val scale=vectors.maxOfOrNull {row->row.filterNotNull().maxOfOrNull {abs(it)} ?: 0.0}?.takeIf {it>0} ?: 1.0
     val data=Array(n){row->DoubleArray(dimensions){column->vectors[row].getOrNull(column)?.div(scale) ?: Double.NaN}}
     fun distance(a:Int,b:Int):Double {
@@ -20,11 +22,11 @@ internal fun statisticsHierarchy(vectors:List<List<Double?>>,linkage:String="sin
             val x=data[a][i];val y=data[b][i]
             if(x.isFinite()&&y.isFinite()) {
                 val delta=x-y;squares+=delta*delta;absolute+=abs(delta);count++
-                if(metric=="correlation"){sumX+=x;sumY+=y;sumXX+=x*x;sumYY+=y*y;sumXY+=x*y}
+                if(effectiveMetric=="correlation"){sumX+=x;sumY+=y;sumXX+=x*x;sumYY+=y*y;sumXY+=x*y}
             }
         }
         if(count==0)return Double.POSITIVE_INFINITY
-        return when(metric) {
+        return when(effectiveMetric) {
             "manhattan"->absolute*dimensions/count
             "correlation"->if(count<2)Double.POSITIVE_INFINITY else {
                 val covariance=sumXY-sumX*sumY/count;val varianceX=sumXX-sumX*sumX/count;val varianceY=sumYY-sumY*sumY/count

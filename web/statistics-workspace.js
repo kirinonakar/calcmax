@@ -184,6 +184,9 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
     const clusteringOn=$('statistics-heatmap-clustering').checked;
     $('statistics-heatmap-linkage-label').hidden=!clusteringOn;
     $('statistics-heatmap-metric-label').hidden=!clusteringOn;
+    const wardLinkage=clusteringOn&&value('statistics-heatmap-linkage')==='ward';
+    if(wardLinkage)$('statistics-heatmap-metric').value='euclidean';
+    $('statistics-heatmap-metric').disabled=wardLinkage;
     $('statistics-plot-grouping-label').hidden=value('statistics-plot-type')==='scatter'||correlation||columns<2;
     $('statistics-plot-orientation-label').hidden=!['box','violin'].includes(value('statistics-plot-type'));
     if(correlation){
