@@ -170,7 +170,8 @@ private fun previewXlsxWorksheet(bytes:ByteArray,shared:List<String>,styles:Xlsx
 }
 
 internal fun previewStatisticsXlsx(bytes:ByteArray):StatisticsXlsxWorkbook {
-    val entries=readXlsxEntries(bytes),worksheets=xlsxWorksheetList(entries)
+    val entries=readXlsxEntries(bytes)
+    val worksheets=xlsxWorksheetList(entries)
     require(worksheets.isNotEmpty()) {"XLSX workbook does not contain any worksheets"}
     val shared=xlsxSharedStrings(entries["xl/sharedStrings.xml"]);val styles=xlsxStyles(entries["xl/styles.xml"])
     val sheets=worksheets.mapNotNull {(name,path)->entries[path]?.let {StatisticsXlsxSheet(name,previewXlsxWorksheet(it,shared,styles))}}
