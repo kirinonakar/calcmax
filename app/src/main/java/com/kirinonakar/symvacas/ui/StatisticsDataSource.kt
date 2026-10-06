@@ -93,6 +93,42 @@ internal fun importStatisticsCsv(preview:StatisticsCsvImport,columns:List<Int>,s
     return keptHeader.joinToString("\n") {row->statisticsCsvLine(columns.map {index->row.getOrNull(index).orEmpty()})}
 }
 
+private fun markdownStatisticsCells(line:String):List<String> {
+    var body=line.trim()
+    if(body.startsWith('|'))body=body.drop(1)
+    if(body.endsWith('|')&&!body.endsWith("\\|"))body=body.dropLast(1)
+    val cells=mutableListOf<String>();val cell=StringBuilder();var index=0
+    while(index<body.length) {
+        val char=body[index]
+        if(char=='\\'&&body.getOrNull(index+1)=='|'){cell.append('|');index++}
+        else if(char=='|'){cells+=cell.toString().trim();cell.setLength(0)}
+        else cell.append(char)
+        index++
+    }
+    cells+=cell.toString().trim();return cells
+}
+
+internal fun statisticsMarkdownTableCsv(source:String):String? {
+    val lines=source.removePrefix("\uFEFF").trim().split(Regex("\\r\\n|\\n|\\r")).toMutableList()
+    if(lines.firstOrNull()?.startsWith("```")==true&&lines.lastOrNull()?.startsWith("```")==true){lines.removeAt(lines.lastIndex);lines.removeAt(0)}
+    if(lines.size<3||lines.any {!it.contains('|')})return null
+    val header=markdownStatisticsCells(lines[0]);val divider=markdownStatisticsCells(lines[1])
+    if(header.isEmpty()||divider.size!=header.size||divider.any {!it.matches(Regex(":?-{3,}:?"))})return null
+    val rows=listOf(header)+lines.drop(2).map(::markdownStatisticsCells)
+    if(rows.drop(1).any {it.size>header.size})return null
+    return rows.joinToString("\n") {row->(0 until header.size).joinToString(",") {index->(row.getOrNull(index).orEmpty()).csvCell()}}
+}
+
+internal fun normalizeStatisticsMarkdownPaste(previous:String,updated:String):String? {
+    var prefix=0
+    while(prefix<previous.length&&prefix<updated.length&&previous[prefix]==updated[prefix])prefix++
+    var suffix=0
+    while(suffix<previous.length-prefix&&suffix<updated.length-prefix&&previous[previous.lastIndex-suffix]==updated[updated.lastIndex-suffix])suffix++
+    val inserted=updated.substring(prefix,updated.length-suffix)
+    val converted=statisticsMarkdownTableCsv(inserted)?:return null
+    return updated.substring(0,prefix)+converted+updated.substring(updated.length-suffix)
+}
+
 internal fun statisticsCsvLine(cells:List<String>):String=cells.joinToString(",") {it.csvCell()}
 
 private fun String.csvCell():String=if(any {it==','||it=='"'||it=='\n'||it=='\r'||it=='\t'})"\"${replace("\"","\"\"")}\"" else this

@@ -29,6 +29,23 @@ export function csvRows(source,{maxColumns=100,skipHeader=true,preserveEmptyRows
   if(!rows.length)throw new Error('Enter data below the header');
   const columns=Math.max(...rows.map(r=>r.length));if(columns>maxColumns)throw new Error(`Use up to ${maxColumns} data columns`);return rows.map(r=>Array.from({length:columns},(_,i)=>r[i]||''));
 }
+function markdownCells(line){
+  line=line.trim();if(line.startsWith('|'))line=line.slice(1);if(line.endsWith('|')&&!line.endsWith('\\|'))line=line.slice(0,-1);
+  const cells=[];let cell='';
+  for(let index=0;index<line.length;index++){const ch=line[index];if(ch==='\\'&&line[index+1]==='|'){cell+='|';index++;}else if(ch==='|'){cells.push(cell.trim());cell='';}else cell+=ch;}
+  cells.push(cell.trim());return cells;
+}
+function markdownCsvCell(cell){return /[",\r\n\t]/.test(cell)?`"${cell.replace(/"/g,'""')}"`:cell;}
+export function markdownTableCsv(source){
+  const lines=source.replace(/^\uFEFF/,'').trim().split(/\r\n|\n|\r/);
+  if(lines[0]?.startsWith('```')&&lines.at(-1)?.startsWith('```')){lines.shift();lines.pop();}
+  if(lines.length<3||lines.some(line=>!line.includes('|')))return null;
+  const header=markdownCells(lines[0]),separator=markdownCells(lines[1]);
+  if(!header.length||separator.length!==header.length||!separator.every(cell=>/^:?-{3,}:?$/.test(cell)))return null;
+  const rows=[header,...lines.slice(2).map(markdownCells)];
+  if(rows.slice(1).some(row=>row.length>header.length))return null;
+  return rows.map(row=>Array.from({length:header.length},(_,index)=>markdownCsvCell(row[index]||'')).join(',')).join('\n');
+}
 export function statisticsColumnCount(kind){
   if(Object.hasOwn({list:1,xy:2,xyz:3},kind))return {list:1,xy:2,xyz:3}[kind];
   const match=/^columns:(\d+)$/.exec(kind||'');

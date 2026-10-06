@@ -1,7 +1,8 @@
 import {$,value,element,control} from './app-ui.js';
 import {t,setText} from './i18n.js';
 import {downloadFile} from './storage.js';
-import {statisticsCommand,statisticsAnalysisData,csvRows,statisticsDataRows,statisticsDatasetSource,numericStatisticsRows,statisticsColumnCount,statisticsColumnNames,statisticsKindForColumns,statisticsCsvHasHeader,statisticsColumnLabels,statisticsHeatMapColumnNames,statisticsDetectedColumns} from './workspace-commands.js';
+import {statisticsCommand,statisticsAnalysisData,csvRows,statisticsDataRows,statisticsDatasetSource,numericStatisticsRows,statisticsColumnCount,statisticsColumnNames,statisticsKindForColumns,statisticsCsvHasHeader,statisticsColumnLabels,statisticsHeatMapColumnNames,statisticsDetectedColumns,markdownTableCsv} from './workspace-commands.js';
+import {readXlsxWorkbook} from './xlsx-reader.js';
 import {statisticsPlot,statisticsPlotPanels} from './statistics-plot.js';
 import {statisticsHeatMapData,statisticsCorrelationHeatMap,statisticsPlotNumber} from './statistics-plot-data.js';
 import {clusteredHeatMap} from './statistics-cluster.js';
@@ -76,25 +77,38 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
   $('dataset-list').onchange=()=>{const name=value('dataset-list');if(Object.hasOwn(state.datasets,name)){$('statistics-data').value=state.datasets[name];$('dataset-name').value=name;const savedKind=state.datasetKinds[name];setDataKind(statisticsColumnCount(savedKind)?savedKind:inferDataKind());dataKindChange();persist();}};
   $('dataset-save').onclick=()=>{const name=value('dataset-name').trim();if(!name){toast('데이터 이름을 입력하세요.');return;}state.datasets[name]=value('statistics-data');state.datasetKinds[name]=dataKind();datasetsList();$('dataset-list').value=name;persist();toast('데이터를 저장했습니다.');};
   $('dataset-delete').onclick=()=>{delete state.datasetKinds[value('dataset-list')];delete state.datasets[value('dataset-list')];datasetsList();persist();};
-  $('csv-open').onclick=()=>pickFile('.csv,.tsv,text/csv',async file=>{
-    const rows=csvRows((await file.text()).replace(/^\uFEFF/,''),{maxColumns:100,skipHeader:false}),content=element('div'),columns=[],header=element('input'),preview=element('pre','','csv-preview');
-    const selectedColumns=()=>columns.map((input,i)=>input.checked?i:null).filter(i=>i!==null);
-    function updatePreview(){const selected=selectedColumns();preview.textContent=selected.length?rows.slice(header.checked?1:0).slice(0,3).map(row=>selected.map(i=>row[i]).join('  |  ')).join('\n'):'';}
-    preview.setAttribute('aria-live','polite');
-    header.type='checkbox';header.checked=statisticsCsvHasHeader(rows);
-    header.onchange=updatePreview;
-    const headerLabel=element('label','Skip header row','check');headerLabel.append(header);content.append(headerLabel);
-    for(let index=0;index<rows[0].length;index++){
-      const input=element('input');input.type='checkbox';input.checked=index<3;input.onchange=updatePreview;columns.push(input);
-      const label=element('label',`${t('Column')} ${index+1}: ${rows[0][index]}`,'check');label.append(input);content.append(label);
+  $('csv-open').onclick=()=>pickFile('.csv,.tsv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',async file=>{
+    const isXlsx=/\.xlsx$/i.test(file.name)||file.type==='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    if(isXlsx&&file.size>64*1024*1024)throw new Error('XLSX file is too large');
+    function showPreview(rows){
+      if(!rows.length)throw new Error('The selected sheet is empty');
+      const content=element('div'),columns=[],header=element('input'),preview=element('pre','','csv-preview');
+      const selectedColumns=()=>columns.map((input,i)=>input.checked?i:null).filter(i=>i!==null);
+      function updatePreview(){const selected=selectedColumns();preview.textContent=selected.length?rows.slice(header.checked?1:0).slice(0,3).map(row=>selected.map(i=>row[i]).join('  |  ')).join('\n'):'';}
+      preview.setAttribute('aria-live','polite');
+      header.type='checkbox';header.checked=statisticsCsvHasHeader(rows);
+      header.onchange=updatePreview;
+      const headerLabel=element('label','Skip header row','check');headerLabel.append(header);content.append(headerLabel);
+      for(let index=0;index<rows[0].length;index++){
+        const input=element('input');input.type='checkbox';input.checked=index<3;input.onchange=updatePreview;columns.push(input);
+        const label=element('label',`${t('Column')} ${index+1}: ${rows[0][index]}`,'check');label.append(input);content.append(label);
+      }
+      content.append(element('h3','Preview'),preview);updatePreview();
+      content.append(control('Import CSV/XLSX',()=>{
+        const selected=selectedColumns();if(!selected.length){toast(t('Select at least one column'));return;}
+        const body=rows.slice(header.checked?1:0),imported=header.checked?[rows[0],...body]:body;
+        $('statistics-data').value=imported.map(row=>selected.map(i=>/[",\r\n\t]/.test(row[i])?'"'+row[i].replace(/"/g,'""')+'"':row[i]).join(',')).join('\n');
+        $('dataset-name').value=file.name.replace(/\.(csv|tsv|xlsx)$/i,'');setDataKind(statisticsKindForColumns(selected.length));dataKindChange();persist();$('dialog').close();
+      }));openDialog('Import CSV/XLSX',content);
     }
-    content.append(element('h3','Preview'),preview);updatePreview();
-    content.append(control('Import CSV',()=>{
-      const selected=selectedColumns();if(!selected.length){toast(t('Select at least one column'));return;}
-      const body=rows.slice(header.checked?1:0),imported=header.checked?[rows[0],...body]:body;
-      $('statistics-data').value=imported.map(row=>selected.map(i=>/[",\r\n\t]/.test(row[i])?'"'+row[i].replace(/"/g,'""')+'"':row[i]).join(',')).join('\n');
-      $('dataset-name').value=file.name.replace(/\.(csv|tsv)$/i,'');setDataKind(statisticsKindForColumns(selected.length));dataKindChange();persist();$('dialog').close();
-    }));openDialog('Import CSV',content);
+    if(!isXlsx){showPreview(csvRows((await file.text()).replace(/^\uFEFF/,''),{maxColumns:100,skipHeader:false}));return;}
+    const workbook=await readXlsxWorkbook(await file.arrayBuffer()),sheets=workbook.filter(sheet=>sheet.rows.length);
+    if(!sheets.length)throw new Error('The XLSX workbook has no data sheets');
+    if(sheets.length===1){showPreview(sheets[0].rows);return;}
+    const content=element('div'),selector=element('select'),label=element('label','Sheet');
+    sheets.forEach((sheet,index)=>{const option=element('option',sheet.name);option.value=String(index);selector.append(option);});
+    label.append(selector);content.append(element('p','Choose a sheet to import'),label);
+    content.append(control('Continue',()=>showPreview(sheets[Number(selector.value)].rows)));openDialog('Select sheet',content);
   });
   $('csv-save').onclick=()=>downloadFile(`${value('dataset-name')||'symvacas-data'}.csv`,value('statistics-data'),'text/csv');
   function dataRows(){return statisticsDataRows(value('statistics-data'),dataKind());}
@@ -242,6 +256,12 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
   };
   $('statistics-add-row').onclick=()=>{try{const rows=editorRows(),columns=Math.max(dataColumns(),rows[0]?.length||0);rows.push(Array(columns).fill(''));writeRows(rows);if(!$('statistics-grid').hidden)statisticsGrid();}catch(exc){error(exc.message);}};
   $('statistics-data').addEventListener('input',()=>{invalidateRegression();statisticsControls();});
+  $('statistics-data').addEventListener('paste',event=>{
+    const text=event.clipboardData?.getData('text/plain')||event.clipboardData?.getData('text');if(!text)return;
+    const converted=markdownTableCsv(text);if(converted===null)return;
+    const field=$('statistics-data'),start=field.selectionStart,end=field.selectionEnd;
+    event.preventDefault();field.setRangeText(converted,start,end,'end');field.dispatchEvent(new field.ownerDocument.defaultView.Event('input',{bubbles:true}));
+  });
   $('statistics-data').addEventListener('change',()=>{invalidateRegression();statisticsControls();if(!$('statistics-grid').hidden)statisticsGrid();});
   $('statistics-store').onclick=async()=>{const name=value('dataset-name').trim();if(!/^[A-Za-z][A-Za-z0-9_]*$/.test(name)){error('Dataset name must be a valid variable name');return;}try{await storeExpression(name,statisticsDatasetSource(value('statistics-data'),dataKind()));}catch(exc){error(exc.message);}};
   $('statistics-plot-run').onclick=()=>{try{statisticsGraph={...statisticsGraph,rows:numericStatisticsRows(dataRows()),curve:statisticsGraph?.curve||[]};$('statistics-plot').hidden=false;drawStatisticsGraph();}catch(exc){error(exc.message);}};

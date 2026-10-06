@@ -28,6 +28,8 @@ import com.kirinonakar.symvacas.ui.theme.LocalInstrument
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
+import java.nio.charset.StandardCharsets
 import kotlin.math.max
 
 @Composable private fun StatHeader(text:String,modifier:Modifier) { val c=LocalInstrument.current; Box(modifier.fillMaxHeight(),contentAlignment=Alignment.Center){Text(text,fontSize=11.sp,color=c.muted,fontWeight=FontWeight.SemiBold)} }
@@ -103,16 +105,27 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
     var heatMapClustering by rememberSaveable {mutableStateOf(m.statisticsHeatMapClustering||m.statisticsPlot=="Clustered heatmap")}
     var csv by rememberSaveable {mutableStateOf(m.statisticsCsv)}
     var importPreview by remember {mutableStateOf<StatisticsCsvImport?>(null)}
+    var importSheets by remember {mutableStateOf<List<StatisticsXlsxSheet>?>(null)}
     val importCsv=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {uri->
         if(uri!=null)scope.launch {
-            val content=withContext(Dispatchers.IO) {runCatching {context.contentResolver.openInputStream(uri)?.bufferedReader()?.use {it.readText()}}.getOrNull()}
-            if(content!=null) {
-                val preview=previewStatisticsCsv(content)
-                if(preview.columnCount==0)m.error="The selected CSV file is empty"
-                else importPreview=preview
-            } else m.error="Could not read the selected CSV file"
+            val result=withContext(Dispatchers.IO) {runCatching {
+                val bytes=context.contentResolver.openInputStream(uri)?.use {stream->
+                    val output=ByteArrayOutputStream();val buffer=ByteArray(8192);var total=0L
+                    while(true){val count=stream.read(buffer);if(count<0)break;total+=count;if(total>64L*1024*1024)error("Import file is too large");output.write(buffer,0,count)}
+                    output.toByteArray()
+                }?:error("Could not read the selected file")
+                val mime=context.contentResolver.getType(uri).orEmpty()
+                val xlsx=mime.contains("spreadsheetml.sheet")||bytes.size>=4&&bytes[0]==0x50.toByte()&&bytes[1]==0x4b.toByte()&&bytes[2]==0x03.toByte()&&bytes[3]==0x04.toByte()
+                if(xlsx)previewStatisticsXlsx(bytes) else previewStatisticsCsv(String(bytes,StandardCharsets.UTF_8))
+            }}
+            result.onSuccess {parsed->when(parsed) {
+                is StatisticsXlsxWorkbook->{val sheets=parsed.sheets.filter {it.preview.columnCount>0};if(sheets.size==1)importPreview=sheets.single().preview else importSheets=sheets}
+                is StatisticsCsvImport->if(parsed.columnCount==0)m.error="The selected file is empty" else importPreview=parsed
+            }}
+                .onFailure {exception->m.error=exception.message?:"Could not read the selected file"}
         }
     }
+    importSheets?.let {sheets->StatisticsXlsxSheetDialog(sheets,onDismiss={importSheets=null}) {preview->importSheets=null;importPreview=preview}}
     importPreview?.let {preview->StatisticsCsvImportDialog(preview,onDismiss={importPreview=null}) {columns,skipHeader->
         m.clearRegression();data=importStatisticsCsv(preview,columns,skipHeader)
         selectedDataKind=statisticsKindForColumns(columns.size);columnCount=columns.size.toString()
@@ -171,13 +184,13 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
             if(autoColumns&&detectedColumns.isFailure)Text(tr("Column count must be between 1 and 100"),fontSize=11.sp,color=LocalInstrument.current.danger)
         }
         Row(Modifier.horizontalScroll(rememberScrollState())) {
-            SmallAction("Import CSV"){importCsv.launch(arrayOf("text/csv","text/comma-separated-values","text/plain","application/vnd.ms-excel"))}
+            SmallAction("Import CSV/XLSX"){importCsv.launch(arrayOf("text/csv","text/comma-separated-values","text/plain","application/vnd.ms-excel","application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))}
             SmallAction("Export CSV"){exportCsv.launch("${datasetName.ifBlank {"dataset"}}.csv")}
             SmallAction("Store as $datasetName"){if(datasetName.matches(Regex("[A-Za-z][A-Za-z0-9_]*")))m.store(datasetName,variableSource(),false)else m.error="Dataset name must be a valid variable name"}
             SmallAction(if(csv)"Table editor" else "Direct input"){csv=!csv}
             SmallAction("Add row"){if(parsedRows.size<999)data+="\n"+",".repeat(dataColumns.size-1)}
         }
-        if(csv)OutlinedTextField(data,{data=it},Modifier.fillMaxWidth().height(180.dp).keepInputVisible(),label={Text(if(dataKind.startsWith("columns:"))dataColumns.joinToString(", ") else when(dataKind){"xy"->if(isKorean())"x, y 값" else "x, y values";"xyz"->if(isKorean())"x, y, z 값" else "x, y, z values";else->tr("One value per line")})},textStyle=MaterialTheme.typography.bodyLarge.copy(fontFamily=FontFamily.Monospace))
+        if(csv)OutlinedTextField(data,{updated->data=normalizeStatisticsMarkdownPaste(data,updated)?:updated},Modifier.fillMaxWidth().height(180.dp).keepInputVisible(),label={Text(if(dataKind.startsWith("columns:"))dataColumns.joinToString(", ") else when(dataKind){"xy"->if(isKorean())"x, y 값" else "x, y values";"xyz"->if(isKorean())"x, y, z 값" else "x, y, z values";else->tr("One value per line")})},textStyle=MaterialTheme.typography.bodyLarge.copy(fontFamily=FontFamily.Monospace))
         else {
             val grid=LocalInstrument.current.grid
             val tableColumns=if(dataKind=="list")listOf("value") else dataColumns
@@ -418,7 +431,7 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
     var columnCount by remember(preview) {mutableIntStateOf(minOf(3,preview.columnCount))}
     var columns by remember(preview) {mutableStateOf((0 until minOf(100,preview.columnCount)).toList())}
     val names=List(minOf(100,preview.columnCount)){listOf("x","y","z").getOrNull(it) ?: "x${it+1}"}
-    AlertDialog(onDismissRequest=onDismiss,title={Text(tr("Import CSV"))},text={
+    AlertDialog(onDismissRequest=onDismiss,title={Text(tr("Import CSV/XLSX"))},text={
         Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment=Alignment.CenterVertically) {
                 Checkbox(skipHeader,{skipHeader=it})
@@ -427,7 +440,7 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
             Text(if(preview.hasHeader)tr("Header detected automatically") else tr("No header detected"),style=MaterialTheme.typography.bodySmall)
             Text(tr("Import as"),style=MaterialTheme.typography.titleSmall)
             Field(columnCount.toString(),"Column count (1–100)",Modifier.fillMaxWidth()){text->text.toIntOrNull()?.takeIf {it in 1..minOf(100,preview.columnCount)}?.let {columnCount=it}}
-            Text(tr("Choose a CSV column for each variable"),style=MaterialTheme.typography.bodySmall)
+            Text(tr("Choose a column for each variable"),style=MaterialTheme.typography.bodySmall)
             Column(verticalArrangement=Arrangement.spacedBy(2.dp)) {
                 repeat(columnCount) {index->
                     var expanded by remember(preview,index) {mutableStateOf(false)}
@@ -455,4 +468,21 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
             }
         }
     },confirmButton={TextButton(onClick={onImport(columns.take(columnCount),skipHeader)},enabled=preview.rows.size>(if(skipHeader)1 else 0)){Text(tr("Import"))}},dismissButton={TextButton(onClick=onDismiss){Text(tr("Cancel"))}})
+}
+
+@Composable private fun StatisticsXlsxSheetDialog(sheets:List<StatisticsXlsxSheet>,onDismiss:()->Unit,onSelect:(StatisticsCsvImport)->Unit) {
+    var selected by remember(sheets) {mutableIntStateOf(0)}
+    AlertDialog(onDismissRequest=onDismiss,title={Text(tr("Select sheet"))},text={
+        Column(Modifier.heightIn(max=320.dp).verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(4.dp)) {
+            sheets.forEachIndexed {index,sheet->
+                Row(Modifier.fillMaxWidth().clickable {selected=index},verticalAlignment=Alignment.CenterVertically) {
+                    RadioButton(selected==index,{selected=index})
+                    Column {
+                        Text(sheet.name,style=MaterialTheme.typography.bodyMedium)
+                        Text(if(isKorean())"${sheet.preview.rows.size}행 · ${sheet.preview.columnCount}열" else "${sheet.preview.rows.size} rows · ${sheet.preview.columnCount} columns",style=MaterialTheme.typography.bodySmall,color=LocalInstrument.current.muted)
+                    }
+                }
+            }
+        }
+    },confirmButton={TextButton(onClick={onSelect(sheets[selected].preview)}){Text(tr("Continue"))}},dismissButton={TextButton(onClick=onDismiss){Text(tr("Cancel"))}})
 }
