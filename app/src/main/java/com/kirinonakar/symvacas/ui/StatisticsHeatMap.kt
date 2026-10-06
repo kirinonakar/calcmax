@@ -31,7 +31,7 @@ private fun heatColor(value:Double,lo:Double,hi:Double):Color {
     if(data.rows.isEmpty()||data.columns.isEmpty()||finite.isEmpty()&&!data.correlation)return
     val lo=if(data.correlation)-1.0 else finite.min();val hi=if(data.correlation)1.0 else finite.max()
     fun formatted(value:Double)=String.format(Locale.US,"%.${displayDigits.coerceIn(1,6)}g",value)
-    val caption=tr(if(data.correlation)"Pearson r · pairwise complete observations" else "Rows × columns · color = value")
+    val caption=tr(if(data.clustered)"Single linkage · Euclidean" else if(data.correlation)"Pearson r · pairwise complete observations" else "Rows × columns · color = value")
     Text(caption,fontSize=11.sp,color=c.muted)
     val description=buildString {
         append(caption)
@@ -41,10 +41,10 @@ private fun heatColor(value:Double,lo:Double,hi:Double):Color {
         }}
     }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val chartWidth=maxOf(maxWidth,(100+data.columns.size*76).dp)
+        val chartWidth=maxOf(maxWidth,((if(data.clustered)180 else 100)+data.columns.size*76).dp)
         Box(Modifier.fillMaxWidth().heightIn(max=420.dp).verticalScroll(rememberScrollState()).horizontalScroll(rememberScrollState())) {
-            Canvas(Modifier.width(chartWidth).height((40+data.rows.size*30).dp).background(c.display).semantics {contentDescription=description}) {
-                val left=90.dp.toPx();val top=40.dp.toPx();val cellWidth=(size.width-left-10.dp.toPx())/data.columns.size;val cellHeight=30.dp.toPx()
+            Canvas(Modifier.width(chartWidth).height(((if(data.clustered)120 else 40)+data.rows.size*30).dp).background(c.display).semantics {contentDescription=description}) {
+                val left=(if(data.clustered)170 else 90).dp.toPx();val top=(if(data.clustered)120 else 40).dp.toPx();val cellWidth=(size.width-left-10.dp.toPx())/data.columns.size;val cellHeight=30.dp.toPx()
                 val text=Paint(Paint.ANTI_ALIAS_FLAG).apply {color=c.ink.toArgb();textSize=11.sp.toPx()}
                 fun label(value:String,x:Float,y:Float,maxWidth:Float,center:Boolean=false) {
                     var shown=value
@@ -52,9 +52,27 @@ private fun heatColor(value:Double,lo:Double,hi:Double):Color {
                     if(shown!=value)shown=shown.dropLast(1)+"…"
                     drawContext.canvas.nativeCanvas.drawText(shown,if(center)x-text.measureText(shown)/2 else x,y,text)
                 }
-                data.columns.forEachIndexed {index,name->label(name,left+(index+.5f)*cellWidth,25.dp.toPx(),cellWidth-8.dp.toPx(),true)}
+                if(data.clustered) {
+                    val rowPeak=data.rowLinks.maxOfOrNull {it.height}?.takeIf {it>0} ?: 1.0
+                    val columnPeak=data.columnLinks.maxOfOrNull {it.height}?.takeIf {it>0} ?: 1.0
+                    data.rowLinks.forEach {link->
+                        val a=top+(link.left.toFloat()+.5f)*cellHeight;val b=top+(link.right.toFloat()+.5f)*cellHeight
+                        fun x(height:Double)=78.dp.toPx()-(height/rowPeak).toFloat()*70.dp.toPx()
+                        drawLine(c.muted,Offset(x(link.leftHeight),a),Offset(x(link.height),a),1.dp.toPx())
+                        drawLine(c.muted,Offset(x(link.height),a),Offset(x(link.height),b),1.dp.toPx())
+                        drawLine(c.muted,Offset(x(link.height),b),Offset(x(link.rightHeight),b),1.dp.toPx())
+                    }
+                    data.columnLinks.forEach {link->
+                        val a=left+(link.left.toFloat()+.5f)*cellWidth;val b=left+(link.right.toFloat()+.5f)*cellWidth
+                        fun y(height:Double)=85.dp.toPx()-(height/columnPeak).toFloat()*75.dp.toPx()
+                        drawLine(c.muted,Offset(a,y(link.leftHeight)),Offset(a,y(link.height)),1.dp.toPx())
+                        drawLine(c.muted,Offset(a,y(link.height)),Offset(b,y(link.height)),1.dp.toPx())
+                        drawLine(c.muted,Offset(b,y(link.height)),Offset(b,y(link.rightHeight)),1.dp.toPx())
+                    }
+                }
+                data.columns.forEachIndexed {index,name->label(name,left+(index+.5f)*cellWidth,top-15.dp.toPx(),cellWidth-8.dp.toPx(),true)}
                 data.rows.forEachIndexed {rowIndex,row->
-                    text.color=c.ink.toArgb();label(row.label,5.dp.toPx(),top+(rowIndex+.65f)*cellHeight,left-12.dp.toPx())
+                    text.color=c.ink.toArgb();label(row.label,(if(data.clustered)85 else 5).dp.toPx(),top+(rowIndex+.65f)*cellHeight,78.dp.toPx())
                     row.values.forEachIndexed {column,value->
                         drawRect(value?.let {heatColor(it,lo,hi)} ?: c.display,Offset(left+column*cellWidth,top+rowIndex*cellHeight),Size(cellWidth-1.dp.toPx(),cellHeight-1.dp.toPx()))
                         text.color=if(value==null)c.muted.toArgb() else if(heatColor(value,lo,hi).luminance()<.18f)Color.White.toArgb() else Color(23,35,44).toArgb()

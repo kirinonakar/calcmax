@@ -17,6 +17,12 @@ internal fun statisticsColumnLabels(csv:String,kind:String):List<String> {
     return names.mapIndexed {index,name->raw.first().getOrNull(index)?.trim()?.takeIf {it.isNotBlank()&&it!=name}?.let {"$it ($name)"} ?: name}
 }
 internal fun statisticsKindForColumns(count:Int):String = when(count) {1->"list";2->"xy";3->"xyz";else->"columns:${count.coerceIn(1,100)}"}
+internal fun statisticsDetectedColumns(source:String):Int {
+    if(source.isBlank())return 1
+    val count=source.removePrefix("\uFEFF").replace("\r\n","\n").replace('\r','\n').lineSequence().map {it.splitCsvRecord().size}.maxOrNull() ?: 1
+    require(count<=100) {"Column count must be between 1 and 100"}
+    return count.coerceAtLeast(1)
+}
 
 /** Group labels stay categorical, including numeric and date labels. */
 internal fun statisticsPlotSeries(rows:List<List<String>>,kind:String,grouping:String="columns"):List<Pair<String,List<Double>>> {

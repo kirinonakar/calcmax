@@ -1,9 +1,10 @@
 import {$,value,element,control} from './app-ui.js';
 import {t,setText} from './i18n.js';
 import {downloadFile} from './storage.js';
-import {statisticsCommand,statisticsAnalysisData,csvRows,statisticsDataRows,statisticsDatasetSource,numericStatisticsRows,statisticsColumnCount,statisticsColumnNames,statisticsKindForColumns,statisticsCsvHasHeader,statisticsColumnLabels} from './workspace-commands.js';
+import {statisticsCommand,statisticsAnalysisData,csvRows,statisticsDataRows,statisticsDatasetSource,numericStatisticsRows,statisticsColumnCount,statisticsColumnNames,statisticsKindForColumns,statisticsCsvHasHeader,statisticsColumnLabels,statisticsDetectedColumns} from './workspace-commands.js';
 import {statisticsPlot,statisticsPlotPanels} from './statistics-plot.js';
 import {statisticsHeatMapData,statisticsCorrelationHeatMap} from './statistics-plot-data.js';
+import {clusteredHeatMap} from './statistics-cluster.js';
 import {createAdvancedStatistics} from './advanced-statistics.js';
 import {renderFormulas} from './formula-preview.js';
 import {editableTable} from './editable-table.js';
@@ -22,6 +23,9 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
   let statisticsGraph=null;
   let advanced=null;
   let regressionRun=null;
+  let detectedColumnSource=null,detectedColumnCount=null;
+  let clusterRun=null;
+  function cancelClustering(){const run=clusterRun;clusterRun=null;run?.worker.terminate();}
   const menus=Object.fromEntries(['statistics-op','statistics-grouping','regression-kind','regression-response','statistics-plot-type'].map(id=>
     [id,[...$(id).options].map(option=>({option,label:option.textContent}))]));
   function filterMenu(id,available,fallback){
@@ -32,7 +36,7 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
       entries.some(({option})=>option.value===fallback)?fallback:entries[0]?.option.value||'';
     return select.value!==previous;
   }
-  function invalidateRegression(){cancelRegression();statisticsGraph=null;$('regression-caption').replaceChildren();$('regression-inference').replaceChildren();$('regression-export').hidden=true;$('regression-transfer').hidden=true;$('statistics-plot').replaceChildren();$('statistics-plot').hidden=true;}
+  function invalidateRegression(){cancelClustering();cancelRegression();statisticsGraph=null;$('regression-caption').replaceChildren();$('regression-inference').replaceChildren();$('regression-export').hidden=true;$('regression-transfer').hidden=true;$('statistics-plot').replaceChildren();$('statistics-plot').hidden=true;}
   function regressionBusy(busy){$('regression-progress').hidden=!busy;$('regression-cancel').hidden=!busy;$('regression-section').setAttribute('aria-busy',String(busy));}
   function cancelRegression(){if(!regressionRun)return;regressionRun=null;regressionBusy(false);engine.cancel();}
   $('regression-cancel').onclick=cancelRegression;
@@ -40,7 +44,15 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
     cancelRegression();$('statistics-data').value='';$('dataset-name').value='';$('dataset-list').value='';
     dataKindChange();$('statistics-plot').hidden=true;persist();
   };
-  const dataKind=()=>value('statistics-kind')==='columns'?`columns:${Number(value('statistics-columns'))||4}`:value('statistics-kind');
+  const dataKind=()=>{
+    if(value('statistics-kind')!=='columns')return value('statistics-kind');
+    if($('statistics-columns-auto').checked){
+      const source=value('statistics-data');
+      if(source!==detectedColumnSource){detectedColumnSource=source;try{detectedColumnCount=statisticsDetectedColumns(source);}catch{detectedColumnCount=null;}}
+      if(detectedColumnCount!==null)$('statistics-columns').value=String(detectedColumnCount);
+    }
+    return `columns:${Number(value('statistics-columns'))||4}`;
+  };
   const dataColumns=()=>statisticsColumnCount(dataKind());
   function setDataKind(kind){
     if(kind?.startsWith('columns:')){$('statistics-columns').value=String(statisticsColumnCount(kind));$('statistics-kind').value='columns';}
@@ -119,6 +131,8 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
     $('statistics-sigma-y').disabled=op!=='ztest2';
     $('statistics-yates-options').hidden=op!=='chi2independence';
     $('statistics-columns-label').hidden=!kind.startsWith('columns:');
+    $('statistics-columns-auto-label').hidden=!kind.startsWith('columns:');
+    $('statistics-columns').disabled=$('statistics-columns-auto').checked;
     $('regression-section').hidden=columns<2;
     $('regression-response').value=automaticResponse()?String(columns-1):String(state.fields['regression-response-choice']);
     const positionResponse=['polynomial','logistic','logisticridge','logisticlasso','logisticelasticnet'].includes(regressionMode());
@@ -140,13 +154,14 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
     try{$('statistics-samples').textContent=analysisSummary();}catch{setText($('statistics-samples'),'Enter data to see analyzed groups');}
     advanced?.render();
   }
-  function dataKindChange(){cancelRegression();statisticsGraph=null;$('regression-caption').replaceChildren();$('regression-inference').replaceChildren();$('regression-export').hidden=true;$('regression-transfer').hidden=true;$('statistics-plot').replaceChildren();$('statistics-plot-type').value=dataKind()==='xy'?'scatter':'histogram';render();refreshWorkspaceMath();}
+  function dataKindChange(){cancelClustering();cancelRegression();statisticsGraph=null;$('regression-caption').replaceChildren();$('regression-inference').replaceChildren();$('regression-export').hidden=true;$('regression-transfer').hidden=true;$('statistics-plot').replaceChildren();$('statistics-plot-type').value=dataKind()==='xy'?'scatter':'histogram';render();refreshWorkspaceMath();}
   $('statistics-kind').onchange=dataKindChange;
   $('statistics-columns').onchange=()=>{
     const count=Number(value('statistics-columns'));
     if(!Number.isInteger(count)||count<1||count>100){$('statistics-columns').value=String(state.fields['statistics-columns']||4);return;}
     dataKindChange();persist();
   };
+  $('statistics-columns-auto').onchange=()=>{invalidateRegression();render();refreshWorkspaceMath();persist();};
   $('statistics-op').onchange=()=>{if(['tinterval','zinterval'].includes(value('statistics-op'))&&value('statistics-extra')==='0')$('statistics-extra').value='95';statisticsControls();refreshWorkspaceMath();};
   $('statistics-grouping').onchange=()=>{statisticsControls();refreshWorkspaceMath();};
   for(const id of ['statistics-column','statistics-first-group','statistics-second-group'])$(id).onchange=()=>{statisticsControls();refreshWorkspaceMath();};
@@ -180,8 +195,26 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
 
   function drawStatisticsGraph(){
     const container=$('statistics-plot'),type=value('statistics-plot-type'),options={type,orientation:value('statistics-plot-orientation'),digits:state.digits,curve:statisticsGraph.curve,xAxisLabel:statisticsGraph.xAxisLabel||'x',yAxisLabel:statisticsGraph.yAxisLabel||'y'};
+    if(type!=='clusteredheatmap')cancelClustering();
     if(type==='scatter'){statisticsPlot(container,statisticsGraph.plotRows||statisticsGraph.rows,options);return;}
     if(type==='heatmap'){statisticsPlot(container,statisticsGraph.rows,{...options,heatMap:statisticsHeatMapData(dataRows(),{grouping:value('statistics-plot-grouping'),columnCount:dataColumns()})});return;}
+    if(type==='clusteredheatmap'){
+      const key=JSON.stringify([value('statistics-data'),dataKind(),value('statistics-plot-grouping')]);
+      if(statisticsGraph.clusterKey===key&&statisticsGraph.clusterData){cancelClustering();statisticsPlot(container,statisticsGraph.rows,{...options,heatMap:statisticsGraph.clusterData});return;}
+      setText(container,'Clustering…');if(clusterRun?.key===key){clusterRun.graph=statisticsGraph;return;}
+      cancelClustering();
+      const data=statisticsHeatMapData(dataRows(),{grouping:value('statistics-plot-grouping'),columnCount:dataColumns()});
+      if(typeof Worker==='undefined'){statisticsGraph.clusterKey=key;statisticsGraph.clusterData=clusteredHeatMap(data);statisticsPlot(container,statisticsGraph.rows,{...options,heatMap:statisticsGraph.clusterData});return;}
+      const worker=new Worker(new URL('./statistics-cluster-worker.js',import.meta.url),{type:'module'}),run={worker,key,graph:statisticsGraph};clusterRun=run;
+      worker.onmessage=({data:message})=>{
+        if(clusterRun!==run||statisticsGraph!==run.graph||value('statistics-plot-type')!=='clusteredheatmap')return;
+        cancelClustering();if(message.error){container.replaceChildren();error(message.error);return;}
+        statisticsGraph.clusterKey=key;statisticsGraph.clusterData=message.result;
+        statisticsPlot(container,statisticsGraph.rows,{...options,digits:state.digits,heatMap:message.result});
+      };
+      worker.onerror=event=>{if(clusterRun!==run)return;cancelClustering();container.replaceChildren();error(event.message||'Clustering failed');};
+      worker.postMessage(data);return;
+    }
     if(type==='correlationheatmap'){statisticsPlot(container,statisticsGraph.rows,{...options,heatMap:statisticsCorrelationHeatMap(dataRows(),{columnCount:dataColumns()})});return;}
     const panels=statisticsPlotPanels(dataRows(),{grouping:value('statistics-plot-grouping'),columnCount:dataColumns()});
     if(panels.length===1&&!panels[0].label){statisticsPlot(container,statisticsGraph.rows,{...options,series:panels[0].series});return;}

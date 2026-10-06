@@ -6,7 +6,8 @@ import {createAppUI} from '../app-ui.js';
 import {setLanguage,translateDOM,t as translate} from '../i18n.js';
 import {createStatisticsWorkspace} from '../statistics-workspace.js';
 import {statisticsPlotSeries} from '../statistics-plot.js';
-import {statisticsCommand,csvRows,statisticsDatasetSource} from '../workspace-commands.js';
+import {statisticsCommand,csvRows,statisticsDatasetSource,statisticsDetectedColumns} from '../workspace-commands.js';
+import {clusteredHeatMap} from '../statistics-cluster.js';
 import {regressionResidualCSV,renderRegressionReport} from '../regression-report.js';
 import {restoreFields} from '../app-state.js';
 
@@ -25,6 +26,63 @@ function workspace(t,fields={}){
   const run=()=>statistics.runRegression({precision:60},(...args)=>results.push(args));
   return {$,state,requests,results,errors,run,statistics,get saves(){return saves;},get cancels(){return cancels;}};
 }
+
+test('automatic column detection counts all CSV/TSV columns including headers and missing cells',()=>{
+  assert.equal(statisticsDetectedColumns(''),1);
+  assert.equal(statisticsDetectedColumns('a,b,c,d,e\n1,2\n3,,5,6,7'),5);
+  assert.equal(statisticsDetectedColumns('"A,B",C\n1,2'),2);
+  assert.equal(statisticsDetectedColumns('date\tamount\tnote\n2024-01-01\t1,234\t'),3);
+  assert.equal(statisticsDetectedColumns('1,2\n3,4,5,6\n,,'),4);
+  assert.throws(()=>statisticsDetectedColumns(Array(101).fill('1').join(',')),/100/);
+});
+
+for(const language of ['en','ko'])test(`automatic n columns tracks pasted data and preserves manual mode and saved kind (${language})`,t=>{
+  const {$,statistics,state,errors}=workspace(t,{'statistics-kind':'columns','statistics-columns':'4','statistics-columns-auto':true,'statistics-data':'A_col,B_col,C_col,D_col,E_col\n1,2,3,4,5\n6,7,8,9,10'});
+  setLanguage(language);translateDOM();statistics.render();
+  const change=id=>$(id).dispatchEvent(new document.defaultView.Event('change'));
+  assert.equal($('statistics-columns').value,'5');assert.equal($('statistics-columns').disabled,true);assert.equal($('statistics-columns-auto-label').hidden,false);
+  $('statistics-column').value='4';$('statistics-op').value='mean';assert.equal(statistics.expression(),'mean([5,10])');
+  $('dataset-name').value='auto-columns';$('dataset-save').click();assert.equal(state.datasetKinds['auto-columns'],'columns:5');
+  $('statistics-data').value='1\t2\t\n3\t4\t5';change('statistics-data');assert.equal($('statistics-columns').value,'3');
+  $('statistics-table-toggle').click();assert.equal($('statistics-grid').querySelectorAll('thead th').length,5,'three values plus index and row action');
+  $('statistics-columns-auto').checked=false;change('statistics-columns-auto');assert.equal($('statistics-columns').disabled,false);
+  $('statistics-data').value='1,2,3,4';change('statistics-data');assert.equal($('statistics-columns').value,'3','manual mode keeps its count');
+  $('statistics-columns-auto').checked=true;change('statistics-columns-auto');assert.equal($('statistics-columns').value,'4');
+  $('statistics-kind').value='xy';change('statistics-kind');assert.equal($('statistics-columns-auto-label').hidden,true);
+  assert.deepEqual(errors,[]);
+});
+
+for(const language of ['en','ko'])test(`clustered heatmap draws both dendrograms and retains all row names and cell values (${language})`,t=>{
+  const {$,statistics,errors}=workspace(t,{'statistics-kind':'columns','statistics-columns-auto':true,'statistics-data':'A,0,10,1,11\nB,10,20,11,21\nC,1,11,2,12\nD,11,21,12,22'});
+  setLanguage(language);translateDOM();statistics.render();
+  $('statistics-plot-grouping').value='first';$('statistics-plot-type').value='clusteredheatmap';$('statistics-plot-type').dispatchEvent(new document.defaultView.Event('change'));
+  const svg=$('statistics-plot').querySelector('svg');assert.equal(svg.getAttribute('aria-label'),translate('Clustered heatmap'));
+  assert.equal(svg.querySelectorAll('[data-dendrogram="row"]').length,3);assert.equal(svg.querySelectorAll('[data-dendrogram="column"]').length,3);
+  assert.equal(svg.querySelectorAll('rect[data-value]').length,16);assert.match(svg.textContent,/A.*C.*B.*D/);
+  for(const path of svg.querySelectorAll('[data-dendrogram]'))assert.doesNotMatch(path.getAttribute('d'),/NaN|Infinity/);
+  assert.equal($('statistics-plot-orientation-label').hidden,true);assert.equal($('statistics-plot-grouping-label').hidden,false);assert.deepEqual(errors,[]);
+});
+
+test('cluster worker ignores cancelled results and accepts repeated plot clicks without becoming stuck',t=>{
+  const previousWorker=globalThis.Worker,workers=[];
+  class ControlledWorker {
+    constructor(){workers.push(this);this.terminated=false;}
+    postMessage(data){this.data=data;}
+    terminate(){this.terminated=true;}
+    finish(){this.onmessage({data:{result:clusteredHeatMap(this.data)}});}
+  }
+  globalThis.Worker=ControlledWorker;t.after(()=>{if(previousWorker===undefined)delete globalThis.Worker;else globalThis.Worker=previousWorker;});
+  const {$,errors}=workspace(t,{'statistics-kind':'xyz','statistics-data':'0,10,1\n1,11,2\n10,20,11'});
+  $('statistics-plot-type').value='clusteredheatmap';$('statistics-plot-type').dispatchEvent(new document.defaultView.Event('change'));
+  assert.match($('statistics-plot').textContent,/Clustering/);$('statistics-plot-run').click();assert.equal(workers.length,1);
+  workers[0].finish();assert.ok(workers[0].terminated);assert.ok($('statistics-plot').querySelector('[data-dendrogram]'));
+  $('statistics-plot-run').click();assert.equal(workers.length,1,'completed clustering is reused');
+  $('statistics-data').value='2,3,4\n5,6,7';$('statistics-data').dispatchEvent(new document.defaultView.Event('input'));
+  $('statistics-plot-run').click();assert.equal(workers.length,2);
+  $('statistics-plot-type').value='heatmap';$('statistics-plot-type').dispatchEvent(new document.defaultView.Event('change'));
+  assert.equal(workers[1].terminated,true);workers[1].finish();assert.equal($('statistics-plot').querySelectorAll('[data-dendrogram]').length,0);
+  assert.deepEqual(errors,[]);
+});
 
 test('regularization is selected within linear and logistic families and invalidates prior results',t=>{
   const context=workspace(t,{'regression-kind':'linear','regression-penalty':'elasticnet','regression-alpha':'0.2','regression-ratio':'0.7'});
@@ -264,19 +322,19 @@ for(const language of ['en','ko'])test(`data type changes remove incompatible me
   assert.deepEqual(options('regression-kind'),['multiple','logistic','randomforest']);
   assert.equal($('regression-kind').value,'multiple');
   assert.equal($('regression-custom').hidden,true);
-  assert.deepEqual(options('statistics-plot-type'),['histogram','box','violin','heatmap','correlationheatmap']);
+  assert.deepEqual(options('statistics-plot-type'),['histogram','box','violin','heatmap','clusteredheatmap','correlationheatmap']);
   assert.deepEqual(options('statistics-grouping'),['columns']);
   $('regression-kind').value='logistic';changeKind('xy');
   assert.equal($('regression-kind').value,'logistic','a model compatible with both shapes stays selected');
   assert.deepEqual(options('regression-kind'),xyModels);
-  assert.deepEqual(options('statistics-plot-type'),['scatter','histogram','box','violin','heatmap','correlationheatmap']);
+  assert.deepEqual(options('statistics-plot-type'),['scatter','histogram','box','violin','heatmap','clusteredheatmap','correlationheatmap']);
   $('statistics-op').value='anova';changeKind('list');
   assert.equal($('regression-section').hidden,true);
   assert.deepEqual(options('regression-kind'),[]);
   assert.equal($('statistics-op').value,'stats');
   for(const invalid of ['correlation','ttestpaired','ttest2','ztest2','anova','tukey','mannwhitney','kruskal','chi2independence','fisherexact'])assert.ok(!options('statistics-op').includes(invalid),`${invalid} is absent for a List`);
   assert.ok(options('statistics-op').includes('wilcoxon'),'one-sample signed ranks remain available');
-  assert.deepEqual(options('statistics-plot-type'),['histogram','box','violin','heatmap','correlationheatmap']);
+  assert.deepEqual(options('statistics-plot-type'),['histogram','box','violin','heatmap','clusteredheatmap','correlationheatmap']);
   changeKind('xyz');
   assert.deepEqual(options('regression-kind'),['multiple','logistic','randomforest']);
   assert.deepEqual([...$('regression-kind').options].map(option=>option.textContent),['multiple','logistic','Random Forest'].map(translate));

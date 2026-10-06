@@ -76,7 +76,7 @@ internal fun beeswarmLayout(axisPositions:List<Double>,preferredRadius:Double,ha
 }
 
 internal data class StatisticsHeatMapRow(val label:String,val values:List<Double?>,val counts:List<Int>?=null)
-internal data class StatisticsHeatMapData(val columns:List<String>,val rows:List<StatisticsHeatMapRow>,val correlation:Boolean=false)
+internal data class StatisticsHeatMapData(val columns:List<String>,val rows:List<StatisticsHeatMapRow>,val correlation:Boolean=false,val clustered:Boolean=false,val rowLinks:List<StatisticsClusterLink> = emptyList(),val columnLinks:List<StatisticsClusterLink> = emptyList())
 private fun plotNumber(value:String?)=value?.statisticsNumericCell()?.toDoubleOrNull()?.takeIf(Double::isFinite)
 
 internal fun statisticsHeatMapData(rows:List<List<String>>,kind:String,grouping:String="columns"):StatisticsHeatMapData {

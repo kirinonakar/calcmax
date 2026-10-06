@@ -3,6 +3,7 @@ import {numericStatisticsRows,statisticsColumnNames} from './workspace-commands.
 import {displayNumber} from './display-format.js';
 import {t} from './i18n.js';
 import {statisticsPlotNumber,violinDensity,beeswarmLayout,statisticsHeatMapData,statisticsCorrelationHeatMap,heatMapColor} from './statistics-plot-data.js';
+import {clusteredHeatMap} from './statistics-cluster.js';
 export function statisticsPlotSeries(rows,{grouping='columns',columnCount=rows[0]?.length||1}={}){
   const names=statisticsColumnNames(columnCount);
   const number=statisticsPlotNumber;
@@ -28,7 +29,7 @@ export function statisticsPlotPanels(rows,{grouping='columns',columnCount=rows[0
 }
 
 export function statisticsPlot(container,rows,{type='scatter',digits=10,curve=[],xAxisLabel='x',yAxisLabel='y',series=statisticsPlotSeries(rows),heatMap,orientation='horizontal'}={}){
-  if(type==='heatmap'||type==='correlationheatmap'){drawHeatMap(container,heatMap||(type==='correlationheatmap'?statisticsCorrelationHeatMap(rows):statisticsHeatMapData(rows)),digits);return;}
+  if(['heatmap','correlationheatmap','clusteredheatmap'].includes(type)){drawHeatMap(container,heatMap||(type==='correlationheatmap'?statisticsCorrelationHeatMap(rows):type==='clusteredheatmap'?clusteredHeatMap(statisticsHeatMapData(rows)):statisticsHeatMapData(rows)),digits);return;}
   if(type==='violin'||type==='box'){drawDistribution(container,series,digits,type,orientation);return;}
   const columns=series.map(entry=>entry.values);
   if(type==='scatter'){
@@ -113,18 +114,25 @@ function drawHeatMap(container,data,digits){
   const finite=data.rows.flatMap(row=>row.values).filter(value=>value!==null);
   if(!data.rows.length||!data.columns.length||!finite.length&&!data.correlation){container.replaceChildren();return;}
   const minimum=data.range?.[0]??finite.reduce((a,b)=>Math.min(a,b)),maximum=data.range?.[1]??finite.reduce((a,b)=>Math.max(a,b));
-  const width=Math.max(600,120+data.columns.length*80),cellWidth=(width-120)/data.columns.length;
-  const {svg,node}=svgChart(data.correlation?'Correlation heat map':'Heat map',width,45+data.rows.length*30);
+  const left=data.clustered?180:100,top=data.clustered?120:45,width=Math.max(600,left+20+data.columns.length*80),cellWidth=(width-left-20)/data.columns.length;
+  const {svg,node}=svgChart(data.clustered?'Clustered heatmap':data.correlation?'Correlation heat map':'Heat map',width,top+data.rows.length*30);
   svg.style.width=`${width}px`;svg.classList.add('statistics-heatmap');
-  data.columns.forEach((name,i)=>node('text',{x:100+(i+.5)*cellWidth,y:24,fill:'var(--ink)','text-anchor':'middle','font-size':14},name));
+  if(data.clustered){
+    const rowPeak=data.rowLinks.reduce((peak,link)=>Math.max(peak,link.height),0)||1,columnPeak=data.columnLinks.reduce((peak,link)=>Math.max(peak,link.height),0)||1;
+    for(const link of data.rowLinks){const a=top+(link.left+.5)*30,b=top+(link.right+.5)*30,x=78-link.height/rowPeak*70;
+      node('path',{d:`M${78-link.leftHeight/rowPeak*70},${a} H${x} V${b} H${78-link.rightHeight/rowPeak*70}`,fill:'none',stroke:'var(--muted)','stroke-width':1.5,'data-dendrogram':'row'});}
+    for(const link of data.columnLinks){const a=left+(link.left+.5)*cellWidth,b=left+(link.right+.5)*cellWidth,y=85-link.height/columnPeak*75;
+      node('path',{d:`M${a},${85-link.leftHeight/columnPeak*75} V${y} H${b} V${85-link.rightHeight/columnPeak*75}`,fill:'none',stroke:'var(--muted)','stroke-width':1.5,'data-dendrogram':'column'});}
+  }
+  data.columns.forEach((name,i)=>node('text',{x:left+(i+.5)*cellWidth,y:top-21,fill:'var(--ink)','text-anchor':'middle','font-size':14},name));
   data.rows.forEach((row,i)=>{
-    const label=node('text',{x:90,y:45+i*30+19,fill:'var(--ink)','text-anchor':'end','font-size':13},row.label.length>12?`${row.label.slice(0,11)}…`:row.label);
+    const label=node('text',{x:left-10,y:top+i*30+19,fill:'var(--ink)','text-anchor':'end','font-size':13},row.label.length>12?`${row.label.slice(0,11)}…`:row.label);
     node('title',{},row.label,label);
     row.values.forEach((value,column)=>{
-      const cell=node('rect',{x:100+column*cellWidth,y:45+i*30,width:cellWidth,height:30,fill:heatMapColor(value,minimum,maximum)||'var(--number)',stroke:'var(--line)','data-row':i,'data-column':column,'data-value':value??''});
+      const cell=node('rect',{x:left+column*cellWidth,y:top+i*30,width:cellWidth,height:30,fill:heatMapColor(value,minimum,maximum)||'var(--number)',stroke:'var(--line)','data-row':i,'data-column':column,'data-value':value??''});
       const displayed=value===null?'—':displayNumber(value,digits);
       node('title',{},`${row.label} · ${data.columns[column]}: ${displayed}${row.counts?` (n=${row.counts[column]})`:''}`,cell);
-      node('text',{x:100+(column+.5)*cellWidth,y:45+i*30+20,fill:value===null?'var(--muted)':heatMapTextColor(value,minimum,maximum),'text-anchor':'middle','font-size':12},displayed.length>10?`${displayed.slice(0,9)}…`:displayed);
+      node('text',{x:left+(column+.5)*cellWidth,y:top+i*30+20,fill:value===null?'var(--muted)':heatMapTextColor(value,minimum,maximum),'text-anchor':'middle','font-size':12},displayed.length>10?`${displayed.slice(0,9)}…`:displayed);
     });
   });
   const scroll=document.createElement('div');scroll.className='statistics-heatmap-scroll';scroll.tabIndex=0;scroll.setAttribute('aria-label',t('Heat map'));scroll.append(svg);
@@ -133,7 +141,7 @@ function drawHeatMap(container,data,digits){
   low.textContent=displayNumber(minimum,digits);high.textContent=displayNumber(maximum,digits);bar.className='statistics-heatmap-scale';
   if(minimum===maximum)bar.style.background=heatMapColor(minimum,minimum,maximum);
   legend.append(low,bar,high);
-  const caption=document.createElement('div');caption.className='statistics-plot-legend';caption.textContent=t(data.correlation?'Pearson r · pairwise complete observations':'Rows × columns · color = value');
+  const caption=document.createElement('div');caption.className='statistics-plot-legend';caption.textContent=t(data.clustered?'Single linkage · Euclidean':data.correlation?'Pearson r · pairwise complete observations':'Rows × columns · color = value');
   container.replaceChildren(caption,scroll,legend);
 }
 

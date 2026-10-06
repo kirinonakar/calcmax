@@ -34,6 +34,10 @@ export function statisticsColumnCount(kind){
   const match=/^columns:(\d+)$/.exec(kind||'');
   return match&&Number(match[1])>=1&&Number(match[1])<=100?Number(match[1]):0;
 }
+export function statisticsDetectedColumns(source){
+  if(!source.trim())return 1;
+  return Math.max(1,...csvRows(source,{skipHeader:false,preserveEmptyRows:true}).map(row=>row.length));
+}
 export function statisticsColumnNames(count){return Array.from({length:count},(_,i)=>['x','y','z'][i]||`x${i+1}`);}
 export function statisticsColumnLabels(source,kind){
   const names=statisticsColumnNames(statisticsColumnCount(kind));

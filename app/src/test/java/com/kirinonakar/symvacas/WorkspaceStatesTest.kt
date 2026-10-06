@@ -6,6 +6,13 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class WorkspaceStatesTest {
+    @Test fun automaticColumnsPersistsInSelectionAndFullWorkspaceState() {
+        val prefs=MemoryPreferences();val state=com.kirinonakar.symvacas.calculator.StatisticsState(prefs)
+        assertFalse(state.statisticsAutoColumns);state.statisticsAutoColumns=true;state.saveSelection()
+        val restored=com.kirinonakar.symvacas.calculator.StatisticsState(prefs);assertTrue(restored.statisticsAutoColumns)
+        restored.statisticsAutoColumns=false;val editor=prefs.edit();restored.writeTo(editor);editor.apply()
+        assertFalse(com.kirinonakar.symvacas.calculator.StatisticsState(prefs).statisticsAutoColumns)
+    }
     @Test fun distributionOrientationPersistsInSelectionAndWorkspaceState() {
         val prefs=MemoryPreferences()
         val state=com.kirinonakar.symvacas.calculator.StatisticsState(prefs)

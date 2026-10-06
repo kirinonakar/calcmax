@@ -1,4 +1,9 @@
 export const nativeKorean = {
+  "Auto columns": "열 수 자동",
+  "Column count must be between 1 and 100": "열 개수는 1~100이어야 합니다",
+  "Clustered heatmap": "군집 히트맵",
+  "Single linkage · Euclidean": "단일 연결 · 유클리드 거리",
+  "Clustering…": "군집 계산 중…",
   "Orientation": "방향",
   "Horizontal": "가로",
   "Vertical": "세로",

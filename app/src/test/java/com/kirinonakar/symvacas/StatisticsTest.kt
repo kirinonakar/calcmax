@@ -22,6 +22,13 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class StatisticsDataSourceTest {
+    @Test fun automaticColumnsCountHeadersRaggedRowsQuotedCellsAndTsv() {
+        fun count(source:String)=com.kirinonakar.symvacas.ui.statisticsDetectedColumns(source)
+        assertEquals(1,count(""));assertEquals(5,count("a,b,c,d,e\n1,2\n3,,5,6,7"))
+        assertEquals(2,count("\"A,B\",C\n1,2"));assertEquals(3,count("date\tamount\tnote\n2024-01-01\t1,234\t"))
+        assertEquals(4,count("1,2\n3,4,5,6\n,,"))
+        try{count(List(101){"1"}.joinToString(","));throw AssertionError("Expected column limit")}catch(_:IllegalArgumentException){}
+    }
     @Test fun directInputDetectsArbitraryHeadersWithoutRemovingFirstExpressionsOrGroups() {
         val source="Treatment,Measurement\nA,1\nB,2\nA,3"
         val rows=com.kirinonakar.symvacas.ui.statisticsRows(source)

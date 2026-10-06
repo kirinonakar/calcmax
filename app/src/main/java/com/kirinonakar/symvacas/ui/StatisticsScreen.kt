@@ -31,6 +31,7 @@ import kotlinx.coroutines.withContext
 import kotlin.math.max
 
 @Composable private fun StatHeader(text:String,modifier:Modifier) { val c=LocalInstrument.current; Box(modifier.fillMaxHeight(),contentAlignment=Alignment.Center){Text(text,fontSize=11.sp,color=c.muted,fontWeight=FontWeight.SemiBold)} }
+private data class StatisticsClusterRequest(val rows:List<List<String>>,val kind:String,val grouping:String)
 
 @Composable private fun StatCell(value:String,modifier:Modifier,focus:FocusRequester,tag:String,onValue:(String)->Unit) {
     val c=LocalInstrument.current
@@ -57,8 +58,11 @@ import kotlin.math.max
     val activeName=if(isNew)"" else selected.ifBlank {names.firstOrNull().orEmpty()}
     var datasetName by rememberSaveable {mutableStateOf(m.statisticsName)}
     var data by rememberSaveable {mutableStateOf(m.statisticsData)}
-    var dataKind by rememberSaveable {mutableStateOf(m.statisticsKind)}
-    var columnCount by rememberSaveable {mutableStateOf(if(dataKind.startsWith("columns:"))statisticsColumnCount(dataKind).toString() else "4")}
+    var selectedDataKind by rememberSaveable {mutableStateOf(m.statisticsKind)}
+    var columnCount by rememberSaveable {mutableStateOf(if(selectedDataKind.startsWith("columns:"))statisticsColumnCount(selectedDataKind).toString() else "4")}
+    var autoColumns by rememberSaveable {mutableStateOf(m.statisticsAutoColumns)}
+    val detectedColumns=remember(data) {runCatching {statisticsDetectedColumns(data)}}
+    val dataKind=if(autoColumns&&selectedDataKind.startsWith("columns:"))"columns:${detectedColumns.getOrDefault(statisticsColumnCount(selectedDataKind))}" else selectedDataKind
     val dataColumns=statisticsColumnNames(dataKind)
     var regression by rememberSaveable {mutableStateOf(m.statisticsRegression)}
     var regularization by rememberSaveable {mutableStateOf(m.statisticsRegularization)}
@@ -83,7 +87,7 @@ import kotlin.math.max
     var plotType by rememberSaveable {mutableStateOf(m.statisticsPlot)}
     var csv by rememberSaveable {mutableStateOf(m.statisticsCsv)}
     var importPreview by remember {mutableStateOf<StatisticsCsvImport?>(null)}
-    LaunchedEffect(data,datasetName,dataKind,regression,plotType,plotGrouping,plotOrientation,csv,selected,isNew,customFormula,customVariable,customInitials,polynomialDegree,logisticResponse,lassoAlpha,forestTrees,forestDepth,forestSeed,regularization,l1Ratio,forestTask) {m.statisticsPlotGrouping=plotGrouping;m.statisticsPlotOrientation=plotOrientation;m.saveStatistics(datasetName,data,dataKind,regression,plotType,csv,selected,isNew,customFormula,customVariable,customInitials,polynomialDegree,logisticResponse,lassoAlpha,forestTrees,forestDepth,forestSeed,regularization,l1Ratio,forestTask)}
+    LaunchedEffect(data,datasetName,dataKind,regression,plotType,plotGrouping,plotOrientation,autoColumns,csv,selected,isNew,customFormula,customVariable,customInitials,polynomialDegree,logisticResponse,lassoAlpha,forestTrees,forestDepth,forestSeed,regularization,l1Ratio,forestTask) {m.statisticsAutoColumns=autoColumns;m.statisticsPlotGrouping=plotGrouping;m.statisticsPlotOrientation=plotOrientation;m.saveStatistics(datasetName,data,dataKind,regression,plotType,csv,selected,isNew,customFormula,customVariable,customInitials,polynomialDegree,logisticResponse,lassoAlpha,forestTrees,forestDepth,forestSeed,regularization,l1Ratio,forestTask)}
     val importCsv=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {uri->
         if(uri!=null)scope.launch {
             val content=withContext(Dispatchers.IO) {runCatching {context.contentResolver.openInputStream(uri)?.bufferedReader()?.use {it.readText()}}.getOrNull()}
@@ -96,8 +100,8 @@ import kotlin.math.max
     }
     importPreview?.let {preview->StatisticsCsvImportDialog(preview,onDismiss={importPreview=null}) {columns,skipHeader->
         m.clearRegression();data=importStatisticsCsv(preview,columns,skipHeader)
-        dataKind=statisticsKindForColumns(columns.size);columnCount=columns.size.toString()
-        plotType=if(dataKind=="xy")"Scatter" else "Histogram"
+        selectedDataKind=statisticsKindForColumns(columns.size);columnCount=columns.size.toString()
+        plotType=if(selectedDataKind=="xy")"Scatter" else "Histogram"
         datasetName=datasetName.ifBlank {activeName.ifBlank {"D1"}}
         m.saveDataSet(datasetName,data,dataKind);selected=datasetName;isNew=false
         importPreview=null
@@ -123,17 +127,24 @@ import kotlin.math.max
     val zValues=if(dataColumns.size>=3)numericRows.mapNotNull {it.getOrNull(2)?.toDoubleOrNull()?.takeIf {v->v.isFinite()}} else emptyList()
     val paired=numericRows.mapNotNull {row->val x=row.getOrNull(0)?.toDoubleOrNull();val y=row.getOrNull(1)?.toDoubleOrNull();if(x!=null&&y!=null&&x.isFinite()&&y.isFinite())x to y else null}
     Panel("Data & statistics","Enter values once, then summarize, test, or plot the current dataset.",panelScroll) {
-        if(names.isNotEmpty())Choices(names,activeName,{name->m.clearRegression();selected=name;isNew=false;m.dataSets.optJSONObject(name)?.let {item->datasetName=name;data=item.optString("csv");dataKind=item.optString("kind","list");columnCount=if(dataKind.startsWith("columns:"))statisticsColumnCount(dataKind).toString() else "4";plotType=if(dataKind=="xy")"Scatter" else "Histogram"}})
+        if(names.isNotEmpty())Choices(names,activeName,{name->m.clearRegression();selected=name;isNew=false;m.dataSets.optJSONObject(name)?.let {item->datasetName=name;data=item.optString("csv");selectedDataKind=item.optString("kind","list");columnCount=if(selectedDataKind.startsWith("columns:"))statisticsColumnCount(selectedDataKind).toString() else "4";plotType=if(selectedDataKind=="xy")"Scatter" else "Histogram"}})
         Row(horizontalArrangement=Arrangement.spacedBy(6.dp),verticalAlignment=Alignment.CenterVertically) {
             Field(datasetName,"Dataset name",Modifier.weight(1f)){datasetName=it}
             SmallAction("New"){startNew()}
             SmallAction("Save"){m.saveDataSet(datasetName,data,dataKind);selected=datasetName;isNew=false}
             SmallAction("Delete"){if(activeName.isNotBlank()){m.deleteDataSet(activeName);selected="";isNew=true;startNew()}}
         }
-        Choices(listOf("List","x,y data","x,y,z data","n columns"),when(dataKind){"xy"->"x,y data";"xyz"->"x,y,z data";"list"->"List";else->"n columns"},{m.clearRegression();dataKind=when(it){"x,y data"->"xy";"x,y,z data"->"xyz";"n columns"->"columns:${columnCount.toIntOrNull()?.coerceIn(1,100) ?: 4}";else->"list"};plotType=if(dataKind=="xy")"Scatter" else "Histogram"})
-        if(dataKind.startsWith("columns:"))Field(columnCount,"Column count (1–100)",Modifier.width(170.dp).testTag("statistics-columns")) {text->
-            columnCount=text
-            text.toIntOrNull()?.takeIf {it in 1..100}?.let {m.clearRegression();dataKind="columns:$it"}
+        Choices(listOf("List","x,y data","x,y,z data","n columns"),when(dataKind){"xy"->"x,y data";"xyz"->"x,y,z data";"list"->"List";else->"n columns"},{m.clearRegression();selectedDataKind=when(it){"x,y data"->"xy";"x,y,z data"->"xyz";"n columns"->"columns:${columnCount.toIntOrNull()?.coerceIn(1,100) ?: 4}";else->"list"};plotType=if(selectedDataKind=="xy")"Scatter" else "Histogram"})
+        if(dataKind.startsWith("columns:")) {
+            Row(Modifier.horizontalScroll(rememberScrollState()),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                Field(if(autoColumns)statisticsColumnCount(dataKind).toString() else columnCount,"Column count (1–100)",Modifier.width(170.dp).testTag("statistics-columns"),enabled=!autoColumns) {text->
+                    columnCount=text
+                    text.toIntOrNull()?.takeIf {it in 1..100}?.let {m.clearRegression();selectedDataKind="columns:$it"}
+                }
+                Checkbox(autoColumns,{m.clearRegression();if(autoColumns){columnCount=statisticsColumnCount(dataKind).toString();selectedDataKind=dataKind};autoColumns=it},Modifier.testTag("statistics-columns-auto"))
+                Text(tr("Auto columns"),fontSize=12.sp)
+            }
+            if(autoColumns&&detectedColumns.isFailure)Text(tr("Column count must be between 1 and 100"),fontSize=11.sp,color=LocalInstrument.current.danger)
         }
         Row(Modifier.horizontalScroll(rememberScrollState())) {
             SmallAction("Import CSV"){importCsv.launch(arrayOf("text/csv","text/comma-separated-values","text/plain","application/vnd.ms-excel"))}
@@ -268,7 +279,7 @@ import kotlin.math.max
                     m.fitRegression("regression($table,custom,$customFormula,$customVariable$guesses)",data)
                 },enabled=customFormula.isNotBlank()&&customVariable.matches(Regex("[A-Za-z][A-Za-z0-9_]*"))&&paired.size>=2&&!m.regressionBusy){Text(tr("Fit custom model"))}
             }
-            Choices(if(dataKind=="xy")listOf("Scatter","Histogram","Box plot","Violin + points","Heat map","Correlation heat map") else listOf("Histogram","Box plot","Violin + points","Heat map","Correlation heat map"),plotType,{plotType=it})
+            Choices(if(dataKind=="xy")listOf("Scatter","Histogram","Box plot","Violin + points","Heat map","Clustered heatmap","Correlation heat map") else listOf("Histogram","Box plot","Violin + points","Heat map","Clustered heatmap","Correlation heat map"),plotType,{plotType=it})
             if(plotType in listOf("Box plot","Violin + points")) {
                 Text(tr("Orientation"),fontSize=11.sp,color=LocalInstrument.current.muted)
                 Choices(listOf("Horizontal","Vertical"),if(plotOrientation=="vertical")"Vertical" else "Horizontal",{plotOrientation=if(it=="Vertical")"vertical" else "horizontal"})
@@ -284,13 +295,20 @@ import kotlin.math.max
         val fittedResponseName=regressionColumns.getOrNull(fittedResponse).orEmpty()
         val fitVisible=dataKind=="xy"&&plotType=="Scatter"&&m.regressionData==data&&m.regressionFit.isNotBlank()
         val plotPairs=if(fitVisible&&m.regressionMode in listOf("logistic","polynomial","ridge","lasso","elasticnet","logisticridge","logisticlasso","logisticelasticnet","randomforest","randomforestclassifier","randomforestregressor")&&fittedResponse==0)paired.map {(x,y)->y to x} else paired
-        val heatMap=remember(parsedRows,dataKind,plotGrouping,plotType) {when(plotType) {
+        val clusterRequest=remember(parsedRows,dataKind,plotGrouping,plotType) {if(plotType=="Clustered heatmap")StatisticsClusterRequest(parsedRows,dataKind,plotGrouping) else null}
+        val clustered by produceState<Pair<StatisticsClusterRequest,StatisticsHeatMapData>?>(null,clusterRequest) {
+            value=null
+            clusterRequest?.let {request->value=request to withContext(Dispatchers.Default){clusteredHeatMap(statisticsHeatMapData(request.rows,request.kind,request.grouping))}}
+        }
+        val plainHeatMap=remember(parsedRows,dataKind,plotGrouping,plotType) {when(plotType) {
             "Heat map"->statisticsHeatMapData(parsedRows,dataKind,plotGrouping)
             "Correlation heat map"->statisticsCorrelationHeatMap(parsedRows,dataKind)
             else->null
         }}
+        val heatMap=if(plotType=="Clustered heatmap")clustered?.takeIf {it.first==clusterRequest}?.second else plainHeatMap
+        if(plotType=="Clustered heatmap"&&heatMap==null)Text(tr("Clustering…"),fontSize=12.sp,color=LocalInstrument.current.muted)
         heatMap?.let {StatisticsHeatMap(it,m.displayDigits)}
-        val plotPanels=if(heatMap!=null)emptyList() else if(plotType=="Scatter")listOf(StatisticsPlotPanel("",emptyList())) else statisticsPlotPanels(parsedRows,dataKind,plotGrouping)
+        val plotPanels=if(plotType in listOf("Heat map","Clustered heatmap","Correlation heat map"))emptyList() else if(plotType=="Scatter")listOf(StatisticsPlotPanel("",emptyList())) else statisticsPlotPanels(parsedRows,dataKind,plotGrouping)
         plotPanels.forEach {panel->
             if(panel.label.isNotBlank())Text(panel.label,style=MaterialTheme.typography.titleSmall)
             StatisticsPlot(plotType,if(plotType=="Scatter")plotPairs else xValues.mapIndexed {i,v->i.toDouble() to v},xValues,yValues,if(fitVisible)m.regressionCurve.orEmpty() else emptyList(),if(fitVisible&&!m.regressionMode.startsWith("randomforest"))m.regressionFit else "",m.displayDigits,fitVisible&&m.regressionMode=="linear",m.regressionCorrelation,tertiary=zValues,allColumns=panel.series,xDateOrigin=if(fitVisible&&fittedResponse==0)null else dateAxis?.origin,

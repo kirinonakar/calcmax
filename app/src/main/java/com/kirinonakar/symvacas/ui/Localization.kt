@@ -7,6 +7,8 @@ import androidx.compose.runtime.staticCompositionLocalOf
 val LocalLanguage = staticCompositionLocalOf { "en" }
 
 private val korean = mapOf(
+    "Auto columns" to "열 수 자동", "Column count must be between 1 and 100" to "열 개수는 1~100이어야 합니다",
+    "Clustered heatmap" to "군집 히트맵", "Single linkage · Euclidean" to "단일 연결 · 유클리드 거리", "Clustering…" to "군집 계산 중…",
     "Orientation" to "방향", "Horizontal" to "가로", "Vertical" to "세로",
     "Violin + points" to "바이올린 + 원자료", "Heat map" to "히트맵", "Correlation heat map" to "상관관계 히트맵",
     "Rows × columns · color = value" to "행 × 열 · 색 = 값", "Pearson r · pairwise complete observations" to "Pearson r · 각 열 쌍의 결측값 제외",
