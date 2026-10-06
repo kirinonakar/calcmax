@@ -3,7 +3,8 @@
 Models intentionally expose their specification in result notes: Efron/Breslow
 Cox with optional left truncation and a Grambsch–Therneau PH check,
 proportional odds and NB2, Gaussian random intercept/slope ML, and
-working-correlation GEE.
+working-correlation GEE. Count, multinomial, ordinal and Cox fits report
+covariance from analytic scores and observed information.
 """
 import math
 import random
@@ -77,74 +78,13 @@ def variance(x): return sum((v-mean(x))**2 for v in x)/(len(x)-1)
 def normal_p(z): return float(2*_normal_sf(abs(z)))
 
 
-def derivatives(f, beta, hessian=False):
-    steps = [1e-4*max(1, abs(b)) for b in beta]
-    f0 = f(beta)
-    grad = []
-    hess = [[0.0]*len(beta) for _ in beta]
-    for i, step in enumerate(steps):
-        plus, minus = beta[:], beta[:]
-        plus[i] += step; minus[i] -= step
-        fp, fm = f(plus), f(minus)
-        grad.append((fp-fm)/(2*step))
-        if hessian:
-            hess[i][i] = (fp-2*f0+fm)/step**2
-            for j in range(i):
-                vals = []
-                for si, sj in ((1,1),(1,-1),(-1,1),(-1,-1)):
-                    b = beta[:]; b[i] += si*step; b[j] += sj*steps[j]
-                    vals.append(f(b))
-                hess[i][j] = hess[j][i] = (vals[0]-vals[1]-vals[2]+vals[3])/(4*step*steps[j])
-    return grad, hess
-
-
-def optimize(f, start):
-    """BFGS with numerical gradient and Armijo backtracking; reject failed fits."""
-    beta = start[:]; n = len(beta)
-    require(n <= 30, 'Model limit: 30 parameters')
-    H = [[float(i == j) for j in range(n)] for i in range(n)]
-    value = f(beta); grad, _ = derivatives(f, beta)
-    for iteration in range(300):
-        if max(map(abs, grad)) < 2e-5:
-            # A vanishing score alone also occurs when an estimate tends to
-            # infinity. Check the information-scaled step before declaring
-            # convergence (separation, monotone Cox, zero-mean count strata).
-            _,information=derivatives(f,beta,True)
-            require(min(float(v) for v in mp.eigsy(mp.matrix(information),eigvals_only=True))>1e-8,'Model information is singular; possible separation or boundary estimate')
-            newton=inverse(information)*mp.matrix(grad)
-            if max(abs(float(v)) for v in newton)<1e-3: break
-        direction = [-dot(row, grad) for row in H]
-        if dot(direction, grad) >= 0:
-            H = [[float(i == j) for j in range(n)] for i in range(n)]
-            direction = [-g for g in grad]
-        step = 1.0
-        for _ in range(40):
-            candidate = [b+step*d for b,d in zip(beta,direction)]
-            trial = f(candidate)
-            if math.isfinite(trial) and trial <= value+1e-4*step*dot(grad,direction): break
-            step *= .5
-        else: raise MathError('Model did not converge; check separation, scaling and identifiability')
-        newgrad, _ = derivatives(f, candidate)
-        delta = [a-b for a,b in zip(candidate,beta)]
-        change = [a-b for a,b in zip(newgrad,grad)]
-        curvature = dot(delta,change)
-        if curvature > 1e-12:
-            hy = [dot(row,change) for row in H]; yhy = dot(change,hy)
-            H = [[H[i][j]+(curvature+yhy)*delta[i]*delta[j]/curvature**2-(hy[i]*delta[j]+delta[i]*hy[j])/curvature for j in range(n)] for i in range(n)]
-        beta, value, grad = candidate, trial, newgrad
-    else: raise MathError('Model did not converge in 300 iterations')
-    require(max(map(abs,beta)) < 50, 'Unbounded estimates: possible separation or non-identifiability')
-    _, hess = derivatives(f,beta,True)
-    require(min(float(v) for v in mp.eigsy(mp.matrix(hess),eigvals_only=True)) > 1e-8, 'Model information is singular; estimates are not identifiable')
-    return beta, inverse(hess), value, iteration+1
-
-
 def newton(start, exact):
     """Damped Newton with an exact score and observed information.
 
     exact(beta) returns (objective, score, information). Poisson, multinomial
-    logit and Cox partial-likelihood models use this so the estimate and the
-    reported covariance come from analytic derivatives instead of differences.
+    logit, ordinal, NB2 and Cox partial-likelihood models use this so the
+    estimate and the reported covariance come from analytic derivatives
+    instead of differences.
     """
     beta = start[:]; n = len(beta)
     require(n <= 30, 'Model limit: 30 parameters')
@@ -164,13 +104,12 @@ def newton(start, exact):
         step = 1.0
         for _ in range(40):
             candidate = [b+step*d for b, d in zip(beta, direction)]
-            try: trial = exact(candidate)[0]
+            try: trial, trial_grad, trial_information = exact(candidate)
             except (OverflowError, ValueError): trial = math.inf
             if math.isfinite(trial) and trial <= value+1e-4*step*dot(grad, direction): break
             step *= .5
         else: raise MathError('Model did not converge; check separation, scaling and identifiability')
-        try: value, grad, info = exact(candidate)
-        except (OverflowError, ValueError): raise MathError('Model exceeded the numeric range; check separation or scaling')
+        value, grad, info = trial, trial_grad, trial_information
         beta = candidate
     else: raise MathError('Model did not converge in 100 iterations')
     require(max(map(abs, beta)) < 50, 'Unbounded estimates: possible separation or non-identifiability')
@@ -254,16 +193,39 @@ def model(rows, mode):
                 return value,score,information
             b,cov,ll,it = newton(start,exact)
         else:
-            def objective(b):
-                try:
-                    total = 0.0
-                    r = math.exp(-b[-1])
-                    for row,v in zip(x,y):
-                        z = dot(row,b[:p]); mu = math.exp(z)
-                        total += math.lgamma(r)-math.lgamma(v+r)+math.lgamma(v+1)+r*math.log1p(mu/r)+v*(math.log(r+mu)-z)
-                    return total
-                except (OverflowError,ValueError): return math.inf
-            b,cov,ll,it = optimize(objective,start)
+            def exact(b):
+                # NB2 log-link in a log-dispersion coordinate. Counts are
+                # integers, so the digamma differences in the score reduce to
+                # finite reciprocal sums and the estimate and covariance come
+                # from analytic derivatives.
+                r = math.exp(-b[-1])
+                if not r > 0: raise ValueError('Negative binomial dispersion underflowed')
+                count = len(b)
+                value = 0.0; score = [0.0]*count; information = [[0.0]*count for _ in range(count)]
+                psi_r = psi1_r = None
+                for row,v in zip(x,y):
+                    z = dot(row,b[:p]); mu = math.exp(z)
+                    value += math.lgamma(r)-math.lgamma(v+r)+math.lgamma(v+1)+r*math.log1p(mu/r)+v*(math.log(r+mu)-z)
+                    if v <= 64:
+                        harmonic = 0.0; squared = 0.0
+                        for k in range(int(v)):
+                            reciprocal = 1.0/(r+k); harmonic += reciprocal; squared += reciprocal*reciprocal
+                    else:
+                        if psi_r is None:
+                            psi_r = float(mp.digamma(r)); psi1_r = float(mp.polygamma(1,r))
+                        harmonic = float(mp.digamma(r+v))-psi_r
+                        squared = psi1_r-float(mp.polygamma(1,r+v))
+                    denominator = r+mu; share = r/denominator; log_ratio = math.log1p(mu/r)
+                    score[-1] += r*(harmonic-log_ratio+(mu-v)/denominator)
+                    information[-1][-1] += r*(log_ratio-harmonic+(v-mu)/denominator)+r*r*(squared-(mu/denominator)/r-(v-mu)/denominator**2)
+                    for j in range(p):
+                        score[j] += row[j]*(mu-v)*share
+                        information[j][-1] += row[j]*share*mu*(v-mu)/denominator
+                        for k in range(j,p): information[j][k] += row[j]*row[k]*share*mu*(r+v)/denominator
+                for j in range(count):
+                    for k in range(j): information[j][k] = information[k][j]
+                return value,score,information
+            b,cov,ll,it = newton(start,exact)
         coefficients=list(map(float,transform*mp.matrix(b[:p])))
         coefficient_cov=transform*cov[:p,:p]*transform.T
         result = {'coefficients':inference(coefficients,coefficient_cov,names,True),'log likelihood':-ll,'AIC':2*len(b)+2*ll,'iterations':it}
@@ -310,17 +272,55 @@ def model(rows, mode):
         result = [b[p]]
         for z in b[p+1:]: result.append(result[-1]+math.exp(z))
         return result
-    def objective(b):
-        try:
-            threshold = cuts(b); total = 0.0
-            for row,c in zip(x,labels):
-                z = dot(row,b[:p]); lo = logistic(threshold[c-1]-z) if c else 0
-                hi = logistic(threshold[c]-z) if c<k-1 else 1
-                if hi <= lo: return math.inf
-                total -= math.log(hi-lo)
-            return total
-        except OverflowError: return math.inf
-    b,cov,ll,it = optimize(objective,[0.0]*p+[-1.0]+[0.0]*(k-2))
+    def exact(b):
+        # Proportional-odds cumulative logit with log-increment thresholds.
+        # The score and observed information are analytic, including the
+        # chain rule from the threshold increments, so inference avoids
+        # finite differences.
+        threshold = cuts(b); count = len(b); levels = k-1
+        value = 0.0; score = [0.0]*count; information = [[0.0]*count for _ in range(count)]
+        slope_information = [[0.0]*p for _ in range(p)]; cross_information = [[0.0]*levels for _ in range(p)]
+        threshold_information = [[0.0]*levels for _ in range(levels)]
+        for row,c in zip(x,labels):
+            z = dot(row,b[:p])
+            lower = logistic(threshold[c-1]-z) if c else 0.0
+            upper = logistic(threshold[c]-z) if c<k-1 else 1.0
+            probability = upper-lower
+            if not probability > 0: raise ValueError('Ordinal cell probability underflowed')
+            value -= math.log(probability); inverse_probability = 1/probability
+            low_density = lower*(1-lower); high_density = upper*(1-upper)
+            low_score = low_density*inverse_probability; high_score = -high_density*inverse_probability
+            low_curvature = (low_density*(1-2*lower)*probability+low_density*low_density)*inverse_probability*inverse_probability
+            high_curvature = (high_density*high_density-high_density*(1-2*upper)*probability)*inverse_probability*inverse_probability
+            mixed_curvature = -low_density*high_density*inverse_probability*inverse_probability
+            linear = -low_score-high_score
+            for j in range(p):
+                score[j] += linear*row[j]
+                for m in range(j,p): slope_information[j][m] += (low_curvature+2*mixed_curvature+high_curvature)*row[j]*row[m]
+            if c:
+                score[p+c-1] += low_score; threshold_information[c-1][c-1] += low_curvature
+                for j in range(p): cross_information[j][c-1] -= row[j]*(low_curvature+mixed_curvature)
+            if c<k-1:
+                score[p+c] += high_score; threshold_information[c][c] += high_curvature
+                for j in range(p): cross_information[j][c] -= row[j]*(mixed_curvature+high_curvature)
+            if 0<c<k-1:
+                threshold_information[c-1][c] += mixed_curvature; threshold_information[c][c-1] += mixed_curvature
+        factor = [1.0]+[math.exp(b[p+m]) for m in range(1,levels)]
+        for m in range(levels):
+            score[p+m] = factor[m]*math.fsum(score[p+j] for j in range(m,levels))
+        for m in range(levels):
+            for l in range(levels):
+                total = math.fsum(threshold_information[j][n] for j in range(m,levels) for n in range(l,levels))
+                information[p+m][p+l] = factor[m]*factor[l]*total+(score[p+m] if m==l and m else 0.0)
+        for i in range(p):
+            for l in range(levels):
+                information[i][p+l] = factor[l]*math.fsum(cross_information[i][j] for j in range(l,levels))
+        for j in range(p):
+            for m in range(j,p): information[j][m] = slope_information[j][m]
+        for j in range(count):
+            for m in range(j): information[j][m] = information[m][j]
+        return value,score,information
+    b,cov,ll,it = newton([0.0]*p+[-1.0]+[0.0]*(k-2),exact)
     threshold=cuts(b)
     margins=[min((dot(r,b[:p])-threshold[c-1] if c else math.inf),(threshold[c]-dot(r,b[:p]) if c<k-1 else math.inf)) for r,c in zip(x,labels)]
     require(not (min(margins)>=-1e-8 and max(margins)>1e-8),'Complete or quasi separation: ordinal MLE is not finite')
@@ -540,7 +540,7 @@ def calculate(engine,name,a):
         engine.note += ' Balanced two-way within-subjects ANOVA: rows=subjects, columns list the first factor (slowest) crossed with the second factor. Greenhouse–Geisser corrections per effect.'
         return result
     if name in ('multinomial','ordinal','poissonreg','nbreg'):
-        engine.note += {'ordinal':' Proportional-odds cumulative logit; ascending numeric categories.', 'multinomial':' Multinomial logit; smallest category is reference.', 'poissonreg':' Poisson log-link regression; exp(coef) is incidence rate ratio.', 'nbreg':' Negative binomial NB2 log-link; dispersion alpha is jointly estimated.'}[name]+' Rows: predictors then response. Wald 95% CI.'
+        engine.note += {'ordinal':' Proportional-odds cumulative logit; ascending numeric categories; analytic score and observed information.', 'multinomial':' Multinomial logit; smallest category is reference.', 'poissonreg':' Poisson log-link regression; exp(coef) is incidence rate ratio.', 'nbreg':' Negative binomial NB2 log-link; dispersion alpha is jointly estimated; analytic score and observed information.'}[name]+' Rows: predictors then response. Wald 95% CI.'
         return model(table(a[0],3,2),name)
     if name in ('mixedmodel','gee'): return clustered(engine,name,a)
     if name in ('bootstrapci','testpower','samplesize','kstest'): return resampling(engine,name,a)
@@ -752,10 +752,24 @@ def clustered(engine,name,a):
     if family=='poisson': require(all(v>=0 and v.is_integer() for v in y),'Poisson GEE response must be integer counts')
     if family=='gaussian': b=list(map(float,inverse(X.T*X)*X.T*Y)); mu=[dot(r,b) for r in x]; weights=[1.0]*n
     else:
-        def objective(b):
-            try: return sum(softplus(dot(r,b))-v*dot(r,b) if family=='binomial' else math.exp(dot(r,b))-v*dot(r,b) for r,v in zip(x,y))
-            except OverflowError: return math.inf
-        b,_,_,_=optimize(objective,[0.0]*p); mu=[logistic(dot(r,b)) if family=='binomial' else math.exp(dot(r,b)) for r in x]; weights=[v*(1-v) if family=='binomial' else v for v in mu]
+        def exact(b):
+            # Canonical-link GLM start: the score and the Fisher information
+            # are analytic, so the working-correlation iteration avoids
+            # finite differences.
+            value = 0.0; score = [0.0]*p; information = [[0.0]*p for _ in range(p)]
+            for row,v in zip(x,y):
+                z = dot(row,b)
+                if family=='binomial':
+                    fitted = logistic(z); value += softplus(z)-v*z; weight = fitted*(1-fitted)
+                else:
+                    fitted = math.exp(z); value += fitted-v*z; weight = fitted
+                for j in range(p):
+                    score[j] += row[j]*(fitted-v)
+                    for k in range(j,p): information[j][k] += row[j]*row[k]*weight
+            for j in range(1,p):
+                for k in range(j): information[j][k] = information[k][j]
+            return value,score,information
+        b,_,_,_=newton([0.0]*p,exact); mu=[logistic(dot(r,b)) if family=='binomial' else math.exp(dot(r,b)) for r in x]; weights=[v*(1-v) if family=='binomial' else v for v in mu]
         if family=='binomial':
             margins=[(2*v-1)*dot(r,b) for r,v in zip(x,y)]
             require(not (min(margins)>=-1e-8 and max(margins)>1e-8),'Complete or quasi separation: binomial GEE estimates are not finite')
