@@ -1,18 +1,28 @@
 package com.kirinonakar.symvacas.ui
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.VerticalDivider
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kirinonakar.symvacas.ui.theme.LocalInstrument
@@ -108,9 +118,42 @@ import kotlin.math.abs
             }
             Text(tr("Fitted value"),fontSize=11.sp,color=colors.muted)
         }
-        Column(Modifier.horizontalScroll(rememberScrollState())) {
-            Text((if(binomial)listOf("Observation","Observed","Fitted value","Residual","Pearson residual","Deviance residual","Leverage","Cook's D") else if(machineLearning)listOf("Observation","Observed","Fitted value","Residual") else listOf("Observation","Observed","Fitted value","Residual","Standardized","Leverage","Cook's D")).map {tr(it)}.joinToString(" | "),fontSize=11.sp)
-            residuals.take(100).forEach {row->Text((listOf("row","observed","fitted","residual")+(if(binomial)listOf("standardized","deviance","leverage","cook") else if(machineLearning)emptyList() else listOf("standardized","leverage","cook"))).joinToString(" | "){value(row,it)},fontSize=11.sp,fontFamily=FontFamily.Monospace)}
+        val residualHeaders=(if(binomial)listOf("Observation","Observed","Fitted value","Residual","Pearson residual","Deviance residual","Leverage","Cook's D") else if(machineLearning)listOf("Observation","Observed","Fitted value","Residual") else listOf("Observation","Observed","Fitted value","Residual","Standardized","Leverage","Cook's D")).map {tr(it)}
+        val residualKeys=listOf("row","observed","fitted","residual")+(if(binomial)listOf("standardized","deviance","leverage","cook") else if(machineLearning)emptyList() else listOf("standardized","leverage","cook"))
+        val residualRows=residuals.take(100)
+        val residualGrid=colors.grid
+        val residualHeaderStyle=LocalTextStyle.current.copy(fontSize=11.sp,fontWeight=FontWeight.SemiBold)
+        val residualCellStyle=LocalTextStyle.current.copy(fontSize=11.sp,fontFamily=FontFamily.Monospace)
+        val residualMeasurer=rememberTextMeasurer()
+        val residualDensity=LocalDensity.current
+        val residualColumnWidths=remember(report,digits) {
+            residualKeys.indices.map {column->
+                val headerWidth=residualMeasurer.measure(residualHeaders[column],residualHeaderStyle).size.width
+                val cellWidth=residualRows.maxOfOrNull {row->residualMeasurer.measure(value(row,residualKeys[column]),residualCellStyle).size.width} ?: 0
+                (maxOf(headerWidth,cellWidth)/residualDensity.density).dp+16.dp
+            }
+        }
+        Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+            Column(Modifier.border(1.dp,residualGrid)) {
+                Row(Modifier.height(30.dp).background(colors.scientific)) {
+                    residualHeaders.forEachIndexed {column,header->
+                        Box(Modifier.width(residualColumnWidths[column]).fillMaxHeight().padding(horizontal=8.dp),contentAlignment=Alignment.CenterStart) {Text(header,fontSize=11.sp,fontWeight=FontWeight.SemiBold,maxLines=1,softWrap=false)}
+                        if(column<residualHeaders.lastIndex)VerticalDivider(color=residualGrid,thickness=1.dp)
+                    }
+                }
+                HorizontalDivider(color=residualGrid,thickness=1.dp)
+                Column(Modifier.heightIn(max=320.dp).verticalScroll(rememberScrollState())) {
+                    residualRows.forEachIndexed {index,row->
+                        Row(Modifier.height(28.dp)) {
+                            residualKeys.forEachIndexed {column,key->
+                                Box(Modifier.width(residualColumnWidths[column]).fillMaxHeight().padding(horizontal=8.dp),contentAlignment=Alignment.CenterStart) {Text(value(row,key),fontSize=11.sp,fontFamily=FontFamily.Monospace,maxLines=1,softWrap=false)}
+                                if(column<residualKeys.lastIndex)VerticalDivider(color=residualGrid,thickness=1.dp)
+                            }
+                        }
+                        if(index<residualRows.lastIndex)HorizontalDivider(color=residualGrid,thickness=1.dp)
+                    }
+                }
+            }
         }
         if(residuals.size>100)Text(tr("Showing first 100 rows; copy includes all rows."),fontSize=11.sp,color=colors.muted)
         TextButton(onClick={
