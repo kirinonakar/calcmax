@@ -415,7 +415,7 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
     document.querySelectorAll('.tape-expression').forEach(button=>button.disabled=isBusy()||!!calcSession);
     $('expression').readOnly=!typing||isBusy();
   }
-  function updateResultSource(){ $('result-source').hidden=['scientific','tip'].includes(value('mode'))||!lastResultSource; }
+  function updateResultSource(){ $('result-source').hidden=['scientific','statistics','tip'].includes(value('mode'))||!lastResultSource; }
   function dispose() {
     cancelCalculationPreview();tapeFollow.dispose();displaySizing.dispose();
     cursorResizeObserver?.disconnect();

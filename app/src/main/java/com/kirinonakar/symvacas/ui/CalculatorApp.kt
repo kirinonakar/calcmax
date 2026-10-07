@@ -227,13 +227,13 @@ internal fun largeHistoryTree(root:JSONObject?):Boolean {
     return root!=null&&!safeHistoryTree(root)
 }
 
-@Composable fun Display(m:CalculatorModel,screenExpanded:Boolean=false,onToggleScreen:(()->Unit)?=null,requestInitialFocus:Boolean=true) {
+@Composable fun Display(m:CalculatorModel,screenExpanded:Boolean=false,onToggleScreen:(()->Unit)?=null,requestInitialFocus:Boolean=true,showInput:Boolean=true) {
     val c=LocalInstrument.current
     var typing by rememberSaveable {mutableStateOf(false)}
     LaunchedEffect(m.calcSession!=null){if(m.calcSession!=null)typing=false}
     Column(Modifier.fillMaxWidth().background(c.display).padding(vertical=4.dp)) {
-        DisplayToolbar(m,typing){typing=!typing}
-        DisplayContent(m,typing,requestInitialFocus)
+        if(showInput)DisplayToolbar(m,typing){typing=!typing}
+        DisplayContent(m,typing,requestInitialFocus,showInput=showInput)
         DisplayActions(m,screenExpanded,onToggleScreen)
     }
 }
@@ -267,18 +267,18 @@ internal fun largeHistoryTree(root:JSONObject?):Boolean {
     }
 }
 
-@Composable fun DisplayContent(m:CalculatorModel,typing:Boolean,requestInitialFocus:Boolean=true,scrollState:ScrollState?=null,onInitialFocus:()->Unit={}) {
+@Composable fun DisplayContent(m:CalculatorModel,typing:Boolean,requestInitialFocus:Boolean=true,scrollState:ScrollState?=null,showInput:Boolean=true,onInitialFocus:()->Unit={}) {
     val c=LocalInstrument.current
-    val inputTree=remember(m.editor.source,m.answerDisplay,typing) {
-        if(typing)null else m.inputTree()
+    val inputTree=remember(m.editor.source,m.answerDisplay,typing,showInput) {
+        if(typing||!showInput)null else m.inputTree()
     }
     val focus=remember {FocusRequester()}
     var inputFocused by remember {mutableStateOf(false)}
     val requestInputFocus:()->Boolean={try {focus.requestFocus()} catch (_:IllegalStateException) {false}}
     var caretVisible by remember{mutableStateOf(true)}
-    LaunchedEffect(m.editor,m.committed){caretVisible=true;while(!m.committed){delay(500);caretVisible=!caretVisible}}
-    LaunchedEffect(typing,m.wordWrap,m.poweredOn,requestInitialFocus){
-        if(requestInitialFocus&&!typing&&m.poweredOn&&scrollState?.isScrollInProgress!=true&&requestInputFocus())onInitialFocus()
+    LaunchedEffect(m.editor,m.committed,showInput){caretVisible=true;while(showInput&&!m.committed){delay(500);caretVisible=!caretVisible}}
+    LaunchedEffect(typing,m.wordWrap,m.poweredOn,requestInitialFocus,showInput){
+        if(showInput&&requestInitialFocus&&!typing&&m.poweredOn&&scrollState?.isScrollInProgress!=true&&requestInputFocus())onInitialFocus()
     }
     val calculating=m.busy||m.previewBusy
     var showCalculationStatus by remember{mutableStateOf(false)}
@@ -287,8 +287,8 @@ internal fun largeHistoryTree(root:JSONObject?):Boolean {
         if(calculating){delay(1000);showCalculationStatus=true}
     }
     Column(Modifier.fillMaxWidth().padding(horizontal=14.dp)) {
-        if(!m.poweredOn) Box(Modifier.fillMaxWidth().height(66.dp),contentAlignment=Alignment.Center){Text("OFF · press 2nd to resume",color=c.muted)}
-        else if(typing) BasicTextField(
+        if(showInput&&!m.poweredOn) Box(Modifier.fillMaxWidth().height(66.dp),contentAlignment=Alignment.Center){Text("OFF · press 2nd to resume",color=c.muted)}
+        else if(showInput&&typing) BasicTextField(
             value=TextFieldValue(m.editor.source,TextRange(m.editor.anchor.coerceIn(0,m.editor.source.length),m.editor.cursor.coerceIn(0,m.editor.source.length))),
             onValueChange={
                 val relation=if(!m.committed&&it.selection.collapsed&&it.composition==null)m.editor.typedRelation(it.text,it.selection.end) else null
@@ -323,7 +323,7 @@ internal fun largeHistoryTree(root:JSONObject?):Boolean {
             singleLine=!m.wordWrap,
             maxLines=if(m.wordWrap)4 else 1,
             readOnly=m.calcSession!=null)
-        else Box(Modifier.fillMaxWidth().heightIn(min=60.dp,max=if(m.wordWrap)180.dp else androidx.compose.ui.unit.Dp.Infinity).focusRequester(focus).onFocusChanged{inputFocused=it.isFocused}.onKeyEvent{handleMathInputKey(m,it)}.focusable().then(if(m.wordWrap)Modifier.verticalScroll(rememberScrollState())else Modifier.horizontalScroll(rememberScrollState())).semantics{contentDescription="Current expression"},contentAlignment=Alignment.CenterStart){
+        else if(showInput) Box(Modifier.fillMaxWidth().heightIn(min=60.dp,max=if(m.wordWrap)180.dp else androidx.compose.ui.unit.Dp.Infinity).focusRequester(focus).onFocusChanged{inputFocused=it.isFocused}.onKeyEvent{handleMathInputKey(m,it)}.focusable().then(if(m.wordWrap)Modifier.verticalScroll(rememberScrollState())else Modifier.horizontalScroll(rememberScrollState())).semantics{contentDescription="Current expression"},contentAlignment=Alignment.CenterStart){
             // In scrollable workspaces, merely composing this display must not reveal its caret.
             CompositionLocalProvider(LocalMathInputRevision provides if(m.committed||!inputFocused)null else m.editor,LocalMathCursorTarget provides if(m.committed)null else m.editor.cursorTarget(),LocalMathAfter provides {a,b->requestInputFocus();m.edit(m.editor.after(a,b))},LocalCaretVisible provides caretVisible,LocalActiveToken provides m.editor.activeToken,LocalTypedParens provides m.typedParens,LocalPlaceCursor provides {a,b,p->requestInputFocus();m.edit(m.editor.placeInToken(a,b,p))}) {
                 MathInputLayout(inputTree,m.editor.source,m.inputFont,m.editor.cursor,if(m.committed)null else m.editor.cursorTarget(),select={a,b->requestInputFocus();m.edit(m.editor.selectRange(a,b))},selection=minOf(m.editor.anchor,m.editor.cursor)..maxOf(m.editor.anchor,m.editor.cursor),after={requestInputFocus();m.edit(Editor(m.editor.source))})
@@ -362,7 +362,7 @@ internal fun largeHistoryTree(root:JSONObject?):Boolean {
         val shownCalcValues=m.calcSession?.accepted ?: if(m.committed&&m.lastCalcSource==m.editor.source)m.lastCalcValues else emptyMap()
         val shownCalcSource=m.calcSession?.source ?: if(m.committed&&m.lastCalcSource==m.editor.source)m.lastCalcSource else ""
         val shownCalcFormula=m.variables.optJSONObject(shownCalcSource)?.takeIf {it.has("start")&&it.optString("kind")!="number"}
-        if(shownCalcValues.isNotEmpty()||shownCalcFormula!=null)Row(Modifier.fillMaxWidth().heightIn(min=24.dp).horizontalScroll(rememberScrollState()),verticalAlignment=Alignment.CenterVertically){
+        if(showInput&&(shownCalcValues.isNotEmpty()||shownCalcFormula!=null))Row(Modifier.fillMaxWidth().heightIn(min=24.dp).horizontalScroll(rememberScrollState()),verticalAlignment=Alignment.CenterVertically){
             MathText("CALC  ",11f,modifier=Modifier.alignBy(MathAxis),tint=c.muted)
             if(shownCalcFormula!=null){
                 MathText("$shownCalcSource = ",13f,modifier=Modifier.alignBy(MathAxis),tint=c.accent)

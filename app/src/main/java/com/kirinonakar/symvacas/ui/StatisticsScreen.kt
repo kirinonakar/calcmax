@@ -509,7 +509,7 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
         }
         StatisticsAnalysis(m,numericRows,if(dataColumns.size==1)"list" else dataKind)
         AdvancedStatistics(m,data,dataKind)
-        Display(m,requestInitialFocus=false)
+        Display(m,requestInitialFocus=false,showInput=false)
     }
 }
 
