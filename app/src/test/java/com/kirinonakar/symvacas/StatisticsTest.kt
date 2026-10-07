@@ -14,6 +14,9 @@ import com.kirinonakar.symvacas.ui.statisticsMoveColumn
 import com.kirinonakar.symvacas.ui.statisticsRemoveColumn
 import com.kirinonakar.symvacas.ui.statisticsDataSource
 import com.kirinonakar.symvacas.ui.statisticsDateAxis
+import com.kirinonakar.symvacas.ui.statisticsReplaceDataRows
+import com.kirinonakar.symvacas.ui.statisticsRows
+import com.kirinonakar.symvacas.ui.statisticsTableColumnLabels
 import com.kirinonakar.symvacas.ui.statisticsGroupedValues
 import com.kirinonakar.symvacas.ui.statisticsNumericRows
 import com.kirinonakar.symvacas.ui.statisticsRecallSource
@@ -32,6 +35,13 @@ class StatisticsDataSourceTest {
         assertEquals(4,count("1,2\n3,4,5,6\n,,"))
         try{count(List(101){"1"}.joinToString(","));throw AssertionError("Expected column limit")}catch(_:IllegalArgumentException){}
     }
+    @Test fun nColumnSelectionRecognizesOneTwoThreeColumnsAsListXyXyz() {
+        fun kind(selected:String,count:Int)=com.kirinonakar.symvacas.ui.statisticsEffectiveKind(selected,count)
+        assertEquals("list",kind("columns:1",1));assertEquals("xy",kind("columns:2",2));assertEquals("xyz",kind("columns:3",3))
+        assertEquals("columns:4",kind("columns:4",4));assertEquals("columns:100",kind("columns:100",100))
+        assertEquals("xy",kind("xy",2));assertEquals("list",kind("list",1));assertEquals("xyz",kind("xyz",3))
+    }
+
     @Test fun directInputDetectsArbitraryHeadersWithoutRemovingFirstExpressionsOrGroups() {
         val source="Treatment,Measurement\nA,1\nB,2\nA,3"
         val rows=com.kirinonakar.symvacas.ui.statisticsRows(source)
@@ -116,6 +126,18 @@ class StatisticsDataSourceTest {
         assertEquals("2,1\n5,4",statisticsMoveColumn("1,2\n4,5",0,1))
         assertEquals("\"a,b\",1\n4,3",statisticsMoveColumn("1,\"a,b\"\n3,4",0,1))
         assertEquals(listOf(listOf("1","2"),listOf("2","4")),statisticsCsvRows("1,2\n2,4"))
+    }
+
+    @Test fun tableEditorLabelsUseDetectedHeadersAndRowWritesKeepThem() {
+        val csv="Treatment,Measurement\nA,1\nB,2"
+        assertEquals(listOf("Treatment (x)","Measurement (y)"),statisticsTableColumnLabels(csv,"xy"))
+        assertEquals(listOf("x","y"),statisticsTableColumnLabels("1,2\n2,4","xy"))
+        assertEquals(listOf("value"),statisticsTableColumnLabels("1\n2","list"))
+        assertEquals(listOf("weight (value)"),statisticsTableColumnLabels("weight\n1\n2","list"))
+        assertEquals(csv,statisticsReplaceDataRows(csv,statisticsRows(csv)))
+        assertEquals("Treatment,Measurement\nC,1\nB,2",statisticsReplaceDataRows(csv,listOf(listOf("C","1"),listOf("B","2"))))
+        assertEquals("Treatment,Measurement\nB,2",statisticsReplaceDataRows(csv,listOf(listOf("B","2"))))
+        assertEquals("1,2\n3,4",statisticsReplaceDataRows("1,2\n2,4",listOf(listOf("1","2"),listOf("3","4"))))
     }
 }
 

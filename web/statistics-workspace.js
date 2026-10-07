@@ -59,11 +59,15 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
       if(source!==detectedColumnSource){detectedColumnSource=source;try{detectedColumnCount=statisticsDetectedColumns(source);}catch{detectedColumnCount=null;}}
       if(detectedColumnCount!==null)$('statistics-columns').value=String(detectedColumnCount);
     }
-    return `columns:${Number(value('statistics-columns'))||4}`;
+    return statisticsKindForColumns(Number(value('statistics-columns'))||4);
   };
   const dataColumns=()=>statisticsColumnCount(dataKind());
   function setDataKind(kind){
-    if(kind?.startsWith('columns:')){$('statistics-columns').value=String(statisticsColumnCount(kind));$('statistics-kind').value='columns';}
+    if(kind?.startsWith('columns:')){
+      const count=statisticsColumnCount(kind);
+      $('statistics-columns').value=String(count);
+      $('statistics-kind').value=count>=1&&count<=3?statisticsKindForColumns(count):'columns';
+    }
     else $('statistics-kind').value=kind;
   }
   function inferDataKind(){try{return statisticsKindForColumns(csvRows(value('statistics-data'))[0].length);}catch{return 'list';}}
@@ -128,7 +132,7 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
   $('regression-clear').onclick=()=>{cancelRegression();statisticsGraph=null;$('regression-caption').replaceChildren();$('regression-inference').replaceChildren();$('regression-export').hidden=true;$('regression-transfer').hidden=true;if(!$('statistics-plot').hidden)$('statistics-plot-run').click();};
   $('regression-export').onclick=()=>downloadFile('regression-residuals.csv',regressionResidualCSV(statisticsGraph?.report),'text/csv');
   function statisticsControls(){
-    const columns=dataColumns(),kind=dataKind(),pairOps=['correlation','ttestpaired','wilcoxon','chi2independence','fisherexact'],multiOps=['ttest2','ztest2','mannwhitney','anova','tukey','kruskal'];
+    const columns=dataColumns(),kind=dataKind(),columnsMode=value('statistics-kind')==='columns',pairOps=['correlation','ttestpaired','wilcoxon','chi2independence','fisherexact'],multiOps=['ttest2','ztest2','mannwhitney','anova','tukey','kruskal'];
     filterMenu('statistics-op',op=>columns!==1||op==='wilcoxon'||![...pairOps,...multiOps].includes(op),'stats');
     const op=value('statistics-op'),paired=pairOps.includes(op)&&!(op==='wilcoxon'&&columns===1),multi=['ttest2','ztest2','mannwhitney'].includes(op),all=['anova','tukey','kruskal'].includes(op);
     filterMenu('statistics-grouping',grouping=>grouping==='columns'||!paired&&kind==='xy','columns');
@@ -152,8 +156,8 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
     $('statistics-sigma').disabled=!['ztest','ztest2','zinterval'].includes(op);
     $('statistics-sigma-y').disabled=op!=='ztest2';
     $('statistics-yates-options').hidden=op!=='chi2independence';
-    $('statistics-columns-label').hidden=!kind.startsWith('columns:');
-    $('statistics-columns-auto-label').hidden=!kind.startsWith('columns:');
+    $('statistics-columns-label').hidden=!columnsMode;
+    $('statistics-columns-auto-label').hidden=!columnsMode;
     $('statistics-columns').disabled=$('statistics-columns-auto').checked;
     $('regression-section').hidden=columns<2;
     $('regression-response').value=automaticResponse()?String(columns-1):String(state.fields['regression-response-choice']);
@@ -201,9 +205,12 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
       if(numericCount>=2)saveHeatMapAxisSelections();
       else{delete state.fields['statistics-heatmap-x-columns'];delete state.fields['statistics-heatmap-y-columns'];}
     }
-    setText($('statistics-data-label'),kind==='list'?'One value per line':kind==='xy'?'x, y values':kind==='xyz'?'x, y, z values':statisticsColumnNames(columns).join(', '));
+    // Detected header names replace the generic x/y names in the localized value hint.
+    const dataLabels=statisticsColumnLabels(value('statistics-data'),kind).join(', ');
+    setText($('statistics-data-label'),kind==='list'?'One value per line':kind==='xy'?t('x, y values').replace('x, y',dataLabels):kind==='xyz'?t('x, y, z values').replace('x, y, z',dataLabels):dataLabels);
     try{$('statistics-samples').textContent=analysisSummary();}catch{setText($('statistics-samples'),'Enter data to see analyzed groups');}
     advanced?.render();
+    updateLineNumbers();
   }
   function updateHeatMapAxis(id,names,rows,excluded=new Set()){
     const container=$(id),axis=id.endsWith('x-axis')?'x':'y',stateField=`statistics-heatmap-${axis}-columns`,existing=[...container.querySelectorAll('input:checked')].map(input=>Number(input.value)),hadChoices=container.querySelectorAll('input').length>0;
@@ -246,11 +253,25 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
   for(const id of ['statistics-column','statistics-first-group','statistics-second-group'])$(id).onchange=()=>{statisticsControls();refreshWorkspaceMath();};
   $('statistics-yates').onchange=()=>{refreshWorkspaceMath();persist();};
   function editorRows(){return value('statistics-data').trim()?csvRows(value('statistics-data'),{preserveEmptyRows:true}):[];}
+  // Number every logical line; the gutter shares the textarea line height and mirrors its vertical scroll.
+  function updateLineNumbers(){
+    const field=$('statistics-data'),gutter=$('statistics-line-numbers'),count=field.value.split('\n').length,numbers=[];
+    for(let line=1;line<=count;line++)numbers.push(line);
+    gutter.textContent=numbers.join('\n');syncLineNumberScroll();
+  }
+  function syncLineNumberScroll(){$('statistics-line-numbers').style.transform=`translateY(${-$('statistics-data').scrollTop}px)`;}
+  // The grid edits only the rows below a detected header, so the header row has to survive every write-back.
+  function editorHeader(){
+    try{
+      const stored=csvRows(value('statistics-data'),{preserveEmptyRows:true,skipHeader:false}),data=editorRows();
+      return data.length<stored.length?stored.slice(0,stored.length-data.length):[];
+    }catch{return [];}
+  }
   // Quote an empty List cell so a blank row survives serialization and reload.
-  function writeRows(rows){invalidateRegression();$('statistics-data').value=rows.map(row=>row.length===1&&!row[0]?'""':row.map(cell=>/[",\r\n\t]/.test(cell)?'"'+cell.replace(/"/g,'""')+'"':cell).join(',')).join('\n');statisticsControls();refreshWorkspaceMath();persist();}
+  function writeRows(rows){invalidateRegression();$('statistics-data').value=editorHeader().concat(rows).map(row=>row.length===1&&!row[0]?'""':row.map(cell=>/[",\r\n\t]/.test(cell)?'"'+cell.replace(/"/g,'""')+'"':cell).join(',')).join('\n');statisticsControls();refreshWorkspaceMath();persist();}
   function statisticsGrid(){
     const rows=editorRows(),columns=dataColumns();
-    const table=editableTable({rows:rows.length,columns:statisticsColumnNames(columns),label:t('Stats data'),value:(row,col)=>rows[row][col]||'',
+    const table=editableTable({rows:rows.length,columns:statisticsColumnLabels(value('statistics-data'),dataKind()),label:t('Stats data'),value:(row,col)=>rows[row][col]||'',
       onInput:(row,col,cell)=>{while(rows[row].length<columns)rows[row].push('');rows[row][col]=cell;writeRows(rows);},
       onDeleteRow:row=>{rows.splice(row,1);writeRows(rows);statisticsGrid();}});
     $('statistics-grid').replaceChildren(table);
@@ -264,6 +285,7 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
   };
   $('statistics-add-row').onclick=()=>{try{const rows=editorRows(),columns=Math.max(dataColumns(),rows[0]?.length||0);rows.push(Array(columns).fill(''));writeRows(rows);if(!$('statistics-grid').hidden)statisticsGrid();}catch(exc){error(exc.message);}};
   $('statistics-data').addEventListener('input',()=>{invalidateRegression();statisticsControls();});
+  $('statistics-data').addEventListener('scroll',syncLineNumberScroll);
   $('statistics-data').addEventListener('paste',event=>{
     const text=event.clipboardData?.getData('text/plain')||event.clipboardData?.getData('text');if(!text)return;
     const converted=markdownTableCsv(text);if(converted===null)return;

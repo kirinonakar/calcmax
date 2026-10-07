@@ -1,5 +1,5 @@
 import {parse,latexInput,closeInputBrackets} from './parser.js';
-import {resultMathDisplay} from './result-display.js';
+import {resultDisplayTree,resultMathDisplay,resultText} from './result-display.js';
 import {t,setText} from './i18n.js';
 import {expressionInputDisplay} from './expression-display.js';
 import {calcVariables,calcBindings} from './calc-session.js';
@@ -51,15 +51,13 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
     function freeze(node){if(inputAnswer&&node.kind==='symbol'&&node.value==='Ans')return inputAnswer;if(inputAnswer&&node.kind==='call'&&node.value==='Ans')return {kind:'answer_call',args:[inputAnswer,...node.args.map(freeze)]};return {...node,args:(node.args||[]).map(freeze)};}
     return inputAnswer?freeze(tree):tree;
   }
+  function resultOptions(){return {notation:engineeringConversion?'eng':state.resultDisplayMode,grouping,engineeringShift,showZeroExponent:engineeringConversion};}
   function renderResult() {
     if(!lastResult){renderTape();return;}
-    let tree=decimal ? lastResult.decimalTree||lastResult.tree : lastResult.tree;
-    if(mixed&&!decimal&&tree?.kind==='fraction'){
-      try{const numerator=BigInt(tree.args[0].value),denominator=BigInt(tree.args[1].value),whole=numerator/denominator,remainder=(numerator<0n?-numerator:numerator)%denominator;if(whole)tree={kind:'mixed',args:[{kind:'number',value:whole.toString()},{kind:'fraction',args:[{kind:'number',value:remainder.toString()},{kind:'number',value:denominator.toString()}]}]};}catch{}
-    }
+    const tree=resultDisplayTree(lastResult,{decimal,mixed});
     const text=(decimal ? lastResult.decimal : lastResult.exact)||'';
     const output=element('div');
-    if(tree && text.length<=40000) output.append(resultMathDisplay(tree,state.digits,decimal||lastResult.approximate,{notation:engineeringConversion?'eng':state.resultDisplayMode,grouping,engineeringShift,showZeroExponent:engineeringConversion}));
+    if(tree && text.length<=40000) output.append(resultMathDisplay(tree,state.digits,decimal||lastResult.approximate,resultOptions()));
     else renderFormulas(output,text.split(/\r?\n/),{digits:state.digits});
     if(output.childNodes.length!==$('answer').childNodes.length||[...output.childNodes].some((node,i)=>!node.isEqualNode($('answer').childNodes[i])))$('answer').replaceChildren(...output.childNodes);
     updateResultSource();
@@ -249,7 +247,7 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
   $('insert-mode').onclick=()=>{overwrite=!overwrite;$('insert-mode').textContent=overwrite?'OVR':'INS';};
   $('paste').onclick=async()=>{try{insertPastedExpression(await navigator.clipboard.readText());}catch{const content=element('div'),field=element('textarea');field.rows=4;field.setAttribute('aria-label',t('Paste expression'));content.append(field,control('Insert',()=>{try{insertPastedExpression(field.value);$('dialog').close();}catch(exc){toast(exc.message);}}));openDialog('Paste',content);field.focus({preventScroll:true});}};
   document.addEventListener('paste',event=>{if(event.defaultPrevented||value('mode')!=='scientific'||typing||$('dialog').open||$('settings-dialog').open||event.target.closest?.('input,select,textarea')&&event.target!==$('expression'))return;const text=event.clipboardData?.getData('text/plain')||event.clipboardData?.getData('text');if(!text)return;event.preventDefault();try{insertPastedExpression(text);}catch(exc){toast(exc.message);}});
-  $('answer-copy').onclick=()=>lastResult&&clipboard(decimal?lastResult.decimal:lastResult.exact);
+  $('answer-copy').onclick=()=>{if(lastResult)clipboard(resultText(lastResult,{decimal,mixed,digits:state.digits,...resultOptions()}));};
   $('answer-insert').onclick=()=>{if(state.variables.Ans){changeMode('scientific');insert('Ans',null,{factor:true});}else toast('먼저 재사용 가능한 결과를 계산해 주세요.');};
   $('exact-toggle').onclick=()=>{decimal=!decimal;$('exact-toggle').textContent=decimal?'≈ Decimal':'Exact';renderResult();};
   $('screen-toggle').onclick=()=>{screenExpanded=!screenExpanded;document.documentElement.dataset.screenExpanded=String(screenExpanded);$('screen-toggle').classList.toggle('active',screenExpanded);};

@@ -123,3 +123,54 @@ class WrappedMathResultTest {
         assertEquals(before,result.toString())
     }
 }
+
+class ResultCopyTextTest {
+    private fun leaf(value:String)=JSONObject().put("kind","number").put("value",value)
+    private fun text(value:String)=JSONObject().put("kind","text").put("value",value)
+    private fun args(vararg nodes:JSONObject)=org.json.JSONArray(nodes.toList())
+
+    @Test fun copiedAnswerRoundsToTheDisplayedDigits() {
+        val result=JSONObject().put("exact","0.333333333333333333333333333333").put("decimal","0.333333333333333333333333333333")
+            .put("decimalTree",leaf("0.333333333333333333333333333333"))
+        assertEquals("0.3333333333",ResultDisplayFormat.resultText(result,true,false,ResultDisplayMode.OFF,false,false,0,false,false,10))
+    }
+
+    @Test fun copiedAnswerFollowsNotationAndGrouping() {
+        val notation=JSONObject().put("exact","12345612345.6789").put("decimal","12345612345.6789").put("decimalTree",leaf("12345612345.6789"))
+        assertEquals("1.23456×10^10",ResultDisplayFormat.resultText(notation,true,false,ResultDisplayMode.SCIENTIFIC,false,false,0,false,false,5))
+        val grouped=JSONObject().put("exact","1234567.891").put("decimal","1234567.891").put("decimalTree",leaf("1234567.891"))
+        assertEquals("1,234,567.891",ResultDisplayFormat.resultText(grouped,true,false,ResultDisplayMode.OFF,true,false,0,false,false,10))
+    }
+
+    @Test fun copiedAnswerKeepsFractionsAndRoundsEveryListElement() {
+        val fraction=JSONObject().put("exact","1/2").put("decimal","0.5").put("tree",JSONObject().put("kind","fraction").put("args",args(text("1"),text("2"))))
+        assertEquals("1/2",ResultDisplayFormat.resultText(fraction,false,false,ResultDisplayMode.OFF,false,false,0,false,false,10))
+        val list=JSONObject().put("exact","[1.4142135623730950488016887242097, -1.4142135623730950488016887242097]").put("decimal","[1.4142135623730950488016887242097, -1.4142135623730950488016887242097]")
+            .put("decimalTree",JSONObject().put("kind","list").put("args",args(leaf("1.4142135623730950488016887242097"),leaf("-1.4142135623730950488016887242097"))))
+        assertEquals("[1.4142135624, -1.4142135624]",ResultDisplayFormat.resultText(list,true,false,ResultDisplayMode.OFF,false,false,0,false,false,10))
+    }
+
+    @Test fun copiedAnswerFollowsMixedAndDmsDisplays() {
+        val fraction=JSONObject().put("exact","7/2").put("decimal","3.5").put("tree",JSONObject().put("kind","fraction").put("args",args(text("7"),text("2"))))
+        assertEquals("3 1/2",ResultDisplayFormat.resultText(fraction,false,true,ResultDisplayMode.OFF,false,false,0,false,false,10))
+        val dms=JSONObject().put("exact","12.5125").put("decimal","12.5125").put("dms",true)
+            .put("tree",JSONObject().put("kind","dms").put("args",args(leaf("12"),leaf("30"),leaf("45"))))
+        assertEquals("12°30′45″",ResultDisplayFormat.resultText(dms,false,false,ResultDisplayMode.OFF,false,false,0,true,false,10))
+    }
+
+    @Test fun copiedAnswerRoundsRelationsAndFallsBackForUnknownTrees() {
+        val relation=JSONObject().put("exact","Eq(x, 0.73908513321516064165531208767)").put("decimal","x = 0.73908513321516064165531208767")
+            .put("tree",JSONObject().put("kind","relation").put("value","=").put("args",args(JSONObject().put("kind","symbol").put("value","x"),leaf("0.73908513321516064165531208767"))))
+        assertEquals("x = 0.7390851332",ResultDisplayFormat.resultText(relation,false,false,ResultDisplayMode.OFF,false,false,0,false,false,10))
+        val sum=JSONObject().put("exact","0.5 + 0.25").put("decimal","0.5 + 0.25").put("tree",JSONObject().put("kind","sum").put("args",args(leaf("0.5"),leaf("0.25"))))
+        assertEquals("0.5 + 0.25",ResultDisplayFormat.resultText(sum,true,false,ResultDisplayMode.OFF,false,false,0,false,false,10))
+    }
+
+    @Test fun copiedAnswerRoundsStatisticsRows() {
+        val rows=JSONObject().put("kind","rows").put("args",args(
+            JSONObject().put("kind","row").put("value","mean").put("args",args(leaf("1.2345678901234567"))),
+            JSONObject().put("kind","row").put("value","stdev").put("args",args(leaf("0.9876543210987654")))))
+        val result=JSONObject().put("exact","mean: 1.2345678901234567\nstdev: 0.9876543210987654").put("decimal","mean: 1.2345678901234567\nstdev: 0.9876543210987654").put("decimalTree",rows)
+        assertEquals("mean: 1.2345678901\nstdev: 0.9876543211",ResultDisplayFormat.resultText(result,true,false,ResultDisplayMode.OFF,false,false,0,false,false,10))
+    }
+}

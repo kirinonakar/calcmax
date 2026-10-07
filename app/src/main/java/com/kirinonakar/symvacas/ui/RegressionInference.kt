@@ -158,7 +158,7 @@ import kotlin.math.abs
         if(residuals.size>100)Text(tr("Showing first 100 rows; copy includes all rows."),fontSize=11.sp,color=colors.muted)
         TextButton(onClick={
             val keys=listOf("row","observed","fitted","residual","standardized","leverage","cook","deviance")
-            clipboard.setText(AnnotatedString(keys.joinToString(",")+"\n"+residuals.joinToString("\n") {row->keys.joinToString(","){key->if(row.isNull(key))"" else row.optString(key)}}))
+            clipboard.setText(AnnotatedString(keys.joinToString(",")+"\n"+residuals.joinToString("\n") {row->keys.joinToString(","){key->if(row.isNull(key))"" else ResultDisplayFormat.formatText(row.optString(key),ResultDisplayMode.OFF,false,maxFractionDigits=digits)}}))
         }) {Text(tr("Copy residual CSV"))}
     }
 }

@@ -21,6 +21,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
 import com.kirinonakar.symvacas.calculator.CalculatorModel
 import com.kirinonakar.symvacas.math.Editor
@@ -32,7 +34,7 @@ import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
 import kotlin.math.max
 
-@Composable private fun StatHeader(text:String,modifier:Modifier) { val c=LocalInstrument.current; Box(modifier.fillMaxHeight(),contentAlignment=Alignment.Center){Text(text,fontSize=11.sp,color=c.muted,fontWeight=FontWeight.SemiBold)} }
+@Composable private fun StatHeader(text:String,modifier:Modifier) { val c=LocalInstrument.current; Box(modifier.fillMaxHeight(),contentAlignment=Alignment.Center){Text(text,Modifier.padding(horizontal=4.dp),fontSize=11.sp,color=c.muted,fontWeight=FontWeight.SemiBold,maxLines=1,overflow=TextOverflow.Ellipsis)} }
 @Composable private fun HeatMapAxisPicker(title:String,columns:List<Pair<Int,String>>,selected:Set<Int>,onToggle:(Int)->Unit) {
     Text(tr(title),fontSize=11.sp,color=LocalInstrument.current.muted)
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(5.dp)) {
@@ -53,6 +55,35 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
         BasicTextField(value,onValue,Modifier.fillMaxSize().keepInputVisible().focusRequester(focus).onFocusChanged {focused=it.isFocused}.testTag(tag),
             textStyle=MaterialTheme.typography.bodyMedium.copy(fontSize=12.sp,color=c.ink),singleLine=true,cursorBrush=SolidColor(c.accent),
             decorationBox={innerTextField->Box(Modifier.fillMaxSize().padding(horizontal=8.dp),contentAlignment=Alignment.CenterStart){innerTextField()}})
+    }
+}
+
+@Composable private fun StatDirectInput(value:String,onValue:(String)->Unit,label:String) {
+    val c=LocalInstrument.current
+    val vertical=rememberScrollState();val horizontal=rememberScrollState()
+    val fieldFocus=remember {FocusRequester()}
+    var focused by remember {mutableStateOf(false)}
+    val lineHeight=24.sp
+    val lineCount=value.count {it=='\n'}+1
+    Column(Modifier.fillMaxWidth()) {
+        Text(label,fontSize=11.sp,color=c.muted)
+        Row(Modifier.fillMaxWidth().height(180.dp).border(1.dp,if(focused)c.accent else c.grid)) {
+            Box(Modifier.width(38.dp).fillMaxHeight().background(c.scientific).verticalScroll(vertical).then(statCellTouch(fieldFocus))) {
+                Text((1..lineCount).joinToString("\n"),Modifier.fillMaxWidth().padding(horizontal=4.dp,vertical=10.dp),fontSize=12.sp,fontFamily=FontFamily.Monospace,lineHeight=lineHeight,color=c.muted,textAlign=TextAlign.End,softWrap=false)
+            }
+            VerticalDivider(color=c.grid,thickness=1.dp)
+            BoxWithConstraints(Modifier.weight(1f).fillMaxHeight().then(statCellTouch(fieldFocus))) {
+                val minFieldWidth=(maxWidth-16.dp).coerceAtLeast(0.dp)
+                Box(Modifier.fillMaxSize().verticalScroll(vertical)) {
+                    Box(Modifier.horizontalScroll(horizontal)) {
+                        BasicTextField(value,onValue,Modifier.widthIn(min=minFieldWidth).keepInputVisible().focusRequester(fieldFocus).onFocusChanged {focused=it.isFocused}.testTag("statistics-direct-input"),
+                            textStyle=MaterialTheme.typography.bodyLarge.copy(fontFamily=FontFamily.Monospace,lineHeight=lineHeight),
+                            cursorBrush=SolidColor(c.accent),
+                            decorationBox={inner->Box(Modifier.padding(horizontal=8.dp,vertical=10.dp)){inner()}})
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -82,7 +113,7 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
     var columnCount by rememberSaveable {mutableStateOf(if(selectedDataKind.startsWith("columns:"))statisticsColumnCount(selectedDataKind).toString() else "4")}
     var autoColumns by rememberSaveable {mutableStateOf(m.statisticsAutoColumns)}
     val detectedColumns=remember(data) {runCatching {statisticsDetectedColumns(data)}}
-    val dataKind=if(autoColumns&&selectedDataKind.startsWith("columns:"))"columns:${detectedColumns.getOrDefault(statisticsColumnCount(selectedDataKind))}" else selectedDataKind
+    val dataKind=statisticsEffectiveKind(selectedDataKind,if(autoColumns)detectedColumns.getOrDefault(statisticsColumnCount(selectedDataKind)) else statisticsColumnCount(selectedDataKind))
     val dataColumns=statisticsColumnNames(dataKind)
     var regression by rememberSaveable {mutableStateOf(m.statisticsRegression)}
     var regularization by rememberSaveable {mutableStateOf(m.statisticsRegularization)}
@@ -183,13 +214,13 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
             SmallAction("Delete"){if(activeName.isNotBlank()){m.deleteDataSet(activeName);selected="";isNew=true;startNew()}}
         }
         Choices(listOf("List","x,y data","x,y,z data","n columns"),when(dataKind){"xy"->"x,y data";"xyz"->"x,y,z data";"list"->"List";else->"n columns"},{m.clearRegression();selectedDataKind=when(it){"x,y data"->"xy";"x,y,z data"->"xyz";"n columns"->"columns:${columnCount.toIntOrNull()?.coerceIn(1,100) ?: 4}";else->"list"};plotType=if(selectedDataKind=="xy")"Scatter" else "Histogram"})
-        if(dataKind.startsWith("columns:")) {
+        if(selectedDataKind.startsWith("columns:")) {
             Row(Modifier.horizontalScroll(rememberScrollState()),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                 Field(if(autoColumns)statisticsColumnCount(dataKind).toString() else columnCount,"Column count (1–100)",Modifier.width(170.dp).testTag("statistics-columns"),enabled=!autoColumns) {text->
                     columnCount=text
                     text.toIntOrNull()?.takeIf {it in 1..100}?.let {m.clearRegression();selectedDataKind="columns:$it"}
                 }
-                Checkbox(autoColumns,{m.clearRegression();if(autoColumns){columnCount=statisticsColumnCount(dataKind).toString();selectedDataKind=dataKind};autoColumns=it},Modifier.testTag("statistics-columns-auto"))
+                Checkbox(autoColumns,{m.clearRegression();if(autoColumns){columnCount=statisticsColumnCount(dataKind).toString();selectedDataKind="columns:${statisticsColumnCount(dataKind)}"};autoColumns=it},Modifier.testTag("statistics-columns-auto"))
                 Text(tr("Auto columns"),fontSize=12.sp)
             }
             if(autoColumns&&detectedColumns.isFailure)Text(tr("Column count must be between 1 and 100"),fontSize=11.sp,color=LocalInstrument.current.danger)
@@ -200,10 +231,10 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
             SmallAction(if(csv)"Table editor" else "Direct input"){csv=!csv}
             SmallAction("Add row"){if(parsedRows.size<999)data+="\n"+",".repeat(dataColumns.size-1)}
         }
-        if(csv)OutlinedTextField(data,{updated->data=normalizeStatisticsMarkdownPaste(data,updated)?:updated},Modifier.fillMaxWidth().height(180.dp).keepInputVisible(),label={Text(if(dataKind.startsWith("columns:"))dataColumns.joinToString(", ") else when(dataKind){"xy"->if(isKorean())"x, y 값" else "x, y values";"xyz"->if(isKorean())"x, y, z 값" else "x, y, z values";else->tr("One value per line")})},textStyle=MaterialTheme.typography.bodyLarge.copy(fontFamily=FontFamily.Monospace))
+        if(csv)StatDirectInput(data,{updated->data=normalizeStatisticsMarkdownPaste(data,updated)?:updated},if(dataKind=="list")tr("One value per line") else statisticsTableColumnLabels(data,dataKind).joinToString(", ")+(if(dataKind=="xy"||dataKind=="xyz")(if(isKorean())" 값" else " values") else ""))
         else {
             val grid=LocalInstrument.current.grid
-            val tableColumns=if(dataKind=="list")listOf("value") else dataColumns
+            val tableColumns=statisticsTableColumnLabels(data,dataKind)
             BoxWithConstraints(Modifier.fillMaxWidth()) {
                 val tableWidth=maxOf(maxWidth,if(tableColumns.size>3)(tableColumns.size*90+78).dp else 0.dp)
                 Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
@@ -244,11 +275,11 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
                                 VerticalDivider(color=grid,thickness=1.dp)
                                 repeat(tableColumns.size) {column->
                                     StatCell(row.getOrElse(column){""},Modifier.weight(1f),cellFocus[column],"statistics-cell-$index-$column") {text->
-                                        val next=parsedRows.map {it.toMutableList().apply {while(size<tableColumns.size)add("")}}.toMutableList();next[index][column]=text;data=next.joinToString("\n",transform=::statisticsCsvLine)
+                                        val next=parsedRows.map {it.toMutableList().apply {while(size<tableColumns.size)add("")}}.toMutableList();next[index][column]=text;data=statisticsReplaceDataRows(data,next)
                                     }
                                     VerticalDivider(color=grid,thickness=1.dp)
                                 }
-                                Box(Modifier.width(48.dp).fillMaxHeight(),contentAlignment=Alignment.Center){SmallAction("−"){data=parsedRows.filterIndexed {i,_->i!=index}.joinToString("\n",transform=::statisticsCsvLine)}}
+                                Box(Modifier.width(48.dp).fillMaxHeight(),contentAlignment=Alignment.Center){SmallAction("−"){data=statisticsReplaceDataRows(data,parsedRows.filterIndexed {i,_->i!=index})}}
                             }
                             if(index<parsedRows.lastIndex)HorizontalDivider(color=grid,thickness=1.dp)
                         }
@@ -454,7 +485,7 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
                             val displayedValue=ResultDisplayFormat.formatText(value,m.resultDisplayMode,m.thousandsSeparator,maxFractionDigits=m.displayDigits)
                             val korean=isKorean()
                             TextButton(onClick={
-                                clipboard.setText(AnnotatedString(value))
+                                clipboard.setText(AnnotatedString(displayedValue))
                                 android.widget.Toast.makeText(context,if(korean)"$label 값 복사됨" else "$label copied",android.widget.Toast.LENGTH_SHORT).show()
                             },contentPadding=PaddingValues(horizontal=8.dp,vertical=0.dp),
                                 modifier=Modifier.semantics {contentDescription=if(korean)"$label 값 복사" else "Copy $label value"}) {

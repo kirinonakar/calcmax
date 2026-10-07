@@ -180,4 +180,124 @@ object ResultDisplayFormat {
         val grouped = integer.reversed().chunked(3).joinToString(",").reversed()
         return sign + grouped + fraction
     }
+
+    /** The tree the answer view renders for these settings; the display and the Copy text share it. */
+    fun resultTree(result:JSONObject,decimal:Boolean,mixed:Boolean,engineeringConversion:Boolean,dmsDisplay:Boolean,dmsConversion:Boolean):JSONObject? {
+        val useDecimal=decimal||engineeringConversion
+        val wantDms=dmsDisplay&&!engineeringConversion
+        var tree=when {
+            wantDms&&result.optBoolean("dms")->result.optJSONObject(if(decimal)"decimalTree" else "tree")
+            wantDms->dmsTree(result.optString("decimal"))
+            result.optBoolean("dms")->result.optJSONObject("numericDecimalTree")
+                ?: result.optJSONObject("numericTree")
+                ?: result.optJSONObject(if(decimal)"decimalTree" else "tree")
+            dmsConversion->result.optJSONObject("decimalTree") ?: result.optJSONObject("tree")
+            else->result.optJSONObject(if(useDecimal)"decimalTree" else "tree") ?: result.optJSONObject("tree")
+        }
+        if(mixed&&!useDecimal&&tree?.optString("kind")=="fraction") {
+            val fraction=tree
+            tree=runCatching {
+                val numerator=fraction!!.getJSONArray("args").getJSONObject(0).getString("value").toBigInteger()
+                val denominator=fraction.getJSONArray("args").getJSONObject(1).getString("value").toBigInteger()
+                val parts=numerator.abs().divideAndRemainder(denominator)
+                if(parts[0].signum()==0)fraction else JSONObject().put("kind","call").put("value","mixed").put("args",JSONArray(listOf(parts[0]*numerator.signum().toBigInteger(),parts[1],denominator).map {JSONObject().put("kind","number").put("value",it.toString())}))
+            }.getOrDefault(tree)
+        }
+        return tree
+    }
+
+    /** Copy text for the answer view: the digits, grouping and notation the display shows. */
+    fun resultText(result:JSONObject,decimal:Boolean,mixed:Boolean,displayMode:ResultDisplayMode,thousandsSeparator:Boolean,engineeringConversion:Boolean,engineeringShift:Int,dmsDisplay:Boolean,dmsConversion:Boolean,displayDigits:Int):String {
+        val useDecimal=decimal||engineeringConversion
+        val effectiveMode=if(engineeringConversion)ResultDisplayMode.ENGINEERING else displayMode
+        val shift=if(engineeringConversion)engineeringShift else 0
+        val compact=result.optString("exact").length>20_000||largeHistoryTree(result.optJSONObject(if(decimal)"decimalTree" else "tree"))
+        val formatted=if(compact)null else resultTree(result,decimal,mixed,engineeringConversion,dmsDisplay,dmsConversion)?.let{formatTree(it,effectiveMode,thousandsSeparator,shift,engineeringConversion,displayDigits)}
+        return formatted?.let(::treeText) ?: formatText(result.optString(if(useDecimal)"decimal" else "exact"),effectiveMode,thousandsSeparator,shift,engineeringConversion,displayDigits)
+    }
+
+    /** Plain text for a formatted display tree; null when the tree has no faithful text form. */
+    private fun treeText(node:JSONObject):String? {
+        val kind=node.optString("kind")
+        val value=node.optString("value")
+        val args=node.optJSONArray("args")
+        fun part(index:Int):String? = args?.optJSONObject(index)?.let(::treeText)
+        return when(kind) {
+            "number","float","text","constant","symbol" -> value
+            "fraction" -> ratioText(node)
+            "binary" -> when(value) {
+                "/" -> ratioText(node)
+                "*" -> notationText(node)
+                else -> null
+            }
+            "product" -> notationText(node)
+            "unary" -> if(value=="-")part(0)?.let{"-$it"} else null
+            "call" -> if(value=="mixed")mixedText(node) else null
+            "dms","sexagesimal" -> dmsText(node)
+            "relation" -> relationText(node)
+            "group" -> part(0)?.let{"($it)"}
+            "quantity" -> part(0)?.let{if(value.isBlank())it else "$it $value"}
+            "list" -> collectionText(node,"[","]")
+            "set" -> collectionText(node,"{","}")
+            "tuple" -> collectionText(node,"(",")")
+            "matrix" -> collectionText(node,"[","]")
+            "row" -> part(0)?.let{"$value: $it"}
+            "rows" -> args?.let{array->
+                val lines=(0 until array.length()).map{array.optJSONObject(it)?.let(::treeText)}
+                if(lines.any{it==null})null else lines.joinToString("\n")
+            }
+            else -> null
+        }
+    }
+
+    private fun ratioText(node:JSONObject):String? {
+        val args=node.optJSONArray("args") ?: return null
+        if(args.length()!=2)return null
+        val numerator=args.optJSONObject(0)?.let(::treeText) ?: return null
+        val denominator=args.optJSONObject(1)?.let(::treeText) ?: return null
+        return "$numerator/$denominator"
+    }
+
+    private fun notationText(node:JSONObject):String? {
+        val args=node.optJSONArray("args") ?: return null
+        if(args.length()!=2)return null
+        val power=args.optJSONObject(1) ?: return null
+        if(power.optString("kind")!="power")return null
+        val powerArgs=power.optJSONArray("args") ?: return null
+        if(powerArgs.length()!=2||powerArgs.optJSONObject(0)?.optString("value")!="10")return null
+        val mantissa=args.optJSONObject(0)?.let(::treeText) ?: return null
+        val exponent=powerArgs.optJSONObject(1)?.optString("value") ?: return null
+        return "$mantissa×10^$exponent"
+    }
+
+    private fun dmsText(node:JSONObject):String? {
+        val args=node.optJSONArray("args") ?: return null
+        val markers=listOf("°","′","″")
+        val parts=(0 until args.length()).map {index->(args.optJSONObject(index)?.let(::treeText) ?: return null)+markers.getOrElse(index){""}}
+        return parts.takeIf{it.isNotEmpty()}?.joinToString("")
+    }
+
+    private fun mixedText(node:JSONObject):String? {
+        val args=node.optJSONArray("args") ?: return null
+        if(args.length()!=3)return null
+        val whole=args.optJSONObject(0)?.let(::treeText) ?: return null
+        val numerator=args.optJSONObject(1)?.let(::treeText) ?: return null
+        val denominator=args.optJSONObject(2)?.let(::treeText) ?: return null
+        return "$whole $numerator/$denominator"
+    }
+
+    private fun relationText(node:JSONObject):String? {
+        val args=node.optJSONArray("args") ?: return null
+        if(args.length()!=2)return null
+        val left=args.optJSONObject(0)?.let(::treeText) ?: return null
+        val right=args.optJSONObject(1)?.let(::treeText) ?: return null
+        val operator=when(node.optString("value")){"!="->"≠";"<="->"≤";">="->"≥";else->node.optString("value")}
+        return "$left $operator $right"
+    }
+
+    private fun collectionText(node:JSONObject,open:String,close:String):String? {
+        val args=node.optJSONArray("args") ?: return null
+        val parts=(0 until args.length()).map {index->args.optJSONObject(index)?.let(::treeText) ?: return null}
+        return open+parts.joinToString(", ")+close
+    }
 }

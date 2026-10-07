@@ -52,6 +52,31 @@ for(const language of ['en','ko'])test(`automatic n columns tracks pasted data a
   assert.deepEqual(errors,[]);
 });
 
+test('n-column counts of one, two, and three are recognized as list, x,y, and x,y,z data',t=>{
+  const {$,state,errors}=workspace(t,{'statistics-kind':'columns','statistics-columns':'4','statistics-data':'1,2,3,4'});
+  const change=id=>$(id).dispatchEvent(new document.defaultView.Event('change'));
+  assert.equal($('statistics-kind').value,'columns');
+  $('statistics-columns').value='2';change('statistics-columns');
+  assert.equal($('statistics-kind').value,'columns','n-columns mode stays selected');
+  assert.equal($('statistics-data-label').textContent,'x, y values');
+  assert.equal($('statistics-columns-label').hidden,false,'the column count stays editable');
+  assert.equal($('statistics-plot-type').value,'scatter');
+  assert.equal([...$('regression-kind').options].some(option=>option.value==='multiple'),false);
+  $('dataset-name').value='two';$('dataset-save').click();assert.equal(state.datasetKinds.two,'xy');
+  $('statistics-columns').value='3';change('statistics-columns');
+  assert.equal($('statistics-data-label').textContent,'x, y, z values');
+  assert.equal([...$('regression-kind').options].some(option=>option.value==='multiple'),true);
+  $('dataset-name').value='three';$('dataset-save').click();assert.equal(state.datasetKinds.three,'xyz');
+  $('statistics-columns').value='1';change('statistics-columns');
+  assert.equal($('statistics-data-label').textContent,'One value per line');
+  assert.equal($('regression-section').hidden,true);
+  $('dataset-name').value='one';$('dataset-save').click();assert.equal(state.datasetKinds.one,'list');
+  $('statistics-columns').value='5';change('statistics-columns');
+  assert.equal($('statistics-data-label').textContent,'x, y, z, x4, x5');
+  assert.equal($('regression-section').hidden,false);
+  assert.deepEqual(errors,[]);
+});
+
 test('regularization is selected within linear and logistic families and invalidates prior results',t=>{
   const context=workspace(t,{'regression-kind':'linear','regression-penalty':'elasticnet','regression-alpha':'0.2','regression-ratio':'0.7'});
   const {$,statistics}=context;
@@ -514,6 +539,25 @@ test('arbitrary first-row headers are excluded consistently from analysis, plots
   assert.equal(csvRows('Label,Value\nA,1',{skipHeader:false})[0][0],'Label');
 });
 
+test('table editor names columns from the dataset header and keeps the header row when rows change',t=>{
+  const {$,statistics}=workspace(t,{'statistics-data':'Treatment,Measurement\nA,1\nB,2'});
+  assert.equal($('statistics-data-label').textContent,'Treatment (x), Measurement (y) values');
+  $('statistics-table-toggle').click();
+  const headers=()=>[...$('statistics-grid').querySelectorAll('thead th')].map(cell=>cell.textContent);
+  assert.deepEqual(headers(),['#','Treatment (x)','Measurement (y)','']);
+  const cell=$('statistics-grid').querySelector('input[data-row="0"][data-column="0"]');
+  cell.value='C';cell.dispatchEvent(new document.defaultView.Event('input'));
+  assert.equal($('statistics-data').value,'Treatment,Measurement\nC,1\nB,2');
+  $('statistics-grid').querySelectorAll('.table-row-action button')[0].click();
+  assert.equal($('statistics-data').value,'Treatment,Measurement\nB,2');
+  assert.deepEqual(headers(),['#','Treatment (x)','Measurement (y)','']);
+  $('statistics-add-row').click();
+  assert.equal($('statistics-data').value,'Treatment,Measurement\nB,2\n,');
+  assert.equal($('statistics-grid').querySelectorAll('tbody tr').length,2);
+  setLanguage('ko');translateDOM();statistics.render();
+  assert.equal($('statistics-data-label').textContent,'Treatment (x), Measurement (y) 값');
+});
+
 
 test('coefficient, odds ratio, VIF and fitted-parameter labels track header columns and response order without renaming engine IDs',t=>{
   const {$,statistics}=workspace(t,{'statistics-kind':'xyz','regression-kind':'logistic','statistics-data':'Outcome,Age,Weight\n0,20,50\n1,30,60'});
@@ -533,4 +577,18 @@ test('coefficient, odds ratio, VIF and fitted-parameter labels track header colu
   $('statistics-data').value='20,50,0\n30,60,1';$('regression-response').value='2';$('regression-response').dispatchEvent(new document.defaultView.Event('change'));
   statistics.showRegression({decimal:'x1+x2',regression:report});
   assert.deepEqual(cells().map(row=>row[0]),['Intercept','x','y']);
+});
+
+test('direct input line numbers follow the editor value line count',t=>{
+  const {$}=workspace(t,{'statistics-data':'1,2\n2,4\n3,6'});
+  assert.equal($('statistics-line-numbers').textContent,'1\n2\n3','initialized from the restored dataset');
+  assert.equal($('statistics-data').getAttribute('wrap'),'off');
+  $('statistics-data').value='1,2\n2,4\n3,6\n4,8';
+  $('statistics-data').dispatchEvent(new document.defaultView.Event('input'));
+  assert.equal($('statistics-line-numbers').textContent,'1\n2\n3\n4');
+  $('statistics-data').value='';
+  $('statistics-data').dispatchEvent(new document.defaultView.Event('change'));
+  assert.equal($('statistics-line-numbers').textContent,'1','an empty editor still shows its first line');
+  $('statistics-data').scrollTop=24;$('statistics-data').dispatchEvent(new document.defaultView.Event('scroll'));
+  assert.equal($('statistics-line-numbers').style.transform,'translateY(-24px)');
 });

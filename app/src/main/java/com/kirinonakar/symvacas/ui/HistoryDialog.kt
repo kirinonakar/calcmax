@@ -49,7 +49,7 @@ import java.util.Date
                         }
                     }
                     Text("${entry.mode} · ${DateFormat.getDateTimeInstance(DateFormat.SHORT,DateFormat.SHORT).format(Date(entry.id))}",fontSize=10.sp,color=LocalInstrument.current.muted)
-                    Row { SmallAction("Reuse") { m.edit(Editor(entry.source));m.mode="Scientific/CAS";close() }; SmallAction(if(entry.favorite)"★" else "☆") { m.favorite(entry.id) }; SmallAction("Copy") { clipboard.setText(AnnotatedString(entry.exact)) }; SmallAction("Delete") { m.deleteHistory(entry.id) } }
+                    Row { SmallAction("Reuse") { m.edit(Editor(entry.source));m.mode="Scientific/CAS";close() }; SmallAction(if(entry.favorite)"★" else "☆") { m.favorite(entry.id) }; SmallAction("Copy") { clipboard.setText(AnnotatedString(response?.let {result->ResultDisplayFormat.resultText(result,m.decimal,false,m.resultDisplayMode,m.thousandsSeparator,false,0,false,false,m.displayDigits)} ?: ResultDisplayFormat.formatText(if(m.decimal)entry.decimal else entry.exact,m.resultDisplayMode,m.thousandsSeparator,maxFractionDigits=m.displayDigits))) }; SmallAction("Delete") { m.deleteHistory(entry.id) } }
                 }
                 HorizontalDivider()
             }

@@ -249,7 +249,10 @@ internal fun largeHistoryTree(root:JSONObject?):Boolean {
         Spacer(Modifier.weight(1f))
         TextButton(onClick={m.undo()},enabled=m.canUndo,modifier=Modifier.height(36.dp).semantics{contentDescription="Undo last input"},contentPadding=PaddingValues(horizontal=8.dp)){Text("Undo",fontSize=11.sp)}
         val selection=m.editor.source.substring(minOf(m.editor.anchor,m.editor.cursor),maxOf(m.editor.anchor,m.editor.cursor))
-        val copyTarget=CopyCycle.next(m.result?.optString(if(m.decimal)"decimal" else "exact"),m.editor.source,copyExpression,selection)
+        val copyAnswer=remember(m.result,m.decimal,m.mixedNumbers,m.resultDisplayMode,m.thousandsSeparator,m.engineeringConversion,m.engineeringShift,m.dmsDisplay,m.dmsConversion,m.displayDigits) {
+            m.result?.let {result->ResultDisplayFormat.resultText(result,m.decimal,m.mixedNumbers,m.resultDisplayMode,m.thousandsSeparator,m.engineeringConversion,m.engineeringShift,m.dmsDisplay,m.dmsConversion,m.displayDigits)}
+        }
+        val copyTarget=CopyCycle.next(copyAnswer,m.editor.source,copyExpression,selection)
         TextButton(onClick={
             val start=minOf(m.editor.anchor,m.editor.cursor)
             clipboard.setText(AnnotatedString(selection))
@@ -401,25 +404,7 @@ internal fun largeHistoryTree(root:JSONObject?):Boolean {
 @Composable fun ResultMath(result:JSONObject,decimal:Boolean,size:Float,mixed:Boolean=false,displayMode:ResultDisplayMode=ResultDisplayMode.OFF,thousandsSeparator:Boolean=false,engineeringConversion:Boolean=false,engineeringShift:Int=0,dmsDisplay:Boolean=false,dmsConversion:Boolean=false,displayDigits:Int=10) {
     val useDecimal=decimal||engineeringConversion
     val effectiveMode=if(engineeringConversion)ResultDisplayMode.ENGINEERING else displayMode
-    val wantDms=dmsDisplay&&!engineeringConversion
-    var tree=when {
-        wantDms&&result.optBoolean("dms")->result.optJSONObject(if(decimal)"decimalTree" else "tree")
-        wantDms->ResultDisplayFormat.dmsTree(result.optString("decimal"))
-        result.optBoolean("dms")->result.optJSONObject("numericDecimalTree")
-            ?: result.optJSONObject("numericTree")
-            ?: result.optJSONObject(if(decimal)"decimalTree" else "tree")
-        dmsConversion->result.optJSONObject("decimalTree") ?: result.optJSONObject("tree")
-        else->result.optJSONObject(if(useDecimal)"decimalTree" else "tree") ?: result.optJSONObject("tree")
-    }
-    if(mixed&&!useDecimal&&tree?.optString("kind")=="fraction") {
-        val fraction=tree
-        tree=runCatching {
-            val numerator=fraction!!.getJSONArray("args").getJSONObject(0).getString("value").toBigInteger()
-            val denominator=fraction.getJSONArray("args").getJSONObject(1).getString("value").toBigInteger()
-            val parts=numerator.abs().divideAndRemainder(denominator)
-            if(parts[0].signum()==0)fraction else JSONObject().put("kind","call").put("value","mixed").put("args",org.json.JSONArray(listOf(parts[0]*numerator.signum().toBigInteger(),parts[1],denominator).map {JSONObject().put("kind","number").put("value",it.toString())}))
-        }.getOrDefault(tree)
-    }
+    val tree=ResultDisplayFormat.resultTree(result,decimal,mixed,engineeringConversion,dmsDisplay,dmsConversion)
     val shift=if(engineeringConversion)engineeringShift else 0
     val displayTree=tree?.let{ResultDisplayFormat.formatTree(it,effectiveMode,thousandsSeparator,shift,engineeringConversion,displayDigits)}
     if(displayTree!=null)WrappedMathResult(displayTree,size) else Text(ResultDisplayFormat.formatText(result.optString(if(useDecimal)"decimal" else "exact"),effectiveMode,thousandsSeparator,shift,engineeringConversion,displayDigits),fontSize=size.sp,color=LocalInstrument.current.ink,fontFamily=FontFamily.Serif)

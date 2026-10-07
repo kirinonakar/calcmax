@@ -20,7 +20,7 @@ math{font-family:"SymvaCAS Math","Cambria Math",math;font-weight:400;font-synthe
 .catalog-help-block .hint{margin:4px 0}.catalog-example{text-align:left;padding:5px 0;overflow-wrap:anywhere;font-weight:400}
 .regression-section{border-block:1px solid var(--line);padding:14px 0;margin:16px 0}.regression-section h2{margin-bottom:12px}
 #tip-percent:disabled,#tip-fixed:disabled{opacity:.45;cursor:not-allowed}
-#statistics-editor{margin-bottom:16px}#statistics-editor>label{margin-bottom:0}
+#statistics-editor{margin-bottom:16px}#statistics-editor>label{margin-bottom:0}#statistics-editor .line-numbered{display:flex;align-items:stretch;height:180px}#statistics-editor .line-numbered>textarea{flex:1;min-width:0;height:100%;resize:none;border-radius:0 7px 7px 0}#statistics-editor .line-numbers{flex:none;overflow:hidden;padding:10px 6px;border:1px solid var(--line);border-right:0;border-radius:7px 0 0 7px;background:var(--bar);color:var(--muted);font-family:Consolas,"SFMono-Regular",monospace;font-size:14px;line-height:1.7;text-align:right;pointer-events:none;user-select:none}#statistics-editor .line-numbers>span{display:block;white-space:pre}
 .matrix-grid{display:block;margin:20px 0;overflow:auto}
 .editable-table{width:100%;border-collapse:collapse;table-layout:fixed;background:var(--panel)}
 .editable-table td,.editable-table th{border:1px solid var(--line);padding:0}

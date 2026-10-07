@@ -6,7 +6,7 @@ import {expressionDisplay,expressionInputDisplay} from '../expression-display.js
 import {paintMathRoots} from '../math-roots.js';
 import {markInputCursor} from '../input-cursor.js';
 import {mathDisplay} from '../math-display.js';
-import {resultMathDisplay,resultMathParts} from '../result-display.js';
+import {resultMathDisplay,resultMathParts,resultText} from '../result-display.js';
 
 const box=(left,top,width,height)=>({left,top,right:left+width,bottom:top+height,width,height});
 const vertices=path=>path.match(/-?\d+(?:\.\d+)?(?:e[+-]?\d+)?/gi).map(Number).reduce((points,value,i)=>{
@@ -142,4 +142,27 @@ test('root collections wrap at terms while retaining all signs and punctuation',
   assert.equal(resultMathDisplay(fraction).querySelectorAll('mfrac').length,1);
   const parts=resultMathParts({kind:'sum',args:[fraction,number('3')]});
   assert.equal(parts.length,2);assert.equal(parts[1][0].value,'+');assert.equal(parts[0][0],fraction);
+});
+
+test('copied answers use the digits and notation shown in the result view',()=>{
+  const number=value=>({kind:'number',value});
+  assert.equal(resultText({exact:'0.333333333333333333333333333333',decimal:'0.333333333333333333333333333333',decimalTree:number('0.333333333333333333333333333333')},{decimal:true,digits:10}),'0.3333333333');
+  assert.equal(resultText({exact:'12345612345.6789',decimal:'12345612345.6789',decimalTree:number('12345612345.6789')},{decimal:true,digits:5,notation:'sci'}),'1.23456×10^10');
+  assert.equal(resultText({exact:'1234567.891',decimal:'1234567.891',decimalTree:number('1234567.891')},{decimal:true,digits:10,grouping:true}),'1,234,567.891');
+});
+
+test('copied answers keep fractions, lists, mixed numbers, dms, and statistics rows',()=>{
+  const number=value=>({kind:'number',value});
+  const fraction={kind:'fraction',args:[{kind:'text',value:'7'},{kind:'text',value:'2'}]};
+  assert.equal(resultText({exact:'7/2',decimal:'3.5',tree:fraction},{digits:10}),'7/2');
+  assert.equal(resultText({exact:'7/2',decimal:'3.5',tree:fraction},{mixed:true,digits:10}),'3 1/2');
+  assert.equal(resultText({exact:'12.5125',decimal:'12.5125',tree:{kind:'dms',args:[number('12'),number('30'),number('45')]}},{digits:10}),'12°30′45″');
+  const rows={kind:'rows',args:[{kind:'row',value:'mean',args:[number('1.2345678901234567')]},{kind:'row',value:'stdev',args:[number('0.9876543210987654')]}]};
+  assert.equal(resultText({exact:'mean: 1.2345678901234567\nstdev: 0.9876543210987654',decimal:'mean: 1.2345678901234567\nstdev: 0.9876543210987654',decimalTree:rows},{decimal:true,digits:10}),'mean: 1.2345678901\nstdev: 0.9876543211');
+});
+
+test('copied answers round relations and fall back to the raw text for other trees',()=>{
+  const number=value=>({kind:'number',value});
+  assert.equal(resultText({exact:'x = 0.73908513321516064165531208767',decimal:'x = 0.73908513321516064165531208767',tree:{kind:'relation',value:'==',args:[{kind:'symbol',value:'x'},number('0.73908513321516064165531208767')]}},{digits:10}),'x = 0.7390851332');
+  assert.equal(resultText({exact:'0.5 + 0.25',decimal:'0.5 + 0.25',tree:{kind:'sum',args:[number('0.5'),number('0.25')]}},{decimal:true,digits:10}),'0.5 + 0.25');
 });

@@ -22,7 +22,18 @@ internal fun statisticsHeatMapColumnNames(csv:String,kind:String):List<String> {
     if(!statisticsHasHeader(raw))return names
     return names.mapIndexed {index,name->raw.firstOrNull()?.getOrNull(index)?.trim()?.takeIf(String::isNotBlank) ?: name}
 }
+
+/** Table editor column headers: a detected header name keeps the column name used by the analysis. */
+internal fun statisticsTableColumnLabels(csv:String,kind:String):List<String> {
+    val names=if(kind=="list")listOf("value") else statisticsColumnNames(kind)
+    val rows=statisticsCsvRows(csv)
+    if(!statisticsHasHeader(rows))return names
+    return names.mapIndexed {index,name->rows.first().getOrNull(index)?.trim()?.takeIf {it.isNotBlank()&&it!=name}?.let {"$it ($name)"} ?: name}
+}
 internal fun statisticsKindForColumns(count:Int):String = when(count) {1->"list";2->"xy";3->"xyz";else->"columns:${count.coerceIn(1,100)}"}
+/** n-column selections with one, two, or three columns are handled as List, x,y, and x,y,z data. */
+internal fun statisticsEffectiveKind(selectedKind:String,columnCount:Int):String =
+    if(selectedKind.startsWith("columns:"))statisticsKindForColumns(columnCount) else selectedKind
 internal fun statisticsDetectedColumns(source:String):Int {
     if(source.isBlank())return 1
     val count=source.removePrefix("\uFEFF").replace("\r\n","\n").replace('\r','\n').lineSequence().map {it.splitCsvRecord().size}.maxOrNull() ?: 1
@@ -91,6 +102,12 @@ internal fun statisticsMoveColumn(csv:String,column:Int,delta:Int):String {
     }
 }
 
+/** Rewrites the table editor's data rows while a detected header row stays above them. */
+internal fun statisticsReplaceDataRows(csv:String,rows:List<List<String>>):String {
+    val stored=statisticsCsvRows(csv)
+    val headerCount=if(statisticsHasHeader(stored))1 else 0
+    return (stored.take(headerCount)+rows).joinToString("\n",transform=::statisticsCsvLine)
+}
 internal data class StatisticsCsvImport(val rows:List<List<String>>,val hasHeader:Boolean,val columnCount:Int) {
     val labels:List<String> get()=(0 until columnCount).map {index->
         val header=if(hasHeader)rows.firstOrNull()?.getOrNull(index)?.trim().orEmpty() else ""
