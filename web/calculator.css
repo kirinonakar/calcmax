@@ -31,6 +31,10 @@ math{font-family:"SymvaCAS Math","Cambria Math",math;font-weight:400;font-synthe
 .editable-table input:focus{outline:2px solid var(--accent);outline-offset:-2px;background:var(--bg)}
 .editable-table .table-row-action{text-align:center}
 .editable-table .table-row-action button{padding:5px 8px}
+.editable-table .table-column-actions th{padding:2px;white-space:nowrap}
+.editable-table .table-column-actions button{padding:2px 4px;font-size:11px;line-height:1;min-width:0}
+.editable-table .table-column-actions button+button{margin-left:2px}
+.editable-table .table-column-actions button:disabled{opacity:.35}
 label:has(>input:disabled),label:has(>select:disabled){color:var(--muted)}
 input:disabled,select:disabled{opacity:.45;cursor:default}
 :root[data-engineering-conversion="true"] .key[data-input="ENG"]{color:var(--accent);background:var(--bar)}

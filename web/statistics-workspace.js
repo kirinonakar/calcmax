@@ -268,13 +268,36 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
     }catch{return [];}
   }
   // Quote an empty List cell so a blank row survives serialization and reload.
-  function writeRows(rows){invalidateRegression();$('statistics-data').value=editorHeader().concat(rows).map(row=>row.length===1&&!row[0]?'""':row.map(cell=>/[",\r\n\t]/.test(cell)?'"'+cell.replace(/"/g,'""')+'"':cell).join(',')).join('\n');statisticsControls();refreshWorkspaceMath();persist();}
+  function writeStoredRows(rows){invalidateRegression();$('statistics-data').value=rows.map(row=>row.length===1&&!row[0]?'""':row.map(cell=>/[",\r\n\t]/.test(cell)?'"'+cell.replace(/"/g,'""')+'"':cell).join(',')).join('\n');statisticsControls();refreshWorkspaceMath();persist();}
   function statisticsGrid(){
     const rows=editorRows(),columns=dataColumns();
     const table=editableTable({rows:rows.length,columns:statisticsColumnLabels(value('statistics-data'),dataKind()),label:t('Stats data'),value:(row,col)=>rows[row][col]||'',
       onInput:(row,col,cell)=>{while(rows[row].length<columns)rows[row].push('');rows[row][col]=cell;writeRows(rows);},
+      onMoveColumn:moveColumn,onDeleteColumn:removeColumn,
       onDeleteRow:row=>{rows.splice(row,1);writeRows(rows);statisticsGrid();}});
     $('statistics-grid').replaceChildren(table);
+  }
+  function writeRows(rows){writeStoredRows(editorHeader().concat(rows));}
+  function storedRows(){return editorHeader().concat(editorRows());}
+  // Column edits rewrite the header and every data row, matching the Android statistics table editor.
+  function moveColumn(column,delta){
+    try{
+      const target=column+delta;
+      writeStoredRows(storedRows().map(row=>{
+        if(column<0||target<0||column>=row.length||target>=row.length)return row;
+        const swapped=row.slice();swapped[column]=row[target];swapped[target]=row[column];return swapped;
+      }));
+      statisticsGrid();
+    }catch(exc){error(exc.message);}
+  }
+  function removeColumn(column){
+    try{
+      const remaining=Math.max(dataColumns()-1,1);
+      if(!($('statistics-columns-auto').checked&&value('statistics-kind')==='columns'))setDataKind(statisticsKindForColumns(remaining));
+      if(statisticsKindForColumns(remaining)!=='xy'&&value('statistics-plot-type')==='scatter')$('statistics-plot-type').value='histogram';
+      writeStoredRows(storedRows().map(row=>column<row.length?row.filter((_,index)=>index!==column):row));
+      statisticsGrid();
+    }catch(exc){error(exc.message);}
   }
   $('statistics-table-toggle').onclick=()=>{
     const grid=$('statistics-grid'),tableMode=grid.hidden;

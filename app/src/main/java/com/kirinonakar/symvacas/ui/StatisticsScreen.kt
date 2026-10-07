@@ -237,8 +237,9 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
             val tableColumns=statisticsTableColumnLabels(data,dataKind)
             BoxWithConstraints(Modifier.fillMaxWidth()) {
                 val tableWidth=maxOf(maxWidth,if(tableColumns.size>3)(tableColumns.size*90+78).dp else 0.dp)
+                val headerHeight=if(tableColumns.size>1)62.dp else 31.dp
                 Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
-                    Column(Modifier.width(tableWidth).border(1.dp,grid).heightIn(max=300.dp).verticalScroll(rememberScrollState()).testTag("statistics-table")) {
+                    Column(Modifier.width(tableWidth).border(1.dp,grid).testTag("statistics-table")) {
                         Row(Modifier.fillMaxWidth().height(30.dp).background(LocalInstrument.current.scientific)) {
                             StatHeader("#",Modifier.width(30.dp)); VerticalDivider(color=grid,thickness=1.dp)
                             tableColumns.forEach {name->StatHeader(name,Modifier.weight(1f));VerticalDivider(color=grid,thickness=1.dp)}
@@ -268,20 +269,22 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
                             }
                             HorizontalDivider(color=grid,thickness=1.dp)
                         }
-                        parsedRows.forEachIndexed {index,row->
-                            val cellFocus=remember(index,tableColumns.size) {List(tableColumns.size){FocusRequester()} }
-                            Row(Modifier.fillMaxWidth().height(44.dp)) {
-                                Box(Modifier.width(30.dp).fillMaxHeight().then(statCellTouch(cellFocus.first())),contentAlignment=Alignment.Center){Text("${index+1}",fontSize=12.sp,color=LocalInstrument.current.muted)}
-                                VerticalDivider(color=grid,thickness=1.dp)
-                                repeat(tableColumns.size) {column->
-                                    StatCell(row.getOrElse(column){""},Modifier.weight(1f),cellFocus[column],"statistics-cell-$index-$column") {text->
-                                        val next=parsedRows.map {it.toMutableList().apply {while(size<tableColumns.size)add("")}}.toMutableList();next[index][column]=text;data=statisticsReplaceDataRows(data,next)
-                                    }
+                        Column(Modifier.fillMaxWidth().heightIn(max=300.dp-headerHeight).verticalScroll(rememberScrollState())) {
+                            parsedRows.forEachIndexed {index,row->
+                                val cellFocus=remember(index,tableColumns.size) {List(tableColumns.size){FocusRequester()} }
+                                Row(Modifier.fillMaxWidth().height(44.dp)) {
+                                    Box(Modifier.width(30.dp).fillMaxHeight().then(statCellTouch(cellFocus.first())),contentAlignment=Alignment.Center){Text("${index+1}",fontSize=12.sp,color=LocalInstrument.current.muted)}
                                     VerticalDivider(color=grid,thickness=1.dp)
+                                    repeat(tableColumns.size) {column->
+                                        StatCell(row.getOrElse(column){""},Modifier.weight(1f),cellFocus[column],"statistics-cell-$index-$column") {text->
+                                            val next=parsedRows.map {it.toMutableList().apply {while(size<tableColumns.size)add("")}}.toMutableList();next[index][column]=text;data=statisticsReplaceDataRows(data,next)
+                                        }
+                                        VerticalDivider(color=grid,thickness=1.dp)
+                                    }
+                                    Box(Modifier.width(48.dp).fillMaxHeight(),contentAlignment=Alignment.Center){SmallAction("−"){data=statisticsReplaceDataRows(data,parsedRows.filterIndexed {i,_->i!=index})}}
                                 }
-                                Box(Modifier.width(48.dp).fillMaxHeight(),contentAlignment=Alignment.Center){SmallAction("−"){data=statisticsReplaceDataRows(data,parsedRows.filterIndexed {i,_->i!=index})}}
+                                if(index<parsedRows.lastIndex)HorizontalDivider(color=grid,thickness=1.dp)
                             }
-                            if(index<parsedRows.lastIndex)HorizontalDivider(color=grid,thickness=1.dp)
                         }
                     }
                 }
@@ -338,22 +341,6 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
                     }
                     Field(forestSeed,"Random seed",Modifier.fillMaxWidth()){m.clearRegression();forestSeed=it}
                 }
-                val table=statisticsRegressionTable(numericRows,dataKind,fitMode,responseColumn)
-                val validOptions=if(regularized)(lassoAlphaCv||lassoAlpha.toDoubleOrNull()?.let {it.isFinite()&&it>0}==true)&&(regularization!="elasticnet"||l1Ratio.toDoubleOrNull()?.let {it in 0.0..1.0}==true)
-                    else forestTrees.toIntOrNull() in 1..200&&forestDepth.toIntOrNull() in 1..20&&forestSeed.toLongOrNull() in 0L..2147483647L
-                Button(onClick={table?.let {
-                    val options=if(regularized){val penalty=if(lassoAlphaCv)"cv" else lassoAlpha;if(regularization=="elasticnet")"[$penalty,$l1Ratio]" else penalty} else "[$forestTrees,$forestDepth,$forestSeed]"
-                    m.fitRegression("regression($it,$fitMode,$options)",data,responseColumn)
-                }},enabled=table!=null&&validOptions&&!m.regressionBusy){Text(tr("Analyze"))}
-            }
-            if(dataKind=="xy"&&regression=="polynomial") {
-                Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                    Field(polynomialDegree,"Polynomial degree (1–10)",Modifier.weight(1f)){m.clearRegression();polynomialDegree=it}
-                    Button(onClick={
-                        val table=statisticsRegressionTable(numericRows,dataKind,"polynomial",responseColumn)
-                        if(table!=null)m.fitRegression("regression($table,polynomial,$polynomialDegree)",data,responseColumn)
-                    },enabled=(polynomialDegree.toIntOrNull() ?: 0) in 1..10&&!m.regressionBusy){Text(tr("Analyze"))}
-                }
             }
             if(dataKind!="list"&&regression in listOf("multiple","logistic"))Text(tr(if(regression=="logistic")"Selected column is response; others are predictors. Logistic response: 0 or 1." else "Selected column is response; others are predictors."),fontSize=11.sp,color=LocalInstrument.current.muted)
             if(dataColumns.size>1&&(regularized||regression in listOf("multiple","logistic","polynomial","randomforest"))) {
@@ -365,7 +352,25 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
                     Choices(listOf("Auto","Always"),if(firthMode=="firth")"Always" else "Auto",{m.clearRegression();firthMode=if(it=="Always")"firth" else "auto"})
                 }
                 val table=statisticsRegressionTable(numericRows,dataKind,fitMode,responseColumn)
-                if(!regularized&&regression !in listOf("polynomial","randomforest"))Button(onClick={table?.let {m.fitRegression("regression($it,$regression${if(regression=="logistic"&&firthMode=="firth")",firth" else ""})",data,responseColumn)}},enabled=table!=null&&!m.regressionBusy){Text(tr("Analyze"))}
+                val validOptions=when {
+                    regularized->(lassoAlphaCv||lassoAlpha.toDoubleOrNull()?.let {it.isFinite()&&it>0}==true)&&(regularization!="elasticnet"||l1Ratio.toDoubleOrNull()?.let {it in 0.0..1.0}==true)
+                    regression=="randomforest"->forestTrees.toIntOrNull() in 1..200&&forestDepth.toIntOrNull() in 1..20&&forestSeed.toLongOrNull() in 0L..2147483647L
+                    else->true
+                }
+                if(regression!="polynomial")Button(onClick={table?.let {when {
+                    regularized->{val penalty=if(lassoAlphaCv)"cv" else lassoAlpha;m.fitRegression("regression($it,$fitMode,${if(regularization=="elasticnet")"[$penalty,$l1Ratio]" else penalty})",data,responseColumn)}
+                    regression=="randomforest"->m.fitRegression("regression($it,$fitMode,[$forestTrees,$forestDepth,$forestSeed])",data,responseColumn)
+                    else->m.fitRegression("regression($it,$regression${if(regression=="logistic"&&firthMode=="firth")",firth" else ""})",data,responseColumn)
+                }}},enabled=table!=null&&validOptions&&!m.regressionBusy){Text(tr("Analyze"))}
+            }
+            if(dataKind=="xy"&&regression=="polynomial") {
+                Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                    Field(polynomialDegree,"Polynomial degree (1–10)",Modifier.weight(1f)){m.clearRegression();polynomialDegree=it}
+                    Button(onClick={
+                        val table=statisticsRegressionTable(numericRows,dataKind,"polynomial",responseColumn)
+                        if(table!=null)m.fitRegression("regression($table,polynomial,$polynomialDegree)",data,responseColumn)
+                    },enabled=(polynomialDegree.toIntOrNull() ?: 0) in 1..10&&!m.regressionBusy){Text(tr("Analyze"))}
+                }
             }
             if(m.regressionBusy)Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
                 Text(if(isKorean())"회귀 적합 중…" else "Fitting regression…",Modifier.weight(1f),fontSize=11.sp,color=LocalInstrument.current.muted)

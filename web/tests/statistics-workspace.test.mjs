@@ -44,7 +44,7 @@ for(const language of ['en','ko'])test(`automatic n columns tracks pasted data a
   $('statistics-column').value='4';$('statistics-op').value='mean';assert.equal(statistics.expression(),'mean([5,10])');
   $('dataset-name').value='auto-columns';$('dataset-save').click();assert.equal(state.datasetKinds['auto-columns'],'columns:5');
   $('statistics-data').value='1\t2\t\n3\t4\t5';change('statistics-data');assert.equal($('statistics-columns').value,'3');
-  $('statistics-table-toggle').click();assert.equal($('statistics-grid').querySelectorAll('thead th').length,5,'three values plus index and row action');
+  $('statistics-table-toggle').click();assert.equal($('statistics-grid').querySelector('thead tr').querySelectorAll('th').length,5,'three values plus index and row action');assert.equal($('statistics-grid').querySelectorAll('.table-column-actions button').length,9,'move and delete controls for every column');
   $('statistics-columns-auto').checked=false;change('statistics-columns-auto');assert.equal($('statistics-columns').disabled,false);
   $('statistics-data').value='1,2,3,4';change('statistics-data');assert.equal($('statistics-columns').value,'3','manual mode keeps its count');
   $('statistics-columns-auto').checked=true;change('statistics-columns-auto');assert.equal($('statistics-columns').value,'4');
@@ -543,7 +543,7 @@ test('table editor names columns from the dataset header and keeps the header ro
   const {$,statistics}=workspace(t,{'statistics-data':'Treatment,Measurement\nA,1\nB,2'});
   assert.equal($('statistics-data-label').textContent,'Treatment (x), Measurement (y) values');
   $('statistics-table-toggle').click();
-  const headers=()=>[...$('statistics-grid').querySelectorAll('thead th')].map(cell=>cell.textContent);
+  const headers=()=>[...$('statistics-grid').querySelector('thead tr').querySelectorAll('th')].map(cell=>cell.textContent);
   assert.deepEqual(headers(),['#','Treatment (x)','Measurement (y)','']);
   const cell=$('statistics-grid').querySelector('input[data-row="0"][data-column="0"]');
   cell.value='C';cell.dispatchEvent(new document.defaultView.Event('input'));
@@ -559,6 +559,46 @@ test('table editor names columns from the dataset header and keeps the header ro
 });
 
 
+
+test('table editor moves and deletes columns across the header and every data row',t=>{
+  const {$,errors}=workspace(t,{'statistics-data':'Treatment,Measurement\nA,1\nB,2'});
+  $('statistics-table-toggle').click();
+  const grid=$('statistics-grid'),action=(column,name)=>grid.querySelector(`.table-column-actions button[data-column="${column}"][data-column-action="${name}"]`);
+  assert.equal(action(0,'left').disabled,true,'the first column cannot move left');
+  assert.equal(action(1,'right').disabled,true,'the last column cannot move right');
+  action(0,'right').click();
+  assert.equal($('statistics-data').value,'Measurement,Treatment\n1,A\n2,B');
+  assert.equal(action(1,'right').disabled,true,'the moved column now keeps the disabled right edge');
+  assert.equal(action(1,'left').disabled,false);
+  action(1,'left').click();
+  assert.equal($('statistics-data').value,'Treatment,Measurement\nA,1\nB,2');
+  $('statistics-plot-type').value='scatter';
+  action(0,'delete').click();
+  assert.equal($('statistics-data').value,'Measurement\n1\n2');
+  assert.equal($('statistics-kind').value,'list','one remaining column becomes List data');
+  assert.equal($('statistics-plot-type').value,'histogram','scatter falls back without an x column');
+  assert.equal(grid.querySelectorAll('.table-column-actions').length,0,'column actions need at least two columns');
+  assert.deepEqual(errors,[]);
+});
+
+test('table editor column moves keep quoted cells intact',t=>{
+  const {$,errors}=workspace(t,{'statistics-data':'1,"a,b"\n3,4'});
+  $('statistics-table-toggle').click();
+  $('statistics-grid').querySelector('.table-column-actions button[data-column="0"][data-column-action="right"]').click();
+  assert.equal($('statistics-data').value,'"a,b",1\n4,3');
+  assert.deepEqual(errors,[]);
+});
+
+test('deleting a column in automatic columns mode re-detects the remaining column count',t=>{
+  const {$,errors}=workspace(t,{'statistics-kind':'columns','statistics-columns':'3','statistics-columns-auto':true,'statistics-data':'a,b,c\n1,2,3\n4,5,6'});
+  $('statistics-table-toggle').click();
+  assert.equal($('statistics-columns').value,'3');
+  $('statistics-grid').querySelector('.table-column-actions button[data-column="1"][data-column-action="delete"]').click();
+  assert.equal($('statistics-data').value,'a,c\n1,3\n4,6');
+  assert.equal($('statistics-columns').value,'2','automatic detection follows the deleted column');
+  assert.equal($('statistics-kind').value,'columns','automatic mode keeps the n columns selection');
+  assert.deepEqual(errors,[]);
+});
 test('coefficient, odds ratio, VIF and fitted-parameter labels track header columns and response order without renaming engine IDs',t=>{
   const {$,statistics}=workspace(t,{'statistics-kind':'xyz','regression-kind':'logistic','statistics-data':'Outcome,Age,Weight\n0,20,50\n1,30,60'});
   const report={n:8,df:5,fitScale:'binomial',coefficients:[{name:'b0',estimate:'1',oddsRatio:'2',vif:null},{name:'b1',estimate:'3',oddsRatio:'4',vif:'1.2'},{name:'b2',estimate:'5',oddsRatio:'6',vif:'1.3'}]};
