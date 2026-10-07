@@ -89,7 +89,7 @@ internal fun advancedStatisticsRows(data:String,columnLimit:Int?=null):List<List
     }}
     fun setOption(key:String,value:String) {
         val next=JSONObject(settings.toString()).put(key,value)
-        if(key in listOf("time","event","subject","response","group","grouping"))next.put("predictors",if(selected=="survivalanalysis")"" else "auto")
+        if(key in listOf("time","event","subject","response","group","grouping","offset","adjustment")||(selected=="glmm"&&key=="family"))next.put("predictors",if(selected=="survivalanalysis")"" else "auto")
         formsText=JSONObject(formsText).put(selected,next).toString();message=""
     }
     LaunchedEffect(selected,source,input,formsText,band) {m.updateAdvancedStatisticsDraft(JSONObject().put("kind",selected).put("source",source).put("input",input).put("forms",JSONObject(formsText)).put("band",band))}
@@ -118,7 +118,7 @@ internal fun advancedStatisticsRows(data:String,columnLimit:Int?=null):List<List
             if(input!="expression") {
                 StatisticsFormFields(definition,settings,columns,::setOption)
                 Text(if(ko)"${rows.size}행 · ${columns.joinToString(", ")}" else "${rows.size} rows · ${columns.joinToString(", ")}",fontSize=11.sp,color=LocalInstrument.current.muted)
-                if(input=="example")Text(rows.take(4).joinToString("\n"){it.joinToString(", ")},fontSize=11.sp,color=LocalInstrument.current.muted)
+                if(input=="example")Text(rows.joinToString("\n"){it.joinToString(", ")},fontSize=11.sp,color=LocalInstrument.current.muted)
                 command.exceptionOrNull()?.message?.let {Text(tr(it),fontSize=12.sp,color=MaterialTheme.colorScheme.error)}
             }
         }
@@ -167,7 +167,15 @@ internal fun advancedStatisticsRows(data:String,columnLimit:Int?=null):List<List
                 Choices(columns,columns.getOrNull(selected ?: -1).orEmpty(),{name->onChange(key,columns.indexOf(name).toString())},translate=false)
             }
             "columns"->{
-                val excluded=if(key=="predictors")when(definition.getString("id")){"cox"->listOf("time","event");"survivalanalysis"->listOf("time","event")+if(option("grouping")=="groups")listOf("group") else emptyList();else->listOf("subject","response")} else emptyList()
+                val id=definition.getString("id")
+                val roles=when(id) {
+                    "cox"->listOf("time","event")
+                    "survivalanalysis"->listOf("time","event")+if(option("grouping")=="groups")listOf("group") else emptyList()
+                    "poissonreg","nbreg"->listOf("response")
+                    else->listOf("subject","response")
+                }
+                val offsetRoles=if(id in listOf("poissonreg","nbreg","glmm")&&option("adjustment")!="none"&&(id!="glmm"||option("family")!="binomial"))listOf("offset") else emptyList()
+                val excluded=if(key=="predictors")roles+offsetRoles else emptyList()
                 val reserved=excluded.mapNotNull {option(it).toIntOrNull()?.let {value->if(value==-1)columns.lastIndex else value}}
                 val selected=if(value=="auto")columns.indices.filter {it !in reserved} else value.split(',').mapNotNull(String::toIntOrNull)
                 Text(label,fontSize=11.sp,color=LocalInstrument.current.muted)

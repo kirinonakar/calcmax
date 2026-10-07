@@ -317,6 +317,56 @@ class AdvancedStatisticsTests(unittest.TestCase):
                     for key in path: actual=actual[key]
                     self.assertAlmostEqual(float(actual),expected,delta=case.get('tolerance',1e-6)*max(1,abs(expected)))
 
+    def test_gaussian_gee_correlation_is_invariant_to_response_units(self):
+        rows=[[g,t,2+.4*t+(g%4-1.5)*.7+((g+2*t)%5-2)*.2] for g in range(12) for t in range(3+g%3)]
+        for corr in ('exchangeable','ar1'):
+            base=run('gee',rows,'gaussian',corr)
+            scaled=run('gee',[[g,t,10*y+30] for g,t,y in rows],'gaussian',corr)
+            self.assertAlmostEqual(float(base['alpha']),float(scaled['alpha']),places=8)
+            for i in range(2):
+                self.assertAlmostEqual(float(scaled['coefficients'][i]['estimate']),10*float(base['coefficients'][i]['estimate'])+(30 if i==0 else 0),places=7)
+                self.assertAlmostEqual(float(scaled['coefficients'][i]['SE']),10*float(base['coefficients'][i]['SE']),places=7)
+        self.assertIn('Few clusters',evaluate('gee('+str(rows)+',gaussian,exchangeable)')['note'])
+
+    def test_mixed_slope_boundary_has_blups_and_explicit_icc_origin(self):
+        noise=[.1,-.2,.2,-.2,.1]
+        rows=[[g,t,2+.4*t+(g%5-2)*.6+noise[t+2]] for g in range(1,16) for t in range(-2,3)]
+        result=run('mixedmodel',rows,1)
+        self.assertEqual(int(result['singular fit']),1)
+        self.assertAlmostEqual(float(result['random slope variance']),0,places=6)
+        self.assertIn('ICC at x=0',result)
+        self.assertNotIn('ICC',result)
+        self.assertEqual(len(result['subject random effects (BLUP)']),15)
+        self.assertAlmostEqual(sum(float(row['x1']) for row in result['subject random effects (BLUP)']),0,places=6)
+
+    def test_glmm_zero_variance_matches_independent_glm_and_nodes(self):
+        rows=[[g,t,(g+t)%2] for g in range(1,9) for t in range(3)]
+        for points in (1,15,25):
+            result=run('glmm',rows,'binomial',points)
+            self.assertEqual(float(result['random intercept variance']),0)
+            self.assertAlmostEqual(float(result['log likelihood']),-24*math.log(2),places=8)
+            self.assertAlmostEqual(float(result['coefficients'][0]['SE']),math.sqrt(5/12),places=6)
+            self.assertTrue(all(float(row['posterior mean'])==0 for row in result['subject random effects']))
+        counts=[[g,t,v] for g in range(1,6) for t,v in enumerate([1,2,1,3,2])]
+        glm=run('poissonreg',[[t,v] for _,t,v in counts])
+        result=run('glmm',counts,'poisson')
+        self.assertEqual(float(result['random intercept variance']),0)
+        for actual,expected in zip(result['coefficients'],glm['coefficients']):
+            self.assertAlmostEqual(float(actual['estimate']),float(expected['estimate']),places=6)
+            self.assertAlmostEqual(float(actual['SE']),float(expected['SE']),places=6)
+
+    def test_count_exposure_is_log_offset_and_validates_row_alignment(self):
+        rows=[[0,1],[0,0],[1,3],[1,1],[2,2],[2,5],[3,4],[3,8],[4,6],[4,10]]
+        exposure=[1+.3*(i%4) for i in range(len(rows))]
+        first=run('poissonreg',rows,exposure,'exposure')
+        second=run('poissonreg',rows,[math.log(v) for v in exposure])
+        self.assertAlmostEqual(float(first['log likelihood']),float(second['log likelihood']),places=10)
+        for invalid,mode in (([1],'offset'),([0]*len(rows),'exposure'),([-1]*len(rows),'exposure')):
+            with self.assertRaises(MathError):run('poissonreg',rows,invalid,mode)
+        clustered=[[g,t,(g+t)%2] for g in range(1,5) for t in range(3)]
+        for args in ((clustered,'gamma'),(clustered,'binomial',2),(clustered,'binomial',15,[1]*len(clustered)),(clustered,'poisson',15,[1]),(clustered,'binomial',15,[0]*len(clustered),'unknown')):
+            with self.assertRaises(MathError):run('glmm',*args)
+
     def test_invalid_inputs_fail_without_plausible_results(self):
         sources=['padjust([0.1,1.1])','cohend([1,1],[2,2])','mcnemar([[1,-2],[3,4]])','kaplanmeier([[1,2],[2,1]])','logrank([[1,0],[2,0]],[[1,0],[2,0]])',
                  'poissonreg([[1,-1],[2,2],[3,4]])','impute([[NA,1],[NA,2]])','pca([[1,2],[1,3]])','cohend([1,2],[3,4,5],paired)',

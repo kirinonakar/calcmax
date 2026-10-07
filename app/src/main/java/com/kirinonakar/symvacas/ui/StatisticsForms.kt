@@ -11,9 +11,10 @@ internal fun advancedStatisticsTermLabels(definition:JSONObject,rows:List<List<S
     fun column(key:String)=opts[key]?.toIntOrNull()?.let {if(it==-1)n-1 else it} ?: -1
     fun multiple(excluded:List<Int>)=if(opts["predictors"]=="auto")(0 until n).filter {it !in excluded} else opts["predictors"].orEmpty().split(',').filter(String::isNotBlank).map(String::toInt)
     val predictors=when(id) {
-        "mixedmodel","gee"->multiple(listOf(column("subject"),column("response")))
+        "mixedmodel","gee","glmm"->multiple(listOf(column("subject"),column("response"))+if(id=="glmm"&&opts["family"]!="binomial"&&opts["adjustment"]!="none")listOf(column("offset")) else emptyList())
         "cox"->multiple(listOf(column("time"),column("event"))+if(opts["truncation"]=="entry")listOf(column("entry")) else emptyList())
-        "poissonreg","nbreg","ordinal","multinomial"->(0 until (n-1).coerceAtLeast(0)).toList()
+        "poissonreg","nbreg"->multiple(listOf(column("response"))+if(opts["adjustment"]!="none")listOf(column("offset")) else emptyList())
+        "ordinal","multinomial"->(0 until (n-1).coerceAtLeast(0)).toList()
         "survivalanalysis"->{
             val plan=survivalAnalysisPlan(rows,settings,columnLabels);val labels=mutableMapOf<String,String>()
             plan.groups.drop(1).forEachIndexed {index,group->
@@ -101,12 +102,24 @@ internal fun guidedStatisticsCommand(definition:JSONObject,rows:List<List<String
             "cox(${table(selected)},${opts["ties"]},${if(entry==null)-1 else 2},${if(opts["ph"]=="test")1 else 0})"
         }
         "repeatedanova"->{val indices=multiple("columns");require(indices.size>=2) {"Choose at least two conditions"};"repeatedanova(${table(complete(indices))},${opts["factor2"]})"}
-        "mixedmodel","gee"->{
+        "poissonreg","nbreg"->{
+            val response=col("response");val offset=if(opts["adjustment"]!="none")col("offset") else null
+            val reserved=listOfNotNull(response,offset);distinct(reserved)
+            val predictors=multiple("predictors",reserved);val mapped=complete(predictors+response)
+            val suffix=if(offset==null)"" else ",${vector(complete(listOf(offset)).map {it[0]})},${opts["adjustment"]}"
+            "$id(${table(mapped)}$suffix)"
+        }
+        "mixedmodel","gee","glmm"->{
             val subject=col("subject");val response=col("response");distinct(listOf(subject,response))
-            val selectedColumns=multiple("predictors",listOf(subject,response))
+            val offset=if(id=="glmm"&&opts["family"]!="binomial"&&opts["adjustment"]!="none")col("offset") else null
+            val reserved=listOfNotNull(subject,response,offset);distinct(reserved)
+            val selectedColumns=multiple("predictors",reserved)
             val selected=complete(listOf(subject)+selectedColumns+response);val labels=selected.map {it[0]}.distinct()
             val mapped=selected.map {row->listOf((labels.indexOf(row[0])+1).toString())+row.drop(1)}
-            if(id=="gee") {
+            if(id=="glmm") {
+                val suffix=if(offset==null)"" else ",${vector(complete(listOf(offset)).map {it[0]})},${opts["adjustment"]}"
+                "glmm(${table(mapped)},${opts["family"]},${opts["points"]}$suffix)"
+            } else if(id=="gee") {
                 val pairs=interactionPairs(opts["interactions"],selectedColumns,columnLabels)
                 require(pairs.distinct().size==pairs.size) {"Interaction pairs must be distinct"}
                 val suffix=if(pairs.isEmpty())"" else ","+pairs.joinToString(",","[","]") {pair->"[${pair.first},${pair.second}]"}

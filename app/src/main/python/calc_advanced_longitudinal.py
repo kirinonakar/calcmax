@@ -74,15 +74,17 @@ def interaction_pairs(value, width):
     return pairs
 
 
-def nelder_mead(objective,start,step,iterations=160):
+def nelder_mead(objective,start,step,iterations=160,diagnostics=False):
     """Deterministic direct search for small profile objectives with boundaries."""
     size=len(start); simplex=[list(start)]
     for i in range(size):
         point=list(start); point[i]+=step[i]; simplex.append(point)
     values=[objective(point) for point in simplex]
-    for _ in range(iterations):
+    converged=False
+    for iteration in range(iterations):
         order=sorted(range(size+1),key=lambda i:values[i]); simplex=[simplex[i] for i in order]; values=[values[i] for i in order]
-        if max(abs(simplex[i][j]-simplex[0][j]) for i in range(1,size+1) for j in range(size))<1e-7: break
+        if max(abs(simplex[i][j]-simplex[0][j]) for i in range(1,size+1) for j in range(size))<1e-7:
+            converged=True; break
         centroid=[sum(simplex[i][j] for i in range(size))/size for j in range(size)]
         reflected=[2*centroid[j]-simplex[size][j] for j in range(size)]; value=objective(reflected)
         if value<values[0]:
@@ -96,7 +98,9 @@ def nelder_mead(objective,start,step,iterations=160):
             else:
                 for i in range(1,size+1):
                     simplex[i]=[(simplex[i][j]+simplex[0][j])/2 for j in range(size)]; values[i]=objective(simplex[i])
-    return simplex[0],values[0]
+    best=min(range(size+1),key=lambda i:values[i])
+    result=(simplex[best],values[best])
+    return result+(iteration+1,converged) if diagnostics else result
 
 
 def numeric_rank(values,tolerance=1e-10):
@@ -197,7 +201,10 @@ def mixed_intercept(engine,x,y,clusters,ids,method):
     _,beta,information,rss,ratio=intercept_fit(x,y,clusters,method)
     sigma=rss/(len(y)-len(x[0])) if method=='reml' else rss/len(y)
     engine.note += ' Gaussian random-intercept mixed model, '+('restricted maximum likelihood (REML)' if method=='reml' else 'maximum likelihood (ML)')+', Wald inference. Rows: subject ID, predictors, response.'
-    return {'coefficients':inference(list(map(float,beta)),inverse(information)*sigma,['Intercept']+['x'+str(i) for i in range(1,len(x[0]))]),'residual variance':sigma,'random intercept variance':ratio*sigma,'ICC':ratio/(1+ratio),'subjects':len(ids),'estimation':method.upper()}
+    result={'coefficients':inference(list(map(float,beta)),inverse(information)*sigma,['Intercept']+['x'+str(i) for i in range(1,len(x[0]))]),'residual variance':sigma,'random intercept variance':ratio*sigma,'ICC':ratio/(1+ratio),'subjects':len(ids),'estimation':method.upper(),'singular fit':int(ratio==0)}
+    result['subject random effects (BLUP)']=[{'subject':id_,'Intercept':ratio*math.fsum(y[i]-dot(x[i],beta) for i in c)/(1+len(c)*ratio)} for id_,c in zip(ids,clusters)]
+    if ratio==0: engine.note += ' Singular fit: random-intercept variance is zero.'
+    return result
 
 
 def mixed_random_effects(engine,x,y,clusters,ids,slopes,method):
@@ -213,22 +220,23 @@ def mixed_random_effects(engine,x,y,clusters,ids,slopes,method):
         moments=[math.fsum(x[i][a]*y[i] for i in members) for a in range(p)]
         blocks.append((products,cross,outcome,gram,moments,math.fsum(y[i]*y[i] for i in members)))
     def evaluate(parameters):
-        if max(abs(v) for v in parameters)>8: return None
+        if max(abs(v) for v in parameters)>1e4: return None
         lower=mp.zeros(count); position=0
         for i in range(count):
             for j in range(i+1):
-                lower[i,j]=mp.exp(parameters[position]) if i==j else parameters[position]; position+=1
+                lower[i,j]=parameters[position]; position+=1
         theta=lower*lower.T
-        try: theta_inverse=inverse(theta)
-        except MathError: return None
-        logdet=len(blocks)*2*math.fsum(math.log(float(lower[i,i])) for i in range(count))
+        # I + L'Z'ZL and L(I + L'Z'ZL)^-1 L' remain defined at
+        # exactly zero variance and rank-deficient random-effect covariance.
+        logdet=0.0
         information=[[0.0]*p for _ in range(p)]; vector=[0.0]*p; total=0.0
         for products,cross,outcome,gram,moments,energy in blocks:
-            core=[[float(theta_inverse[a,b])+products[a][b] for b in range(count)] for a in range(count)]
-            values=small_inverse(core)
-            if values is None: return None
+            core=mp.eye(count)+lower.T*mp.matrix(products)*lower
+            raw=small_inverse(core.tolist())
+            if raw is None: return None
+            values=(lower*mp.matrix(raw)*lower.T).tolist()
             if any(not math.isfinite(v) for row in values for v in row): return None
-            entry=small_logdet(core)
+            entry=small_logdet(core.tolist())
             if entry is None: return None
             logdet+=entry
             for a in range(p):
@@ -259,12 +267,15 @@ def mixed_random_effects(engine,x,y,clusters,ids,slopes,method):
         result=evaluate(parameters)
         return math.inf if result is None else result[0]
     seed=intercept_fit(x,y,clusters,method)[4]
-    start=0.5*math.log(max(1e-3,seed))
+    start=math.sqrt(max(0,seed))
     best=None
-    for scale in (start,math.log(.25),math.log(.1)):
+    for scale in (max(.1,start),.25,0.0):
         parameters=[start if i==0 and j==0 else scale if i==j else 0.0 for i,j in pairs]
-        candidate,value=nelder_mead(objective,parameters,[.4]*len(parameters),160+80*max(0,len(parameters)-3))
-        if math.isfinite(value) and (best is None or value<best[1]): best=(candidate,value)
+        candidate,value,iterations,converged=nelder_mead(objective,parameters,[.2]*len(parameters),700+150*max(0,len(parameters)-3),True)
+        if math.isfinite(value) and (best is None or value<best[1]): best=(candidate,value,iterations,converged)
+    boundary=[start if i==0 and j==0 else 0.0 for i,j in pairs]
+    boundary_value=objective(boundary)
+    if best is None or boundary_value<=best[1]+1e-8: best=(boundary,boundary_value,0,True)
     require(best is not None,'Random-slope model did not converge')
     fields=evaluate(best[0]); require(fields is not None,'Random-slope model did not converge')
     _,beta,information,rss,theta=fields
@@ -272,13 +283,31 @@ def mixed_random_effects(engine,x,y,clusters,ids,slopes,method):
     result={'coefficients':inference(list(map(float,beta)),inverse(information)*sigma,['Intercept']+['x'+str(i) for i in range(1,p)]),'residual variance':sigma,'random intercept variance':sigma*float(theta[0,0])}
     for index,slope in enumerate(slopes):
         result['random slope variance x'+str(slope)]=sigma*float(theta[index+1,index+1])
-        result['intercept-slope correlation x'+str(slope)]=float(theta[0,index+1])/math.sqrt(float(theta[0,0])*float(theta[index+1,index+1]))
+        denominator=math.sqrt(float(theta[0,0])*float(theta[index+1,index+1]))
+        result['intercept-slope correlation x'+str(slope)]=float(theta[0,index+1])/denominator if denominator else None
+    for i in range(1,count):
+        for j in range(i+1,count):
+            label='x'+str(slopes[i-1])+' / x'+str(slopes[j-1])
+            result['slope-slope covariance '+label]=sigma*float(theta[i,j])
+            denominator=math.sqrt(float(theta[i,i])*float(theta[j,j]))
+            result['slope-slope correlation '+label]=float(theta[i,j])/denominator if denominator else None
     if count==2:
         result['random slope variance']=result['random slope variance x'+str(slopes[0])]
         result['intercept-slope correlation']=result['intercept-slope correlation x'+str(slopes[0])]
-    result['ICC']=float(theta[0,0])/(1+float(theta[0,0]))
+    result['ICC at x=0']=float(theta[0,0])/(1+float(theta[0,0]))
+    eigenvalues=[float(v) for v in mp.eigsy(theta,eigvals_only=True)]
+    result['singular fit']=int(min(eigenvalues)<=1e-6*max(1,max(eigenvalues)))
+    result['optimizer iterations']=best[2]; result['optimizer converged']=int(best[3])
+    result['subject random effects (BLUP)']=[]
+    for id_,c in zip(ids,clusters):
+        z=mp.matrix([[1.0]+[x[i][s] for s in slopes] for i in c])
+        effects=theta*inverse(mp.eye(count)+z.T*z*theta)*z.T*mp.matrix([y[i]-dot(x[i],beta) for i in c])
+        result['subject random effects (BLUP)'].append({'subject':id_,**{label:float(v) for label,v in zip(['Intercept']+['x'+str(s) for s in slopes],effects)}})
     result['subjects']=len(ids); result['estimation']=method.upper()
     engine.note += ' Gaussian random intercept with random slopes on '+', '.join('x'+str(s) for s in slopes)+', '+('restricted maximum likelihood (REML)' if method=='reml' else 'maximum likelihood (ML)')+', Wald inference. Rows: subject ID, predictors, response.'
+    engine.note += ' ICC at x=0; within-subject correlation varies with the predictors.'
+    if result['singular fit']: engine.note += ' Singular fit: random-effect covariance is on or near a boundary.'
+    if not best[3]: engine.note += ' Optimizer iteration limit reached; estimates may be unreliable.'
     return result
 
 
@@ -288,6 +317,8 @@ def clustered(engine,name,a):
     for index,row in enumerate(rows): grouped.setdefault(row[0],[]).append(index)
     ids=sorted(grouped); clusters=[grouped[id_] for id_ in ids]
     require(len(clusters)>=3,'At least three subject/cluster IDs are required')
+    if name=='gee' and len(clusters)<20:
+        engine.note += ' Few clusters: sandwich SE and asymptotic Wald p-values may be unreliable.'
     pairs=[]; names=[]; terms=''
     if name=='gee':
         family=option(a,1,'gaussian'); require(family in ('gaussian','binomial','poisson'),'GEE family: gaussian, binomial, or poisson')
@@ -389,25 +420,34 @@ def clustered(engine,name,a):
         return fisher,scores,standardized
     def update(standardized):
         numerator=0.0; denominator=0.0
+        # Estimate Pearson dispersion before estimating a dimensionless
+        # correlation. This also makes Gaussian alpha invariant to units.
+        dispersion=math.fsum(v*v for v in standardized)/(n-p)
+        if dispersion<=1e-30: return 0.0
         if corr=='exchangeable':
             for c in clusters:
                 values=[standardized[i] for i in c]; numerator+=math.fsum(values[i]*values[j] for i in range(len(values)) for j in range(i+1,len(values))); denominator+=len(values)*(len(values)-1)/2
+            # Pearson scale and pair degrees of freedom follow statsmodels.
+            denominator=dispersion*max(1,denominator-p)
         else:
             for c in clusters:
-                values=[standardized[i] for i in c]; numerator+=math.fsum(values[k]*values[k+1] for k in range(len(values)-1)); denominator+=max(0,len(values)-1)
+                values=[standardized[i] for i in c]
+                if len(values)>1:
+                    numerator+=math.fsum(values[k]*values[k+1] for k in range(len(values)-1))/(len(values)-1)
+                    denominator+=math.fsum(v*v for v in values)/len(values)
         if denominator<=0: return 0.0
         lower=-1/(largest-1)+1e-6 if corr=='exchangeable' and largest>1 else -0.9999
         return max(lower,min(0.9999,numerator/denominator))
     alpha=0.0
     for iteration in range(200):
         fisher,scores,standardized=moments(alpha,b)
-        alpha=update(standardized)
+        previous_alpha=alpha; alpha=update(standardized)
         total=mp.zeros(p,1)
         for vector in scores: total+=vector
         step=inverse(fisher)*total
-        if max(abs(float(step[j,0])) for j in range(p))<1e-9: break
+        if max(abs(float(step[j,0])) for j in range(p))<1e-9 and abs(alpha-previous_alpha)<1e-9: break
         b=[b[j]+float(step[j,0]) for j in range(p)]
-        require(max(abs(v) for v in b)<40,'GEE estimates diverged; simplify the working correlation')
+        require(all(math.isfinite(v) for v in b) and (family=='gaussian' or max(abs(v) for v in b)<40),'GEE estimates diverged; simplify the working correlation')
     else: raise MathError('GEE did not converge; simplify the working correlation')
     fisher,scores,standardized=moments(alpha,b)
     bread=inverse(fisher); meat=mp.zeros(p)
@@ -415,7 +455,7 @@ def clustered(engine,name,a):
     cov=bread*meat*bread
     b=list(map(float,transform*mp.matrix(b))); cov=transform*cov*transform.T
     engine.note += ' GEE: '+corr+' working correlation'+(' (moment estimate alpha='+format(alpha,'.4g')+')' if corr!='independence' else '')+', cluster sandwich covariance, asymptotic Wald inference. Rows: cluster ID, predictors, response'+('; AR(1) uses the within-cluster row order as the time order' if corr=='ar1' else '')+'. Zero robust SE leaves p/CI unavailable.'
-    return {'coefficients':inference(b,cov,names,family!='gaussian'),'clusters':len(ids),'family':family,'working correlation':corr,'alpha':alpha}
+    return {'coefficients':inference(b,cov,names,family!='gaussian'),'clusters':len(ids),'family':family,'working correlation':corr,'alpha':alpha,'Pearson dispersion':math.fsum(v*v for v in standardized)/(n-p)}
 
 
 def calculate(engine, name, a):

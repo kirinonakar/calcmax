@@ -174,6 +174,30 @@ test('GEE interactions accept column numbers, names, letters and shown labels',(
   }
 });
 
+test('GLMM controls reserve exposure, hide count options for binary outcomes and restore settings',t=>{
+  const dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));
+  const original=Object.getOwnPropertyDescriptor(globalThis,'document');
+  Object.defineProperty(globalThis,'document',{value:dom.window.document,configurable:true});
+  t.after(()=>{setLanguage('en');dom.window.close();if(original)Object.defineProperty(globalThis,'document',original);else delete globalThis.document;});
+  const state={fields:{'statistics-advanced-kind':'glmm','statistics-advanced-input':'current','statistics-form-glmm-family':'poisson','statistics-form-glmm-adjustment':'exposure','statistics-form-glmm-offset':'2'}};
+  const data=()=> 'id,time,exposure,outcome\nA,0,2,0\nA,1,3,1\nB,0,4,1';
+  const api=createAdvancedStatistics({state,persist:()=>{},data,columnLimit:()=>4});
+  const $=id=>document.getElementById(id),change=(key,value)=>{const field=$(`statistics-form-glmm-${key}`);field.value=value;field.dispatchEvent(new dom.window.Event('change'));};
+  assert.equal(api.expression(),'glmm([[1,0,0],[1,1,1],[2,0,1]],poisson,15,[2,3,4],exposure)');
+  assert.deepEqual([...document.querySelectorAll('[data-column]')].map(c=>c.dataset.column),['1']);
+  assert.deepEqual(api.context().termLabels,{x1:'time (y)'});
+  change('family','binomial');
+  assert.equal($('statistics-form-glmm-adjustment'),null);
+  assert.match(api.expression(),/binomial,15\)$/);
+  change('family','nbinom');
+  const points=$('statistics-form-glmm-points');points.value='21';points.oninput();
+  assert.equal(api.expression(),'glmm([[1,0,0],[1,1,1],[2,0,1]],nbinom,21,[2,3,4],exposure)');
+  setLanguage('ko');api.render();
+  assert.match($('statistics-form-glmm-points').parentElement.textContent,/적분 점 수/);
+  const restored=createAdvancedStatistics({state,persist:()=>{},data,columnLimit:()=>4});
+  assert.equal(restored.expression(),api.expression());
+});
+
 test('advanced controls restore selection and edited source, switch locale, and load raw data',t=>{
   const dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));
   const original=Object.getOwnPropertyDescriptor(globalThis,'document');

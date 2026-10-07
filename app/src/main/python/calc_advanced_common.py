@@ -40,6 +40,19 @@ def option(a, i, default):
     return str(a[i]) if len(a) > i else default
 
 
+def count_offsets(a,index,size):
+    """Optional row-aligned log offset or positive exposure vector."""
+    values=vector(a[index],size) if len(a)>index else [0.0]*size
+    require(len(values)==size,'Offset/exposure must have one value per observation')
+    mode=option(a,index+1,'offset')
+    require(mode in ('offset','exposure'),'Choose offset or exposure')
+    if mode=='exposure':
+        require(all(v>0 for v in values),'Exposure must be positive')
+        values=[math.log(v) for v in values]
+    require(all(abs(v)<700 for v in values),'Offset exceeds the numeric range')
+    return values
+
+
 def convert(value):
     if isinstance(value, dict): return {k: convert(v) for k, v in value.items()}
     if isinstance(value, (list, tuple)): return [convert(v) for v in value]

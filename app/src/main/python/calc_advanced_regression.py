@@ -4,24 +4,26 @@ import mpmath as mp
 from calc_shared import MathError, require
 from calc_advanced_common import (
     dot, inference, logistic, mean, newton, regression_data,
-    standardized_design, table,
+    standardized_design, table, count_offsets,
 )
 
 
-def model(rows, mode):
+def model(rows, mode, offsets=None):
     x,y = regression_data(rows); p = len(x[0]); names = ['Intercept']+['x'+str(i) for i in range(1,p)]
     x,transform,centers,scales=standardized_design(x)
     if mode in ('poissonreg','nbreg'):
+        offsets=[0.0]*len(y) if offsets is None else offsets
         require(all(v >= 0 and v.is_integer() for v in y) and sum(y)>0, 'Response must be nonnegative integer counts with at least one event')
-        start = [math.log(mean(y))]+[0.0]*(p-1)+([0.0] if mode=='nbreg' else [])
+        top=max(offsets)
+        start = [math.log(sum(y))-top-math.log(math.fsum(math.exp(v-top) for v in offsets))]+[0.0]*(p-1)+([0.0] if mode=='nbreg' else [])
         if mode == 'poissonreg':
             def exact(b):
                 # Log-link Poisson: the score and the observed information
                 # (equal to the Fisher information for the canonical link) are
                 # analytic, so standard errors come from X'WX, not differences.
                 value = 0.0; score = [0.0]*p; information = [[0.0]*p for _ in range(p)]
-                for row,v in zip(x,y):
-                    z = dot(row,b); mu = math.exp(z)
+                for row,v,off in zip(x,y,offsets):
+                    z = dot(row,b)+off; mu = math.exp(z)
                     value += mu-v*z+math.lgamma(v+1)
                     for j in range(p):
                         score[j] += row[j]*(mu-v)
@@ -41,8 +43,8 @@ def model(rows, mode):
                 count = len(b)
                 value = 0.0; score = [0.0]*count; information = [[0.0]*count for _ in range(count)]
                 psi_r = psi1_r = None
-                for row,v in zip(x,y):
-                    z = dot(row,b[:p]); mu = math.exp(z)
+                for row,v,off in zip(x,y,offsets):
+                    z = dot(row,b[:p])+off; mu = math.exp(z)
                     value += math.lgamma(r)-math.lgamma(v+r)+math.lgamma(v+1)+r*math.log1p(mu/r)+v*(math.log(r+mu)-z)
                     if v <= 64:
                         harmonic = 0.0; squared = 0.0
@@ -169,5 +171,8 @@ def model(rows, mode):
 def calculate(engine, name, a):
     if name in ('multinomial','ordinal','poissonreg','nbreg'):
         engine.note += {'ordinal':' Proportional-odds cumulative logit; ascending numeric categories; analytic score and observed information.', 'multinomial':' Multinomial logit; smallest category is reference.', 'poissonreg':' Poisson log-link regression; exp(coef) is incidence rate ratio.', 'nbreg':' Negative binomial NB2 log-link; dispersion alpha is jointly estimated; analytic score and observed information.'}[name]+' Rows: predictors then response. Wald 95% CI.'
-        return model(table(a[0],3,2),name)
+        rows=table(a[0],3,2)
+        offsets=count_offsets(a,1,len(rows)) if name in ('poissonreg','nbreg') else None
+        if len(a)>1: engine.note += ' Row-aligned '+str(a[2] if len(a)>2 else 'offset')+' included in the log mean.'
+        return model(rows,name,offsets)
     raise MathError('Unknown advanced analysis')

@@ -20,6 +20,25 @@ import {createAdvancedStatistics} from '../advanced-statistics.js';
 // Reuse the interpreter for sequential integration scenarios. The cold solver
 // scenario below explicitly loads its own interpreter to keep startup coverage.
 let sharedRuntime;
+test('GLMM, random-slope LMM, correlated GEE and count exposure match independent fixtures in WASM',async()=>{
+  const py=await runtime();
+  const fixtures=JSON.parse(readFileSync(new URL('../../tests/fixtures/advanced_statistics_reference.json',import.meta.url),'utf8'));
+  const selected=fixtures.filter(c=>c.function==='glmm'||/Mixed random slope|exchangeable|ar1|exposure/.test(c.name));
+  py.globals.set('longitudinal_fixtures',JSON.stringify(selected));
+  assert.equal(py.runPython(`
+import json, math
+import symvacas_catalog as catalog
+longitudinal_cases = json.loads(longitudinal_fixtures)
+for case in longitudinal_cases:
+    result = getattr(catalog, case['function'])(*case['arguments'])
+    for path, expected in case['expected']:
+        actual = result
+        for key in path: actual = actual[key]
+        assert abs(float(actual)-expected) <= case['tolerance']*max(1,abs(expected)), (case['name'],path,actual,expected)
+len(longitudinal_cases)
+`),selected.length);
+  assert.equal(selected.length,13);
+});
 test('Bayesian priors and count/exposure updates match independent reference distributions in WASM',async()=>{
   const py=await runtime();
   const fixtures=JSON.parse(readFileSync(new URL('../../tests/fixtures/bayesian_statistics_reference.json',import.meta.url),'utf8'));

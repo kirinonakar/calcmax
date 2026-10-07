@@ -11,6 +11,7 @@ from calc_advanced_common import convert
 from calc_advanced_inference import calculate as inference
 from calc_advanced_survival import calculate as survival
 from calc_advanced_longitudinal import calculate as longitudinal
+from calc_advanced_glmm import calculate as glmm
 from calc_advanced_regression import calculate as regression
 from calc_advanced_resampling import calculate as resampling
 from calc_advanced_learning import calculate as learning
@@ -34,11 +35,12 @@ _ANALYSES = {
     'survivalanalysis': (1, 5, survival),
     'repeatedanova': (1, 2, longitudinal),
     'mixedmodel': (1, 3, longitudinal),
+    'glmm': (1, 5, glmm),
     'gee': (1, 4, longitudinal),
     'multinomial': (1, 1, regression),
     'ordinal': (1, 1, regression),
-    'poissonreg': (1, 1, regression),
-    'nbreg': (1, 1, regression),
+    'poissonreg': (1, 3, regression),
+    'nbreg': (1, 3, regression),
     'bootstrapci': (1, 5, resampling),
     'testpower': (2, 5, resampling),
     'samplesize': (1, 5, resampling),

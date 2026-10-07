@@ -1195,8 +1195,8 @@ export const advancedStatisticsSchema = [
     "input": "table",
     "suffix": ",0",
     "example": "mixedmodel([[1,0,2],[1,1,4],[1,2,4],[2,0,3],[2,1,4],[2,2,6],[3,0,1],[3,1,3],[3,2,4],[4,0,4],[4,1,5],[4,2,8]],0)",
-    "help": "Rows: subject ID, predictors, response. Gaussian random intercept with up to three random slopes (0 none, a predictor position, or [1,2]); third argument ml (default) or reml; up to 5000 rows.",
-    "helpKo": "열: 대상 ID, 설명변수, 반응. Gaussian 랜덤 절편 + 최대 3개 랜덤 기울기(0 없음, 변수 위치, 또는 [1,2]); 셋째 인수 ml(기본)·reml; 최대 5000행.",
+    "help": "Rows: subject ID, predictors, response. Gaussian random intercept with up to three random slopes (0 none, a predictor position, or [1,2]); third argument ml (default) or reml; up to 5000 rows. Includes subject BLUPs, slope correlations and singular-fit diagnostics; random-slope ICC is at x=0; asymptotic Wald z inference.",
+    "helpKo": "열: 대상 ID, 설명변수, 반응. Gaussian 랜덤 절편 + 최대 3개 랜덤 기울기(0 없음, 변수 위치, 또는 [1,2]); 셋째 인수 ml(기본)·reml; 최대 5000행. 대상별 BLUP·기울기 상관·singular 진단 포함; 기울기 ICC는 x=0 기준; 점근 Wald z 추론.",
     "controls": [
       {
         "key": "subject",
@@ -1246,8 +1246,8 @@ export const advancedStatisticsSchema = [
         ]
       }
     ],
-    "formHelp": "Gaussian random intercept with up to three random slopes under ML or REML. Random-slope positions accept 0, a number or a list such as 1,2.",
-    "formHelpKo": "Gaussian 랜덤 절편 + 최대 3개 랜덤 기울기, ML·REML 추정입니다. 랜덤 기울기 위치는 0, 번호, 또는 1,2 같은 목록입니다.",
+    "formHelp": "Gaussian random intercept + up to three random slopes; ML / REML, singular-fit diagnostics and subject BLUPs. ICC for random slopes is at x=0. Slopes: 0, a position or 1,2. Wald z inference.",
+    "formHelpKo": "Gaussian 랜덤 절편 + 최대 3개 랜덤 기울기; ML·REML, singular 진단·대상별 BLUP. 기울기 모형의 ICC는 x=0 기준. 기울기: 0, 번호 또는 1,2. Wald z 추론.",
     "exampleRows": [
       [
         "1",
@@ -1312,14 +1312,219 @@ export const advancedStatisticsSchema = [
     ]
   },
   {
+    "id": "glmm",
+    "label": "Generalized mixed model (GLMM)",
+    "ko": "일반화 혼합모형 (GLMM)",
+    "input": "table",
+    "suffix": ",binomial,15",
+    "example": "glmm([[1,0,0],[1,1,0],[1,2,1],[2,0,0],[2,1,1],[2,2,1],[3,0,0],[3,1,0],[3,2,0],[4,0,1],[4,1,1],[4,2,1],[5,0,1],[5,1,0],[5,2,1],[6,0,0],[6,1,1],[6,2,0]],binomial,15)",
+    "help": "Rows: subject ID, predictors, response. Random intercept; binomial (0/1, logit), poisson or nbinom (NB2, log). ML adaptive Gauss-Hermite quadrature: 15 points default, 1 = Laplace, otherwise 7-31. Optional fourth argument offset vector, fifth offset / exposure. Limit 1500 rows, 8 fixed coefficients. Subject-specific effects; joint marginal observed information by central differences; asymptotic Wald inference.",
+    "helpKo": "열: 대상 ID, 설명변수, 반응. 랜덤 절편; binomial(0/1, 로짓), poisson·nbinom(NB2, 로그). ML 적응형 Gauss-Hermite 적분: 기본 15점, 1=Laplace, 그 외 7~31점. 선택적 넷째 인수 오프셋 목록, 다섯째 offset·exposure. 최대 1500행·고정계수 8개. 대상별 조건부 효과, 중앙차분 관측 정보행렬·점근 Wald 추론.",
+    "controls": [
+      {
+        "key": "subject",
+        "label": "Subject / cluster",
+        "ko": "대상·군집 열",
+        "type": "column",
+        "default": 0
+      },
+      {
+        "key": "response",
+        "label": "Response",
+        "ko": "반응 열",
+        "type": "column",
+        "default": -1
+      },
+      {
+        "key": "predictors",
+        "label": "Predictors",
+        "ko": "설명변수 열",
+        "type": "columns",
+        "default": "auto"
+      },
+      {
+        "key": "family",
+        "label": "Family",
+        "ko": "분포",
+        "type": "choice",
+        "default": "binomial",
+        "choices": [
+          {
+            "id": "binomial",
+            "label": "Binomial (0/1)",
+            "ko": "이항 (0/1)"
+          },
+          {
+            "id": "poisson",
+            "label": "Poisson",
+            "ko": "포아송"
+          },
+          {
+            "id": "nbinom",
+            "label": "Negative binomial (NB2)",
+            "ko": "음이항 (NB2)"
+          }
+        ]
+      },
+      {
+        "key": "points",
+        "label": "Quadrature points (1 = Laplace)",
+        "ko": "적분 점 수 (1 = Laplace)",
+        "type": "number",
+        "default": "15"
+      },
+      {
+        "key": "adjustment",
+        "label": "Offset / exposure",
+        "ko": "오프셋·노출량",
+        "type": "choice",
+        "default": "none",
+        "choices": [
+          {
+            "id": "none",
+            "label": "None",
+            "ko": "없음"
+          },
+          {
+            "id": "offset",
+            "label": "Log offset",
+            "ko": "로그 오프셋"
+          },
+          {
+            "id": "exposure",
+            "label": "Exposure",
+            "ko": "노출량"
+          }
+        ],
+        "when": {
+          "family": [
+            "poisson",
+            "nbinom"
+          ]
+        }
+      },
+      {
+        "key": "offset",
+        "label": "Offset / exposure column",
+        "ko": "오프셋·노출량 열",
+        "type": "column",
+        "default": 0,
+        "when": {
+          "adjustment": [
+            "offset",
+            "exposure"
+          ],
+          "family": [
+            "poisson",
+            "nbinom"
+          ]
+        }
+      }
+    ],
+    "formHelp": "Random intercept; binomial / Poisson / NB2. ML quadrature (15 default, 1 Laplace, 7-31); conditional effects. Count families support log offset or positive exposure. Few-subject Wald inference may be unreliable.",
+    "formHelpKo": "랜덤 절편; 이항·포아송·NB2. ML 적분(기본 15점, 1 Laplace, 7~31); 조건부 효과. 빈도 분포는 로그 오프셋·양수 노출량 지원. 소수 대상의 Wald 추론은 부정확할 수 있습니다.",
+    "exampleRows": [
+      [
+        "1",
+        "0",
+        "0"
+      ],
+      [
+        "1",
+        "1",
+        "0"
+      ],
+      [
+        "1",
+        "2",
+        "1"
+      ],
+      [
+        "2",
+        "0",
+        "0"
+      ],
+      [
+        "2",
+        "1",
+        "1"
+      ],
+      [
+        "2",
+        "2",
+        "1"
+      ],
+      [
+        "3",
+        "0",
+        "0"
+      ],
+      [
+        "3",
+        "1",
+        "0"
+      ],
+      [
+        "3",
+        "2",
+        "0"
+      ],
+      [
+        "4",
+        "0",
+        "1"
+      ],
+      [
+        "4",
+        "1",
+        "1"
+      ],
+      [
+        "4",
+        "2",
+        "1"
+      ],
+      [
+        "5",
+        "0",
+        "1"
+      ],
+      [
+        "5",
+        "1",
+        "0"
+      ],
+      [
+        "5",
+        "2",
+        "1"
+      ],
+      [
+        "6",
+        "0",
+        "0"
+      ],
+      [
+        "6",
+        "1",
+        "1"
+      ],
+      [
+        "6",
+        "2",
+        "0"
+      ]
+    ]
+  },
+  {
     "id": "gee",
     "label": "GEE",
     "ko": "GEE",
     "input": "table",
     "suffix": ",gaussian,independence",
     "example": "gee([[1,0,2],[1,1,4],[1,2,4],[2,0,3],[2,1,4],[2,2,6],[3,0,1],[3,1,3],[3,2,4],[4,0,4],[4,1,5],[4,2,8]],gaussian,independence)",
-    "help": "Rows: cluster ID, predictors, response. gaussian / binomial / poisson; working correlation independent / exchangeable / ar1; fourth argument [i,j] interaction pairs; sandwich SE.",
-    "helpKo": "열: 군집 ID, 설명변수, 반응. gaussian / binomial / poisson; 작업상관 independence / exchangeable / ar1; 넷째 인수 [i,j] 상호작용 쌍; 강건 SE.",
+    "help": "Rows: cluster ID, predictors, response. gaussian / binomial / poisson; working correlation independence / exchangeable / ar1; fourth argument [i,j] interaction pairs; sandwich SE. Pearson dispersion-adjusted correlation; AR(1) uses row order and equal spacing. Few-cluster Wald inference may be unreliable.",
+    "helpKo": "열: 군집 ID, 설명변수, 반응. gaussian / binomial / poisson; 작업상관 independence / exchangeable / ar1; 넷째 인수 [i,j] 상호작용 쌍; 강건 SE. Pearson 분산 보정 상관; AR(1)은 행 순서·등간격 사용. 소수 군집의 Wald 추론은 부정확할 수 있습니다.",
     "controls": [
       {
         "key": "subject",
@@ -1398,8 +1603,8 @@ export const advancedStatisticsSchema = [
         "default": ""
       }
     ],
-    "formHelp": "Working correlation independent / exchangeable / AR(1); cluster-robust SE. Interactions accept header names (age,weight), the shown column letters or labels (y,z / age (y),weight (z)), column numbers (2,3) or predictor order (p1,p2); separate pairs with ;.",
-    "formHelpKo": "작업상관 independent / exchangeable / AR(1); 군집 강건 표준오차. 상호작용은 열 이름(age,weight), 표시된 열 문자·라벨(y,z / age (y),weight (z)), 열 번호(2,3), 설명변수 순서(p1,p2)로 입력하고 쌍은 ;로 구분합니다.",
+    "formHelp": "Working correlation independence / exchangeable / AR(1); dispersion-adjusted correlation and cluster-robust SE. AR(1): row order, equal spacing. Interactions accept header names (age,weight), the shown column letters or labels (y,z / age (y),weight (z)), column numbers (2,3) or predictor order (p1,p2); separate pairs with ;.",
+    "formHelpKo": "작업상관 independence / exchangeable / AR(1); 분산 보정 상관·군집 강건 표준오차. AR(1): 행 순서·등간격. 상호작용은 열 이름(age,weight), 표시된 열 문자·라벨(y,z / age (y),weight (z)), 열 번호(2,3), 설명변수 순서(p1,p2)로 입력하고 쌍은 ;로 구분합니다.",
     "exampleRows": [
       [
         "1",
@@ -1490,8 +1695,105 @@ export const advancedStatisticsSchema = [
     "input": "table",
     "suffix": "",
     "example": "poissonreg([[0,1],[0,0],[1,3],[1,1],[2,2],[2,5],[3,4],[3,8],[4,6],[4,10]])",
-    "help": "Rows: predictors, integer count response. Log link.",
-    "helpKo": "열: 설명변수, 정수 빈도 반응. 로그 연결함수."
+    "help": "Rows: predictors, integer count response. Log link. Optional second argument row-aligned offset/exposure list; third argument offset (default) or exposure (positive, log transformed).",
+    "helpKo": "열: 설명변수, 정수 빈도 반응. 로그 연결함수. 선택적 둘째 인수 행별 오프셋·노출량 목록; 셋째 인수 offset(기본)·exposure(양수, 로그 변환).",
+    "controls": [
+      {
+        "key": "response",
+        "label": "Response",
+        "ko": "반응 열",
+        "type": "column",
+        "default": -1
+      },
+      {
+        "key": "predictors",
+        "label": "Predictors",
+        "ko": "설명변수 열",
+        "type": "columns",
+        "default": "auto"
+      },
+      {
+        "key": "adjustment",
+        "label": "Offset / exposure",
+        "ko": "오프셋·노출량",
+        "type": "choice",
+        "default": "none",
+        "choices": [
+          {
+            "id": "none",
+            "label": "None",
+            "ko": "없음"
+          },
+          {
+            "id": "offset",
+            "label": "Log offset",
+            "ko": "로그 오프셋"
+          },
+          {
+            "id": "exposure",
+            "label": "Exposure",
+            "ko": "노출량"
+          }
+        ]
+      },
+      {
+        "key": "offset",
+        "label": "Offset / exposure column",
+        "ko": "오프셋·노출량 열",
+        "type": "column",
+        "default": 0,
+        "when": {
+          "adjustment": [
+            "offset",
+            "exposure"
+          ]
+        }
+      }
+    ],
+    "formHelp": "Log-link counts; choose predictors, response and optional offset / positive exposure.",
+    "formHelpKo": "로그 연결 빈도 모형; 설명변수·반응·선택적 오프셋·양수 노출량.",
+    "exampleRows": [
+      [
+        "0",
+        "1"
+      ],
+      [
+        "0",
+        "0"
+      ],
+      [
+        "1",
+        "3"
+      ],
+      [
+        "1",
+        "1"
+      ],
+      [
+        "2",
+        "2"
+      ],
+      [
+        "2",
+        "5"
+      ],
+      [
+        "3",
+        "4"
+      ],
+      [
+        "3",
+        "8"
+      ],
+      [
+        "4",
+        "6"
+      ],
+      [
+        "4",
+        "10"
+      ]
+    ]
   },
   {
     "id": "nbreg",
@@ -1500,8 +1802,129 @@ export const advancedStatisticsSchema = [
     "input": "table",
     "suffix": "",
     "example": "nbreg([[0,0],[0,0],[0,1],[0,8],[1,0],[1,1],[1,3],[1,15],[2,0],[2,2],[2,5],[2,23],[3,1],[3,3],[3,10],[3,35]])",
-    "help": "Rows: predictors, integer count response. NB2 with estimated dispersion.",
-    "helpKo": "열: 설명변수, 정수 빈도 반응. NB2 과산포 모수 추정."
+    "help": "Rows: predictors, integer count response. NB2 with estimated dispersion. Optional offset/exposure list and offset (default) / exposure mode.",
+    "helpKo": "열: 설명변수, 정수 빈도 반응. NB2 과산포 모수 추정. 선택적 오프셋·노출량 목록과 offset(기본)·exposure 모드.",
+    "controls": [
+      {
+        "key": "response",
+        "label": "Response",
+        "ko": "반응 열",
+        "type": "column",
+        "default": -1
+      },
+      {
+        "key": "predictors",
+        "label": "Predictors",
+        "ko": "설명변수 열",
+        "type": "columns",
+        "default": "auto"
+      },
+      {
+        "key": "adjustment",
+        "label": "Offset / exposure",
+        "ko": "오프셋·노출량",
+        "type": "choice",
+        "default": "none",
+        "choices": [
+          {
+            "id": "none",
+            "label": "None",
+            "ko": "없음"
+          },
+          {
+            "id": "offset",
+            "label": "Log offset",
+            "ko": "로그 오프셋"
+          },
+          {
+            "id": "exposure",
+            "label": "Exposure",
+            "ko": "노출량"
+          }
+        ]
+      },
+      {
+        "key": "offset",
+        "label": "Offset / exposure column",
+        "ko": "오프셋·노출량 열",
+        "type": "column",
+        "default": 0,
+        "when": {
+          "adjustment": [
+            "offset",
+            "exposure"
+          ]
+        }
+      }
+    ],
+    "formHelp": "NB2 counts with estimated dispersion; optional offset / positive exposure.",
+    "formHelpKo": "과산포를 추정하는 NB2 빈도 모형; 선택적 오프셋·양수 노출량.",
+    "exampleRows": [
+      [
+        "0",
+        "0"
+      ],
+      [
+        "0",
+        "0"
+      ],
+      [
+        "0",
+        "1"
+      ],
+      [
+        "0",
+        "8"
+      ],
+      [
+        "1",
+        "0"
+      ],
+      [
+        "1",
+        "1"
+      ],
+      [
+        "1",
+        "3"
+      ],
+      [
+        "1",
+        "15"
+      ],
+      [
+        "2",
+        "0"
+      ],
+      [
+        "2",
+        "2"
+      ],
+      [
+        "2",
+        "5"
+      ],
+      [
+        "2",
+        "23"
+      ],
+      [
+        "3",
+        "1"
+      ],
+      [
+        "3",
+        "3"
+      ],
+      [
+        "3",
+        "10"
+      ],
+      [
+        "3",
+        "35"
+      ]
+    ]
   },
   {
     "id": "bootstrapci",
