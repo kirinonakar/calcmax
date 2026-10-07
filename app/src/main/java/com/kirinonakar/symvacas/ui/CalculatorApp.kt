@@ -232,13 +232,13 @@ internal fun largeHistoryTree(root:JSONObject?):Boolean {
     var typing by rememberSaveable {mutableStateOf(false)}
     LaunchedEffect(m.calcSession!=null){if(m.calcSession!=null)typing=false}
     Column(Modifier.fillMaxWidth().background(c.display).padding(vertical=4.dp)) {
-        if(showInput)DisplayToolbar(m,typing){typing=!typing}
+        DisplayToolbar(m,typing,showInput){typing=!typing}
         DisplayContent(m,typing,requestInitialFocus,showInput=showInput)
         DisplayActions(m,screenExpanded,onToggleScreen)
     }
 }
 
-@Composable fun DisplayToolbar(m:CalculatorModel,typing:Boolean,onToggleTyping:()->Unit) {
+@Composable fun DisplayToolbar(m:CalculatorModel,typing:Boolean,showInput:Boolean=true,onToggleTyping:()->Unit) {
     val c=LocalInstrument.current
     val clipboard=LocalClipboardManager.current
     var copyExpression by remember{mutableStateOf(false)}
@@ -247,13 +247,13 @@ internal fun largeHistoryTree(root:JSONObject?):Boolean {
     Row(Modifier.fillMaxWidth().height(36.dp).padding(horizontal=14.dp),verticalAlignment=Alignment.CenterVertically) {
         Text(if(m.committed)"=" else "MATH",fontSize=10.sp,color=c.muted,letterSpacing=1.sp)
         Spacer(Modifier.weight(1f))
-        TextButton(onClick={m.undo()},enabled=m.canUndo,modifier=Modifier.height(36.dp).semantics{contentDescription="Undo last input"},contentPadding=PaddingValues(horizontal=8.dp)){Text("Undo",fontSize=11.sp)}
-        val selection=m.editor.source.substring(minOf(m.editor.anchor,m.editor.cursor),maxOf(m.editor.anchor,m.editor.cursor))
+        if(showInput)TextButton(onClick={m.undo()},enabled=m.canUndo,modifier=Modifier.height(36.dp).semantics{contentDescription="Undo last input"},contentPadding=PaddingValues(horizontal=8.dp)){Text("Undo",fontSize=11.sp)}
+        val selection=if(showInput)m.editor.source.substring(minOf(m.editor.anchor,m.editor.cursor),maxOf(m.editor.anchor,m.editor.cursor)) else ""
         val copyAnswer=remember(m.result,m.decimal,m.mixedNumbers,m.resultDisplayMode,m.thousandsSeparator,m.engineeringConversion,m.engineeringShift,m.dmsDisplay,m.dmsConversion,m.displayDigits) {
             m.result?.let {result->ResultDisplayFormat.resultText(result,m.decimal,m.mixedNumbers,m.resultDisplayMode,m.thousandsSeparator,m.engineeringConversion,m.engineeringShift,m.dmsDisplay,m.dmsConversion,m.displayDigits)}
         }
-        val copyTarget=CopyCycle.next(copyAnswer,m.editor.source,copyExpression,selection)
-        TextButton(onClick={
+        val copyTarget=if(showInput)CopyCycle.next(copyAnswer,m.editor.source,copyExpression,selection) else CopyTarget(copyAnswer.orEmpty(),false,false)
+        if(showInput)TextButton(onClick={
             val start=minOf(m.editor.anchor,m.editor.cursor)
             clipboard.setText(AnnotatedString(selection))
             m.edit(Editor(m.editor.source.removeRange(start,start+selection.length),start))
@@ -261,9 +261,9 @@ internal fun largeHistoryTree(root:JSONObject?):Boolean {
         TextButton(onClick={
             if(copyTarget.text.isNotBlank())clipboard.setText(AnnotatedString(copyTarget.text))
             if(selection.isEmpty())copyExpression=copyTarget.expressionNext
-        },modifier=Modifier.height(36.dp),contentPadding=PaddingValues(horizontal=8.dp)){Text(if(selection.isNotEmpty())"Copy" else copyTarget.label,fontSize=11.sp)}
-        TextButton(onClick={clipboard.getText()?.text?.let{if(m.calcSession!=null)m.insertCalcValue(it)else m.insert(it)}},modifier=Modifier.height(36.dp),contentPadding=PaddingValues(horizontal=8.dp)){Text("Paste",fontSize=11.sp)}
-        if(m.calcSession==null)TextButton(onClick=onToggleTyping,modifier=Modifier.height(36.dp),contentPadding=PaddingValues(horizontal=8.dp)){Text(if(typing)"Math input" else "Keyboard",fontSize=11.sp)}
+        },enabled=showInput||copyTarget.text.isNotBlank(),modifier=Modifier.height(36.dp),contentPadding=PaddingValues(horizontal=8.dp)){Text(if(!showInput)if(isKorean())"결과 복사" else "Copy result" else if(selection.isNotEmpty())"Copy" else copyTarget.label,fontSize=11.sp)}
+        if(showInput)TextButton(onClick={clipboard.getText()?.text?.let{if(m.calcSession!=null)m.insertCalcValue(it)else m.insert(it)}},modifier=Modifier.height(36.dp),contentPadding=PaddingValues(horizontal=8.dp)){Text("Paste",fontSize=11.sp)}
+        if(showInput&&m.calcSession==null)TextButton(onClick=onToggleTyping,modifier=Modifier.height(36.dp),contentPadding=PaddingValues(horizontal=8.dp)){Text(if(typing)"Math input" else "Keyboard",fontSize=11.sp)}
     }
 }
 
