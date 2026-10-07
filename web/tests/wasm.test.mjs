@@ -20,6 +20,24 @@ import {createAdvancedStatistics} from '../advanced-statistics.js';
 // Reuse the interpreter for sequential integration scenarios. The cold solver
 // scenario below explicitly loads its own interpreter to keep startup coverage.
 let sharedRuntime;
+test('Bayesian priors and count/exposure updates match independent reference distributions in WASM',async()=>{
+  const py=await runtime();
+  const fixtures=JSON.parse(readFileSync(new URL('../../tests/fixtures/bayesian_statistics_reference.json',import.meta.url),'utf8'));
+  py.globals.set('bayesian_fixtures',JSON.stringify(fixtures));
+  const checked=py.runPython(`
+import json, math
+import symvacas_catalog as catalog
+bayesian_cases = json.loads(bayesian_fixtures)
+for case in bayesian_cases:
+    result = getattr(catalog, case['function'])(*case['arguments'])
+    for key, expected in case['expected'].items():
+        pairs = zip(result[key], expected) if isinstance(expected, list) else [(result[key], expected)]
+        for actual, reference in pairs:
+            assert math.isclose(float(actual), reference, rel_tol=case['tolerance'], abs_tol=1e-12), (case['function'], key, actual, reference)
+len(bayesian_cases)
+`);
+  assert.equal(checked,fixtures.length);
+});
 test('current data headers label term cells through the real WASM engine',async t=>{
   const py=await runtime(),dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));
   const original=Object.getOwnPropertyDescriptor(globalThis,'document');

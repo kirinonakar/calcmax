@@ -66,6 +66,16 @@ internal fun guidedStatisticsCommand(definition:JSONObject,rows:List<List<String
     }
     return when(id) {
         "padjust"->"padjust(${vector(values(col("column")))},${opts["method"]},${opts["alpha"]})"
+        "bayesproportion","bayesmean","bayesrate"->{
+            val data=when {
+                id=="bayesproportion"&&opts["layout"]=="counts"->table(complete(listOf(col("successes"),col("trials"))))
+                id=="bayesrate"&&opts["layout"]=="exposure"->table(complete(listOf(col("column"),col("exposure"))))
+                else->vector(complete(listOf(col("column"))).map {it[0]})
+            }
+            val keys=if(id=="bayesmean")listOf("mu","kappa","alpha","beta","level","threshold") else listOf("alpha","beta","level","threshold")
+            require(keys.all {opts.getValue(it).isNotBlank()}) {"Enter all Bayesian prior and interval parameters"}
+            "$id($data,${keys.joinToString(",") {opts.getValue(it).trim()}})"
+        }
         "levene","bartlett"->{
             val samples=if(opts["grouping"]=="groups") {val pairs=complete(listOf(col("group"),col("value")));pairs.map {it[0]}.distinct().map {label->pairs.filter {it[0]==label}.map {it[1]}}} else multiple("columns").map(::values)
             require(samples.size>=2) {"Choose at least two groups"};"$id(${samples.joinToString(",",transform=::vector)})"

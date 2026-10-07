@@ -1,0 +1,319 @@
+[
+  {
+    "function": "bayesproportion",
+    "arguments": [
+      [
+        [
+          7,
+          10
+        ]
+      ],
+      1,
+      1,
+      0.95,
+      0.5
+    ],
+    "expected": {
+      "posterior mean": 0.6666666666666666,
+      "posterior SD": 0.1307440900921227,
+      "credible interval": [
+        0.3902574404275788,
+        0.8907365561809019
+      ],
+      "P(p > threshold)": 0.88671875,
+      "log BF10": -0.25391520998096384
+    },
+    "source": "SciPy 1.18.1",
+    "tolerance": 2e-09
+  },
+  {
+    "function": "bayesproportion",
+    "arguments": [
+      [
+        [
+          0,
+          100
+        ]
+      ],
+      0.5,
+      0.5,
+      0.99,
+      0.1
+    ],
+    "expected": {
+      "posterior mean": 0.0049504950495049506,
+      "posterior SD": 0.006949388214200189,
+      "credible interval": [
+        1.9586182676542068e-07,
+        0.03853633289959721
+      ],
+      "P(p > threshold)": 4.302080000071996e-06,
+      "log BF10": 7.659851535072061
+    },
+    "source": "SciPy 1.18.1",
+    "tolerance": 2e-09
+  },
+  {
+    "function": "bayesproportion",
+    "arguments": [
+      [
+        [
+          50000,
+          100000
+        ]
+      ],
+      2,
+      3,
+      0.95,
+      0.5
+    ],
+    "expected": {
+      "posterior mean": 0.4999950002499875,
+      "posterior SD": 0.0015810913979746712,
+      "credible interval": [
+        0.4968961246671743,
+        0.5030938760222124
+      ],
+      "P(p > threshold)": 0.4987384621232811,
+      "log BF10": -5.125223771407036
+    },
+    "source": "SciPy 1.18.1",
+    "tolerance": 2e-09
+  },
+  {
+    "function": "bayesproportion",
+    "arguments": [
+      [
+        [
+          0,
+          1
+        ]
+      ],
+      0.05,
+      0.1,
+      0.95,
+      0.2
+    ],
+    "expected": {
+      "posterior mean": 0.043478260869565216,
+      "posterior SD": 0.1390798694766382,
+      "credible interval": [
+        7.840737389352094e-33,
+        0.5526762617872539
+      ],
+      "P(p > threshold)": 0.07137806287864293,
+      "log BF10": -0.1823215567939544
+    },
+    "source": "SciPy 1.18.1",
+    "tolerance": 2e-09
+  },
+  {
+    "function": "bayesrate",
+    "arguments": [
+      [
+        [
+          8,
+          5
+        ]
+      ],
+      1,
+      1,
+      0.95,
+      1
+    ],
+    "expected": {
+      "posterior mean": 1.5,
+      "posterior SD": 0.5,
+      "credible interval": [
+        0.6858955162297222,
+        2.627198203365552
+      ],
+      "P(rate > threshold)": 0.8472374939845612,
+      "predictive count SD": 1.3228756555322954
+    },
+    "source": "SciPy 1.18.1",
+    "tolerance": 2e-09
+  },
+  {
+    "function": "bayesrate",
+    "arguments": [
+      [
+        [
+          0,
+          0.5
+        ]
+      ],
+      0.1,
+      2,
+      0.99,
+      0.2
+    ],
+    "expected": {
+      "posterior mean": 0.04000000000000001,
+      "posterior SD": 0.1264911064067352,
+      "credible interval": [
+        2.3722845165656125e-24,
+        0.8378232093541446
+      ],
+      "P(rate > threshold)": 0.058597554109866466,
+      "predictive count SD": 0.23664319132398465
+    },
+    "source": "SciPy 1.18.1",
+    "tolerance": 2e-09
+  },
+  {
+    "function": "bayesrate",
+    "arguments": [
+      [
+        [
+          10000,
+          2500
+        ]
+      ],
+      2,
+      3,
+      0.95,
+      4
+    ],
+    "expected": {
+      "posterior mean": 3.9960047942469035,
+      "posterior SD": 0.03995605253697562,
+      "credible interval": [
+        3.9180714616179215,
+        4.074694935610521
+      ],
+      "P(rate > threshold)": 0.4588666329666537,
+      "predictive count SD": 1.9994002301643463
+    },
+    "source": "SciPy 1.18.1",
+    "tolerance": 2e-09
+  },
+  {
+    "function": "bayesmean",
+    "arguments": [
+      [
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      0,
+      1,
+      2,
+      1,
+      0.95,
+      0
+    ],
+    "expected": {
+      "posterior mean": 2.5,
+      "mean posterior t scale": 0.6009252125773316,
+      "credible interval": [
+        1.1406127260621555,
+        3.8593872739378448
+      ],
+      "P(mean > threshold)": 0.998776600812846,
+      "predictive interval": [
+        -1.0966006622655722,
+        6.096600662265573
+      ],
+      "posterior SD": 0.681385143869247
+    },
+    "source": "SciPy 1.18.1",
+    "tolerance": 2e-09
+  },
+  {
+    "function": "bayesmean",
+    "arguments": [
+      [
+        10,
+        12,
+        8,
+        11
+      ],
+      10,
+      0.5,
+      2,
+      10,
+      0.9,
+      11
+    ],
+    "expected": {
+      "posterior mean": 10.222222222222221,
+      "mean posterior t scale": 0.8940820521906157,
+      "credible interval": [
+        8.559633696679564,
+        11.884810747764877
+      ],
+      "P(mean > threshold)": 0.2048433146732778,
+      "predictive interval": [
+        6.323106511068781,
+        14.12133793337566
+      ],
+      "posterior SD": 1.0323970270197298
+    },
+    "source": "SciPy 1.18.1",
+    "tolerance": 2e-09
+  },
+  {
+    "function": "bayesmean",
+    "arguments": [
+      [
+        2
+      ],
+      0,
+      1,
+      0.1,
+      1,
+      0.99,
+      3
+    ],
+    "expected": {
+      "posterior mean": 1.0,
+      "mean posterior t scale": 1.2909944487358056,
+      "credible interval": [
+        -41.91140101450118,
+        43.91140101450118
+      ],
+      "P(mean > threshold)": 0.16696316623923863,
+      "predictive interval": [
+        -73.3247267810787,
+        75.3247267810787
+      ]
+    },
+    "source": "SciPy 1.18.1",
+    "tolerance": 2e-09
+  },
+  {
+    "function": "bayesmean",
+    "arguments": [
+      [
+        3,
+        3,
+        3
+      ],
+      3,
+      2,
+      1,
+      1,
+      0.95,
+      3
+    ],
+    "expected": {
+      "posterior mean": 3.0,
+      "mean posterior t scale": 0.282842712474619,
+      "credible interval": [
+        2.2729296609706395,
+        3.7270703390293605
+      ],
+      "P(mean > threshold)": 0.5,
+      "predictive interval": [
+        1.219048662265694,
+        4.780951337734306
+      ],
+      "posterior SD": 0.3651483716701107
+    },
+    "source": "SciPy 1.18.1",
+    "tolerance": 2e-09
+  }
+]

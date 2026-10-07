@@ -117,6 +117,15 @@ export function guidedStatisticsCommand(definition,rows,settings={},columnLabels
     return selected.map(row=>[row[0],row[1]===opts.eventValue?'1':'0',...row.slice(2)]);
   };
   if(id==='padjust')return `padjust(${list(values(column('column')))},${opts.method},${opts.alpha})`;
+  if(['bayesproportion','bayesmean','bayesrate'].includes(id)){
+    let data;
+    if(id==='bayesproportion'&&opts.layout==='counts')data=table(complete([column('successes'),column('trials')]));
+    else if(id==='bayesrate'&&opts.layout==='exposure')data=table(complete([column('column'),column('exposure')]));
+    else data=list(complete([column('column')]).map(row=>row[0]));
+    const keys=id==='bayesmean'?['mu','kappa','alpha','beta','level','threshold']:['alpha','beta','level','threshold'];
+    if(keys.some(key=>!String(opts[key]).trim()))throw new Error('Enter all Bayesian prior and interval parameters');
+    return `${id}(${data},${keys.map(key=>String(opts[key]).trim()).join(',')})`;
+  }
   if(['levene','bartlett'].includes(id)){
     let samples;
     if(opts.grouping==='groups'){

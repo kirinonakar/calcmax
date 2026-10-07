@@ -341,6 +341,312 @@ export const advancedStatisticsSchema = [
     ]
   },
   {
+    "id": "bayesproportion",
+    "label": "Bayesian proportion",
+    "ko": "베이지안 비율",
+    "input": "list",
+    "suffix": ",1,1,0.95,0.5",
+    "example": "bayesproportion([1,1,0,1,0,1,1,1,0,1],1,1,0.95,0.5)",
+    "help": "Binary 0/1 list or [[successes,trials],...]; Beta prior alpha, beta (default 1,1); credible level; threshold p0 in (0,1). Returns equal-tailed interval, P(p>p0), next-success probability and BF10 (Beta alternative / point null p=p0).",
+    "helpKo": "0/1 목록 또는 [[성공 수,시행 수],...]; Beta 사전 alpha,beta(기본 1,1), 구간 수준, 기준 p0(0~1 사이). 등꼬리 구간·P(p>p0)·다음 성공 확률·BF10(Beta 대립 / p=p0 점귀무).",
+    "controls": [
+      {
+        "key": "layout",
+        "label": "Data",
+        "ko": "자료 형태",
+        "type": "choice",
+        "default": "binary",
+        "choices": [
+          {
+            "id": "binary",
+            "label": "Binary observations (0/1)",
+            "ko": "0/1 관측값"
+          },
+          {
+            "id": "counts",
+            "label": "Successes / trials",
+            "ko": "성공 수·시행 수"
+          }
+        ]
+      },
+      {
+        "key": "column",
+        "label": "Observation column",
+        "ko": "관측값 열",
+        "type": "column",
+        "default": 0,
+        "when": {
+          "layout": [
+            "binary"
+          ]
+        }
+      },
+      {
+        "key": "successes",
+        "label": "Successes",
+        "ko": "성공 수 열",
+        "type": "column",
+        "default": 0,
+        "when": {
+          "layout": [
+            "counts"
+          ]
+        }
+      },
+      {
+        "key": "trials",
+        "label": "Trials",
+        "ko": "시행 수 열",
+        "type": "column",
+        "default": 1,
+        "when": {
+          "layout": [
+            "counts"
+          ]
+        }
+      },
+      {
+        "key": "alpha",
+        "label": "Prior α",
+        "ko": "사전 α",
+        "type": "number",
+        "default": "1"
+      },
+      {
+        "key": "beta",
+        "label": "Prior β",
+        "ko": "사전 β",
+        "type": "number",
+        "default": "1"
+      },
+      {
+        "key": "level",
+        "label": "Credible level",
+        "ko": "베이지안 구간 수준",
+        "type": "number",
+        "default": "0.95"
+      },
+      {
+        "key": "threshold",
+        "label": "Threshold p0",
+        "ko": "기준 비율 p0",
+        "type": "number",
+        "default": "0.5"
+      }
+    ],
+    "formHelp": "Beta prior → posterior proportion · credible interval · P(p > p0). BF10: Beta alternative / point null p=p0.",
+    "formHelpKo": "Beta 사전 → 사후 비율 · 베이지안 구간 · P(p > p0). BF10: Beta 대립 / p=p0 점귀무.",
+    "exampleRows": [
+      [
+        "1"
+      ],
+      [
+        "1"
+      ],
+      [
+        "0"
+      ],
+      [
+        "1"
+      ],
+      [
+        "0"
+      ],
+      [
+        "1"
+      ],
+      [
+        "1"
+      ],
+      [
+        "1"
+      ],
+      [
+        "0"
+      ],
+      [
+        "1"
+      ]
+    ]
+  },
+  {
+    "id": "bayesmean",
+    "label": "Bayesian mean",
+    "ko": "베이지안 평균",
+    "input": "list",
+    "suffix": ",0,1,2,1,0.95,0",
+    "example": "bayesmean([1,2,3,4,5],0,1,2,1,0.95,0)",
+    "help": "Normal sample, unknown variance; prior mu0,kappa0,alpha0,beta0; credible level; threshold. Variance ~ InvGamma(alpha0,beta0), mean | variance ~ Normal(mu0,variance/kappa0). Defaults 0,1,2,1 are proper, scale-dependent priors. Returns Student-t mean interval and next-observation predictive interval.",
+    "helpKo": "분산 미지의 정규 표본; 사전 mu0,kappa0,alpha0,beta0, 구간 수준, 기준값. 분산 ~ InvGamma(alpha0,beta0), 평균|분산 ~ Normal(mu0,분산/kappa0). 기본 0,1,2,1은 자료 척도에 맞춰 조절할 적정 사전분포. 평균의 t 구간과 다음 관측 예측구간.",
+    "controls": [
+      {
+        "key": "column",
+        "label": "Sample column",
+        "ko": "표본 열",
+        "type": "column",
+        "default": 0
+      },
+      {
+        "key": "mu",
+        "label": "Prior mean μ0",
+        "ko": "사전 평균 μ0",
+        "type": "number",
+        "default": "0"
+      },
+      {
+        "key": "kappa",
+        "label": "Prior strength κ0",
+        "ko": "사전 강도 κ0",
+        "type": "number",
+        "default": "1"
+      },
+      {
+        "key": "alpha",
+        "label": "Variance prior α0",
+        "ko": "분산 사전 α0",
+        "type": "number",
+        "default": "2"
+      },
+      {
+        "key": "beta",
+        "label": "Variance prior β0",
+        "ko": "분산 사전 β0",
+        "type": "number",
+        "default": "1"
+      },
+      {
+        "key": "level",
+        "label": "Credible level",
+        "ko": "베이지안 구간 수준",
+        "type": "number",
+        "default": "0.95"
+      },
+      {
+        "key": "threshold",
+        "label": "Threshold mean",
+        "ko": "기준 평균",
+        "type": "number",
+        "default": "0"
+      }
+    ],
+    "formHelp": "Normal data, unknown variance. Adjust the normal-inverse-gamma prior to your data scale; mean interval and next-observation prediction.",
+    "formHelpKo": "분산 미지의 정규 자료. 자료 척도에 맞춰 정규-역감마 사전을 조절하세요. 평균 구간·다음 관측 예측.",
+    "exampleRows": [
+      [
+        "1"
+      ],
+      [
+        "2"
+      ],
+      [
+        "3"
+      ],
+      [
+        "4"
+      ],
+      [
+        "5"
+      ]
+    ]
+  },
+  {
+    "id": "bayesrate",
+    "label": "Bayesian Poisson rate",
+    "ko": "베이지안 발생률",
+    "input": "list",
+    "suffix": ",1,1,0.95,1",
+    "example": "bayesrate([0,2,1,3,2],1,1,0.95,1)",
+    "help": "Count list (one exposure unit each) or [[count,exposure],...]; Gamma prior shape, rate (inverse scale, default 1,1); credible level; nonnegative threshold. Equal-tailed rate interval and predictive count mean/SD for one exposure unit.",
+    "helpKo": "횟수 목록(관측당 노출 1) 또는 [[횟수,노출량],...]; Gamma 사전 shape,rate(척도의 역수, 기본 1,1), 구간 수준, 0 이상 기준값. 발생률 등꼬리 구간과 노출 1단위의 예측 횟수 평균·SD.",
+    "controls": [
+      {
+        "key": "layout",
+        "label": "Data",
+        "ko": "자료 형태",
+        "type": "choice",
+        "default": "counts",
+        "choices": [
+          {
+            "id": "counts",
+            "label": "Counts (exposure = 1)",
+            "ko": "횟수 (노출량 = 1)"
+          },
+          {
+            "id": "exposure",
+            "label": "Counts / exposure",
+            "ko": "횟수·노출량"
+          }
+        ]
+      },
+      {
+        "key": "column",
+        "label": "Count column",
+        "ko": "횟수 열",
+        "type": "column",
+        "default": 0
+      },
+      {
+        "key": "exposure",
+        "label": "Exposure",
+        "ko": "노출량 열",
+        "type": "column",
+        "default": 1,
+        "when": {
+          "layout": [
+            "exposure"
+          ]
+        }
+      },
+      {
+        "key": "alpha",
+        "label": "Prior shape α",
+        "ko": "사전 shape α",
+        "type": "number",
+        "default": "1"
+      },
+      {
+        "key": "beta",
+        "label": "Prior rate β",
+        "ko": "사전 rate β",
+        "type": "number",
+        "default": "1"
+      },
+      {
+        "key": "level",
+        "label": "Credible level",
+        "ko": "베이지안 구간 수준",
+        "type": "number",
+        "default": "0.95"
+      },
+      {
+        "key": "threshold",
+        "label": "Threshold rate",
+        "ko": "기준 발생률",
+        "type": "number",
+        "default": "1"
+      }
+    ],
+    "formHelp": "Gamma prior → Poisson rate · credible interval · P(rate > threshold). β is rate, not scale.",
+    "formHelpKo": "Gamma 사전 → 포아송 발생률 · 베이지안 구간 · 기준 초과 확률. β는 rate(척도의 역수)입니다.",
+    "exampleRows": [
+      [
+        "0"
+      ],
+      [
+        "2"
+      ],
+      [
+        "1"
+      ],
+      [
+        "3"
+      ],
+      [
+        "2"
+      ]
+    ]
+  },
+  {
     "id": "kaplanmeier",
     "label": "Kaplan–Meier",
     "ko": "Kaplan–Meier",

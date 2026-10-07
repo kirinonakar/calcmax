@@ -7,6 +7,19 @@ import androidx.compose.runtime.staticCompositionLocalOf
 val LocalLanguage = staticCompositionLocalOf { "en" }
 
 private val korean = mapOf(
+    "Enter all Bayesian prior and interval parameters" to "베이지안 사전분포·구간 매개변수를 모두 입력하세요",
+    "Prior parameters must be positive" to "사전분포 매개변수는 양수여야 합니다",
+    "Prior kappa, alpha and beta must be positive" to "사전 κ·α·β는 양수여야 합니다",
+    "Credible level must lie in (0,1)" to "베이지안 구간 수준은 0과 1 사이여야 합니다",
+    "Proportion threshold must lie in (0,1)" to "기준 비율은 0과 1 사이여야 합니다",
+    "Rate threshold must be nonnegative" to "기준 발생률은 0 이상이어야 합니다",
+    "Use binary 0/1 observations or nonnegative integer counts" to "0/1 관측값 또는 0 이상 정수 횟수를 입력하세요",
+    "Successes must not exceed nonnegative integer trials" to "성공 수는 0 이상 정수 시행 수를 넘을 수 없습니다",
+    "Each exposure must be positive" to "각 노출량은 양수여야 합니다",
+    "Positive total trials or exposure required" to "총 시행 수·노출량은 양수여야 합니다",
+    "Counts must be nonnegative integers; exposure must be nonnegative" to "횟수는 0 이상 정수, 노출량은 0 이상이어야 합니다",
+    "Use two columns: successes/trials or count/exposure" to "성공 수·시행 수 또는 횟수·노출량 두 열을 입력하세요",
+    "Enter Bayesian observations or a count table" to "베이지안 관측값 또는 빈도표를 입력하세요",
     "Auto columns" to "열 수 자동", "Column count must be between 1 and 100" to "열 개수는 1~100이어야 합니다",
     "Clustered heatmap" to "군집 히트맵", "Single linkage · Euclidean" to "단일 연결 · 유클리드 거리", "Clustering…" to "군집 계산 중…",
     "Orientation" to "방향", "Horizontal" to "가로", "Vertical" to "세로",

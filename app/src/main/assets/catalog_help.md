@@ -637,8 +637,6 @@ References: [Firth logistic regression](https://search.r-project.org/CRAN/refman
 
 In Statistics, Advanced analysis provides controls for correction methods, column roles, groups, predictors and test options. Switch between current data, examples and an editable expression. Table analyses reject blank selected cells; impute converts them to NA. All advanced analyses use binary64 numerics.
 
-For current data with headers, result terms use the header and column name, such as `treatment (z)`.
-
 `padjust` — p values; method bonferroni / holm / fdr (BH) / by; alpha.
 Example: padjust([0.01,0.04,0.03,0.2],holm,0.05)
 
@@ -656,6 +654,15 @@ Example: bartlett([1,2,4,5],[2,3,5,8])
 
 `mcnemar` — Paired 2×2 count table; exact / corrected / asymptotic.
 Example: mcnemar([[20,8],[2,15]],exact)
+
+`bayesproportion` — Binary 0/1 list or [[successes,trials],...]; Beta prior alpha, beta (default 1,1); credible level; threshold p0 in (0,1). Returns equal-tailed interval, P(p>p0), next-success probability and BF10 (Beta alternative / point null p=p0).
+Example: bayesproportion([1,1,0,1,0,1,1,1,0,1],1,1,0.95,0.5)
+
+`bayesmean` — Normal sample, unknown variance; prior mu0,kappa0,alpha0,beta0; credible level; threshold. Variance ~ InvGamma(alpha0,beta0), mean | variance ~ Normal(mu0,variance/kappa0). Defaults 0,1,2,1 are proper, scale-dependent priors. Returns Student-t mean interval and next-observation predictive interval.
+Example: bayesmean([1,2,3,4,5],0,1,2,1,0.95,0)
+
+`bayesrate` — Count list (one exposure unit each) or [[count,exposure],...]; Gamma prior shape, rate (inverse scale, default 1,1); credible level; nonnegative threshold. Equal-tailed rate interval and predictive count mean/SD for one exposure unit.
+Example: bayesrate([0,2,1,3,2],1,1,0.95,1)
 
 `kaplanmeier` — Rows: time, event (1=event, 0=censored); confidence level.
 Example: kaplanmeier([[1,1],[2,0],[3,1],[4,1],[5,0],[6,1]],0.95)
@@ -713,5 +720,7 @@ Example: kmeans([[1,1],[1,2],[2,1],[8,8],[8,9],[9,8]],2,0)
 
 `impute` — NA for missing cells; mean / median / mode / regression / knn with neighbours (default 5). Single imputation.
 Example: impute([[1,NA],[2,4],[NA,6],[4,8]],mean)
+
+Bayesian analyses assume independent observations and the stated likelihood with proper conjugate priors; intervals are equal-tailed posterior credible intervals. A Bayes factor is not a posterior hypothesis probability and depends on the prior. References: [Stanford conjugate priors](https://web.stanford.edu/class/stats200/Lecture21.pdf), [normal-inverse-gamma analysis](https://treese41528.github.io/ComputationalDataScience/Website/part3_bayesian/chapter5/ch5_2-prior-distributions.html).
 
 Models return errors on failed convergence or non-identifiability. Cox supports Breslow/Efron ties, optional left truncation and a Grambsch–Therneau scaled-Schoenfeld proportional-hazards check; ordinal logistic assumes proportional odds. Mixed models support a random intercept plus up to three random slopes under ML or REML; GEE supports independent, exchangeable and AR(1) working correlations. Repeated-measures ANOVA covers balanced one- and two-way within-subject designs with GG corrections. Single imputation (mean, median, mode, regression or k-NN) does not propagate imputation uncertainty. Cross-validation covers linear, ridge, lasso, elastic-net and logistic fits with random, blocked or stratified splits. Firth inference uses profile penalized-likelihood intervals; bootstrap CIs use the percentile method, not BCa.

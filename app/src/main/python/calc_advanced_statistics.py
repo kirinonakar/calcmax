@@ -1,6 +1,6 @@
 """Public dispatch for portable advanced statistics (binary64 numerics).
 
-Analysis implementations live in the inference, survival, longitudinal,
+Analysis implementations live in the Bayesian, inference, survival, longitudinal,
 regression, resampling and learning modules. calc_advanced_common owns shared
 validation, numerical tools and SymPy result conversion. Keep this entry point
 shared by calculator expressions and the Python catalog.
@@ -14,10 +14,14 @@ from calc_advanced_longitudinal import calculate as longitudinal
 from calc_advanced_regression import calculate as regression
 from calc_advanced_resampling import calculate as resampling
 from calc_advanced_learning import calculate as learning
+from calc_advanced_bayesian import calculate as bayesian
 
 
 # Function names, argument limits and handlers share one registry.
 _ANALYSES = {
+    'bayesproportion': (1, 5, bayesian),
+    'bayesmean': (1, 7, bayesian),
+    'bayesrate': (1, 5, bayesian),
     'padjust': (1, 3, inference),
     'cohend': (2, 3, inference),
     'eta2': (2, 20, inference),

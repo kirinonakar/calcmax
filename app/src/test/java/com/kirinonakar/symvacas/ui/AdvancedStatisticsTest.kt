@@ -9,6 +9,18 @@ import com.kirinonakar.symvacas.math.Parser
 import com.kirinonakar.symvacas.math.requiresExplicitEvaluation
 
 class AdvancedStatisticsTest {
+    @Test fun bayesianFormsRejectMissingValuesAndOverlappingCountRoles() {
+        val definitions=JSONArray(File("src/main/assets/advanced_statistics.json").readText())
+        fun definition(id:String)=(0 until definitions.length()).map {definitions.getJSONObject(it)}.first {it.getString("id")==id}
+        val rows=listOf(listOf("7","10"),listOf("2","5"))
+        for(id in listOf("bayesproportion","bayesmean","bayesrate")) {
+            assertTrue(requiresExplicitEvaluation(Parser("$id([1])").parse()))
+            assertTrue(runCatching {guidedStatisticsCommand(definition(id),rows,JSONObject().put("alpha",""))}.exceptionOrNull() is IllegalArgumentException)
+            assertTrue(runCatching {guidedStatisticsCommand(definition(id),listOf(listOf("1"),listOf("")))}.exceptionOrNull() is IllegalArgumentException)
+        }
+        assertTrue(runCatching {guidedStatisticsCommand(definition("bayesproportion"),rows,JSONObject().put("layout","counts").put("trials","0"))}.exceptionOrNull() is IllegalArgumentException)
+        assertTrue(runCatching {guidedStatisticsCommand(definition("bayesrate"),rows,JSONObject().put("layout","exposure").put("exposure","0"))}.exceptionOrNull() is IllegalArgumentException)
+    }
     @Test fun termLabelsFollowSelectedPredictorsAndInteractions() {
         val definitions=JSONArray(File("src/main/assets/advanced_statistics.json").readText())
         fun definition(id:String)=(0 until definitions.length()).map {definitions.getJSONObject(it)}.first {it.getString("id")==id}

@@ -34,6 +34,37 @@ test('all advanced examples parse and require explicit evaluation',()=>{
   for(const item of schema){const tree=parse(latexInput(item.example));assert.equal(tree.value,item.id);assert.equal(requiresExplicitEvaluation(tree),true,item.id);}
 });
 
+test('Bayesian forms switch data shapes, preserve priors and restore localized controls',t=>{
+  const dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));
+  const original=Object.getOwnPropertyDescriptor(globalThis,'document');
+  Object.defineProperty(globalThis,'document',{value:dom.window.document,configurable:true});
+  t.after(()=>{setLanguage('en');dom.window.close();if(original)Object.defineProperty(globalThis,'document',original);else delete globalThis.document;});
+  setLanguage('en');
+  const state={fields:{'statistics-advanced-kind':'bayesproportion','statistics-advanced-input':'current'}};
+  let data='successes,trials\n7,10\n2,5',saves=0;
+  const api=createAdvancedStatistics({state,persist:()=>saves++,data:()=>data});
+  const $=id=>document.getElementById(id),change=(id,value)=>{const control=$(id);control.value=value;control.dispatchEvent(new dom.window.Event(control.tagName==='SELECT'?'change':'input'));};
+  change('statistics-form-bayesproportion-layout','counts');
+  assert.equal($('statistics-form-bayesproportion-column'),null);
+  change('statistics-form-bayesproportion-alpha','2');
+  assert.equal(api.expression(),'bayesproportion([[7,10],[2,5]],2,1,0.95,0.5)');
+  setLanguage('ko');api.render();
+  assert.equal(document.querySelector('#statistics-advanced-kind option[value="bayesproportion"]').textContent,'베이지안 비율');
+  assert.match($('statistics-form-bayesproportion-level').parentElement.textContent,/베이지안 구간 수준/);
+  const restored=createAdvancedStatistics({state,persist:()=>saves++,data:()=>data});
+  assert.equal(restored.expression(),api.expression());
+  data='count,exposure\n3,2.5\n0,1.5';change('statistics-advanced-kind','bayesrate');
+  assert.equal($('statistics-form-bayesrate-exposure'),null);
+  change('statistics-form-bayesrate-layout','exposure');
+  assert.equal(restored.expression(),'bayesrate([[3,2.5],[0,1.5]],1,1,0.95,1)');
+  data='sample\n1\n\n3';change('statistics-advanced-kind','bayesmean');
+  assert.throws(()=>restored.expression(),/Complete selected rows/);
+  data='sample\n1\n3';restored.render();change('statistics-form-bayesmean-kappa','');
+  assert.throws(()=>restored.expression(),/Enter all Bayesian/);
+  assert.ok(saves>=5);
+  for(const name of ['bayesproportion','bayesmean','bayesrate'])assert.equal(requiresExplicitEvaluation(parse(`${name}([1])`)),true);
+});
+
 test('term labels follow selected predictors including interactions and Cox entry columns',()=>{
   const rows=[['1','2','3','4','5']],labels=['id (x)','time (y)','treatment (z)','entry (x4)','outcome (x5)'];
   const definition=id=>schema.find(item=>item.id===id);
