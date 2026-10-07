@@ -11,18 +11,23 @@ function assertSwarm(positions,halfWidth){
   return swarm;
 }
 
-test('beeswarm centers isolated points and separates equal and nearby observations',()=>{
+test('beeswarm preserves every observation without overlaps at sparse and dense scales',()=>{
+  { // beeswarm centers
+
   assert.deepEqual(beeswarmLayout([],3,28),{radius:3,offsets:[]});
   assert.deepEqual(assertSwarm([0,20,40],28).offsets,[0,0,0]);
   const swarm=assertSwarm([20,0,0,0,1,2,21,40],28);
   assert.equal(swarm.radius,3);assert.equal(swarm.offsets[1],0);assert.ok(swarm.offsets.some(offset=>offset>0)&&swarm.offsets.some(offset=>offset<0));
   const pair=beeswarmLayout([0,1],3,28);assert.ok(Math.abs(Math.abs(pair.offsets[1])-Math.sqrt(6.45**2-1))<1e-12);
-});
 
-test('dense and constant swarms keep every circle inside its lane without overlaps',()=>{
+  }
+  { // dense and constant
+
   for(const positions of [Array(100).fill(0),Array.from({length:100},(_,i)=>i*.01),[...Array(80).fill(0),...Array(80).fill(1),20]])assert.ok(assertSwarm(positions,23).radius<3);
   const large=beeswarmLayout(Array(5000).fill(50),3,28);
   assert.equal(large.offsets.length,5000);assert.ok(large.offsets.every(offset=>Math.abs(offset)+large.radius<=28+1e-8));
+
+  }
 });
 
 test('violin KDE is symmetric, normalized and finite at extreme scales; degenerate samples use only raw points',()=>{

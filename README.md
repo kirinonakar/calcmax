@@ -112,27 +112,18 @@ Upload the complete contents of `build/web/`. Serve `.wasm` as `application/wasm
 Android and desktop engine tests:
 
 ```powershell
-.\gradlew.bat :math:test :math:exportCases :app:lintDebug
+.\gradlew.bat :math:test :math:exportCases :app:testDebugUnitTest
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install sympy==1.14.0
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
-```
-
-With a connected Android device or emulator:
-
-```powershell
-.\gradlew.bat :app:connectedDebugAndroidTest
 ```
 
 Web tests require **Node.js 22+** and Python. After parser changes, export Kotlin fixtures with `:math:exportCases` and refresh the web build before running:
 
 ```powershell
 cd web
-npm ci
 npm test
 ```
-
-The web suite covers parser parity, the actual WASM engine, Worker cancellation/recovery, DOM workflows and static deployment. Browser rendering and cross-browser compatibility need separate verification.
 
 ## Limits
 

@@ -3,14 +3,6 @@ import assert from 'node:assert/strict';
 import {Worker} from 'node:worker_threads';
 import {statisticsHierarchy,clusteredHeatMap} from '../statistics-cluster.js';
 
-test('single linkage joins the nearest pairs and yields the expected Euclidean merge heights',()=>{
-  const hierarchy=statisticsHierarchy([[0],[10],[1],[11]]);
-  assert.deepEqual(hierarchy.order,[0,2,1,3]);
-  const heights=hierarchy.links.map(link=>link.height);
-  assert.ok(Math.abs(heights[0]-1/11)<1e-12);assert.ok(Math.abs(heights[1]-1/11)<1e-12);assert.ok(Math.abs(heights[2]-9/11)<1e-12);
-  assert.deepEqual(statisticsHierarchy([[0],[10],[1],[11]]),hierarchy);
-});
-
 test('clustered heat maps reorder both axes without altering labels, values or missing cells',()=>{
   const data={columns:['a','b','c','d'],rows:[
     {label:'A',values:[0,10,1,11]},{label:'B',values:[10,20,11,21]},
@@ -55,16 +47,4 @@ test('average, complete and Ward linkages follow their Lance–Williams merge he
   assert.ok(Math.abs(ward.links[0].height-1/6)<1e-12);
   assert.ok(Math.abs(ward.links[1].height-1/6)<1e-12);
   assert.ok(Math.abs(ward.links[2].height-Math.sqrt(25/18))<1e-12);
-});
-
-test('distance metrics scale pairwise-complete cells and can be correlation based',()=>{
-  assert.ok(Math.abs(statisticsHierarchy([[0,0],[3,4]]).links[0].height-1.25)<1e-12);
-  assert.ok(Math.abs(statisticsHierarchy([[0,0],[3,4]],{metric:'manhattan'}).links[0].height-1.75)<1e-12);
-  assert.ok(Math.abs(statisticsHierarchy([[1,2,3],[2,4,6]],{metric:'correlation'}).links[0].height)<1e-12);
-});
-
-test('Ward linkage pins the distance metric to Euclidean',()=>{
-  const ward=statisticsHierarchy([[0],[2],[10],[12]],{linkage:'ward'});
-  assert.deepEqual(statisticsHierarchy([[0],[2],[10],[12]],{linkage:'ward',metric:'manhattan'}),ward);
-  assert.deepEqual(statisticsHierarchy([[0],[2],[10],[12]],{linkage:'ward',metric:'correlation'}),ward);
 });

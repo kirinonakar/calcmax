@@ -72,38 +72,35 @@ def evaluate(tree, **options):
 
 
 class AnswerFunctionTests(unittest.TestCase):
-    def test_indefinite_integral_answers_bind_x_and_preserve_the_integration_constant(self):
-        x = node("symbol", "x")
-        for integrand, expected in [(x, "2 + C"), (node("number", 0), "C")]:
-            result = evaluate(node("call", "integrate", integrand, x), variables={"x": node("number", 99)})
+    def test_answer_functions_bind_variables_and_preserve_constants_and_domains(self):
+        with self.subTest(scenario='indefinite_integral_answers_bind_x_and_preserve_the_integration_constant'):
+            x = node("symbol", "x")
+            for integrand, expected in [(x, "2 + C"), (node("number", 0), "C")]:
+                result = evaluate(node("call", "integrate", integrand, x), variables={"x": node("number", 99)})
+                self.assertTrue(result["ok"], result)
+                self.assertEqual(["x"], result["resultAst"]["parameters"])
+                applied = evaluate(node("call", "Ans", node("number", 2)), variables={"Ans": result["resultAst"], "C": node("number", 7)})
+                self.assertEqual(expected, applied["exact"], applied)
+        with self.subTest(scenario='derivative_answer_calls_ignore_stored_x_and_keep_exact_values'):
+            x = node("symbol", "x")
+            body = node("binary", "^", x, node("number", 3))
+            derivative = node("call", "diff", node("call", "f", x), x)
+            result = evaluate(derivative, functions={"f": {"parameters": ["x"], "body": body}},
+                              variables={"x": node("number", 99)})
             self.assertTrue(result["ok"], result)
             self.assertEqual(["x"], result["resultAst"]["parameters"])
-            applied = evaluate(node("call", "Ans", node("number", 2)), variables={"Ans": result["resultAst"], "C": node("number", 7)})
-            self.assertEqual(expected, applied["exact"], applied)
-
-
-    def test_derivative_answer_calls_ignore_stored_x_and_keep_exact_values(self):
-        x = node("symbol", "x")
-        body = node("binary", "^", x, node("number", 3))
-        derivative = node("call", "diff", node("call", "f", x), x)
-        result = evaluate(derivative, functions={"f": {"parameters": ["x"], "body": body}},
-                          variables={"x": node("number", 99)})
-        self.assertTrue(result["ok"], result)
-        self.assertEqual(["x"], result["resultAst"]["parameters"])
-        for argument, expected in [(1, "3"), (2, "12")]:
-            applied = evaluate(node("call", "Ans", node("number", argument)),
-                               variables={"Ans": result["resultAst"], "x": node("number", 99)})
-            self.assertEqual(expected, applied["exact"], applied)
-        symbolic = evaluate(node("call", "Ans", node("symbol", "t")), variables={"Ans": result["resultAst"]})
-        self.assertEqual("3*t**2", symbolic["exact"])
-
-
-    def test_constant_derivatives_keep_original_excluded_values(self):
-        x = node("symbol", "x")
-        result = evaluate(node("call", "diff", node("binary", "/", x, x), x))
-        self.assertEqual("0", result["exact"])
-        self.assertEqual("0", evaluate(node("call", "Ans", node("number", 2)), variables={"Ans": result["resultAst"]})["exact"])
-        self.assertFalse(evaluate(node("call", "Ans", node("number", 0)), variables={"Ans": result["resultAst"]})["ok"])
+            for argument, expected in [(1, "3"), (2, "12")]:
+                applied = evaluate(node("call", "Ans", node("number", argument)),
+                                   variables={"Ans": result["resultAst"], "x": node("number", 99)})
+                self.assertEqual(expected, applied["exact"], applied)
+            symbolic = evaluate(node("call", "Ans", node("symbol", "t")), variables={"Ans": result["resultAst"]})
+            self.assertEqual("3*t**2", symbolic["exact"])
+        with self.subTest(scenario='constant_derivatives_keep_original_excluded_values'):
+            x = node("symbol", "x")
+            result = evaluate(node("call", "diff", node("binary", "/", x, x), x))
+            self.assertEqual("0", result["exact"])
+            self.assertEqual("0", evaluate(node("call", "Ans", node("number", 2)), variables={"Ans": result["resultAst"]})["exact"])
+            self.assertFalse(evaluate(node("call", "Ans", node("number", 0)), variables={"Ans": result["resultAst"]})["ok"])
 
 
     def test_missing_numeric_multivariate_and_wrong_arity_answers_are_rejected(self):
@@ -124,20 +121,20 @@ class LogSolveTests(unittest.TestCase):
 
 
     def test_log_roots_respect_assumptions_and_preserved_domain_guards(self):
-        x = node("symbol", "x")
-        result = evaluate(node("call", "solve", self.equation(), x), assumptions={"x": ["negative"]})
-        self.assertEqual("EmptySet", result.get("exact"), result)
-        excluded = node("restricted", "", self.equation(), node("relation", "!=", x, node("number", 7)))
-        result = evaluate(node("call", "solve", excluded, x))
-        self.assertEqual("EmptySet", result.get("exact"), result)
-
-    def test_general_transcendental_log_equations_stay_unresolved(self):
-        x = node("symbol", "x")
-        equation = node("relation", "=", node("call", "ln", x), x)
-        result = evaluate(node("call", "solve", equation, x))
-        self.assertTrue(result["ok"], result)
-        self.assertIn("ConditionSet", result["exact"])
-        self.assertIn("Symbolic solution not found", result["note"])
+        with self.subTest(scenario='log_roots_respect_assumptions_and_preserved_domain_guards'):
+            x = node("symbol", "x")
+            result = evaluate(node("call", "solve", self.equation(), x), assumptions={"x": ["negative"]})
+            self.assertEqual("EmptySet", result.get("exact"), result)
+            excluded = node("restricted", "", self.equation(), node("relation", "!=", x, node("number", 7)))
+            result = evaluate(node("call", "solve", excluded, x))
+            self.assertEqual("EmptySet", result.get("exact"), result)
+        with self.subTest(scenario='general_transcendental_log_equations_stay_unresolved'):
+            x = node("symbol", "x")
+            equation = node("relation", "=", node("call", "ln", x), x)
+            result = evaluate(node("call", "solve", equation, x))
+            self.assertTrue(result["ok"], result)
+            self.assertIn("ConditionSet", result["exact"])
+            self.assertIn("Symbolic solution not found", result["note"])
 
 
 if __name__ == "__main__":

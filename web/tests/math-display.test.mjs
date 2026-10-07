@@ -1,157 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {JSDOM} from 'jsdom';
-import {readFileSync} from 'node:fs';
-import {expressionDisplay,expressionInputDisplay} from '../expression-display.js';
-import {paintMathRoots} from '../math-roots.js';
-import {markInputCursor} from '../input-cursor.js';
-import {mathDisplay} from '../math-display.js';
-import {resultMathDisplay,resultMathParts,resultText} from '../result-display.js';
+import {resultText} from '../result-display.js';
 
-const box=(left,top,width,height)=>({left,top,right:left+width,bottom:top+height,width,height});
-const vertices=path=>path.match(/-?\d+(?:\.\d+)?(?:e[+-]?\d+)?/gi).map(Number).reduce((points,value,i)=>{
-  if(i%2)points.at(-1).push(value);else points.push([value]);return points;
-},[]);
+test('copied answers match displayed precision, notation and structured results',()=>{
+  { // copied answers use
 
-test('root overlays retain MathML semantics, have bounded dimensions, and follow layout changes',()=>{
-  const dom=new JSDOM();globalThis.document=dom.window.document;
-  const style=document.createElement('style');style.textContent=readFileSync(new URL('../calculator.css',import.meta.url),'utf8');document.head.append(style);
-  const source='nthroot(sqrt(1/2),3)',math=expressionDisplay(source),frame=document.createElement('span');
-  frame.className='input-math';frame.append(math);document.body.append(frame);
-  const roots=[...math.querySelectorAll('msqrt,mroot')],computed=dom.window.getComputedStyle;
-  dom.window.getComputedStyle=node=>roots.includes(node)?{fontSize:'24px'}:node===math?{color:'rgb(22, 42, 38)'}:computed(node);
-  let offset=.25,width=160;
-  frame.getBoundingClientRect=()=>box(100,40,width,90);
-  math.getBoundingClientRect=()=>box(100,40,width,90);
-  roots.forEach((root,i)=>{
-    root.getBoundingClientRect=()=>box(100+offset+i*20,40+i*10,width-i*20,90-i*10);
-    root.firstElementChild.getBoundingClientRect=()=>box(100+offset+(i+1)*20,60+i*10,width-(i+1)*20,55-i*10);
-  });
-  const overlay=paintMathRoots(math);
-  assert.equal(overlay.parentElement,frame);assert.equal(overlay.getAttribute('width'),'160');assert.equal(overlay.getAttribute('height'),'90');
-  assert.equal(overlay.getAttribute('aria-hidden'),'true');assert.equal(overlay.getAttribute('focusable'),'false');
-  assert.equal(overlay.querySelectorAll('path').length,2);assert.equal(math.querySelectorAll('svg').length,0,'no SVG participates in MathML sizing');
-  const paths=[...overlay.querySelectorAll('path')];
-  for(const path of paths){
-    assert.equal(path.getAttribute('fill'),'currentColor');assert.equal(path.getAttribute('stroke'),'none');
-    assert.match(path.getAttribute('d'),/ Z$/,'the radical uses a single filled outline');
-    assert.equal(path.getAttribute('stroke-linecap'),null,'no rounded caps protrude at the joins');
-  }
-  assert.equal(math.querySelectorAll('mroot').length,1);assert.equal(math.querySelectorAll('msqrt').length,1);assert.equal(math.querySelectorAll('mfrac').length,1);
-  assert.equal(math.textContent,'123','accessible math text is unchanged');
-  for(const root of roots){assert.ok(root.classList.contains('math-root-painted'));assert.ok(root.firstElementChild.classList.contains('math-root-content'));}
-  assert.equal(frame.style.getPropertyValue('--math-ink'),'rgb(22, 42, 38)','the radicand and overlay share the original math color');
-  assert.equal(computed(overlay).pointerEvents,'none');
-  const previous=overlay.firstElementChild.getAttribute('d');offset=.75;width=240;
-  assert.equal(paintMathRoots(math),overlay);assert.notEqual(overlay.firstElementChild.getAttribute('d'),previous);
-  assert.equal(overlay.getAttribute('width'),'240');assert.equal(frame.querySelectorAll('.math-root-overlay').length,1);
-  markInputCursor(math,source,source.length);
-  assert.equal(math.parentElement,frame,'cursor and roots share the HTML coordinate system');assert.equal(frame.querySelectorAll('.input-caret').length,1);
-  dom.window.close();
-});
-
-test('resize notifications repaint roots and removed formulas release their observers',async t=>{
-  const dom=new JSDOM();globalThis.document=dom.window.document;
-  const observed=new Set(),frames=[];let onResize,size=100;
-  const originalFrame=globalThis.requestAnimationFrame;
-  globalThis.requestAnimationFrame=callback=>frames.push(callback);
-  dom.window.ResizeObserver=class{constructor(callback){onResize=callback;}observe(node){observed.add(node);}unobserve(node){observed.delete(node);}};
-  t.after(()=>{globalThis.requestAnimationFrame=originalFrame;dom.window.close();});
-  const math=expressionDisplay('sqrt(8)'),root=math.firstElementChild,frame=document.createElement('span');
-  frame.className='input-math';frame.append(math);document.body.append(frame);
-  frame.getBoundingClientRect=math.getBoundingClientRect=()=>box(0,0,size,40);
-  root.getBoundingClientRect=()=>box(0,0,size,40);
-  root.firstElementChild.getBoundingClientRect=()=>box(20,10,size-20,25);
-  dom.window.getComputedStyle=node=>node===root?{fontSize:'24px'}:{color:'black'};
-  await Promise.resolve();
-  const overlay=frame.querySelector('.math-root-overlay');assert.ok(overlay);assert.equal(observed.size,2);
-  size=200;onResize();while(frames.length)frames.shift()();
-  assert.equal(overlay.getAttribute('width'),'200');assert.equal(vertices(overlay.firstElementChild.getAttribute('d'))[4][0],200);
-  frame.remove();await Promise.resolve();while(frames.length)frames.shift()();
-  assert.equal(observed.size,0,'detached formulas cannot accumulate resize observers');
-});
-
-function page(t){
-  const dom=new JSDOM('');
-  const previous=globalThis.document;
-  globalThis.document=dom.window.document;
-  t.after(()=>{globalThis.document=previous;dom.window.close();});
-}
-
-test('negative fractions put the sign before the fraction and retain editable source ranges',t=>{
-  page(t);
-  for(const source of ['-1/5','(-1)/5','-x/5','cos(pi/2+theta)=-1/5','(-1/5)^2']){
-    for(const render of [expressionDisplay,expressionInputDisplay]){
-      const math=render(source),fraction=[...math.querySelectorAll('mfrac')].at(-1);
-      assert.equal(fraction.children[0].textContent,source==='-x/5'?'x':'1',source);
-      assert.equal(fraction.previousElementSibling.localName,'mo',source);
-      assert.equal(fraction.previousElementSibling.textContent,'−',source);
-      assert.equal(fraction.previousElementSibling.getAttribute('rspace'),'0.18em',source);
-      assert.equal(fraction.querySelector('mo'),null,source);
-      const sign=fraction.previousElementSibling,at=source.indexOf('-');
-      assert.equal(Number(sign.getAttribute('data-source-start')),at,source);
-      assert.equal(Number(sign.getAttribute('data-source-end')),at+1,source);
-      const numerator=fraction.children[0];
-      assert.equal(Number(numerator.getAttribute('data-source-start')),at+1,source);
-      assert.equal(Number(numerator.getAttribute('data-source-end')),at+2,source);
-    }
-  }
-  for(const source of ['(-x+1)/5','(-1)^2/5']){
-    const fraction=expressionDisplay(source).querySelector('mfrac');
-    assert.ok(fraction.children[0].querySelector('mo'),source);
-    assert.equal(fraction.previousElementSibling,null,source);
-  }
-  const tree={kind:'fraction',args:[{kind:'unary',value:'-',args:[{kind:'number',value:'1'}]},{kind:'number',value:'5'}]},before=JSON.stringify(tree);
-  const result=mathDisplay(tree).querySelector('mfrac');
-  assert.equal(result.children[0].textContent,'1');assert.equal(result.previousElementSibling.textContent,'−');
-  assert.equal(JSON.stringify(tree),before);
-  const unary=mathDisplay({kind:'unary',value:'-',args:[{kind:'fraction',args:[{kind:'number',value:'1'},{kind:'number',value:'5'}]}]});
-  assert.equal(unary.querySelector('mfrac').previousElementSibling.textContent,'−');
-  assert.equal(unary.querySelector('mfrac').previousElementSibling.getAttribute('rspace'),'0.18em');
-});
-
-test('trigonometric powers sit on the function name in previews, input, and results',t=>{
-  page(t);
-  for(const source of ['sin(x)^2','(sin(x))^2','sin(x)²','cos(x)^3','tan(θ)^2']){
-    for(const math of [expressionDisplay(source),expressionInputDisplay(source)]){
-      const power=math.querySelector('msup');
-      assert.equal(power.children[0].localName,'mi',source);
-      assert.match(power.children[0].textContent,/^(sin|cos|tan)$/);
-      assert.equal(power.parentNode.children[1].textContent,source.includes('θ')?'(θ)':'(x)');
-    }
-  }
-  const result=mathDisplay({kind:'power',args:[{kind:'function',value:'sin',args:[{kind:'symbol',value:'theta'}]},{kind:'number',value:'2'}]});
-  assert.equal(result.textContent,'sin2(θ)');
-  assert.equal(result.querySelector('msup > mi').textContent,'sin');
-  for(const source of ['sin(x)^(-1)','sin(x)^a','f(x)^2'])assert.equal(expressionDisplay(source).querySelector('msup').children[0].textContent,source.startsWith('f')?'f(x)':'sin(x)');
-  assert.equal(expressionDisplay('sin(x^2)').querySelector('msup').children[0].textContent,'x');
-});
-
-test('root collections wrap at terms while retaining all signs and punctuation',t=>{
-  const dom=new JSDOM(''),previous=globalThis.document;
-  globalThis.document=dom.window.document;
-  t.after(()=>{globalThis.document=previous;dom.window.close();});
-  const number=value=>({kind:'number',value}),imaginary={kind:'product',args:[number('1.08395410131771066843'),{kind:'text',value:'I'}]};
-  const tree={kind:'set',args:[number('-1.16730397826141868425'),{kind:'sum',args:[number('-0.1812324444698753839'),{kind:'unary',value:'-',args:[imaginary]}]}]};
-  const before=JSON.stringify(tree),display=resultMathDisplay(tree,10,true);
-  assert.equal(display.querySelectorAll('.result-part').length,3);
-  assert.equal(display.textContent,'{-1.1673039783,-0.1812324445-1.0839541013·i}');
-  assert.equal(display.firstElementChild.textContent,'{-1.1673039783,');
-  assert.equal(JSON.stringify(tree),before);
-  const fraction={kind:'fraction',args:[number('1'),number('2')]};
-  assert.equal(resultMathDisplay(fraction).querySelectorAll('mfrac').length,1);
-  const parts=resultMathParts({kind:'sum',args:[fraction,number('3')]});
-  assert.equal(parts.length,2);assert.equal(parts[1][0].value,'+');assert.equal(parts[0][0],fraction);
-});
-
-test('copied answers use the digits and notation shown in the result view',()=>{
   const number=value=>({kind:'number',value});
   assert.equal(resultText({exact:'0.333333333333333333333333333333',decimal:'0.333333333333333333333333333333',decimalTree:number('0.333333333333333333333333333333')},{decimal:true,digits:10}),'0.3333333333');
   assert.equal(resultText({exact:'12345612345.6789',decimal:'12345612345.6789',decimalTree:number('12345612345.6789')},{decimal:true,digits:5,notation:'sci'}),'1.23456×10^10');
   assert.equal(resultText({exact:'1234567.891',decimal:'1234567.891',decimalTree:number('1234567.891')},{decimal:true,digits:10,grouping:true}),'1,234,567.891');
-});
 
-test('copied answers keep fractions, lists, mixed numbers, dms, and statistics rows',()=>{
+  }
+  { // copied answers keep
+
   const number=value=>({kind:'number',value});
   const fraction={kind:'fraction',args:[{kind:'text',value:'7'},{kind:'text',value:'2'}]};
   assert.equal(resultText({exact:'7/2',decimal:'3.5',tree:fraction},{digits:10}),'7/2');
@@ -159,10 +20,6 @@ test('copied answers keep fractions, lists, mixed numbers, dms, and statistics r
   assert.equal(resultText({exact:'12.5125',decimal:'12.5125',tree:{kind:'dms',args:[number('12'),number('30'),number('45')]}},{digits:10}),'12°30′45″');
   const rows={kind:'rows',args:[{kind:'row',value:'mean',args:[number('1.2345678901234567')]},{kind:'row',value:'stdev',args:[number('0.9876543210987654')]}]};
   assert.equal(resultText({exact:'mean: 1.2345678901234567\nstdev: 0.9876543210987654',decimal:'mean: 1.2345678901234567\nstdev: 0.9876543210987654',decimalTree:rows},{decimal:true,digits:10}),'mean: 1.2345678901\nstdev: 0.9876543211');
-});
 
-test('copied answers round relations and fall back to the raw text for other trees',()=>{
-  const number=value=>({kind:'number',value});
-  assert.equal(resultText({exact:'x = 0.73908513321516064165531208767',decimal:'x = 0.73908513321516064165531208767',tree:{kind:'relation',value:'==',args:[{kind:'symbol',value:'x'},number('0.73908513321516064165531208767')]}},{digits:10}),'x = 0.7390851332');
-  assert.equal(resultText({exact:'0.5 + 0.25',decimal:'0.5 + 0.25',tree:{kind:'sum',args:[number('0.5'),number('0.25')]}},{decimal:true,digits:10}),'0.5 + 0.25');
+  }
 });

@@ -2,7 +2,6 @@ import json
 import pathlib
 import subprocess
 import sys
-import time
 import unittest
 from unittest.mock import patch
 
@@ -65,26 +64,27 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual("before\n", result["output"])
 
     def test_monitoring_tool_is_released_on_success_and_failure(self):
-        monitoring = getattr(sys, "monitoring", None)
-        if monitoring is None: self.skipTest("Requires Python 3.12+")
-        before = [monitoring.get_tool(i) for i in range(6)]
-        def work(steps):
-            with Budget(1, steps):
-                for _ in range(2000): pass
-        for steps in (100000, 10):
+        with self.subTest(scenario='monitoring_tool_is_released_on_success_and_failure'):
+            monitoring = getattr(sys, "monitoring", None)
+            if monitoring is None: self.skipTest("Requires Python 3.12+")
+            before = [monitoring.get_tool(i) for i in range(6)]
+            def work(steps):
+                with Budget(1, steps):
+                    for _ in range(2000): pass
+            for steps in (100000, 10):
+                try:
+                    work(steps)
+                except ExecutionStopped: pass
+                self.assertEqual(before, [monitoring.get_tool(i) for i in range(6)])
+        with self.subTest(scenario='trace_fallback_restores_existing_hook'):
+            def previous(frame, event, arg): return previous
+            sys.settrace(previous)
             try:
-                work(steps)
-            except ExecutionStopped: pass
-            self.assertEqual(before, [monitoring.get_tool(i) for i in range(6)])
+                with patch.object(sys, "monitoring", None):
+                    with Budget(1): sum(range(10))
+                    self.assertIs(previous, sys.gettrace())
+            finally: sys.settrace(None)
 
-    def test_trace_fallback_restores_existing_hook(self):
-        def previous(frame, event, arg): return previous
-        sys.settrace(previous)
-        try:
-            with patch.object(sys, "monitoring", None):
-                with Budget(1): sum(range(10))
-                self.assertIs(previous, sys.gettrace())
-        finally: sys.settrace(None)
 
     def test_loop_guards_and_cooperative_cancellation_in_bounded_subprocesses(self):
         # Each subprocess has a timeout so a broken single-line loop hook cannot hang CI.
@@ -114,5 +114,36 @@ assert json.loads(script_runner.run(json.dumps({{'source': "print('again')"}})))
                 completed = subprocess.run([sys.executable, "-c", program], capture_output=True, text=True, timeout=10)
                 self.assertEqual(0, completed.returncode, completed.stderr)
 
+class ScriptRunnerTests(unittest.TestCase):
+
+
+    def test_scripts_receive_input_and_saved_function_definitions(self):
+        with self.subTest(scenario='input_prompt_and_float_conversion'):
+            class Bridge:
+                def __init__(self): self.requests = []
+                def request(self, prompt, output):
+                    self.requests.append((prompt, output))
+                    return "2.5"
+            bridge = Bridge()
+            result = json.loads(script_runner.run(json.dumps({"source":"a=float(input('a='))\nprint(a*2)"}), bridge))
+            self.assertTrue(result["ok"], result)
+            self.assertEqual(bridge.requests, [("a=", "")])
+            self.assertEqual(result["output"], "a=2.5\n5.0\n")
+        with self.subTest(scenario='custom_catalog_function_uses_saved_definition'):
+            definition={"f":{"parameters":["x"],"body":{"kind":"binary","value":"+","args":[{"kind":"symbol","value":"x"},{"kind":"number","value":"1"}]}}}
+            result=json.loads(script_runner.run(json.dumps({"source":"import symvacas_catalog as calc\nprint(calc.f(3))","functions":definition})))
+            self.assertTrue(result["ok"],result)
+            self.assertEqual(result["output"],"4\n")
+
+    def test_script_errors_and_output_are_bounded_and_identifiable(self):
+        with self.subTest(scenario='traceback_contains_script_name'):
+            result=json.loads(script_runner.run(json.dumps({"source":"raise ValueError('bad')","filename":"example.py"})))
+            self.assertFalse(result["ok"])
+            self.assertIn("example.py",result["error"])
+            self.assertIn("ValueError: bad",result["error"])
+        with self.subTest(scenario='output_is_bounded'):
+            result=json.loads(script_runner.run(json.dumps({"source":"print('x' * 50000)"})))
+            self.assertTrue(result["ok"])
+            self.assertEqual(len(result["output"]),40000)
 
 if __name__ == "__main__": unittest.main()

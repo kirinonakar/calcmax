@@ -39,35 +39,36 @@ class BayesianRegressionTests(unittest.TestCase):
                     self.assertAlmostEqual(float(c['oddsLow']),math.exp(float(c['low'])))
 
     def test_hmc_matches_exact_linear_and_quadrature_logistic_posteriors(self):
-        for mode,key in [('bayeslinear','linear'),('bayeslogistic','logisticQuadrature')]:
-            options = [2.5,.95]+([2,1] if mode == 'bayeslinear' else [])+[['hmc',2000,600,10,7,4]]
-            result = catalog.regression_report(REFERENCE['rows'],mode,options)
-            self.assertEqual(result['method'],'hmc')
-            self.assertEqual(result['hmc']['totalSamples'],8000)
-            self.assertEqual(len(result['hmc']['chainDiagnostics']),4)
-            self.assertEqual(result['hmc']['divergences'],0)
-            for actual,expected in zip(result['coefficients'],REFERENCE[key]):
-                self.assertLess(abs(float(actual['estimate'])-expected['estimate']),5*float(actual['mcse'])+.015)
-                self.assertLess(abs(float(actual['posteriorSD'])-expected['posteriorSD']),.08*expected['posteriorSD'])
-                self.assertLess(abs(float(actual['probabilityPositive'])-expected['probabilityPositive']),.035)
-                self.assertLess(float(actual['rHat']),1.05)
-                self.assertGreater(float(actual['ess']),100)
-            if mode == 'bayeslogistic':
-                # The separated posterior is asymmetric; HMC must not merely
-                # resample the Gaussian Laplace approximation.
-                self.assertGreater(float(result['coefficients'][1]['estimate']),REFERENCE['laplace'][1]['estimate']+.3)
+        with self.subTest(scenario='hmc_matches_exact_linear_and_quadrature_logistic_posteriors'):
+            for mode,key in [('bayeslinear','linear'),('bayeslogistic','logisticQuadrature')]:
+                options = [2.5,.95]+([2,1] if mode == 'bayeslinear' else [])+[['hmc',2000,600,10,7,4]]
+                result = catalog.regression_report(REFERENCE['rows'],mode,options)
+                self.assertEqual(result['method'],'hmc')
+                self.assertEqual(result['hmc']['totalSamples'],8000)
+                self.assertEqual(len(result['hmc']['chainDiagnostics']),4)
+                self.assertEqual(result['hmc']['divergences'],0)
+                for actual,expected in zip(result['coefficients'],REFERENCE[key]):
+                    self.assertLess(abs(float(actual['estimate'])-expected['estimate']),5*float(actual['mcse'])+.015)
+                    self.assertLess(abs(float(actual['posteriorSD'])-expected['posteriorSD']),.08*expected['posteriorSD'])
+                    self.assertLess(abs(float(actual['probabilityPositive'])-expected['probabilityPositive']),.035)
+                    self.assertLess(float(actual['rHat']),1.05)
+                    self.assertGreater(float(actual['ess']),100)
+                if mode == 'bayeslogistic':
+                    # The separated posterior is asymmetric; HMC must not merely
+                    # resample the Gaussian Laplace approximation.
+                    self.assertGreater(float(result['coefficients'][1]['estimate']),REFERENCE['laplace'][1]['estimate']+.3)
+        with self.subTest(scenario='sampler_reproduces_seed_and_preserves_gaussian_target'):
+            target = lambda q: (sum(v*v for v in q)/2,list(q))
+            chains,summary = sample(target,2,1000,300,10,19,2)
+            again,repeat = sample(target,2,1000,300,10,19,2)
+            self.assertEqual(chains,again); self.assertEqual(summary,repeat)
+            self.assertEqual([len(c) for c in chains],[1000,1000])
+            for j in range(2):
+                values = [row[j] for chain in chains for row in chain]
+                self.assertLess(abs(sum(values)/len(values)),.1)
+                self.assertAlmostEqual(sum(v*v for v in values)/len(values),1,delta=.12)
+            self.assertEqual(diagnostics([[1.]*100,[1.]*100]),(None,0.0))
 
-    def test_sampler_reproduces_seed_and_preserves_gaussian_target(self):
-        target = lambda q: (sum(v*v for v in q)/2,list(q))
-        chains,summary = sample(target,2,1000,300,10,19,2)
-        again,repeat = sample(target,2,1000,300,10,19,2)
-        self.assertEqual(chains,again); self.assertEqual(summary,repeat)
-        self.assertEqual([len(c) for c in chains],[1000,1000])
-        for j in range(2):
-            values = [row[j] for chain in chains for row in chain]
-            self.assertLess(abs(sum(values)/len(values)),.1)
-            self.assertAlmostEqual(sum(v*v for v in values)/len(values),1,delta=.12)
-        self.assertEqual(diagnostics([[1.]*100,[1.]*100]),(None,0.0))
 
     def test_proper_priors_handle_collinearity_and_original_coordinate_transform(self):
         rows = [[-2,0],[-1,0],[1,1],[2,1]]

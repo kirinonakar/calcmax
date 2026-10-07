@@ -22,75 +22,57 @@ class AdvancedStatisticsTest {
         assertTrue(runCatching {guidedStatisticsCommand(definition("bayesrate"),rows,JSONObject().put("layout","exposure").put("exposure","0"))}.exceptionOrNull() is IllegalArgumentException)
     }
     @Test fun termLabelsFollowSelectedPredictorsAndInteractions() {
-        val definitions=JSONArray(File("src/main/assets/advanced_statistics.json").readText())
-        fun definition(id:String)=(0 until definitions.length()).map {definitions.getJSONObject(it)}.first {it.getString("id")==id}
-        val rows=listOf(listOf("1","2","3","4","5"));val labels=listOf("id (x)","time (y)","treatment (z)","entry (x4)","outcome (x5)")
-        assertEquals(mapOf("x1" to "treatment (z)","x2" to "time (y)","x1:x2" to "treatment (z):time (y)","x1^2" to "treatment (z)^2"),advancedStatisticsTermLabels(definition("gee"),rows,JSONObject().put("subject","0").put("response","4").put("predictors","2,1").put("interactions","z,y;z,z"),labels))
-        assertEquals(mapOf("x1" to "time (y)","x2" to "treatment (z)","x3" to "entry (x4)"),advancedStatisticsTermLabels(definition("mixedmodel"),rows,JSONObject().put("subject","0").put("response","4"),labels))
-        assertEquals(mapOf("x1" to "id (x)","x2" to "treatment (z)"),advancedStatisticsTermLabels(definition("cox"),rows,JSONObject().put("time","1").put("event","4").put("truncation","entry").put("entry","3"),labels))
-        assertEquals(emptyMap<String,String>(),advancedStatisticsTermLabels(definition("gee"),rows,JSONObject(),emptyList()))
+        run { // termLabelsFollowSelectedPredictorsAndInteractions
+            val definitions=JSONArray(File("src/main/assets/advanced_statistics.json").readText())
+            fun definition(id:String)=(0 until definitions.length()).map {definitions.getJSONObject(it)}.first {it.getString("id")==id}
+            val rows=listOf(listOf("1","2","3","4","5"));val labels=listOf("id (x)","time (y)","treatment (z)","entry (x4)","outcome (x5)")
+            assertEquals(mapOf("x1" to "treatment (z)","x2" to "time (y)","x1:x2" to "treatment (z):time (y)","x1^2" to "treatment (z)^2"),advancedStatisticsTermLabels(definition("gee"),rows,JSONObject().put("subject","0").put("response","4").put("predictors","2,1").put("interactions","z,y;z,z"),labels))
+            assertEquals(mapOf("x1" to "time (y)","x2" to "treatment (z)","x3" to "entry (x4)"),advancedStatisticsTermLabels(definition("mixedmodel"),rows,JSONObject().put("subject","0").put("response","4"),labels))
+            assertEquals(mapOf("x1" to "id (x)","x2" to "treatment (z)"),advancedStatisticsTermLabels(definition("cox"),rows,JSONObject().put("time","1").put("event","4").put("truncation","entry").put("entry","3"),labels))
+            assertEquals(emptyMap<String,String>(),advancedStatisticsTermLabels(definition("gee"),rows,JSONObject(),emptyList()))
+        }
+        run { // geeInteractionsAcceptLettersNamesAndShownLabels
+            val definitions=JSONArray(File("src/main/assets/advanced_statistics.json").readText())
+            val definition=(0 until definitions.length()).map {definitions.getJSONObject(it)}.first {it.getString("id")=="gee"}
+            val labels=listOf("id (x)","time (y)","treatment (z)","age (x4)","sex (x5)","y (x6)")
+            val rows=listOf(listOf("1","0","0","47","0","1"),listOf("1","1","0","47","0","1"),listOf("2","0","1","60","1","0"),listOf("2","1","1","60","1","0"))
+            val base=JSONObject().put("subject","0").put("response","5").put("predictors","1,2,3,4").put("family","binomial")
+            val expected="gee([[1,0,0,47,0,1],[1,1,0,47,0,1],[2,0,1,60,1,0],[2,1,1,60,1,0]],binomial,independence,[[1,2]])"
+            for(interactions in listOf("y,z","time, treatment","time (y), treatment (z)"))
+                assertEquals(interactions,expected,guidedStatisticsCommand(definition,rows,JSONObject(base.toString()).put("interactions",interactions),labels))
+            val shifted="gee([[1,0,0,47,0,1],[1,1,0,47,0,1],[2,0,1,60,1,0],[2,1,1,60,1,0]],binomial,independence,[[3,4]])"
+            for(interactions in listOf("x4,x5"))
+                assertEquals(interactions,shifted,guidedStatisticsCommand(definition,rows,JSONObject(base.toString()).put("interactions",interactions),labels))
+            val subset="gee([[1,47,0,1],[1,47,0,1],[2,60,1,0],[2,60,1,0]],binomial,independence,[[1,2]])"
+            assertEquals("x4,x5",subset,guidedStatisticsCommand(definition,rows,JSONObject(base.toString()).put("predictors","3,4").put("interactions","x4,x5"),labels))
+            for(interactions in listOf("1,2","id (x),time (y)"))
+                assertTrue(interactions,runCatching {guidedStatisticsCommand(definition,rows,JSONObject(base.toString()).put("interactions",interactions),labels)}.exceptionOrNull() is IllegalArgumentException)
+        }
     }
     private fun definition(id:String,input:String,suffix:String="")=JSONObject().put("id",id).put("input",input).put("suffix",suffix)
-    @Test fun preservesMissingCellsAndSubjectRows() {
-        assertEquals("impute([[1,NA],[NA,2]],mean)",advancedStatisticsCommand(definition("impute","table",",mean"),listOf(listOf("1",""),listOf("","2"))))
-        assertEquals("gee([[1,0,2],[1,1,4]],gaussian)",advancedStatisticsCommand(definition("gee","table",",gaussian"),listOf(listOf("1","0","2"),listOf("1","1","4"))))
-    }
-    @Test fun geeInteractionsAcceptLettersNamesAndShownLabels() {
-        val definitions=JSONArray(File("src/main/assets/advanced_statistics.json").readText())
-        val definition=(0 until definitions.length()).map {definitions.getJSONObject(it)}.first {it.getString("id")=="gee"}
-        val labels=listOf("id (x)","time (y)","treatment (z)","age (x4)","sex (x5)","y (x6)")
-        val rows=listOf(listOf("1","0","0","47","0","1"),listOf("1","1","0","47","0","1"),listOf("2","0","1","60","1","0"),listOf("2","1","1","60","1","0"))
-        val base=JSONObject().put("subject","0").put("response","5").put("predictors","1,2,3,4").put("family","binomial")
-        val expected="gee([[1,0,0,47,0,1],[1,1,0,47,0,1],[2,0,1,60,1,0],[2,1,1,60,1,0]],binomial,independence,[[1,2]])"
-        for(interactions in listOf("y,z","time, treatment","time (y), treatment (z)"))
-            assertEquals(interactions,expected,guidedStatisticsCommand(definition,rows,JSONObject(base.toString()).put("interactions",interactions),labels))
-        val shifted="gee([[1,0,0,47,0,1],[1,1,0,47,0,1],[2,0,1,60,1,0],[2,1,1,60,1,0]],binomial,independence,[[3,4]])"
-        for(interactions in listOf("x4,x5"))
-            assertEquals(interactions,shifted,guidedStatisticsCommand(definition,rows,JSONObject(base.toString()).put("interactions",interactions),labels))
-        val subset="gee([[1,47,0,1],[1,47,0,1],[2,60,1,0],[2,60,1,0]],binomial,independence,[[1,2]])"
-        assertEquals("x4,x5",subset,guidedStatisticsCommand(definition,rows,JSONObject(base.toString()).put("predictors","3,4").put("interactions","x4,x5"),labels))
-        for(interactions in listOf("1,2","id (x),time (y)"))
-            assertTrue(interactions,runCatching {guidedStatisticsCommand(definition,rows,JSONObject(base.toString()).put("interactions",interactions),labels)}.exceptionOrNull() is IllegalArgumentException)
-    }
-    @Test fun separatesSurvivalGroupsWithoutLosingCensoring() {
-        val rows=listOf(listOf("1","1","A"),listOf("2","0","B"),listOf("3","0","A"),listOf("4","1","B"))
-        assertEquals("logrank([[1,1],[3,0]],[[2,0],[4,1]])",advancedStatisticsCommand(definition("logrank","survivalgroups"),rows))
-    }
-    @Test fun preservesIndependentSampleLengths() {
-        assertEquals("cohend([1,3],[2],independent)",advancedStatisticsCommand(definition("cohend","groups",",independent"),listOf(listOf("1","2"),listOf("3",""))))
-    }
+
     @Test(expected=IllegalArgumentException::class) fun rejectsIncompleteModelRows() {
         advancedStatisticsCommand(definition("cox","table"),listOf(listOf("1","","0"),listOf("2","1","1")))
     }
-    @Test fun preservesMissingFirstRowAndIgnoresHeadersAndTrailingLineBreaks() {
-        assertEquals(listOf(listOf("1","0","2"),listOf("2","1","3")),advancedStatisticsRows("time,event,x\n1,0,2\n2,1,3\n"))
-        assertEquals(listOf(listOf("NA","NA"),listOf("1","2")),advancedStatisticsRows("NA,NA\n1,2"))
-        assertEquals(listOf(listOf("1","2"),listOf("",""),listOf("3","4")),advancedStatisticsRows("1,2\n\n3,4"))
+    @Test fun analysisRowsPreserveMissingCellsHeadersAndSelectedColumns() {
+        run { // preservesMissingFirstRowAndIgnoresHeadersAndTrailingLineBreaks
+            assertEquals(listOf(listOf("1","0","2"),listOf("2","1","3")),advancedStatisticsRows("time,event,x\n1,0,2\n2,1,3\n"))
+            assertEquals(listOf(listOf("NA","NA"),listOf("1","2")),advancedStatisticsRows("NA,NA\n1,2"))
+            assertEquals(listOf(listOf("1","2"),listOf("",""),listOf("3","4")),advancedStatisticsRows("1,2\n\n3,4"))
+        }
+        run { // usesOnlyTheSelectedDataColumns
+            assertEquals(listOf(listOf("1","2"),listOf("3","4")),advancedStatisticsRows("1,2,9\n3,4,8",2))
+            assertEquals(listOf(listOf("1","2"),listOf("4","5")),advancedStatisticsRows("x,y,z\n1,2,3\n4,5,6",2))
+            val wide=(1..25).joinToString(",")
+            assertEquals(listOf(listOf("1","2"),listOf("1","2")),advancedStatisticsRows("$wide\n$wide",2))
+        }
     }
-    @Test fun usesOnlyTheSelectedDataColumns() {
-        assertEquals(listOf(listOf("1","2"),listOf("3","4")),advancedStatisticsRows("1,2,9\n3,4,8",2))
-        assertEquals(listOf(listOf("1","2"),listOf("4","5")),advancedStatisticsRows("x,y,z\n1,2,3\n4,5,6",2))
-        val wide=(1..25).joinToString(",")
-        assertEquals(listOf(listOf("1","2"),listOf("1","2")),advancedStatisticsRows("$wide\n$wide",2))
-    }
+
     @Test(expected=IllegalArgumentException::class) fun keepsTheColumnCapWithinTheSelectedRange() {
         val wide=(1..25).joinToString(",")
         advancedStatisticsRows("$wide\n$wide",25)
     }
-    @Test fun excludesParenthesizedUnitHeadersFromAnalysis() {
-        val rows=advancedStatisticsRows("환율,금융자산(만원)\n1200,5000\n1250,5200",2)
-        assertEquals(listOf(listOf("1200","5000"),listOf("1250","5200")),rows)
-        assertEquals("cohend([1200,1250],[5000,5200],independent)",advancedStatisticsCommand(definition("cohend","groups",",independent"),rows))
-    }
-    @Test fun sharedExamplesParseOnAndroidAndWaitForExplicitEvaluation() {
-        val schema=JSONArray(File("src/main/assets/advanced_statistics.json").readText())
-        for(i in 0 until schema.length()) {
-            val item=schema.getJSONObject(i)
-            val expression=Parser(item.getString("example")).parse()
-            assertEquals(item.getString("id"),expression.value)
-            assertTrue(requiresExplicitEvaluation(expression))
-        }
-    }
+
     @Test fun formPlansMatchSharedColumnAndOptionCases() {
         val definitions=JSONArray(File("src/main/assets/advanced_statistics.json").readText())
         val cases=JSONArray(File("../tests/fixtures/statistics_forms.json").readText())

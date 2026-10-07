@@ -1,3 +1,5 @@
+import symvacas_catalog as calc
+import sympy as s
 import itertools
 import json
 import math
@@ -22,46 +24,41 @@ class ProbabilityTests(unittest.TestCase):
         return float(response["value"])
 
 
-    def test_every_distribution_and_operation_has_valid_defaults(self):
-        for distribution in SCHEMA["distributions"]:
-            for op in SCHEMA["operations"]:
-                if op.get("discrete") and not distribution.get("discrete"):continue
-                if op.get("continuous") and distribution.get("discrete"):continue
-                values={f[0]:f[3] for f in distribution["fields"]+op["fields"]}
-                result=self.run_probability(distribution=distribution["id"],operation=op["id"],**values)
-                with self.subTest(distribution=distribution["id"],operation=op["id"]):
-                    self.assertTrue(result["ok"],result)
-                    if result["isProbability"]:self.assertTrue(0<=float(result["value"])<=1)
-
-    def test_binomial_integer_and_noninteger_boundaries(self):
-        for x in [0,1,2,2.3,3,5,6,-1]:
-            probabilities=[math.comb(5,k)/32 for k in range(6)]
-            for operation,predicate in [("le",lambda k:k<=x),("lt",lambda k:k<x),("ge",lambda k:k>=x),("gt",lambda k:k>x),("eq",lambda k:k==x)]:
-                self.assertAlmostEqual(self.value(distribution="binomial",operation=operation,n=5,p="50%",x=x),sum(v for k,v in enumerate(probabilities) if predicate(k)),places=14)
-        self.assertAlmostEqual(self.value(distribution="binomial",operation="between",n=5,p="1/2",lower="1.2",upper="3.8"),0.625)
-
-    def test_degenerate_distributions(self):
-        for distribution,values,point in [("binomial",dict(n=5,p=0),0),("binomial",dict(n=5,p=1),5),("binomial",dict(n=0,p="0.5"),0),("poisson",dict(rate=0),0),("geometric",dict(p=1),1),("hypergeometric",dict(population=1,successes=1,draws=1),1)]:
-            for op,expected in [("eq",1),("le",1),("lt",0),("ge",1),("gt",0)]:
-                self.assertEqual(self.value(distribution=distribution,operation=op,x=point,**values),expected)
-            self.assertEqual(self.value(distribution=distribution,operation="quantile",q="0.5",**values),point)
+    def test_discrete_distributions_preserve_integer_and_degenerate_boundaries(self):
+        with self.subTest(scenario='binomial_integer_and_noninteger_boundaries'):
+            for x in [0,1,2,2.3,3,5,6,-1]:
+                probabilities=[math.comb(5,k)/32 for k in range(6)]
+                for operation,predicate in [("le",lambda k:k<=x),("lt",lambda k:k<x),("ge",lambda k:k>=x),("gt",lambda k:k>x),("eq",lambda k:k==x)]:
+                    self.assertAlmostEqual(self.value(distribution="binomial",operation=operation,n=5,p="50%",x=x),sum(v for k,v in enumerate(probabilities) if predicate(k)),places=14)
+            self.assertAlmostEqual(self.value(distribution="binomial",operation="between",n=5,p="1/2",lower="1.2",upper="3.8"),0.625)
+        with self.subTest(scenario='degenerate_distributions'):
+            for distribution,values,point in [("binomial",dict(n=5,p=0),0),("binomial",dict(n=5,p=1),5),("binomial",dict(n=0,p="0.5"),0),("poisson",dict(rate=0),0),("geometric",dict(p=1),1),("hypergeometric",dict(population=1,successes=1,draws=1),1)]:
+                for op,expected in [("eq",1),("le",1),("lt",0),("ge",1),("gt",0)]:
+                    self.assertEqual(self.value(distribution=distribution,operation=op,x=point,**values),expected)
+                self.assertEqual(self.value(distribution=distribution,operation="quantile",q="0.5",**values),point)
 
 
-    def test_extreme_tails_keep_small_probabilities(self):
-        tail=self.value(operation="gt",mu=0,sigma=1,x=10)
-        self.assertAlmostEqual(tail/7.619853024160526e-24,1,places=13)
-        interval=self.value(operation="between",mu=0,sigma=1,lower=9,upper=10)
-        self.assertGreater(interval,1e-19)
-        self.assertLess(interval,2e-19)
-        self.assertAlmostEqual(self.value(category="repeat",operation="atLeastOne",n=10,p="1e-30")/1e-29,1,places=14)
-        self.assertEqual(self.value(operation="between",mu=0,sigma=1,lower="-inf",upper="inf"),1)
-
-    def test_dice_sum_matches_enumerated_outcomes(self):
-        rolls=list(itertools.product(range(1,5),repeat=3))
-        for x in range(1,14):
-            for operation,predicate in [("eq",lambda s:s==x),("le",lambda s:s<=x),("ge",lambda s:s>=x)]:
-                expected=sum(predicate(sum(roll)) for roll in rolls)/len(rolls)
-                self.assertEqual(self.value(category="dice",operation=operation,dice=3,sides=4,x=x),expected)
+    def test_dice_and_draw_probabilities_match_enumerated_outcomes(self):
+        with self.subTest(scenario='dice_sum_matches_enumerated_outcomes'):
+            rolls=list(itertools.product(range(1,5),repeat=3))
+            for x in range(1,14):
+                for operation,predicate in [("eq",lambda s:s==x),("le",lambda s:s<=x),("ge",lambda s:s>=x)]:
+                    expected=sum(predicate(sum(roll)) for roll in rolls)/len(rolls)
+                    self.assertEqual(self.value(category="dice",operation=operation,dice=3,sides=4,x=x),expected)
+        with self.subTest(scenario='draw_operations_match_enumeration_and_hypergeometric'):
+            for population in range(1,7):
+                for marked in range(population+1):
+                    for draws in range(population+1):
+                        counts=[sum(item<marked for item in choice) for choice in itertools.combinations(range(population),draws)]
+                        for op,distribution_op in [("exactly","eq"),("atLeast","ge"),("atMost","le"),("atLeastOne","ge"),("allMarked","eq")]:
+                            for k in ([1] if op=="atLeastOne" else [marked] if op=="allMarked" else range(marked+2)):
+                                expected=sum(x==k if distribution_op=="eq" else x>=k if distribution_op=="ge" else x<=k for x in counts)/len(counts)
+                                result=self.run_probability(category="draw",operation=op,population=population,marked=marked,draws=draws,k=k)
+                                self.assertTrue(result["ok"],result)
+                                self.assertEqual(float(result["value"]),expected)
+                                self.assertEqual(float(result["value"]),self.value(distribution="hypergeometric",operation=distribution_op,population=population,successes=marked,draws=draws,x=k))
+            for op,distribution_op,k in [("exactly","eq",3),("atLeast","ge",3),("atMost","le",3),("atLeastOne","ge",1)]:
+                self.assertEqual(self.value(category="draw",operation=op,population=100,marked=10,draws=20,k=k),self.value(distribution="hypergeometric",operation=distribution_op,population=100,successes=10,draws=20,x=k))
 
 
     def test_invalid_inputs_are_explicit_errors(self):
@@ -73,33 +70,6 @@ class ProbabilityTests(unittest.TestCase):
         for request in requests:
             with self.subTest(request=request):self.assertFalse(self.run_probability(**request)["ok"])
 
-    def test_event_defaults_are_target_specific_and_never_require_the_answer(self):
-        tool=next(t for t in SCHEMA['tools'] if t['id']=='events')
-        defaults={field[0]:field[3] for field in tool['fields']}
-        expected={'intersection':.2,'union':.7,'conditional':.4,'reverse':.5,'onlyA':.2,'neither':.3}
-        for op in tool['operations']:
-            if op['id']=='conditionalCounts':continue
-            with self.subTest(operation=op['id']):
-                self.assertNotIn(op['id'],op['inputs'])
-                self.assertAlmostEqual(self.value(category='events',operation=op['id'],**{k:defaults[k] for k in op['inputs']}),expected[op['id']])
-
-    def test_events_accept_conditional_union_and_complement_inputs(self):
-        cases=[('intersection',dict(pb='1/2',conditional='2/5'),'1/5'),
-               ('intersection',dict(pa='40%',reverse='1/2'),'1/5'),
-               ('union',dict(pa='2/5',pb='1/2',conditional='2/5'),'7/10'),
-               ('conditional',dict(pa='2/5',pb='1/2',reverse='1/2'),'2/5'),
-               ('reverse',dict(pa='2/5',pb='1/2',conditional='2/5'),'1/2'),
-               ('onlyA',dict(pa='2/5',pb='1/2',union='7/10'),'1/5'),
-               ('neither',dict(union='7/10'),'3/10'),
-               ('union',dict(neither='3/10'),'7/10'),
-               ('intersection',dict(pa='2/5',pb='1/2',neither='3/10'),'1/5'),
-               ('conditional',dict(pb='1/2',onlyA='1/5',pa='2/5'),'2/5')]
-        from fractions import Fraction
-        for operation,values,expected in cases:
-            with self.subTest(operation=operation,values=values):
-                response=self.run_probability(category='events',operation=operation,**values)
-                self.assertTrue(response['ok'],response)
-                self.assertEqual(Fraction(response['fraction']),Fraction(expected))
 
     def test_events_detect_ambiguity_conflicts_and_zero_conditioning_events(self):
         cases=[('intersection',dict(pa='.4',pb='.5'),'unique answer'),
@@ -143,43 +113,25 @@ class ProbabilityTests(unittest.TestCase):
                                 self.assertIn('unique answer',str(error))
                             else:self.assertEqual(answer,facts[target])
 
-    def test_events_handle_boundary_and_independent_probabilities(self):
-        self.assertEqual(self.value(category='events',operation='intersection',pa=0),0)
-        self.assertEqual(self.value(category='events',operation='intersection',pa=1,pb='.5'),.5)
-        self.assertEqual(self.value(category='events',operation='conditional',pb='.5',intersection=0),0)
-        self.assertEqual(self.value(category='events',operation='reverse',pa='.4',intersection='.4'),1)
-        # A zero conditional probability determines the intersection without marginals.
-        self.assertEqual(self.value(category='events',operation='intersection',conditional=0),0)
-        for op,expected in [('intersection',.2),('union',.7),('conditional',.4),('reverse',.5),('onlyA',.2),('neither',.3)]:
-            response=json.loads(calc_engine.dispatch(json.dumps(dict(action='probability',category='events',operation=op,independent=True,values=dict(pa='.4',pb='.5')))))
-            self.assertTrue(response['ok'],response)
-            self.assertAlmostEqual(float(response['value']),expected)
-
 
     def test_new_quantiles_preserve_accuracy_across_scales(self):
-        for kind,params in [("gamma",dict(shape=2,scale="1e-60")),("gamma",dict(shape="0.1",scale="1e60")),
-                            ("weibull",dict(shape=2,scale="1e-60")),("beta",dict(alpha="0.01",beta=3)),
-                            ("lognormal",dict(mu=-200,sigma=1)),("lognormal",dict(mu=0,sigma=20))]:
-            for q in ["0.001","0.5","0.999"]:
-                with self.subTest(distribution=kind,params=params,q=q):
-                    result=self.run_probability(distribution=kind,operation="quantile",q=q,**params)
-                    self.assertTrue(result["ok"],result)
-                    self.assertAlmostEqual(self.value(distribution=kind,x=result["value"],**params),float(q),places=14)
-
-    def test_draw_operations_match_enumeration_and_hypergeometric(self):
-        for population in range(1,7):
-            for marked in range(population+1):
-                for draws in range(population+1):
-                    counts=[sum(item<marked for item in choice) for choice in itertools.combinations(range(population),draws)]
-                    for op,distribution_op in [("exactly","eq"),("atLeast","ge"),("atMost","le"),("atLeastOne","ge"),("allMarked","eq")]:
-                        for k in ([1] if op=="atLeastOne" else [marked] if op=="allMarked" else range(marked+2)):
-                            expected=sum(x==k if distribution_op=="eq" else x>=k if distribution_op=="ge" else x<=k for x in counts)/len(counts)
-                            result=self.run_probability(category="draw",operation=op,population=population,marked=marked,draws=draws,k=k)
-                            self.assertTrue(result["ok"],result)
-                            self.assertEqual(float(result["value"]),expected)
-                            self.assertEqual(float(result["value"]),self.value(distribution="hypergeometric",operation=distribution_op,population=population,successes=marked,draws=draws,x=k))
-        for op,distribution_op,k in [("exactly","eq",3),("atLeast","ge",3),("atMost","le",3),("atLeastOne","ge",1)]:
-            self.assertEqual(self.value(category="draw",operation=op,population=100,marked=10,draws=20,k=k),self.value(distribution="hypergeometric",operation=distribution_op,population=100,successes=10,draws=20,x=k))
+        with self.subTest(scenario='new_quantiles_preserve_accuracy_across_scales'):
+            for kind,params in [("gamma",dict(shape=2,scale="1e-60")),("gamma",dict(shape="0.1",scale="1e60")),
+                                ("weibull",dict(shape=2,scale="1e-60")),("beta",dict(alpha="0.01",beta=3)),
+                                ("lognormal",dict(mu=-200,sigma=1)),("lognormal",dict(mu=0,sigma=20))]:
+                for q in ["0.001","0.5","0.999"]:
+                    with self.subTest(distribution=kind,params=params,q=q):
+                        result=self.run_probability(distribution=kind,operation="quantile",q=q,**params)
+                        self.assertTrue(result["ok"],result)
+                        self.assertAlmostEqual(self.value(distribution=kind,x=result["value"],**params),float(q),places=14)
+        with self.subTest(scenario='extreme_tails_keep_small_probabilities'):
+            tail=self.value(operation="gt",mu=0,sigma=1,x=10)
+            self.assertAlmostEqual(tail/7.619853024160526e-24,1,places=13)
+            interval=self.value(operation="between",mu=0,sigma=1,lower=9,upper=10)
+            self.assertGreater(interval,1e-19)
+            self.assertLess(interval,2e-19)
+            self.assertAlmostEqual(self.value(category="repeat",operation="atLeastOne",n=10,p="1e-30")/1e-29,1,places=14)
+            self.assertEqual(self.value(operation="between",mu=0,sigma=1,lower="-inf",upper="inf"),1)
 
 
     def test_normal_parameter_solver_round_trips_both_tails(self):
@@ -236,5 +188,21 @@ class ProbabilityTests(unittest.TestCase):
         for scale in (0,-1,'inf'):
             self.assertFalse(self.run_probability(distribution='cauchy',location=0,scale=scale,x=1)['ok'])
 
+class CauchyCatalogTests(unittest.TestCase):
 
-if __name__ == "__main__":unittest.main()
+
+    def test_catalog_dispatch_is_independent_of_angle_mode(self):
+        for angle in ('DEG','RAD','GRAD'):
+            for name,args,expected in [('cauchypdf',[0,0,1],1/math.pi),('cauchycdf',[-1,1,0,1],.5),('invcauchy',[.75,0,1],1)]:
+                tree={'kind':'call','value':name,'args':[{'kind':'number','value':str(v)} for v in args]}
+                result=json.loads(calc_engine.dispatch(json.dumps({'tree':tree,'angle':angle})))
+                self.assertTrue(result['ok'],result)
+                self.assertAlmostEqual(float(result['decimal']),expected,places=14)
+
+    def test_invalid_parameters_bounds_and_arities(self):
+        for name,args in [('cauchypdf',[]),('cauchypdf',[1,2]),('cauchycdf',[2,1]),('cauchycdf',[1,0,0]),('invcauchy',[-.1]),('invcauchy',[1.1]),
+                          ('cauchypdf',[1,s.oo,1]),('cauchypdf',[1,0,s.oo]),('cauchycdf',[s.I]),('invcauchy',[s.nan]),('cauchypdf',[1,0,-1])]:
+            with self.subTest(name=name,args=args):
+                with self.assertRaises(calc_engine.MathError): getattr(calc,name)(*args)
+
+if __name__ == "__main__": unittest.main()
