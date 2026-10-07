@@ -136,7 +136,7 @@ The web suite covers parser parity, the actual WASM engine, Worker cancellation/
 
 ## Limits
 
-Symbolic operations depend on SymPy's algorithms and computation budgets; some results remain unevaluated. Expensive calculations and scripts can be stopped, with a 20-second service/Worker deadline. Graphs use finite sampling and may miss very narrow features. Matrix entry grids support up to 9 × 9 values and vectors up to 9 components; larger exact operations may reach computation limits.
+Symbolic operations depend on SymPy's algorithms and computation budgets; some results remain unevaluated. Expensive calculations and scripts can be stopped, with a 60-second service/Worker deadline. Graphs use finite sampling and may miss very narrow features. Matrix entry grids support up to 9 × 9 values and vectors up to 9 components; larger exact operations may reach computation limits.
 
 ## License
 

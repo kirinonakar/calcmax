@@ -19,6 +19,30 @@ class Control:
 
 
 class RuntimeTests(unittest.TestCase):
+    def test_heavy_and_statistics_deadlines_allow_25_seconds_but_stop_after_60(self):
+        number = {"kind": "number", "value": "2"}
+        integral = {"kind": "call", "value": "integrate", "args": [number, {"kind": "symbol", "value": "x"}]}
+        stats = {"kind": "call", "value": "stats", "args": [{"kind": "list", "args": [number, number]}]}
+        nested = {"kind": "binary", "value": "+", "args": [number, integral]}
+        for tree, explicit, elapsed, succeeds in (
+                (integral, None, 25, True), (integral, 8, 25, True),
+                (stats, None, 25, True), (nested, None, 25, True),
+                (integral, None, 61, False), (stats, None, 61, False),
+                (integral, 2, 3, False), (number, None, 9, False)):
+            with self.subTest(tree=tree, budget=explicit, elapsed=elapsed):
+                clock = [0]
+                original = calc_engine.Engine.build
+                def delayed_build(engine, node, *args, **kwargs):
+                    clock[0] = elapsed
+                    return original(engine, node, *args, **kwargs)
+                request = {"tree": tree}
+                if explicit is not None: request["budget"] = explicit
+                with patch("calc_runtime.time.monotonic", side_effect=lambda: clock[0]), \
+                        patch.object(calc_engine.Engine, "build", delayed_build):
+                    result = json.loads(calc_engine.dispatch(json.dumps(request)))
+                self.assertEqual(succeeds, result["ok"], result)
+                if not succeeds: self.assertIn("limit reached", result["error"])
+
     def test_expired_and_cancelled_short_requests_are_rejected(self):
         payload = json.dumps({"tree": {"kind": "number", "value": "1"}, "budget": -1})
         self.assertIn("limit reached", json.loads(calc_engine.dispatch(payload))["error"])

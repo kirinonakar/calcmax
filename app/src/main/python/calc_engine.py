@@ -22,6 +22,9 @@ from calc_advanced_statistics import FUNCTIONS as ADVANCED_STATISTICS
 HEAVY_CALLS=("solve","integrate","dsolve","desolve","laplace","ilaplace","fourier","ifourier","mellin","invmellin","ztrans","invztrans","pdsolve","domain","range","real_roots","rsolve","invt","tinterval","tukey","tvmrate","irr","regression","wilcoxon","mannwhitney")
 MAX_SHOWN_INTEGER_DIGITS=10000
 HEAVY_CALLS += tuple(ADVANCED_STATISTICS)
+HEAVY_CALLS += ("mean", "median", "variance", "stdev", "sumdata", "quartiles", "stats",
+                "covariance", "correlation", "ttest", "ttest2", "ttestpaired", "ztest", "ztest2",
+                "chi2test", "chi2independence", "fisherexact", "anova", "shapiro", "kruskal", "zinterval")
 
 def statistics_display_terms(value, labels):
     """Label term cells for display while keeping the reusable answer unchanged."""
@@ -74,12 +77,12 @@ def _dispatch(payload, control=None):
     heavy=contains_heavy_call(tree)
     # Cold CAS work also fills SymPy caches. Heavy calls keep a generous step ceiling
     # so the time limit remains the binding guard.
-    seconds=float(request.get("budget",20 if heavy else 8))
+    seconds=float(request.get("budget",60 if heavy else 8))
     if heavy:
         steps=100000000
         # As-you-type previews pass two seconds; a committed heavy call (eight seconds and up) may
-        # use the rest of the 20-second IPC window.
-        if seconds>=8: seconds=max(seconds,16)
+        # use the full 60-second IPC window.
+        if seconds>=8: seconds=max(seconds,60)
     else:
         steps=3000000
     budget=Budget(seconds,steps=steps,control=control)

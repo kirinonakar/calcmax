@@ -109,7 +109,10 @@ class EngineClient(private val context: Context) {
     private val inputHandlers = mutableMapOf<Int, (String, String, (String) -> Unit) -> Unit>()
     private val timeouts = mutableMapOf<Int, Runnable>()
     private val handler = Handler(Looper.getMainLooper())
-    companion object { private val counter = AtomicInteger() }
+    companion object {
+        private val counter = AtomicInteger()
+        private const val EXECUTION_TIMEOUT_MS = 60_000L
+    }
     private var closed = false
     private val incoming = Messenger(Handler(Looper.getMainLooper()) { msg ->
         if (msg.what == 3) {
@@ -154,7 +157,7 @@ class EngineClient(private val context: Context) {
             inputHandlers.remove(id); timeouts.remove(id); cancelRequest(id)
         }
         timeouts[id] = timeout
-        handler.postDelayed(timeout, 20000)
+        handler.postDelayed(timeout, EXECUTION_TIMEOUT_MS)
     }
     suspend fun execute(request: JSONObject, onInput: ((String, String, (String) -> Unit) -> Unit)? = null): JSONObject = withContext(Dispatchers.Main.immediate) {
         try {

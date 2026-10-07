@@ -1,3 +1,6 @@
+const EXECUTION_TIMEOUT_MS = 60000;
+const EXECUTION_TIMEOUT_ERROR = '계산 시간이 60초를 초과했습니다.';
+
 export class EngineClient extends EventTarget {
   constructor() { super(); this.counter = 0; this.pending = null; this.start(); }
   emit(type,detail) { this.dispatchEvent(new CustomEvent(type,{detail})); }
@@ -52,7 +55,7 @@ export class EngineClient extends EventTarget {
       pending.waitingInput=false;
       pending.inputController=null;
       pending.started=Date.now();
-      pending.timer=setTimeout(()=>this.cancel('계산 시간이 20초를 초과했습니다.'),pending.remaining);
+      pending.timer=setTimeout(()=>this.cancel(EXECUTION_TIMEOUT_ERROR),pending.remaining);
       worker.postMessage({type:'input',id:data.id,inputId:data.inputId,value:String(value)});
     } catch(error) {
       if(this.pending===pending&&this.worker===worker)this.cancel(String(error));
@@ -71,7 +74,7 @@ export class EngineClient extends EventTarget {
     let resolve;
     const promise = new Promise(done => { resolve = done; });
     const id = ++this.counter;
-    this.pending = {id,resolve,promise,background,onInput,remaining:20000,started:Date.now(),timer:setTimeout(() => this.cancel('계산 시간이 20초를 초과했습니다.'),20000)};
+    this.pending = {id,resolve,promise,background,onInput,remaining:EXECUTION_TIMEOUT_MS,started:Date.now(),timer:setTimeout(() => this.cancel(EXECUTION_TIMEOUT_ERROR),EXECUTION_TIMEOUT_MS)};
     this.emit('activity',true);
     if (!background) this.emit('busy',true);
     this.worker.postMessage({id,request});

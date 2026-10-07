@@ -65,6 +65,23 @@ test('a runtime error settles a calculation without treating it as cold startup'
   tick(240000);assert.equal(workers.length,1);
 });
 
+test('calculations can finish after 20 seconds and the next request expires at 60 seconds',async t=>{
+  const {engine,workers,tick}=runtime(t);
+  workers[0].message({type:'ready'});
+  const slow=engine.execute({action:'evaluate'});
+  tick(25000);assert.equal(workers.length,1);assert.ok(engine.pending);
+  workers[0].message({type:'result',id:workers[0].request.id,result:{ok:true,exact:'2'}});
+  assert.equal((await slow).exact,'2');
+  const stalled=engine.execute({action:'evaluate'});
+  tick(59999);assert.equal(workers.length,1);assert.ok(engine.pending);
+  tick(1);assert.equal(workers[0].terminated,true);assert.equal(workers.length,2);
+  assert.deepEqual(await stalled,{ok:false,error:'계산 시간이 60초를 초과했습니다.'});
+  workers[1].message({type:'ready'});
+  const next=engine.execute({action:'evaluate'});
+  workers[1].message({type:'result',id:workers[1].request.id,result:{ok:true}});
+  assert.equal((await next).ok,true);
+});
+
 test('background previews leave editing unlocked and foreground work waits for them',async t=>{
   const {engine,workers}=runtime(t),busy=[];
   engine.addEventListener('busy',event=>busy.push(event.detail));
@@ -111,9 +128,9 @@ test('Python input pauses the deadline and resumes with the remaining execution 
   tick(60000);assert.equal(workers.length,1);assert.ok(engine.pending);
   answer('');await Promise.resolve();
   assert.deepEqual(workers[0].request,{type:'input',id,inputId:1,value:''});
-  tick(14999);assert.equal(workers.length,1);
+  tick(54999);assert.equal(workers.length,1);
   tick(1);assert.equal(workers.length,2);
-  assert.match((await result).error,/20/);
+  assert.match((await result).error,/60/);
 });
 
 test('cancel and stale input replies cannot resume a replacement worker',async t=>{
