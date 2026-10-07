@@ -637,6 +637,8 @@ References: [Firth logistic regression](https://search.r-project.org/CRAN/refman
 
 In Statistics, Advanced analysis provides controls for correction methods, column roles, groups, predictors and test options. Switch between current data, examples and an editable expression. Table analyses reject blank selected cells; impute converts them to NA. All advanced analyses use binary64 numerics.
 
+For current data with headers, result terms use the header and column name, such as `treatment (z)`.
+
 `padjust` — p values; method bonferroni / holm / fdr (BH) / by; alpha.
 Example: padjust([0.01,0.04,0.03,0.2],holm,0.05)
 

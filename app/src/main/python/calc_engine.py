@@ -23,6 +23,22 @@ HEAVY_CALLS=("solve","integrate","dsolve","desolve","laplace","ilaplace","fourie
 MAX_SHOWN_INTEGER_DIGITS=10000
 HEAVY_CALLS += tuple(ADVANCED_STATISTICS)
 
+def statistics_display_terms(value, labels):
+    """Label term cells for display while keeping the reusable answer unchanged."""
+    if isinstance(value, list):
+        return [statistics_display_terms(item, labels) for item in value]
+    if not isinstance(value, dict): return value
+    result = {}
+    for key, item in value.items():
+        if key == 'term' and isinstance(item, str):
+            if item in labels: item = labels[item]
+            elif ': ' in item:  # Multinomial category contrast followed by a predictor.
+                prefix, term = item.rsplit(': ', 1)
+                item = prefix + ': ' + labels.get(term, term)
+            result[key] = item
+        else: result[key] = statistics_display_terms(item, labels)
+    return result
+
 def shown_exact(rounded):
     """Keep exact values reusable without sending a huge integer to the result view."""
     if isinstance(rounded,s.Rational) and max(abs(rounded.p).bit_length(),rounded.q.bit_length()) > 33219:
@@ -88,10 +104,12 @@ def _dispatch(payload, control=None):
             if getattr(value,"has",lambda *_:False)(s.zoo,s.nan): raise MathError("Undefined or division by zero")
             # Keep the available precision in display trees. The Android result view
             # applies displayDigits as fractional places after choosing a notation.
-            display_value=display_rounded(value,engine.precision)
+            term_labels=request.get('statisticsTermLabels', {}) if tree.get('value') in ADVANCED_STATISTICS else {}
+            shown_value=statistics_display_terms(value,term_labels) if term_labels else value
+            display_value=display_rounded(shown_value,engine.precision)
             exact,exact_tree=shown_exact(display_value)
             require(len(exact)<=40000,"Result exceeds display size limit")
-            decimal_value=approximate(value,engine.precision)
+            decimal_value=approximate(shown_value,engine.precision)
             dms_result=(is_dms_expression(request["tree"],request.get("variables",{}))
                         and getattr(value,"is_number",False) and not value.has(s.I))
             result={"exact":exact,"decimal":readable(decimal_value),"tree":exact_tree,"note":engine.note,

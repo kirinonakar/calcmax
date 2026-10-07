@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {JSDOM} from 'jsdom';
 import {advancedStatisticsSchema as schema} from '../advanced-statistics-schema.js';
-import {advancedStatisticsCommand,advancedStatisticsRows,createAdvancedStatistics,guidedStatisticsCommand,survivalAnalysisPlan} from '../advanced-statistics.js';
+import {advancedStatisticsCommand,advancedStatisticsRows,createAdvancedStatistics,guidedStatisticsCommand,survivalAnalysisPlan,advancedStatisticsTermLabels} from '../advanced-statistics.js';
 import {survivalStepPoints,survivalNumber} from '../survival-report.js';
 import {parse,latexInput} from '../parser.js';
 import {requiresExplicitEvaluation} from '../evaluation-policy.js';
@@ -32,6 +32,15 @@ test('advanced data shapes preserve subjects, censoring, categories and missing 
 
 test('all advanced examples parse and require explicit evaluation',()=>{
   for(const item of schema){const tree=parse(latexInput(item.example));assert.equal(tree.value,item.id);assert.equal(requiresExplicitEvaluation(tree),true,item.id);}
+});
+
+test('term labels follow selected predictors including interactions and Cox entry columns',()=>{
+  const rows=[['1','2','3','4','5']],labels=['id (x)','time (y)','treatment (z)','entry (x4)','outcome (x5)'];
+  const definition=id=>schema.find(item=>item.id===id);
+  assert.deepEqual(advancedStatisticsTermLabels(definition('gee'),rows,{subject:'0',response:'4',predictors:'2,1',interactions:'z,y;z,z'},labels),{x1:'treatment (z)',x2:'time (y)','x1:x2':'treatment (z):time (y)','x1^2':'treatment (z)^2'});
+  assert.deepEqual(advancedStatisticsTermLabels(definition('mixedmodel'),rows,{subject:'0',response:'4'},labels),{x1:'time (y)',x2:'treatment (z)',x3:'entry (x4)'});
+  assert.deepEqual(advancedStatisticsTermLabels(definition('cox'),rows,{time:'1',event:'4',truncation:'entry',entry:'3'},labels),{x1:'id (x)',x2:'treatment (z)'});
+  assert.deepEqual(advancedStatisticsTermLabels(definition('gee'),rows,{},[]),{});
 });
 
 test('survival plans validate distinct roles, preserve labels and omit unselected cells',()=>{

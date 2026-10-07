@@ -9,6 +9,15 @@ import com.kirinonakar.symvacas.math.Parser
 import com.kirinonakar.symvacas.math.requiresExplicitEvaluation
 
 class AdvancedStatisticsTest {
+    @Test fun termLabelsFollowSelectedPredictorsAndInteractions() {
+        val definitions=JSONArray(File("src/main/assets/advanced_statistics.json").readText())
+        fun definition(id:String)=(0 until definitions.length()).map {definitions.getJSONObject(it)}.first {it.getString("id")==id}
+        val rows=listOf(listOf("1","2","3","4","5"));val labels=listOf("id (x)","time (y)","treatment (z)","entry (x4)","outcome (x5)")
+        assertEquals(mapOf("x1" to "treatment (z)","x2" to "time (y)","x1:x2" to "treatment (z):time (y)","x1^2" to "treatment (z)^2"),advancedStatisticsTermLabels(definition("gee"),rows,JSONObject().put("subject","0").put("response","4").put("predictors","2,1").put("interactions","z,y;z,z"),labels))
+        assertEquals(mapOf("x1" to "time (y)","x2" to "treatment (z)","x3" to "entry (x4)"),advancedStatisticsTermLabels(definition("mixedmodel"),rows,JSONObject().put("subject","0").put("response","4"),labels))
+        assertEquals(mapOf("x1" to "id (x)","x2" to "treatment (z)"),advancedStatisticsTermLabels(definition("cox"),rows,JSONObject().put("time","1").put("event","4").put("truncation","entry").put("entry","3"),labels))
+        assertEquals(emptyMap<String,String>(),advancedStatisticsTermLabels(definition("gee"),rows,JSONObject(),emptyList()))
+    }
     private fun definition(id:String,input:String,suffix:String="")=JSONObject().put("id",id).put("input",input).put("suffix",suffix)
     @Test fun preservesMissingCellsAndSubjectRows() {
         assertEquals("impute([[1,NA],[NA,2]],mean)",advancedStatisticsCommand(definition("impute","table",",mean"),listOf(listOf("1",""),listOf("","2"))))

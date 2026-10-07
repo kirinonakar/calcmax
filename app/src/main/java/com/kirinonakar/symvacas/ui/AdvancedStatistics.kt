@@ -127,12 +127,14 @@ internal fun advancedStatisticsRows(data:String,columnLimit:Int?=null):List<List
             if(!definition.has("controls"))SmallAction(if(ko)"예제" else "Example"){source=definition.getString("example");message=""}
             if(definition.getString("input")!="none")SmallAction(if(ko)"현재 데이터" else "Use current data"){
                 if(definition.has("controls")){input="current";message=""}
-                else runCatching {advancedStatisticsCommand(definition,advancedStatisticsRows(data,columnLimit))}.onSuccess {source=it;message=""}.onFailure {message=it.message.orEmpty()}
+                else runCatching {advancedStatisticsCommand(definition,advancedStatisticsRows(data,columnLimit))}.onSuccess {source=it;input="current";message=""}.onFailure {message=it.message.orEmpty()}
             }
             Button(onClick={command.getOrNull()?.let {
                 survivalReport=null;previousResult=m.result;pending=selected=="survivalanalysis"
                 reportPlan=if(pending&&input!="expression")survivalAnalysisPlan(rows,settings,columns) else null
-                m.edit(Editor(it));m.calculate()
+                val usesCurrentData=input=="current"&&(definition.has("controls")||it==runCatching {advancedStatisticsCommand(definition,rows)}.getOrNull())
+                val termLabels=if(usesCurrentData&&statisticsHasHeader(statisticsCsvRows(data))&&statisticsCsvRows(data).first().none {cell->cell=="NA"})advancedStatisticsTermLabels(definition,rows,settings,columns) else emptyMap()
+                m.edit(Editor(it));m.calculate(statisticsTermLabels=termLabels)
             }},enabled=command.isSuccess&&command.getOrDefault("").isNotBlank()&&!m.busy,modifier=Modifier.testTag("statistics-advanced-run")){Text(if(ko)"분석" else "Analyze")}
             SmallAction(if(ko)"계산기로" else "Insert expression"){command.getOrNull()?.let {m.edit(Editor(it));m.mode="Scientific/CAS"}}
         }

@@ -15,10 +15,28 @@ import {createAppUI} from '../app-ui.js';
 import {createAppState,restoreFields} from '../app-state.js';
 import {getLanguage,setLanguage,translateDOM} from '../i18n.js';
 import {renderRegressionReport,regressionResidualCSV} from '../regression-report.js';
+import {createAdvancedStatistics} from '../advanced-statistics.js';
 
 // Reuse the interpreter for sequential integration scenarios. The cold solver
 // scenario below explicitly loads its own interpreter to keep startup coverage.
 let sharedRuntime;
+test('current data headers label term cells through the real WASM engine',async t=>{
+  const py=await runtime(),dom=new JSDOM(readFileSync(new URL('../index.html',import.meta.url),'utf8'));
+  const original=Object.getOwnPropertyDescriptor(globalThis,'document');
+  Object.defineProperty(globalThis,'document',{value:dom.window.document,configurable:true});
+  t.after(()=>{dom.window.close();if(original)Object.defineProperty(globalThis,'document',original);else delete globalThis.document;});
+  const state={fields:{'statistics-advanced-kind':'gee','statistics-advanced-input':'current','statistics-form-gee-subject':'0','statistics-form-gee-response':'3','statistics-form-gee-predictors':'2'}};
+  const rows=JSON.parse(readFileSync(new URL('../../app/src/main/assets/advanced_statistics.json',import.meta.url),'utf8')).find(item=>item.id==='gee').exampleRows.map(row=>[row[0],'99',row[1],row[2]].join(','));
+  let data=['id,unused,treatment,outcome',...rows].join('\n');
+  const api=createAdvancedStatistics({state,persist:()=>{},data:()=>data,columnLimit:()=>4});
+  const context=api.context();assert.deepEqual(context.termLabels,{x1:'treatment (z)'});
+  const evaluate=labels=>{py.globals.set('payload',JSON.stringify({tree:parse(context.expression),precision:20,budget:30,statisticsTermLabels:labels}));return JSON.parse(py.runPython('calc_engine.dispatch(payload)'));};
+  const raw=evaluate({}),result=evaluate(context.termLabels);
+  assert.equal(result.ok,true,result.error);
+  for(const field of ['exact','decimal','tree','decimalTree'])assert.match(JSON.stringify(result[field]),/treatment \(z\)/);
+  assert.deepEqual(result.resultAst,raw.resultAst);
+  data=rows.join('\n');assert.deepEqual(api.context().termLabels,{});
+});
 test('every advanced statistics example and Python catalog run in real WASM',async()=>{
   const py=await runtime();
   const definitions=JSON.parse(readFileSync(new URL('../../app/src/main/assets/advanced_statistics.json',import.meta.url),'utf8'));

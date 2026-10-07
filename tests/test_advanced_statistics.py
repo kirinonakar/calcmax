@@ -36,6 +36,20 @@ def run(name,*args):
 
 
 class AdvancedStatisticsTests(unittest.TestCase):
+    def test_header_term_labels_affect_both_displays_and_preserve_reusable_answer(self):
+        item=next(item for item in json.loads((ROOT/'app/src/main/assets/advanced_statistics.json').read_text(encoding='utf-8')) if item['id']=='gee')
+        request={'tree':tree(item['example']),'precision':20,'budget':30}
+        original=json.loads(dispatch(json.dumps(request)))
+        labelled=json.loads(dispatch(json.dumps({**request,'statisticsTermLabels':{'x1':'treatment (z)'}})))
+        self.assertTrue(labelled['ok'],labelled.get('error'))
+        for field in ('exact','decimal','tree','decimalTree'):
+            self.assertIn('treatment (z)',json.dumps(labelled[field]))
+        self.assertEqual(labelled.get('resultAst'),original.get('resultAst'))
+        self.assertEqual(labelled.get('reusable'),original.get('reusable'))
+        for field in ('exact','decimal','tree','decimalTree'):
+            self.assertEqual(json.dumps(labelled[field]).replace('treatment (z)','x1'),json.dumps(original[field]))
+        self.assertIn('term: x1',original['exact'])
+
     def test_all_visible_examples_evaluate_through_public_dispatch(self):
         for item in json.loads((ROOT/'app/src/main/assets/advanced_statistics.json').read_text(encoding='utf-8')):
             with self.subTest(function=item['id']):

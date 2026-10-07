@@ -2,6 +2,36 @@ package com.kirinonakar.symvacas.ui
 
 import org.json.JSONObject
 
+/** Map engine predictor positions to the labels of the selected data columns. */
+internal fun advancedStatisticsTermLabels(definition:JSONObject,rows:List<List<String>>,settings:JSONObject,columnLabels:List<String>):Map<String,String> {
+    if(columnLabels.isEmpty())return emptyMap()
+    val n=rows.maxOfOrNull {it.size} ?: 0;val id=definition.getString("id")
+    val controls=definition.optJSONArray("controls")
+    val opts=(0 until (controls?.length() ?: 0)).associate {index->val field=controls!!.getJSONObject(index);val key=field.getString("key");key to settings.optString(key,field.get("default").toString())}
+    fun column(key:String)=opts[key]?.toIntOrNull()?.let {if(it==-1)n-1 else it} ?: -1
+    fun multiple(excluded:List<Int>)=if(opts["predictors"]=="auto")(0 until n).filter {it !in excluded} else opts["predictors"].orEmpty().split(',').filter(String::isNotBlank).map(String::toInt)
+    val predictors=when(id) {
+        "mixedmodel","gee"->multiple(listOf(column("subject"),column("response")))
+        "cox"->multiple(listOf(column("time"),column("event"))+if(opts["truncation"]=="entry")listOf(column("entry")) else emptyList())
+        "poissonreg","nbreg","ordinal","multinomial"->(0 until (n-1).coerceAtLeast(0)).toList()
+        "survivalanalysis"->{
+            val plan=survivalAnalysisPlan(rows,settings,columnLabels);val labels=mutableMapOf<String,String>()
+            plan.groups.drop(1).forEachIndexed {index,group->
+                val label="${columnLabels[column("group")]}: $group / ${plan.groups.first()}"
+                labels["group:${index+1}"]=label;labels["x${index+1}"]=label
+            }
+            plan.predictors.forEachIndexed {index,name->labels["predictor:$index"]=name;labels["x${(plan.groups.size-1).coerceAtLeast(0)+index+1}"]=name}
+            return labels
+        }
+        else->emptyList()
+    }
+    val labels=predictors.mapIndexed {index,column->"x${index+1}" to (columnLabels.getOrNull(column) ?: "x${index+1}")}.toMap().toMutableMap()
+    if(id=="gee")for((i,j) in interactionPairs(opts["interactions"].orEmpty(),predictors,columnLabels)) {
+        labels[if(i==j)"x$i^2" else "x$i:x$j"]=if(i==j)"${labels["x$i"]}^2" else "${labels["x$i"]}:${labels["x$j"]}"
+    }
+    return labels
+}
+
 /** Construct the same selected-column analysis plan used by the Web form. */
 internal fun guidedStatisticsCommand(definition:JSONObject,rows:List<List<String>>,settings:JSONObject=JSONObject(),columnLabels:List<String> = emptyList()):String {
     if(definition.getString("id")=="survivalanalysis")return survivalAnalysisPlan(rows,settings,columnLabels).command

@@ -1,5 +1,5 @@
 import {advancedStatisticsSchema} from './advanced-statistics-schema.js';
-import {csvRows,statisticsCsvHasHeader} from './workspace-commands.js';
+import {csvRows,statisticsCsvHasHeader,statisticsColumnLabels} from './workspace-commands.js';
 import {$,element} from './app-ui.js';
 import {getLanguage,t} from './i18n.js';
 import {renderSurvivalReport} from './survival-report.js';
@@ -191,6 +191,28 @@ export function guidedStatisticsCommand(definition,rows,settings={},columnLabels
   throw new Error('Unknown analysis form');
 }
 
+// Predictor positions in the engine follow the selected order, not the table order.
+export function advancedStatisticsTermLabels(definition,rows,settings={},columnLabels=[]){
+  if(!columnLabels.length)return {};
+  const n=Math.max(0,...rows.map(row=>row.length)),id=definition.id;
+  const opts=Object.fromEntries((definition.controls||[]).map(field=>[field.key,settings[field.key]??field.default]));
+  const column=key=>Number(opts[key])===-1?n-1:Number(opts[key]);
+  const multiple=excluded=>opts.predictors==='auto'?Array.from({length:n},(_,i)=>i).filter(i=>!excluded.includes(i)):String(opts.predictors??'').split(',').filter(Boolean).map(Number);
+  let predictors=[];
+  if(['mixedmodel','gee'].includes(id))predictors=multiple([column('subject'),column('response')]);
+  else if(id==='cox')predictors=multiple([column('time'),column('event'),...(opts.truncation==='entry'?[column('entry')]:[])]);
+  else if(['poissonreg','nbreg','ordinal','multinomial'].includes(id))predictors=Array.from({length:Math.max(0,n-1)},(_,i)=>i);
+  else if(id==='survivalanalysis'){
+    const plan=survivalAnalysisPlan(rows,settings,columnLabels),labels={};
+    plan.groups.slice(1).forEach((group,i)=>{labels[`group:${i+1}`]=`${columnLabels[column('group')]}: ${group} / ${plan.groups[0]}`;labels[`x${i+1}`]=labels[`group:${i+1}`];});
+    plan.predictors.forEach((name,i)=>{labels[`predictor:${i}`]=name;labels[`x${Math.max(0,plan.groups.length-1)+i+1}`]=name;});
+    return labels;
+  }
+  const labels=Object.fromEntries(predictors.map((column,i)=>[`x${i+1}`,columnLabels[column]||`x${i+1}`]));
+  if(id==='gee')for(const [i,j] of interactionPairs(opts.interactions,predictors,columnLabels))labels[i===j?`x${i}^2`:`x${i}:x${j}`]=i===j?`${labels[`x${i}`]}^2`:`${labels[`x${i}`]}:${labels[`x${j}`]}`;
+  return labels;
+}
+
 // Shared schema defines the function, shape and default options for both UIs.
 export function advancedStatisticsCommand(definition,rows) {
   if(definition.input==='none')return definition.example;
@@ -246,8 +268,14 @@ export function createAdvancedStatistics({state,persist,data,columnLimit}) {
   const settings=()=>Object.fromEntries((selected().controls||[]).map(field=>[field.key,state.fields[fieldId(field.key)]??field.default]));
   const limit=()=>{const value=Number(columnLimit?.());return Number.isInteger(value)&&value>0?value:null;};
   const currentRows=()=>input.value==='example'?selected().exampleRows:advancedStatisticsRows(data(),limit());
-  const context=()=>selected().id==='survivalanalysis'&&input.value!=='expression'?survivalAnalysisPlan(currentRows(),settings(),columnNames()):{expression:expression(),groups:[],predictors:[]};
-  function columnNames(){if(input.value!=='current'||!data().trim())return [];const rows=csvRows(data(),{skipHeader:false});return statisticsCsvHasHeader(rows)?rows[0]:[];}
+  const context=()=>{
+    const plan=selected().id==='survivalanalysis'&&input.value!=='expression'?survivalAnalysisPlan(currentRows(),settings(),columnNames()):{expression:expression(),groups:[],predictors:[]};
+    let usesCurrentData=input.value==='current'&&!!selected().controls;
+    if(input.value==='current'&&!selected().controls)try{usesCurrentData=source.value.trim()===advancedStatisticsCommand(selected(),currentRows());}catch{}
+    if(usesCurrentData)plan.termLabels=advancedStatisticsTermLabels(selected(),currentRows(),settings(),columnNames());
+    return plan;
+  };
+  function columnNames(){if(input.value!=='current'||!data().trim())return [];const rows=csvRows(data(),{skipHeader:false});const count=Math.min(limit()??Infinity,Math.max(0,...rows.map(row=>row.length)));return statisticsCsvHasHeader(rows)&&!rows[0].some(cell=>cell==='NA')?statisticsColumnLabels(data(),`columns:${count}`):[];}
   const expression=()=>selected().controls&&input.value!=='expression'?guidedStatisticsCommand(selected(),currentRows(),settings(),columnNames()):source.value.trim();
   const preview=()=>{
     if(selected().controls&&input.value!=='expression'){
@@ -321,7 +349,7 @@ export function createAdvancedStatistics({state,persist,data,columnLimit}) {
   input.onchange=()=>{if(input.value==='expression'&&!source.value)source.value=selected().example;signature='';update();persist();};
   $('statistics-advanced-example').onclick=()=>{source.value=selected().example;if(selected().controls)input.value='example';signature='';update();persist();};
   $('statistics-advanced-data').onclick=()=>{
-    try{if(selected().controls){input.value='current';signature='';update();}else source.value=advancedStatisticsCommand(selected(),advancedStatisticsRows(data(),limit()));persist();}
+    try{if(selected().controls){input.value='current';signature='';update();}else {source.value=advancedStatisticsCommand(selected(),advancedStatisticsRows(data(),limit()));input.value='current';}persist();}
     catch(exc){help.textContent=exc.message;}
   };
   $('statistics-data').addEventListener('input',update);

@@ -636,6 +636,8 @@ Example: regression([[-3,0],[-2,0],[-1,0],[1,1],[2,1],[3,1]],randomforestclassif
 
 통계 화면의 고급 분석에서 보정 방법, 자료 열, 그룹, 설명변수, 검정 옵션을 직접 선택합니다. 현재 데이터·예제·분석 식을 전환할 수 있습니다. 표 분석은 선택한 열의 빈 셀을 자동 삭제하지 않습니다. impute는 빈 셀을 NA로 변환합니다. 모든 고급 분석은 64비트 수치 계산입니다.
 
+현재 데이터에 header가 있으면 결과의 term은 `treatment (z)`처럼 header와 열 이름으로 표시됩니다.
+
 `padjust` — p값 목록; 방법 bonferroni / holm / fdr (BH) / by; 유의수준.
 Example: padjust([0.01,0.04,0.03,0.2],holm,0.05)
 

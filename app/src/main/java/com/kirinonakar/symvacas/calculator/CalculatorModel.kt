@@ -777,7 +777,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
             } finally {busy=false}
         }
     }
-    fun calculate(source: String = editor.source) {
+    fun calculate(source: String = editor.source,statisticsTermLabels:Map<String,String> = emptyMap()) {
         if(calcSession!=null){submitCalcValue();return}
         if(engineeringConversion) {
             exitEngineering()
@@ -806,7 +806,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         job = viewModelScope.launch {
             busy=true; error=""
             try {
-                val response = engine.execute(request().put("tree",JSONObject(tree.json())))
+                val response = engine.execute(request().put("tree",JSONObject(tree.json())).put("statisticsTermLabels",JSONObject(statisticsTermLabels)))
                 if(response.optBoolean("ok")) {
                     result=response;dmsDisplay=response.optBoolean("dms");dmsConversion=false
                     val exact=response.optString("exact"); val approx=response.optString("decimal")
