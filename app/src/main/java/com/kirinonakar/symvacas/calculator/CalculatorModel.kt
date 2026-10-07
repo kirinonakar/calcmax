@@ -322,6 +322,16 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     val statisticsLogisticResponse get()=statisticsState.statisticsLogisticResponse
     val statisticsRegularization get()=statisticsState.statisticsRegularization
     val statisticsL1Ratio get()=statisticsState.statisticsL1Ratio
+    val statisticsBayesianMethod get()=statisticsState.statisticsBayesianMethod
+    val statisticsHmcSamples get()=statisticsState.statisticsHmcSamples
+    val statisticsHmcWarmup get()=statisticsState.statisticsHmcWarmup
+    val statisticsHmcLeapfrog get()=statisticsState.statisticsHmcLeapfrog
+    val statisticsHmcSeed get()=statisticsState.statisticsHmcSeed
+    val statisticsHmcChains get()=statisticsState.statisticsHmcChains
+    val statisticsBayesianPriorSD get()=statisticsState.statisticsBayesianPriorSD
+    val statisticsBayesianLevel get()=statisticsState.statisticsBayesianLevel
+    val statisticsBayesianShape get()=statisticsState.statisticsBayesianShape
+    val statisticsBayesianScale get()=statisticsState.statisticsBayesianScale
     val statisticsLassoAlpha get()=statisticsState.statisticsLassoAlpha
     val statisticsForestTask get()=statisticsState.statisticsForestTask
     val statisticsForestTrees get()=statisticsState.statisticsForestTrees
@@ -837,8 +847,8 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     fun clearHistory() { history=history.filter { it.favorite };tape=emptyList();save() }
     fun saveDataSet(name:String,csv:String,kind:String) = with(CalculatorStatisticsActions) { performSaveDataSet(name,csv,kind) }
     fun deleteDataSet(name:String) = with(CalculatorStatisticsActions) { performDeleteDataSet(name) }
-    fun saveStatistics(name:String,data:String,kind:String,regression:String,plot:String,csv:Boolean,selected:String,isNew:Boolean,customFormula:String,customVariable:String,customInitials:String,polynomialDegree:String="3",logisticResponse:String="",lassoAlpha:String="0.1",forestTrees:String="100",forestDepth:String="10",forestSeed:String="0",regularization:String="none",l1Ratio:String="0.5",forestTask:String="auto") =
-        with(CalculatorStatisticsActions) { performSaveStatistics(name,data,kind,regression,plot,csv,selected,isNew,customFormula,customVariable,customInitials,polynomialDegree,logisticResponse,lassoAlpha,forestTrees,forestDepth,forestSeed,regularization,l1Ratio,forestTask) }
+    fun saveStatistics(name:String,data:String,kind:String,regression:String,plot:String,csv:Boolean,selected:String,isNew:Boolean,customFormula:String,customVariable:String,customInitials:String,polynomialDegree:String="3",logisticResponse:String="",lassoAlpha:String="0.1",forestTrees:String="100",forestDepth:String="10",forestSeed:String="0",regularization:String="none",l1Ratio:String="0.5",forestTask:String="auto",bayesianPriorSD:String="2.5",bayesianLevel:String="0.95",bayesianShape:String="2",bayesianScale:String="1",bayesianMethod:String="analytic",hmcSamples:String="500",hmcWarmup:String="500",hmcLeapfrog:String="10",hmcSeed:String="0",hmcChains:String="2") =
+        with(CalculatorStatisticsActions) { performSaveStatistics(name,data,kind,regression,plot,csv,selected,isNew,customFormula,customVariable,customInitials,polynomialDegree,logisticResponse,lassoAlpha,forestTrees,forestDepth,forestSeed,regularization,l1Ratio,forestTask,bayesianPriorSD,bayesianLevel,bayesianShape,bayesianScale,bayesianMethod,hmcSamples,hmcWarmup,hmcLeapfrog,hmcSeed,hmcChains) }
     fun fitRegression(source:String,data:String,responseColumn:Int?=null) = with(CalculatorStatisticsActions) { performFitRegression(source,data,responseColumn) }
     fun clearRegression() = with(CalculatorStatisticsActions) { performClearRegression() }
     fun cancelRegression() = with(CalculatorStatisticsActions) { performCancelRegression() }

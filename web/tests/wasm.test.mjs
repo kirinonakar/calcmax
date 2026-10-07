@@ -20,6 +20,36 @@ import {createAdvancedStatistics} from '../advanced-statistics.js';
 // Reuse the interpreter for sequential integration scenarios. The cold solver
 // scenario below explicitly loads its own interpreter to keep startup coverage.
 let sharedRuntime;
+test('Bayesian linear, logistic and HMC run through workspace commands in real WASM',async()=>{
+  const py=await runtime();
+  const reference=JSON.parse(readFileSync(new URL('../../tests/fixtures/bayesian_regression_reference.json',import.meta.url),'utf8'));
+  const evaluate=source=>{
+    py.globals.set('payload',JSON.stringify({tree:parse(source),precision:30,budget:30}));
+    const result=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));
+    assert.equal(result.ok,true,result.error);return result;
+  };
+  for(const [mode,key] of [['bayeslinear','linear'],['bayeslogistic','laplace']]){
+    const source=statisticsCommand('0,-2\n0,-1\n1,1\n1,2',{op:'regression',kind:'xy',responseColumn:0,regression:mode});
+    const result=evaluate(source);
+    for(const [i,c] of result.regression.coefficients.entries())for(const field of ['estimate','posteriorSD','low','high','probabilityPositive']){
+      assert.ok(Math.abs(Number(c[field])-reference[key][i][field])<1e-8,`${mode} ${field}`);
+    }
+    assert.ok(result.curve.length>100);
+    if(mode==='bayeslogistic')assert.ok(result.curve.every(([,y])=>y>=0&&y<=1));
+    const hmcSource=statisticsCommand('-2,0\n-1,0\n1,1\n2,1',{op:'regression',kind:'xy',regression:mode,
+      bayesianMethod:'hmc',hmcSamples:'200',hmcWarmup:'150',hmcSeed:'11'});
+    const hmc=evaluate(hmcSource);
+    assert.equal(hmc.regression.method,'hmc');
+    assert.equal(hmc.regression.hmc.totalSamples,400);
+    assert.ok(Number(hmc.regression.coefficients[1].ess)>0);
+    assert.deepEqual(evaluate(hmcSource).regression,hmc.regression,'seeded chains reproduce in WASM');
+    assert.ok(hmc.curve.length>100);
+  }
+  const multivariate=evaluate(statisticsCommand('10,0,20\n12,1,22',{op:'regression',kind:'xyz',responseColumn:1,regression:'bayeslogistic'}));
+  assert.equal(multivariate.regression.coefficients.length,3);assert.equal(multivariate.curve.length,0);
+  const catalogHmc=py.runPython("__import__('symvacas_catalog').regression_report([[-2,0],[-1,0],[1,1],[2,1]],'bayeslogistic',[2.5,.95,['hmc',100,50,10,0,2]])['method']");
+  assert.equal(catalogHmc,'hmc');
+});
 test('GLMM, random-slope LMM, correlated GEE and count exposure match independent fixtures in WASM',async()=>{
   const py=await runtime();
   const fixtures=JSON.parse(readFileSync(new URL('../../tests/fixtures/advanced_statistics_reference.json',import.meta.url),'utf8'));

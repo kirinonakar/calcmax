@@ -27,6 +27,45 @@ function workspace(t,fields={}){
   return {$,state,requests,results,errors,run,statistics,get saves(){return saves;},get cancels(){return cancels;}};
 }
 
+for(const language of ['en','ko'])test(`Bayesian models restore HMC settings, select any response column and report posterior uncertainty (${language})`,async t=>{
+  const {$,statistics,run,requests}=workspace(t,{'statistics-kind':'xyz','statistics-data':'A,Response,B\n10,0,20\n11,,21\n12,1,22',
+    'regression-kind':'bayeslinear','regression-response-choice':'1','regression-bayesian-method':'hmc',
+    'regression-hmc-samples':'300','regression-hmc-warmup':'200','regression-hmc-leapfrog':'8','regression-hmc-seed':'7','regression-hmc-chains':'3'});
+  setLanguage(language);translateDOM();statistics.render();
+  const change=id=>$(id).dispatchEvent(new document.defaultView.Event('change'));
+  assert.equal($('regression-hmc').hidden,false);
+  for(const mode of ['bayeslinear','bayeslogistic']){
+    $('regression-kind').value=mode;change('regression-kind');
+    assert.equal($('regression-penalty-label').hidden,true);
+    assert.equal($('regression-firth-label').hidden,true);
+    assert.deepEqual([...$('regression-response').options].map(o=>o.value),['0','1','2']);
+    assert.equal($('regression-variance-shape').closest('label').hidden,mode!=='bayeslinear');
+    assert.equal(statistics.expression('regression'),`regression([[10,20,0],[12,22,1]],${mode},[2.5,0.95${mode==='bayeslinear'?',2,1':''},[hmc,300,200,8,7,3]])`);
+    const pending=run();
+    assert.equal(requests.at(-1).request.tree.args[1].value,mode);
+    requests.at(-1).resolve({ok:true,exact:'x1+x2',regression:{bayesian:true,model:mode,method:'hmc',n:2,df:null,priorSD:'2.5',credibleLevel:.95,fitScale:mode==='bayeslogistic'?'binomial':'y',
+      coefficients:[{name:'b1',estimate:'1',posteriorSD:'.2',low:'.5',high:'1.5',probabilityPositive:'.99',rHat:'1.01',ess:'200',mcse:'.02',...(mode==='bayeslogistic'?{oddsRatio:'2.7',oddsLow:'1.6',oddsHigh:'4.5'}:{})}],
+      residuals:[{row:1,observed:0,fitted:.1,residual:-.1,predictiveLow:-1,predictiveHigh:1}],
+      hmc:{samples:300,warmup:200,leapfrog:8,seed:7,chains:3,acceptanceRate:.9,divergences:0,chainDiagnostics:[{chain:1,acceptanceRate:.9,stepSize:.5,divergences:0}]}}});
+    await pending;
+    const headers=[...$('regression-inference').querySelectorAll('table:first-of-type th')].map(el=>el.textContent);
+    assert.ok(headers.includes(translate('Posterior SD')));
+    assert.ok(headers.some(text=>text.includes('95%')));
+    assert.ok(headers.includes(translate('Split R-hat')));
+    assert.ok(!headers.includes('p')&&!headers.includes('SE'));
+    assert.ok(!$('regression-inference').textContent.includes('α=')&&!$('regression-inference').textContent.includes('Binomial MLE'));
+    assert.match($('regression-caption').textContent,mode==='bayeslogistic'?/P\(y=1\)/:/y=/);
+    assert.equal($('regression-transfer').hidden,true);
+    $('regression-hmc-seed').value='9';$('regression-hmc-seed').dispatchEvent(new document.defaultView.Event('input'));
+    assert.equal($('regression-inference').textContent,'');
+    $('regression-hmc-seed').value='7';
+  }
+  $('regression-bayesian-method').value='analytic';change('regression-bayesian-method');
+  assert.equal($('regression-hmc').hidden,true);
+  assert.equal(statistics.expression('regression'),'regression([[10,20,0],[12,22,1]],bayeslogistic,[2.5,0.95])');
+  assert.equal(regressionResidualCSV({bayesian:true,fitScale:'y',residuals:[{row:1,predictiveLow:-1,predictiveHigh:2}]}).split('\n')[0].endsWith('predictiveLow,predictiveHigh'),true);
+});
+
 test('automatic column detection counts all CSV/TSV columns including headers and missing cells',()=>{
   assert.equal(statisticsDetectedColumns(''),1);
   assert.equal(statisticsDetectedColumns('a,b,c,d,e\n1,2\n3,,5,6,7'),5);
@@ -256,7 +295,7 @@ test('xyz regression controls select multivariate models and keep graph transfer
   $('statistics-kind').value='xyz';$('statistics-kind').dispatchEvent(new document.defaultView.Event('change'));
   assert.equal($('regression-section').hidden,false);
   assert.equal($('regression-kind').value,'multiple');
-  assert.equal([...$('regression-kind').options].filter(o=>!o.disabled).map(o=>o.value).join(','),'multiple,logistic,randomforest');
+  assert.equal([...$('regression-kind').options].filter(o=>!o.disabled).map(o=>o.value).join(','),'multiple,logistic,bayeslinear,bayeslogistic,randomforest');
   $('statistics-data').value='0,0,1\n1,0,3\n0,1,4\n1,1,7\n2,1,8';
   statistics.showRegression({ok:true,decimal:'1+2*x1+3*x2'});
   assert.equal($('regression-transfer').hidden,true);
@@ -292,8 +331,8 @@ test('Korean xyz data keeps multiple and logistic selectable and submits their m
   $('statistics-kind').value='xyz';$('statistics-kind').dispatchEvent(new document.defaultView.Event('change'));
   $('statistics-data').value='0,0,1\n1,0,0\n0,1,0\n1,1,1\n2,1,0';
   assert.equal($('regression-kind').value,'multiple');
-  assert.deepEqual([...$('regression-kind').options].filter(option=>!option.disabled).map(option=>option.value),['multiple','logistic','randomforest']);
-  for(const model of ['multiple','logistic','randomforest']){
+  assert.deepEqual([...$('regression-kind').options].filter(option=>!option.disabled).map(option=>option.value),['multiple','logistic','bayeslinear','bayeslogistic','randomforest']);
+  for(const model of ['multiple','logistic','bayeslinear','bayeslogistic','randomforest']){
     $('regression-kind').value=model;$('regression-kind').dispatchEvent(new document.defaultView.Event('change'));
     const pending=run();
     const request=requests.at(-1);

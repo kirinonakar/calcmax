@@ -208,9 +208,9 @@ class StatisticsTestCommandsTest {
 }
 
 class RegressionFormulaTest {
-    @Test fun machineLearningModelsAllowSmallSamplesAndReorderResponse() {
+    @Test fun properPriorAndMachineLearningModelsAllowSmallSamplesAndReorderResponse() {
         val rows=listOf(listOf("1","10","20"),listOf("","11","21"),listOf("0","12","22"))
-        for(mode in listOf("ridge","lasso","elasticnet","logisticridge","logisticlasso","logisticelasticnet","randomforest","randomforestclassifier","randomforestregressor")) {
+        for(mode in listOf("ridge","lasso","elasticnet","logisticridge","logisticlasso","logisticelasticnet","randomforest","randomforestclassifier","randomforestregressor","bayeslinear","bayeslogistic")) {
             assertEquals("[[10,20,1],[12,22,0]]",statisticsRegressionTable(rows,"xyz",mode,0))
             assertEquals("y",com.kirinonakar.symvacas.ui.statisticsRegressionParameterLabels("xyz",mode,0)["b1"])
             assertEquals("z",com.kirinonakar.symvacas.ui.statisticsRegressionParameterLabels("xyz",mode,0)["b2"])

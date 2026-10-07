@@ -95,21 +95,22 @@ export function statisticsAnalysisData(source,{op='stats',column=0,grouping='col
   const samples=paired?['x','y'].map((label,i)=>({label,values:pairs.map(row=>row[i])})):['anova','tukey','kruskal'].includes(op)?names.map((label,i)=>({label,values:values[i]})):['ttest2','ztest2','mannwhitney'].includes(op)?[first,second].map(i=>({label:names[i],values:values[i]})):[{label:names[selected],values:values[selected]}];
   return {rows,groups,pairs,paired,categorical,first,second,samples};
 }
-export function statisticsCommand(source,{op='stats',column=0,extra='0',tail='two',sigma='1',sigmaY='1',yatesCorrection=true,regression='linear',firth='auto',degree='3',alpha='0.1',l1Ratio='0.5',trees='100',maxDepth='10',seed='0',responseColumn,formula='A*exp(-k*x)+C',variable='x',initials='',grouping='columns',firstGroup='',secondGroup='',kind}={}){
-  if(op==='regression'&&kind&&kind!=='xy'&&!(statisticsColumnCount(kind)>1&&['multiple','logistic','ridge','lasso','elasticnet','logisticridge','logisticlasso','logisticelasticnet','randomforest','randomforestclassifier','randomforestregressor'].includes(regression)))throw new Error('Regression needs x,y data');
+export function statisticsCommand(source,{op='stats',column=0,extra='0',tail='two',sigma='1',sigmaY='1',yatesCorrection=true,regression='linear',firth='auto',degree='3',alpha='0.1',l1Ratio='0.5',trees='100',maxDepth='10',seed='0',priorSD='2.5',credibleLevel='0.95',varianceShape='2',varianceScale='1',bayesianMethod='analytic',hmcSamples='500',hmcWarmup='500',hmcLeapfrog='10',hmcSeed='0',hmcChains='2',responseColumn,formula='A*exp(-k*x)+C',variable='x',initials='',grouping='columns',firstGroup='',secondGroup='',kind}={}){
+  if(op==='regression'&&kind&&kind!=='xy'&&!(statisticsColumnCount(kind)>1&&['multiple','logistic','ridge','lasso','elasticnet','logisticridge','logisticlasso','logisticelasticnet','randomforest','randomforestclassifier','randomforestregressor','bayeslinear','bayeslogistic'].includes(regression)))throw new Error('Regression needs x,y data');
   const {rows,groups,pairs,categorical,first,second,samples:activeSamples}=statisticsAnalysisData(source,{op,column,grouping,firstGroup,secondGroup,kind});
   const samples=activeSamples.map(sample=>sample.values),data=samples[0];
   if(!categorical){for(const number of samples.flat().filter(Boolean))parse(number);}
   const tailArgument=tail==='two'?'':','+tail;
   if(op==='regression'){
-    if(['multiple','logistic','ridge','lasso','elasticnet','logisticridge','logisticlasso','logisticelasticnet','randomforest','randomforestclassifier','randomforestregressor'].includes(regression)){
+    if(['multiple','logistic','ridge','lasso','elasticnet','logisticridge','logisticlasso','logisticelasticnet','randomforest','randomforestclassifier','randomforestregressor','bayeslinear','bayeslogistic'].includes(regression)){
       const complete=rows.filter(row=>row.every(Boolean));
-      const machineLearning=['ridge','lasso','elasticnet','logisticridge','logisticlasso','logisticelasticnet','randomforest','randomforestclassifier','randomforestregressor'].includes(regression);
-      if(machineLearning?complete.length<2:complete.length<=rows[0].length)throw new Error(machineLearning?'Regression needs at least two complete rows':'Add more data points than fit parameters');
+      const flexible=regression.startsWith('bayes')||['ridge','lasso','elasticnet','logisticridge','logisticlasso','logisticelasticnet','randomforest','randomforestclassifier','randomforestregressor','bayeslinear','bayeslogistic'].includes(regression);
+      if(flexible?complete.length<2:complete.length<=rows[0].length)throw new Error(flexible?'Regression needs at least two complete rows':'Add more data points than fit parameters');
       const response=responseColumn===undefined?rows[0].length-1:Number(responseColumn);
       if(!Number.isInteger(response)||response<0||response>=rows[0].length)throw new Error('Select a dependent variable column');
       const order=rows[0].map((_,i)=>i).filter(i=>i!==response).concat(response);
-      const regressionOptions=['elasticnet','logisticelasticnet'].includes(regression)?`,[${alpha},${l1Ratio}]`:['ridge','lasso','logisticridge','logisticlasso'].includes(regression)?','+alpha:regression.startsWith('randomforest')?`,[${trees},${maxDepth},${seed}]`:regression==='logistic'&&firth==='firth'?',firth':'';
+      const samplerOptions=bayesianMethod==='hmc'?`,[hmc,${hmcSamples},${hmcWarmup},${hmcLeapfrog},${hmcSeed},${hmcChains}]`:'';
+      const regressionOptions=regression.startsWith('bayes')?`,[${priorSD},${credibleLevel}${regression==='bayeslinear'?`,${varianceShape},${varianceScale}`:''}${samplerOptions}]`:['elasticnet','logisticelasticnet'].includes(regression)?`,[${alpha},${l1Ratio}]`:['ridge','lasso','logisticridge','logisticlasso'].includes(regression)?','+alpha:regression.startsWith('randomforest')?`,[${trees},${maxDepth},${seed}]`:regression==='logistic'&&firth==='firth'?',firth':'';
       return `regression(${vector(complete.map(row=>vector(order.map(i=>row[i]))))},${regression}${regressionOptions})`;
     }
     if(pairs.length<2)throw new Error('Regression needs at least two complete x,y rows');

@@ -120,6 +120,17 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
     var l1Ratio by rememberSaveable {mutableStateOf(m.statisticsL1Ratio)}
     var lassoAlpha by rememberSaveable {mutableStateOf(m.statisticsLassoAlpha)}
     var lassoAlphaCv by rememberSaveable {mutableStateOf(false)}
+    var bayesianMethod by rememberSaveable {mutableStateOf(m.statisticsBayesianMethod)}
+    var hmcSamples by rememberSaveable {mutableStateOf(m.statisticsHmcSamples)}
+    var hmcWarmup by rememberSaveable {mutableStateOf(m.statisticsHmcWarmup)}
+    var hmcLeapfrog by rememberSaveable {mutableStateOf(m.statisticsHmcLeapfrog)}
+    var hmcSeed by rememberSaveable {mutableStateOf(m.statisticsHmcSeed)}
+    var hmcChains by rememberSaveable {mutableStateOf(m.statisticsHmcChains)}
+    var bayesianPriorSD by rememberSaveable {mutableStateOf(m.statisticsBayesianPriorSD)}
+    var bayesianLevel by rememberSaveable {mutableStateOf(m.statisticsBayesianLevel)}
+    var bayesianShape by rememberSaveable {mutableStateOf(m.statisticsBayesianShape)}
+    var bayesianScale by rememberSaveable {mutableStateOf(m.statisticsBayesianScale)}
+    val bayesian=regression in listOf("bayeslinear","bayeslogistic")
     var firthMode by rememberSaveable {mutableStateOf("auto")}
     var forestTask by rememberSaveable {mutableStateOf(m.statisticsForestTask)}
     var forestTrees by rememberSaveable {mutableStateOf(m.statisticsForestTrees)}
@@ -197,7 +208,7 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
     val defaultHeatMapY=heatMapAxisIndices.drop(heatMapAxisSplit).toSet()
     val heatMapXSelection=parseHeatMapSelection(heatMapXColumns,dataColumns.size,defaultHeatMapX).intersect(validHeatMapAxes)
     val heatMapYSelection=parseHeatMapSelection(heatMapYColumns,dataColumns.size,defaultHeatMapY).intersect(validHeatMapAxes)-heatMapXSelection
-    LaunchedEffect(data,datasetName,dataKind,regression,plotType,plotGrouping,plotOrientation,heatMapMode,heatMapCorrelation,heatMapXColumns,heatMapYColumns,heatMapClustering,heatMapFit,autoColumns,csv,selected,isNew,customFormula,customVariable,customInitials,polynomialDegree,logisticResponse,lassoAlpha,forestTrees,forestDepth,forestSeed,regularization,l1Ratio,forestTask) {m.statisticsAutoColumns=autoColumns;m.statisticsPlotGrouping=plotGrouping;m.statisticsPlotOrientation=plotOrientation;m.statisticsHeatMapMode=heatMapMode;m.statisticsHeatMapCorrelation=heatMapCorrelation;m.statisticsHeatMapXColumns=if(heatMapAxisIndices.size<2)"" else encodeHeatMapSelection(heatMapXSelection);m.statisticsHeatMapYColumns=if(heatMapAxisIndices.size<2)"" else encodeHeatMapSelection(heatMapYSelection);m.statisticsHeatMapClustering=heatMapClustering;m.statisticsHeatMapFit=heatMapFit;m.saveStatistics(datasetName,data,dataKind,regression,plotType,csv,selected,isNew,customFormula,customVariable,customInitials,polynomialDegree,logisticResponse,lassoAlpha,forestTrees,forestDepth,forestSeed,regularization,l1Ratio,forestTask)}
+    LaunchedEffect(data,datasetName,dataKind,regression,plotType,plotGrouping,plotOrientation,heatMapMode,heatMapCorrelation,heatMapXColumns,heatMapYColumns,heatMapClustering,heatMapFit,autoColumns,csv,selected,isNew,customFormula,customVariable,customInitials,polynomialDegree,logisticResponse,lassoAlpha,forestTrees,forestDepth,forestSeed,regularization,l1Ratio,forestTask,bayesianPriorSD,bayesianLevel,bayesianShape,bayesianScale,bayesianMethod,hmcSamples,hmcWarmup,hmcLeapfrog,hmcSeed,hmcChains) {m.statisticsAutoColumns=autoColumns;m.statisticsPlotGrouping=plotGrouping;m.statisticsPlotOrientation=plotOrientation;m.statisticsHeatMapMode=heatMapMode;m.statisticsHeatMapCorrelation=heatMapCorrelation;m.statisticsHeatMapXColumns=if(heatMapAxisIndices.size<2)"" else encodeHeatMapSelection(heatMapXSelection);m.statisticsHeatMapYColumns=if(heatMapAxisIndices.size<2)"" else encodeHeatMapSelection(heatMapYSelection);m.statisticsHeatMapClustering=heatMapClustering;m.statisticsHeatMapFit=heatMapFit;m.saveStatistics(datasetName,data,dataKind,regression,plotType,csv,selected,isNew,customFormula,customVariable,customInitials,polynomialDegree,logisticResponse,lassoAlpha,forestTrees,forestDepth,forestSeed,regularization,l1Ratio,forestTask,bayesianPriorSD,bayesianLevel,bayesianShape,bayesianScale,bayesianMethod,hmcSamples,hmcWarmup,hmcLeapfrog,hmcSeed,hmcChains)}
     val dateAxis=if(dataColumns.size>1)statisticsDateAxis(parsedRows) else null
     val numericRows=statisticsNumericRows(parsedRows,dateAxis)
     fun vector(column:Int)=numericRows.mapNotNull {it.getOrNull(column)?.takeIf(String::isNotBlank)}.joinToString(",","[","]")
@@ -307,12 +318,12 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
                 if(dataKind!="list")SmallAction("Clear regression"){m.clearRegression()}
             }
             val activeRegression=if(m.regressionFit.isNotBlank()&&m.regressionData==data)when {m.regressionMode.startsWith("randomforest")->"randomforest";m.regressionMode.startsWith("logistic")->"logistic";m.regressionMode in listOf("ridge","lasso","elasticnet")->if(dataColumns.size>2)"multiple" else "linear";else->m.regressionMode} else ""
-            if(dataColumns.size>1)Choices(if(dataKind=="xyz"||dataKind.startsWith("columns:"))listOf("multiple","logistic","randomforest") else listOf("linear","quadratic","polynomial","logarithmic","exponential","power","logistic","randomforest","custom"),if(regularized||regression in listOf("custom","polynomial","randomforest"))regression else activeRegression,{selectedMode->
+            if(dataColumns.size>1)Choices(if(dataKind=="xyz"||dataKind.startsWith("columns:"))listOf("multiple","logistic","randomforest","bayeslinear","bayeslogistic") else listOf("linear","quadratic","polynomial","logarithmic","exponential","power","logistic","randomforest","bayeslinear","bayeslogistic","custom"),if(regularized||regression in listOf("custom","polynomial","randomforest","bayeslinear","bayeslogistic"))regression else activeRegression,{selectedMode->
                 regression=selectedMode;plotType=if(dataKind=="xy")"Scatter" else "Histogram"
                 val selectedResponse=if(selectedMode in listOf("polynomial","logistic")) {if(logisticResponse=="0")0 else regressionColumns.lastIndex} else responseColumn
                 if(selectedMode in listOf("polynomial","logistic")&&logisticResponse!="0")logisticResponse=""
-                if(selectedMode in listOf("custom","polynomial","randomforest")||regularization!="none")m.clearRegression()
-                if(selectedMode !in listOf("custom","polynomial","randomforest")&&(selectedMode !in listOf("linear","multiple","logistic")||regularization=="none")) {
+                if(selectedMode in listOf("custom","polynomial","randomforest","bayeslinear","bayeslogistic")||regularization!="none")m.clearRegression()
+                if(selectedMode !in listOf("custom","polynomial","randomforest","bayeslinear","bayeslogistic")&&(selectedMode !in listOf("linear","multiple","logistic")||regularization=="none")) {
                     val table=statisticsRegressionTable(numericRows,dataKind,selectedMode,selectedResponse)
                     if(table!=null)m.fitRegression("regression($table,$selectedMode)",data,if(selectedMode in listOf("multiple","logistic"))selectedResponse else null)
                     else m.error="Add more data points than fit parameters"
@@ -342,8 +353,35 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
                     Field(forestSeed,"Random seed",Modifier.fillMaxWidth()){m.clearRegression();forestSeed=it}
                 }
             }
-            if(dataKind!="list"&&regression in listOf("multiple","logistic"))Text(tr(if(regression=="logistic")"Selected column is response; others are predictors. Logistic response: 0 or 1." else "Selected column is response; others are predictors."),fontSize=11.sp,color=LocalInstrument.current.muted)
-            if(dataColumns.size>1&&(regularized||regression in listOf("multiple","logistic","polynomial","randomforest"))) {
+            if(dataColumns.size>1&&bayesian) {
+                Text(tr("Inference method"),fontSize=11.sp,color=LocalInstrument.current.muted)
+                val methods=mapOf((if(regression=="bayeslinear")"Conjugate (exact)" else "Laplace approximation") to "analytic","HMC" to "hmc")
+                Choices(methods.keys.toList(),methods.entries.firstOrNull {it.value==bayesianMethod}?.key ?: methods.keys.first(),{m.clearRegression();bayesianMethod=methods[it] ?: "analytic"})
+                if(bayesianMethod=="hmc") {
+                    Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                        Field(hmcSamples,"Samples per chain (100–5000)",Modifier.weight(1f)){m.clearRegression();hmcSamples=it}
+                        Field(hmcWarmup,"Warmup (50–5000)",Modifier.weight(1f)){m.clearRegression();hmcWarmup=it}
+                    }
+                    Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                        Field(hmcLeapfrog,"Leapfrog steps (1–50)",Modifier.weight(1f)){m.clearRegression();hmcLeapfrog=it}
+                        Field(hmcChains,"Chains (2–4)",Modifier.weight(1f)){m.clearRegression();hmcChains=it}
+                    }
+                    Field(hmcSeed,"Random seed",Modifier.fillMaxWidth()){m.clearRegression();hmcSeed=it}
+                    Text(tr("Static HMC; step size adapts during warmup. Check split R-hat, ESS and divergences."),fontSize=11.sp,color=LocalInstrument.current.muted)
+                }
+
+                Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                    Field(bayesianPriorSD,"Prior SD",Modifier.weight(1f)){m.clearRegression();bayesianPriorSD=it}
+                    Field(bayesianLevel,"Credible level (0–1)",Modifier.weight(1f)){m.clearRegression();bayesianLevel=it}
+                }
+                if(regression=="bayeslinear")Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                    Field(bayesianShape,"Variance prior shape",Modifier.weight(1f)){m.clearRegression();bayesianShape=it}
+                    Field(bayesianScale,"Variance prior scale",Modifier.weight(1f)){m.clearRegression();bayesianScale=it}
+                }
+                Text(tr("Zero-mean priors include the intercept on standardized predictors; coefficients in original units."),fontSize=11.sp,color=LocalInstrument.current.muted)
+            }
+            if(dataKind!="list"&&regression in listOf("multiple","logistic","bayeslinear","bayeslogistic"))Text(tr(if(regression in listOf("logistic","bayeslogistic"))"Selected column is response; others are predictors. Logistic response: 0 or 1." else "Selected column is response; others are predictors."),fontSize=11.sp,color=LocalInstrument.current.muted)
+            if(dataColumns.size>1&&(regularized||regression in listOf("multiple","logistic","polynomial","randomforest","bayeslinear","bayeslogistic"))) {
                 Text(tr("Dependent variable"),fontSize=11.sp,color=LocalInstrument.current.muted)
                 if(regression in listOf("polynomial","logistic"))Choices(listOf("first","last"),if(responseColumn==0)"first" else "last",{position->m.clearRegression();logisticResponse=if(position=="first")"0" else ""})
                 else Choices(regressionColumns,regressionColumns.getOrNull(responseColumn).orEmpty(),{name->m.clearRegression();logisticResponse=regressionColumns.indexOf(name).toString()},translate=false)
@@ -352,12 +390,16 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
                     Choices(listOf("Auto","Always"),if(firthMode=="firth")"Always" else "Auto",{m.clearRegression();firthMode=if(it=="Always")"firth" else "auto"})
                 }
                 val table=statisticsRegressionTable(numericRows,dataKind,fitMode,responseColumn)
+                val validHmc=bayesianMethod!="hmc"||(hmcSamples.toIntOrNull() in 100..5000&&hmcWarmup.toIntOrNull() in 50..5000&&hmcLeapfrog.toIntOrNull() in 1..50&&hmcChains.toIntOrNull() in 2..4&&hmcSeed.toLongOrNull() in 0L..2147483647L)
+                val samplerOptions=if(bayesianMethod=="hmc")",[hmc,$hmcSamples,$hmcWarmup,$hmcLeapfrog,$hmcSeed,$hmcChains]" else ""
                 val validOptions=when {
+                    bayesian->validHmc&&bayesianPriorSD.toDoubleOrNull()?.let {it.isFinite()&&it in 0.000001..1000000.0}==true&&bayesianLevel.toDoubleOrNull()?.let {it>0&&it<1}==true&&(regression!="bayeslinear"||(bayesianShape.toDoubleOrNull()?.let {it.isFinite()&&it>0}==true&&bayesianScale.toDoubleOrNull()?.let {it.isFinite()&&it>0}==true))
                     regularized->(lassoAlphaCv||lassoAlpha.toDoubleOrNull()?.let {it.isFinite()&&it>0}==true)&&(regularization!="elasticnet"||l1Ratio.toDoubleOrNull()?.let {it in 0.0..1.0}==true)
                     regression=="randomforest"->forestTrees.toIntOrNull() in 1..200&&forestDepth.toIntOrNull() in 1..20&&forestSeed.toLongOrNull() in 0L..2147483647L
                     else->true
                 }
                 if(regression!="polynomial")Button(onClick={table?.let {when {
+                    bayesian->m.fitRegression("regression($it,$regression,[$bayesianPriorSD,$bayesianLevel${if(regression=="bayeslinear")",$bayesianShape,$bayesianScale" else ""}$samplerOptions])",data,responseColumn)
                     regularized->{val penalty=if(lassoAlphaCv)"cv" else lassoAlpha;m.fitRegression("regression($it,$fitMode,${if(regularization=="elasticnet")"[$penalty,$l1Ratio]" else penalty})",data,responseColumn)}
                     regression=="randomforest"->m.fitRegression("regression($it,$fitMode,[$forestTrees,$forestDepth,$forestSeed])",data,responseColumn)
                     else->m.fitRegression("regression($it,$regression${if(regression=="logistic"&&firthMode=="firth")",firth" else ""})",data,responseColumn)
@@ -438,12 +480,12 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
                 Choices(listOf("Columns","first","last"),if(plotGrouping=="columns")"Columns" else plotGrouping,{plotGrouping=if(it=="Columns")"columns" else it})
             }
         }
-        val fittedResponse=if(m.regressionMode in listOf("multiple","logistic","polynomial","ridge","lasso","elasticnet","logisticridge","logisticlasso","logisticelasticnet","randomforest","randomforestclassifier","randomforestregressor"))m.regressionResponseColumn?.takeIf {it in regressionColumns.indices} ?: regressionColumns.lastIndex else regressionColumns.lastIndex
+        val fittedResponse=if(m.regressionMode in listOf("multiple","logistic","polynomial","ridge","lasso","elasticnet","logisticridge","logisticlasso","logisticelasticnet","randomforest","randomforestclassifier","randomforestregressor","bayeslinear","bayeslogistic"))m.regressionResponseColumn?.takeIf {it in regressionColumns.indices} ?: regressionColumns.lastIndex else regressionColumns.lastIndex
         val fittedVariables=statisticsRegressionVariables(dataKind,fittedResponse)
         val parameterLabels=statisticsRegressionParameterLabels(dataKind,m.regressionMode,fittedResponse,data)
         val fittedResponseName=regressionColumns.getOrNull(fittedResponse).orEmpty()
         val fitVisible=dataKind=="xy"&&plotType=="Scatter"&&m.regressionData==data&&m.regressionFit.isNotBlank()
-        val plotPairs=if(fitVisible&&m.regressionMode in listOf("logistic","polynomial","ridge","lasso","elasticnet","logisticridge","logisticlasso","logisticelasticnet","randomforest","randomforestclassifier","randomforestregressor")&&fittedResponse==0)paired.map {(x,y)->y to x} else paired
+        val plotPairs=if(fitVisible&&m.regressionMode in listOf("logistic","polynomial","ridge","lasso","elasticnet","logisticridge","logisticlasso","logisticelasticnet","randomforest","randomforestclassifier","randomforestregressor","bayeslinear","bayeslogistic")&&fittedResponse==0)paired.map {(x,y)->y to x} else paired
         val heatMapInput=remember(parsedRows,dataKind,data,plotGrouping,plotType,heatMapMode,heatMapCorrelation,heatMapXColumns,heatMapYColumns) {
             if(plotType!="Heat map")null else {
                 if(heatMapMode=="correlation")statisticsCorrelationHeatMap(parsedRows,dataKind,heatMapCorrelation,heatMapXSelection.toList().sorted(),heatMapYSelection.toList().sorted(),heatMapColumnNames)
@@ -463,7 +505,7 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
             if(panel.label.isNotBlank())Text(panel.label,style=MaterialTheme.typography.titleSmall)
             StatisticsPlot(plotType,if(plotType=="Scatter")plotPairs else xValues.mapIndexed {i,v->i.toDouble() to v},xValues,yValues,if(fitVisible)m.regressionCurve.orEmpty() else emptyList(),if(fitVisible&&!m.regressionMode.startsWith("randomforest"))m.regressionFit else "",m.displayDigits,fitVisible&&m.regressionMode=="linear",m.regressionCorrelation,tertiary=zValues,allColumns=panel.series,xDateOrigin=if(fitVisible&&fittedResponse==0)null else dateAxis?.origin,
                 xAxisLabel=if(fitVisible)fittedVariables["x"] ?: "x" else "x",yAxisLabel=if(fitVisible)fittedResponseName else "y",
-                fitPrefix=if(fitVisible&&m.regressionMode.startsWith("logistic"))"P($fittedResponseName = 1) = " else if(fitVisible)"$fittedResponseName ≈ " else "y ≈ ",fitVariables=if(fitVisible&&m.regressionMode in listOf("logistic","polynomial","ridge","lasso","elasticnet","logisticridge","logisticlasso","logisticelasticnet","randomforest","randomforestclassifier","randomforestregressor"))fittedVariables else emptyMap(),orientation=plotOrientation)
+                fitPrefix=if(fitVisible&&(m.regressionMode.startsWith("logistic")||m.regressionMode=="bayeslogistic"))"P($fittedResponseName = 1) = " else if(fitVisible)"$fittedResponseName ≈ " else "y ≈ ",fitVariables=if(fitVisible&&m.regressionMode in listOf("logistic","polynomial","ridge","lasso","elasticnet","logisticridge","logisticlasso","logisticelasticnet","randomforest","randomforestclassifier","randomforestregressor","bayeslinear","bayeslogistic"))fittedVariables else emptyMap(),orientation=plotOrientation)
         }
         if(dateAxis!=null&&plotType=="Scatter")Text((if(isKorean())"회귀식의 x: ${dateAxis.origin.plusDays(1)} = 1일째" else "Regression x: ${dateAxis.origin.plusDays(1)} = day 1"),fontSize=11.sp,color=LocalInstrument.current.muted)
         if(dataKind!="list"&&m.regressionData==data&&m.regressionFit.isNotBlank()) {
@@ -473,7 +515,7 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
                     CompositionLocalProvider(LocalMathMinimumSize provides 8f) {
                         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical=3.dp).testTag("statistics-regression-equation"),
                             horizontalArrangement=Arrangement.spacedBy(5.dp)) {
-                            MathText(if(m.regressionMode.startsWith("logistic"))"P($fittedResponseName = 1) = " else "$fittedResponseName = ",12f,Modifier.alignBy(MathAxis))
+                            MathText(if((m.regressionMode.startsWith("logistic")||m.regressionMode=="bayeslogistic"))"P($fittedResponseName = 1) = " else "$fittedResponseName = ",12f,Modifier.alignBy(MathAxis))
                             Box(Modifier.alignBy(MathAxis)) {
                                 if(equation!=null)MathNode(equation,12f)
                                 else Text(m.regressionFit,fontSize=12.sp,fontFamily=FontFamily.Monospace)

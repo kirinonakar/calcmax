@@ -1,0 +1,69 @@
+{
+  "source": "NumPy/SciPy 1.18.1; independent conjugate solution, MAP/Hessian, and 2D quadrature",
+  "rows": [
+    [
+      -2.0,
+      0.0
+    ],
+    [
+      -1.0,
+      0.0
+    ],
+    [
+      1.0,
+      1.0
+    ],
+    [
+      2.0,
+      1.0
+    ]
+  ],
+  "options": [
+    2.5,
+    0.95
+  ],
+  "linear": [
+    {
+      "estimate": 0.4807692307692307,
+      "posteriorSD": 0.2950633435820828,
+      "low": -0.10848942793243643,
+      "high": 1.0700278894708979,
+      "probabilityPositive": 0.9516545696765406
+    },
+    {
+      "estimate": 0.28846153846153844,
+      "posteriorSD": 0.1866144439488415,
+      "low": -0.08421836003307465,
+      "high": 0.6611414369561515,
+      "probabilityPositive": 0.9439448281561518
+    }
+  ],
+  "laplace": [
+    {
+      "estimate": 9.660870551569869e-17,
+      "posteriorSD": 1.331800901682307,
+      "low": -2.6102818018752916,
+      "high": 2.610281801875291,
+      "probabilityPositive": 0.5
+    },
+    {
+      "estimate": 1.4578357033339264,
+      "posteriorSD": 0.95508811735028,
+      "low": -0.41410260873478744,
+      "high": 3.3297740154026396,
+      "probabilityPositive": 0.9365434540773884
+    }
+  ],
+  "logisticQuadrature": [
+    {
+      "estimate": 0.0,
+      "posteriorSD": 1.4816598539233357,
+      "probabilityPositive": 0.5
+    },
+    {
+      "estimate": 1.9807301238159976,
+      "posteriorSD": 1.0306720776960878,
+      "probabilityPositive": 0.9872739415767777
+    }
+  ]
+}

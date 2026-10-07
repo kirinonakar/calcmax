@@ -7,6 +7,47 @@ import androidx.compose.runtime.staticCompositionLocalOf
 val LocalLanguage = staticCompositionLocalOf { "en" }
 
 private val korean = mapOf(
+    "Bayesian linear regression" to "베이지안 선형 회귀",
+    "Bayesian logistic regression" to "베이지안 로지스틱 회귀",
+    "Prior SD" to "사전분포 SD",
+    "Credible level (0–1)" to "사후 확률 수준 (0–1)",
+    "Credible interval" to "credible interval",
+    "Variance prior shape" to "분산 사전분포 shape",
+    "Variance prior scale" to "분산 사전분포 scale",
+    "Posterior variance mean" to "사후 분산 평균",
+    "Posterior estimate" to "사후 추정값",
+    "Posterior SD" to "사후 SD",
+    "OR credible interval" to "OR credible interval",
+    "Predictive lower" to "예측구간 하한",
+    "Predictive upper" to "예측구간 상한",
+    "Inference method" to "추론 방법",
+    "Conjugate (exact)" to "켤레 사후분포 (정확)",
+    "Laplace approximation" to "Laplace 근사",
+    "Samples per chain (100–5000)" to "체인별 표본 수 (100–5000)",
+    "Warmup (50–5000)" to "Warmup (50–5000)",
+    "Leapfrog steps (1–50)" to "Leapfrog 단계 수 (1–50)",
+    "Chains (2–4)" to "체인 수 (2–4)",
+    "Samples per chain" to "체인별 표본 수",
+    "Warmup" to "Warmup",
+    "Leapfrog steps" to "Leapfrog 단계 수",
+    "Chains" to "체인 수",
+    "Chain" to "체인",
+    "Acceptance rate" to "수용률",
+    "Divergences" to "발산 수",
+    "Step size" to "단계 크기",
+    "Split R-hat" to "Split R-hat",
+    "Autocorrelation ESS" to "자기상관 ESS",
+    "MCSE" to "MCSE",
+    "Zero-mean priors include the intercept on standardized predictors; coefficients in original units." to "표준화된 설명변수와 절편에 평균 0 사전분포 적용 · 계수는 원래 단위",
+    "Static HMC; step size adapts during warmup. Check split R-hat, ESS and divergences." to "Static HMC · warmup 중 단계 크기 적응 · split R-hat, ESS, 발산 수를 확인하세요.",
+    "HMC posterior samples; check R-hat, ESS and divergences." to "HMC 사후 표본 · R-hat, ESS, 발산 수를 확인하세요.",
+    "Gaussian Laplace posterior at the MAP; approximate credible intervals." to "MAP에서 Gaussian Laplace 사후분포 근사 · 근사 credible interval",
+    "Normal-inverse-gamma posterior; exact Student-t credible intervals." to "Normal-inverse-gamma 사후분포 · 정확한 Student-t credible interval",
+    "Training probabilities evaluated at the MAP." to "학습 확률은 MAP 계수에서 계산합니다.",
+    "Training predictions evaluated at posterior mean coefficients." to "학습 예측은 사후 평균 계수에서 계산합니다.",
+    "HMC divergences detected; posterior summaries may be unreliable." to "HMC 발산이 발생했습니다. 사후 요약 결과가 불안정할 수 있습니다.",
+    "HMC split R-hat exceeds 1.05 or is unavailable; increase warmup and samples." to "HMC split R-hat이 1.05를 넘거나 계산되지 않습니다. warmup과 표본 수를 늘리세요.",
+    "HMC effective sample size is below 100; increase samples and inspect mixing." to "HMC 유효 표본 수가 100 미만입니다. 표본 수를 늘리고 체인 혼합을 확인하세요.",
     "Enter all Bayesian prior and interval parameters" to "베이지안 사전분포·구간 매개변수를 모두 입력하세요",
     "Prior parameters must be positive" to "사전분포 매개변수는 양수여야 합니다",
     "Prior kappa, alpha and beta must be positive" to "사전 κ·α·β는 양수여야 합니다",
@@ -350,7 +391,10 @@ private val korean = mapOf(
 )
 
 @Composable
-fun tr(english: String): String = if (LocalLanguage.current == "ko") korean[english] ?: english else english
+fun tr(english: String): String {
+    val label=when(english){"bayeslinear"->"Bayesian linear regression";"bayeslogistic"->"Bayesian logistic regression";else->english}
+    return if (LocalLanguage.current == "ko") korean[label] ?: label else label
+}
 
 @Composable
 fun isKorean(): Boolean = LocalLanguage.current == "ko"
