@@ -10,7 +10,9 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'app/src/main/python'))
 from calc_engine import dispatch
 from calc_evaluator import Engine
-from calc_advanced_statistics import advanced
+from calc_advanced_statistics import FUNCTIONS, advanced
+from calc_shared import MathError
+import mpmath as mp
 import sympy as s
 
 
@@ -36,6 +38,26 @@ def run(name,*args):
 
 
 class AdvancedStatisticsTests(unittest.TestCase):
+    def test_registered_analyses_reject_missing_and_excess_arguments(self):
+        definitions=json.loads((ROOT/'app/src/main/assets/advanced_statistics.json').read_text(encoding='utf-8'))
+        self.assertEqual(FUNCTIONS,{item['id'] for item in definitions})
+        for name in FUNCTIONS:
+            for args in ([],[s.Integer(0)]*21):
+                with self.subTest(function=name,count=len(args)):
+                    with self.assertRaisesRegex(MathError,name+' argument count mismatch'):
+                        advanced(Engine({}),name,args)
+
+    def test_public_entry_preserves_precision_after_success_and_failure(self):
+        rows=[[1,2],[2,1],[3,4],[4,3],[5,7]]
+        expected=run('pca',rows)
+        for precision in (10,40):
+            with mp.workdps(precision):
+                self.assertEqual(run('pca',rows),expected)
+                self.assertEqual(mp.mp.dps,precision)
+                with self.assertRaisesRegex(MathError,'Standardized PCA requires nonconstant columns'):
+                    run('pca',[[1,2],[1,3]])
+                self.assertEqual(mp.mp.dps,precision)
+
     def test_header_term_labels_affect_both_displays_and_preserve_reusable_answer(self):
         item=next(item for item in json.loads((ROOT/'app/src/main/assets/advanced_statistics.json').read_text(encoding='utf-8')) if item['id']=='gee')
         request={'tree':tree(item['example']),'precision':20,'budget':30}

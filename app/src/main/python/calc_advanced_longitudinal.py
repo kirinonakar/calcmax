@@ -1,0 +1,424 @@
+"""Repeated-measures ANOVA, Gaussian mixed effects and clustered GEE models."""
+import math
+import mpmath as mp
+from calc_shared import MathError, require
+from calc_statistics import _f_sf
+from calc_advanced_common import (
+    dot, inference, integer, inverse, logistic, mean, newton, option, softplus,
+    standardized_design, table,
+)
+
+
+def repeated_anova(engine, a):
+    """Balanced one- or two-factor within-subjects ANOVA with GG corrections."""
+    rows=table(a[0],2,2); n=len(rows); k=len(rows[0])
+    factor2=integer(a[1],1,20) if len(a)>1 else 1
+    if factor2==1:
+        overall=mean(sum(rows,[])); cols=list(zip(*rows))
+        total=sum((v-overall)**2 for r in rows for v in r); sscondition=n*sum((mean(c)-overall)**2 for c in cols); sssubject=k*sum((mean(r)-overall)**2 for r in rows); error=total-sscondition-sssubject
+        require(error>1e-12, 'Repeated-measures residual variation is required')
+        df1=k-1; df2=(n-1)*(k-1); f=(sscondition/df1)/(error/df2)
+        # Greenhouse–Geisser epsilon from double-centered covariance.
+        cov=[[sum((rows[t][i]-mean(cols[i]))*(rows[t][j]-mean(cols[j])) for t in range(n))/(n-1) for j in range(k)] for i in range(k)]
+        cm=[mean(r) for r in cov]; gm=mean(cm); centered=[[cov[i][j]-cm[i]-cm[j]+gm for j in range(k)] for i in range(k)]
+        epsilon=min(1,max(1/df1,sum(centered[i][i] for i in range(k))**2/(df1*sum(v*v for r in centered for v in r))))
+        engine.note += ' Balanced one-factor repeated measures: rows=subjects, columns=conditions. Includes Greenhouse–Geisser correction.'
+        return {'F':f,'df1':df1,'df2':df2,'p':float(_f_sf(f,df1,df2)),'partial eta2':sscondition/(sscondition+error),'GG epsilon':epsilon,'GG p':float(_f_sf(f,df1*epsilon,df2*epsilon))}
+    require(k%factor2==0,'Condition count must be divisible by the second-factor levels')
+    second=k//factor2; require(second>=2 and factor2>=2,'Two-way repeated measures need two or more levels per factor')
+    overall=mean(sum(rows,[]))
+    cells=[[mean([rows[s][i*factor2+j] for s in range(n)]) for j in range(factor2)] for i in range(second)]
+    first_means=[mean(cells[i]) for i in range(second)]; second_means=[mean([cells[i][j] for i in range(second)]) for j in range(factor2)]
+    subject_means=[mean(r) for r in rows]; subject_first=[[mean(rows[s][i*factor2:(i+1)*factor2]) for i in range(second)] for s in range(n)]
+    subject_second=[[mean(rows[s][j::factor2]) for j in range(factor2)] for s in range(n)]
+    total=sum((v-overall)**2 for r in rows for v in r); subject_ss=k*sum((v-overall)**2 for v in subject_means)
+    first_ss=n*factor2*sum((v-overall)**2 for v in first_means); second_ss=n*second*sum((v-overall)**2 for v in second_means)
+    interaction_ss=n*sum((cells[i][j]-first_means[i]-second_means[j]+overall)**2 for i in range(second) for j in range(factor2))
+    first_error=factor2*sum((subject_first[s][i]-first_means[i]-subject_means[s]+overall)**2 for s in range(n) for i in range(second))
+    second_error=second*sum((subject_second[s][j]-second_means[j]-subject_means[s]+overall)**2 for s in range(n) for j in range(factor2))
+    within=total-subject_ss; interaction_error=within-first_ss-second_ss-interaction_ss-first_error-second_error
+    require(min(first_error,second_error,interaction_error)>1e-12,'Repeated-measures residual variation is required')
+    def epsilon(variables,dimension):
+        size=len(variables[0]); columns=list(zip(*variables))
+        centered=[[sum((variables[t][i]-mean(columns[i]))*(variables[t][j]-mean(columns[j])) for t in range(len(variables)))/(len(variables)-1) for j in range(size)] for i in range(size)]
+        rows_mean=[mean(r) for r in centered]; grand=mean(rows_mean)
+        starred=[[centered[i][j]-rows_mean[i]-rows_mean[j]+grand for j in range(size)] for i in range(size)]
+        require(sum(v*v for r in starred for v in r)>0,'Greenhouse–Geisser correction needs contrast variation')
+        return min(1,max(1/dimension,sum(starred[i][i] for i in range(size))**2/(dimension*sum(v*v for r in starred for v in r))))
+    def helmert(levels): return [[1/math.sqrt(u*(u+1)) if j<u else -u/math.sqrt(u*(u+1)) if j==u else 0.0 for j in range(levels)] for u in range(1,levels)]
+    contrasts_first,contrasts_second=helmert(second),helmert(factor2)
+    residual_rows=[[rows[s][i*factor2+j]-subject_first[s][i]-subject_second[s][j]+subject_means[s] for i in range(second) for j in range(factor2)] for s in range(n)]
+    interaction_variables=[[sum(contrasts_first[u][i]*contrasts_second[v][j]*row[i*factor2+j] for i in range(second) for j in range(factor2)) for v in range(factor2-1) for u in range(second-1)] for row in residual_rows]
+    effects={'A':(first_ss,second-1,first_error,(n-1)*(second-1)),'B':(second_ss,factor2-1,second_error,(n-1)*(factor2-1)),'AB':(interaction_ss,(second-1)*(factor2-1),interaction_error,(n-1)*(second-1)*(factor2-1))}
+    adjustments={'A':epsilon(subject_first,second-1),'B':epsilon(subject_second,factor2-1),'AB':epsilon(interaction_variables,(second-1)*(factor2-1))}
+    result={'first factor levels':second,'second factor levels':factor2,'subject df':n-1}
+    for key,(effect,degree1,error,degree2) in effects.items():
+        value=(effect/degree1)/(error/degree2)
+        result[key+' F']=value; result[key+' df1']=degree1; result[key+' df2']=degree2; result[key+' p']=float(_f_sf(value,degree1,degree2))
+        result[key+' GG epsilon']=adjustments[key]; result[key+' GG p']=float(_f_sf(value,degree1*adjustments[key],degree2*adjustments[key]))
+    engine.note += ' Balanced two-way within-subjects ANOVA: rows=subjects, columns list the first factor (slowest) crossed with the second factor. Greenhouse–Geisser corrections per effect.'
+    return result
+
+
+def interaction_pairs(value, width):
+    """Normalize [i,j] predictor-pair interactions into distinct ascending pairs."""
+    if value is None:
+        return []
+    require(isinstance(value, (list, tuple)) and len(value) >= 1, 'Interactions must be a list of [i,j] predictor pairs')
+    pairs = []
+    for item in value:
+        require(isinstance(item, (list, tuple)) and len(item) == 2, 'Interactions must be a list of [i,j] predictor pairs')
+        first, second = integer(item[0], 1, width), integer(item[1], 1, width)
+        pairs.append((min(first, second), max(first, second)))
+    require(len(set(pairs)) == len(pairs), 'Interaction pairs must be distinct')
+    return pairs
+
+
+def nelder_mead(objective,start,step,iterations=160):
+    """Deterministic direct search for small profile objectives with boundaries."""
+    size=len(start); simplex=[list(start)]
+    for i in range(size):
+        point=list(start); point[i]+=step[i]; simplex.append(point)
+    values=[objective(point) for point in simplex]
+    for _ in range(iterations):
+        order=sorted(range(size+1),key=lambda i:values[i]); simplex=[simplex[i] for i in order]; values=[values[i] for i in order]
+        if max(abs(simplex[i][j]-simplex[0][j]) for i in range(1,size+1) for j in range(size))<1e-7: break
+        centroid=[sum(simplex[i][j] for i in range(size))/size for j in range(size)]
+        reflected=[2*centroid[j]-simplex[size][j] for j in range(size)]; value=objective(reflected)
+        if value<values[0]:
+            expanded=[centroid[j]+2*(reflected[j]-centroid[j]) for j in range(size)]; trial=objective(expanded)
+            if trial<value: simplex[size],values[size]=expanded,trial
+            else: simplex[size],values[size]=reflected,value
+        elif value<values[size-1]: simplex[size],values[size]=reflected,value
+        else:
+            contracted=[centroid[j]+.5*(simplex[size][j]-centroid[j]) for j in range(size)]; trial=objective(contracted)
+            if trial<values[size]: simplex[size],values[size]=contracted,trial
+            else:
+                for i in range(1,size+1):
+                    simplex[i]=[(simplex[i][j]+simplex[0][j])/2 for j in range(size)]; values[i]=objective(simplex[i])
+    return simplex[0],values[0]
+
+
+def numeric_rank(values,tolerance=1e-10):
+    """Column rank of a numeric design by scaled Gaussian elimination (no symbolic cost)."""
+    matrix=[[float(v) for v in row] for row in values]; height=len(matrix); width=len(matrix[0])
+    scales=[max(abs(row[j]) for row in matrix) or 1.0 for j in range(width)]
+    matrix=[[row[j]/scales[j] for j in range(width)] for row in matrix]
+    rank=0; position=0
+    for column in range(width):
+        if position>=height: break
+        pivot=max(range(position,height),key=lambda i:abs(matrix[i][column]))
+        if abs(matrix[pivot][column])<=tolerance: continue
+        matrix[position],matrix[pivot]=matrix[pivot],matrix[position]
+        leading=matrix[position]
+        for i in range(position+1,height):
+            row=matrix[i]; factor=row[column]/leading[column]
+            if factor:
+                for j in range(column,width): row[j]-=factor*leading[j]
+        rank+=1; position+=1
+    return rank
+
+
+def clustered_design(rows):
+    """Intercept design and response for clustered models with a numeric collinearity check."""
+    design=[[1.0]+[float(v) for v in row[1:-1]] for row in rows]; response=[float(row[-1]) for row in rows]
+    require(len(design)>len(design[0]),'More observations than coefficients are required')
+    require(numeric_rank(design)==len(design[0]),'Predictors are collinear')
+    return design,response
+
+
+def small_logdet(values):
+    """log|A| of a small positive-definite matrix by elimination with partial pivoting."""
+    size=len(values); work=[[float(values[i][j]) for j in range(size)] for i in range(size)]; total=0.0
+    for column in range(size):
+        pivot=max(range(column,size),key=lambda i:abs(work[i][column]))
+        if abs(work[pivot][column])<=1e-300: return None
+        if pivot!=column: work[column],work[pivot]=work[pivot],work[column]
+        total+=math.log(abs(work[column][column]))
+        for i in range(column+1,size):
+            factor=work[i][column]/work[column][column]
+            for j in range(column+1,size): work[i][j]-=factor*work[column][j]
+    return total
+
+
+def small_inverse(values):
+    """Inverse of a small matrix by Gauss-Jordan elimination with partial pivoting."""
+    size=len(values)
+    work=[[float(values[i][j]) for j in range(size)]+[1.0 if i==j else 0.0 for j in range(size)] for i in range(size)]
+    for column in range(size):
+        pivot=max(range(column,size),key=lambda i:abs(work[i][column]))
+        if abs(work[pivot][column])<=1e-300: return None
+        work[column],work[pivot]=work[pivot],work[column]
+        divisor=work[column][column]
+        work[column]=[v/divisor for v in work[column]]
+        for i in range(size):
+            if i==column: continue
+            factor=work[i][column]
+            if factor: work[i]=[v-factor*w for v,w in zip(work[i],work[column])]
+    return [[work[i][size+j] for j in range(size)] for i in range(size)]
+
+
+def intercept_fit(x,y,clusters,method):
+    """Gaussian random-intercept ML/REML fit with per-cluster algebra (no n x n matrices)."""
+    n=len(y); p=len(x[0])
+    gram=[[math.fsum(r[i]*r[j] for r in x) for j in range(p)] for i in range(p)]
+    right=[math.fsum(r[i]*v for r,v in zip(x,y)) for i in range(p)]
+    energy=math.fsum(v*v for v in y)
+    pieces=[(len(cluster),[math.fsum(x[i][j] for i in cluster) for j in range(p)],math.fsum(y[i] for i in cluster)) for cluster in clusters]
+    def fit(ratio):
+        matrix=[row[:] for row in gram]; vector=list(right); total=energy; logdet=0.0
+        for size,moment,outcome in pieces:
+            factor=ratio/(1+size*ratio); logdet+=math.log1p(size*ratio)
+            total-=factor*outcome*outcome
+            for i in range(p):
+                vector[i]-=factor*moment[i]*outcome
+                for j in range(i,p):
+                    matrix[i][j]-=factor*moment[i]*moment[j]
+                    if i!=j: matrix[j][i]=matrix[i][j]
+        information=mp.matrix(matrix); beta=inverse(information)*mp.matrix(vector)
+        rss=total-float((mp.matrix(vector).T*beta)[0])
+        require(rss>1e-12,'Mixed model requires residual variation')
+        if method=='reml':
+            extra=small_logdet(matrix); require(extra is not None,'Mixed model information is singular')
+            objective=(n-p)*math.log(rss/(n-p))+logdet+extra
+        else: objective=n*math.log(rss/n)+logdet
+        return objective,beta,information,rss,ratio
+    def objective(z): return fit(math.exp(z))[0]
+    low,high=-16.0,16.0; golden=(math.sqrt(5)-1)/2
+    u=high-golden*(high-low); v=low+golden*(high-low); fu,fv=objective(u),objective(v)
+    for _ in range(60):
+        if fu<fv: high,v,fv=v,u,fu; u=high-golden*(high-low); fu=objective(u)
+        else: low,u,fu=u,v,fv; v=low+golden*(high-low); fv=objective(v)
+    chosen=fit(math.exp((low+high)/2)); boundary=fit(0)
+    return boundary if boundary[0]<=chosen[0] else chosen
+
+
+def mixed_intercept(engine,x,y,clusters,ids,method):
+    _,beta,information,rss,ratio=intercept_fit(x,y,clusters,method)
+    sigma=rss/(len(y)-len(x[0])) if method=='reml' else rss/len(y)
+    engine.note += ' Gaussian random-intercept mixed model, '+('restricted maximum likelihood (REML)' if method=='reml' else 'maximum likelihood (ML)')+', Wald inference. Rows: subject ID, predictors, response.'
+    return {'coefficients':inference(list(map(float,beta)),inverse(information)*sigma,['Intercept']+['x'+str(i) for i in range(1,len(x[0]))]),'residual variance':sigma,'random intercept variance':ratio*sigma,'ICC':ratio/(1+ratio),'subjects':len(ids),'estimation':method.upper()}
+
+
+def mixed_random_effects(engine,x,y,clusters,ids,slopes,method):
+    """Gaussian random intercept plus up to three random slopes (ML or REML)."""
+    n=len(y); p=len(x[0]); count=1+len(slopes); pairs=[(i,j) for i in range(count) for j in range(i+1)]
+    blocks=[]
+    for cluster in clusters:
+        members=list(cluster); design=[[1.0]+[x[i][s] for s in slopes] for i in members]
+        products=[[math.fsum(design[t][a]*design[t][b] for t in range(len(members))) for b in range(count)] for a in range(count)]
+        cross=[[math.fsum(design[t][a]*x[i][j] for t,i in enumerate(members)) for j in range(p)] for a in range(count)]
+        outcome=[math.fsum(design[t][a]*y[i] for t,i in enumerate(members)) for a in range(count)]
+        gram=[[math.fsum(x[i][a]*x[i][b] for i in members) for b in range(p)] for a in range(p)]
+        moments=[math.fsum(x[i][a]*y[i] for i in members) for a in range(p)]
+        blocks.append((products,cross,outcome,gram,moments,math.fsum(y[i]*y[i] for i in members)))
+    def evaluate(parameters):
+        if max(abs(v) for v in parameters)>8: return None
+        lower=mp.zeros(count); position=0
+        for i in range(count):
+            for j in range(i+1):
+                lower[i,j]=mp.exp(parameters[position]) if i==j else parameters[position]; position+=1
+        theta=lower*lower.T
+        try: theta_inverse=inverse(theta)
+        except MathError: return None
+        logdet=len(blocks)*2*math.fsum(math.log(float(lower[i,i])) for i in range(count))
+        information=[[0.0]*p for _ in range(p)]; vector=[0.0]*p; total=0.0
+        for products,cross,outcome,gram,moments,energy in blocks:
+            core=[[float(theta_inverse[a,b])+products[a][b] for b in range(count)] for a in range(count)]
+            values=small_inverse(core)
+            if values is None: return None
+            if any(not math.isfinite(v) for row in values for v in row): return None
+            entry=small_logdet(core)
+            if entry is None: return None
+            logdet+=entry
+            for a in range(p):
+                for b in range(a,p):
+                    subtotal=gram[a][b]
+                    for u in range(count):
+                        for v in range(count): subtotal-=cross[u][a]*values[u][v]*cross[v][b]
+                    information[a][b]+=subtotal
+                    if a!=b: information[b][a]+=subtotal
+                adjustment=moments[a]
+                for u in range(count):
+                    for v in range(count): adjustment-=cross[u][a]*values[u][v]*outcome[v]
+                vector[a]+=adjustment
+            quadratic=0.0
+            for u in range(count):
+                for v in range(count): quadratic+=outcome[u]*values[u][v]*outcome[v]
+            total+=energy-quadratic
+        matrix=mp.matrix(information); beta=inverse(matrix)*mp.matrix(vector)
+        rss=total-float((mp.matrix(vector).T*beta)[0])
+        if not math.isfinite(rss) or rss<=1e-12: return None
+        if method=='reml':
+            extra=small_logdet(information)
+            if extra is None: return None
+            objective=(n-p)*math.log(rss/(n-p))+logdet+extra
+        else: objective=n*math.log(rss/n)+logdet
+        return objective,beta,matrix,rss,theta
+    def objective(parameters):
+        result=evaluate(parameters)
+        return math.inf if result is None else result[0]
+    seed=intercept_fit(x,y,clusters,method)[4]
+    start=0.5*math.log(max(1e-3,seed))
+    best=None
+    for scale in (start,math.log(.25),math.log(.1)):
+        parameters=[start if i==0 and j==0 else scale if i==j else 0.0 for i,j in pairs]
+        candidate,value=nelder_mead(objective,parameters,[.4]*len(parameters),160+80*max(0,len(parameters)-3))
+        if math.isfinite(value) and (best is None or value<best[1]): best=(candidate,value)
+    require(best is not None,'Random-slope model did not converge')
+    fields=evaluate(best[0]); require(fields is not None,'Random-slope model did not converge')
+    _,beta,information,rss,theta=fields
+    sigma=rss/(n-p) if method=='reml' else rss/n
+    result={'coefficients':inference(list(map(float,beta)),inverse(information)*sigma,['Intercept']+['x'+str(i) for i in range(1,p)]),'residual variance':sigma,'random intercept variance':sigma*float(theta[0,0])}
+    for index,slope in enumerate(slopes):
+        result['random slope variance x'+str(slope)]=sigma*float(theta[index+1,index+1])
+        result['intercept-slope correlation x'+str(slope)]=float(theta[0,index+1])/math.sqrt(float(theta[0,0])*float(theta[index+1,index+1]))
+    if count==2:
+        result['random slope variance']=result['random slope variance x'+str(slopes[0])]
+        result['intercept-slope correlation']=result['intercept-slope correlation x'+str(slopes[0])]
+    result['ICC']=float(theta[0,0])/(1+float(theta[0,0]))
+    result['subjects']=len(ids); result['estimation']=method.upper()
+    engine.note += ' Gaussian random intercept with random slopes on '+', '.join('x'+str(s) for s in slopes)+', '+('restricted maximum likelihood (REML)' if method=='reml' else 'maximum likelihood (ML)')+', Wald inference. Rows: subject ID, predictors, response.'
+    return result
+
+
+def clustered(engine,name,a):
+    rows=table(a[0],4,3)
+    grouped={}
+    for index,row in enumerate(rows): grouped.setdefault(row[0],[]).append(index)
+    ids=sorted(grouped); clusters=[grouped[id_] for id_ in ids]
+    require(len(clusters)>=3,'At least three subject/cluster IDs are required')
+    pairs=[]; names=[]; terms=''
+    if name=='gee':
+        family=option(a,1,'gaussian'); require(family in ('gaussian','binomial','poisson'),'GEE family: gaussian, binomial, or poisson')
+        corr=option(a,2,'independence'); require(corr in ('independence','exchangeable','ar1'),'GEE working correlation: independence, exchangeable, or ar1')
+        width=len(rows[0])-2; require(width>=1,'Choose at least one predictor')
+        pairs=interaction_pairs(a[3] if len(a)>3 else None,width)
+        names=['Intercept']+['x'+str(i) for i in range(1,width+1)]+[('x'+str(i)+'^2') if i==j else ('x'+str(i)+':x'+str(j)) for i,j in pairs]
+        terms=', '.join(('x'+str(i)+'^2') if i==j else ('x'+str(i)+':x'+str(j)) for i,j in pairs)
+        if pairs: rows=[row[:1]+row[1:-1]+[row[i]*row[j] for i,j in pairs]+row[-1:] for row in rows]
+    x,y=clustered_design(rows); n=len(y); p=len(x[0]); Y=mp.matrix(y)
+    if name=='mixedmodel':
+        argument=a[1] if len(a)>1 else 0
+        if isinstance(argument,(list,tuple)):
+            slopes=[integer(v,1,19) for v in argument]
+            require(slopes and len(slopes)<=3 and len(set(slopes))==len(slopes),'Use 0, a predictor position, or up to three distinct positions such as [1,2]')
+        else:
+            selected=integer(argument,0,19); slopes=[] if selected==0 else [selected]
+        method=option(a,2,'ml'); require(method in ('ml','reml'),'Estimation: ml or reml')
+        require(any(len(c)>1 for c in clusters),'Random intercept requires repeated subjects')
+        for slope in slopes: require(1<=slope<p,'Random-slope predictor position is out of range')
+        if not slopes: return mixed_intercept(engine,x,y,clusters,ids,method)
+        require(len(clusters)*(p*(len(slopes)+1))**2<=20000,'Random-slope model is too large; reduce predictors, random effects, or subjects')
+        return mixed_random_effects(engine,x,y,clusters,ids,slopes,method)
+    x,transform,_,_=standardized_design(x); X=mp.matrix(x)
+    if pairs: engine.note += ' GEE interactions: '+terms+'.'
+    if family=='binomial': require(all(v in (0,1) for v in y),'Binomial GEE response must be 0/1')
+    if family=='poisson': require(all(v>=0 and v.is_integer() for v in y),'Poisson GEE response must be integer counts')
+    if family=='gaussian': b=list(map(float,inverse(X.T*X)*X.T*Y)); mu=[dot(r,b) for r in x]; weights=[1.0]*n
+    else:
+        def exact(b):
+            # Canonical-link GLM start: the score and the Fisher information
+            # are analytic, so the working-correlation iteration avoids
+            # finite differences.
+            value = 0.0; score = [0.0]*p; information = [[0.0]*p for _ in range(p)]
+            for row,v in zip(x,y):
+                z = dot(row,b)
+                if family=='binomial':
+                    fitted = logistic(z); value += softplus(z)-v*z; weight = fitted*(1-fitted)
+                else:
+                    fitted = math.exp(z); value += fitted-v*z; weight = fitted
+                for j in range(p):
+                    score[j] += row[j]*(fitted-v)
+                    for k in range(j,p): information[j][k] += row[j]*row[k]*weight
+            for j in range(1,p):
+                for k in range(j): information[j][k] = information[k][j]
+            return value,score,information
+        b,_,_,_=newton([0.0]*p,exact); mu=[logistic(dot(r,b)) if family=='binomial' else math.exp(dot(r,b)) for r in x]; weights=[v*(1-v) if family=='binomial' else v for v in mu]
+        if family=='binomial':
+            margins=[(2*v-1)*dot(r,b) for r,v in zip(x,y)]
+            require(not (min(margins)>=-1e-8 and max(margins)>1e-8),'Complete or quasi separation: binomial GEE estimates are not finite')
+    if corr=='independence':
+        bread=inverse([[sum(weights[t]*x[t][i]*x[t][j] for t in range(n)) for j in range(p)] for i in range(p)]); meat=mp.zeros(p)
+        for c in clusters:
+            score=mp.matrix([sum(x[t][i]*(y[t]-mu[t]) for t in c) for i in range(p)]); meat+=score*score.T
+        cov=bread*meat*bread
+        b=list(map(float,transform*mp.matrix(b))); cov=transform*cov*transform.T
+        engine.note += ' GEE: independent working correlation, cluster sandwich covariance, asymptotic Wald inference. Rows: cluster ID, predictors, response. Zero robust SE leaves p/CI unavailable.'
+        return {'coefficients':inference(b,cov,names,family!='gaussian'),'clusters':len(ids),'family':family}
+    largest=max(len(c) for c in clusters)
+    def moments(alpha,beta):
+        mean_values=[]; variances=[]; derivatives=[]
+        for row in x:
+            linear=dot(row,beta)
+            if family=='gaussian': mean_values.append(linear); variances.append(1.0); derivatives.append(1.0)
+            else:
+                value=logistic(linear) if family=='binomial' else math.exp(linear)
+                mean_values.append(value); variances.append(value*(1-value) if family=='binomial' else value); derivatives.append(value*(1-value) if family=='binomial' else value)
+        require(all(math.isfinite(v) for v in mean_values),'GEE mean function exceeded the numeric range')
+        correlation=alpha
+        if corr=='exchangeable' and largest>1: correlation=max(correlation,-1/(largest-1)+1e-6)
+        fisher=mp.zeros(p); scores=[]; standardized=[0.0]*n
+        for c in clusters:
+            size=len(c); scaled=[]; residual=[]
+            for i in c:
+                divided=derivatives[i]/math.sqrt(variances[i])
+                scaled.append(mp.matrix([x[i][j]*divided for j in range(p)]))
+                residual.append((y[i]-mean_values[i])/math.sqrt(variances[i])); standardized[i]=residual[-1]
+            if corr=='exchangeable':
+                first=1/(1-correlation); second=correlation/((1-correlation)*(1+(size-1)*correlation))
+                columns_sum=mp.matrix([mp.fsum(scaled[k][j,0] for k in range(size)) for j in range(p)])
+                gram=mp.zeros(p)
+                for k in range(size): gram+=scaled[k]*scaled[k].T
+                score=first*mp.matrix([mp.fsum(scaled[k][j,0]*residual[k] for k in range(size)) for j in range(p)])-second*math.fsum(residual)*columns_sum
+                fisher+=first*gram-second*columns_sum*columns_sum.T
+            else:
+                if size==1: coefficient=1.0; diagonals=[1.0]
+                else:
+                    coefficient=1/(1-correlation*correlation); diagonals=[1.0]*size
+                    for k in range(1,size-1): diagonals[k]=1+correlation*correlation
+                vector=mp.matrix([mp.fsum(diagonals[k]*scaled[k][j,0]*residual[k] for k in range(size)) for j in range(p)])
+                gram=mp.zeros(p)
+                for k in range(size): gram+=diagonals[k]*(scaled[k]*scaled[k].T)
+                if size>1:
+                    for k in range(size-1):
+                        vector-=correlation*mp.matrix([scaled[k][j,0]*residual[k+1]+scaled[k+1][j,0]*residual[k] for j in range(p)])
+                        gram-=correlation*(scaled[k]*scaled[k+1].T+scaled[k+1]*scaled[k].T)
+                score=coefficient*vector; fisher+=coefficient*gram
+            scores.append(score)
+        return fisher,scores,standardized
+    def update(standardized):
+        numerator=0.0; denominator=0.0
+        if corr=='exchangeable':
+            for c in clusters:
+                values=[standardized[i] for i in c]; numerator+=math.fsum(values[i]*values[j] for i in range(len(values)) for j in range(i+1,len(values))); denominator+=len(values)*(len(values)-1)/2
+        else:
+            for c in clusters:
+                values=[standardized[i] for i in c]; numerator+=math.fsum(values[k]*values[k+1] for k in range(len(values)-1)); denominator+=max(0,len(values)-1)
+        if denominator<=0: return 0.0
+        lower=-1/(largest-1)+1e-6 if corr=='exchangeable' and largest>1 else -0.9999
+        return max(lower,min(0.9999,numerator/denominator))
+    alpha=0.0
+    for iteration in range(200):
+        fisher,scores,standardized=moments(alpha,b)
+        alpha=update(standardized)
+        total=mp.zeros(p,1)
+        for vector in scores: total+=vector
+        step=inverse(fisher)*total
+        if max(abs(float(step[j,0])) for j in range(p))<1e-9: break
+        b=[b[j]+float(step[j,0]) for j in range(p)]
+        require(max(abs(v) for v in b)<40,'GEE estimates diverged; simplify the working correlation')
+    else: raise MathError('GEE did not converge; simplify the working correlation')
+    fisher,scores,standardized=moments(alpha,b)
+    bread=inverse(fisher); meat=mp.zeros(p)
+    for vector in scores: meat+=vector*vector.T
+    cov=bread*meat*bread
+    b=list(map(float,transform*mp.matrix(b))); cov=transform*cov*transform.T
+    engine.note += ' GEE: '+corr+' working correlation'+(' (moment estimate alpha='+format(alpha,'.4g')+')' if corr!='independence' else '')+', cluster sandwich covariance, asymptotic Wald inference. Rows: cluster ID, predictors, response'+('; AR(1) uses the within-cluster row order as the time order' if corr=='ar1' else '')+'. Zero robust SE leaves p/CI unavailable.'
+    return {'coefficients':inference(b,cov,names,family!='gaussian'),'clusters':len(ids),'family':family,'working correlation':corr,'alpha':alpha}
+
+
+def calculate(engine, name, a):
+    if name == 'repeatedanova':
+        return repeated_anova(engine, a)
+    return clustered(engine, name, a)
