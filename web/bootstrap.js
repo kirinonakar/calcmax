@@ -1,3 +1,8 @@
+import {refreshOfflineCache} from './cache-maintenance.js';
+
+// Cache maintenance must not prevent the calculator from starting offline.
+refreshOfflineCache().catch(()=>{});
+
 // Keep module-linking failures visible even when app.js cannot execute.
 try {
   await import('./app.js');

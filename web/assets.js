@@ -1,4 +1,4 @@
-self.SYMVACAS_CACHE = 'symvacas-static-13f7e65e823ee6be';
+self.SYMVACAS_CACHE = 'symvacas-static-6c8a0ff241f4258d';
 self.SYMVACAS_ASSETS = [
   "./",
   "./advanced-statistics-schema.js",
@@ -11,6 +11,7 @@ self.SYMVACAS_ASSETS = [
   "./app.js",
   "./ast-source.js",
   "./bootstrap.js",
+  "./cache-maintenance.js",
   "./calc-session.js",
   "./calculation-tape.js",
   "./calculator-keypad.js",
