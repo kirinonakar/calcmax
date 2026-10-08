@@ -37,7 +37,7 @@ internal fun survivalStepPoints(curve:JSONArray,index:Int):List<Pair<Double,Doub
     val names=groups.mapIndexed {i,g->plan?.groups?.getOrNull(i) ?: if(groups.size==1)label("All subjects","전체") else label("Group ","그룹 ")+number(g.getDouble("id"))}
     Row(Modifier.fillMaxWidth(),verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) {
         Text("Kaplan–Meier",Modifier.weight(1f),style=MaterialTheme.typography.titleSmall)
-        if(onCopy!=null)SmallAction("Copy result",modifier=Modifier.testTag("statistics-survival-copy")){onCopy()}
+        if(onCopy!=null)SmallAction("Copy result",fontSize=12.sp,modifier=Modifier.testTag("statistics-survival-copy")){onCopy()}
     }
     groups.forEachIndexed {i,g->Text("${names[i]} · n=${g.getInt("n")}",color=c.curves[i%c.curves.size],fontSize=12.sp)}
     ExportableGraphCanvas(Modifier.fillMaxWidth().height(250.dp).testTag("statistics-survival-plot").semantics {contentDescription=if(ko)"Kaplan–Meier 생존곡선과 95% 신뢰구간" else "Kaplan–Meier survival curves and 95% confidence intervals"},c.display,exports,

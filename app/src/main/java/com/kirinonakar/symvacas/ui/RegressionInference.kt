@@ -35,7 +35,7 @@ import kotlin.math.abs
     val clipboard=LocalClipboardManager.current
     var expanded by remember(report) {mutableStateOf(false)}
     if(onCopy!=null)Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.End) {
-        SmallAction("Copy result",modifier=Modifier.testTag("statistics-regression-copy")){onCopy()}
+        SmallAction("Copy result",fontSize=12.sp,modifier=Modifier.testTag("statistics-regression-copy")){onCopy()}
     }
     fun value(objectValue:JSONObject,key:String):String {
         val raw=objectValue.optString(key).takeUnless {objectValue.isNull(key)||it.isBlank()} ?: return "—"
