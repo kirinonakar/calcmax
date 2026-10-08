@@ -46,7 +46,7 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
     return select.value!==previous;
   }
   function invalidateRegression(){cancelClustering();cancelRegression();statisticsGraph=null;$('regression-caption').replaceChildren();$('regression-inference').replaceChildren();$('regression-export').hidden=true;$('regression-transfer').hidden=true;$('statistics-plot').replaceChildren();$('statistics-plot').hidden=true;}
-  function regressionBusy(busy){$('regression-progress').hidden=!busy;$('regression-section').setAttribute('aria-busy',String(busy));}
+  function regressionBusy(busy){$('regression-section').setAttribute('aria-busy',String(busy));}
   function cancelRegression(){if(!regressionRun)return;regressionRun=null;regressionBusy(false);engine.cancel();}
   $('statistics-new').onclick=()=>{
     cancelRegression();$('statistics-data').value='';$('dataset-name').value='';$('dataset-list').value='';

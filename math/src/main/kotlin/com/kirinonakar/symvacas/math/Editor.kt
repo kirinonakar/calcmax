@@ -28,6 +28,12 @@ data class Editor(val source: String = "", val cursor: Int = source.length, val 
             if(slot!=null && nodes.any {node->node.kind=="binary" && node.value=="*" && node.displayOperator=="∘" && node.args.any {it.start==slot.start && it.end==slot.end}}==true)
                 return Editor(source.substring(0,slot.start)+text+source.substring(slot.end),slot.start+text.length)
         }
+        // A newly filled bare exponent is still being edited. Give it a group before
+        // the first character so later digits do not become factors at its end.
+        if(cursor==anchor && exponent==null && text.isNotEmpty()) {
+            val pending=emptyExponentAt(cursor)?.args?.get(1)?.takeIf {it.kind=="hole"}
+            if(pending!=null)return copy(exponent=pending.start..pending.end).insert(text,inside)
+        }
         if(cursor==anchor && exponent==null && text.firstOrNull()?.let{it.isDigit()||it=='.'}==true &&
             tree()?.nodes()?.any {it.kind=="binary"&&it.value=="^"&&it.end==cursor&&it.args[1].kind !in setOf("hole","group")}==true)
             return Editor(source,cursor).insert("*$text",inside+1)

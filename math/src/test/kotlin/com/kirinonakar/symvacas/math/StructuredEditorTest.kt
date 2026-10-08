@@ -271,6 +271,27 @@ class StructuredEditorTest {
         assertEquals("3^(2+3)+6",editor.insert("+3").source)
         assertEquals("3^(2)+3+6",editor.move(1).insert("+3").source)
     }
+    @Test fun consecutiveExponentDigitsStayInsideFunctionArguments() {
+        for(template in listOf("integrate(,x,,)","integrate(,x)","diff(,x)","sin()")) {
+            val start=template.indexOf('(')+1
+            for(power in listOf("^","^()")) {
+                val editor=Editor(template,start).insert("x").insert(power,if(power=="^()")2 else 1)
+                    .insert("4").insert("4")
+                val expected=template.substring(0,start)+"x^(44)"+template.substring(start)
+                assertEquals("$template $power",expected,editor.source)
+                val exponent=editor.tree()!!.args[0].args[1].args[0]
+                assertEquals("44",exponent.value)
+                assertEquals(exponent.start..exponent.end,editor.cursorTarget())
+                assertEquals(expected.replace("44","444"),editor.insert("4").source)
+                assertEquals(expected.replace("44","4"),editor.delete().source)
+                val outside=editor.move(1)
+                assertEquals(expected.replace("x^(44)","x^(44)*4"),outside.insert("4").source)
+                assertEquals(expected.replace("44","445"),outside.move(-1).insert("5").source)
+            }
+        }
+        // A completed square remains a complete operand; the next digit is a factor.
+        assertEquals("integrate(x^2*4,x,,)",Editor("integrate(,x,,)",10).insert("x").insert("^2").insert("4").source)
+    }
     @Test fun matrixArrowKeysMoveBetweenElementsAndRows() {
         val source="[[1,2],[3,4]]"
         // right from the end of a row wraps onto the first element of the next row
