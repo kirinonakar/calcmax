@@ -1,4 +1,4 @@
-self.SYMVACAS_CACHE = 'symvacas-static-03d1234642f04b24';
+self.SYMVACAS_CACHE = 'symvacas-static-0afb1b79e0779aa0';
 self.SYMVACAS_ASSETS = [
   "./",
   "./advanced-statistics-schema.js",
@@ -39,6 +39,7 @@ self.SYMVACAS_ASSETS = [
   "./graph-color-settings.js",
   "./graph-colors.js",
   "./graph-integral.js",
+  "./graph-sampling.js",
   "./graph-view.js",
   "./graph-workspace.js",
   "./i18n.js",

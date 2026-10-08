@@ -7,6 +7,7 @@ import {renderFormulas} from './formula-preview.js';
 import {displayNumber} from './display-format.js';
 import {bindGraphGestures,transformBounds,nearestPoint,curvePointAtX} from './graph-view.js';
 import {surfaceZRange,surfaceSampleCount} from './surface-geometry.js';
+import {graphSamplingInterval,graphPreviewRequest,graphSamplingIdentity} from './graph-sampling.js';
 import {t,setText} from './i18n.js';
 
 export function graphInputTree(source,kind='cartesian'){
@@ -106,7 +107,8 @@ export function createGraphWorkspace({execute,options,onError:reportError,onClea
   const onError=message=>{setText($('graph-status'),message);$('graph-status').classList.add('error');reportError(message);};
   let result=null,bounds=null,analysis=null,trace=null,integral=null,parameters={...(saved.parameters||{})},parameterRanges={...(saved.parameterRanges||{})},derivative=null,radianAxis=!!saved.radianAxis,active=false,pending=false,timer=null,animation=null,revision=0,analysisRevision=0,signature='';
   let animationEnabled={...(saved.animationEnabled||{})},heightScale=[1,.5,2].includes(saved.heightScale)?saved.heightScale:saved.halfHeight?.5:1,running=false,frame=null,formulaSignature='',tableResult=null,tableDigits=null,tableLanguage=null;
-  let parametersOpen=saved.parametersOpen!==false,pendingAnalysis=null;
+  let parametersOpen=saved.parametersOpen!==false,pendingAnalysis=null,viewDragging=false;
+  const viewSampler=graphSamplingInterval(()=>{if(pending&&active&&!running&&!isBusy()&&isReady())run();});
   const window=$('graph-plot').ownerDocument.defaultView;
   const requestFrame=callback=>window.requestAnimationFrame?window.requestAnimationFrame(callback):window.setTimeout(callback,16);
   const cancelFrame=id=>window.cancelAnimationFrame?window.cancelAnimationFrame(id):window.clearTimeout(id);
@@ -176,7 +178,7 @@ export function createGraphWorkspace({execute,options,onError:reportError,onClea
   function queue(){pending=true;densityControls();clearTimeout(timer);timer=null;if(animation||!active)return;timer=setTimeout(()=>{timer=null;if(active&&!running&&!isBusy()&&isReady())run();},180);}
   function flush(){
     if(pendingAnalysis&&!running&&!isBusy()&&isReady()){const next=pendingAnalysis;pendingAnalysis=null;analyze(next.action,next.point);return;}
-    if(!animation&&pending&&active&&!running&&!isBusy()&&isReady()&&timer===null)queue();
+    if(!animation&&pending&&active&&!running&&!isBusy()&&isReady()&&timer===null){if(viewDragging)viewSampler.schedule();else queue();}
   }
   function selections(){
     const count=expressions().length;
@@ -205,6 +207,7 @@ export function createGraphWorkspace({execute,options,onError:reportError,onClea
     lines.slice(count+(hasDerivative?1:0)).forEach((line,i)=>removeButton(line,`${t('Delete shading')}: ${i+1}`,()=>removeSource(i,true)));
   }
   function clearPlot(){
+    viewSampler.cancel();viewDragging=false;
     result=null;analysis=null;trace=null;integral=null;pendingAnalysis=null;revision++;analysisRevision++;
     for(const id of ['graph-plot','graph-table','graph-trace','graph-analysis-result'])$(id).replaceChildren();
     $('graph-status').textContent='';$('graph-status').classList.remove('error');
@@ -307,12 +310,12 @@ export function createGraphWorkspace({execute,options,onError:reportError,onClea
     clearTimeout(timer);timer=null;if(running||isBusy()||!isReady()){pending=true;return;}pending=false;running=true;
     try{
       if(!value('graph-source').trim()){clearPlot();parameterControls([],true);selections();render();persist();return;}
-      const request=makeRequest(),token=++revision,source=value('graph-source'),graphKind=kind(),view=currentBounds();
+      const preview=viewDragging&&['cartesian','implicit','differential'].includes(kind()),baseRequest=makeRequest(),request=preview?graphPreviewRequest(baseRequest):baseRequest,identity=graphSamplingIdentity(baseRequest),token=++revision,source=value('graph-source'),graphKind=kind();
       const nextSignature=JSON.stringify([source,graphKind,parameters,derivative]);if(nextSignature!==signature){analysis=null;trace=null;integral=null;analysisRevision++;signature=nextSignature;}
-      const response=await execute(request);if(token!==revision||source!==value('graph-source')||graphKind!==kind())return;
+      const response=await execute(request,{background:preview});if(token!==revision||source!==value('graph-source')||graphKind!==kind()||!animation&&identity!==graphSamplingIdentity(makeRequest()))return;
       if(!response.ok){onError(response.error);return;}
       result=response;bounds=currentBounds();$('graph-status').textContent='';parameterControls(response.parameters);
-      if(animation)queueDraw();else{selections();render();persist();}
+      if(animation||viewDragging)queueDraw();else{selections();render();persist();}
     }catch(error){onError(error.message);}finally{running=false;flush();}
   }
   function renderAnalysis(){
@@ -339,7 +342,14 @@ export function createGraphWorkspace({execute,options,onError:reportError,onClea
       analysis=response;$('graph-status').textContent='';integral=action==='integral'&&graphKind==='cartesian'?[a,b]:null;trace=response.points?.[0]||trace;$('graph-analysis-action').value=action;analysisControls();render();
     }catch(error){if(token===analysisRevision)onError(error.message);}finally{flush();}
   }
-  function changeView(next,commit=true){if(!Object.values(next).every(Number.isFinite)||next.xmin>=next.xmax||next.ymin>=next.ymax){onError('Enter finite values with minimum < maximum');return;}bounds=next;writeBounds(next);queueDraw();if(commit){render();persist();if(['cartesian','implicit','surface','differential'].includes(kind()))queue();}}
+  function changeView(next,commit=true){
+    if(!Object.values(next).every(Number.isFinite)||next.xmin>=next.xmax||next.ymin>=next.ymax){onError('Enter finite values with minimum < maximum');return;}
+    viewDragging=!commit;bounds=next;writeBounds(next);queueDraw();
+    if(commit){
+      viewSampler.cancel();render();persist();
+      if(['cartesian','implicit','surface','differential'].includes(kind())){clearTimeout(timer);timer=null;pending=true;run();}
+    }else if(['cartesian','implicit','differential'].includes(kind())){pending=true;viewSampler.schedule();}
+  }
   function surfaceChange(dx,dy,zoom){const previousCount=surfaceSampleCount(currentBounds(),surface.samples,surface.autoDensity,surface.zoom);surface.rotation=((surface.rotation+dx*.7)%360+360)%360;surface.elevation=Math.max(-90,Math.min(90,surface.elevation+dy*.5));surface.zoom=Math.max(.4,Math.min(3,surface.zoom*zoom));$('graph-rotation').value=String(surface.rotation);$('graph-elevation').value=String(surface.elevation);$('graph-surface-zoom').value=String(surface.zoom);queueDraw();persist();if(surface.autoDensity&&previousCount!==surfaceSampleCount(currentBounds(),surface.samples,true,surface.zoom))queue();}
   function selectTrace(point,parameter=point[0]){
     trace=point;
@@ -475,5 +485,5 @@ export function createGraphWorkspace({execute,options,onError:reportError,onClea
     if(kind()!==graphKind){$('graph-kind').value=graphKind;$('graph-kind').onchange();}
     $('graph-source').value=next;$('graph-source').oninput();persist();
   }
-  return {addExpression,run,render,flush,snapshot:()=>({sources:{...sourceDrafts,[kind()]:value('graph-source')},parameters:{...parameters},parameterRanges,parametersOpen,rangesOpen:$('graph-ranges').open,helpOpen:$('graph-help').open,animationEnabled:{...animationEnabled},heightScale,halfHeight:heightScale===.5,radianAxis,surface:{...surface},ranges:Object.fromEntries(rangeIds.filter(id=>!(surface.autoZ&&id.startsWith('graph-z'))&&value(id)!==''&&Number.isFinite(numeric(id))).map(id=>[id,numeric(id)]))}),updateButtons,activate(value){active=value;if(active&&(!result||pending))queue();if(!active){pendingAnalysis=null;clearTimeout(timer);timer=null;stopAnimation(false);}},dispose(){pendingAnalysis=null;active=false;disposeGestures();resizeObserver?.disconnect();if(frame!==null)cancelFrame(frame);clearTimeout(timer);stopAnimation(false);revision++;analysisRevision++;}};
+  return {addExpression,run,render,flush,snapshot:()=>({sources:{...sourceDrafts,[kind()]:value('graph-source')},parameters:{...parameters},parameterRanges,parametersOpen,rangesOpen:$('graph-ranges').open,helpOpen:$('graph-help').open,animationEnabled:{...animationEnabled},heightScale,halfHeight:heightScale===.5,radianAxis,surface:{...surface},ranges:Object.fromEntries(rangeIds.filter(id=>!(surface.autoZ&&id.startsWith('graph-z'))&&value(id)!==''&&Number.isFinite(numeric(id))).map(id=>[id,numeric(id)]))}),updateButtons,activate(value){active=value;if(active&&(!result||pending))queue();if(!active){viewSampler.cancel();viewDragging=false;pendingAnalysis=null;clearTimeout(timer);timer=null;stopAnimation(false);}},dispose(){viewSampler.cancel();viewDragging=false;pendingAnalysis=null;active=false;disposeGestures();resizeObserver?.disconnect();if(frame!==null)cancelFrame(frame);clearTimeout(timer);stopAnimation(false);revision++;analysisRevision++;}};
 }

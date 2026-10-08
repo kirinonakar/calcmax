@@ -40,6 +40,7 @@ import com.kirinonakar.symvacas.math.SurfaceProjection
 import com.kirinonakar.symvacas.math.Parser
 import com.kirinonakar.symvacas.ui.theme.LocalInstrument
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import org.json.JSONObject
 import kotlin.math.*
 
@@ -63,6 +64,7 @@ import kotlin.math.*
     val tableRequester=remember {BringIntoViewRequester()}
     var selected by rememberSaveable { mutableIntStateOf(0) }
     var other by rememberSaveable { mutableIntStateOf(1) }
+    var viewportDragging by remember { mutableStateOf(false) }
     LaunchedEffect(m.graphKind){
         selected=0;other=1;tangentPositionOpen=false
         val low=if(m.graphKind=="cartesian")m.xMin else m.parameterMin
@@ -79,7 +81,20 @@ import kotlin.math.*
         scrollToSection=null
     }
     val parameterSignature=m.graphParameters.entries.joinToString(","){"${it.key}=${it.value.value}"}
-    LaunchedEffect(m.graphSource,m.graphDerivativeSelected,m.xMin,m.xMax,m.yMin,m.yMax,m.graphKind,m.parameterMin,m.parameterMax,m.sequenceInitials,m.differentialInitials,m.differentialT0,if(m.graphAnimating)"animation" else parameterSignature,m.surfaceSamples,m.surfaceAutoDensity,if(m.surfaceAutoDensity)m.surfaceZoom else 1f) { if(!m.graphAnimating){delay(350);m.plot(auto=true)} }
+    LaunchedEffect(m.graphSource,m.graphDerivativeSelected,m.xMin,m.xMax,m.yMin,m.yMax,m.graphKind,m.parameterMin,m.parameterMax,m.sequenceInitials,m.differentialInitials,m.differentialT0,if(m.graphAnimating)"animation" else parameterSignature,m.surfaceSamples,m.surfaceAutoDensity,if(m.surfaceAutoDensity)m.surfaceZoom else 1f,viewportDragging) { if(!m.graphAnimating && !viewportDragging){delay(350);m.plot(auto=true)} }
+    LaunchedEffect(viewportDragging) {
+        if(viewportDragging) {
+            var sampledView:List<Double>?=null
+            while(isActive) {
+                delay(80)
+                val view=listOf(m.xMin,m.xMax,m.yMin,m.yMax)
+                if(view!=sampledView && !m.graphAnimating && m.graphKind in listOf("cartesian","implicit","differential")) {
+                    sampledView=view
+                    m.plot(auto=true,preview=true)
+                }
+            }
+        }
+    }
     BoxWithConstraints(Modifier.fillMaxSize()) {
     // Cartesian and every other graph use the same viewport height. Expression
     // rows, sliders, and settings scroll with the plot instead of resizing it.
@@ -191,7 +206,7 @@ import kotlin.math.*
             var axis:String?=null
             var totalPan=Offset.Zero
             var dragging=false
-            do {
+            try { do {
                 val event=awaitPointerEvent()
                 val fingers=event.changes.filter{it.pressed&&it.previousPressed}
                 if(fingers.isNotEmpty()) {
@@ -208,6 +223,7 @@ import kotlin.math.*
                         val factors=GraphZoom.factors(axis!!,old.x,old.y,now.x,now.y);zx=factors.first;zy=factors.second
                     }else axis=null
                     if(dragging) {
+                        viewportDragging=true
                         val w=m.xMax-m.xMin;val h=m.yMax-m.yMin
                         val anchorX=m.xMin+w*previous.x/size.width;val anchorY=m.yMax-h*previous.y/size.height
                         val newW=(w/zx).coerceIn(2e-7,2e8);val newH=(h/zy).coerceIn(2e-7,2e8)
@@ -217,6 +233,10 @@ import kotlin.math.*
                     }
                 }
             }while(event.changes.any{it.pressed})
+            } finally {
+                viewportDragging=false
+                if(dragging && !m.graphAnimating)m.plot(auto=true)
+            }
         }}
         if(m.graphKind=="surface") {
             Box(Modifier.fillMaxWidth().height(plotHeight).clipToBounds()) {

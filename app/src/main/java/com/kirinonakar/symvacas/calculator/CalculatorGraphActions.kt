@@ -50,10 +50,10 @@ internal object CalculatorGraphActions {
         clock.postFrameCallback(callback)
         continuation.invokeOnCancellation {Handler(Looper.getMainLooper()).post {clock.removeFrameCallback(callback)}}
     }
-    fun CalculatorModel.performPlot(auto: Boolean = false) {
+    fun CalculatorModel.performPlot(auto: Boolean = false, preview: Boolean = false) {
         val limit=if(graphKind in listOf("surface","differential")) 1 else 6
         // Coalesce animation ticks before reparsing or allocating another request.
-        if(graphAnimating && graphJob?.isActive==true) {graphPendingPlot={performPlot(auto)};return}
+        if((graphAnimating || preview) && graphJob?.isActive==true) {graphPendingPlot={performPlot(auto,preview)};return}
         val trees=mutableListOf<JSONObject>()
         val shadings=JSONArray()
         try {
@@ -71,10 +71,18 @@ internal object CalculatorGraphActions {
         val derivativeSelected=graphDerivativeSelected?.takeIf {graphKind=="cartesian" && it in trees.indices}
         val source=graphSource;val kind=graphKind;val min=if(kind in listOf("cartesian","implicit","surface"))xMin else parameterMin;val max=if(kind in listOf("cartesian","implicit","surface"))xMax else parameterMax
         val viewYMin=yMin;val viewYMax=yMax;val parameters=graphState.parameterPayload()
+        val initials=sequenceInitials;val differentialSeeds=differentialInitials;val initialTime=differentialT0
+        val environment=request("graph").put("angle","RAD").toString()
         val request=request("graph").put("angle","RAD").put("trees",JSONArray(trees)).put("graphKind",kind)
             .put("variable",when(kind){"cartesian","implicit","surface"->"x";"sequence"->"n";else->"t"})
-            .put("min",min).put("max",max).put("samples",if(graphAnimating)200 else 500).put("xMin",xMin).put("xMax",xMax).put("yMin",viewYMin).put("yMax",viewYMax)
+            .put("min",min).put("max",max).put("samples",if(graphAnimating || preview)200 else 500).put("xMin",xMin).put("xMax",xMax).put("yMin",viewYMin).put("yMax",viewYMax)
             .put("parameters",parameters)
+        if(preview && kind in listOf("cartesian","implicit")) {
+            // Sample a small margin so the next pointer frames already have data.
+            val dx=(max-min)*.15;val dy=(viewYMax-viewYMin)*.15
+            request.put("min",min-dx).put("max",max+dx).put("xMin",min-dx).put("xMax",max+dx)
+                .put("yMin",viewYMin-dy).put("yMax",viewYMax+dy)
+        }
         if(derivativeSelected!=null)request.put("derivativeSelected",derivativeSelected)
         if(shadings.length()>0)request.put("shadings",shadings)
         if(kind=="surface") {
@@ -102,18 +110,21 @@ internal object CalculatorGraphActions {
         if(graphRequestSignature==signature && graphJob?.isActive==true || auto && graphState.graphResultSignature==signature && graphData!=null) return
         // Conflate updates while a request is running. Cancelling each frame
         // restarts the Python process and discards its compiled function cache.
-        if(graphJob?.isActive==true) {graphPendingPlot={performPlot(auto)};return}
+        if(graphJob?.isActive==true) {graphPendingPlot={performPlot(auto,preview)};return}
         graphRequestSignature=signature
         graphJob=viewModelScope.launch {
             graphBusy=true; error=""
             try {
                 val response=engine.execute(request)
-                if(source==graphSource && kind==graphKind && derivativeSelected==graphDerivativeSelected && min==(if(kind in listOf("cartesian","implicit","surface"))xMin else parameterMin) && max==(if(kind in listOf("cartesian","implicit","surface"))xMax else parameterMax) && viewYMin==yMin && viewYMax==yMax && (graphAnimating || parameters.toString()==graphState.parameterPayload().toString())) {
+                val domainMatches=if(kind in listOf("cartesian","implicit","surface"))preview || min==xMin && max==xMax else min==parameterMin && max==parameterMax
+                // Keep useful preview geometry even if another pan happened while
+                // Python was running. The Canvas projects it into the latest view.
+                if(source==graphSource && kind==graphKind && derivativeSelected==graphDerivativeSelected && domainMatches && (preview || viewYMin==yMin && viewYMax==yMax) && initials==sequenceInitials && differentialSeeds==differentialInitials && initialTime==differentialT0 && environment==request("graph").put("angle","RAD").toString() && (graphAnimating || parameters.toString()==graphState.parameterPayload().toString())) {
                     if(response.optBoolean("ok")) {
                     } else error=response.optString("error")
                     graphState.applyPlotResponse(response,signature)
                 }
-                if(!graphState.graphAnimating)save()
+                if(!graphState.graphAnimating && !preview)save()
             } finally {
                 graphBusy=false
                 graphJob=null

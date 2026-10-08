@@ -852,7 +852,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     fun fitRegression(source:String,data:String,responseColumn:Int?=null) = with(CalculatorStatisticsActions) { performFitRegression(source,data,responseColumn) }
     fun clearRegression() = with(CalculatorStatisticsActions) { performClearRegression() }
     fun cancelRegression() = with(CalculatorStatisticsActions) { performCancelRegression() }
-    fun plot(auto: Boolean = false) = with(CalculatorGraphActions) { performPlot(auto) }
+    fun plot(auto: Boolean = false, preview: Boolean = false) = with(CalculatorGraphActions) { performPlot(auto,preview) }
     fun setGraphParameter(name:String,value:Double,centerRange:Boolean=false) = with(CalculatorGraphActions) { performSetGraphParameter(name,value,centerRange) }
     fun setGraphParameterAnimation(name:String,enabled:Boolean) {graphState.setParameterAnimation(name,enabled);save()}
     fun resetSurfaceRanges() {graphState.resetSurfaceRanges();save();plot()}
