@@ -4,6 +4,80 @@ import sympy as s
 from calc_display import display_tree, readable
 
 
+def quadratic_candidates(poly):
+    """Keep both signs unevaluated until the separate root simplification step."""
+    a, b, c = poly.all_coeffs()
+    discriminant = s.expand(b*b-4*a*c)
+    radical = s.Pow(discriminant, s.Rational(1, 2), evaluate=False)
+    roots = [s.Mul(s.Add(-b, radical if sign == 1 else s.Mul(-1, radical, evaluate=False), evaluate=False),
+                   s.Pow(2*a, -1, evaluate=False), evaluate=False) for sign in (1, -1)]
+    return discriminant, roots
+
+
+def nonlinear_system_steps(equations, variables):
+    """Explain two-variable polynomial systems reducible to degree at most two.
+
+    Derive candidates algebraically; the caller keeps the solver's actual
+    answer and original domain restrictions as the final conclusion.
+    """
+    if len(equations) != 2 or len(variables) != 2: return None
+    equations = [item if isinstance(item, s.Equality) else s.Eq(item, 0, evaluate=False) for item in equations]
+    try:
+        polynomials = [s.Poly(item.lhs-item.rhs, *variables) for item in equations]
+    except s.PolynomialError:
+        return None
+    linear_index = next((index for index, poly in enumerate(polynomials) if poly.total_degree() == 1), None)
+    if linear_index is None: return None
+    linear, other = polynomials[linear_index], equations[1-linear_index]
+    columns = [index for index, var in enumerate(variables) if linear.coeff_monomial(var).is_zero is False]
+    if not columns: return None
+    column = min(columns, key=lambda index: (linear.coeff_monomial(variables[index]) not in (1, -1), -index))
+    isolated, remaining = variables[column], variables[1-column]
+    coefficient = linear.coeff_monomial(isolated)
+    replacement = s.cancel(-(linear.as_expr()-coefficient*isolated)/coefficient)
+    substituted = s.Eq(other.lhs.subs(isolated, replacement), other.rhs.subs(isolated, replacement), evaluate=False)
+    expanded = s.expand(substituted.lhs-substituted.rhs)
+    try:
+        reduced = s.Poly(expanded, remaining)
+    except s.PolynomialError:
+        return None
+    if s.count_ops(expanded) > 60 or reduced.degree() > 2: return None
+    if not reduced.is_zero and reduced.LC().is_zero is not False: return None
+
+    steps = []
+    def eq(left, right=0): return s.Eq(left, right, evaluate=False)
+    def add(title, explanation, values):
+        steps.append({"title": title, "explanation": explanation,
+                      "equations": [{"exact": readable(value), "tree": display_tree(value)} for value in values]})
+    relation = eq(isolated, replacement)
+    add("Isolate a variable in the linear equation", "Rearrange the linear equation so one variable is expressed in terms of the other.", [relation])
+    add("Substitute into the other equation", "Replace the isolated variable with its expression to obtain an equation with one unknown.", [substituted])
+    normalized = eq(expanded)
+    if display_tree(substituted) != display_tree(normalized):
+        add("Expand and collect like terms", "", [normalized])
+    if reduced.is_zero:
+        add("The equations describe the same relation", "Substitution gives an identity. One variable can be chosen freely, and the other follows from the linear equation.", [eq(0), relation])
+    elif reduced.degree() == 0:
+        add("The equations conflict", "Substitution gives a false equality. No values can satisfy both equations at once.", [normalized])
+    else:
+        if reduced.degree() == 2:
+            discriminant, raw = quadratic_candidates(reduced)
+            add("Compute the discriminant", "", [eq(s.Symbol("D"), discriminant)])
+            add("Apply the quadratic formula", "", [eq(remaining, value) for value in raw])
+            roots = list(dict.fromkeys(s.simplify(value) for value in raw))
+            add("Simplify the candidate roots", "", [eq(remaining, value) for value in roots])
+        else:
+            a, b = reduced.all_coeffs()
+            roots = [s.cancel(-b/a)]
+            add("Solve the equation with one unknown", "Move the constant and divide by the nonzero variable coefficient.", [eq(remaining, roots[0])])
+        pairs = []
+        for root in roots:
+            value = s.simplify(replacement.subs(remaining, root))
+            pairs.append(s.Tuple(eq(remaining, root), eq(isolated, value)))
+        add("Back-substitute each candidate root", "Substitute each candidate into the linear relation to find its matching value of the other variable.", [relation, *pairs])
+    return {"method": "Substitution method", "steps": steps}
+
+
 def can_explain_linear_system(matrix, rhs):
     """Only proceed when every pivot and consistency decision is certain."""
     reduced = matrix.row_join(rhs).applyfunc(s.cancel)
@@ -132,9 +206,19 @@ def linear_system_steps(matrix, rhs, variables, equations):
                 if reduced[index, column] == 0: continue
                 multiplier = s.cancel(reduced[index, column]/divisor)
                 before, pivot_equation = row_equation(reduced, index), row_equation(reduced, row)
+                # Preserve the operation, then expand each coefficient from
+                # the same rows used by elimination without combining terms.
+                scaled = -multiplier
+                terms = [reduced[index, j]*variable for j, variable in enumerate(variables)
+                         if reduced[index, j] != 0]
+                terms += [s.cancel(scaled*reduced[row, j])*variable for j, variable in enumerate(variables)
+                          if reduced[row, j] != 0]
+                combined_rhs = s.Add(before.rhs, scaled*pivot_equation.rhs, evaluate=False)
+                scaled_left = pivot_equation.lhs if scaled == 1 else s.Mul(scaled, pivot_equation.lhs, evaluate=False)
+                operation = equation(s.Add(before.lhs, scaled_left, evaluate=False), combined_rhs)
+                expanded = equation(s.Add(*terms, evaluate=False), combined_rhs)
                 reduced.row_op(index, lambda value, j: s.cancel(value-multiplier*reduced[row, j]))
-                combined = equation(s.Add(before.lhs, -multiplier*pivot_equation.lhs, evaluate=False), s.Add(before.rhs, -multiplier*pivot_equation.rhs, evaluate=False))
-                add(basic, "Eliminate one variable", "Subtract a suitable multiple of another equation so one variable disappears. This leaves fewer unknowns to solve.", [combined, row_equation(reduced, index)])
+                add(basic, "Eliminate one variable", "Subtract a suitable multiple of another equation so one variable disappears. This leaves fewer unknowns to solve.", distinct([operation, expanded, row_equation(reduced, index)]))
             pivots.append((row, column))
             row += 1
             if row == reduced.rows: break

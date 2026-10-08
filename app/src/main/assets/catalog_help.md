@@ -14,6 +14,24 @@ Tap an example to place its expression in the calculator input.
 - The Functions screen exports the custom library to a JSON file and imports it back; import validates each definition and reports added, replaced and skipped entries.
 - Read the hint line under the catalog list for category-specific guidance.
 
+## Step-by-step explanations
+
+Android and Web use the same explanation engine. Explanations retain the computed answer and original domain restrictions; unsupported transformations show a solver summary.
+
+**Equations:** Linear/quadratic equations, factorable polynomials through degree 8 whose factors are linear or quadratic, cubic Cardano transformations, and power substitutions that reduce to a linear/quadratic equation (such as `x^6-5*x^3+6=0`). Simple trigonometric/exponential/logarithmic equations include inverse and periodic branches.
+
+**Systems:** Linear systems with at most 6 equations and 6 unknowns, including parameter coefficients/right-hand sides when every pivot and consistency decision is provable. Two-variable polynomial systems with a linear equation support substitution when the remaining equation reduces to degree 2 or less, including matching each root with the other variable (for example, `x+y=3`, `x^2+y^2=5`). Parameter-dependent rank or consistency falls back to a summary.
+
+**ODEs:** First-order linear integrating factors with a verified elementary primitive, including nonpolynomial coefficients such as `1/t` and `sin(t)`. Homogeneous second-order equations with constant coefficients include characteristic roots and repeated-root solutions when the root case is decidable.
+
+**Integration:** Verified SymPy manual-integration rules for the selected variable, including constant parameters. Parameter cases such as `a=0` in `exp(a*x)` and `a=-1` in `x^a` are explained separately. Definite bounds are shown only when the primitive's endpoint difference matches the computed answer.
+
+**Differentiation:** Sum/product/quotient, constant/variable powers, and common trigonometric/hyperbolic chain rules, through derivative order 10. Traversal is bounded to depth 12, 96 visits and 80 rule steps; omitted detail is reported.
+
+**Limits:** Substitution, cancellation, square-root conjugates, checked `0/0` and infinity/infinity L'Hôpital transformations, highest-power comparison, one-sided cases, bounded local series, and sine/cosine squeeze cases.
+
+These explanations have expression-size, traversal and output-size limits. General nonlinear systems, arbitrary ODEs and integrals without a verified rule remain summaries; a missing derivation does not establish that no closed form exists.
+
 ## Scientific
 `sin(x)` — Sine of x (uses the current angle unit).
 Example: sin(pi/6)

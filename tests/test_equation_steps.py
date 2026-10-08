@@ -6,8 +6,31 @@ import unittest
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]/"app/src/main/python"))
 import sympy as s
 from calc_engine import Engine, dispatch
-from calc_display import result_ast
+from calc_display import result_ast, display_tree
 from calc_equation_steps import equation_steps
+
+
+def visible_formula(tree):
+    """Read the operators and parentheses shown by both display renderers.
+
+    Unary sums intentionally receive no implicit parentheses here: that was
+    the bug, and a semantic AST decoder would silently hide it.
+    """
+    kind, args = tree["kind"], tree.get("args", [])
+    shown = [visible_formula(arg) for arg in args]
+    if kind in ("number", "text", "symbol"): return tree["value"]
+    if kind == "parentheses": return "("+"".join(shown)+")"
+    if kind == "unary": return tree["value"]+shown[0]
+    if kind == "sum":
+        return "".join(("+" if index and args[index]["kind"] != "unary" else "")+item
+                       for index, item in enumerate(shown))
+    if kind == "product":
+        return "*".join("("+item+")" if arg["kind"] == "sum" else item
+                        for arg, item in zip(args, shown))
+    if kind == "fraction": return "("+shown[0]+")/("+shown[1]+")"
+    if kind == "power": return "("+shown[0]+")**("+shown[1]+")"
+    if kind == "relation": return "Eq("+",".join(shown)+",evaluate=False)"
+    raise AssertionError(f"Unsupported display node: {tree}")
 
 
 class EquationStepTests(unittest.TestCase):
@@ -28,7 +51,7 @@ class EquationStepTests(unittest.TestCase):
         x = s.Symbol("x")
         for expression in [2*x+3, x*x-5*x+6, x*x+1, (x-2)**2, 0*x, s.Integer(3)]:
             result, report = self.report(s.Eq(expression, 0, evaluate=False), x)
-            self.assertGreaterEqual(len(report["steps"]), 4)
+            self.assertGreaterEqual(len(report["steps"]), 3)
             self.assertEqual(result["exact"], report["steps"][-1]["exact"])
             self.assertEqual("", report["note"])
         _, report = self.report(s.Eq(2*x*x+3*x+4, 0), x)
@@ -164,6 +187,151 @@ class EquationStepTests(unittest.TestCase):
         self.assertEqual({x: 1, y: 2, z: 3}, known)
         self.assertTrue(all(s.simplify(eq.lhs.subs(known)-eq.rhs) == 0 for eq in equations))
 
+    def test_elimination_display_preserves_signs_before_combining_terms(self):
+        x, y, z = s.symbols("x y z")
+        examples = [
+            [s.Eq(y+z, 3), s.Eq(x+2*y-z, 4), s.Eq(2*x-y+z, 1)],
+            [s.Eq(x-y+z, 0), s.Eq(x+y-z, 2), s.Eq(-x+2*y+z, 4)],
+            [s.Eq(2*x-y+z, 1), s.Eq(x+y-z, 2), s.Eq(-x+2*y+z, 4)],
+        ]
+        for equations in examples:
+            with self.subTest(equations=equations):
+                _, report = self.report(equations, [x, y, z])
+                eliminations = [step for step in report["steps"] if step["title"] == "Eliminate one variable"]
+                self.assertTrue(eliminations)
+                for step in eliminations:
+                    reduced = s.sympify(step["equations"][-1]["exact"])
+                    for formula in step["equations"]:
+                        visible = s.sympify(visible_formula(formula["tree"]))
+                        exact = s.sympify(formula["exact"])
+                        self.assertEqual(0, s.expand(visible.lhs-exact.lhs))
+                        self.assertEqual(0, s.expand(visible.rhs-exact.rhs))
+                        self.assertEqual(0, s.expand(visible.lhs-visible.rhs-reduced.lhs+reduced.rhs))
+        result, report = self.report(examples[0], [x, y, z])
+        self.assertEqual([{x: 1, y: 2, z: 1}], Engine({}).build(result["resultAst"]))
+        eliminations = [step for step in report["steps"] if step["title"] == "Eliminate one variable"]
+        self.assertEqual(["Eq(-5*y + 3*z, -7)", "Eq(8*z, 8)"],
+                         [step["equations"][-1]["exact"] for step in eliminations])
+        for step in eliminations:
+            self.assertEqual(3, len(step["equations"]))
+            expanded = step["equations"][1]["tree"]["args"][0]
+            self.assertEqual("sum", expanded["kind"])
+            self.assertTrue(all(arg["kind"] != "sum" for arg in expanded["args"]))
+
+    def test_unevaluated_sum_and_negative_sum_keep_visible_grouping(self):
+        x, y, z = s.symbols("x y z")
+        expressions = [
+            s.Add(-2*x-4*y+2*z, 2*x-y+z, evaluate=False),
+            s.Add(-5*y+3*z, 5*y+5*z, evaluate=False),
+            s.Mul(-1, x-y+z, evaluate=False),
+        ]
+        for expression in expressions:
+            with self.subTest(expression=expression):
+                shown = visible_formula(display_tree(expression))
+                self.assertIn("(", shown)
+                self.assertEqual(0, s.expand(s.sympify(shown)-expression))
+
+    def test_already_normalized_equations_skip_unchanged_transformations(self):
+        x = s.Symbol("x")
+        _, report = self.report(s.Eq(x*x-5*x+6, 0), x)
+        titles = [step["title"] for step in report["steps"]]
+        self.assertNotIn("Move all terms to the left", titles)
+        self.assertNotIn("Expand and collect like terms", titles)
+        formula = next(step for step in report["steps"] if step["title"] == "Apply the quadratic formula")
+        # Keep both radicals unevaluated, including the minus branch.
+        self.assertEqual(2, formula["exact"].count("sqrt(1)"))
+        def count_roots(tree):
+            return int(tree["kind"] == "root")+sum(count_roots(arg) for arg in tree.get("args", []))
+        self.assertEqual(2, count_roots(formula["tree"]))
+        simplified = report["steps"][titles.index("Apply the quadratic formula")+1]
+        self.assertEqual("Simplify the candidate roots", simplified["title"])
+        self.assertEqual([s.Eq(x, 3), s.Eq(x, 2)], s.sympify(simplified["exact"]))
+        # A transformation with different sides or an unexpanded product stays.
+        _, moved = self.report(s.Eq(x*x, 5*x-6), x)
+        self.assertIn("Move all terms to the left", [step["title"] for step in moved["steps"]])
+        source = s.Eq(s.Mul(x-2, x-3, evaluate=False), 0, evaluate=False)
+        expanded = equation_steps(Engine({}), "solve", [source, x], s.FiniteSet(2, 3))
+        self.assertIn("Expand and collect like terms", [step["title"] for step in expanded["steps"]])
+
+    def test_single_equation_system_uses_the_general_derivation(self):
+        x, y = s.symbols("x y")
+        examples = [s.Eq(x*x-5*x+6, 0), s.Eq(2*x+3, 0),
+                    s.Eq(s.sin(x), s.Rational(1, 2)), s.Eq(s.sin(x), 2),
+                    s.Eq(x**4+x*x+1, 0), s.Eq(0, 0, evaluate=False)]
+        for equation in examples:
+            _, general = self.report(equation, x)
+            for source, variables in [([equation], [x]), ([equation], x), (equation, [x])]:
+                with self.subTest(equation=equation, variables=variables):
+                    result, system = self.report(source, variables, solutionSteps=True)
+                    self.assertEqual(general["steps"][:-1], system["steps"][:-1])
+                    self.assertEqual(general["note"], system["note"])
+                    self.assertEqual(result["exact"], system["steps"][-1]["exact"])
+                    self.assertEqual(system, result["solutionSteps"])
+        # System's default variable list may include an unused variable.
+        equation = s.Eq(x*x-5*x+6, 0)
+        _, general = self.report(equation, x)
+        for source in [equation, [equation]]:
+            result, system = self.report(source, [x, y])
+            self.assertEqual(general["steps"][:-1], system["steps"][:-1])
+            self.assertEqual([{x: 2}, {x: 3}], Engine({}).build(result["resultAst"]))
+        _, multivariable = self.report([s.Eq(x*x+y*y, 5)], [x, y])
+        self.assertIn("Detailed transformations are unavailable", multivariable["note"])
+
+    def test_trig_steps_skip_constant_domain_checks_and_unchanged_branch_isolation(self):
+        x = s.Symbol("x")
+        _, report = self.report(s.Eq(s.sin(x), s.Rational(1, 2)), x)
+        titles = [step["title"] for step in report["steps"]]
+        self.assertNotIn("Exclude zero denominators", titles)
+        self.assertNotIn("Multiply by the nonzero denominator", titles)
+        self.assertNotIn("Expand and collect like terms", titles)
+        self.assertNotIn("Isolate the variable in each branch", titles)
+        self.assertIn("Include periodic branches (n is an integer)", titles)
+        _, shifted = self.report(s.Eq(s.sin(2*x+1), s.Rational(1, 2)), x)
+        self.assertIn("Isolate the variable in each branch", [step["title"] for step in shifted["steps"]])
+
+    def test_linear_and_quadratic_systems_show_substitution_and_matching_pairs(self):
+        x, y = s.symbols("x y")
+        examples = [
+            [s.Eq(x+y, 3), s.Eq(x*x+y*y, 5)],
+            [s.Eq(x*x+y*y, 5), s.Eq(x+y, 3)],
+            [s.Eq(x-y, 1), s.Eq(x*x+y*y, 5)],
+            [s.Eq(x+y, 2), s.Eq(x*x+y*y, 2)],
+            [s.Eq(x+y, 0), s.Eq(x*x+y*y, -2)],
+            [s.Eq(x+y, 3), s.Eq(x*x-y*y, 3)],
+        ]
+        for equations in examples:
+            with self.subTest(equations=equations):
+                result, report = self.report(equations, [x, y], solutionSteps=True)
+                self.assertEqual("", report["note"])
+                self.assertEqual("Substitution method", report["method"])
+                back = next(step for step in report["steps"] if step["title"] == "Back-substitute each candidate root")
+                candidates = []
+                for formula in back["equations"][1:]:
+                    pair = {item.lhs: item.rhs for item in s.sympify(formula["exact"])}
+                    self.assertTrue(all(s.simplify(eq.lhs.subs(pair)-eq.rhs) == 0 for eq in equations))
+                    candidates.append(pair)
+                actual = Engine({}).build(result["resultAst"])
+                self.assertEqual({tuple(pair[var] for var in (x, y)) for pair in actual},
+                                 {tuple(pair[var] for var in (x, y)) for pair in candidates})
+                self.assertEqual(report, result["solutionSteps"])
+        _, example = self.report(examples[0], [x, y])
+        expanded = next(step for step in example["steps"] if step["title"] == "Expand and collect like terms")
+        self.assertEqual(s.Eq(2*x*x-6*x+4, 0), s.sympify(expanded["equations"][0]["exact"]))
+
+    def test_nonlinear_substitution_keeps_domains_and_handles_degenerate_reductions(self):
+        x, y = s.symbols("x y")
+        equations = [s.Eq(x+y, 0), s.Eq(x*x+y*y, -2)]
+        result, report = self.report(equations, [x, y], assumptions={"x": ["real"], "y": ["real"]})
+        self.assertEqual("[]", result["exact"])
+        self.assertEqual("", report["note"])
+        for constant, title in [(9, "The equations describe the same relation"), (8, "The equations conflict")]:
+            _, report = self.report([s.Eq(x+y, 3), s.Eq((x+y)**2, constant)], [x, y])
+            self.assertEqual("", report["note"])
+            self.assertIn(title, [step["title"] for step in report["steps"]])
+        a = s.Symbol("a")
+        _, conditional = self.report([s.Eq(a*x+a*y, 3), s.Eq(x*x+y*y, 5)], [x, y])
+        self.assertIn("Detailed transformations are unavailable", conditional["note"])
+
     def test_domain_restrictions_reject_extraneous_roots(self):
         x = s.Symbol("x")
         source = {"kind": "call", "value": "solve", "args": [
@@ -196,7 +364,7 @@ class EquationStepTests(unittest.TestCase):
         self.assertIn("Detailed transformations are unavailable", unresolved["note"])
         self.assertEqual("Known real roots (partial)", unresolved["steps"][-1]["title"])
         y = s.Symbol("y")
-        _, nonlinear = self.report([s.Eq(x*x+y*y, 1), s.Eq(x, y)], [x, y])
+        _, nonlinear = self.report([s.Eq(x*x+y*y, 1), s.Eq(x*y, 1)], [x, y])
         self.assertIn("Detailed transformations are unavailable", nonlinear["note"])
         a = s.Symbol("a")
         _, conditional = self.report([s.Eq(x+y, 1), s.Eq(x+y, a)], [x, y])
@@ -235,7 +403,7 @@ class EquationStepTests(unittest.TestCase):
         x = s.Symbol("x")
         report = equation_steps(Engine({}), "solve", [(x+1)**1000, x], s.FiniteSet(-1))
         self.assertIn("too large", report["note"])
-        self.assertEqual(3, len(report["steps"]))
+        self.assertEqual(2, len(report["steps"]))
 
 
 if __name__ == "__main__":

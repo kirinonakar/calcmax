@@ -94,6 +94,21 @@ class WrappedMathResultTest {
         assertEquals("}",parts.last().last().getString("value"))
         assertEquals(before,result.toString())
     }
+    @Test fun outerListBracketsCanEncloseAllPartsWithoutRemovingInnerDelimiters() {
+        val pair=node("tuple","",node("relation","=",node("symbol","x"),node("number","1")),
+            node("relation","=",node("symbol","y"),node("number","2")))
+        val result=node("list","",pair,node("list","",node("number","3"),node("number","4")))
+        val before=result.toString()
+        val parts=resultMathParts(result,includeOuterDelimiters=false)
+        val tokens=parts.flatten().map{it.optString("value")}
+        assertEquals("(",tokens.first())
+        assertEquals("]",tokens.last())
+        assertEquals(1,tokens.count{it=="["})
+        assertEquals(1,tokens.count{it=="]"})
+        assertEquals(3,tokens.count{it==", "})
+        assertEquals(before,result.toString())
+        assertEquals("[",resultMathParts(result).first().first().optString("value"))
+    }
 }
 
 class ResultCopyTextTest {

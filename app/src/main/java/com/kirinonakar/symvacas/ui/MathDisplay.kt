@@ -266,7 +266,7 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
         }
     }
 }
-@Composable private fun SquareBrackets(close:Boolean=true,content:@Composable ()->Unit) {
+@Composable internal fun SquareBrackets(close:Boolean=true,content:@Composable ()->Unit) {
     val ink=LocalInstrument.current.ink
     Box(Modifier.drawBehind {
         val stroke=1.5.dp.toPx();val arm=7.dp.toPx();val left=stroke/2;val right=this.size.width-stroke/2

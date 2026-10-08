@@ -88,12 +88,14 @@ test('equation step explanations preserve real WASM answers across workspace met
     [{kind:'solve',source:'x^6-5x^3+6=0',variable:'x'},'Recover roots of the original variable'],
     [{kind:'solve',source:'x+y=3x\nx-y=1',variable:'x,y'},'Substitute into the second equation'],
     [{kind:'solve',source:'x+a*y=1\ny=b',variable:'x,y'},'Substitute into the second equation'],
+    [{kind:'solve',source:'y+z=3\nx+2y-z=4\n2x-y+z=1',variable:'x,y,z'},'Eliminate one variable'],
+    [{kind:'solve',source:'x+y=3\nx^2+y^2=5',variable:'x,y'},'Back-substitute each candidate root'],
     [{kind:'solve',source:'sin(x)=1/2',variable:'x'},'Include periodic branches (n is an integer)'],
     [{kind:'nsolve',source:'x^2=2',variable:'x',extra:'1,2'},'Numerical root'],
     [{kind:'dsolve',source:'diff(y(t),t)=y(t)',variable:'y(t)',extra:'t',initial:'y(0)=1'},'Integrating factor'],
     [{kind:'dsolve',source:'diff(y(t),t)+y(t)/t=t',variable:'y(t)',extra:'t'},'Integrating factor'],
     [{kind:'dsolve',source:'diff(y(t),t,2)-2*diff(y(t),t)+y(t)=0',variable:'y(t)',extra:'t'},'Build the homogeneous solution'],
-    [{kind:'pdsolve',source:'diff(u(x,y),x)+diff(u(x,y),y)=0',variable:'u(x,y)'},'Move all terms to the left'],
+    [{kind:'pdsolve',source:'diff(u(x,y),x)+diff(u(x,y),y)=0',variable:'u(x,y)'},'Original equation'],
   ];
   for(const [options,title] of cases){
     const source=equationCommand(options),plain=run(source,false),traced=run(source);
@@ -115,6 +117,33 @@ test('equation step explanations preserve real WASM answers across workspace met
   assert.deepEqual(solved.equations.map(formula=>formula.exact),['Eq(-x, 1)','Eq(x, -1)']);
   assert.equal(system.steps.at(-1).tree.kind,'tuple');
   assert.deepEqual(system.advancedSteps.at(-1).equations.map(formula=>formula.exact),['Eq(x, -1)','Eq(y, -2)']);
+  const quadratic=run('solve(x^2-5*x+6=0,x)').equationSteps;
+  assert.ok(!quadratic.steps.some(step=>['Move all terms to the left','Expand and collect like terms'].includes(step.title)));
+  const formula=quadratic.steps.find(step=>step.title==='Apply the quadratic formula');
+  assert.equal(formula.exact.match(/sqrt\(1\)/g).length,2);
+  const rootCount=tree=>Number(tree.kind==='root')+(tree.args||[]).reduce((total,arg)=>total+rootCount(arg),0);
+  assert.equal(rootCount(formula.tree),2);
+  assert.equal(quadratic.steps[quadratic.steps.indexOf(formula)+1].title,'Simplify the candidate roots');
+  for(const command of ['solve([x^2-5*x+6=0],[x])','solve([x^2-5*x+6=0],[x,y])',
+                       equationCommand({kind:'solve',source:'x^2-5*x+6=0',variable:'x,y'})]){
+    const single=run(command,true,true),plain=run(command,false);
+    const {equationSteps,solutionSteps,...answer}=single;
+    assert.deepEqual(answer,plain);
+    assert.deepEqual(equationSteps.steps.slice(0,-1),quadratic.steps.slice(0,-1));
+    assert.equal(equationSteps.note,'');
+    assert.deepEqual(solutionSteps,equationSteps);
+  }
+  const trig=run('solve(sin(x)=1/2,x)').equationSteps;
+  assert.ok(!trig.steps.some(step=>['Exclude zero denominators','Multiply by the nonzero denominator','Isolate the variable in each branch'].includes(step.title)));
+  const elimination=run('solve([y+z=3,x+2*y-z=4,2*x-y+z=1],[x,y,z])').equationSteps.steps.filter(step=>step.title==='Eliminate one variable');
+  assert.deepEqual(elimination.map(step=>step.equations.at(-1).exact),['Eq(-5*y + 3*z, -7)','Eq(8*z, 8)']);
+  assert.ok(elimination.every(step=>step.equations.length===3&&step.equations[1].tree.args[0].args.every(arg=>arg.kind!=='sum')));
+  const nonlinear=run('solve([x+y=3,x^2+y^2=5],[x,y])',true,true);
+  assert.equal(nonlinear.equationSteps.note,'');
+  assert.deepEqual(nonlinear.solutionSteps,nonlinear.equationSteps);
+  const back=nonlinear.equationSteps.steps.find(step=>step.title==='Back-substitute each candidate root');
+  assert.equal(back.equations.length,3);
+  assert.deepEqual(back.equations.slice(1).map(formula=>formula.exact),['(Eq(x, 2), Eq(y, 1))','(Eq(x, 1), Eq(y, 2))']);
 });
 test('Bayesian linear, logistic and NUTS run through workspace commands in real WASM',async()=>{
   const py=await runtime();

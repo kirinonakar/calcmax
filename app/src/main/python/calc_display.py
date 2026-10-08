@@ -19,6 +19,15 @@ def is_dms_expression(node, variables=None):
 
 def display_tree(x):
     def t(kind,value="",args=()): return {"kind":kind,"value":value,"args":list(args)}
+    def negative(value):
+        coefficient, factors = value.as_coeff_Mul()
+        if coefficient.is_negative and factors != 1:
+            positive = factors if coefficient == -1 else s.Mul(-coefficient, factors, evaluate=False)
+        else:
+            positive = -value
+        argument = display_tree(positive)
+        if isinstance(positive,s.Add): argument=t("parentheses",args=[argument])
+        return t("unary","-",[argument])
     if isinstance(x,Quantity): return t("quantity",x.unit_text(),[display_tree(x.base)])
     if isinstance(x,dict): return t("rows",args=[t("row",str(k),[display_tree(v)]) for k,v in x.items()])
     if isinstance(x,s.ImageSet) and len(x.lamda.variables)==1 and x.base_set==s.S.Integers:
@@ -49,9 +58,12 @@ def display_tree(x):
     if isinstance(x,s.Add):
         terms=x.as_ordered_terms()
         terms=[a for a in terms if not (a.is_Symbol and str(a)=="C")]+[a for a in terms if a.is_Symbol and str(a)=="C"]
-        return t("sum",args=[t("unary","-",[display_tree(-a)]) if a.could_extract_minus_sign() else display_tree(a) for a in terms])
+        # Unevaluated sums can contain entire sums as operands. Keep their
+        # grouping before extracting a minus: -(a-b) must not display as -a-b.
+        return t("sum",args=[t("parentheses",args=[display_tree(a)]) if isinstance(a,s.Add) else
+                             negative(a) if a.could_extract_minus_sign() else display_tree(a) for a in terms])
     if isinstance(x,s.Mul):
-        if x.could_extract_minus_sign(): return t("unary","-",[display_tree(-x)])
+        if x.could_extract_minus_sign(): return negative(x)
         if any(isinstance(a,s.Pow) and a.is_number and a.exp.is_Integer and abs(a.exp)>10000 for a in x.args):
             return t("product",args=[display_tree(a) for a in x.args])
         num,den = s.fraction(x)

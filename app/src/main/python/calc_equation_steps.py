@@ -8,7 +8,7 @@ from math import gcd
 from sympy.solvers.solveset import NonlinearError
 from sympy.core.relational import Relational
 from calc_display import display_tree, readable
-from calc_equation_system_steps import linear_system_steps, can_explain_linear_system
+from calc_equation_system_steps import linear_system_steps, can_explain_linear_system, nonlinear_system_steps, quadratic_candidates
 
 
 SUMMARY = "Detailed transformations are unavailable for this equation; the steps below summarize the solver input and result."
@@ -32,12 +32,12 @@ EXPLANATIONS = {
     "Divide by the coefficient of the variable": "Divide both sides by the same nonzero coefficient to leave the variable by itself.",
     "Compute the discriminant": "For ax² + bx + c = 0, calculate D = b² − 4ac. This is the quantity under the square root in the quadratic formula.",
     "Apply the quadratic formula": "Substitute a, b, c and D into x = (−b ± √D)/(2a). The two signs give the candidate roots.",
+    "Simplify the candidate roots": "Evaluate the square root and simplify each fraction to obtain the candidate roots.",
     "Exclude zero denominators": "Division by zero is undefined. Keep this restriction when removing the denominator so invalid roots are not included.",
     "Multiply by the nonzero denominator": "Multiply both sides by the denominator. This is valid only where the denominator is nonzero.",
     "Factor the polynomial": "Rewrite the polynomial as a product. A product is zero when at least one factor is zero.",
     "Set each factor equal to zero": "Solve the smaller equations separately, then combine their allowed roots.",
     "Solve the linear factor": "Move the constant and divide by the variable coefficient in this factor.",
-    "Keep solutions allowed by the original equation and domain": "Discard candidates excluded by the original equation, denominators or variable assumptions.",
     "Solution": "These are the solver's final values after applying the original equation and domain restrictions.",
     "Numerical root": "Use the starting value or interval to find a nearby root numerically.",
     "Substitute the root: residual should be near zero": "Put the computed value into the left side minus the right side. A residual near zero checks that it satisfies the equation numerically.",
@@ -81,10 +81,28 @@ def equation_steps(engine, method, values, answer):
     def eq(left, right=0):
         return s.Eq(left, right, evaluate=False)
 
+    def add_changed(title, value):
+        # Skip a transformation that leaves the immediately visible formula
+        # unchanged. Conclusions and domain checks still have their own steps.
+        tree = display_tree(value)
+        if not steps or steps[-1].get("tree") != tree:
+            add(title, value)
+
     def residual(value):
         return value.lhs-value.rhs if isinstance(value, s.Equality) else value
 
     source = values[0]
+    if method == "solve" and (isinstance(source, list) or isinstance(values[1], list)):
+        equations = source if isinstance(source, list) else [source]
+        variables = values[1] if isinstance(values[1], list) else [values[1]]
+        if len(equations) == 1:
+            active = [variable for variable in variables if equations[0].has(variable)]
+            if len(active) == 1 or not active and len(variables) == 1:
+                # System inputs use lists even for one equation. Reuse the
+                # scalar derivation when only one requested variable occurs,
+                # keeping the solver's original result shape at the end.
+                source = equations[0]
+                values = [source, active[0] if active else variables[0], *values[2:]]
     add("Original equation", source)
     note = ""
     expressions = source if isinstance(source, list) else [source]
@@ -94,7 +112,7 @@ def equation_steps(engine, method, values, answer):
         note = SUMMARY
     elif method in ("dsolve", "desolve", "pdsolve"):
         expression = residual(source)
-        add("Move all terms to the left", eq(expression))
+        add_changed("Move all terms to the left", eq(expression))
         note = SUMMARY
         if method in ("dsolve", "desolve"):
             function, variable = values[1:3]
@@ -155,7 +173,7 @@ def equation_steps(engine, method, values, answer):
     elif method == "nsolve":
         var = values[1]
         expression = residual(source)
-        add("Move all terms to the left", eq(expression))
+        add_changed("Move all terms to the left", eq(expression))
         add("Initial bracket" if len(values) == 4 else "Initial guess", values[2:] if len(values) == 4 else eq(var, values[2]))
         add("Numerical root", eq(var, answer))
         add("Substitute the root: residual should be near zero", s.N(expression.subs(var, answer), engine.precision))
@@ -176,17 +194,30 @@ def equation_steps(engine, method, values, answer):
             steps.extend(explanation.pop("steps"))
             extra.update(explanation)
         else:
-            note = SUMMARY
+            explanation = nonlinear_system_steps(equations, variables)
+            if explanation is not None:
+                steps.extend(explanation.pop("steps"))
+                extra.update(explanation)
+            else:
+                note = SUMMARY
     else:
         var = values[1]
         expression = residual(source)
-        add("Move all terms to the left", eq(expression))
+        already_isolated = (isinstance(source, s.Equality) and isinstance(source.lhs, s.Function)
+                            and source.lhs.func in (s.sin, s.cos, s.tan, s.exp, s.log) and not source.rhs.has(var))
+        if not already_isolated: add_changed("Move all terms to the left", eq(expression))
         numerator, denominator = s.fraction(s.together(expression))
         if denominator != 1:
-            add("Exclude zero denominators", s.Ne(denominator, 0, evaluate=False))
-            add("Multiply by the nonzero denominator", eq(numerator))
+            if denominator.is_zero is not False:
+                add("Exclude zero denominators", s.Ne(denominator, 0, evaluate=False))
+            if denominator.is_zero is False and not denominator.has(var):
+                # Clearing a known constant denominator adds no useful step
+                # when the next operation simply isolates a function again.
+                numerator = expression
+            else:
+                add_changed("Multiply by the nonzero denominator", eq(numerator))
         expanded = s.expand(numerator)
-        add("Expand and collect like terms", eq(expanded))
+        if expanded != numerator: add_changed("Expand and collect like terms", eq(expanded))
         try:
             polynomial = s.Poly(expanded, var)
         except s.PolynomialError:
@@ -196,13 +227,10 @@ def equation_steps(engine, method, values, answer):
             note = "This derivation assumes the leading coefficient is nonzero; degenerate parameter cases require separate solving."
 
         def quadratic(poly, unknown=var):
-            a, b, c = poly.all_coeffs()
-            discriminant = s.expand(b*b-4*a*c)
+            discriminant, roots = quadratic_candidates(poly)
             add("Compute the discriminant", eq(s.Symbol("D"), discriminant))
-            # Unevaluated operations keep the formula visible even for double roots.
-            radical = s.Pow(discriminant, s.Rational(1, 2), evaluate=False)
-            roots = [s.Mul(s.Add(-b, sign*radical, evaluate=False), s.Pow(2*a, -1, evaluate=False), evaluate=False) for sign in (1, -1)]
             add("Apply the quadratic formula", [eq(unknown, root) for root in roots])
+            add_changed("Simplify the candidate roots", list(dict.fromkeys(eq(unknown, s.simplify(root)) for root in roots)))
 
         if polynomial is None:
             functions = [function for function in expanded.atoms(s.Function) if function.has(var)]
@@ -210,9 +238,10 @@ def equation_steps(engine, method, values, answer):
             coefficient = expanded.coeff(function) if function is not None else 0
             rest = expanded-coefficient*function if function is not None else expanded
             supported = function is not None and function.func in (s.sin, s.cos, s.tan, s.exp, s.log)
-            if supported and coefficient.is_zero is False and not coefficient.has(var) and not rest.has(var) and answer != s.S.EmptySet:
+            if (supported and coefficient.is_zero is False and not coefficient.has(var) and not rest.has(var)
+                    and answer != s.S.EmptySet and answer != []):
                 target = s.cancel(-rest/coefficient)
-                add("Isolate the function", eq(function, target))
+                add_changed("Isolate the function", eq(function, target))
                 argument = function.args[0]
                 inverse = {s.sin: s.asin, s.cos: s.acos, s.tan: s.atan, s.exp: s.log, s.log: s.exp}[function.func](target)
                 if function.func == s.log:
@@ -235,7 +264,8 @@ def equation_steps(engine, method, values, answer):
                     argument_poly = None
                 if argument_poly is not None and argument_poly.degree() == 1:
                     a, b = argument_poly.all_coeffs()
-                    add("Isolate the variable in each branch", [eq(var, s.expand((branch-b)/a)) for branch in branches])
+                    if argument != var:
+                        add("Isolate the variable in each branch", [eq(var, s.expand((branch-b)/a)) for branch in branches])
                 else:
                     note = SUMMARY
             else:
@@ -311,8 +341,6 @@ def equation_steps(engine, method, values, answer):
             note = SUMMARY
     if engine.conditions:
         add("Check the original domain restrictions", list(dict.fromkeys(engine.conditions)))
-    if method == "solve" and not isinstance(source, list) and not isinstance(values[1], list):
-        add("Keep solutions allowed by the original equation and domain")
     add("Solution" if not getattr(answer, "has", lambda *_: False)(s.ConditionSet) else "Unresolved solution set", answer)
     steps[-1]["tree"] = equation_solution_tree(steps[-1]["tree"])
     if engine.note:
