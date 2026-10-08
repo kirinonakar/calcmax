@@ -5,6 +5,7 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -70,6 +71,7 @@ private fun DrawScope.drawHeatMapCells(data:StatisticsHeatMapData,ink:Color,mute
 
 @Composable internal fun StatisticsHeatMap(data:StatisticsHeatMapData,displayDigits:Int,fitToScreen:Boolean=false) {
     val c=LocalInstrument.current
+    val exports=remember {GraphExportState()}
     val finite=data.rows.flatMap {it.values}.filterNotNull()
     if(data.rows.isEmpty()||data.columns.isEmpty()||finite.isEmpty()&&!data.correlation)return
     val lo=if(data.correlation)-1.0 else finite.min();val hi=if(data.correlation)1.0 else finite.max()
@@ -84,6 +86,18 @@ private fun DrawScope.drawHeatMapCells(data:StatisticsHeatMapData,ink:Color,mute
         else->"Raw values · rows × columns"
     }
     val caption=tr(captionKey)+(if(data.clustered)" · ${tr("Hierarchical clustering")}" else "")
+    val exportLegend:DrawScope.()->Unit={
+        val paint=Paint(Paint.ANTI_ALIAS_FLAG).apply {color=c.muted.toArgb();textSize=11.sp.toPx()}
+        drawContext.canvas.nativeCanvas.drawText(caption,8.dp.toPx(),16.dp.toPx(),paint)
+        val start=8.dp.toPx();val width=(size.width-16.dp.toPx()).coerceAtLeast(1f)
+        for(index in 0 until 100) {
+            val value=lo*(1-index/99.0)+hi*index/99.0
+            drawRect(heatColor(value,lo,hi),Offset(start+index*width/100,25.dp.toPx()),Size(width/100+1,12.dp.toPx()))
+        }
+        drawContext.canvas.nativeCanvas.drawText(formatted(lo),start,52.dp.toPx(),paint)
+        val maximum=formatted(hi)
+        drawContext.canvas.nativeCanvas.drawText(maximum,start+width-paint.measureText(maximum),52.dp.toPx(),paint)
+    }
     Text(caption,fontSize=11.sp,color=c.muted)
     val description=buildString {
         append(caption)
@@ -101,7 +115,7 @@ private fun DrawScope.drawHeatMapCells(data:StatisticsHeatMapData,ink:Color,mute
             val viewportWidth=maxWidth.value
             val viewportHeight=if(maxHeight.value.isFinite())minOf(maxHeight.value,heatMapMaxViewportHeight.toFloat()) else heatMapMaxViewportHeight.toFloat()
             val fit=minOf(viewportWidth/designWidthDp,viewportHeight/designHeightDp,1f)
-            Canvas(Modifier.width((designWidthDp*fit).dp.coerceAtLeast(1.dp)).height((designHeightDp*fit).dp.coerceAtLeast(1.dp)).background(c.display).semantics {contentDescription=description}) {
+            ExportableGraphCanvas(Modifier.width((designWidthDp*fit).dp.coerceAtLeast(1.dp)).height((designHeightDp*fit).dp.coerceAtLeast(1.dp)).background(c.display).semantics {contentDescription=description},c.display,exports,60.dp,exportLegend) {
                 scale(fit,fit,pivot=Offset.Zero) {
                     drawHeatMapCells(data,c.ink,c.muted,c.display,lo,hi,::formatted,leftDp.dp.toPx(),topDp.dp.toPx(),heatMapCellWidth.dp.toPx(),heatMapCellHeight.dp.toPx())
                 }
@@ -109,7 +123,7 @@ private fun DrawScope.drawHeatMapCells(data:StatisticsHeatMapData,ink:Color,mute
         } else {
             val chartWidth=maxOf(maxWidth,designWidthDp.dp)
             Box(Modifier.fillMaxWidth().heightIn(max=heatMapMaxViewportHeight.dp).verticalScroll(rememberScrollState()).horizontalScroll(rememberScrollState())) {
-                Canvas(Modifier.width(chartWidth).height(designHeightDp.dp).background(c.display).semantics {contentDescription=description}) {
+                ExportableGraphCanvas(Modifier.width(chartWidth).height(designHeightDp.dp).background(c.display).semantics {contentDescription=description},c.display,exports,60.dp,exportLegend) {
                     val left=leftDp.dp.toPx()
                     drawHeatMapCells(data,c.ink,c.muted,c.display,lo,hi,::formatted,left,topDp.dp.toPx(),(size.width-left-10.dp.toPx())/data.columns.size,heatMapCellHeight.dp.toPx())
                 }
@@ -126,4 +140,5 @@ private fun DrawScope.drawHeatMapCells(data:StatisticsHeatMapData,ink:Color,mute
         }
         Text(formatted(hi),fontSize=11.sp,color=c.muted)
     }
+    PlotExportActions(exports,"symvacas-heatmap")
 }

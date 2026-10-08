@@ -7,6 +7,7 @@ import {installEngine} from '../engine-bootstrap.js';
 import {parse,latexInput} from '../parser.js';
 import {tipCommand,moneyResult} from '../money.js';
 import {statisticsCommand,statisticsAnalysisData,statisticsColumnLabels,statisticsCategoryLabels,distributionCommand,equationCommand} from '../workspace-commands.js';
+import {solutionStepsCopyText} from '../equation-steps.js';
 
 // Reuse the interpreter for sequential integration scenarios. The cold solver
 // scenario below explicitly loads its own interpreter to keep startup coverage.
@@ -119,6 +120,18 @@ test('equation step explanations preserve real WASM answers across workspace met
   assert.deepEqual(solved.equations.map(formula=>formula.exact),['Eq(-x, 1)','Eq(x, -1)']);
   assert.equal(system.steps.at(-1).tree.kind,'tuple');
   assert.deepEqual(system.advancedSteps.at(-1).equations.map(formula=>formula.exact),['Eq(x, -1)','Eq(y, -2)']);
+  const grouped=run('solve([x+y=1,x-y=2],[x,y])',true,true);
+  const substitution=grouped.solutionSteps.steps.find(step=>step.title==='Substitute into the second equation');
+  const minus=substitution.equations[0].tree.args[0].args.find(node=>node.kind==='unary');
+  assert.equal(minus.args[0].kind,'parentheses');
+  assert.equal(minus.args[0].args[0].kind,'sum');
+  assert.equal(substitution.equations[0].exact,'Eq(2*x - 1, 2)');
+  assert.deepEqual(grouped.solutionSteps,grouped.equationSteps);
+  const copied=solutionStepsCopyText(grouped.solutionSteps);
+  assert.ok(copied.includes('x-(1-x) = 2'),copied);
+  assert.ok(copied.includes('x = 3/2'));
+  assert.ok(copied.includes('y = -1/2'));
+  assert.ok(copied.includes('Advanced solution · Gaussian elimination'));
   const quadratic=run('solve(x^2-5*x+6=0,x)').equationSteps;
   assert.ok(!quadratic.steps.some(step=>['Move all terms to the left','Expand and collect like terms'].includes(step.title)));
   const formula=quadratic.steps.find(step=>step.title==='Apply the quadratic formula');

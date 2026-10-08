@@ -2,6 +2,7 @@ import {element} from './app-ui.js';
 import {t} from './i18n.js';
 import {roundNumber} from './display-format.js';
 import {regressionROC} from './regression-roc.js';
+import {appendPlotExportButtons} from './svg-export.js';
 
 export function regressionParameterLabels(mode,columns,responseColumn){
   const predictors=columns.filter((_,i)=>i!==responseColumn);if(!predictors.length)return {};
@@ -66,6 +67,7 @@ export function renderRegressionReport(container,report,digits=10,parameterLabel
     const zero=document.createElementNS(ns,'line');for(const [key,v] of Object.entries({x1:30,x2:580,y1:90,y2:90,stroke:'currentColor'}))zero.setAttribute(key,String(v));svg.append(zero);
     for(const [x,y,r] of points){const dot=document.createElementNS(ns,'circle');for(const [key,v] of Object.entries({cx:30+550*(x-min)/(max-min||1),cy:90-75*y/range,r:2.5,fill:Math.abs(Number(r.standardized))>3?'#da5545':'currentColor'}))dot.setAttribute(key,String(v));const title=document.createElementNS(ns,'title');title.textContent=`${r.row}: ${number(binomial?r.deviance:r.residual)}`;dot.append(title);svg.append(dot);}
     const axis=document.createElementNS(ns,'text');axis.setAttribute('x','300');axis.setAttribute('y','195');axis.setAttribute('text-anchor','middle');axis.setAttribute('fill','currentColor');axis.textContent=t('Fitted value');svg.append(axis);details.append(svg);
+    appendPlotExportButtons(svg,'symvacas-residuals');
   }
   const residualWrapper=element('div');residualWrapper.style.overflowX='auto';
   const predictive=bayesian&&!binomial;

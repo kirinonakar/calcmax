@@ -18,6 +18,7 @@ const english={
   'SymvaCAS WebAssembly 과학·CAS·그래프·Python 계산기':'SymvaCAS WebAssembly scientific, CAS, graphing, and Python calculator'
 };
 const korean={
+  'Could not export the graph':'그래프를 내보낼 수 없습니다.',
   'Use [shade] or [s] for shading. Example: [s] -1<x<1 ,-1<y<x. Between functions: [s] sin(x), cos(x), 0..pi.':'[shade] 또는 [s]로 영역을 표시합니다. 예: [s] -1<x<1 ,-1<y<x. 두 함수 사이: [s] sin(x), cos(x), 0..pi.',
   'Delete graph':'그래프 삭제','Delete derivative curve':'도함수 그래프 삭제','Delete shading':'음영 삭제',
   'Use [shade] y < f(x) to shade below a function, or [shade] f, g to shade between two functions. Example: [shade] sin(x), cos(x), 0..pi.':'[shade] y < f(x)는 함수 아래의 영역을, [shade] f, g는 두 함수 사이의 영역을 표시합니다. 예: [shade] sin(x), cos(x), 0..pi.',

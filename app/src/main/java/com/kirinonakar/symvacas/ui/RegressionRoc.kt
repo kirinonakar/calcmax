@@ -1,7 +1,6 @@
 package com.kirinonakar.symvacas.ui
 
 import android.graphics.Paint
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -33,12 +32,17 @@ import kotlin.math.min
     }
     if(points.size<2)return
     val colors=LocalInstrument.current
+    val exports=remember {GraphExportState()}
     val auc=ResultDisplayFormat.formatText(report.optString("auc"),ResultDisplayMode.OFF,false,maxFractionDigits=digits)
     val title="${tr(if(oob)"OOB ROC curve" else "ROC curve")} · AUC=$auc"
     val xLabel=tr("False positive rate (FPR)");val yLabel=tr("Sensitivity (TPR)")
     Text(title,fontSize=12.sp)
     Text(tr(if(oob)"ROC/AUC uses OOB predictions; positive class = 1." else "ROC/AUC uses fitted data; positive class = 1."),fontSize=11.sp,color=colors.muted)
-    Canvas(Modifier.widthIn(max=360.dp).fillMaxWidth().aspectRatio(1f).testTag(if(oob)"statistics-oob-roc" else "statistics-roc").semantics {contentDescription="$title · $xLabel · $yLabel"}) {
+    ExportableGraphCanvas(Modifier.widthIn(max=360.dp).fillMaxWidth().aspectRatio(1f).testTag(if(oob)"statistics-oob-roc" else "statistics-roc").semantics {contentDescription="$title · $xLabel · $yLabel"},colors.display,exports,
+        exportFooterHeight=24.dp,exportFooter={
+            val paint=Paint(Paint.ANTI_ALIAS_FLAG).apply {color=colors.muted.toArgb();textSize=11.sp.toPx()}
+            drawContext.canvas.nativeCanvas.drawText(title,8.dp.toPx(),16.dp.toPx(),paint)
+        }) {
         val left=40.dp.toPx();val top=12.dp.toPx()
         val side=min(size.width-left-12.dp.toPx(),size.height-top-40.dp.toPx()).coerceAtLeast(1f)
         fun x(value:Double)=left+side*value.toFloat()
@@ -60,4 +64,5 @@ import kotlin.math.min
         native.save();native.rotate(-90f,12.dp.toPx(),top+side/2)
         native.drawText(yLabel,12.dp.toPx()-paint.measureText(yLabel)/2,top+side/2,paint);native.restore()
     }
+    PlotExportActions(exports,if(oob)"symvacas-oob-roc" else "symvacas-roc")
 }

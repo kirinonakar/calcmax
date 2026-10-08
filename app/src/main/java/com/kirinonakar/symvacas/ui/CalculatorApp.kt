@@ -428,11 +428,11 @@ private fun domainText(result:JSONObject?):String {
     val conditions=result?.optJSONArray("conditions") ?: return ""
     return if(conditions.length()==0)"" else "Domain: "+(0 until conditions.length()).joinToString{conditions.optString(it)}
 }
-@Composable fun SmallAction(text:String,active:Boolean?=null,description:String?=null,shaded:Boolean=false,fontSize:TextUnit=11.sp,translate:Boolean=true,modifier:Modifier=Modifier,action:()->Unit){
+@Composable fun SmallAction(text:String,active:Boolean?=null,description:String?=null,shaded:Boolean=false,fontSize:TextUnit=11.sp,translate:Boolean=true,modifier:Modifier=Modifier,enabled:Boolean=true,action:()->Unit){
     val c=LocalInstrument.current
-    val color=when(active){true->c.accent;false->c.muted.copy(alpha=.45f);null->MaterialTheme.colorScheme.onSurface}
+    val color=if(!enabled)c.muted.copy(alpha=.45f)else when(active){true->c.accent;false->c.muted.copy(alpha=.45f);null->MaterialTheme.colorScheme.onSurface}
     val actionModifier=description?.let{value->modifier.semantics{contentDescription=value}} ?: modifier
-    TextButton(onClick=action,contentPadding=PaddingValues(horizontal=8.dp,vertical=0.dp),modifier=actionModifier,
+    TextButton(onClick=action,enabled=enabled,contentPadding=PaddingValues(horizontal=8.dp,vertical=0.dp),modifier=actionModifier,
         colors=ButtonDefaults.textButtonColors(containerColor=if(shaded)c.accent.copy(alpha=.22f) else androidx.compose.ui.graphics.Color.Transparent)){
         Text(if(translate)tr(text) else text,fontSize=fontSize,color=color,fontWeight=if(active==true)FontWeight.SemiBold else FontWeight.Normal)
     }

@@ -20,7 +20,7 @@ export function createWorkspaces({state,engine,ui,persist,restoreSelect,requestO
   const functions=createFunctionsWorkspace({state,ui,persist,refreshWorkspaceMath,changeMode,insert});
   const python=createPythonWorkspace({engine,ui,persist,requestOptions,error,run});
   const probability=createProbabilityWorkspace({state,engine,persist,requestOptions});
-  const equationSteps=createEquationSteps($('equation-steps'),$('equation-steps-body'),state);
+  const equationSteps=createEquationSteps($('equation-steps'),$('equation-steps-body'),state,ui.clipboard);
   function equationSource(){return value('equation-form')==='general'?value('equation-source'):polynomialEquation(['equation-a','equation-b','equation-c','equation-d'].slice(0,Number(value('equation-form'))+1).map(value),value('equation-variable'));}
   function tipExpression(){return tipCommand({bill:value('tip-amount'),percent:value('tip-percent'),fixed:value('tip-fixed'),tax:value('tip-tax'),people:value('tip-people'),method:value('tip-method'),whole:$('tip-whole').checked});}
   function tipMethodControls(){const fixed=value('tip-method')==='amount';$('tip-percent').disabled=fixed;$('tip-fixed').disabled=!fixed;}

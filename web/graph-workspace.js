@@ -9,6 +9,8 @@ import {bindGraphGestures,transformBounds,nearestPoint,curvePointAtX} from './gr
 import {surfaceZRange,surfaceSampleCount} from './surface-geometry.js';
 import {graphSamplingInterval,graphPreviewRequest,graphSamplingIdentity} from './graph-sampling.js';
 import {t,setText} from './i18n.js';
+import {graphSvg,graphPng} from './graph-export.js';
+import {downloadFile} from './storage.js';
 
 export function graphInputTree(source,kind='cartesian'){
   const tree=parse(latexInput(source));
@@ -110,6 +112,21 @@ export function createGraphWorkspace({execute,options,onError:reportError,onClea
   let parametersOpen=saved.parametersOpen!==false,pendingAnalysis=null,viewDragging=false;
   const viewSampler=graphSamplingInterval(()=>{if(pending&&active&&!running&&!isBusy()&&isReady())run();});
   const window=$('graph-plot').ownerDocument.defaultView;
+  let exporting=false;
+  function exportControls(){for(const format of ['svg','png'])$('graph-save-'+format).disabled=exporting||!result||!bounds;}
+  for(const format of ['svg','png'])$('graph-save-'+format).onclick=async()=>{
+    if(!result||!bounds||exporting)return;
+    exporting=true;exportControls();
+    try{
+      let range=result.surface?zRange():null;
+      const shown=range?{...result,zMin:range[0],zMax:range[1]}:result;
+      const settings={colors:getColors(),digits:options().displayDigits,dots:kind()==='sequence',analysis,trace,integral,selected:selected(),radianAxis,heightScale,surfaceView:surface};
+      // Render synchronously to snapshot the current view before async encoding.
+      if(format==='svg')downloadFile('symvacas-graph.svg',graphSvg($('graph-plot'),shown,bounds,settings),'image/svg+xml');
+      else {draw();downloadFile('symvacas-graph.png',await graphPng($('graph-plot').querySelector('canvas')),'image/png');}
+    }catch(error){onError(error.message||'Could not export the graph');}
+    finally{exporting=false;exportControls();}
+  };
   const requestFrame=callback=>window.requestAnimationFrame?window.requestAnimationFrame(callback):window.setTimeout(callback,16);
   const cancelFrame=id=>window.cancelAnimationFrame?window.cancelAnimationFrame(id):window.clearTimeout(id);
   function draw(){if(result&&bounds){let range;try{range=result.surface?zRange():null;}catch{return;}plot($('graph-plot'),range?{...result,zMin:range[0],zMax:range[1]}:result,bounds,{colors:getColors(),digits:options().displayDigits,dots:kind()==='sequence',analysis,trace,integral,selected:selected(),radianAxis,heightScale,surfaceView:surface});}}
@@ -211,6 +228,7 @@ export function createGraphWorkspace({execute,options,onError:reportError,onClea
     result=null;analysis=null;trace=null;integral=null;pendingAnalysis=null;revision++;analysisRevision++;
     for(const id of ['graph-plot','graph-table','graph-trace','graph-analysis-result'])$(id).replaceChildren();
     $('graph-status').textContent='';$('graph-status').classList.remove('error');
+    exportControls();
   }
   function removeSource(index,shading=false){
     const next=removeGraphSource(value('graph-source'),index,kind(),shading),before=selected(),other=Number(value('graph-other'));
@@ -222,7 +240,7 @@ export function createGraphWorkspace({execute,options,onError:reportError,onClea
     $('graph-source').oninput();persist();
   }
   function render(){
-    heightControls();densityControls();parameterVisibility();formulas();renderRangeNumbers();analysisControls();syncParameterControls();if(!result||!bounds)return;
+    exportControls();heightControls();densityControls();parameterVisibility();formulas();renderRangeNumbers();analysisControls();syncParameterControls();if(!result||!bounds)return;
     for(const [id,number,suffix] of [['graph-rotation',surface.rotation,'°'],['graph-elevation',surface.elevation,'°'],['graph-surface-zoom',surface.zoom*100,'%']]){let output=$(id+'-value');if(!output){output=document.createElement('output');output.id=id+'-value';$(id).insertAdjacentElement('afterend',output);}output.textContent=displayNumber(number,options().displayDigits)+suffix;}
     let shown=result;
     if(result.surface){
@@ -424,6 +442,7 @@ export function createGraphWorkspace({execute,options,onError:reportError,onClea
   $('graph-reset-parameters').onclick=()=>{for(const name of Object.keys(parameters)){parameterRanges[name]=[-5,5];parameters[name]=1;if(animation)animation.phases[name]=parameterPhase(name)-animation.phase;}parameterControls(Object.keys(parameters),true);persist();parameterChanged();};
   function parameterPhase(name){const [a,b]=parameterRanges[name]||[-5,5];return Math.asin(Math.max(-1,Math.min(1,2*(parameters[name]-a)/(b-a)-1)));}
   function updateButtons(){
+    exportControls();
     const disabled=!!animation||isBusy()||!isReady();
     for(const button of [document.querySelector('[data-run="graph"]'),$('graph-analysis-run')])if(button.disabled!==disabled)button.disabled=disabled;
   }

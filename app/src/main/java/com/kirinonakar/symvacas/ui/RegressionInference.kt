@@ -1,6 +1,5 @@
 package com.kirinonakar.symvacas.ui
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
@@ -122,15 +121,17 @@ import kotlin.math.abs
             if(x.isFinite()&&y.isFinite())Triple(x,y,abs(row.optDouble("standardized"))>3) else null
         }
         if(points.isNotEmpty()) {
+            val exports=remember {GraphExportState()}
             val minimum=points.minOf {it.first};val maximum=points.maxOf {it.first}
             val spread=points.maxOf {abs(it.second)}.takeIf {it>0} ?: 1.0
-            Canvas(Modifier.fillMaxWidth().height(150.dp)) {
+            ExportableGraphCanvas(Modifier.fillMaxWidth().height(150.dp),colors.display,exports) {
                 val half=size.height/2
                 drawLine(colors.muted,Offset(8f,half),Offset(size.width-8f,half))
                 points.forEach {(x,y,outlier)->drawCircle(if(outlier)Color(0xffda5545) else colors.accent,2.5f,
                     Offset((8+(size.width-16)*(x-minimum)/((maximum-minimum).takeIf {it>0} ?: 1.0)).toFloat(),(half-0.85*half*y/spread).toFloat()))}
             }
             Text(tr("Fitted value"),fontSize=11.sp,color=colors.muted)
+            PlotExportActions(exports,"symvacas-residuals")
         }
         val predictive=bayesian&&!binomial
         val residualHeaders=((if(binomial)listOf("Observation","Observed","Fitted value","Residual","Pearson residual","Deviance residual","Leverage","Cook's D") else if(bayesian||machineLearning)listOf("Observation","Observed","Fitted value","Residual") else listOf("Observation","Observed","Fitted value","Residual","Standardized","Leverage","Cook's D"))+(if(predictive)listOf("Predictive lower","Predictive upper") else emptyList())).map {tr(it)}

@@ -1,6 +1,8 @@
 package com.kirinonakar.symvacas.ui
 
 import android.graphics.Paint
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.gestures.detectTransformGestures
@@ -21,6 +23,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -41,6 +44,9 @@ import com.kirinonakar.symvacas.math.Parser
 import com.kirinonakar.symvacas.ui.theme.LocalInstrument
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import kotlin.math.*
 
@@ -48,6 +54,36 @@ import kotlin.math.*
     val defaults=LocalInstrument.current
     val c=defaults.copy(curves=m.graphColors.mapIndexed {index,hex->hex?.let {Color(android.graphics.Color.parseColor(it))} ?: defaults.curves[index]})
     val focusManager=LocalFocusManager.current
+    val context=LocalContext.current
+    val exportScope=rememberCoroutineScope()
+    val exports=remember {GraphExportState()}
+    var exportImage by remember {mutableStateOf<GraphExportImage?>(null)}
+    var exportMessage by remember {mutableStateOf("")}
+    var exporting by remember {mutableStateOf(false)}
+    fun saveExport(uri:android.net.Uri?) {
+        val image=exportImage
+        exportImage=null
+        if(uri==null||image==null){exporting=false;return}
+        exportScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    context.contentResolver.openOutputStream(uri,"wt")?.use {image.writeTo(it)} ?: error("Could not open the selected file for writing")
+                }
+                exportMessage="Graph saved"
+            } catch(e:Exception) {m.error=e.message ?: "Could not save the graph"}
+            finally {exporting=false}
+        }
+    }
+    val saveSvg=rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("image/svg+xml"),::saveExport)
+    val savePng=rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("image/png"),::saveExport)
+    fun prepareExport(format:String) {
+        try {
+            val capture=exports.capture ?: return
+            exportImage=capture(format)
+            exporting=true;exportMessage=""
+            if(format=="svg")saveSvg.launch("symvacas-graph.svg")else savePng.launch("symvacas-graph.png")
+        } catch(e:Exception) {exporting=false;exportImage=null;m.error=e.message ?: "Could not save the graph"}
+    }
     var rangeDialog by remember { mutableStateOf(false) }
     var analysis by remember { mutableStateOf(false) }
     var showTable by rememberSaveable { mutableStateOf(false) }
@@ -119,7 +155,10 @@ import kotlin.math.*
                 if(m.graphKind in listOf("cartesian","parametric","polar"))SmallAction("Analyze",active=if(analysis)true else null,shaded=analysis) {analysis=!analysis;if(analysis)scrollToSection="analysis"}
                 if(m.graphKind!="surface")SmallAction("Table",active=if(showTable)true else null,shaded=showTable) {showTable=!showTable;if(showTable)scrollToSection="table"}
                 if(m.graphKind in listOf("cartesian","parametric","polar"))SmallAction(if(m.radianAxis)"x: π rad" else "x: decimal"){m.radianAxis=!m.radianAxis;m.save()}
+                SmallAction("Save SVG",enabled=m.graphData!=null&&!exporting){prepareExport("svg")}
+                SmallAction("Save PNG",enabled=m.graphData!=null&&!exporting){prepareExport("png")}
             }
+            if(exportMessage.isNotBlank())Text(tr(exportMessage),Modifier.padding(horizontal=14.dp),fontSize=11.sp,color=c.muted)
             if(m.graphParameters.isNotEmpty()) {
                 Row(Modifier.fillMaxWidth().padding(horizontal=10.dp).horizontalScroll(rememberScrollState()),verticalAlignment=Alignment.CenterVertically) {
                     SmallAction(if(parametersOpen)"Parameters ▾" else "Parameters ▸"){focusManager.clearFocus();parametersOpen=!parametersOpen}
@@ -240,7 +279,7 @@ import kotlin.math.*
         }}
         if(m.graphKind=="surface") {
             Box(Modifier.fillMaxWidth().height(plotHeight).clipToBounds()) {
-            SurfaceGraph(m,surfaceRotation,surfaceElevation,m.surfaceZoom,m.surfaceRenderMode,m.surfaceColor,Modifier.fillMaxSize().clipToBounds().pointerInput(m.graphKind) {
+            SurfaceGraph(m,surfaceRotation,surfaceElevation,m.surfaceZoom,m.surfaceRenderMode,m.surfaceColor,exports,Modifier.fillMaxSize().clipToBounds().pointerInput(m.graphKind) {
                 detectTransformGestures { _,pan,zoom,_->
                     surfaceRotation=((surfaceRotation+pan.x*.7f)%360f+360f)%360f
                     surfaceElevation=(surfaceElevation+pan.y*.5f).coerceIn(-90f,90f)
@@ -282,7 +321,7 @@ import kotlin.math.*
             }
         } else Box(Modifier.fillMaxWidth().height(plotHeight).clipToBounds()) {
         val derivativeDash=remember {PathEffect.dashPathEffect(floatArrayOf(10f,6f))}
-        Canvas(Modifier.fillMaxSize().clipToBounds().background(c.display).then(transform).pointerInput(m.graphKind,selected) { detectTapGestures { p ->
+        ExportableGraphCanvas(Modifier.fillMaxSize().clipToBounds().background(c.display).then(transform).pointerInput(m.graphKind,selected) { detectTapGestures { p ->
             val target=m.xMin+(m.xMax-m.xMin)*p.x/size.width
             val targetY=m.yMax-(m.yMax-m.yMin)*p.y/size.height
             val xSpan=m.xMax-m.xMin;val ySpan=m.yMax-m.yMin
@@ -315,7 +354,7 @@ import kotlin.math.*
             val curve=latestCurves.getOrNull(selected)
             m.trace=if(m.graphKind=="cartesian")curve?.let {graphTracePointAtX(it,target,targetY)}
                 else curve?.filterNotNull()?.minByOrNull { ((it.first-target)/xSpan).pow(2)+((it.second-targetY)/ySpan).pow(2) }
-        } }.semantics { contentDescription="Graph with ${curves.size} curves. Pinch to zoom, drag to pan, tap to trace${if(m.graphAnalysis?.optString("analysis")=="tangent")" or move the tangent" else ""}. Use Range and Analyze for accessible controls." }) {
+        } }.semantics { contentDescription="Graph with ${curves.size} curves. Pinch to zoom, drag to pan, tap to trace${if(m.graphAnalysis?.optString("analysis")=="tangent")" or move the tangent" else ""}. Use Range and Analyze for accessible controls." },c.display,exports) {
             val xlo=m.xMin;val xhi=m.xMax
             fun px(x:Double)=((x-xlo)/(xhi-xlo)*size.width).toFloat()
             fun py(y:Double)=(size.height-(y-m.yMin)/(m.yMax-m.yMin)*size.height).toFloat()
@@ -810,7 +849,7 @@ internal fun graphShadeFormula(source:String,displayDigits:Int?=null):GraphShade
     }
 }
 
-@Composable private fun SurfaceGraph(m:CalculatorModel,rotation:Float,elevationDeg:Float,zoom:Float,renderMode:String,colorHex:String,modifier:Modifier=Modifier) {
+@Composable private fun SurfaceGraph(m:CalculatorModel,rotation:Float,elevationDeg:Float,zoom:Float,renderMode:String,colorHex:String,exports:GraphExportState,modifier:Modifier=Modifier) {
     val c=LocalInstrument.current
     val mesh=remember(m.graphData) {
         val rows=m.graphData?.optJSONArray("surface")
@@ -828,8 +867,8 @@ internal fun graphShadeFormula(source:String,displayDigits:Int?=null):GraphShade
     val projection=remember(bounds,rotation,elevationDeg) {SurfaceProjection(bounds,rotation.toDouble(),elevationDeg.toDouble())}
     val faces=remember(mesh,projection,renderMode) {if(renderMode=="wireframe")emptyList() else SurfaceMesh.faces(mesh,projection)}
     val surfaceColor=remember(colorHex) {runCatching {Color(android.graphics.Color.parseColor(colorHex))}.getOrDefault(Color(0xFF007B68))}
-    Canvas(modifier.background(c.display).semantics { contentDescription="Three dimensional surface. Drag to rotate freely, pinch to zoom, and adjust x, y and z ranges." }) {
-        if(mesh.isEmpty())return@Canvas
+    ExportableGraphCanvas(modifier.background(c.display).semantics { contentDescription="Three dimensional surface. Drag to rotate freely, pinch to zoom, and adjust x, y and z ranges." },c.display,exports) {
+        if(mesh.isEmpty())return@ExportableGraphCanvas
         val scale=min(size.width,size.height)*.34f*zoom
         fun project(point:DoubleArray):Offset {
             val p=projection.project(point)

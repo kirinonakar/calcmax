@@ -1,10 +1,10 @@
 package com.kirinonakar.symvacas.ui
 
 import android.graphics.Paint
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
@@ -29,6 +29,7 @@ internal fun survivalStepPoints(curve:JSONArray,index:Int):List<Pair<Double,Doub
 
 @Composable internal fun SurvivalReport(report:JSONObject,plan:SurvivalPlan?,band:Boolean) {
     val c=LocalInstrument.current;val ko=isKorean()
+    val exports=remember {GraphExportState()}
     fun label(en:String,kr:String)=if(ko)kr else en
     fun number(value:Double)=if(value.isFinite())String.format(Locale.US,"%.5g",value).replace(Regex("(\\.\\d*?)0+(?=e|$)"),"$1").replace(Regex("\\.(?=e|$)"),"") else "—"
     fun value(row:JSONObject,key:String)=if(row.isNull(key))"—" else number(row.optDouble(key,Double.NaN))
@@ -36,7 +37,11 @@ internal fun survivalStepPoints(curve:JSONArray,index:Int):List<Pair<Double,Doub
     val names=groups.mapIndexed {i,g->plan?.groups?.getOrNull(i) ?: if(groups.size==1)label("All subjects","전체") else label("Group ","그룹 ")+number(g.getDouble("id"))}
     Text("Kaplan–Meier",style=MaterialTheme.typography.titleSmall)
     groups.forEachIndexed {i,g->Text("${names[i]} · n=${g.getInt("n")}",color=c.curves[i%c.curves.size],fontSize=12.sp)}
-    Canvas(Modifier.fillMaxWidth().height(250.dp).testTag("statistics-survival-plot").semantics {contentDescription=if(ko)"Kaplan–Meier 생존곡선과 95% 신뢰구간" else "Kaplan–Meier survival curves and 95% confidence intervals"}) {
+    ExportableGraphCanvas(Modifier.fillMaxWidth().height(250.dp).testTag("statistics-survival-plot").semantics {contentDescription=if(ko)"Kaplan–Meier 생존곡선과 95% 신뢰구간" else "Kaplan–Meier survival curves and 95% confidence intervals"},c.display,exports,
+        exportFooterHeight=(names.size*18+6).dp,exportFooter={
+            val paint=Paint(Paint.ANTI_ALIAS_FLAG).apply {textSize=11.sp.toPx()}
+            names.forEachIndexed {index,name->paint.color=c.curves[index%c.curves.size].toArgb();drawContext.canvas.nativeCanvas.drawText("$name · n=${groups[index].getInt("n")}",8.dp.toPx(),(index*18+16).dp.toPx(),paint)}
+        }) {
         val left=42.dp.toPx();val right=size.width-12.dp.toPx();val top=25.dp.toPx();val bottom=size.height-36.dp.toPx()
         val maxTime=groups.maxOfOrNull {g->g.getJSONArray("curve").let {it.getJSONArray(it.length()-1).getDouble(0)}}?.coerceAtLeast(1.0) ?: 1.0
         fun x(t:Double)=left+(t/maxTime*(right-left)).toFloat()
@@ -57,6 +62,7 @@ internal fun survivalStepPoints(curve:JSONArray,index:Int):List<Pair<Double,Doub
             for(j in 0 until curve.length()) {val row=curve.getJSONArray(j);if(row.getDouble(3)>0){val px=x(row.getDouble(0));val py=y(row.getDouble(4));val r=3.dp.toPx();drawLine(color,Offset(px-r,py),Offset(px+r,py),1.dp.toPx());drawLine(color,Offset(px,py-r),Offset(px,py+r),1.dp.toPx())}}
         }
     }
+    PlotExportActions(exports,"symvacas-survival")
     Text(label("Shading: pointwise 95% CI · + censored","음영: 시점별 95% 신뢰구간 · + 중도절단"),fontSize=11.sp,color=c.muted)
     SurvivalTable(listOf(label("Group","그룹"),"n",label("Events","사건"),label("Median","중앙 생존시간")),groups.mapIndexed {i,g->listOf(names[i],g.getInt("n").toString(),g.getInt("events").toString(),if(g.isNull("median"))label("Not reached","미도달") else value(g,"median"))})
     Text(label("Log-rank test","Log-rank 검정"),style=MaterialTheme.typography.titleSmall)

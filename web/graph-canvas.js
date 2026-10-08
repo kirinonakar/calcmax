@@ -9,7 +9,7 @@ const finite=point=>point&&point.every(Number.isFinite);
 
 // One persistent bitmap per workspace, with a backing store sized for its
 // actual CSS width and device pixel ratio. Geometry uses the gesture viewBox.
-export function plotGraph(container,result,bounds,{colors=defaultGraphColors,digits=10,dots=false,selected=0,analysis=null,trace=null,integral=null,radianAxis=false,halfHeight=false,heightScale=halfHeight?.5:1,surfaceView={}}={}){
+export function plotGraph(container,result,bounds,{colors=defaultGraphColors,digits=10,dots=false,selected=0,analysis=null,trace=null,integral=null,radianAxis=false,halfHeight=false,heightScale=halfHeight?.5:1,surfaceView={},contextFactory=null}={}){
   const scale=[1,.5,2].includes(heightScale)?heightScale:1;
   const h=460*scale,ih=h-2*pad;
   const {xmin,xmax,ymin,ymax}=bounds;
@@ -23,9 +23,11 @@ export function plotGraph(container,result,bounds,{colors=defaultGraphColors,dig
   const cssWidth=canvas.getBoundingClientRect().width||container.getBoundingClientRect().width||w;
   const width=Math.max(1,Math.round(cssWidth*ratio)),height=Math.max(1,Math.round(cssWidth*h/w*ratio));
   if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height;}
-  const ctx=canvas.getContext('2d');if(!ctx)return canvas;
+  const context=canvas.getContext('2d');if(!context)return canvas;
+  const ctx=contextFactory?contextFactory(context,{width:w,height:h}):context;
   ctx.setTransform(canvas.width/w,0,0,canvas.height/h,0,0);ctx.clearRect(0,0,w,h);
   const style=window.getComputedStyle(container),muted=style.getPropertyValue('--muted').trim()||'#738a7c',ink=style.getPropertyValue('--ink').trim()||'#20392f',accent=style.getPropertyValue('--accent').trim()||colors[0];
+  ctx.fillStyle=style.getPropertyValue('--number').trim()||'#ffffff';ctx.fillRect(0,0,w,h);
   // Size in CSS pixels: readable on mobile without growing too large on desktop.
   const labelSize=Math.max(10,Math.min(12,cssWidth/100+6));
   ctx.lineJoin='round';ctx.lineCap='round';ctx.font=`${labelSize*w/cssWidth}px system-ui`;ctx.fillStyle=muted;

@@ -1,4 +1,4 @@
-self.SYMVACAS_CACHE = 'symvacas-static-82304e5293fecb11';
+self.SYMVACAS_CACHE = 'symvacas-static-9503d5d4fa33266b';
 self.SYMVACAS_ASSETS = [
   "./",
   "./advanced-statistics-schema.js",
@@ -28,6 +28,7 @@ self.SYMVACAS_ASSETS = [
   "./engine-fetch.js",
   "./engine-ui.js",
   "./engine.zip",
+  "./equation-formula-text.js",
   "./equation-steps.js",
   "./evaluation-policy.js",
   "./expression-display.js",
@@ -39,8 +40,10 @@ self.SYMVACAS_ASSETS = [
   "./graph-canvas.js",
   "./graph-color-settings.js",
   "./graph-colors.js",
+  "./graph-export.js",
   "./graph-integral.js",
   "./graph-sampling.js",
+  "./graph-svg-context.js",
   "./graph-view.js",
   "./graph-workspace.js",
   "./i18n.js",
@@ -75,6 +78,7 @@ self.SYMVACAS_ASSETS = [
   "./surface-geometry.js",
   "./surface-plot.js",
   "./survival-report.js",
+  "./svg-export.js",
   "./sw.js",
   "./THIRD_PARTY.md",
   "./unit-groups.js",

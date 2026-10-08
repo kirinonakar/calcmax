@@ -1,6 +1,7 @@
 import {element} from './app-ui.js';
 import {t} from './i18n.js';
 import {roundNumber} from './display-format.js';
+import {appendPlotExportButtons} from './svg-export.js';
 
 export function regressionROC(report,digits=10,{oob=false}={}){
   const points=(report.roc||[]).map(point=>point.map(Number)).filter(point=>point.length===2&&point.every(n=>Number.isFinite(n)&&n>=0&&n<=1));
@@ -22,5 +23,5 @@ export function regressionROC(report,digits=10,{oob=false}={}){
   draw('path',{d:points.map(([fpr,tpr],i)=>`${i?'L':'M'}${x(fpr)},${y(tpr)}`).join(' '),stroke:'var(--accent)','stroke-width':2.5,fill:'none','data-roc-curve':'true'});
   draw('text',{x:196,y:351,'text-anchor':'middle','font-size':12,fill:'var(--ink)'},t('False positive rate (FPR)'));
   draw('text',{x:0,y:0,transform:'translate(14 162) rotate(-90)','text-anchor':'middle','font-size':12,fill:'var(--ink)'},t('Sensitivity (TPR)'));
-  figure.append(svg);return figure;
+  figure.append(svg);appendPlotExportButtons(svg,oob?'symvacas-oob-roc':'symvacas-roc',{captions:[{text:`${t(title)} · AUC=${roundNumber(String(report.auc),digits)}`}]});return figure;
 }

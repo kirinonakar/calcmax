@@ -209,12 +209,14 @@ def linear_system_steps(matrix, rhs, variables, equations):
             if node.get("kind") == "symbol" and node.get("value") == str(variable):
                 return copy.deepcopy(display_tree(value))
             children = [replace_tree(child, variable, value) for child in node.get("args", [])]
-            if node.get("kind") == "product" and node != {**node, "args": children}:
-                # Show numerical substitution explicitly, including negative operands.
+            if node.get("kind") in ("product", "unary") and node != {**node, "args": children}:
+                # Keep a substituted sum or negative operand grouped under
+                # multiplication and negation, before any simplification.
                 children = [{"kind": "parentheses", "args": [child]} if
                             child.get("kind") in ("sum", "unary") or child.get("value", "").startswith("-")
                             else child for child in children]
-                return {**node, "displayOperator": "×", "args": children}
+                if node.get("kind") == "product":
+                    return {**node, "displayOperator": "×", "args": children}
             return {**node, "args": children}
         shown = replace_tree(display_tree(original), isolated, replacement)
         step = add(basic, "Substitute into the second equation", "Replace the isolated variable with its expression. The second equation now has only one unknown.")

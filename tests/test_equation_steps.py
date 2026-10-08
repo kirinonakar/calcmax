@@ -151,6 +151,24 @@ class EquationStepTests(unittest.TestCase):
         self.assertEqual("Read the solution from the matrix", report["advancedSteps"][-1]["title"])
         self.assertEqual(["Eq(x, -1)", "Eq(y, -2)"], [formula["exact"] for formula in report["advancedSteps"][-1]["equations"]])
 
+    def test_substitution_under_minus_preserves_visible_grouping(self):
+        x, y = s.symbols("x y")
+        for first in [s.Eq(x+y, 1), s.Eq(y-2*x, 1), s.Eq(y, -1)]:
+            with self.subTest(first=first):
+                result, report = self.report([first, s.Eq(x-y, 2)], [x, y], solutionSteps=True)
+                substitute = next(step for step in report["steps"] if step["title"] == "Substitute into the second equation")
+                formula = substitute["equations"][0]
+                shown = visible_formula(formula["tree"])
+                self.assertIn("-(", shown)
+                visible = s.sympify(shown)
+                exact = s.sympify(formula["exact"], locals={"Eq": lambda left, right: s.Eq(left, right, evaluate=False)})
+                self.assertEqual(0, s.expand(visible.lhs-exact.lhs))
+                self.assertEqual(0, s.expand(visible.rhs-exact.rhs))
+                self.assertEqual(report, result["solutionSteps"])
+                if first == s.Eq(x+y, 1):
+                    self.assertEqual([{x: s.Rational(3, 2), y: -s.Rational(1, 2)}],
+                                     Engine({}).build(result["resultAst"]))
+
     def test_rearrangement_describes_only_operations_that_are_used(self):
         x, y = s.symbols("x y")
         for first, expected in [

@@ -23,7 +23,7 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
   let engineeringConversion=false,engineeringShift=0;
   const tapeFollow=followTape($('calculation-tape'),$('tape-active'));
   const displaySizing=createDisplaySizing(document.querySelector('main'),$('expression-preview'),$('answer'));
-  const solutionSteps=createEquationSteps($('result-steps'),$('result-steps-body'),state);
+  const solutionSteps=createEquationSteps($('result-steps'),$('result-steps-body'),state,clipboard);
   let displayedStepResult=null;
   let statisticsResultTarget='';
   const expressionUndo=[];

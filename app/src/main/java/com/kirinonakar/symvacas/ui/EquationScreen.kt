@@ -5,14 +5,21 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.selection.DisableSelection
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 import com.kirinonakar.symvacas.calculator.CalculatorModel
 import com.kirinonakar.symvacas.calculator.FunctionTransfer
 import com.kirinonakar.symvacas.calculator.ResultDisplayMode
@@ -119,22 +126,30 @@ import org.json.JSONArray
             var expanded by remember(report){mutableStateOf(false)}
             var advancedExpanded by remember(report){mutableStateOf(false)}
             val expansionDescription=tr(if(expanded)"Expanded" else "Collapsed")
+            val clipboard=LocalClipboardManager.current
+            val language=LocalLanguage.current
+            val copyText=remember(report.toString(),m.displayDigits,language) {
+                solutionStepsCopyText(report,m.displayDigits){translateLabel(it,language)}
+            }
             HorizontalDivider()
-            TextButton(onClick={expanded=!expanded},modifier=Modifier.fillMaxWidth().semantics {
+            Row(Modifier.fillMaxWidth()) {
+            TextButton(onClick={expanded=!expanded},modifier=Modifier.weight(1f).semantics {
                 stateDescription=expansionDescription
             }) {Text((if(expanded)"▾ " else "▸ ")+tr("Step-by-step solution"))}
-            if(expanded) {
+            SmallAction("Copy full solution"){clipboard.setText(AnnotatedString(copyText))}
+            }
+            if(expanded) {SelectionContainer {Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(10.dp)) {
                 report.optString("note").lines().filter{it.isNotBlank()}.forEach {line->Text(tr(line),style=MaterialTheme.typography.bodySmall)}
                 if(report.optString("method").isNotBlank())Text(tr(report.optString("method")),style=MaterialTheme.typography.titleMedium)
                 EquationStepList(report.optJSONArray("steps"),m)
                 report.optJSONArray("advancedSteps")?.let {advanced->
                     val advancedDescription=tr(if(advancedExpanded)"Expanded" else "Collapsed")
-                    TextButton(onClick={advancedExpanded=!advancedExpanded},modifier=Modifier.fillMaxWidth().semantics{stateDescription=advancedDescription}) {
+                    DisableSelection {TextButton(onClick={advancedExpanded=!advancedExpanded},modifier=Modifier.fillMaxWidth().semantics{stateDescription=advancedDescription}) {
                         Text((if(advancedExpanded)"▾ " else "▸ ")+tr("Advanced solution · Gaussian elimination"))
-                    }
+                    }}
                     if(advancedExpanded)EquationStepList(advanced,m)
                 }
-            }
+            }}}
         }
 }
 
@@ -143,13 +158,8 @@ import org.json.JSONArray
     (0 until steps.length()).forEach {index->
         val step=steps.getJSONObject(index)
         Text("${index+1}. ${tr(step.optString("title"))}",style=MaterialTheme.typography.titleSmall)
-        val parts=step.optJSONArray("explanationParts")
-        val explanation=if(parts==null)tr(step.optString("explanation"))else (0 until parts.length()).map {i->
-            val part=parts.getJSONObject(i)
-            var text=tr(part.getString("text"))
-            part.optJSONObject("values")?.let {values->values.keys().forEach {key->text=text.replace("{$key}",values.getString(key))}}
-            text
-        }.joinToString(" ")
+        val language=LocalLanguage.current
+        val explanation=equationStepExplanation(step){translateLabel(it,language)}
         if(explanation.isNotBlank())Text(explanation,style=MaterialTheme.typography.bodySmall)
         step.optJSONObject("variableOrder")?.let{EquationStepFormula(it,m)}
         val operation=step.optJSONObject("operation")
@@ -183,7 +193,22 @@ import org.json.JSONArray
 @Composable private fun EquationStepFormula(formula:JSONObject,m:CalculatorModel) {
     formula.optJSONObject("tree")?.let {tree->
         val displayTree=ResultDisplayFormat.formatTree(tree,ResultDisplayMode.OFF,false,maxFractionDigits=m.displayDigits)
-        Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())){MathNode(displayTree,m.outputFont)}
+        val text=remember(displayTree.toString()){equationFormulaText(displayTree)}
+        val clipboard=LocalClipboardManager.current
+        var selectionOpen by remember(text){mutableStateOf(false)}
+        var selectedText by remember(text){mutableStateOf(TextFieldValue(text,TextRange(0,text.length)))}
+        fun selectFormula(){selectedText=TextFieldValue(text,TextRange(0,text.length));selectionOpen=true}
+        // Native text handles operate on one coherent formula, preserving
+        // fractions and parentheses rather than copying separate layout labels.
+        DisableSelection {Box(Modifier.fillMaxWidth().combinedClickable(onClick=::selectFormula,onLongClick=::selectFormula)
+            .horizontalScroll(rememberScrollState()).semantics {contentDescription=text}){MathNode(displayTree,m.outputFont)}}
+        if(selectionOpen)AlertDialog(onDismissRequest={selectionOpen=false},title={Text(tr("Select formula"))},text={
+            OutlinedTextField(selectedText,{selectedText=it},readOnly=true,maxLines=8,modifier=Modifier.fillMaxWidth())
+        },confirmButton={TextButton(onClick={
+            val range=selectedText.selection
+            clipboard.setText(AnnotatedString(if(range.collapsed)text else text.substring(range.min,range.max)))
+            selectionOpen=false
+        }){Text(tr("Copy"))}},dismissButton={TextButton(onClick={selectionOpen=false}){Text(tr("Close"))}})
     }
 }
 

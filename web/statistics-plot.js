@@ -4,6 +4,7 @@ import {displayNumber} from './display-format.js';
 import {t} from './i18n.js';
 import {statisticsPlotNumber,violinDensity,beeswarmLayout,statisticsHeatMapData,statisticsCorrelationHeatMap,heatMapColor} from './statistics-plot-data.js';
 import {clusteredHeatMap} from './statistics-cluster.js';
+import {appendPlotExportButtons} from './svg-export.js';
 export function statisticsPlotSeries(rows,{grouping='columns',columnCount=rows[0]?.length||1}={}){
   const names=statisticsColumnNames(columnCount);
   const number=statisticsPlotNumber;
@@ -28,7 +29,25 @@ export function statisticsPlotPanels(rows,{grouping='columns',columnCount=rows[0
   }]);
 }
 
-export function statisticsPlot(container,rows,{type='scatter',digits=10,curve=[],xAxisLabel='x',yAxisLabel='y',series=statisticsPlotSeries(rows),heatMap,heatMapFit=false,orientation='horizontal'}={}){
+export function statisticsPlot(container,rows,options={}){
+  drawStatisticsPlot(container,rows,options);
+  const svg=container.querySelector('svg');if(!svg)return;
+  const actions=appendPlotExportButtons(svg,'symvacas-statistics-'+(options.type||'scatter'),()=>{
+  const captions=[];
+  const legend=container.querySelector('.statistics-plot-legend');
+  if(legend){
+    const entries=[...legend.children];
+    if(entries.length)entries.forEach(entry=>captions.push({text:entry.textContent,color:container.ownerDocument.defaultView.getComputedStyle(entry).color}));
+    else captions.push({text:legend.textContent});
+  }
+  const bar=container.querySelector('.statistics-heatmap-legend'),scale=bar?{low:bar.firstElementChild.textContent,high:bar.lastElementChild.textContent}:null;
+  if(scale&&scale.low===scale.high)scale.color=container.ownerDocument.defaultView.getComputedStyle(bar.querySelector('.statistics-heatmap-scale')).backgroundColor;
+  return {captions,scale};
+  });
+  if(svg.parentNode!==container)container.append(actions);
+}
+
+function drawStatisticsPlot(container,rows,{type='scatter',digits=10,curve=[],xAxisLabel='x',yAxisLabel='y',series=statisticsPlotSeries(rows),heatMap,heatMapFit=false,orientation='horizontal'}={}){
   if(['heatmap','correlationheatmap','clusteredheatmap'].includes(type)){drawHeatMap(container,heatMap||(type==='correlationheatmap'?statisticsCorrelationHeatMap(rows):type==='clusteredheatmap'?clusteredHeatMap(statisticsHeatMapData(rows)):statisticsHeatMapData(rows)),digits,heatMapFit);return;}
   if(type==='violin'||type==='box'){drawDistribution(container,series,digits,type,orientation);return;}
   const columns=series.map(entry=>entry.values);

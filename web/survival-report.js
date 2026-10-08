@@ -1,5 +1,6 @@
 import {element} from './app-ui.js';
 import {getLanguage,t} from './i18n.js';
+import {appendPlotExportButtons} from './svg-export.js';
 
 const colors=['var(--accent)','#cf7131','#8254b6','#397ec6','#bf547f','#86962e'];
 export function survivalNumber(n,digits=5){return n===null||n===undefined||!Number.isFinite(Number(n))?'—':Number(Number(n).toPrecision(Math.min(5,Math.max(2,digits)))).toString();}
@@ -41,6 +42,7 @@ export function renderSurvivalReport(container,report,{groups=[],predictors=[],b
     }
   });
   container.append(svg,element('p',text('Shading: pointwise 95% CI · + censored','음영: 시점별 95% 신뢰구간 · + 중도절단'),'hint'));
+  appendPlotExportButtons(svg,'symvacas-survival',{captions:[...legend.children].map(entry=>({text:entry.textContent,color:container.ownerDocument.defaultView.getComputedStyle(entry).color}))});
   const table=(headers,rows)=>{const scroll=element('div','','survival-table-scroll'),table=element('table'),head=element('thead'),header=element('tr'),body=element('tbody');headers.forEach(label=>{const cell=element('th',label);cell.scope='col';header.append(cell);});head.append(header);rows.forEach(values=>{const row=element('tr');values.forEach(value=>row.append(element('td',String(value))));body.append(row);});table.append(head,body);scroll.append(table);container.append(scroll);};
   table([text('Group','그룹'),'n',text('Events','사건'),text('Median survival','중앙 생존시간')],report.groups.map((g,i)=>[names[i],g.n,g.events,g.median===null?text('Not reached','미도달'):number(g.median)]));
   container.append(element('h3',text('Log-rank test','Log-rank 검정')));

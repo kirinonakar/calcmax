@@ -22,7 +22,10 @@ import kotlin.math.abs
 
 @Composable internal fun StatisticsPlot(type:String,points:List<Pair<Double,Double>>,values:List<Double>,secondary:List<Double> = emptyList(),curve:List<Pair<Double,Double>> = emptyList(),fitLabel:String="",displayDigits:Int=10,showCorrelation:Boolean=false,correlation:Double?=null,tertiary:List<Double> = emptyList(),xDateOrigin:LocalDate?=null,xAxisLabel:String="x",yAxisLabel:String="y",fitPrefix:String="y ≈ ",fitVariables:Map<String,String> = emptyMap(),allColumns:List<Pair<String,List<Double>>>? = null,orientation:String="horizontal") {
     val c=LocalInstrument.current
+    val exports=remember {GraphExportState()}
     val series=if(allColumns!=null)allColumns.mapIndexed {index,(name,observations)->Triple(name,observations,c.curves[index%c.curves.size])}.filter {it.second.isNotEmpty()} else (if(secondary.isEmpty()&&tertiary.isEmpty())listOf(Triple("",values,c.accent)) else listOf(Triple("x",values,c.accent),Triple("y",secondary,c.danger),Triple("z",tertiary,c.curves[2]))).filter {it.second.isNotEmpty()}
+    val exportLabels=if(type=="Histogram")series.map {"${it.first.ifBlank {"value"}} (n=${it.second.size})" to it.third}
+        else if(type=="Scatter"&&fitLabel.isNotBlank())listOf((fitPrefix+fitLabel) to c.danger) else emptyList()
     val fitEquation=remember(fitLabel,displayDigits,fitVariables) {if(fitLabel.isBlank())null else regressionFormulaDisplayTree(fitLabel,displayDigits,fitVariables)}
     val densities=remember(type,series.map {it.second}) {if(type=="Violin + points")series.map {violinDensity(it.second)} else emptyList()}
     val distribution=type in listOf("Box plot","Violin + points")
@@ -31,14 +34,18 @@ import kotlin.math.abs
     BoxWithConstraints(Modifier.fillMaxWidth()) {
     val chartWidth=if(vertical)maxOf(maxWidth,(series.size*70+82).dp) else maxWidth
     Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
-    Canvas(Modifier.width(chartWidth).height(if(vertical)300.dp else if(distribution)(series.size*70+70).coerceAtLeast(220).dp else 220.dp).background(c.display)) {
+    ExportableGraphCanvas(Modifier.width(chartWidth).height(if(vertical)300.dp else if(distribution)(series.size*70+70).coerceAtLeast(220).dp else 220.dp).background(c.display),c.display,exports,
+        exportFooterHeight=if(exportLabels.isEmpty())0.dp else (exportLabels.size*18+6).dp,exportFooter={
+            val paint=Paint(Paint.ANTI_ALIAS_FLAG).apply {textSize=11.sp.toPx()}
+            exportLabels.forEachIndexed {index,(label,color)->paint.color=color.toArgb();drawContext.canvas.nativeCanvas.drawText(label,8.dp.toPx(),(index*18+16).dp.toPx(),paint)}
+        }) {
         val left=(if(vertical)70 else 38).dp.toPx();val right=12.dp.toPx();val top=14.dp.toPx();val bottom=(if(vertical)48 else 28).dp.toPx()
         val width=size.width-left-right;val height=size.height-top-bottom
         val text=Paint(Paint.ANTI_ALIAS_FLAG).apply {color=c.muted.toArgb();textSize=10.sp.toPx()}
         drawLine(c.grid,Offset(left,top+height),Offset(left+width,top+height),1.dp.toPx())
         drawLine(c.grid,Offset(left,top),Offset(left,top+height),1.dp.toPx())
         if(type=="Scatter") {
-            if(points.isEmpty())return@Canvas
+            if(points.isEmpty())return@ExportableGraphCanvas
             val range=if(curve.isEmpty())points else points+curve
             var x0=range.minOf {it.first};var x1=range.maxOf {it.first};var y0=range.minOf {it.second};var y1=range.maxOf {it.second}
             if(x0==x1){x0-=1;x1+=1};if(y0==y1){y0-=1;y1+=1}
@@ -127,6 +134,7 @@ import kotlin.math.abs
     }
     }
     }
+    PlotExportActions(exports,"symvacas-statistics-plot")
     if(type=="Box plot")series.forEach {entry->
         val summary=remember(entry.second) {
             val sorted=entry.second.sorted()

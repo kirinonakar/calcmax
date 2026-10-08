@@ -1,4 +1,10 @@
 export const nativeKorean = {
+  "Copy full solution": "풀이 전체 복사",
+  "Copy table": "표 복사",
+  "Select formula": "수식 선택",
+  "Save SVG": "SVG 저장",
+  "Save PNG": "PNG 저장",
+  "Graph saved": "그래프를 저장했습니다",
   "Some intermediate steps were omitted to keep the explanation manageable. The computed result is unchanged.": "풀이가 지나치게 길어지지 않도록 일부 중간 단계를 생략했습니다. 계산 결과에는 영향이 없습니다.",
   "General power rule": "밑과 지수가 변하는 거듭제곱의 미분",
   "When the exponent also varies, differentiate both the base and exponent using the logarithmic power rule.": "지수도 변수에 따라 달라지면 로그 미분을 이용하여 밑과 지수를 모두 미분합니다.",

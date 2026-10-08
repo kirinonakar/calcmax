@@ -33,11 +33,18 @@ internal fun statisticsReportFor(result:JSONObject?,source:String,analyses:Set<S
 internal fun statisticsCellText(m:CalculatorModel,cell:JSONObject)=ResultDisplayFormat.resultText(cell,true,false,
     m.resultDisplayMode,m.thousandsSeparator,m.engineeringConversion,m.engineeringShift,false,false,m.displayDigits)
 
+internal fun statisticsTableCopyText(headers:List<String>,rows:List<List<String>>):String {
+    fun cell(value:String)=if(value.any {it=='\t'||it=='\n'||it=='\r'||it=='"'})"\""+value.replace("\"","\"\"")+"\"" else value
+    return (listOf(headers)+rows.map {row->headers.indices.map {row.getOrElse(it){""}}})
+        .joinToString("\n") {row->row.joinToString("\t",transform=::cell)}
+}
+
 @Composable internal fun StatisticsTextTable(headers:List<String>,rows:List<List<String>>,headerSize:Int=12,cellSize:Int=13) {
     val c=LocalInstrument.current
+    val clipboard=LocalClipboardManager.current
     // Intrinsic text widths keep columns aligned. A single scroll owns the table;
     // no child scroll receives unbounded width. Cap unusually long cells for readability.
-    SelectionContainer {
+    Column(Modifier.fillMaxWidth()) {SelectionContainer {
         Row(Modifier.horizontalScroll(rememberScrollState())) {
             headers.forEachIndexed {column,header->Column(Modifier.widthIn(min=64.dp,max=320.dp).width(IntrinsicSize.Max)) {
                 Box(Modifier.fillMaxWidth().height(38.dp).background(c.grid).padding(horizontal=8.dp),contentAlignment=Alignment.CenterStart) {
@@ -52,6 +59,9 @@ internal fun statisticsCellText(m:CalculatorModel,cell:JSONObject)=ResultDisplay
             }}
         }
     }
+    TextButton(onClick={clipboard.setText(AnnotatedString(statisticsTableCopyText(headers,rows)))},modifier=Modifier.align(Alignment.End)) {
+        Text(tr("Copy table"),fontSize=12.sp)
+    }}
 }
 
 @Composable internal fun StatisticsResultReport(m:CalculatorModel,report:JSONObject) {
