@@ -154,7 +154,10 @@ import com.kirinonakar.symvacas.ui.theme.LocalInstrument
     if(groupedComparison&&test=="Tukey HSD")Text(groupedValues.mapIndexed {index,(name,_)->"${listOf("x","y","z").getOrNull(index) ?: "group ${index+1}"} = $name"}.joinToString(" · "),fontSize=11.sp,color=c.muted)
     if(categorySelection)Text("${columnLabels[firstIndex]}: ${xCategories.joinToString(", ")} · ${columnLabels[secondIndex]}: ${yCategories.joinToString(", ")}",fontSize=11.sp,color=c.muted)
     Row(Modifier.horizontalScroll(rememberScrollState()),verticalAlignment=Alignment.CenterVertically) {
-        Button(onClick={command?.let {m.edit(Editor(it));m.calculate(statisticsTermLabels=categoryLabels)}},enabled=command!=null,modifier=Modifier.testTag("statistics-run-test")){Text(if(test.endsWith("interval"))"Compute interval" else "Run test")}
+        CalculationButton(if(test.endsWith("interval"))"Compute interval" else "Run test",
+            m.busy&&m.calculationAction=="statistics-analysis",m.inputVersion,
+            enabled=command!=null&&!m.busy&&!m.regressionBusy,modifier=Modifier.testTag("statistics-run-test"),
+            onCancel={m.cancel()},onClick={command?.let {m.calculationAction="statistics-analysis";m.edit(Editor(it));m.calculate(statisticsTermLabels=categoryLabels)}})
         SmallAction("Insert expression"){command?.let {m.edit(Editor(it));m.mode="Scientific/CAS"}}
     }
     statisticsReportFor(m.result,m.resultSource.ifBlank {m.editor.source},statisticsTestAnalyses(test))?.let {StatisticsResultReport(m,it)}

@@ -35,7 +35,7 @@ dialogs=createAppDialogs({state,ui,persist,calculator,changeMode,pressKey:keypad
 
 function updateButtons() {
   runtime.updateStopButton();
-  document.querySelectorAll('[data-run]:not([data-run="graph"]),.key[data-evaluate]').forEach(button=>button.disabled=!engine.ready||runtime.busy);
+  document.querySelectorAll('[data-run]:not([data-run="graph"]),.key[data-evaluate]').forEach(button=>button.disabled=button.dataset.cancelCalculation==='true'?false:!engine.ready||runtime.busy);
   calculator.updateButtons();$('retry').hidden=engine.ready||runtime.busy;
   graphs.updateButtons();graphs.flush();
 }

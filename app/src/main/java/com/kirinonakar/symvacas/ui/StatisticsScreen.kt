@@ -409,26 +409,28 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
                         regression=="randomforest"->forestTrees.toIntOrNull() in 1..200&&forestDepth.toIntOrNull() in 1..20&&forestSeed.toLongOrNull() in 0L..2147483647L
                         else->true
                     }
-                    if(regression!="polynomial")Button(onClick={table?.let {when {
+                    if(regression!="polynomial")CalculationButton("Analyze",m.regressionBusy,m.regressionJob ?: m.inputVersion,
+                        onCancel={m.cancelRegression()},onClick={table?.let {when {
                         bayesian->m.fitRegression("regression($it,$regression,[$bayesianPriorSD,$bayesianLevel${if(regression=="bayeslinear")",$bayesianShape,$bayesianScale" else ""}$samplerOptions])",data,responseColumn)
                         regularized->{val penalty=if(lassoAlphaCv)"cv" else lassoAlpha;m.fitRegression("regression($it,$fitMode,${if(regularization=="elasticnet")"[$penalty,$l1Ratio]" else penalty})",data,responseColumn)}
                         regression=="randomforest"->m.fitRegression("regression($it,$fitMode,[$forestTrees,$forestDepth,$forestSeed])",data,responseColumn)
                         else->m.fitRegression("regression($it,$regression${if(regression=="logistic"&&firthMode=="firth")",firth" else ""})",data,responseColumn)
-                    }}},enabled=table!=null&&validOptions&&!m.regressionBusy){Text(tr("Analyze"))}
+                    }}},enabled=table!=null&&validOptions&&!m.busy)
                 }
                 if(dataKind=="xy"&&regression=="polynomial") {
                     Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                         Field(polynomialDegree,"Polynomial degree (1–10)",Modifier.weight(1f)){m.clearRegression();polynomialDegree=it}
-                        Button(onClick={
+                        CalculationButton("Analyze",m.regressionBusy,m.regressionJob ?: m.inputVersion,onCancel={m.cancelRegression()},onClick={
                             val table=statisticsRegressionTable(numericRows,dataKind,"polynomial",responseColumn)
                             if(table!=null)m.fitRegression("regression($table,polynomial,$polynomialDegree)",data,responseColumn)
-                        },enabled=(polynomialDegree.toIntOrNull() ?: 0) in 1..10&&!m.regressionBusy){Text(tr("Analyze"))}
+                        },enabled=(polynomialDegree.toIntOrNull() ?: 0) in 1..10&&!m.busy)
                     }
                 }
-                if(m.regressionBusy)Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
-                    Text(if(isKorean())"회귀 적합 중…" else "Fitting regression…",Modifier.weight(1f),fontSize=11.sp,color=LocalInstrument.current.muted)
-                    SmallAction("Cancel",modifier=Modifier.testTag("statistics-regression-cancel")){m.cancelRegression()}
-                }
+                if(dataColumns.size>1&&!regularized&&regression in listOf("linear","quadratic","logarithmic","exponential","power"))
+                    CalculationButton("Analyze",m.regressionBusy,m.regressionJob ?: m.inputVersion,onCancel={m.cancelRegression()},onClick={
+                        val table=statisticsRegressionTable(numericRows,dataKind,regression,responseColumn)
+                        if(table!=null)m.fitRegression("regression($table,$regression)",data)
+                    },enabled=statisticsRegressionTable(numericRows,dataKind,regression,responseColumn)!=null&&!m.busy)
                 if(dataKind=="xy"&&regression=="custom") {
                     Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
                         SmallAction("ADC example"){m.clearRegression();customFormula="exp(-b*ADC)";customVariable="b";customInitials=""}
@@ -440,11 +442,11 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
                     Field(customInitials,"Initial values and bounds (optional)",Modifier.fillMaxWidth()){m.clearRegression();customInitials=it}
                     Text(if(isKorean())"형식: [[매개변수1, 시작값, 하한, 상한], [매개변수2, 시작값, 하한, 상한]]; 상한은 생략할 수 있습니다."
                         else "Format: [[parameter1, initial, lower, upper], [parameter2, initial, lower, upper]]; upper bound can be omitted.",fontSize=11.sp,color=LocalInstrument.current.muted)
-                    Button(onClick={
+                    CalculationButton("Fit custom model",m.regressionBusy,m.regressionJob ?: m.inputVersion,onCancel={m.cancelRegression()},onClick={
                         val table=numericRows.filter {it.size>=2&&it[0].isNotBlank()&&it[1].isNotBlank()}.joinToString(",","[","]"){it.take(2).joinToString(",","[","]")}
                         val guesses=customInitials.trim().takeIf(String::isNotEmpty)?.let {",$it"}.orEmpty()
                         m.fitRegression("regression($table,custom,$customFormula,$customVariable$guesses)",data)
-                    },enabled=customFormula.isNotBlank()&&customVariable.matches(Regex("[A-Za-z][A-Za-z0-9_]*"))&&paired.size>=2&&!m.regressionBusy){Text(tr("Fit custom model"))}
+                    },enabled=customFormula.isNotBlank()&&customVariable.matches(Regex("[A-Za-z][A-Za-z0-9_]*"))&&paired.size>=2&&!m.busy)
                 }
                 Choices(if(dataKind=="xy")listOf("Scatter","Histogram","Box plot","Violin + points","Heat map") else listOf("Histogram","Box plot","Violin + points","Heat map"),plotType,{plotType=it})
                 if(plotType in listOf("Box plot","Violin + points")) {

@@ -97,7 +97,7 @@ import org.json.JSONArray
             Choices(listOf("Exact","Numeric"),if(numerical)"Numeric" else "Exact",{m.equationNumeric=it=="Numeric"},translate=false)
             if(numerical)Field(guess,"Initial guess",Modifier.fillMaxWidth(),translate=false){m.equationGuess=it}
         }
-        Button(onClick={
+        CalculationButton("Solve",m.busy,m.inputVersion,onCancel={m.cancel()},enabled=!m.busy,onClick={
             val command=when(kind) {
                 "dsolve"->if(expression.isBlank()||m.equationOdeFunction.isBlank()||!m.equationOdeVariable.trim().matches(Regex("[A-Za-z][A-Za-z0-9_]*"))) {
                     m.error="Enter an equation, dependent function and valid independent variable";null
@@ -112,7 +112,7 @@ import org.json.JSONArray
                 }
             }
             if(command!=null){m.fresh(Editor(command));m.calculate()}
-        },enabled=!m.busy){Text(if(m.busy)"Solving…" else "Solve")}
+        })
         if(m.error.isNotBlank())Text(m.error,color=MaterialTheme.colorScheme.error)
         if(m.result!=null) {HorizontalDivider();Text("Solution");Box(Modifier.fillMaxWidth()){ResultMath(m.result!!,m.decimal,m.outputFont,
             displayMode=m.resultDisplayMode,thousandsSeparator=m.thousandsSeparator,displayDigits=m.displayDigits)};SmallAction(if(m.decimal)"Show exact" else "Show decimal",translate=false){m.decimal=!m.decimal}}

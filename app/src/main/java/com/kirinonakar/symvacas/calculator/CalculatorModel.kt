@@ -106,6 +106,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     var lastCalcSource by mutableStateOf("")
         private set
     var busy by mutableStateOf(false)
+    var calculationAction by mutableStateOf("")
         internal set
     var shift by mutableStateOf(false)
     var alpha by mutableStateOf(false)

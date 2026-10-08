@@ -34,6 +34,43 @@ def visible_formula(tree):
 
 
 class EquationStepTests(unittest.TestCase):
+    def test_root_equations_show_power_isolation_and_original_equation_checks(self):
+        x = s.Symbol("x")
+        for index in (2, 3, 4, 5, 7):
+            with self.subTest(index=index):
+                source = s.Eq(s.root(x, index), 16, evaluate=False)
+                result, report = self.report(source, x)
+                titles = [step["title"] for step in report["steps"]]
+                self.assertEqual("", report["note"])
+                self.assertNotIn("Move all terms to the left", titles)
+                powered = next(step for step in report["steps"] if step["title"] == "Raise both sides to the root index")
+                self.assertEqual(index, int(powered["tree"]["args"][1]["args"][1]["value"]))
+                self.assertEqual("parentheses", powered["tree"]["args"][0]["args"][0]["kind"])
+                simplified = next(step for step in report["steps"] if step["title"] == "Simplify the powered equation")
+                self.assertEqual(s.Eq(x, 16**index, evaluate=False), s.sympify(simplified["exact"]))
+                self.assertEqual("{"+str(16**index)+"}", result["exact"])
+                self.assertIn("Check candidates in the original equation", titles)
+        _, shifted = self.report(s.Eq(2*s.root(3*x+1, 3)+4, 12), x)
+        self.assertEqual("", shifted["note"])
+        self.assertIn("Isolate the root", [step["title"] for step in shifted["steps"]])
+        self.assertIn("Eq(x, 21)", [step.get("exact") for step in shifted["steps"]])
+        _, system = self.report([s.Eq(s.root(x, 3), 16)], [x])
+        self.assertIn("Raise both sides to the root index", [step["title"] for step in system["steps"]])
+
+    def test_powering_a_root_does_not_accept_extraneous_candidates(self):
+        x = s.Symbol("x")
+        for index in (2, 3):
+            result, report = self.report(s.Eq(s.root(x, index), -2, evaluate=False), x)
+            self.assertEqual("EmptySet", result["exact"])
+            check = next(step for step in report["steps"] if step["title"] == "Check candidates in the original equation")
+            self.assertEqual("!=", check["tree"]["args"][0]["args"][1]["value"])
+            powered = next(step for step in report["steps"] if step["title"] == "Raise both sides to the root index")
+            self.assertEqual("parentheses", powered["tree"]["args"][1]["args"][0]["kind"])
+        result, report = self.report(s.Eq(s.sqrt(x**2), 2, evaluate=False), x)
+        self.assertEqual("{-2, 2}", result["exact"])
+        check = next(step for step in report["steps"] if step["title"] == "Check candidates in the original equation")
+        self.assertEqual(2, len(check["tree"]["args"]))
+
     def report(self, source, variables, method="solve", extra=(), **options):
         args = [result_ast(source), result_ast(variables), *[result_ast(item) for item in extra]]
         # Solver variables are ordinary parser symbols, not frozen answer snapshots.

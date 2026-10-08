@@ -61,20 +61,20 @@ export class EngineClient extends EventTarget {
       if(this.pending===pending&&this.worker===worker)this.cancel(String(error));
     }
   }
-  execute(request,{background=false,onInput}={}) {
+  execute(request,{background=false,onInput,context=''}={}) {
     if (!this.ready) return Promise.resolve({ok:false,error:'계산 엔진이 로딩 중입니다.'});
     if (this.pending?.background && !background) {
       // Explicit work takes priority, while allowing the current preview to finish.
       this.pending.background = false;
       this.emit('busy',true);
       const worker=this.worker;
-      return this.pending.promise.then(result => this.worker===worker&&this.ready ? this.execute(request,{onInput}) : result);
+      return this.pending.promise.then(result => this.worker===worker&&this.ready ? this.execute(request,{onInput,context}) : result);
     }
     if (this.pending) return Promise.resolve({ok:false,error:'계산 중입니다. 중지한 뒤 다시 실행해 주세요.'});
     let resolve;
     const promise = new Promise(done => { resolve = done; });
     const id = ++this.counter;
-    this.pending = {id,resolve,promise,background,onInput,remaining:EXECUTION_TIMEOUT_MS,started:Date.now(),timer:setTimeout(() => this.cancel(EXECUTION_TIMEOUT_ERROR),EXECUTION_TIMEOUT_MS)};
+    this.pending = {id,resolve,promise,background,onInput,context,remaining:EXECUTION_TIMEOUT_MS,started:Date.now(),timer:setTimeout(() => this.cancel(EXECUTION_TIMEOUT_ERROR),EXECUTION_TIMEOUT_MS)};
     this.emit('activity',true);
     if (!background) this.emit('busy',true);
     this.worker.postMessage({id,request});

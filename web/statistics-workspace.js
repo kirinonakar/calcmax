@@ -46,9 +46,8 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
     return select.value!==previous;
   }
   function invalidateRegression(){cancelClustering();cancelRegression();statisticsGraph=null;$('regression-caption').replaceChildren();$('regression-inference').replaceChildren();$('regression-export').hidden=true;$('regression-transfer').hidden=true;$('statistics-plot').replaceChildren();$('statistics-plot').hidden=true;}
-  function regressionBusy(busy){$('regression-progress').hidden=!busy;$('regression-cancel').hidden=!busy;$('regression-section').setAttribute('aria-busy',String(busy));}
+  function regressionBusy(busy){$('regression-progress').hidden=!busy;$('regression-section').setAttribute('aria-busy',String(busy));}
   function cancelRegression(){if(!regressionRun)return;regressionRun=null;regressionBusy(false);engine.cancel();}
-  $('regression-cancel').onclick=cancelRegression;
   $('statistics-new').onclick=()=>{
     cancelRegression();$('statistics-data').value='';$('dataset-name').value='';$('dataset-list').value='';
     dataKindChange();$('statistics-plot').hidden=true;persist();
@@ -401,7 +400,7 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
     try{
       const source=statisticsExpression('regression'),tree=parse(latexInput(source));
       regressionBusy(true);
-      const result=await engine.execute({...options,tree});
+      const result=await engine.execute({...options,tree},{context:'regression'});
       if(regressionRun!==run||source!==statisticsExpression('regression'))return;
       showResult(result,source,source,{decimalDisplay:true});
       if(result.ok)showRegression(result);

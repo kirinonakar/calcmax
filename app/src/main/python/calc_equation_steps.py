@@ -27,6 +27,10 @@ def equation_solution_tree(tree):
 
 
 EXPLANATIONS = {
+    "Isolate the root": "Move the other terms and divide by the nonzero coefficient so the root is alone on one side.",
+    "Raise both sides to the root index": "Raise both sides to the displayed integer power to remove the root. This can introduce extra candidates, so check them in the original equation.",
+    "Simplify the powered equation": "The root followed by its integer power gives the radicand. Evaluate the same power on the other side.",
+    "Check candidates in the original equation": "Substitute each candidate into the original equation. Keep only values that satisfy it and its original domain restrictions.",
     "Move all terms to the left": "Subtract the right-hand side from both sides. The equation now has 0 on the right, which makes its structure easier to see.",
     "Expand and collect like terms": "Expand products and combine terms with the same power of the variable.",
     "Move the constant to the right": "Subtract the constant from both sides, leaving the variable term on the left.",
@@ -212,7 +216,19 @@ def equation_steps(engine, method, values, answer):
         var = values[1]
         expression = residual(source)
         lambert_form = product_exponential_form(expression, var)
-        already_isolated = (isinstance(source, s.Equality) and isinstance(source.lhs, s.Function)
+        radicals = [power for power in expression.atoms(s.Pow)
+                    if power.has(var) and power.exp.is_Rational and power.exp.p == 1 and power.exp.q > 1]
+        radical = radicals[0] if len(radicals) == 1 else None
+        radical_expression = s.expand(expression)
+        root_coefficient = radical_expression.coeff(radical) if radical is not None else s.S.Zero
+        root_rest = radical_expression-root_coefficient*radical if radical is not None else expression
+        root_target = (s.cancel(-root_rest/root_coefficient)
+                       if root_coefficient.is_zero is False and not root_coefficient.has(var) and not root_rest.has(var)
+                       else None)
+        already_isolated_root = (root_target is not None and isinstance(source, s.Equality)
+                                 and ((source.lhs == radical and source.rhs == root_target)
+                                      or (source.rhs == radical and source.lhs == root_target)))
+        already_isolated = already_isolated_root or (isinstance(source, s.Equality) and isinstance(source.lhs, s.Function)
                             and source.lhs.func in (s.sin, s.cos, s.tan, s.exp, s.log) and not source.rhs.has(var))
         if not already_isolated and lambert_form is None: add_changed("Move all terms to the left", eq(expression))
         numerator, denominator = s.fraction(s.together(expression))
@@ -247,7 +263,43 @@ def equation_steps(engine, method, values, answer):
             coefficient = expanded.coeff(function) if function is not None else 0
             rest = expanded-coefficient*function if function is not None else expanded
             supported = function is not None and function.func in (s.sin, s.cos, s.tan, s.exp, s.log)
-            if lambert_form is not None:
+            if root_target is not None:
+                index = radical.exp.q
+                add_changed("Isolate the root", eq(radical, root_target))
+                add("Raise both sides to the root index", eq(s.Pow(radical, index, evaluate=False),
+                                                              s.Pow(root_target, index, evaluate=False)))
+                # Both renderers need explicit grouping for a power of a power
+                # and for a negative numeric base, including (-2)^2.
+                powers = steps[-1]["tree"]["args"]
+                for side in ([powers[0], powers[1]] if root_target.is_negative else [powers[0]]):
+                    side["args"][0] = {"kind": "parentheses", "value": "", "args": [side["args"][0]]}
+                powered = s.expand(radical.base-root_target**index)
+                add("Simplify the powered equation", eq(radical.base, root_target**index))
+                try:
+                    root_poly = s.Poly(powered, var)
+                except s.PolynomialError:
+                    root_poly = None
+                candidates = []
+                if root_poly is not None and root_poly.degree() == 1 and root_poly.LC().is_zero is False:
+                    a, b = root_poly.all_coeffs()
+                    add_changed("Move the constant to the right", eq(a*var, -b))
+                    candidates = [s.cancel(-b/a)]
+                    add_changed("Divide by the coefficient of the variable", eq(var, candidates[0]))
+                elif root_poly is not None and root_poly.degree() == 2 and root_poly.LC().is_zero is False:
+                    quadratic(root_poly)
+                    _, candidates = quadratic_candidates(root_poly)
+                    candidates = list(dict.fromkeys(s.simplify(candidate) for candidate in candidates))
+                else:
+                    note = SUMMARY
+                if candidates:
+                    checks = []
+                    for candidate in candidates:
+                        left = source.lhs.subs(var, candidate) if isinstance(source, s.Equality) else source.subs(var, candidate)
+                        right = source.rhs.subs(var, candidate) if isinstance(source, s.Equality) else s.S.Zero
+                        comparison = s.Ne if s.simplify(left-right).is_zero is False else s.Eq
+                        checks.append([eq(var, candidate), comparison(left, right, evaluate=False)])
+                    add("Check candidates in the original equation", checks)
+            elif lambert_form is not None:
                 rate, shift, argument = lambert_form
                 used = {str(symbol) for symbol in expression.free_symbols}
                 def fresh(name):

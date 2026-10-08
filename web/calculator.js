@@ -256,6 +256,7 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
   $('expression').addEventListener('select',renderInputCursor);
   $('expression').addEventListener('keyup',renderInputCursor);
   $('expression').addEventListener('beforeinput',event=>{
+    if(event.inputType==='historyUndo'&&!event.isComposing){event.preventDefault();undoInput();return;}
     if(typing&&!event.isComposing&&event.inputType==='insertText'&&event.data==='='){
       const field=$('expression');
       if(functionRelationExit(field.value,field.selectionStart,field.selectionEnd)!==null){event.preventDefault();insert('=');return;}
@@ -273,7 +274,8 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
   $('expression').addEventListener('paste',event=>{const text=event.clipboardData?.getData('text');if(!text)return;try{const converted=latexInput(text);if(converted!==text){event.preventDefault();insert(converted,null,{latexSource:text});}}catch(exc){event.preventDefault();toast(exc.message);}});
   $('expression').addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();event.stopPropagation();if(!event.repeat)evaluate();}if(event.key==='Escape'){event.preventDefault();if(calcSession)cancelCalc();else if(isBusy())engine.cancel();else{$('expression').value='';preview();}}});
   $('clear').onclick=()=>{if(engineeringConversion)exitEngineering();if(calcSession){cancelCalc();return;}expressionUndo.push(value('expression'));$('expression').value='';committed=false;lastResult=null;activeHistoryEntry=null;inputAnswer=null;renderStatisticsMenus();$('answer').replaceChildren();$('note').textContent='';$('commit-indicator').textContent='';preview();};
-  $('undo').onclick=()=>{if(isBusy())return;const undo=undoStack();if(undo.length){const field=$('expression');field.value=undo.pop();field.setSelectionRange(field.value.length,field.value.length);committed=false;if(!calcSession)$('commit-indicator').textContent='';preview();}};
+  function undoInput(){if(isBusy())return;const undo=undoStack();if(undo.length){const field=$('expression');field.value=undo.pop();field.setSelectionRange(field.value.length,field.value.length);inputBoundary=null;committed=false;if(!calcSession)$('commit-indicator').textContent='';preview();}}
+  $('undo').onclick=undoInput;
   $('copy').onclick=()=>{const f=$('expression');clipboard(f.value.slice(f.selectionStart,f.selectionEnd)||f.value);};
   $('cut').onclick=()=>{const field=$('expression'),start=field.selectionStart,end=field.selectionEnd;if(start!==end){clipboard(field.value.slice(start,end));undoStack().push(field.value);field.setRangeText('',start,end,'end');committed=false;preview();}};
   $('typing-toggle').onclick=()=>{typing=!typing;document.documentElement.dataset.typing=String(typing);$('expression').readOnly=!typing;setText($('typing-toggle'),typing?'Math input':'Keyboard');if(typing)$('expression').focus({preventScroll:true});renderInputCursor();};
@@ -414,6 +416,9 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
   applyWordWrap();
   applyFonts();
   document.addEventListener('keydown',event=>{
+    if(!event.defaultPrevented&&!event.isComposing&&!event.altKey&&!event.shiftKey&&(event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='z'&&value('mode')==='scientific'&&!$('dialog').open&&!$('settings-dialog').open&&(!event.target.closest('input,select,textarea,[contenteditable]')||event.target===$('expression'))){
+      event.preventDefault();event.stopPropagation();undoInput();return;
+    }
     if(engineeringConversion&&!event.defaultPrevented&&!event.isComposing&&!event.altKey&&!event.ctrlKey&&!event.metaKey&&value('mode')==='scientific'&&!$('dialog').open&&!$('settings-dialog').open&&['ArrowLeft','ArrowRight'].includes(event.key)&&(!event.target.closest('input,select,textarea')||event.target===$('expression'))){event.preventDefault();event.stopPropagation();handleKey(event.key==='ArrowLeft'?'LEFT':'RIGHT');return;}
     if(!event.defaultPrevented&&!event.isComposing&&!event.altKey&&value('mode')==='scientific'&&!$('dialog').open&&!$('settings-dialog').open&&['Home','End'].includes(event.key)&&(!event.target.closest('input,select,textarea,[contenteditable="true"]')||event.target===$('expression'))){
       event.preventDefault();event.stopPropagation();

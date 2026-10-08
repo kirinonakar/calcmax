@@ -3,7 +3,25 @@ import {setText} from './i18n.js';
 
 export function createEngineUI({engine,onChange,onReady,cancelPreview}) {
   let busy=false,stopTimer=null,stopVisible=false;
-  function updateStopButton(){const visible=stopVisible&&!!engine.pending;$('stop').disabled=!visible;$('stop').hidden=false;$('stop').style.visibility=visible?'':'hidden';}
+  setText($('stop'),'Cancel');
+  const actions=new Map(['equation','statistics','statistics-advanced','regression'].map(context=>
+    [context,document.querySelector(`[data-run="${context}"]`)]));
+  const labels=new Map([...actions].map(([context])=>[context,context==='equation'?'Solve':'Analyze']));
+  function updateStopButton(){
+    const active=engine.pending?.context,visible=stopVisible&&!!engine.pending;
+    for(const [context,button] of actions){
+      const cancel=visible&&active===context;
+      button.dataset.cancelCalculation=String(cancel);
+      setText(button,cancel?'Cancel':labels.get(context));
+      button.disabled=cancel?false:!engine.ready||busy;
+    }
+    const fallback=visible&&$('mode').value==='scientific';
+    $('stop').disabled=!fallback;$('stop').hidden=false;$('stop').style.visibility=fallback?'':'hidden';
+  }
+  for(const button of actions.values())button.addEventListener('click',event=>{
+    if(button.dataset.cancelCalculation!=='true')return;
+    event.preventDefault();event.stopImmediatePropagation();cancelPreview();engine.cancel();
+  },true);
   function updateButtons(){updateStopButton();onChange();}
   document.documentElement.dataset.busy='false';document.documentElement.dataset.engine='loading';
   engine.addEventListener('status',event=>{setText($('status'),event.detail);document.documentElement.dataset.engine=engine.ready?'ready':'loading';updateButtons();});

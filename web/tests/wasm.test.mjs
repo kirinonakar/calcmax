@@ -112,6 +112,9 @@ test('equation step explanations preserve real WASM answers across workspace met
     assert.equal(result.ok,true,`${source}: ${result.error}`);return result;
   };
   const cases=[
+    [{kind:'solve',source:'nthroot(x,3)=16',variable:'x'},'Raise both sides to the root index'],
+    [{kind:'solve',source:'2*nthroot(3*x+1,3)+4=12',variable:'x'},'Isolate the root'],
+    [{kind:'solve',source:'sqrt(x)=-2',variable:'x'},'Check candidates in the original equation'],
     [{kind:'solve',source:'2x+3=0',variable:'x'},'Divide by the coefficient of the variable'],
     [{kind:'solve',source:'x^2-5x+6=0',variable:'x'},'Apply the quadratic formula'],
     [{kind:'solve',source:'x^3-6x^2+11x-6=0',variable:'x'},'Factor the polynomial'],
@@ -179,6 +182,17 @@ test('equation step explanations preserve real WASM answers across workspace met
     assert.equal(equationSteps.note,'');
     assert.deepEqual(solutionSteps,equationSteps);
   }
+  const root=run('solve(nthroot(x,3)=16,x)',true,true);
+  assert.equal(root.exact,'{4096}');assert.equal(root.equationSteps.note,'');
+  assert.deepEqual(root.solutionSteps,root.equationSteps);
+  const rootPower=root.solutionSteps.steps.find(step=>step.title==='Raise both sides to the root index');
+  assert.equal(rootPower.tree.args[0].args[0].kind,'parentheses');
+  assert.ok(solutionStepsCopyText(root.solutionSteps).includes('16^3'));
+  assert.ok(!root.solutionSteps.steps.some(step=>step.title==='Move all terms to the left'));
+  const rejected=run('solve(nthroot(x,3)=-2,x)',true,true);
+  assert.equal(rejected.exact,'EmptySet');
+  const rejection=rejected.solutionSteps.steps.find(step=>step.title==='Check candidates in the original equation');
+  assert.equal(rejection.tree.args[0].args[1].value,'!=');
   const trig=run('solve(sin(x)=1/2,x)').equationSteps;
   assert.ok(!trig.steps.some(step=>['Exclude zero denominators','Multiply by the nonzero denominator','Isolate the variable in each branch'].includes(step.title)));
   const elimination=run('solve([y+z=3,x+2*y-z=4,2*x-y+z=1],[x,y,z])').equationSteps.steps.filter(step=>step.title==='Eliminate one variable');

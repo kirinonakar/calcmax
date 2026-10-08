@@ -285,11 +285,7 @@ internal fun largeHistoryTree(root:JSONObject?):Boolean {
         if(showInput&&requestInitialFocus&&!typing&&m.poweredOn&&scrollState?.isScrollInProgress!=true&&requestInputFocus())onInitialFocus()
     }
     val calculating=m.busy||m.previewBusy
-    var showCalculationStatus by remember{mutableStateOf(false)}
-    LaunchedEffect(calculating,m.inputVersion){
-        showCalculationStatus=false
-        if(calculating){delay(1000);showCalculationStatus=true}
-    }
+    val showCalculationStatus=delayedCalculationStatus(calculating,m.inputVersion)
     Column(Modifier.fillMaxWidth().padding(horizontal=14.dp)) {
         if(showInput&&!m.poweredOn) Box(Modifier.fillMaxWidth().height(66.dp),contentAlignment=Alignment.Center){Text("OFF · press 2nd to resume",color=c.muted)}
         else if(showInput&&typing) BasicTextField(
@@ -379,9 +375,9 @@ internal fun largeHistoryTree(root:JSONObject?):Boolean {
                 Spacer(Modifier.width(14.dp))
             }
         }
-        Row(Modifier.fillMaxWidth().height(24.dp),verticalAlignment=Alignment.CenterVertically){
+        Row(Modifier.fillMaxWidth().heightIn(min=24.dp),verticalAlignment=Alignment.CenterVertically){
             Text(when{m.engineeringConversion->if(isKorean())"ENG 모드 · ←/→로 가수 이동" else "ENG mode · ←/→ shifts mantissa";m.error.isNotBlank()->m.error;calculating&&showCalculationStatus->if(isKorean())"계산 중…" else if(m.busy)"Computing…" else "Calculating…";m.calcSession!=null->if(isKorean())"CALC · 값을 입력하고 = 누르기 · AC는 취소" else "CALC · enter a value, then press = · AC cancels";domainText(m.result).isNotBlank()->domainText(m.result);m.committed->if(isKorean())"다음 입력 시 새 계산 시작" else "Next input starts a new calculation";else->m.result?.optString("note") ?: ""},Modifier.weight(1f),fontSize=10.sp,maxLines=1,color=if(m.error.isNotBlank())c.danger else if(m.engineeringConversion)c.accent else c.muted)
-            if(calculating&&showCalculationStatus)Text("Cancel",Modifier.clickable{m.cancel()}.padding(start=8.dp),fontSize=10.sp,color=c.accent)
+            if(m.mode=="Scientific/CAS"&&calculating&&showCalculationStatus)TextButton(onClick={m.cancel()}){Text(tr("Cancel"),fontSize=12.sp,color=c.accent)}
         }
         if(m.mode=="Scientific/CAS"&&m.committed) {
             ResultGuidance(m)
