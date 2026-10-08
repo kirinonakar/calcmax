@@ -523,7 +523,14 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
                         }
                     }
                 }
-                m.regressionReport?.let {RegressionInference(it,m.displayDigits,parameterLabels)}
+                m.regressionReport?.let {report->
+                    val language=LocalLanguage.current
+                    val result=remember(report,m.result,m.history){regressionResultForCopy(m.result,m.history,report)}
+                    RegressionInference(report,m.displayDigits,parameterLabels,onCopy=result?.let {snapshot->{
+                        val prefix=if(m.regressionMode.startsWith("logistic")||m.regressionMode=="bayeslogistic")"P($fittedResponseName = 1) = " else "$fittedResponseName = "
+                        clipboard.setText(AnnotatedString(statisticsResultCopyText(m,snapshot,language,fittedVariables,prefix)))
+                    }})
+                }
                 if(m.regressionParameters.isNotEmpty()) {
                     Text(tr("Fitted parameters"),fontSize=12.sp,fontWeight=FontWeight.SemiBold)
                     Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(16.dp)) {

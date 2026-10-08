@@ -1,6 +1,6 @@
 export const nativeKorean = {
+  "Regression equation": "회귀식",
   "Copy full solution": "풀이 전체 복사",
-  "Copy table": "표 복사",
   "Select formula": "수식 선택",
   "Save SVG": "SVG 저장",
   "Save PNG": "PNG 저장",

@@ -1,4 +1,4 @@
-import {element} from './app-ui.js';
+import {element,control} from './app-ui.js';
 import {t} from './i18n.js';
 import {roundNumber} from './display-format.js';
 import {regressionROC} from './regression-roc.js';
@@ -12,9 +12,10 @@ export function regressionParameterLabels(mode,columns,responseColumn){
 }
 export function regressionParameterName(name,labels={}){return labels[name]==='Intercept'?t('Intercept'):labels[name]||name;}
 
-export function renderRegressionReport(container,report,digits=10,parameterLabels={}) {
+export function renderRegressionReport(container,report,digits=10,parameterLabels={}, {onCopy}={}) {
   container.replaceChildren();
   if(!report)return;
+  if(onCopy){const heading=element('div','','statistics-result-heading');heading.append(element('h3',t('Regression')),control('Copy result',onCopy));container.append(heading);}
   const number=value=>value===null||value===undefined?'—':roundNumber(String(value),digits);
   const bayesian=!!report.bayesian;
   const machineLearning=!!report.model&&!bayesian;

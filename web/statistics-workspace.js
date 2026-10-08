@@ -13,6 +13,7 @@ import {parse,latexInput} from './parser.js';
 import {astSource} from './ast-source.js';
 import {roundNumber} from './display-format.js';
 import {renderRegressionReport,regressionResidualCSV,regressionParameterLabels,regressionParameterName} from './regression-report.js';
+import {statisticsResultMarkdown} from './statistics-markdown.js';
 
 export function regressionGraphSource(source,digits=10,variable='x') {
   function rounded(node){return {...node,value:node.kind==='number'?roundNumber(node.value,digits):node.kind==='symbol'&&node.value===variable?'x':node.value,args:node.args.map(rounded)};}
@@ -368,7 +369,10 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
       statisticsPlot(chart,statisticsGraph.rows,{...options,series:panel.series});return section;
     }));
   }
-  function render(){statisticsControls();if(!$('statistics-grid').hidden)statisticsGrid();if(statisticsGraph){drawStatisticsGraph();if(statisticsGraph.captions)renderFormulas($('regression-caption'),statisticsGraph.captions,{digits:state.digits});for(const [name,n] of statisticsGraph.parameters||[])$('regression-caption').append(element('span',`${regressionParameterName(name,statisticsGraph.parameterLabels)} = ${roundNumber(String(n),state.digits)}`,'regression-parameter'));renderRegressionReport($('regression-inference'),statisticsGraph.report,state.digits,statisticsGraph.parameterLabels);}}
+  function render(){statisticsControls();if(!$('statistics-grid').hidden)statisticsGrid();if(statisticsGraph){drawStatisticsGraph();if(statisticsGraph.captions)renderFormulas($('regression-caption'),statisticsGraph.captions,{digits:state.digits});for(const [name,n] of statisticsGraph.parameters||[])$('regression-caption').append(element('span',`${regressionParameterName(name,statisticsGraph.parameterLabels)} = ${roundNumber(String(n),state.digits)}`,'regression-parameter'));
+    const snapshot=statisticsGraph.result;
+    const copyOptions={digits:state.digits,regressionVariables:statisticsGraph.regressionVariables,regressionPrefix:statisticsGraph.regressionPrefix};
+    renderRegressionReport($('regression-inference'),statisticsGraph.report,state.digits,statisticsGraph.parameterLabels,{onCopy:snapshot?()=>ui.clipboard(statisticsResultMarkdown(snapshot,copyOptions)):null});}}
   function showRegression(result) {
     const rows=numericStatisticsRows(dataRows()),names=statisticsColumnNames(dataColumns()),logistic=(regressionMode().startsWith('logistic')||regressionMode()==='bayeslogistic');
     const response=['multiple','logistic','polynomial','ridge','lasso','elasticnet','logisticridge','logisticlasso','logisticelasticnet','randomforest','randomforestclassifier','randomforestregressor','bayeslinear','bayeslogistic'].includes(regressionMode())?Number(value('regression-response')):names.length-1,predictors=names.filter((_,i)=>i!==response);
@@ -382,6 +386,9 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
 
     statisticsGraph={rows,plotRows:['polynomial','logistic','ridge','lasso','elasticnet','logisticridge','logisticlasso','logisticelasticnet','randomforest','randomforestclassifier','randomforestregressor','bayeslinear','bayeslogistic'].includes(regressionMode())&&names.length===2?rows.map(row=>[row[1-response],row[response]]):rows,xAxisLabel:predictors[0],yAxisLabel:names[response],curve:result.curve||[],fit:result.decimal||result.exact,report:result.regression,parameterLabels,parameters:(result.parameters||[]).filter(([name])=>parameterLabels[name]),variable:regressionMode()==='custom'?value('regression-variable'):'x',
       captions:regressionMode().startsWith('randomforest')?[]:[`${logistic?`P(${names[response]}=1)`:names[response]}=${displayed}`,...(result.correlation!==null&&result.correlation!==undefined?[`r=${result.correlation}`]:[]),...(result.parameters||[]).filter(([name])=>!parameterLabels[name]).map(([name,n])=>`${name}=${n}`)]};
+    statisticsGraph.result=result;
+    statisticsGraph.regressionVariables=variables;
+    statisticsGraph.regressionPrefix=logistic?`P(${names[response]} = 1) = `:`${names[response]} = `;
     $('statistics-plot').hidden=false;render();
     $('regression-transfer').hidden=dataColumns()!==2||regressionMode().startsWith('randomforest');
     $('regression-export').hidden=!result.regression;
@@ -400,7 +407,7 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
     }catch(exc){if(regressionRun===run)error(exc.message);}
     finally{if(regressionRun===run){regressionRun=null;regressionBusy(false);}}
   }
-  advanced=createAdvancedStatistics({state,persist,data:()=>value('statistics-data'),columnLimit:()=>dataColumns()});
+  advanced=createAdvancedStatistics({state,persist,data:()=>value('statistics-data'),columnLimit:()=>dataColumns(),copy:ui.clipboard});
   statisticsControls();
   return {datasetsList,expression:statisticsExpression,analysisTermLabels,advancedExpression:advanced.expression,advancedContext:advanced.context,showAdvancedResult:advanced.showResult,analysisSummary,render:()=>{render();advanced.render();},showRegression,runRegression};
 }

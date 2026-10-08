@@ -19,7 +19,7 @@ from calc_programmer import programmer
 from calc_statistics import pearson_correlation
 from calc_probability import probability
 from calc_advanced_statistics import FUNCTIONS as ADVANCED_STATISTICS
-from calc_statistics_report import BASIC as BASIC_STATISTICS, statistics_report
+from calc_statistics_report import BASIC as BASIC_STATISTICS, statistics_report, statistics_copy_report
 
 # Symbolic calls whose cold first evaluation is heavy enough that the generic step allowance used
 # to cut off legitimate work. Nested calls count too, so 1+fourier(exp(-t^2),t,w) is heavy as well.
@@ -132,6 +132,7 @@ def _dispatch(payload, control=None):
                 result['statisticsReport']=statistics_report(tree['value'],shown_value,engine.precision,request.get('statisticsTermLabels', {}))
             if request["tree"].get("value")=="survivalanalysis" and hasattr(engine,"survival_report"):
                 result["survival"]=engine.survival_report
+                result["statisticsCopyReport"]=statistics_copy_report('survivalanalysis',value,engine.survival_report,engine.precision)
             if dms_result:
                 result["tree"]=dms_tree(display_value)
                 result["decimalTree"]=dms_tree(decimal_value)
@@ -155,6 +156,8 @@ def _dispatch(payload, control=None):
                 mode=request["tree"]["args"][1].get("value") if len(request["tree"]["args"])>1 else "linear"
                 result["parameters"]=engine.regression_parameters
                 result["regression"]=engine.regression_report
+                if engine.regression_report:
+                    result["statisticsCopyReport"]=statistics_copy_report('regression',value,engine.regression_report,engine.precision)
                 if mode=="linear":
                     try:
                         xs,ys=zip(*rows)

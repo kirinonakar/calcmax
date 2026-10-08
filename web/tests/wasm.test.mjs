@@ -8,10 +8,41 @@ import {parse,latexInput} from '../parser.js';
 import {tipCommand,moneyResult} from '../money.js';
 import {statisticsCommand,statisticsAnalysisData,statisticsColumnLabels,statisticsCategoryLabels,distributionCommand,equationCommand} from '../workspace-commands.js';
 import {solutionStepsCopyText} from '../equation-steps.js';
+import {statisticsResultMarkdown} from '../statistics-markdown.js';
 
 // Reuse the interpreter for sequential integration scenarios. The cold solver
 // scenario below explicitly loads its own interpreter to keep startup coverage.
 let sharedRuntime;
+test('statistics Markdown copy includes every real WASM table row and dedicated regression results',async()=>{
+  const py=await runtime();
+  const run=source=>{
+    py.globals.set('payload',JSON.stringify({tree:parse(source)}));
+    const result=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));
+    assert.equal(result.ok,true,result.error);return result;
+  };
+  const rows=Array.from({length:105},(_,i)=>[i,i+1]),imputed=run(`impute(${JSON.stringify(rows)},mean)`);
+  const section=imputed.statisticsReport.sections.find(section=>section.title==='data');
+  assert.equal(section.rows.length,100);assert.equal(section.copyRows.length,105);
+  const markdown=statisticsResultMarkdown(imputed);
+  assert.ok(markdown.includes('| 105 | 104 | 105 |'),markdown.slice(-500));
+  assert.ok(markdown.includes('| --- | --- | --- |'));
+  const regression=run('regression([[0,1],[1,3],[2,4],[3,7]],linear)');
+  assert.equal(regression.statisticsReport,undefined);
+  const copied=statisticsResultMarkdown(regression);
+  assert.ok(copied.includes('### coefficients'));assert.ok(copied.includes('### residuals'));
+  assert.ok(copied.includes('### Regression equation'));
+  const logistic=run('regression([[0,0],[1,0],[2,1],[3,0],[4,1],[5,1]],logistic)');
+  const logisticCopy=statisticsResultMarkdown(logistic);
+  assert.ok(logisticCopy.includes('P(y = 1) = '));
+  assert.ok(logisticCopy.includes('### coefficients'));
+  assert.ok(logisticCopy.includes('oddsRatio'));
+  assert.ok(logisticCopy.includes('### residuals'));
+  const survival=run('survivalanalysis([[1,1,1],[2,0,1],[3,1,1]],0)');
+  const survivalCopy=statisticsResultMarkdown(survival);
+  assert.ok(survivalCopy.startsWith('## Survival analysis'));
+  assert.ok(survivalCopy.includes('### survival table'));
+  assert.ok(survivalCopy.includes('| Time | At risk | Events | Censored | Survival | Lower 95% CI | Upper 95% CI |'));
+});
 test('selected categorical columns and headers reach the real WASM contingency report',async()=>{
   const py=await runtime(),rows=[[6,2],[1,4]].flatMap((row,i)=>row.flatMap((count,j)=>Array.from({length:count},()=>`${i+j},junk,${['treated','control'][i]},${['yes','no'][j]}`)));
   const source='ID,Unused,Treatment,Outcome\n'+rows.concat('1,junk,,yes','2,,control,').join('\n'),options={op:'fisherexact',kind:'columns:4',firstGroup:'z',secondGroup:'x4'};

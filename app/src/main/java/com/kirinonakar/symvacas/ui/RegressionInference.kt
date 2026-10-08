@@ -18,6 +18,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.font.FontFamily
@@ -29,10 +30,13 @@ import com.kirinonakar.symvacas.calculator.ResultDisplayMode
 import org.json.JSONObject
 import kotlin.math.abs
 
-@Composable internal fun RegressionInference(report:JSONObject,digits:Int,parameterLabels:Map<String,String> = emptyMap()) {
+@Composable internal fun RegressionInference(report:JSONObject,digits:Int,parameterLabels:Map<String,String> = emptyMap(),onCopy:(()->Unit)?=null) {
     val colors=LocalInstrument.current
     val clipboard=LocalClipboardManager.current
     var expanded by remember(report) {mutableStateOf(false)}
+    if(onCopy!=null)Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.End) {
+        SmallAction("Copy result",modifier=Modifier.testTag("statistics-regression-copy")){onCopy()}
+    }
     fun value(objectValue:JSONObject,key:String):String {
         val raw=objectValue.optString(key).takeUnless {objectValue.isNull(key)||it.isBlank()} ?: return "—"
         return ResultDisplayFormat.formatText(raw,ResultDisplayMode.OFF,false,maxFractionDigits=digits)

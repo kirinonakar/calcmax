@@ -7,8 +7,8 @@ import androidx.compose.runtime.staticCompositionLocalOf
 val LocalLanguage = staticCompositionLocalOf { "en" }
 
 private val korean = mapOf(
+    "Regression equation" to "회귀식",
     "Copy full solution" to "풀이 전체 복사",
-    "Copy table" to "표 복사",
     "Select formula" to "수식 선택",
     "Save SVG" to "SVG 저장", "Save PNG" to "PNG 저장", "Graph saved" to "그래프를 저장했습니다",
     "Some intermediate steps were omitted to keep the explanation manageable. The computed result is unchanged." to "풀이가 지나치게 길어지지 않도록 일부 중간 단계를 생략했습니다. 계산 결과에는 영향이 없습니다.",

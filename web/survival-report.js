@@ -1,4 +1,4 @@
-import {element} from './app-ui.js';
+import {element,control} from './app-ui.js';
 import {getLanguage,t} from './i18n.js';
 import {appendPlotExportButtons} from './svg-export.js';
 
@@ -10,12 +10,13 @@ export function survivalStepPoints(curve,index){
   return points;
 }
 
-export function renderSurvivalReport(container,report,{groups=[],predictors=[],band=true,digits=5}={}){
+export function renderSurvivalReport(container,report,{groups=[],predictors=[],band=true,digits=5,onCopy}={}){
   const ko=getLanguage()==='ko',text=(en,kr)=>ko?kr:en;
   const number=n=>survivalNumber(n,digits);
   const groupName=(group,i)=>groups[i]||(report.groups.length>1?text('Group ','그룹 ')+number(group.id):text('All subjects','전체'));
   const names=report.groups.map(groupName);
   container.hidden=false;container.replaceChildren(element('h3','Kaplan–Meier'));
+  if(onCopy)container.append(control('Copy result',onCopy));
   const legend=element('div','','survival-legend');
   names.forEach((name,i)=>{const item=element('span',`${name} · n=${report.groups[i].n}`);item.style.color=colors[i%colors.length];legend.append(item);});
   container.append(legend);

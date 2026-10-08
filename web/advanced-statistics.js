@@ -3,6 +3,7 @@ import {csvRows,statisticsCsvHasHeader,statisticsColumnLabels,statisticsCategory
 import {$,element} from './app-ui.js';
 import {getLanguage,t} from './i18n.js';
 import {renderSurvivalReport} from './survival-report.js';
+import {statisticsResultMarkdown} from './statistics-markdown.js';
 
 export function interactionPairs(value,predictors=[],columnLabels=[]){
   const text=String(value??'').trim();
@@ -301,7 +302,7 @@ export function advancedStatisticsRows(source,columnLimit){
   return selected;
 }
 
-export function createAdvancedStatistics({state,persist,data,columnLimit}) {
+export function createAdvancedStatistics({state,persist,data,columnLimit,copy}) {
   const select=$('statistics-advanced-kind'),source=$('statistics-advanced-source'),help=$('statistics-advanced-help'),input=$('statistics-advanced-input'),form=$('statistics-advanced-controls'),status=$('statistics-advanced-status');
   const selected=()=>advancedStatisticsSchema.find(item=>item.id===select.value)||advancedStatisticsSchema[0];
   const previous=state.fields['statistics-advanced-kind']||select.value;
@@ -337,7 +338,7 @@ export function createAdvancedStatistics({state,persist,data,columnLimit}) {
     const korean=getLanguage()==='ko';
     const suite=definition.id==='survivalanalysis';
     $('statistics-survival-tools').hidden=!suite;
-    if(displayed){let key='';try{key=JSON.stringify(context());}catch{}if(key!==reportKey){displayed=null;report.replaceChildren();report.hidden=true;}else renderSurvivalReport(report,displayed.result,{...displayed.context,band:$('statistics-survival-band').checked,digits:state.digits});}
+    if(displayed){let key='';try{key=JSON.stringify(context());}catch{}if(key!==reportKey){displayed=null;report.replaceChildren();report.hidden=true;}else renderSurvivalResult();}
     help.textContent=definition.controls&&input.value!=='expression'?(korean?definition.formHelpKo:definition.formHelp):(korean?definition.helpKo:definition.help);
     for(const option of select.options){const item=advancedStatisticsSchema.find(item=>item.id===option.value);option.textContent=korean?item.ko:item.label;}
     $('statistics-advanced-data').disabled=definition.input==='none';
@@ -408,10 +409,15 @@ export function createAdvancedStatistics({state,persist,data,columnLimit}) {
   $('statistics-survival-band').checked=state.fields['statistics-survival-band']!==false;
   $('statistics-survival-band').onchange=()=>{state.fields['statistics-survival-band']=$('statistics-survival-band').checked;update();persist();};
   update();
+  function renderSurvivalResult(){
+    const snapshot=displayed.copyResult;
+    renderSurvivalReport(report,displayed.result,{...displayed.context,band:$('statistics-survival-band').checked,digits:state.digits,
+      onCopy:copy&&snapshot?()=>copy(statisticsResultMarkdown(snapshot,{digits:state.digits,notation:state.resultDisplayMode})):null});
+  }
   return {expression,context,render:update,showResult:(result,runContext)=>{
     if(!result.ok||!result.survival)return;
     try{if(JSON.stringify(context())!==JSON.stringify(runContext))return;}catch{return;}
-    displayed={result:result.survival,context:runContext};reportKey=JSON.stringify(runContext);
-    renderSurvivalReport(report,result.survival,{...runContext,band:$('statistics-survival-band').checked,digits:state.digits});
+    displayed={result:result.survival,copyResult:result,context:runContext};reportKey=JSON.stringify(runContext);
+    renderSurvivalResult();
   }};
 }

@@ -16,7 +16,7 @@ TITLES.update({'ancova':'ANCOVA', 'glm':'Generalized linear model (GLM)',
 def statistics_report(name, value, precision, labels=None):
     """Each section has named columns and cells using the normal result formatter.
 
-    Preview large tables at 100 rows; the original full result still powers Copy/Ans.
+    Preview large tables at 100 rows; copyRows retains every formatted row for Copy.
     Never infer that unrelated vectors of equal length describe the same observations.
     """
     sections = []
@@ -25,6 +25,7 @@ def statistics_report(name, value, precision, labels=None):
 
     def cell(v):
         if isinstance(v, str): return v
+        if isinstance(v, bool): return str(v)
         if v is None: return 'unavailable'
         if v is s.nan: return 'undefined'
         shown = display_rounded(v, precision)
@@ -35,9 +36,10 @@ def statistics_report(name, value, precision, labels=None):
 
     def add(title, columns, rows):
         if rows:
-            sections.append({'title': title, 'columns': columns,
-                             'rows': [[cell(v) for v in row] for row in rows[:100]],
-                             'totalRows': len(rows)})
+            formatted = [[cell(v) for v in row] for row in rows]
+            section = {'title': title, 'columns': columns, 'rows': formatted[:100], 'totalRows': len(rows)}
+            if len(rows) > 100: section['copyRows'] = formatted
+            sections.append(section)
 
     def vector(v): return isinstance(v, (list, tuple)) and all(not isinstance(x, (list, tuple, dict)) for x in v)
 
@@ -97,3 +99,19 @@ def statistics_report(name, value, precision, labels=None):
         add('Compared columns', ['First column', 'Second column'] if name == 'mcnemar' else ['Row variable', 'Column variable'], [[table_labels['table:row'], table_labels['table:column']]])
     visit('Summary' if isinstance(value, dict) else TITLES.get(name, name), value)
     return {'analysis': name, 'title': TITLES.get(name, name), 'sections': sections}
+
+
+def statistics_copy_report(name, value, details, precision):
+    """Copy tables for dedicated reports without changing visible report routing."""
+    if name == 'regression':
+        data = {'Fitted expression': value, **details}
+        report = statistics_report(name, data, precision)
+        report['title'] = 'Regression'
+    else:
+        data = {key: item for key, item in details.items() if key != 'groups'}
+        for index, group in enumerate(details.get('groups', [])):
+            data['Group '+str(index+1)] = {key: item for key, item in group.items() if key != 'curve'}
+            data['Group '+str(index+1)]['survival table'] = group.get('curve', [])
+        report = statistics_report(name, data, precision)
+        report['title'] = 'Survival analysis'
+    return report

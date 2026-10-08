@@ -15,6 +15,7 @@ import {createEquationSteps} from './equation-steps.js';
 import {defineFunction,inputAssignment,resultTarget,resultFunction,removeExpiredAnswerFunctions} from './function-transfer.js';
 import {$,value,element,control} from './app-ui.js';
 import {renderStatisticsReport,statisticsReportTarget} from './statistics-report.js';
+import {statisticsResultMarkdown} from './statistics-markdown.js';
 
 export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist,requestOptions,error,changeMode,updateButtons,pressKey,modeDialog,variablesDialog,matrixInsertDialog,graphs,onFunctionsChanged=()=>{}}) {
   const {toast,openDialog,clipboard}=ui;
@@ -64,7 +65,7 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
       const visible=value('mode')==='statistics'&&lastResult?.statisticsReport&&statisticsResultTarget===id;
       target.hidden=!visible;
       if(visible){
-        renderStatisticsReport(target,lastResult.statisticsReport,{digits:state.digits,...resultOptions(),onCopy:()=>clipboard(resultText(lastResult,{decimal:true,mixed:false,digits:state.digits,...resultOptions()}))});
+        renderStatisticsReport(target,lastResult.statisticsReport,{digits:state.digits,...resultOptions(),onCopy:()=>clipboard(statisticsResultMarkdown(lastResult,{digits:state.digits,...resultOptions()}))});
         if(lastResult.note)target.append(element('p',lastResult.note,'hint'));
       }else target.replaceChildren();
     }
@@ -279,7 +280,8 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
   $('insert-mode').onclick=()=>{overwrite=!overwrite;$('insert-mode').textContent=overwrite?'OVR':'INS';};
   $('paste').onclick=async()=>{try{insertPastedExpression(await navigator.clipboard.readText());}catch{const content=element('div'),field=element('textarea');field.rows=4;field.setAttribute('aria-label',t('Paste expression'));content.append(field,control('Insert',()=>{try{insertPastedExpression(field.value);$('dialog').close();}catch(exc){toast(exc.message);}}));openDialog('Paste',content);field.focus({preventScroll:true});}};
   document.addEventListener('paste',event=>{if(event.defaultPrevented||value('mode')!=='scientific'||typing||$('dialog').open||$('settings-dialog').open||event.target.closest?.('input,select,textarea')&&event.target!==$('expression'))return;const text=event.clipboardData?.getData('text/plain')||event.clipboardData?.getData('text');if(!text)return;event.preventDefault();try{insertPastedExpression(text);}catch(exc){toast(exc.message);}});
-  $('answer-copy').onclick=()=>{if(lastResult)clipboard(resultText(lastResult,{decimal,mixed,digits:state.digits,...resultOptions()}));};
+  $('answer-copy').onclick=()=>{if(lastResult)clipboard(value('mode')==='statistics'&&(lastResult.statisticsReport||lastResult.statisticsCopyReport)
+    ?statisticsResultMarkdown(lastResult,{digits:state.digits,...resultOptions()}):resultText(lastResult,{decimal,mixed,digits:state.digits,...resultOptions()}));};
   $('answer-insert').onclick=()=>{if(state.variables.Ans){changeMode('scientific');insert('Ans',null,{factor:true});}else toast('먼저 재사용 가능한 결과를 계산해 주세요.');};
   $('exact-toggle').onclick=()=>{decimal=!decimal;$('exact-toggle').textContent=decimal?'≈ Decimal':'Exact';renderResult();};
   $('screen-toggle').onclick=()=>{screenExpanded=!screenExpanded;document.documentElement.dataset.screenExpanded=String(screenExpanded);$('screen-toggle').classList.toggle('active',screenExpanded);};

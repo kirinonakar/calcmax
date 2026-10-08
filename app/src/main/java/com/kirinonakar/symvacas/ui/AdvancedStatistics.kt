@@ -8,6 +8,8 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -72,6 +74,9 @@ internal fun advancedStatisticsRows(data:String,columnLimit:Int?=null):List<List
     var menuOpen by remember {mutableStateOf(false)}
     var band by rememberSaveable {mutableStateOf(m.advancedStatisticsDraft.optBoolean("band",true))}
     var survivalReport by remember {mutableStateOf<JSONObject?>(null)}
+    var survivalCopyResult by remember {mutableStateOf<JSONObject?>(null)}
+    val clipboard=LocalClipboardManager.current
+    val language=LocalLanguage.current
     var reportPlan by remember {mutableStateOf<SurvivalPlan?>(null)}
     var previousResult by remember {mutableStateOf<JSONObject?>(null)}
     var pending by remember {mutableStateOf(false)}
@@ -94,9 +99,9 @@ internal fun advancedStatisticsRows(data:String,columnLimit:Int?=null):List<List
         formsText=JSONObject(formsText).put(selected,next).toString();message=""
     }
     LaunchedEffect(selected,source,input,formsText,band) {m.updateAdvancedStatisticsDraft(JSONObject().put("kind",selected).put("source",source).put("input",input).put("forms",JSONObject(formsText)).put("band",band))}
-    LaunchedEffect(selected,source,input,formsText,data) {survivalReport=null;pending=false}
+    LaunchedEffect(selected,source,input,formsText,data) {survivalReport=null;survivalCopyResult=null;pending=false}
     LaunchedEffect(m.result,m.busy) {
-        if(pending&&!m.busy&&m.result!=null&&m.result!==previousResult){survivalReport=m.result?.optJSONObject("survival");pending=false}
+        if(pending&&!m.busy&&m.result!=null&&m.result!==previousResult){survivalReport=m.result?.optJSONObject("survival");survivalCopyResult=m.result?.takeIf {survivalReport!=null};pending=false}
     }
     HorizontalDivider()
     SmallAction(if(ko)"고급 분석" else "Advanced analysis",active=true,shaded=expanded,fontSize=12.sp){expanded=!expanded}
@@ -143,7 +148,9 @@ internal fun advancedStatisticsRows(data:String,columnLimit:Int?=null):List<List
         statisticsReportFor(m.result,m.resultSource.ifBlank {m.editor.source},setOf(selected))?.let {StatisticsResultReport(m,it)}
         if(selected=="survivalanalysis") {
             Row(verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) {Checkbox(band,{band=it},modifier=Modifier.testTag("statistics-survival-band"));Text(if(ko)"95% 신뢰구간 밴드" else "95% CI band",fontSize=12.sp)}
-            survivalReport?.let {SurvivalReport(it,reportPlan,band)}
+            survivalReport?.let {report->SurvivalReport(report,reportPlan,band,onCopy=survivalCopyResult?.let {snapshot->{
+                clipboard.setText(AnnotatedString(statisticsResultCopyText(m,snapshot,language)))
+            }})}
         }
     }
 }

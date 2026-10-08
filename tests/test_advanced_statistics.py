@@ -98,9 +98,27 @@ class AdvancedStatisticsTests(unittest.TestCase):
         section=next(section for section in result['statisticsReport']['sections'] if section['title']=='data')
         self.assertEqual(section['totalRows'],105)
         self.assertEqual(len(section['rows']),100)
+        self.assertEqual(len(section['copyRows']),105)
+        self.assertEqual(section['rows'],section['copyRows'][:100])
+        self.assertEqual(section['copyRows'][-1][0]['exact'],'105')
         self.assertIn('104',result['exact'])
         self.assertIn('105',result['exact'])
         self.assertIn('105',json.dumps(result['tree']))
+
+    def test_dedicated_reports_expose_complete_copy_tables_without_changing_ui_routing(self):
+        regression=evaluate('regression([[0,1],[1,3],[2,4],[3,7]],linear)')
+        self.assertNotIn('statisticsReport',regression)
+        copy=regression['statisticsCopyReport']
+        self.assertEqual('Regression',copy['title'])
+        coefficients=next(section for section in copy['sections'] if section['title']=='coefficients')
+        self.assertEqual(len(regression['regression']['coefficients']),len(coefficients['rows']))
+        residuals=next(section for section in copy['sections'] if section['title']=='residuals')
+        self.assertEqual(4,len(residuals['rows']))
+        survival=evaluate('survivalanalysis([[1,1,1],[2,0,1],[3,1,1]],0)')
+        self.assertNotIn('statisticsReport',survival)
+        tables=[section for section in survival['statisticsCopyReport']['sections'] if section['title']=='survival table']
+        self.assertTrue(tables)
+        self.assertEqual(len(survival['survival']['groups'][0]['curve']),tables[0]['totalRows'])
 
     def test_advanced_analyses_reject_invalid_arity_and_data(self):
         with self.subTest(scenario='registered_analyses_reject_missing_and_excess_arguments'):
