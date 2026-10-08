@@ -1,6 +1,7 @@
 import {$,value,element,control} from './app-ui.js';
 import {t,getLanguage} from './i18n.js';
 import {parse,latexInput} from './parser.js';
+import {statisticsRequest} from './statistics-request.js';
 import {renderFormulas} from './formula-preview.js';
 import {displayNumber} from './display-format.js';
 import {equationCommand,polynomialEquation} from './workspace-commands.js';
@@ -75,7 +76,8 @@ export function createWorkspaces({state,engine,ui,persist,restoreSelect,requestO
       else if(workspace==='units')source=`convert(${value('unit-value')},${value('unit-from')},${value('unit-to')})`;
       else if(workspace==='tip')source=tipExpression();
       else if(workspace==='currency'){source=`(${value('currency-amount')})*(${value('currency-rate')})`;}
-      let result=await engine.execute({...requestOptions(),tree:parse(latexInput(source)),...(workspace==='equation'?{equationSteps:true,solutionSteps:true}:{}),...(advancedContext?.termLabels?{statisticsTermLabels:advancedContext.termLabels}:{})},{context:workspace});if(workspace==='tip'&&result.ok)result=moneyResult(result,Number(value('tip-people')));if(statisticsContext&&result.ok)result={...result,note:[statisticsContext,result.note].filter(Boolean).join('\n')};showResult(result,source,workspace==='equation'?equationSource():source,{decimalDisplay:workspace==='regression',statisticsTarget:workspace==='statistics-advanced'?'statistics-advanced-result':workspace==='statistics'?'statistics-analysis-result':''});
+      const expressionRequest=workspace.startsWith('statistics')?statisticsRequest(latexInput(source)):{tree:parse(latexInput(source))};
+      let result=await engine.execute({...requestOptions(),...expressionRequest,...(workspace==='equation'?{equationSteps:true,solutionSteps:true}:{}),...(advancedContext?.termLabels?{statisticsTermLabels:advancedContext.termLabels}:{})},{context:workspace});if(workspace==='tip'&&result.ok)result=moneyResult(result,Number(value('tip-people')));if(statisticsContext&&result.ok)result={...result,note:[statisticsContext,result.note].filter(Boolean).join('\n')};showResult(result,source,workspace==='equation'?equationSource():source,{decimalDisplay:workspace==='regression',statisticsTarget:workspace==='statistics-advanced'?'statistics-advanced-result':workspace==='statistics'?'statistics-analysis-result':''});
       if(workspace==='equation')equationSteps.show(result);
       if(advancedContext)statistics.showAdvancedResult(result,advancedContext);
     }catch(exc){error(exc.message);}

@@ -481,7 +481,7 @@ class EquationStepTests(unittest.TestCase):
         self.assertEqual("", trig["note"])
         _, unresolved = self.report(s.Eq(s.sin(x), x), x)
         self.assertIn("Detailed transformations are unavailable", unresolved["note"])
-        self.assertEqual("Known real roots (partial)", unresolved["steps"][-1]["title"])
+        self.assertEqual("Numerical real roots (partial)", unresolved["steps"][-1]["title"])
         y = s.Symbol("y")
         _, nonlinear = self.report([s.Eq(x*x+2*y*y, 1), s.Eq(x*y, 1)], [x, y])
         self.assertIn("Detailed transformations are unavailable", nonlinear["note"])

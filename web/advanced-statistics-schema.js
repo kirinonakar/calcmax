@@ -1664,10 +1664,10 @@ export const advancedStatisticsSchema = [
     "label": "Mixed model",
     "ko": "혼합모형",
     "input": "table",
-    "suffix": ",0",
-    "example": "mixedmodel([[1,0,2],[1,1,4],[1,2,4],[2,0,3],[2,1,4],[2,2,6],[3,0,1],[3,1,3],[3,2,4],[4,0,4],[4,1,5],[4,2,8]],0)",
-    "help": "Rows: subject ID, predictors, response. Gaussian random intercept with up to three random slopes (0 none, a predictor position, or [1,2]); third argument ml (default) or reml; up to 5000 rows. Includes subject BLUPs, slope correlations and singular-fit diagnostics; random-slope ICC is at x=0; asymptotic Wald z inference.",
-    "helpKo": "열: 대상 ID, 설명변수, 반응. Gaussian 랜덤 절편 + 최대 3개 랜덤 기울기(0 없음, 변수 위치, 또는 [1,2]); 셋째 인수 ml(기본)·reml; 최대 5000행. 대상별 BLUP·기울기 상관·singular 진단 포함; 기울기 ICC는 x=0 기준; 점근 Wald z 추론.",
+    "suffix": ",0,reml",
+    "example": "mixedmodel([[1,0,2],[1,1,4],[1,2,4],[2,0,3],[2,1,4],[2,2,6],[3,0,1],[3,1,3],[3,2,4],[4,0,4],[4,1,5],[4,2,8]],0,reml)",
+    "help": "Rows: subject ID, predictors, response. Gaussian random intercept with up to three random slopes (0 none, a predictor position, or [1,2]); third argument reml (default) or ml; up to 5000 rows. Includes subject BLUPs, slope correlations and singular-fit diagnostics; random-slope ICC is at x=0; asymptotic Wald z inference.",
+    "helpKo": "열: 대상 ID, 설명변수, 반응. Gaussian 랜덤 절편 + 최대 3개 랜덤 기울기(0 없음, 변수 위치, 또는 [1,2]); 셋째 인수 reml(기본)·ml; 최대 5000행. 대상별 BLUP·기울기 상관·singular 진단 포함; 기울기 ICC는 x=0 기준; 점근 Wald z 추론.",
     "controls": [
       {
         "key": "subject",
@@ -1702,23 +1702,23 @@ export const advancedStatisticsSchema = [
         "label": "Estimation",
         "ko": "추정 방법",
         "type": "choice",
-        "default": "ml",
+        "default": "reml",
         "choices": [
-          {
-            "id": "ml",
-            "label": "ML",
-            "ko": "ML"
-          },
           {
             "id": "reml",
             "label": "REML",
             "ko": "REML"
+          },
+          {
+            "id": "ml",
+            "label": "ML",
+            "ko": "ML"
           }
         ]
       }
     ],
-    "formHelp": "Gaussian random intercept + up to three random slopes; ML / REML, singular-fit diagnostics and subject BLUPs. ICC for random slopes is at x=0. Slopes: 0, a position or 1,2. Wald z inference.",
-    "formHelpKo": "Gaussian 랜덤 절편 + 최대 3개 랜덤 기울기; ML·REML, singular 진단·대상별 BLUP. 기울기 모형의 ICC는 x=0 기준. 기울기: 0, 번호 또는 1,2. Wald z 추론.",
+    "formHelp": "Gaussian random intercept + up to three random slopes; REML (default) / ML, singular-fit diagnostics and subject BLUPs. ICC for random slopes is at x=0. Slopes: 0, a position or 1,2. Wald z inference.",
+    "formHelpKo": "Gaussian 랜덤 절편 + 최대 3개 랜덤 기울기; REML(기본)·ML, singular 진단·대상별 BLUP. 기울기 모형의 ICC는 x=0 기준. 기울기: 0, 번호 또는 1,2. Wald z 추론.",
     "exampleRows": [
       [
         "1",

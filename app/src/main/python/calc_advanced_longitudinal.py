@@ -336,7 +336,7 @@ def clustered(engine,name,a):
             require(slopes and len(slopes)<=3 and len(set(slopes))==len(slopes),'Use 0, a predictor position, or up to three distinct positions such as [1,2]')
         else:
             selected=integer(argument,0,19); slopes=[] if selected==0 else [selected]
-        method=option(a,2,'ml'); require(method in ('ml','reml'),'Estimation: ml or reml')
+        method=option(a,2,'reml'); require(method in ('ml','reml'),'Estimation: ml or reml')
         require(any(len(c)>1 for c in clusters),'Random intercept requires repeated subjects')
         for slope in slopes: require(1<=slope<p,'Random-slope predictor position is out of range')
         if not slopes: return mixed_intercept(engine,x,y,clusters,ids,method)

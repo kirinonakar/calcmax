@@ -906,7 +906,109 @@
     "source": "SciPy 1.18.1; statsmodels 0.15.0"
   },
   {
-    "name": "mixedmodel",
+    "name": "Mixed random intercept ml",
+    "function": "mixedmodel",
+    "arguments": [
+      [
+        [
+          1,
+          0,
+          2
+        ],
+        [
+          1,
+          1,
+          4
+        ],
+        [
+          1,
+          2,
+          4
+        ],
+        [
+          2,
+          0,
+          3
+        ],
+        [
+          2,
+          1,
+          4
+        ],
+        [
+          2,
+          2,
+          6
+        ],
+        [
+          3,
+          0,
+          1
+        ],
+        [
+          3,
+          1,
+          3
+        ],
+        [
+          3,
+          2,
+          4
+        ],
+        [
+          4,
+          0,
+          4
+        ],
+        [
+          4,
+          1,
+          5
+        ],
+        [
+          4,
+          2,
+          8
+        ]
+      ],
+      0,
+      "ml"
+    ],
+    "expected": [
+      [
+        [
+          "coefficients",
+          0,
+          "estimate"
+        ],
+        2.4999999999999996
+      ],
+      [
+        [
+          "coefficients",
+          1,
+          "estimate"
+        ],
+        1.5000000000000002
+      ],
+      [
+        [
+          "residual variance"
+        ],
+        0.333333342843241
+      ],
+      [
+        [
+          "random intercept variance"
+        ],
+        1.16666659058741
+      ]
+    ],
+    "tolerance": 0.0002,
+    "source": "SciPy 1.18.1; statsmodels 0.15.0"
+  },
+  {
+    "name": "Mixed random intercept reml",
     "function": "mixedmodel",
     "arguments": [
       [
@@ -979,7 +1081,7 @@
           0,
           "estimate"
         ],
-        2.4999999999999996
+        2.5000000000000013
       ],
       [
         [
@@ -987,19 +1089,19 @@
           1,
           "estimate"
         ],
-        1.5000000000000002
+        1.5
       ],
       [
         [
           "residual variance"
         ],
-        0.333333342843241
+        0.3809523892430147
       ],
       [
         [
           "random intercept variance"
         ],
-        1.16666659058741
+        1.5767194874417383
       ]
     ],
     "tolerance": 0.0002,

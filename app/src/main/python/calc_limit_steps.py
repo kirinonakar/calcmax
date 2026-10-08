@@ -20,9 +20,16 @@ def limit_steps(engine, expression, variable, point, direction, answer, add):
     def limit(value, side=approach):
         return s.limit(value, variable, point, dir=side)
 
+    def substitution_allowed(value):
+        # Matching the computed answer does not prove continuity: SymPy
+        # substitutes 0**0 as 1, and floor/ceiling can jump at the point.
+        return (point.is_finite is True
+                and not value.has(s.floor, s.ceiling, s.sign, s.Piecewise)
+                and not any(power.exp.has(variable) for power in value.atoms(s.Pow)))
+
     add("Identify the approach", "Follow the selected approach to the point. Left and right limits may differ.", s.Limit(expression, variable, point, dir=approach))
     substituted = expression.subs(variable, point)
-    if finite(substituted) and same(substituted, answer):
+    if substitution_allowed(expression) and finite(substituted) and same(substituted, answer):
         if any(condition.subs(variable, point) == s.false for condition in engine.conditions):
             add("Evaluate the continuous extension", "The original expression is undefined at the point. Use its simplified form on nearby allowed values to find the limit.", substituted)
         else:
@@ -33,7 +40,7 @@ def limit_steps(engine, expression, variable, point, direction, answer, add):
     if simplified != expression:
         add("Cancel a removable factor", "Cancel common factors away from the approach point. The simplified expression has the same limit there.", eq(expression, simplified))
         candidate = simplified.subs(variable, point)
-        if finite(candidate) and same(candidate, answer):
+        if substitution_allowed(simplified) and finite(candidate) and same(candidate, answer):
             add("Evaluate the continuous extension", "The original expression is undefined at the point. Use its simplified form on nearby allowed values to find the limit.", candidate)
             return ""
 
@@ -49,7 +56,7 @@ def limit_steps(engine, expression, variable, point, direction, answer, add):
             continue
         reduced = s.cancel(s.expand(numerator*conjugate)/s.expand(denominator*conjugate))
         candidate = reduced.subs(variable, point)
-        if s.count_ops(reduced) <= 60 and finite(candidate) and same(candidate, answer) and same(reduced, expression):
+        if substitution_allowed(reduced) and s.count_ops(reduced) <= 60 and finite(candidate) and same(candidate, answer) and same(reduced, expression):
             add("Rationalize with the conjugate", "Multiply the numerator and denominator by the conjugate. The difference of squares removes the square-root difference on nearby allowed values.", eq(expression, reduced))
             add("Direct substitution", "When the expression is continuous at the approach point, substitute the point directly.", candidate)
             return ""
@@ -89,7 +96,7 @@ def limit_steps(engine, expression, variable, point, direction, answer, add):
                 pending.append((zero_form, numerator/denominator, dn/dd))
                 numerator, denominator = dn, dd
                 candidate = (dn/dd).subs(variable, point)
-                if finite(candidate) and same(candidate, answer):
+                if substitution_allowed(pending[-1][2]) and finite(candidate) and same(candidate, answer):
                     break
             if pending and same(limit(pending[-1][2]), answer):
                 for zero_form, before, after in pending:
@@ -98,13 +105,13 @@ def limit_steps(engine, expression, variable, point, direction, answer, add):
                                    "For this differentiable infinity/infinity form, differentiate the numerator and denominator separately along the same approach. The transformed limit has been checked.")
                     add(title, explanation, eq(s.Limit(before, variable, point, dir=approach), s.Limit(after, variable, point, dir=approach)))
                 candidate = pending[-1][2].subs(variable, point)
-                if finite(candidate) and same(candidate, answer):
+                if substitution_allowed(pending[-1][2]) and finite(candidate) and same(candidate, answer):
                     add("Direct substitution", "When the expression is continuous at the approach point, substitute the point directly.", candidate)
                 return ""
         except (ValueError, TypeError, NotImplementedError, s.PolynomialError):
             pass
 
-    if point.is_finite and expression.has(s.Abs, s.Piecewise, s.sign):
+    if point.is_finite and expression.has(s.Abs, s.Piecewise, s.sign, s.floor, s.ceiling):
         try:
             sides = [approach] if approach in ("+", "-") else ["-", "+"]
             limits = [(side, limit(expression, side)) for side in sides]

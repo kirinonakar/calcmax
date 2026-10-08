@@ -85,6 +85,8 @@ private val korean = mapOf(
     "Identify the approach" to "극한의 접근 방향 확인", "Direct substitution" to "직접 대입", "Cancel a removable factor" to "약분 가능한 인수 제거",
     "L'Hôpital's rule for 0/0" to "0/0 꼴에 로피탈 정리 적용", "Compare highest powers" to "최고차항 비교",
     "Known real roots (partial)" to "확인된 실수 근 · 전체 해는 아님", "Find a numerical root" to "이 구간에서 수치 근 찾기", "Try a starting value" to "초깃값으로 수치 풀이 시도",
+    "Numerical real roots (partial)" to "근사 실수 근 · 전체 해는 아님",
+    "Automatic real-root search interval: [−10, 10]. Displayed roots are approximate partial results; roots outside this range, missed roots and complex roots may exist. Use nsolve to search another interval." to "실수 근 자동 탐색 구간: [−10, 10]. 표시된 근은 근삿값이며 전체 해가 아닙니다. 범위 밖의 근, 탐색에서 놓친 근, 복소수 근이 더 있을 수 있습니다. 다른 구간은 nsolve로 탐색하세요.",
     "A complete symbolic solution was not found." to "기호식으로 전체 해를 구하지 못했습니다.",
     "The known roots are partial results. Other real or complex roots may exist. Use numerical solving on a continuous interval or try a different starting value." to "표시된 근은 확인된 일부 해입니다. 다른 실수 또는 복소수 해가 더 있을 수 있습니다. 식이 연속인 구간에서 수치 풀이를 시도하거나 초깃값을 바꿔 보세요.",
     "An antiderivative was not found. This does not prove that no closed form exists. For a numerical value, supply a finite integration interval." to "원시함수를 구하지 못했습니다. 이것이 닫힌 형태의 해가 없다는 증명은 아닙니다. 수치 값을 구하려면 유한한 적분 구간을 지정하세요.",

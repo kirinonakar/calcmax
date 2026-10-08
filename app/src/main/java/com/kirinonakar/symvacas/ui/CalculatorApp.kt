@@ -292,10 +292,13 @@ internal fun largeHistoryTree(root:JSONObject?):Boolean {
             value=TextFieldValue(m.editor.source,TextRange(m.editor.anchor.coerceIn(0,m.editor.source.length),m.editor.cursor.coerceIn(0,m.editor.source.length))),
             onValueChange={
                 val relation=if(!m.committed&&it.selection.collapsed&&it.composition==null)m.editor.typedRelation(it.text,it.selection.end) else null
+                val matrixFactor=if(!m.committed&&it.selection.collapsed&&it.composition==null)m.editor.typedMatrixFactor(it.text,it.selection.end) else null
                 val symbolDeleted=m.editor.atomicSymbolDeletion(it.text)
                 val latex=LatexInput.convertEdit(m.editor,it.text)
                 if(relation!=null) {
                     m.edit(relation)
+                } else if(matrixFactor!=null) {
+                    m.edit(matrixFactor)
                 } else if(symbolDeleted!=null) {
                     if(m.committed)m.fresh(symbolDeleted) else m.edit(symbolDeleted)
                 } else if(latex!=null) {
@@ -336,7 +339,7 @@ internal fun largeHistoryTree(root:JSONObject?):Boolean {
                 Text("${session.index+1}/${session.names.size}  ${session.name} = ",fontSize=20.sp,color=c.accent)
                 BasicTextField(
                     value=TextFieldValue(session.input.source,TextRange(session.input.anchor.coerceIn(0,session.input.source.length),session.input.cursor.coerceIn(0,session.input.source.length))),
-                    onValueChange={m.editCalcValue(session.input.atomicSymbolDeletion(it.text) ?: Editor(it.text,it.selection.end,it.selection.start))},
+                    onValueChange={m.editCalcValue((if(it.selection.collapsed&&it.composition==null)session.input.typedMatrixFactor(it.text,it.selection.end) else null) ?: session.input.atomicSymbolDeletion(it.text) ?: Editor(it.text,it.selection.end,it.selection.start))},
                     modifier=Modifier.weight(1f).onPreviewKeyEvent{if(it.key in listOf(Key.MoveHome,Key.MoveEnd))handleMathInputKey(m,it)else if(it.type==KeyEventType.KeyDown&&it.key==Key.Enter){m.submitCalcValue();true}else false}.semantics{contentDescription="Value for ${session.name}"},
                     textStyle=TextStyle(color=c.ink,fontSize=22.sp,fontFamily=FontFamily.Monospace),
                     decorationBox={inner->Box(Modifier.fillMaxWidth()) {
@@ -411,7 +414,7 @@ internal fun largeHistoryTree(root:JSONObject?):Boolean {
         Column {
             Text(tr(guidance.optString("message")),style=MaterialTheme.typography.bodyMedium)
             guidance.optJSONObject("knownRoots")?.let {roots->
-                Text(tr("Known real roots (partial)"),style=MaterialTheme.typography.bodySmall)
+                Text(tr(if(roots.optBoolean("approximate"))"Numerical real roots (partial)" else "Known real roots (partial)"),style=MaterialTheme.typography.bodySmall)
                 ResultMath(roots,false,size,displayDigits=displayDigits)
             }
         }

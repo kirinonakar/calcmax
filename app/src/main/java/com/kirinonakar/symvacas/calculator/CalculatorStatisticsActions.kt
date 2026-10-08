@@ -1,7 +1,7 @@
 package com.kirinonakar.symvacas.calculator
 
 import androidx.lifecycle.viewModelScope
-import com.kirinonakar.symvacas.math.Parser
+import com.kirinonakar.symvacas.math.statisticsRequest
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import org.json.JSONObject
@@ -23,13 +23,14 @@ internal object CalculatorStatisticsActions {
     }
     fun CalculatorModel.performFitRegression(source: String, data: String, responseColumn:Int?) {
         regressionJob?.cancel()
-        val tree=try {Parser(source).parse()} catch(e:Exception) {error=e.message ?: "Syntax ERROR";return}
+        val statisticsInput=try {statisticsRequest(source)} catch(e:Exception) {error=e.message ?: "Syntax ERROR";return}
+        val tree=statisticsInput.tree
         val fittedMode=tree.args.getOrNull(1)?.value ?: "linear"
         regressionJob=viewModelScope.launch {
             val currentJob=coroutineContext[Job]
             statisticsState.regressionBusy=true;error=""
             try {
-                val response=engine.execute(request().put("tree",JSONObject(tree.json())))
+                val response=engine.execute(request().put("tree",JSONObject(tree.json())).put("statisticsDatasets",JSONObject(statisticsInput.datasets)))
                 if(response.optBoolean("ok")) {
                     result=response;dmsDisplay=false;dmsConversion=false
                     val array=response.optJSONArray("curve")
@@ -46,7 +47,7 @@ internal object CalculatorStatisticsActions {
                     if(response.has("resultAst")) next.put("Ans",response.getJSONObject("resultAst")) else next.remove("Ans")
                     variables=next
                     appendHistory(HistoryEntry(System.currentTimeMillis(),source,response.optString("exact"),response.optString("decimal"),mode,
-                        inputTree=tree.json(),response=response.toString()))
+                        inputTree=if(statisticsInput.datasets.isNotEmpty())"" else tree.json(),response=response.toString()))
                     save()
                 } else {statisticsState.clearRegression();error=response.optString("error","Math ERROR")}
             } finally {if(regressionJob===currentJob){statisticsState.regressionBusy=false;regressionJob=null}}

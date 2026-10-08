@@ -62,8 +62,10 @@ for name in ('poissonreg','nbreg','multinomial','ordinal'):
 rows=data('cox'); arr=np.asarray(rows,float); fit=sm.PHReg(arr[:,0],arr[:,2:],status=arr[:,1],ties='efron').fit()
 add('cox',[rows],[[['coefficients',0,'estimate'],float(fit.params[0])],[['coefficients',0,'SE'],float(fit.bse[0])],[['partial log likelihood'],float(fit.llf)]],1e-5)
 rows=data('mixedmodel'); arr=np.asarray(rows,float); x=sm.add_constant(arr[:,1:-1]); y=arr[:,-1]
-fit=sm.MixedLM(y,x,groups=arr[:,0]).fit(reml=False,method='powell',disp=False)
-add('mixedmodel',[rows],[[['coefficients',i,'estimate'],float(v)] for i,v in enumerate(fit.fe_params)]+[[['residual variance'],float(fit.scale)],[['random intercept variance'],float(fit.cov_re[0,0])]],2e-4)
+for method in ('ml','reml'):
+    fit=sm.MixedLM(y,x,groups=arr[:,0]).fit(reml=method=='reml',method='powell',disp=False)
+    arguments=[rows,0,'ml'] if method=='ml' else [rows]
+    add('mixedmodel',arguments,[[['coefficients',i,'estimate'],float(v)] for i,v in enumerate(fit.fe_params)]+[[['residual variance'],float(fit.scale)],[['random intercept variance'],float(fit.cov_re[0,0])]],2e-4,name='Mixed random intercept '+method)
 for family in ('gaussian','binomial','poisson'):
     if family=='binomial':
         rows=[[g,x,(g+x)%2] for g in range(1,9) for x in range(3)]

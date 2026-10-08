@@ -1,5 +1,5 @@
 import test from 'node:test';
-import {functionRelationExit,emptyPowerDeletion,emptyFractionDeletion,moveMathCursor,mathStructureExit} from '../input-navigation.js';
+import {functionRelationExit,emptyPowerDeletion,emptyFractionDeletion,moveMathCursor,mathStructureExit,matrixFactorInput} from '../input-navigation.js';
 import assert from 'node:assert/strict';
 import {bindKeyPress} from '../keypad.js';
 
@@ -74,4 +74,51 @@ test('preview policy evaluates arithmetic but waits for expensive or stateful ca
   for(const source of ['rnd()','integrate(exp(-x^2),(x,0,oo))','1+dot([1,2],[3,4])','f(1,2)'])
     assert.equal(requiresExplicitEvaluation(parse(source)),true,source);
   assert.equal(requiresExplicitEvaluation(parse('1+f(1)'),new Set(['f'])),true);
+});
+
+test('matrix edge arrows exit the entire matrix and reenter its last element',()=>{
+  for(const matrix of ['[[3,5],[3,6]]','[[33,55],[33,66]]','[[,],[,]]','[[1]]','[[1,2,3]]','[[1],[2],[3]]']){
+    for(const source of [matrix,`1+${matrix}+2`,`det(${matrix})`]){
+      const start=source.indexOf(matrix),end=start+matrix.length;
+      const node=parse(matrix,{allowHoles:true}),last=node.args.at(-1).args.at(-1),at=start+last.end;
+      assert.equal(moveMathCursor(source,at,at,'RIGHT'),end,source);
+      assert.equal(moveMathCursor(source,end,end,'LEFT'),at,source);
+      assert.equal(moveMathCursor(source,end-1,end-1,'LEFT'),at,source);
+      assert.equal(moveMathCursor(source,at,at,'RIGHT'),end,source);
+    }
+  }
+  const source='[[33,55],[33,66]]';
+  assert.equal(moveMathCursor(source,3,3,'RIGHT'),4,'multi-digit cell editing stays in the cell');
+  assert.equal(moveMathCursor(source,4,4,'RIGHT'),5,'the next cell is reached across the comma');
+  assert.equal(moveMathCursor(source,7,7,'RIGHT'),10,'the next row is reached across both row delimiters');
+  assert.equal(moveMathCursor(source,10,10,'LEFT'),7);
+  assert.equal(moveMathCursor(source,10,10,'UP'),2);
+  assert.equal(moveMathCursor(source,2,2,'DOWN'),10);
+  const power='[[1,2],[3,4^2]]',at=power.indexOf(']]');
+  const outside=mathStructureExit(power,at,at,'RIGHT');
+  assert.equal(moveMathCursor(power,at,at,'RIGHT',outside),power.length,'exiting a power then its matrix skips both closing brackets');
+});
+
+test('matrix factors get explicit multiplication without changing cells or operators',()=>{
+  const matrix='[[3,5],[3,6]]';
+  for(const source of [matrix,`1+${matrix}+2`,`det(${matrix})`]){
+    const end=source.indexOf(matrix)+matrix.length;
+    for(const position of [end-1,end]){
+      for(const text of ['3','.5','x','theta','sin()','(3+4)','[[1,0],[0,1]]','√4','∞']){
+        const edit=matrixFactorInput(source,position,position,text);
+        assert.deepEqual(edit,{position:end,prefix:'*'},source+text);
+        const result=source.slice(0,edit.position)+edit.prefix+text+source.slice(edit.position);
+        assert.equal(result,source.slice(0,end)+'*'+text+source.slice(end));
+        const tree=parse(result,{allowHoles:true});
+        const nodes=[];const visit=node=>{nodes.push(node);node.args.forEach(visit);};visit(tree);
+        const retained=nodes.find(node=>node.start===source.indexOf(matrix)&&node.end===end&&node.kind==='list');
+        assert.deepEqual(retained.args.map(row=>row.args.map(cell=>cell.value)),[['3','5'],['3','6']]);
+      }
+    }
+    for(const text of ['+','-','*','/','^','=',',',')',']',''])assert.equal(matrixFactorInput(source,end,end,text),null,text);
+    assert.equal(matrixFactorInput(source,end-2,end-2,'7'),null,'continuing the final cell must not insert a product');
+  }
+  assert.equal(matrixFactorInput(matrix,0,matrix.length,'3'),null,'replacing a selection must not insert a product');
+  assert.deepEqual(matrixFactorInput(matrix+' ',matrix.length+1,matrix.length+1,'3'),{position:matrix.length+1,prefix:'*'});
+  assert.equal(matrixFactorInput('[[3,5],[3,6',10,10,'7'),null,'an unfinished matrix remains editable');
 });

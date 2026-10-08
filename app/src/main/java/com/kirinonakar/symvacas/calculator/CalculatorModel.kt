@@ -797,7 +797,8 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
             return
         }
         if(committed && source==editor.source)return
-        val tree = try { calculationTree(source) } catch(e: Exception) { error=e.message ?: "Syntax ERROR"; return }
+        val statisticsInput=try {if(mode=="Statistics")statisticsRequest(source) else null} catch(e:Exception) {error=e.message ?: "Syntax ERROR";return}
+        val tree = try { statisticsInput?.tree ?: calculationTree(source) } catch(e: Exception) { error=e.message ?: "Syntax ERROR"; return }
         val target=try {FunctionTransfer.resultTarget(tree)} catch(e:Exception) {error=e.message ?: "Invalid function";return}
         if(target!=null) {
             with(CalculatorVariableActions) {performStoreResult(target,source)}
@@ -820,7 +821,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         job = viewModelScope.launch {
             busy=true; error=""
             try {
-                val response = engine.execute(request().put("tree",JSONObject(tree.json())).put("statisticsTermLabels",JSONObject(statisticsTermLabels)))
+                val response = engine.execute(request().put("tree",JSONObject(tree.json())).put("statisticsDatasets",JSONObject(statisticsInput?.datasets ?: emptyMap<String,List<Any>>())).put("statisticsTermLabels",JSONObject(statisticsTermLabels)))
                 if(response.optBoolean("ok")) {
                     result=response;dmsDisplay=response.optBoolean("dms");dmsConversion=false
                     resultSource=source;resultVersion=calculationRevision
@@ -829,7 +830,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
                     if(response.has("resultAst")) next.put("Ans",response.getJSONObject("resultAst")) else next.remove("Ans")
                     variables=next
                     appendHistory(HistoryEntry(System.currentTimeMillis(),source,exact,approx,mode,
-                        inputTree=tree.json(),response=response.toString()))
+                        inputTree=if(statisticsInput?.datasets?.isNotEmpty()==true)"" else tree.json(),response=response.toString()))
                     save()
                 } else error=response.optString("error","Math ERROR")
             } finally { busy=false }

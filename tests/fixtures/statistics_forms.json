@@ -589,7 +589,7 @@
       "response": "0",
       "predictors": "2"
     },
-    "expected": "mixedmodel([[1,0,2],[1,1,4],[2,0,3]],0)"
+    "expected": "mixedmodel([[1,0,2],[1,1,4],[2,0,3]],0,reml)"
   },
   {
     "id": "mixedmodel",
@@ -616,7 +616,7 @@
       "predictors": "2",
       "slope": "1"
     },
-    "expected": "mixedmodel([[1,0,2],[1,1,4],[2,0,3]],1)"
+    "expected": "mixedmodel([[1,0,2],[1,1,4],[2,0,3]],1,reml)"
   },
   {
     "id": "gee",
@@ -830,6 +830,61 @@
       [
         "2",
         "A",
+        "0"
+      ],
+      [
+        "4",
+        "A",
+        "1"
+      ],
+      [
+        "3",
+        "B",
+        "0"
+      ]
+    ],
+    "settings": {
+      "subject": "1",
+      "response": "0",
+      "predictors": "2",
+      "method": "ml"
+    },
+    "expected": "mixedmodel([[1,0,2],[1,1,4],[2,0,3]],0,ml)"
+  },
+  {
+    "id": "mixedmodel",
+    "rows": [
+      [
+        "2",
+        "A",
+        "0"
+      ],
+      [
+        "4",
+        "A",
+        "1"
+      ],
+      [
+        "3",
+        "B",
+        "0"
+      ]
+    ],
+    "settings": {
+      "subject": "1",
+      "response": "0",
+      "predictors": "2",
+      "slope": "1",
+      "method": "ml"
+    },
+    "expected": "mixedmodel([[1,0,2],[1,1,4],[2,0,3]],1,ml)"
+  },
+  {
+    "id": "mixedmodel",
+    "rows": [
+      [
+        "2",
+        "A",
         "7",
         "0"
       ],
@@ -858,7 +913,7 @@
       "predictors": "2,3",
       "slope": "1,2"
     },
-    "expected": "mixedmodel([[1,7,0,2],[1,9,1,4],[2,5,0,3],[2,6,1,5]],[1,2])"
+    "expected": "mixedmodel([[1,7,0,2],[1,9,1,4],[2,5,0,3],[2,6,1,5]],[1,2],reml)"
   },
   {
     "id": "impute",

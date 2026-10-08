@@ -172,8 +172,7 @@ internal fun guidedStatisticsCommand(definition:JSONObject,rows:List<List<String
                 val numbers=positions.mapNotNull {it.toIntOrNull()}.filter {it!=0}
                 require(numbers.all {it in 1..19}&&numbers.distinct().size==numbers.size) {"Random-slope positions must be distinct predictor numbers"}
                 val argument=when(numbers.size) {0->"0";1->numbers[0].toString();else->"["+numbers.joinToString(",")+"]"}
-                val method=if(opts["method"]=="reml")",reml" else ""
-                "mixedmodel(${table(mapped)},$argument$method)"
+                "mixedmodel(${table(mapped)},$argument,${opts["method"]})"
             }
         }
         "kstest"->{

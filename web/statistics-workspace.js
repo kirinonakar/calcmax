@@ -7,6 +7,7 @@ import {statisticsPlot,statisticsPlotPanels} from './statistics-plot.js';
 import {statisticsHeatMapData,statisticsCorrelationHeatMap,statisticsPlotNumber} from './statistics-plot-data.js';
 import {clusteredHeatMap} from './statistics-cluster.js';
 import {createAdvancedStatistics} from './advanced-statistics.js';
+import {statisticsRequest} from './statistics-request.js';
 import {renderFormulas} from './formula-preview.js';
 import {editableTable} from './editable-table.js';
 import {parse,latexInput} from './parser.js';
@@ -398,9 +399,9 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
     const run={};
     regressionRun=run;
     try{
-      const source=statisticsExpression('regression'),tree=parse(latexInput(source));
+      const source=statisticsExpression('regression'),expressionRequest=statisticsRequest(latexInput(source));
       regressionBusy(true);
-      const result=await engine.execute({...options,tree},{context:'regression'});
+      const result=await engine.execute({...options,...expressionRequest},{context:'regression'});
       if(regressionRun!==run||source!==statisticsExpression('regression'))return;
       showResult(result,source,source,{decimalDisplay:true});
       if(result.ok)showRegression(result);

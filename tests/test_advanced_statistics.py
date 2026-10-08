@@ -340,6 +340,22 @@ class AdvancedStatisticsTests(unittest.TestCase):
                     for key in path: actual=actual[key]
                     self.assertAlmostEqual(float(actual),expected,delta=case.get('tolerance',1e-6)*max(1,abs(expected)))
 
+    def test_lmm_defaults_to_reml_with_or_without_random_slopes(self):
+        fixtures=json.loads((ROOT/'tests/fixtures/advanced_statistics_reference.json').read_text(encoding='utf-8'))
+        for case in fixtures:
+            if case['function']!='mixedmodel': continue
+            args=case['arguments']
+            if len(args)>2 and args[2]!='reml': continue
+            with self.subTest(case=case['name']):
+                rows=args[0]; slope=args[1] if len(args)>1 else 0
+                result=run('mixedmodel',rows,slope)
+                self.assertEqual(result['estimation'],'REML')
+                for path,expected in case['expected']:
+                    actual=result
+                    for key in path: actual=actual[key]
+                    self.assertAlmostEqual(float(actual),expected,delta=case.get('tolerance',1e-6)*max(1,abs(expected)))
+        with self.assertRaises(MathError): run('mixedmodel',rows,0,'invalid')
+
     def test_gaussian_gee_correlation_is_invariant_to_response_units(self):
         with self.subTest(scenario='gaussian_gee_correlation_is_invariant_to_response_units'):
             rows=[[g,t,2+.4*t+(g%4-1.5)*.7+((g+2*t)%5-2)*.2] for g in range(12) for t in range(3+g%3)]

@@ -9,6 +9,7 @@ from calc_engine import Engine,dispatch
 from calc_display import result_ast,display_tree
 from calc_integrals import log_arctan_primitive
 from calc_calculus_steps import calculus_steps, verified_primitive, TRUNCATED
+from calc_result_guidance import automatic_real_roots
 
 
 def call(name,*args): return {"kind":"call","value":name,"args":list(args)}
@@ -162,6 +163,19 @@ class CalculusExplanationTests(unittest.TestCase):
             step=next(step for step in result["solutionSteps"]["steps"] if step["title"]=="Evaluate the one-sided limit")
             self.assertIn("dir='-'" if side=="left" else "dir='+'",step["equations"][0]["exact"])
 
+    def test_indeterminate_powers_and_jumps_never_claim_direct_substitution(self):
+        x=s.Symbol("x")
+        for expression,side,answer in [(x**x,"right","1"),(s.sin(x)**x,"right","1"),
+                                       (s.ceiling(x),"left","0"),(s.floor(x),"right","0"),
+                                       (s.ceiling(x),"right","1"),(s.floor(x),"left","-1")]:
+            with self.subTest(expression=expression,side=side):
+                result=run(call("limit",result_ast(expression),symbol("x"),result_ast(s.Integer(0)),symbol(side)),solutionSteps=True)
+                self.assertTrue(result['ok'],result)
+                self.assertEqual(answer,result['exact'])
+                titles=[step['title'] for step in result['solutionSteps']['steps']]
+                self.assertNotIn('Direct substitution',titles)
+                self.assertNotIn('Evaluate the continuous extension',titles)
+
     def test_substitution_does_not_shadow_the_original_variable(self):
         u=s.Symbol("u")
         result=run(call("integrate",result_ast(2*u*s.sin(u*u)),symbol("u")),solutionSteps=True)
@@ -198,12 +212,40 @@ class CalculusExplanationTests(unittest.TestCase):
         self.assertIn("ConditionSet",result["exact"])
         guidance=result["guidance"]
         self.assertEqual("unresolved_equation",guidance["status"])
-        self.assertEqual("{0}",guidance["knownRoots"]["exact"])
+        roots=s.sympify(guidance["knownRoots"]["exact"])
+        self.assertEqual(3,len(roots))
+        self.assertIn(0,roots)
+        self.assertTrue(guidance['knownRoots']['approximate'])
+        self.assertEqual([-10,10],guidance['searchRange'])
+        for root in roots: self.assertLess(abs(s.N(s.sin(root)-root/2)),1e-25)
         commands=[item["command"] for item in guidance["suggestions"]]
         self.assertIn("nsolve(-x/2 + sin(x),x,1,2)",commands)
         self.assertIn("nsolve(-x/2 + sin(x),x,-2,-1)",commands)
         self.assertIn("partial",guidance["detail"])
         self.assertNotIn("ConditionSet",str(result["equationSteps"]["steps"][-1]["tree"]))
+
+    def test_automatic_numeric_roots_preserve_assumptions_and_original_domain(self):
+        x=s.Symbol('x')
+        for variable in [x,s.Symbol('t')]:
+            result=run(call('solve',result_ast(s.cos(variable)-variable),symbol(str(variable))))
+            self.assertTrue(result['ok'],result)
+            self.assertIn('ConditionSet',result['exact'])
+            roots=s.sympify(result['guidance']['knownRoots']['exact'])
+            self.assertEqual(1,len(roots))
+            self.assertLess(abs(float(next(iter(roots)))-0.7390851332151607),1e-15)
+        source=call('solve',result_ast(s.sin(x)-x/2),symbol('x'))
+        implicit=run(call('solve',result_ast(s.cos(x)-x)))
+        self.assertIn('0.739085133215',implicit['guidance']['knownRoots']['exact'])
+        positive=run(source,assumptions={'x':['positive']})
+        self.assertEqual(1,len(s.sympify(positive['guidance']['knownRoots']['exact'])))
+        integer=run(call('solve',result_ast(s.cos(x)-x),symbol('x'),symbol('integer')))
+        self.assertNotIn('knownRoots',integer.get('guidance',{}))
+        # The residual changes sign across this pole, but there is no root.
+        pole=run(call('solve',result_ast(1/(s.cos(x)-x)),symbol('x')))
+        self.assertNotIn('knownRoots',pole.get('guidance',{}))
+        # Small positive residuals and floating-point underflow are not roots.
+        for expression in [s.sin(x)**2+s.Rational(1,10**100),s.exp(-10**10*(x-s.Rational(123,1000))**2)]:
+            self.assertEqual([],automatic_real_roots(Engine({}),expression,x,s.S.Reals))
 
     def test_calculus_display_trees_keep_integrals_and_derivatives_structured(self):
         x=s.Symbol("x")

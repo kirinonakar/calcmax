@@ -18,6 +18,7 @@ from calc_finance import finance_value
 from calc_integrals import rational_trig_primitive, log_arctan_primitive
 from calc_solutions import affine_exponential_solutions
 from calc_number_theory import bounded_divisors
+from calc_statistics_report import BASIC as BASIC_STATISTICS
 
 MAX_EXACT_DIGITS = 100000
 MAX_NUMERIC_EXPONENT = 100000
@@ -56,6 +57,9 @@ class Engine:
         self.note = ""
         self.conditions = []
         self.bindings = {}
+        # Request-local references to validated numeric datasets. Data cells
+        # have their own row/column bounds and do not consume expression nodes.
+        self.statistics_datasets = {}
         self.regression_parameters = []
         self.regression_report = None
         self.allow_sequence_calls = False
@@ -101,27 +105,67 @@ class Engine:
             return (name not in self.bindings and name not in seen and name not in ("e", "i", "I", "oo", "true", "false")
                     and name not in CONSTANTS and isinstance(stored, dict) and self.has_explicit_angle(stored, seen + (name,)))
         return any(self.has_explicit_angle(child, seen) for child in node.get("args", []))
+    def number(self, value):
+        require(len(value.lstrip("-")) <= MAX_EXACT_DIGITS, "Number too large")
+        if "e" in value.lower():
+            mantissa, exponent = value.lower().split("e", 1)
+            exponent = int(exponent)
+            if abs(exponent) > MAX_NUMERIC_EXPONENT:
+                raise MathError("Decimal exponent limit: 100000")
+            coefficient = s.Rational(mantissa)
+            if oversized_rational_power(s.Integer(10), s.Integer(exponent)):
+                power=s.Pow(10, exponent, evaluate=False)
+                return power if coefficient == 1 else s.Mul(coefficient, power, evaluate=False)
+        number = s.Rational(value)
+        max_bits=math.ceil(MAX_EXACT_DIGITS*math.log2(10))
+        require(abs(number.p).bit_length() <= max_bits and number.q.bit_length() <= max_bits, "Number size limit")
+        return number
+
+    def prepare_statistics_dataset(self, node):
+        """Cache plain numeric vectors/tables; expressions retain normal guards."""
+        packed = self.request.get('statisticsDatasets', {})
+        if node.get('kind') == 'symbol' and node.get('value') in packed:
+            if id(node) in self.statistics_datasets: return
+            rows = packed[node['value']]
+            require(isinstance(rows,list), 'Numeric statistics dataset expected')
+            table = bool(rows) and all(isinstance(row,list) for row in rows)
+            cells = rows if table else [rows]
+            require(len(rows)<=5000 and (not table or all(len(row)<=101 for row in cells)),
+                    'Statistics dataset limit: 5000 rows and 101 columns')
+            require(all(isinstance(cell,str) for row in cells for cell in row),
+                    'Numeric statistics dataset expected')
+            values = [[self.number(cell) for cell in row] for row in cells]
+            self.statistics_datasets[id(node)] = (node, values if table else values[0])
+            return
+        if node.get("kind") == "symbol" and node.get("value") not in self.bindings:
+            node = self.variables.get(node.get("value"), node)
+        if node.get("kind") != "list" or id(node) in self.statistics_datasets:
+            return
+        rows = node.get("args", [])
+        table = bool(rows) and all(row.get("kind") == "list" for row in rows)
+        cells = [row.get("args", []) for row in rows] if table else [rows]
+        def literal(cell):
+            return (cell.get("kind") == "number" or
+                    cell.get("kind") == "unary" and cell.get("value") in ("+", "-")
+                    and len(cell.get("args", [])) == 1 and cell["args"][0].get("kind") == "number")
+        if not all(literal(cell) for row in cells for cell in row):
+            return
+        require(len(rows) <= 5000 and (not table or all(len(row) <= 101 for row in cells)),
+                "Statistics dataset limit: 5000 rows and 101 columns")
+        def value(cell):
+            if cell["kind"] == "number": return self.number(cell["value"])
+            return (-1 if cell["value"] == "-" else 1)*self.number(cell["args"][0]["value"])
+        values = [[value(cell) for cell in row] for row in cells]
+        self.statistics_datasets[id(node)] = (node, values if table else values[0])
+
     def build(self, node, depth=0):
         self.visited += 1
         require(depth < 100 and self.visited <= 12000, "Expression complexity limit")
+        if id(node) in self.statistics_datasets: return self.statistics_datasets[id(node)][1]
         kind, value = node["kind"], node.get("value", "")
         args = node.get("args", [])
         build = lambda a: self.build(a, depth + 1)
-        if kind == "number":
-            require(len(value.lstrip("-")) <= MAX_EXACT_DIGITS, "Number too large")
-            if "e" in value.lower():
-                mantissa, exponent = value.lower().split("e", 1)
-                exponent = int(exponent)
-                if abs(exponent) > MAX_NUMERIC_EXPONENT:
-                    raise MathError("Decimal exponent limit: 100000")
-                coefficient = s.Rational(mantissa)
-                if oversized_rational_power(s.Integer(10), s.Integer(exponent)):
-                    power=s.Pow(10, exponent, evaluate=False)
-                    return power if coefficient == 1 else s.Mul(coefficient, power, evaluate=False)
-            number = s.Rational(value)
-            max_bits=math.ceil(MAX_EXACT_DIGITS*math.log2(10))
-            require(abs(number.p).bit_length() <= max_bits and number.q.bit_length() <= max_bits, "Number size limit")
-            return number
+        if kind == "number": return self.number(value)
         if kind == "symbol":
             if value in self.bindings: return self.bindings[value]
             constants = {"pi": s.pi, "e": s.E, "i": s.I, "I": s.I, "oo": s.oo, "true": s.true, "false": s.false}
@@ -221,6 +265,8 @@ class Engine:
             for n in candidates:
                 if n["kind"] == "symbol": self.bindings[n["value"]] = self.symbol(n["value"])
         try:
+            if value not in self.functions and value in BASIC_STATISTICS | ADVANCED_STATISTICS | {"regression"}:
+                for argument in args: self.prepare_statistics_dataset(argument)
             if value == "impute":
                 # NA is a missing-data token only inside impute; elsewhere it
                 # retains its existing Avogadro-constant meaning.
@@ -256,6 +302,9 @@ class Engine:
                 elif node is self.request.get("tree"): self.solution_step_inputs[-1]=record
             if node is self.request.get("tree") and value in ("solve", "integrate") and len(values) > 1:
                 self.guidance_input = (value, values, result)
+            elif node is self.request.get("tree") and value == "solve" and len(values) == 1 and not isinstance(values[0],list):
+                variables=sorted(values[0].free_symbols,key=str)
+                if len(variables)==1: self.guidance_input=(value,[values[0],variables[0]],result)
             return result
         finally:
             self.bindings = old
@@ -327,7 +376,7 @@ class Engine:
             rounded=s.Rational(units,1)/scale
             return rounded if rounded.is_Integer else s.Float(rounded,max(self.precision,15,len(str(abs(rounded.p)))))
         basic = {"sqrt": s.sqrt, "cbrt": lambda x: s.real_root(x,3), "nthroot": s.root, "abs": s.Abs,
-                 "floor": s.floor, "ceil": s.ceiling, "iPart": s.floor, "frac": s.frac,
+                 "floor": s.floor, "ceil": s.ceiling, "ceiling": s.ceiling, "iPart": s.floor, "frac": s.frac,
                  "sign": s.sign, "gamma": s.gamma,
                  "erf":s.erf,"erfc":s.erfc,"Ei":s.Ei,"Si":s.Si,"Ci":s.Ci,"zeta":s.zeta,
                  "lambertw": s.LambertW, "beta": s.beta, "digamma": s.digamma, "polygamma": s.polygamma,

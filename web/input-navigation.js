@@ -119,16 +119,41 @@ function moveTokenCursor(source,start,direction){
   }catch{}
   return Math.max(0,Math.min(source.length,start+(direction==='LEFT'?-1:1)));
 }
-export function moveMathCursor(source,start,end,direction){
+function isMatrix(node){return ['list','matrix'].includes(node.kind)&&node.args.length&&node.args.every(row=>row.kind==='list');}
+// Keep new factors outside both closing brackets, including a caret left between them.
+export function matrixFactorInput(source,start,end,text){
+  if(start!==end||!/^[\p{L}\p{N}_.([{√∞]/u.test(text))return null;
+  if(source[start-1]!==']'&&source[start]!==']'&&!/\s/.test(source[start-1]||''))return null;
+  const matrices=[];
+  try{
+    const visit=node=>{
+      if(isMatrix(node)&&node.end>node.args.at(-1).end&&source[node.end-1]===']'&&
+        (start>=node.args.at(-1).end&&start<=node.end||node.end<=start&&!source.slice(node.end,start).trim()))matrices.push(node);
+      node.args.forEach(visit);
+    };
+    visit(parse(source,{allowHoles:true}));
+  }catch{return null;}
+  const matrix=matrices.sort((a,b)=>(a.end-a.start)-(b.end-b.start))[0];
+  return matrix?{position:Math.max(start,matrix.end),prefix:'*'}:null;
+}
+export function moveMathCursor(source,start,end,direction,outside=null){
   if(direction==='HOME')return 0;
   if(direction==='END')return source.length;
   if(start!==end)return direction==='LEFT'?start:direction==='RIGHT'?end:null;
-  const exit=mathStructureExit(source,start,end,direction);if(exit)return exit.position;
+  const exit=mathStructureExit(source,start,end,direction,outside);if(exit)return exit.position;
   const nodes=[];try{const visit=node=>{nodes.push(node);node.args.forEach(visit);};visit(parse(source,{allowHoles:true}));}catch{return moveTokenCursor(source,start,direction);}
   const roots=nodes.filter(node=>node.kind==='call'&&['sqrt','cbrt','nthroot'].includes(node.value)).sort((a,b)=>(a.end-a.start)-(b.end-b.start));
   for(const root of roots){const argument=root.args[0];if(!argument)continue;if(direction==='LEFT'&&start===argument.start)return root.start;if(direction==='RIGHT'&&start===argument.end)return root.end;if(direction==='RIGHT'&&start===root.start)return argument.start;if(direction==='LEFT'&&start===root.end)return argument.end;if(direction==='UP'&&start>=argument.start&&start<=argument.end)return root.end;}
-  const matrix=nodes.filter(node=>node.kind==='list'&&node.args.length&&node.args.every(row=>row.kind==='list')&&start>=node.start&&start<=node.end).sort((a,b)=>(a.end-a.start)-(b.end-b.start))[0];
-  if(matrix){const rowIndex=matrix.args.findIndex(row=>start<=row.end),row=matrix.args[rowIndex],column=row?.args.findIndex(cell=>start<=cell.end),cell=row?.args[column];if(cell){if(direction==='UP'||direction==='DOWN'){const target=matrix.args[rowIndex+(direction==='UP'?-1:1)]?.args[column];if(target)return Math.min(target.end,target.start+Math.max(0,start-cell.start));}if(direction==='RIGHT'&&start===cell.end){const target=row.args[column+1]||matrix.args[rowIndex+1]?.args[0];if(target)return target.start;}if(direction==='LEFT'&&start===cell.start){const target=row.args[column-1]||matrix.args[rowIndex-1]?.args.at(-1);if(target)return target.end;}}}
+  const matrix=nodes.filter(node=>isMatrix(node)&&start>=node.start&&start<=node.end).sort((a,b)=>(a.end-a.start)-(b.end-b.start))[0];
+  if(matrix){
+    if(direction==='LEFT'&&start>=matrix.args.at(-1).end){const cell=matrix.args.at(-1).args.at(-1);if(cell)return cell.end;}
+    const rowIndex=matrix.args.findIndex(row=>start<=row.end),row=matrix.args[rowIndex],column=row?.args.findIndex(cell=>start<=cell.end),cell=row?.args[column];
+    if(cell){
+      if(direction==='UP'||direction==='DOWN'){const target=matrix.args[rowIndex+(direction==='UP'?-1:1)]?.args[column];if(target)return Math.min(target.end,target.start+Math.max(0,start-cell.start));}
+      if(direction==='RIGHT'&&start===cell.end){const target=row.args[column+1]||matrix.args[rowIndex+1]?.args[0];return target?.start??matrix.end;}
+      if(direction==='LEFT'&&start===cell.start){const target=row.args[column-1]||matrix.args[rowIndex-1]?.args.at(-1);if(target)return target.end;}
+    }
+  }
   for(const node of nodes){if(node.kind!=='binary')continue;const [left,right]=node.args;if(node.value==='/'&&node.displayOperator!=='÷'){const a=left.end-(left.kind==='group'?1:0),b=right.start+(right.kind==='group'?1:0);if(direction==='RIGHT'&&start===a)return b;if(direction==='LEFT'&&start===b)return a;if(direction==='DOWN'&&start>=left.start&&start<=left.end)return b;if(direction==='UP'&&start>=right.start&&start<=right.end)return left.start+(left.kind==='group'?1:0);}if(node.value==='^'){const a=left.end-(left.kind==='group'?1:0),b=right.start+(right.kind==='group'?1:0);if(direction==='LEFT'&&start===b)return a;if(direction==='RIGHT'&&(start===a||start===left.end))return b;}}
   return moveTokenCursor(source,start,direction);
 }

@@ -6,7 +6,7 @@ import {calcVariables,calcBindings} from './calc-session.js';
 import {previousCalculations,renderPreviousCalculations,followTape} from './calculation-tape.js';
 import {renderFormulas} from './formula-preview.js';
 import {markInputCursor,followInputCursor,followTextCursor,inputPointPosition} from './input-cursor.js';
-import {moveMathCursor,mathStructureExit,functionRelationExit,emptyCallDeletion,emptyPowerDeletion,emptyFractionDeletion,symbolDeletion,powerInput} from './input-navigation.js';
+import {moveMathCursor,mathStructureExit,functionRelationExit,emptyCallDeletion,emptyPowerDeletion,emptyFractionDeletion,symbolDeletion,powerInput,matrixFactorInput} from './input-navigation.js';
 import {createDisplaySizing} from './display-sizing.js';
 import {fractionInput} from './fraction-input.js';
 import {requiresExplicitEvaluation} from './evaluation-policy.js';
@@ -78,7 +78,7 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
     const output=element('div');
     if(lastResult.guidance?.status==='unresolved_equation') {
       output.append(element('p',t(lastResult.guidance.message),'hint'));
-      if(lastResult.guidance.knownRoots){output.append(element('p',t('Known real roots (partial)'),'hint'),resultMathDisplay(lastResult.guidance.knownRoots.tree,state.digits,false));}
+      if(lastResult.guidance.knownRoots){const roots=lastResult.guidance.knownRoots;output.append(element('p',t(roots.approximate?'Numerical real roots (partial)':'Known real roots (partial)'),'hint'),resultMathDisplay(roots.tree,state.digits,!!roots.approximate));}
     }else if(tree && text.length<=40000) output.append(resultMathDisplay(tree,state.digits,decimal||lastResult.approximate,resultOptions()));
     else renderFormulas(output,text.split(/\r?\n/),{digits:state.digits});
     if(output.childNodes.length!==$('answer').childNodes.length||[...output.childNodes].some((node,i)=>!node.isEqualNode($('answer').childNodes[i])))$('answer').replaceChildren(...output.childNodes);
@@ -240,6 +240,8 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
     let start=field.selectionStart,end=!fraction&&overwrite&&field.selectionEnd===start?Math.min(field.value.length,start+text.length):field.selectionEnd;
     if(fraction){({start,end,text,cursor}=fractionInput(field.value,start,end));}
     let prefix='',suffix='';
+    const matrixFactor=!fraction?matrixFactorInput(field.value,start,end,text):null;
+    if(matrixFactor){start=end=matrixFactor.position;prefix=matrixFactor.prefix;}
     if(outsideStructure&&!fraction&&/^[\p{L}\p{N}_.(]/u.test(text))prefix='*';
     // Keypad operands are separate factors; typed/pasted names remain intact.
     if(factor&&(start===end||/^[\p{L}_][\p{L}\p{N}_]*$/u.test(text))){
@@ -257,6 +259,10 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
   $('expression').addEventListener('keyup',renderInputCursor);
   $('expression').addEventListener('beforeinput',event=>{
     if(event.inputType==='historyUndo'&&!event.isComposing){event.preventDefault();undoInput();return;}
+    if(typing&&!event.isComposing&&event.inputType==='insertText'&&event.data){
+      const field=$('expression');
+      if(matrixFactorInput(field.value,field.selectionStart,field.selectionEnd,event.data)){event.preventDefault();insert(event.data);return;}
+    }
     if(typing&&!event.isComposing&&event.inputType==='insertText'&&event.data==='='){
       const field=$('expression');
       if(functionRelationExit(field.value,field.selectionStart,field.selectionEnd)!==null){event.preventDefault();insert('=');return;}
@@ -364,7 +370,7 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
       const f=$('expression');let start=f.selectionStart,end=f.selectionEnd;
       const outside=inputBoundary?.edge==='after'&&inputBoundary.source===f.value&&inputBoundary.position===start&&start===end?inputBoundary:null;
       const exit=!typing?mathStructureExit(f.value,start,end,input,outside):null;
-      const position=typing?null:outside&&input==='LEFT'?(outside.exponentEnd??outside.denominatorEnd):exit?.position??(outside&&input==='RIGHT'?Math.min(f.value.length,start+1):moveMathCursor(f.value,start,end,input));
+      const position=typing?null:outside&&input==='LEFT'?(outside.exponentEnd??outside.denominatorEnd):exit?.position??moveMathCursor(f.value,start,end,input,outside);
       if(position!==null)start=end=position;
       else if(input==='LEFT'||input==='RIGHT')start=end=Math.max(0,Math.min(f.value.length,(input==='LEFT'?start:end)+(input==='LEFT'?-1:1)));
       else try{const nodes=[];const visit=n=>{if(n.start<=start&&n.end>=end)nodes.push(n);n.args?.forEach(visit);};visit(parse(f.value,{allowHoles:true}));nodes.sort((a,b)=>(a.end-a.start)-(b.end-b.start));const selected=input==='UP'?nodes.find(n=>n.start<start||n.end>end):nodes[0]?.args?.[0];if(selected){start=selected.start;end=selected.end;}}catch{}

@@ -26,11 +26,11 @@ Equation mode always includes explanations. In calculator mode, enable **Calc mo
 
 **ODEs:** First-order linear integrating factors with a verified elementary primitive, including nonpolynomial coefficients such as `1/t` and `sin(t)`. Homogeneous second-order equations with constant coefficients include characteristic roots and repeated-root solutions when the root case is decidable.
 
-**Integration:** Verified SymPy manual-integration rules for the selected variable, including constant parameters. Parameter cases such as `a=0` in `exp(a*x)` and `a=-1` in `x^a` are explained separately. Definite bounds are shown only when the primitive's endpoint difference matches the computed answer.
+**Integration:** Verified SymPy manual-integration rules for the selected variable, including constant parameters. Parameter cases such as `a=0` in `exp(a*x)` and `a=-1` in `x^a` are explained separately. Definite bounds are shown only when the primitive's endpoint difference matches the computed answer. For a worked example, try `integrate(x*exp(x),x)`. Integrals such as `integrate(exp(-x^2)*cos(2*x),x,0,oo)` and `integrate(1/(x^4+1),x)` can produce an answer without a detailed derivation.
 
 **Differentiation:** Sum/product/quotient, constant/variable powers, and common trigonometric/hyperbolic chain rules, through derivative order 10. Traversal is bounded to depth 12, 96 visits and 80 rule steps; omitted detail is reported.
 
-**Limits:** Substitution, cancellation, square-root conjugates, checked `0/0` and infinity/infinity L'Hôpital transformations, highest-power comparison, one-sided cases, bounded local series, and sine/cosine squeeze cases.
+**Limits:** Direct substitution excludes variable exponents and floor/ceiling, sign and piecewise jumps; these use other supported rules or a summary. Cancellation, square-root conjugates, checked `0/0` and infinity/infinity L'Hôpital transformations, highest-power comparison, one-sided cases, bounded local series, and sine/cosine squeeze cases.
 
 These explanations have expression-size, traversal and output-size limits. General nonlinear systems, arbitrary ODEs and integrals without a verified rule remain summaries; a missing derivation does not establish that no closed form exists.
 
@@ -231,7 +231,7 @@ Example: taylor(sin(x),x,0,5)
 Example: sum(x^2,x,1,10)
 `product(expr,x,a,b)` — Product of expr over integer x from a to b.
 Example: product(x,x,1,5)
-`solve(eq,x)` — Solve an equation or system for x. Tries the complex domain first, then automatically retries the real domain for unsupported expressions such as absolute values; the result note identifies real-domain solving. In systems, only variables needed by the real-valued terms are changed for that retry. Variable assumptions still apply. A ConditionSet means the symbolic solution is unresolved, not that a root exists. For real numeric roots use nsolve on a continuous interval with a sign change.
+`solve(eq,x)` — Solve an equation or system for x. Tries the complex domain first, then automatically retries the real domain for unsupported expressions such as absolute values; the result note identifies real-domain solving. In systems, only variables needed by the real-valued terms are changed for that retry. Variable assumptions still apply. A ConditionSet means the symbolic solution is unresolved, not that a root exists. For a simple unresolved equation in one variable without free parameters, automatically searches −10 to 10 using graph root candidates, then refines and checks candidates against the original expression and domain. Displays at most 16 approximate real roots as partial results; roots can be missed even inside this interval, and complex roots are not searched. Integer-domain solving is excluded. For another interval use nsolve on a continuous interval with a sign change.
 Example: solve(x^2-5x+6=0,x)
 `solve(eq,x,real)` — Explicitly restrict the domain for one equation and one variable; complex and integer are also supported. Existing assumptions still apply. Omit the domain to enable automatic real-domain retry for absolute-value equations.
 Example: solve(abs(x-1)=3,x,real)
@@ -679,6 +679,8 @@ References: [Firth logistic regression](https://search.r-project.org/CRAN/refman
 
 ## Advanced statistics
 
+Statistics and regression pass numeric datasets separately from the formula, so data cells do not consume the 8192-character / 2048-node parser limits or the engine's 12,000-node expression budget. Numeric datasets accept at most 5000 rows and 101 columns (100 predictors plus response); each analysis retains its own smaller limits. Cells containing formulas use the normal expression budget. Computation time and result-size limits still apply, so the row limit is input capacity, not a guarantee that every model finishes.
+
 In Statistics, Advanced analysis provides controls for correction methods, column roles, groups, predictors and test options. Switch between current data, examples and an editable expression. Table analyses reject blank selected cells; impute converts them to NA. All advanced analyses use binary64 numerics.
 
 `ancova` — Rows: numeric group ID, one or more covariates, response; confidence level (default .95); slope homogeneity check 0/1 (default 1). One factor, common slopes, Type II F tests and adjusted means at pooled covariate means.
@@ -732,8 +734,8 @@ Example: cox([[1,1,0],[2,1,1],[3,0,0],[4,1,1],[5,1,0],[6,0,1],[7,1,1],[8,1,0]],e
 `repeatedanova` — Rows=subjects, columns=conditions. Second-factor levels: 1 = one-way, 2+ = two-way (first factor slowest); GG corrections.
 Example: repeatedanova([[2,4,5],[3,4,7],[4,7,8],[2,3,6],[5,6,7]],1)
 
-`mixedmodel` — Rows: subject ID, predictors, response. Gaussian random intercept with up to three random slopes (0 none, a predictor position, or [1,2]); third argument ml (default) or reml; up to 5000 rows. Includes subject BLUPs, slope correlations and singular-fit diagnostics; random-slope ICC is at x=0; asymptotic Wald z inference.
-Example: mixedmodel([[1,0,2],[1,1,4],[1,2,4],[2,0,3],[2,1,4],[2,2,6],[3,0,1],[3,1,3],[3,2,4],[4,0,4],[4,1,5],[4,2,8]],0)
+`mixedmodel` — Rows: subject ID, predictors, response. Gaussian random intercept with up to three random slopes (0 none, a predictor position, or [1,2]); third argument reml (default) or ml; up to 5000 rows. Includes subject BLUPs, slope correlations and singular-fit diagnostics; random-slope ICC is at x=0; asymptotic Wald z inference.
+Example: mixedmodel([[1,0,2],[1,1,4],[1,2,4],[2,0,3],[2,1,4],[2,2,6],[3,0,1],[3,1,3],[3,2,4],[4,0,4],[4,1,5],[4,2,8]],0,reml)
 
 `glmm` — Rows: subject ID, predictors, response. Random intercept; binomial (0/1, logit), poisson or nbinom (NB2, log). ML adaptive Gauss-Hermite quadrature: 15 points default, 1 = Laplace, otherwise 7-31. Optional fourth argument offset vector, fifth offset / exposure. Limit 1500 rows, 8 fixed coefficients. Subject-specific effects; joint marginal observed information by central differences; asymptotic Wald inference.
 Example: glmm([[1,0,0],[1,1,0],[1,2,1],[2,0,0],[2,1,1],[2,2,1],[3,0,0],[3,1,0],[3,2,0],[4,0,1],[4,1,1],[4,2,1],[5,0,1],[5,1,0],[5,2,1],[6,0,0],[6,1,1],[6,2,0]],binomial,15)

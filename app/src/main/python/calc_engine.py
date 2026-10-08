@@ -228,7 +228,8 @@ def _dispatch(payload, control=None):
                             if engine.note: report["note"]=report.get("note","").replace(engine.note,"").strip()
                             if report.get("steps"):
                                 last=report["steps"][-1]
-                                last["title"]="Known real roots (partial)" if "knownRoots" in guidance else guidance["message"]
+                                last["title"]=("Numerical real roots (partial)" if guidance.get("knownRoots",{}).get("approximate")
+                                               else "Known real roots (partial)") if "knownRoots" in guidance else guidance["message"]
                                 last["explanation"]=guidance["detail"]
                                 if "knownRoots" in guidance: last["tree"]=guidance["knownRoots"]["tree"]
                                 else: last.pop("tree",None)

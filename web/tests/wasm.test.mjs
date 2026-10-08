@@ -9,6 +9,9 @@ import {tipCommand,moneyResult} from '../money.js';
 import {statisticsCommand,statisticsAnalysisData,statisticsColumnLabels,statisticsCategoryLabels,distributionCommand,equationCommand} from '../workspace-commands.js';
 import {solutionStepsCopyText} from '../equation-steps.js';
 import {statisticsResultMarkdown} from '../statistics-markdown.js';
+import {statisticsRequest} from '../statistics-request.js';
+import {guidedStatisticsCommand} from '../advanced-statistics.js';
+import {advancedStatisticsSchema} from '../advanced-statistics-schema.js';
 
 // Reuse the interpreter for sequential integration scenarios. The cold solver
 // scenario below explicitly loads its own interpreter to keep startup coverage.
@@ -99,7 +102,14 @@ test('calculus explanations, special-function primitive and numerical guidance r
   assert.equal(primitive.guidance.status,'special_function');assert.ok(primitive.resultAst);
   assert.equal(evaluate('Ans(1)',{variables:{Ans:primitive.resultAst}}).ok,true);
   const equation=evaluate('solve(sin(x)=x/2,x)');
-  assert.equal(equation.guidance.knownRoots.exact,'{0}');
+  assert.match(equation.guidance.knownRoots.exact,/1\.895494267/);
+  assert.deepEqual(equation.guidance.searchRange,[-10,10]);
+  assert.equal(equation.guidance.knownRoots.approximate,true);
+  assert.match(evaluate('solve(cos(x)=x,x)').guidance.knownRoots.exact,/0\.739085133215/);
+  for(const [source,answer] of [['limit(x^x,x,0,right)','1'],['limit(sin(x)^x,x,0,right)','1'],['limit(ceiling(x),x,0,left)','0']]){
+    const result=evaluate(source);assert.equal(result.exact,answer);
+    assert.ok(!result.solutionSteps.steps.some(step=>step.title==='Direct substitution'),source);
+  }
   const positive=equation.guidance.suggestions.find(suggestion=>suggestion.detail==='1…2');
   assert.ok(positive);const root=evaluate(positive.command);
   assert.ok(Math.abs(Number(root.decimal)-1.895494267033981)<1e-12);
@@ -220,6 +230,28 @@ test('equation step explanations preserve real WASM answers across workspace met
   assert.equal(run('solve(x*exp(x)=1,x,real)').exact,'{LambertW(1)}');
   assert.equal(run('solve(x*exp(x)=-1,x,real)').exact,'EmptySet');
 });
+test('five thousand numeric rows pass the shared statistics dataset path in real WASM',async()=>{
+  const py=await runtime();
+  const rows=Array.from({length:5000},(_,i)=>{const x=(i%17)/17;return [i%20,x,2+0.3*(i%20)+1.5*x+0.1*Math.sin(i)];});
+  const definition=advancedStatisticsSchema.find(item=>item.id==='mixedmodel');
+  const source=guidedStatisticsCommand(definition,rows.map(row=>row.map(String)),{subject:'0',response:'2',predictors:'1',slope:'0'});
+  py.globals.set('payload',JSON.stringify({...statisticsRequest(source),precision:15}));
+  const result=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));
+  assert.equal(result.ok,true,result.error);
+  const coefficients=result.statisticsReport.sections.find(section=>section.title==='coefficients');
+  assert.ok(Math.abs(Number(coefficients.rows[1][1].exact)-1.5)<0.03);
+});
+test('Statistics logistic command with five predictors and 1500 rows passes real WASM',async()=>{
+  const py=await runtime();let seed=17;
+  const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
+  const rows=Array.from({length:1500},()=>{const xs=Array.from({length:5},()=>random()*4-2);return [...xs,Number(random()<1/(1+Math.exp(-0.4*xs[0]+0.3*xs[1])))];});
+  const source=statisticsCommand(rows.map(row=>row.join(',')).join('\n'),{op:'regression',kind:'columns:6',regression:'logistic',responseColumn:5});
+  py.globals.set('payload',JSON.stringify({...statisticsRequest(source),precision:15}));
+  const result=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));
+  assert.equal(result.ok,true,result.error);
+  assert.equal(result.regression.coefficients.length,6);
+  assert.ok(Math.abs(Number(result.regression.coefficients[1].estimate)-0.4)<0.2);
+});
 test('Bayesian linear, logistic and NUTS run through workspace commands in real WASM',async()=>{
   const py=await runtime();
   const reference=JSON.parse(readFileSync(new URL('../../tests/fixtures/bayesian_regression_reference.json',import.meta.url),'utf8'));
@@ -312,6 +344,33 @@ for case in json.loads(reference_json):
     assert.equal(result.ok,true,result.error);
     assert.equal(result.statisticsReport.analysis,name);
     assert.match(JSON.stringify(result.statisticsReport),/baseline/);
+  }
+});
+
+test('LMM defaults to REML and preserves explicit ML in real WASM',async()=>{
+  const py=await runtime();
+  const cases=JSON.parse(readFileSync(new URL('../../tests/fixtures/advanced_statistics_reference.json',import.meta.url),'utf8'))
+    .filter(item=>item.name.startsWith('Mixed random intercept '));
+  py.globals.set('lmm_reference_json',JSON.stringify(cases));
+  py.runPython(`
+import json
+from calc_advanced_statistics import advanced
+from calc_evaluator import Engine
+import sympy as s
+for case in json.loads(lmm_reference_json):
+    actual = advanced(Engine({}), 'mixedmodel', [s.sympify(v) for v in case['arguments']])
+    assert actual['estimation'] == ('ML' if case['name'].endswith(' ml') else 'REML')
+    for path, expected in case['expected']:
+        cell = actual
+        for key in path: cell = cell[key]
+        assert abs(float(cell)-expected) <= case['tolerance']*max(1,abs(expected)), (case['name'],path)
+`);
+  const rows=cases[0].arguments[0];
+  for(const [suffix,label] of [['','restricted maximum likelihood (REML)'],[',0,ml','maximum likelihood (ML)']]){
+    py.globals.set('payload',JSON.stringify(statisticsRequest(`mixedmodel(${JSON.stringify(rows)}${suffix})`)));
+    const result=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));
+    assert.equal(result.ok,true,result.error);
+    assert.ok(result.note.includes(label),result.note);
   }
 });
 

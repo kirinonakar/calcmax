@@ -209,7 +209,7 @@ export function guidedStatisticsCommand(definition,rows,settings={},columnLabels
     const numbers=positions.map(Number).filter(value=>value!==0);
     if(numbers.some(value=>value<1||value>19)||new Set(numbers).size!==numbers.length)throw new Error('Random-slope positions must be distinct predictor numbers');
     const argument=numbers.length===0?'0':numbers.length===1?String(numbers[0]):'['+numbers.join(',')+']';
-    return `mixedmodel(${table(mapped)},${argument}${opts.method==='reml'?',reml':''})`;
+    return `mixedmodel(${table(mapped)},${argument},${opts.method})`;
   }
   if(id==='impute'){
     const width=Math.max(...rows.map(row=>row.length));

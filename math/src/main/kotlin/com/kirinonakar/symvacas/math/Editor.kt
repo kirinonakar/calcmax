@@ -18,6 +18,9 @@ data class Editor(val source: String = "", val cursor: Int = source.length, val 
         return insert(prefix+text+suffix,prefix.length+text.length)
     }
     fun insert(text: String, inside: Int = text.length): Editor {
+        matrixFactorPosition(text)?.let {position->
+            return Editor(source,position).insert("*$text",inside+1)
+        }
         if(text.startsWith("=")) {
             val target=exitForRelation()
             if(target.cursor!=cursor)return target.insert(text,inside)
@@ -244,6 +247,7 @@ data class Editor(val source: String = "", val cursor: Int = source.length, val 
             val scope=barePower(minOf(cursor,anchor),maxOf(cursor,anchor))?.args?.get(1)?.let{it.start..it.end}
             return Editor(source,position,exponent=scope)
         }
+        if(delta in listOf(-1,1))moveMatrix(0,delta)?.let {return it}
         if(delta>0&&exponent!=null&&cursor==exponent.last) {
             val power=barePower(exponent.first,exponent.last)
             return Editor(source,cursor,outside=power?.let{it.start..it.end})
@@ -391,6 +395,26 @@ data class Editor(val source: String = "", val cursor: Int = source.length, val 
         if(cursor!=anchor || newCursor!=cursor+1 || newSource!=source.substring(0,cursor)+"="+source.substring(cursor))return null
         return if(exitForRelation().cursor==cursor)null else insert("=")
     }
+    private fun isClosedMatrix(node:Expr):Boolean = node.kind in setOf("list","matrix") &&
+        node.args.isNotEmpty() && node.args.all {it.kind=="list"} &&
+        node.end>node.args.last().end && source.getOrNull(node.end-1)==']'
+    /** A factor after the last row must start after the entire matrix, with an explicit product. */
+    private fun matrixFactorPosition(text:String):Int? {
+        if(cursor!=anchor || text.firstOrNull()?.let {it.isLetterOrDigit() || it in "_.([{√∞"}!=true)return null
+        if(source.getOrNull(cursor-1)!=']' && source.getOrNull(cursor)!=']' && source.getOrNull(cursor-1)?.isWhitespace()!=true)return null
+        val matrix=tree()?.nodes()?.filter {node->isClosedMatrix(node) &&
+            (cursor in node.args.last().end..node.end || node.end<=cursor && source.substring(node.end,cursor).isBlank())
+        }?.minByOrNull {it.end-it.start} ?: return null
+        return maxOf(cursor,matrix.end)
+    }
+    /** Apply the same protection to a text field/IME insertion as to keypad input. */
+    fun typedMatrixFactor(newSource:String,newCursor:Int):Editor? {
+        val length=newSource.length-source.length
+        if(cursor!=anchor || length<=0 || newCursor!=cursor+length ||
+            !newSource.startsWith(source.substring(0,cursor)) || !newSource.endsWith(source.substring(cursor)))return null
+        val text=newSource.substring(cursor,newCursor)
+        return if(matrixFactorPosition(text)==null)null else insert(text)
+    }
     /** An opening delimiter in a call argument needs its close before the next argument separator. */
     fun inCallArgument():Boolean = cursor==anchor && tree()?.nodes()?.any {node->
         node.kind=="call" && node.args.any {cursor in it.start..it.end}
@@ -425,9 +449,12 @@ data class Editor(val source: String = "", val cursor: Int = source.length, val 
      *  Null outside a matrix so callers keep the ordinary cursor movement. */
     fun moveMatrix(dRow:Int,dColumn:Int):Editor? {
         if(dRow==0&&dColumn==0||cursor!=anchor)return null
-        val rows=tree()?.nodes()?.filter {node->
+        val matrix=tree()?.nodes()?.filter {node->
             (node.kind=="list"||node.kind=="matrix")&&node.args.isNotEmpty()&&node.args.all {it.kind=="list"}&&cursor in node.start..node.end
-        }?.minByOrNull {it.end-it.start}?.args ?: return null
+        }?.minByOrNull {it.end-it.start} ?: return null
+        val rows=matrix.args
+        if(dRow==0 && dColumn<0 && cursor>=rows.last().end)
+            return rows.last().args.lastOrNull()?.let {Editor(source,it.end)}
         val rowIndex=rows.indexOfFirst {cursor<=it.end}
         if(rowIndex<0)return null
         val elements=rows[rowIndex].args
@@ -443,8 +470,8 @@ data class Editor(val source: String = "", val cursor: Int = source.length, val 
         }
         if(dColumn>0) {
             if(cursor<elements[column].end)return null
-            val target=elements.getOrNull(column+1) ?: rows.getOrNull(rowIndex+1)?.args?.firstOrNull() ?: return null
-            return Editor(source,target.start)
+            val target=elements.getOrNull(column+1) ?: rows.getOrNull(rowIndex+1)?.args?.firstOrNull()
+            return Editor(source,target?.start ?: matrix.end)
         }
         if(cursor>elements[column].start)return null
         val target=if(column>0)elements[column-1] else rows.getOrNull(rowIndex-1)?.args?.lastOrNull()

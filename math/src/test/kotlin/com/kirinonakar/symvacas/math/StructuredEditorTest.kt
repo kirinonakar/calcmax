@@ -312,4 +312,55 @@ class StructuredEditorTest {
         assertEquals(3,Editor(template,6).moveMatrix(0,-1)?.cursor)
         assertEquals(7,Editor(template,3).moveMatrix(1,0)?.cursor)
     }
+    @Test fun matrixEdgesExitAndReenterWithoutExposingRowBrackets() {
+        for(matrix in listOf("[[3,5],[3,6]]","[[33,55],[33,66]]","[[,],[,]]","[[1]]","[[1,2,3]]","[[1],[2],[3]]")) {
+            for(source in listOf(matrix,"1+$matrix+2","det($matrix)")) {
+                val node=Editor(source).tree()!!.nodes().first {it.kind=="list"&&it.args.firstOrNull()?.kind=="list"}
+                val last=node.args.last().args.last()
+                val inside=Editor(source,last.end)
+                val outside=inside.moveMatrix(0,1)!!
+                assertEquals(source,node.end,outside.cursor)
+                assertEquals(source,node.end,inside.move(1).cursor)
+                assertEquals(source,last.end,outside.moveMatrix(0,-1)?.cursor)
+                assertEquals(source,last.end,outside.move(-1).cursor)
+                assertEquals(source,source,outside.source)
+                val edited=outside.move(-1).insert("7")
+                assertEquals(source,source.substring(0,last.end)+"7"+source.substring(last.end),edited.source)
+            }
+        }
+        val filled=Editor("[[,],[,]]",2).insert("3").move(1).insert("5").move(1).insert("3").move(1).insert("6")
+        assertEquals("[[3,5],[3,6]]",filled.source)
+        assertEquals("[[3,5],[3,6]]*3",filled.move(1).insert("3").source)
+        assertEquals("[[3,5],[3,67]]",filled.move(1).move(-1).insert("7").source)
+    }
+    @Test fun factorsAfterMatricesUseExplicitMultiplicationForKeypadAndTypedInput() {
+        val matrix="[[3,5],[3,6]]"
+        for(source in listOf(matrix,"1+$matrix+2","det($matrix)")) {
+            val end=source.indexOf(matrix)+matrix.length
+            for(position in listOf(end-1,end)) {
+                val editor=Editor(source,position)
+                for(text in listOf("3",".5","x","theta","sin()","(3+4)","[[1,0],[0,1]]","√4","∞")) {
+                    val result=editor.insert(text)
+                    val expected=source.substring(0,end)+"*"+text+source.substring(end)
+                    assertEquals(text,expected,result.source)
+                    assertEquals(text,end+1+text.length,result.cursor)
+                    assertNotNull(text,result.tree())
+                    assertEquals(text,expected,editor.insertOperand(text).source)
+                    val updated=source.substring(0,position)+text+source.substring(position)
+                    assertEquals(text,expected,editor.typedMatrixFactor(updated,position+text.length)?.source)
+                }
+            }
+            for(operator in listOf("+","-","*","/","^",",", ")", "]"))
+                assertEquals(operator,source.substring(0,end)+operator+source.substring(end),Editor(source,end).insert(operator).source)
+        }
+        assertEquals(matrix+"*sin(3)","sin(3)".fold(Editor(matrix)){editor,char->editor.insert(char.toString())}.source)
+        assertEquals(matrix+"*34",Editor(matrix).insert("3").insert("4").source)
+        assertEquals("[[3,5],[3,67]]",Editor(matrix,matrix.length-2).insert("7").source)
+        assertEquals(matrix+"*sin()",Editor(matrix).insert("sin()",4).source)
+        assertEquals(matrix.length+5,Editor(matrix).insert("sin()",4).cursor)
+        assertNull(Editor(matrix).selectRange(0,matrix.length).typedMatrixFactor("3",1))
+        assertEquals(matrix+"=3",Editor(matrix).insert("=3").source)
+        assertEquals("det($matrix)=3",Editor("det($matrix)",matrix.length+4).insert("=3").source)
+        assertNull(Editor("[[3,5],[3,6]").typedMatrixFactor("[[3,5],[3,6]7",12))
+    }
 }
