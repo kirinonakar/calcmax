@@ -205,10 +205,13 @@ def _dispatch(payload, control=None):
                 if len(json.dumps(combined,ensure_ascii=False))>40000:
                     combined={"steps":[],"note":LIMIT};break
             engine.integral_strategy=saved_strategy
-            if len(engine.solution_step_inputs)>1:
+            if len(engine.solution_step_inputs)>1 and (not combined["steps"] or answer != value):
                 combined["steps"].append({"title":"Computed result","tree":result["tree"],"exact":result["exact"]})
             elif combined["steps"]:
                 # Apply the same presentation precision as the answer view.
+                # The final calculus step already has a formula in equations;
+                # use one authoritative tree so both UIs render the answer once.
+                combined["steps"][-1].pop("equations",None)
                 combined["steps"][-1].update(tree=equation_solution_tree(result["tree"]) if method=="solve" else result["tree"],exact=result["exact"])
             result["solutionSteps"]=combined
         if hasattr(engine,"guidance_input"):

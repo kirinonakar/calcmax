@@ -56,6 +56,11 @@ test('calculus explanations, special-function primitive and numerical guidance r
     const traced=evaluate(source),plain=evaluate(source,{solutionSteps:false});
     const {solutionSteps,...answer}=traced;assert.deepEqual(answer,plain,source);
     assert.ok(solutionSteps.steps.some(step=>step.title===title),source);
+    const final=solutionSteps.steps.at(-1);
+    assert.deepEqual(final.tree,traced.tree,source);
+    assert.equal(final.equations,undefined,source);
+    assert.equal(solutionSteps.steps.filter(step=>step.title==='Computed result'&&
+      (step.exact===traced.exact||step.equations?.some(formula=>formula.exact===traced.exact))).length,1,source);
   }
   const primitive=evaluate('integrate(ln(x)/(1+x^2),x)');
   assert.ok(primitive.exact.includes('polylog'));assert.ok(!primitive.exact.includes('Integral'));

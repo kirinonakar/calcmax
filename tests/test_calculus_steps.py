@@ -76,6 +76,32 @@ class CalculusExplanationTests(unittest.TestCase):
         self.assertTrue(combined["ok"],combined)
         self.assertIn("Differentiate the expression",[step["title"] for step in combined["solutionSteps"]["steps"]])
 
+    def test_final_result_has_one_formula_and_nested_calls_do_not_repeat_it(self):
+        x=s.Symbol("x")
+        expressions=[call("diff",result_ast(x*x),symbol("x")),
+                     call("integrate",result_ast(x*x),symbol("x")),
+                     call("limit",result_ast(s.sin(x)/x),symbol("x"),result_ast(s.Integer(0))),
+                     call("diff",call("integrate",result_ast(x*x),symbol("x")),symbol("x"))]
+        for tree in expressions:
+            result=run(tree,solutionSteps=True)
+            self.assertTrue(result["ok"],result)
+            steps=result["solutionSteps"]["steps"]
+            final=steps[-1]
+            self.assertEqual(result["tree"],final["tree"])
+            self.assertNotIn("equations",final)
+            self.assertEqual(1,sum(step["title"]=="Computed result" and
+                (step.get("exact")==result["exact"] or
+                 any(formula.get("exact")==result["exact"] for formula in step.get("equations",[])))
+                for step in steps))
+        # The last inner call need not be the whole expression's answer.
+        tree={"kind":"binary","value":"+","args":[
+            call("diff",result_ast(x*x),symbol("x")),
+            call("integrate",result_ast(x),symbol("x"))]}
+        result=run(tree,solutionSteps=True)
+        self.assertTrue(result["ok"],result)
+        self.assertEqual(result["exact"],result["solutionSteps"]["steps"][-1]["exact"])
+        self.assertEqual(3,sum(step["title"]=="Computed result" for step in result["solutionSteps"]["steps"]))
+
     def test_parameter_integrals_verify_exceptional_and_generic_branches(self):
         x,a=s.symbols("x a")
         for expression in [a*x*x, a*s.sin(x), s.exp(a*x), s.sin(a*x), x**a, 1/(a*x+1)]:
