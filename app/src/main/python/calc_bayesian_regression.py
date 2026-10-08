@@ -24,12 +24,12 @@ def fit_bayesian(engine, rows, mode, options=None):
     args = [] if options is None else list(options) if isinstance(options, (list, tuple)) else [options]
     sampler = args.pop() if args and isinstance(args[-1], (list, tuple)) else None
     if sampler is not None:
-        require(1 <= len(sampler) <= 6 and str(sampler[0]) == 'hmc',
-                'Sampler options must be [hmc, samples, warmup, leapfrog, seed, chains]')
+        require(1 <= len(sampler) <= 6 and str(sampler[0]) == 'nuts',
+                'Sampler options must be [nuts, samples, warmup, max_depth, seed, chains]')
         from calc_advanced_common import integer
-        bounds = [(100,5000),(50,5000),(1,50),(0,2147483647),(2,4)]
-        hmc_options = [integer(v,*bound) for v,bound in zip(sampler[1:],bounds)]
-        hmc_options += [500,500,10,0,2][len(hmc_options):]
+        bounds = [(100,5000),(50,5000),(1,10),(0,2147483647),(2,4)]
+        nuts_options = [integer(v,*bound) for v,bound in zip(sampler[1:],bounds)]
+        nuts_options += [500,500,8,0,2][len(nuts_options):]
     require(len(args) <= (2 if binary else 4),
             'Use [priorSD, credibleLevel] or linear [priorSD, credibleLevel, varianceShape, varianceScale]')
     _numbers(args or [s.Integer(1)])
@@ -99,10 +99,10 @@ def fit_bayesian(engine, rows, mode, options=None):
         exact_beta = beta.copy()
         sampled_coefficients = None
         if sampler is not None:
-            from calc_hmc import sample, diagnostics, quantile
-            samples,warmup,leapfrog,seed,chains = hmc_options
-            require(n*p*chains*(samples+warmup)*leapfrog <= 200000000,
-                    'HMC workload exceeds 200 million row/parameter leapfrog evaluations; reduce data or sampler settings')
+            from calc_nuts import sample, diagnostics, quantile
+            samples,warmup,max_depth,seed,chains = nuts_options
+            require(n*p*chains*(samples+warmup) <= 200000000,
+                    'NUTS workload exceeds 200 million row/parameter gradient evaluations; reduce data or sampler settings')
             # Whiten with the local covariance; the sampled target still uses
             # the full posterior, not the Gaussian approximation.
             local_covariance = covariance if binary else covariance*variance_mean
@@ -130,7 +130,7 @@ def fit_bayesian(engine, rows, mode, options=None):
                     probability = math.exp(-max(-eta,0))/(1+math.exp(-abs(eta)))
                     for j,v in enumerate(row): gradient[j] += v*(probability-y)
                 return value,[math.fsum(lower[i][j]*gradient[i] for i in range(j,p)) for j in range(p)]
-            draws, hmc = sample(target,p,*hmc_options)
+            draws, nuts = sample(target,p,*nuts_options,max_evaluations=200000000//(n*p))
             # Diagnostics and intervals use coefficients in the visible units.
             transformation = [[float(v) for v in row] for row in transform.tolist()]
             beta_chains = [[unwhiten(z) for z in chain] for chain in draws]
@@ -148,12 +148,13 @@ def fit_bayesian(engine, rows, mode, options=None):
                     'probabilityPositive':out(sum(v>0 for v in values)/len(values)),
                     'rHat':None if rhat is None else out(rhat),'ess':out(ess),'mcse':out(deviation/math.sqrt(ess)) if ess else None})
             beta = mp.matrix([math.fsum(b[j] for chain in beta_chains for b in chain)/(samples*chains) for j in range(p)])
-            report.update(method='hmc',approximate=True,hmc=hmc)
-            if hmc['divergences']: report['warnings'].append('HMC divergences detected; posterior summaries may be unreliable.')
+            report.update(method='nuts',approximate=True,nuts=nuts)
+            if nuts['maxTreeDepthHits']: report['warnings'].append('NUTS reached max tree depth; increase max tree depth and inspect mixing.')
+            if nuts['divergences']: report['warnings'].append('NUTS divergences detected; posterior summaries may be unreliable.')
             if any(c['rHat'] is None or float(c['rHat']) > 1.05 for c in sampled_coefficients):
-                report['warnings'].append('HMC split R-hat exceeds 1.05 or is unavailable; increase warmup and samples.')
+                report['warnings'].append('NUTS split R-hat exceeds 1.05 or is unavailable; increase warmup and samples.')
             if any(float(c['ess']) < 100 for c in sampled_coefficients):
-                report['warnings'].append('HMC effective sample size is below 100; increase samples and inspect mixing.')
+                report['warnings'].append('NUTS effective sample size is below 100; increase samples and inspect mixing.')
             if binary:
                 logits, fitted, _ = evaluate(beta)
             else: fitted = list(design*beta)
@@ -215,6 +216,6 @@ def fit_bayesian(engine, rows, mode, options=None):
         engine.note = ('Bayesian logistic regression: Gaussian Laplace approximation at the MAP; training probabilities evaluated at the MAP.' if binary else
                        'Bayesian linear regression: normal-inverse-gamma prior; exact Student-t marginal posterior and posterior predictive intervals.')+' Zero-mean priors include the intercept on the centered, RMS-standardized design; coefficients are in original units. Equal-tailed credible intervals.'
         if sampler is not None:
-            engine.note = 'Bayesian regression: static HMC with warmup-only dual averaging, multiple seeded chains and Metropolis correction; empirical equal-tailed credible intervals. Classical split R-hat and autocorrelation ESS. Priors include the intercept on centered, RMS-standardized predictors; coefficients in original units. Training predictions evaluated at posterior mean coefficients.'
+            engine.note = 'Bayesian regression: slice NUTS with recursive doubling, U-turn termination, warmup-only dual averaging and multiple seeded chains; empirical equal-tailed credible intervals. Classical split R-hat and autocorrelation ESS. Priors include the intercept on centered, RMS-standardized predictors; coefficients in original units. Training predictions evaluated at posterior mean coefficients.'
             if not binary: engine.note += ' Error variance integrated out; predictive intervals from the exact conjugate posterior.'
         return 1/(1+s.exp(-expression)) if binary else expression

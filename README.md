@@ -21,7 +21,7 @@ A scientific calculator, computer algebra system (CAS), and graphing workspace f
 | Graphing | Function and implicit plots, parametric, polar, sequence, 3D surface and ODE plots; trace, analysis, parameter sliders and animation |
 | Equations | Polynomial equations, systems, exact/numeric solving, differential equations, Step-by-step solution |
 | Matrix / Vector | Matrix algebra, determinants, eigenvalues and vector operations |
-| Statistics | Datasets, descriptive statistics, hypothesis tests, confidence intervals, correlation, regression, ANCOVA, GLM, plots, survival analysis, advanced statistical analysis |
+| Statistics | Datasets, descriptive statistics, hypothesis tests, confidence intervals, correlation, regression, plots, survival analysis, advanced statistical analysis |
 | Probability | Distributions, tail/interval/quantile queries, and editable coin, dice, card and sampling examples |
 | Python | Script editor, local `.py` files, calculator functions, SymPy/mpmath and interactive input |
 | Programmer | Binary/octal/decimal/hex, fixed-width integers and signed/unsigned shifts |

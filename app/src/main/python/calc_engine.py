@@ -129,7 +129,7 @@ def _dispatch(payload, control=None):
             result["approximate"]=bool(getattr(display_value,"has",lambda *_:False)(s.Float))
             result["decimalTree"]=display_tree(decimal_value)
             if tree.get('kind')=='call' and tree.get('value') in BASIC_STATISTICS | (ADVANCED_STATISTICS-{'survivalanalysis'}):
-                result['statisticsReport']=statistics_report(tree['value'],shown_value,engine.precision)
+                result['statisticsReport']=statistics_report(tree['value'],shown_value,engine.precision,request.get('statisticsTermLabels', {}))
             if request["tree"].get("value")=="survivalanalysis" and hasattr(engine,"survival_report"):
                 result["survival"]=engine.survival_report
             if dms_result:

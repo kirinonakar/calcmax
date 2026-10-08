@@ -70,7 +70,7 @@ export function createWorkspaces({state,engine,ui,persist,restoreSelect,requestO
       if(workspace==='scientific'){await evaluate();return;}
       if(workspace==='equation'){source=equationCommand({kind:value('equation-kind'),source:equationSource(),variable:value('equation-variable').trim(),extra:value('equation-extra'),initial:value('equation-initial'),hint:value('equation-hint')});
       }else if(workspace==='matrix'){source=matrix.command();
-      }else if(workspace==='statistics'){source=statistics.expression();statisticsContext=statistics.analysisSummary();}
+      }else if(workspace==='statistics'){source=statistics.expression();statisticsContext=statistics.analysisSummary();advancedContext={termLabels:statistics.analysisTermLabels()};}
       else if(workspace==='statistics-advanced'){source=statistics.advancedExpression();advancedContext=statistics.advancedContext();}
       else if(workspace==='units')source=`convert(${value('unit-value')},${value('unit-from')},${value('unit-to')})`;
       else if(workspace==='tip')source=tipExpression();

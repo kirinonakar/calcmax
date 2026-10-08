@@ -2,6 +2,20 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createAppState} from '../app-state.js';
 
+test('saved HMC settings migrate to NUTS without reusing the leapfrog count',()=>{
+  const saved={fields:{'regression-bayesian-method':'hmc','regression-hmc-samples':'700','regression-hmc-warmup':'600','regression-hmc-leapfrog':'40','regression-hmc-seed':'13','regression-hmc-chains':'4'}};
+  const state=createAppState(saved);
+  assert.equal(state.fields['regression-bayesian-method'],'nuts');
+  for(const [suffix,value] of [['samples','700'],['warmup','600'],['seed','13'],['chains','4']]){
+    assert.equal(state.fields[`regression-nuts-${suffix}`],value);
+    assert.equal(state.fields[`regression-hmc-${suffix}`],undefined);
+  }
+  assert.equal(state.fields['regression-nuts-max-depth'],undefined,'HTML supplies default depth 8');
+  assert.equal(state.fields['regression-hmc-leapfrog'],undefined);
+  assert.equal(saved.fields['regression-bayesian-method'],'hmc');
+  assert.equal(createAppState({fields:{...saved.fields,'regression-nuts-samples':'900','regression-nuts-max-depth':'6'}}).fields['regression-nuts-samples'],'900');
+});
+
 test('saved state rejects malformed collections and bounds preferences and retained entries',()=>{
   const state=createAppState({variables:[],functions:null,datasets:'invalid',datasetKinds:[],fields:[],matrixCells:null,rates:[],assumptions:'invalid',history:'invalid',favorites:{},recent:null,precision:999,digits:999,inputFont:1,outputFont:999,theme:'invalid',resultDisplayMode:'invalid'},'ko-KR');
   for(const key of ['variables','functions','datasets','datasetKinds','fields','matrixCells','rates','assumptions'])assert.deepEqual(state[key],{});

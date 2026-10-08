@@ -41,6 +41,25 @@ internal fun statisticsGroupedValues(rows:List<List<String>>):List<Pair<String,L
     return groups.map {(name,values)->name to values.toList()}
 }
 
+internal fun statisticsCategoryPairs(rows:List<List<String>>,first:Int,second:Int):List<Pair<String,String>> =
+    if(first<0||second<0||first==second)emptyList() else rows.mapNotNull {row->
+        val left=row.getOrNull(first)?.trim()?.takeIf(String::isNotBlank)
+        val right=row.getOrNull(second)?.trim()?.takeIf(String::isNotBlank)
+        if(left!=null&&right!=null)left to right else null
+    }
+
+internal fun statisticsCategoryLabels(pairs:List<Pair<String,String>>,first:String,second:String,shared:Boolean=false):Map<String,String> {
+    val numeric=!shared&&pairs.all {it.first.toBigDecimalOrNull()!=null&&it.second.toBigDecimalOrNull()!=null}
+    val left=if(shared)pairs.flatMap {listOf(it.first,it.second)}.distinct() else statisticsCategories(pairs.map {it.first},numeric)
+    val right=if(shared)left else statisticsCategories(pairs.map {it.second},numeric)
+    return mapOf("table:row" to first,"table:column" to second)+
+        left.mapIndexed {i,label->"table:row:${i+1}" to label}+
+        right.mapIndexed {i,label->"table:column:${i+1}" to label}
+}
+
+internal fun statisticsCategories(values:List<String>,numeric:Boolean):List<String> =
+    if(numeric)values.distinctBy {it.toBigDecimal().stripTrailingZeros()}.sortedBy {it.toBigDecimal()} else values.distinct()
+
 /** Build a test from the visible data table, never from a second copy of its values. */
 internal fun statisticsTestCommand(
     procedure: String,
@@ -63,14 +82,14 @@ internal fun statisticsTestCommand(
     val names=statisticsColumnNames(kind)
     val x = values(0)
     val y = if (names.size>1) values(1) else emptyList()
-    val pairs = if (names.size>1) rows.mapNotNull { row ->
-        val left = row.getOrNull(0)?.trim()?.takeIf(String::isNotBlank)
-        val right = row.getOrNull(1)?.trim()?.takeIf(String::isNotBlank)
-        if (left != null && right != null) left to right else null
-    } else emptyList()
-    val categoryX=pairs.map {it.first}.distinct()
-    val categoryY=pairs.map {it.second}.distinct()
-    val categoryPairs=if(grouping=="group-value")pairs.map {(left,right)->(categoryX.indexOf(left)+1).toString() to (categoryY.indexOf(right)+1).toString()} else pairs
+    val categorical=procedure in listOf("χ² test","Fisher exact")
+    val firstColumn=if(categorical&&firstGroup!=null)names.indexOf(firstGroup) else 0
+    val secondColumn=if(categorical&&secondGroup!=null)names.indexOf(secondGroup) else 1
+    val pairs = statisticsCategoryPairs(rows,firstColumn,secondColumn)
+    val numericCategories=grouping!="group-value"&&pairs.all {it.first.toBigDecimalOrNull()!=null&&it.second.toBigDecimalOrNull()!=null}
+    val categoryX=statisticsCategories(pairs.map {it.first},numericCategories)
+    val categoryY=statisticsCategories(pairs.map {it.second},numericCategories)
+    val categoryPairs=if(numericCategories)pairs else pairs.map {(left,right)->(categoryX.indexOf(left)+1).toString() to (categoryY.indexOf(right)+1).toString()}
     val grouped=if(kind=="xy"&&grouping=="group-value")statisticsGroupedValues(rows) else emptyList()
     val first=grouped.firstOrNull {it.first==firstGroup} ?: grouped.firstOrNull()
     val second=if(secondGroup==first?.first)null else grouped.firstOrNull {it.first==secondGroup} ?: grouped.firstOrNull {it.first!=first?.first}
@@ -111,8 +130,8 @@ internal fun statisticsTestCommand(
             column in names -> sample.takeIf { it.isNotEmpty() }?.let { "ztest($mu0,$sigma,${vector(it)}$tailArgument)" }
             else -> null
         }
-        "χ² test" -> if (names.size>1 && pairs.size >= 2 && (grouping!="group-value"||categoryX.size>=2&&categoryY.size>=2)) "chi2independence(${vector(categoryPairs.map { it.first })},${vector(categoryPairs.map { it.second })},${if(yatesCorrection)1 else 0})" else null
-        "Fisher exact" -> if (names.size>1 && pairs.size >= 2 && (grouping!="group-value"||categoryX.size==2&&categoryY.size==2)) "fisherexact(${vector(categoryPairs.map { it.first })},${vector(categoryPairs.map { it.second })}$tailArgument)" else null
+        "χ² test" -> if (names.size>1 && pairs.size >= 2 && categoryX.size>=2&&categoryY.size>=2) "chi2independence(${vector(categoryPairs.map { it.first })},${vector(categoryPairs.map { it.second })},${if(yatesCorrection)1 else 0})" else null
+        "Fisher exact" -> if (names.size>1 && pairs.size >= 2 && categoryX.size==2&&categoryY.size==2) "fisherexact(${vector(categoryPairs.map { it.first })},${vector(categoryPairs.map { it.second })}$tailArgument)" else null
         "ANOVA","Tukey HSD" -> if (groups.size>=2&&groups.all {it.size>=2}) "${if(procedure=="ANOVA")"anova" else "tukey"}(${groups.joinToString(",") {vector(it)}})" else null
         "Shapiro–Wilk" -> sample.takeIf { it.size in 3..5000 }?.let { "shapiro(${vector(it)})" }
         "t interval" -> sample.takeIf { it.size >= 2 && validLevel }?.let { "tinterval($level,${vector(it)})" }

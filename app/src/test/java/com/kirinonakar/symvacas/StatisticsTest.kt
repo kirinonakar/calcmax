@@ -110,6 +110,23 @@ class StatisticsDataSourceTest {
 }
 
 class StatisticsTestCommandsTest {
+    @Test fun categoricalTestsUseSelectedColumnsAndKeepCompletePairsAndHeaderLabels() {
+        val rows=listOf(listOf("10","unused","treated","yes"),listOf("11","","control","no"),listOf("12","invalid","treated","no"),listOf("13","unused","control","yes"),listOf("14","unused","","yes"),listOf("15","unused","control",""))
+        fun selected(test:String,first:String="z",second:String="x4")=statisticsTestCommand(test,rows,"columns:4","x","Right","0","2","95",firstGroup=first,secondGroup=second,yatesCorrection=false)
+        assertEquals("fisherexact([1,2,1,2],[1,2,2,1],right)",selected("Fisher exact"))
+        assertEquals("chi2independence([1,2,1,2],[1,2,2,1],0)",selected("χ² test"))
+        assertNull(selected("Fisher exact","z","z"))
+        assertNull(selected("χ² test","missing","x4"))
+        assertNull(selected("Fisher exact","x","x4"))
+        val pairs=com.kirinonakar.symvacas.ui.statisticsCategoryPairs(rows,2,3)
+        assertEquals(4,pairs.size)
+        val labels=com.kirinonakar.symvacas.ui.statisticsColumnLabels("ID,Unused,Treatment,Outcome\n"+rows.joinToString("\n"){it.joinToString(",")},"columns:4")
+        assertEquals(mapOf("table:row" to "Treatment (z)","table:column" to "Outcome (x4)","table:row:1" to "treated","table:row:2" to "control","table:column:1" to "yes","table:column:2" to "no"),com.kirinonakar.symvacas.ui.statisticsCategoryLabels(pairs,labels[2],labels[3]))
+        val numeric=listOf(listOf("1","1"),listOf("1.0","0"),listOf("0","1"),listOf("0.0","0"))
+        assertEquals("fisherexact([1,1.0,0,0.0],[1,0,1,0])",command("Fisher exact",numeric,"xy"))
+        val numericLabels=com.kirinonakar.symvacas.ui.statisticsCategoryLabels(com.kirinonakar.symvacas.ui.statisticsCategoryPairs(numeric,0,1),"First","Second")
+        assertEquals("0",numericLabels["table:row:1"]);assertEquals("1",numericLabels["table:row:2"])
+    }
     private fun command(procedure: String, rows: List<List<String>>, kind: String = "list", column: String = "x") =
         statisticsTestCommand(procedure, rows, kind, column, "Two-sided", "0", "2", "95")
 

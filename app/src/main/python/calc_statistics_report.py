@@ -13,13 +13,15 @@ TITLES.update({'ancova':'ANCOVA', 'glm':'Generalized linear model (GLM)',
                'bayesproportion':'Bayesian proportion', 'bayesmean':'Bayesian mean', 'bayesrate':'Bayesian rate'})
 
 
-def statistics_report(name, value, precision):
+def statistics_report(name, value, precision, labels=None):
     """Each section has named columns and cells using the normal result formatter.
 
     Preview large tables at 100 rows; the original full result still powers Copy/Ans.
     Never infer that unrelated vectors of equal length describe the same observations.
     """
     sections = []
+    table_labels = labels if isinstance(labels, dict) else {}
+    categorical = name in ('chi2independence', 'fisherexact', 'mcnemar') and all(table_labels.get(key) for key in ('table:row', 'table:column'))
 
     def cell(v):
         if isinstance(v, str): return v
@@ -76,6 +78,11 @@ def statistics_report(name, value, precision):
                     prefix = 'PC' if title in ('loadings','scores') else 'Column '
                     headers = [prefix+str(i+1) for i in range(width)]
                 index = 'Feature' if title == 'loadings' else 'Cluster' if title == 'centroids' else 'Observation'
+                if categorical and title in ('observed', 'expected'):
+                    headers = [str(table_labels['table:column'])+': '+str(table_labels.get('table:column:'+str(i+1), 'Category '+str(i+1))) for i in range(width)]
+                    add(title, [table_labels['table:row']]+headers,
+                        [[table_labels.get('table:row:'+str(i+1), str(i+1))]+list(row) for i,row in enumerate(v)])
+                    return
                 add(title, [index]+headers, [[i+1]+list(row) for i,row in enumerate(v)])
             elif vector(v):
                 if title in ('confidence interval','quartiles (inclusive)','Quartiles'):
@@ -86,5 +93,7 @@ def statistics_report(name, value, precision):
                 for i,item in enumerate(v): visit(title+' '+str(i+1), item)
         else: add(title, ['Metric','Value'], [[title,v]])
 
+    if categorical:
+        add('Compared columns', ['First column', 'Second column'] if name == 'mcnemar' else ['Row variable', 'Column variable'], [[table_labels['table:row'], table_labels['table:column']]])
     visit('Summary' if isinstance(value, dict) else TITLES.get(name, name), value)
     return {'analysis': name, 'title': TITLES.get(name, name), 'sections': sections}

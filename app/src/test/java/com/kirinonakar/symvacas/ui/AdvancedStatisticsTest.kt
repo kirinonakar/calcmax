@@ -9,6 +9,16 @@ import com.kirinonakar.symvacas.math.Parser
 import com.kirinonakar.symvacas.math.requiresExplicitEvaluation
 
 class AdvancedStatisticsTest {
+    @Test fun mcnemarUsesNamedSelectedColumnsAndOmitsIncompletePairs() {
+        val definitions=JSONArray(File("src/main/assets/advanced_statistics.json").readText())
+        val definition=(0 until definitions.length()).map {definitions.getJSONObject(it)}.first {it.getString("id")=="mcnemar"}
+        val rows=listOf(listOf("1","yes","no"),listOf("2","no","yes"),listOf("3","yes","yes"),listOf("4","","yes"),listOf("5","yes",""))
+        val settings=JSONObject().put("layout","pairs").put("first","1").put("second","2")
+        assertEquals("mcnemar([[1,1],[1,0]],exact)",guidedStatisticsCommand(definition,rows,settings))
+        val labels=advancedStatisticsTermLabels(definition,rows,settings,listOf("ID (x)","Before (y)","After (z)"))
+        assertEquals("Before (y)",labels["table:row"]);assertEquals("After (z)",labels["table:column"])
+        assertEquals("yes",labels["table:row:1"]);assertEquals("yes",labels["table:column:1"])
+    }
     @Test fun structuredReportsRouteToTheirAnalysisMenuIncludingSavedLegacyReports() {
         val report=JSONObject().put("analysis","gee").put("title","GEE")
         val result=JSONObject().put("statisticsReport",report)

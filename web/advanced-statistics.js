@@ -1,5 +1,5 @@
 import {advancedStatisticsSchema} from './advanced-statistics-schema.js';
-import {csvRows,statisticsCsvHasHeader,statisticsColumnLabels} from './workspace-commands.js';
+import {csvRows,statisticsCsvHasHeader,statisticsColumnLabels,statisticsCategoryLabels} from './workspace-commands.js';
 import {$,element} from './app-ui.js';
 import {getLanguage,t} from './i18n.js';
 import {renderSurvivalReport} from './survival-report.js';
@@ -149,7 +149,8 @@ export function guidedStatisticsCommand(definition,rows,settings={},columnLabels
     return `${id}(${samples.map(list).join(',')})`;
   }
   if(id==='mcnemar'){
-    const pairs=complete([column('first'),column('second')]);let counts=pairs;
+    const first=column('first'),second=column('second');distinct([first,second]);
+    const pairs=opts.layout==='pairs'?rows.map(row=>[String(row[first]??'').trim(),String(row[second]??'').trim()]).filter(row=>row.every(Boolean)):complete([first,second]);let counts=pairs;
     if(opts.layout==='pairs'){
       const labels=[...new Set(pairs.flat())];if(labels.length!==2)throw new Error('Paired observations require the same two categories');
       counts=[[0,0],[0,0]];for(const pair of pairs)counts[labels.indexOf(pair[0])][labels.indexOf(pair[1])]++;
@@ -235,6 +236,10 @@ export function advancedStatisticsTermLabels(definition,rows,settings={},columnL
   const column=key=>Number(opts[key])===-1?n-1:Number(opts[key]);
   const multiple=excluded=>opts.predictors==='auto'?Array.from({length:n},(_,i)=>i).filter(i=>!excluded.includes(i)):String(opts.predictors??'').split(',').filter(Boolean).map(Number);
   let predictors=[];
+  if(id==='mcnemar'){
+    const first=column('first'),second=column('second'),pairs=opts.layout==='pairs'?rows.filter(row=>row[first]&&row[second]).map(row=>[row[first],row[second]]):[];
+    return statisticsCategoryLabels(pairs,columnLabels[first],columnLabels[second],true);
+  }
   if(id==='ancova'){
     const groups=[...new Set(rows.map(row=>String(row[column('group')]??'').trim()))],labels={Group:columnLabels[column('group')]};
     groups.forEach((group,i)=>{labels[`group:${i+1}`]=group;});

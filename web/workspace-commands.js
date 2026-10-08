@@ -86,16 +86,22 @@ export function statisticsDatasetSource(source,kind){
 export function statisticsAnalysisData(source,{op='stats',column=0,grouping='columns',firstGroup='',secondGroup='',kind}={}){
   const paired=['regression','correlation','ttestpaired','wilcoxon','chi2independence','fisherexact'].includes(op)&&!(op==='wilcoxon'&&statisticsColumnCount(kind)===1);
   const categorical=['chi2independence','fisherexact'].includes(op);
-  const grouped=grouping==='groups'&&!paired&&(!kind||kind==='xy'),raw=kind?statisticsDataRows(source,kind):csvRows(source),rows=grouped||categorical?raw:numericStatisticsRows(raw),columns=Array.from({length:rows[0].length},(_,i)=>rows.map(r=>r[i]).filter(Boolean)),pairs=rows.filter(r=>r[0]&&r[1]),groups=new Map();
+  const grouped=grouping==='groups'&&!paired&&(!kind||kind==='xy'),raw=kind?statisticsDataRows(source,kind):csvRows(source),rows=grouped||categorical?raw:numericStatisticsRows(raw),columns=Array.from({length:rows[0].length},(_,i)=>rows.map(r=>r[i]).filter(Boolean)),groups=new Map();
+  const columnNames=statisticsColumnNames(columns.length),pairFirst=categorical&&firstGroup?columnNames.indexOf(firstGroup):0,pairSecond=categorical&&secondGroup?columnNames.indexOf(secondGroup):1;
+  const pairs=pairFirst>=0&&pairSecond>=0&&pairFirst!==pairSecond?rows.filter(r=>r[pairFirst]&&r[pairSecond]).map(r=>categorical?[r[pairFirst],r[pairSecond]]:r):[];
   if(grouped)for(const [name,number] of pairs){if(!groups.has(name))groups.set(name,[]);groups.get(name).push(number);}
   const names=groups.size?[...groups.keys()]:statisticsColumnNames(columns.length),values=groups.size?[...groups.values()]:columns;
   const first=groups.size?(names.includes(firstGroup)?names.indexOf(firstGroup):0):firstGroup?names.indexOf(firstGroup):0;
   const second=groups.size?(names.includes(secondGroup)?names.indexOf(secondGroup):names.findIndex((_,i)=>i!==first)):secondGroup?names.indexOf(secondGroup):1;
   const selected=groups.size?first:column;
-  const samples=paired?['x','y'].map((label,i)=>({label,values:pairs.map(row=>row[i])})):['anova','tukey','kruskal'].includes(op)?names.map((label,i)=>({label,values:values[i]})):['ttest2','ztest2','mannwhitney'].includes(op)?[first,second].map(i=>({label:names[i],values:values[i]})):[{label:names[selected],values:values[selected]}];
+  const samples=paired?[pairFirst,pairSecond].map((at,i)=>({label:columnNames[at],values:pairs.map(row=>row[i])})):['anova','tukey','kruskal'].includes(op)?names.map((label,i)=>({label,values:values[i]})):['ttest2','ztest2','mannwhitney'].includes(op)?[first,second].map(i=>({label:names[i],values:values[i]})):[{label:names[selected],values:values[selected]}];
   return {rows,groups,pairs,paired,categorical,first,second,samples};
 }
-export function statisticsCommand(source,{op='stats',column=0,extra='0',tail='two',sigma='1',sigmaY='1',yatesCorrection=true,regression='linear',firth='auto',degree='3',alpha='0.1',l1Ratio='0.5',trees='100',maxDepth='10',seed='0',priorSD='2.5',credibleLevel='0.95',varianceShape='2',varianceScale='1',bayesianMethod='analytic',hmcSamples='500',hmcWarmup='500',hmcLeapfrog='10',hmcSeed='0',hmcChains='2',responseColumn,formula='A*exp(-k*x)+C',variable='x',initials='',grouping='columns',firstGroup='',secondGroup='',kind}={}){
+export function statisticsCategoryLabels(pairs,first,second,shared=false){
+  const left=[...new Set(shared?pairs.flat():pairs.map(row=>row[0]))],right=shared?left:[...new Set(pairs.map(row=>row[1]))];
+  return {'table:row':first,'table:column':second,...Object.fromEntries(left.map((label,i)=>[`table:row:${i+1}`,label])),...Object.fromEntries(right.map((label,i)=>[`table:column:${i+1}`,label]))};
+}
+export function statisticsCommand(source,{op='stats',column=0,extra='0',tail='two',sigma='1',sigmaY='1',yatesCorrection=true,regression='linear',firth='auto',degree='3',alpha='0.1',l1Ratio='0.5',trees='100',maxDepth='10',seed='0',priorSD='2.5',credibleLevel='0.95',varianceShape='2',varianceScale='1',bayesianMethod='analytic',nutsSamples='500',nutsWarmup='500',nutsMaxDepth='8',nutsSeed='0',nutsChains='2',responseColumn,formula='A*exp(-k*x)+C',variable='x',initials='',grouping='columns',firstGroup='',secondGroup='',kind}={}){
   if(op==='regression'&&kind&&kind!=='xy'&&!(statisticsColumnCount(kind)>1&&['multiple','logistic','ridge','lasso','elasticnet','logisticridge','logisticlasso','logisticelasticnet','randomforest','randomforestclassifier','randomforestregressor','bayeslinear','bayeslogistic'].includes(regression)))throw new Error('Regression needs x,y data');
   const {rows,groups,pairs,categorical,first,second,samples:activeSamples}=statisticsAnalysisData(source,{op,column,grouping,firstGroup,secondGroup,kind});
   const samples=activeSamples.map(sample=>sample.values),data=samples[0];
@@ -109,14 +115,14 @@ export function statisticsCommand(source,{op='stats',column=0,extra='0',tail='tw
       const response=responseColumn===undefined?rows[0].length-1:Number(responseColumn);
       if(!Number.isInteger(response)||response<0||response>=rows[0].length)throw new Error('Select a dependent variable column');
       const order=rows[0].map((_,i)=>i).filter(i=>i!==response).concat(response);
-      const samplerOptions=bayesianMethod==='hmc'?`,[hmc,${hmcSamples},${hmcWarmup},${hmcLeapfrog},${hmcSeed},${hmcChains}]`:'';
+      const samplerOptions=bayesianMethod==='nuts'?`,[nuts,${nutsSamples},${nutsWarmup},${nutsMaxDepth},${nutsSeed},${nutsChains}]`:'';
       const regressionOptions=regression.startsWith('bayes')?`,[${priorSD},${credibleLevel}${regression==='bayeslinear'?`,${varianceShape},${varianceScale}`:''}${samplerOptions}]`:['elasticnet','logisticelasticnet'].includes(regression)?`,[${alpha},${l1Ratio}]`:['ridge','lasso','logisticridge','logisticlasso'].includes(regression)?','+alpha:regression.startsWith('randomforest')?`,[${trees},${maxDepth},${seed}]`:regression==='logistic'&&firth==='firth'?',firth':'';
       return `regression(${vector(complete.map(row=>vector(order.map(i=>row[i]))))},${regression}${regressionOptions})`;
     }
     if(pairs.length<2)throw new Error('Regression needs at least two complete x,y rows');
     return `regression(${vector(pairs.map(p=>vector(regression==='polynomial'&&Number(responseColumn)===0?[p[1],p[0]]:p.slice(0,2))))},${regression}${regression==='polynomial'?','+degree:regression==='custom'?`,${formula},${variable}${initials.trim()?','+initials:''}`:''})`;
   }
-  if(categorical){if(pairs.length<2)throw new Error('Enter complete categorical pairs');const left=[...new Set(pairs.map(r=>r[0]))],right=[...new Set(pairs.map(r=>r[1]))];return `${op}(${vector(pairs.map(r=>left.indexOf(r[0])+1))},${vector(pairs.map(r=>right.indexOf(r[1])+1))}${op==='fisherexact'?tailArgument:','+(yatesCorrection?1:0)})`;}
+  if(categorical){if(first===second||first<0||second<0)throw new Error('Choose two different columns');if(pairs.length<2)throw new Error('Enter at least two complete rows in the selected columns.');const left=[...new Set(pairs.map(r=>r[0]))],right=[...new Set(pairs.map(r=>r[1]))];if(op==='fisherexact'&&(left.length!==2||right.length!==2))throw new Error('Fisher exact needs exactly two categories in each selected column.');if(op==='chi2independence'&&(left.length<2||right.length<2))throw new Error('Each selected column needs at least two categories.');return `${op}(${vector(pairs.map(r=>left.indexOf(r[0])+1))},${vector(pairs.map(r=>right.indexOf(r[1])+1))}${op==='fisherexact'?tailArgument:','+(yatesCorrection?1:0)})`;}
   if(op==='wilcoxon'&&statisticsColumnCount(kind)===1){if(!data?.length)throw new Error('Select a nonempty data column');return `wilcoxon(${vector(data)}${tailArgument})`;}
   if(['correlation','ttestpaired','wilcoxon'].includes(op)){if(pairs.length<2)throw new Error('Enter at least two complete paired rows');return `${op}(${op==='ttestpaired'?extra+',':''}${vector(pairs.map(r=>r[0]))},${vector(pairs.map(r=>r[1]))}${op!=='correlation'?tailArgument:''})`;}
   if(op==='mannwhitney'){const [a,b]=samples;if(!a?.length||!b?.length||first===second)throw new Error('Select two different nonempty samples');return `mannwhitney(${vector(a)},${vector(b)}${tailArgument})`;}

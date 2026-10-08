@@ -117,11 +117,11 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
     var lassoAlpha by rememberSaveable {mutableStateOf(m.statisticsLassoAlpha)}
     var lassoAlphaCv by rememberSaveable {mutableStateOf(false)}
     var bayesianMethod by rememberSaveable {mutableStateOf(m.statisticsBayesianMethod)}
-    var hmcSamples by rememberSaveable {mutableStateOf(m.statisticsHmcSamples)}
-    var hmcWarmup by rememberSaveable {mutableStateOf(m.statisticsHmcWarmup)}
-    var hmcLeapfrog by rememberSaveable {mutableStateOf(m.statisticsHmcLeapfrog)}
-    var hmcSeed by rememberSaveable {mutableStateOf(m.statisticsHmcSeed)}
-    var hmcChains by rememberSaveable {mutableStateOf(m.statisticsHmcChains)}
+    var nutsSamples by rememberSaveable {mutableStateOf(m.statisticsNutsSamples)}
+    var nutsWarmup by rememberSaveable {mutableStateOf(m.statisticsNutsWarmup)}
+    var nutsMaxDepth by rememberSaveable {mutableStateOf(m.statisticsNutsMaxDepth)}
+    var nutsSeed by rememberSaveable {mutableStateOf(m.statisticsNutsSeed)}
+    var nutsChains by rememberSaveable {mutableStateOf(m.statisticsNutsChains)}
     var bayesianPriorSD by rememberSaveable {mutableStateOf(m.statisticsBayesianPriorSD)}
     var bayesianLevel by rememberSaveable {mutableStateOf(m.statisticsBayesianLevel)}
     var bayesianShape by rememberSaveable {mutableStateOf(m.statisticsBayesianShape)}
@@ -204,7 +204,7 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
     val defaultHeatMapY=heatMapAxisIndices.drop(heatMapAxisSplit).toSet()
     val heatMapXSelection=parseHeatMapSelection(heatMapXColumns,dataColumns.size,defaultHeatMapX).intersect(validHeatMapAxes)
     val heatMapYSelection=parseHeatMapSelection(heatMapYColumns,dataColumns.size,defaultHeatMapY).intersect(validHeatMapAxes)-heatMapXSelection
-    LaunchedEffect(data,datasetName,dataKind,regression,plotType,plotGrouping,plotOrientation,heatMapMode,heatMapCorrelation,heatMapXColumns,heatMapYColumns,heatMapClustering,heatMapFit,autoColumns,csv,selected,isNew,customFormula,customVariable,customInitials,polynomialDegree,logisticResponse,lassoAlpha,forestTrees,forestDepth,forestSeed,regularization,l1Ratio,forestTask,bayesianPriorSD,bayesianLevel,bayesianShape,bayesianScale,bayesianMethod,hmcSamples,hmcWarmup,hmcLeapfrog,hmcSeed,hmcChains) {m.statisticsAutoColumns=autoColumns;m.statisticsPlotGrouping=plotGrouping;m.statisticsPlotOrientation=plotOrientation;m.statisticsHeatMapMode=heatMapMode;m.statisticsHeatMapCorrelation=heatMapCorrelation;m.statisticsHeatMapXColumns=if(heatMapAxisIndices.size<2)"" else encodeHeatMapSelection(heatMapXSelection);m.statisticsHeatMapYColumns=if(heatMapAxisIndices.size<2)"" else encodeHeatMapSelection(heatMapYSelection);m.statisticsHeatMapClustering=heatMapClustering;m.statisticsHeatMapFit=heatMapFit;m.saveStatistics(datasetName,data,dataKind,regression,plotType,csv,selected,isNew,customFormula,customVariable,customInitials,polynomialDegree,logisticResponse,lassoAlpha,forestTrees,forestDepth,forestSeed,regularization,l1Ratio,forestTask,bayesianPriorSD,bayesianLevel,bayesianShape,bayesianScale,bayesianMethod,hmcSamples,hmcWarmup,hmcLeapfrog,hmcSeed,hmcChains)}
+    LaunchedEffect(data,datasetName,dataKind,regression,plotType,plotGrouping,plotOrientation,heatMapMode,heatMapCorrelation,heatMapXColumns,heatMapYColumns,heatMapClustering,heatMapFit,autoColumns,csv,selected,isNew,customFormula,customVariable,customInitials,polynomialDegree,logisticResponse,lassoAlpha,forestTrees,forestDepth,forestSeed,regularization,l1Ratio,forestTask,bayesianPriorSD,bayesianLevel,bayesianShape,bayesianScale,bayesianMethod,nutsSamples,nutsWarmup,nutsMaxDepth,nutsSeed,nutsChains) {m.statisticsAutoColumns=autoColumns;m.statisticsPlotGrouping=plotGrouping;m.statisticsPlotOrientation=plotOrientation;m.statisticsHeatMapMode=heatMapMode;m.statisticsHeatMapCorrelation=heatMapCorrelation;m.statisticsHeatMapXColumns=if(heatMapAxisIndices.size<2)"" else encodeHeatMapSelection(heatMapXSelection);m.statisticsHeatMapYColumns=if(heatMapAxisIndices.size<2)"" else encodeHeatMapSelection(heatMapYSelection);m.statisticsHeatMapClustering=heatMapClustering;m.statisticsHeatMapFit=heatMapFit;m.saveStatistics(datasetName,data,dataKind,regression,plotType,csv,selected,isNew,customFormula,customVariable,customInitials,polynomialDegree,logisticResponse,lassoAlpha,forestTrees,forestDepth,forestSeed,regularization,l1Ratio,forestTask,bayesianPriorSD,bayesianLevel,bayesianShape,bayesianScale,bayesianMethod,nutsSamples,nutsWarmup,nutsMaxDepth,nutsSeed,nutsChains)}
     val dateAxis=if(dataColumns.size>1)statisticsDateAxis(parsedRows) else null
     val numericRows=statisticsNumericRows(parsedRows,dateAxis)
     fun vector(column:Int)=numericRows.mapNotNull {it.getOrNull(column)?.takeIf(String::isNotBlank)}.joinToString(",","[","]")
@@ -352,22 +352,22 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
             }
             if(dataColumns.size>1&&bayesian) {
                 StatisticsSelectionTitle("Inference method")
-                val methods=mapOf((if(regression=="bayeslinear")"Conjugate (exact)" else "Laplace approximation") to "analytic","HMC" to "hmc")
+                val methods=mapOf((if(regression=="bayeslinear")"Conjugate (exact)" else "Laplace approximation") to "analytic","NUTS" to "nuts")
                 Choices(methods.keys.toList(),methods.entries.firstOrNull {it.value==bayesianMethod}?.key ?: methods.keys.first(),{m.clearRegression();bayesianMethod=methods[it] ?: "analytic"})
-                if(bayesianMethod=="hmc") {
+                if(bayesianMethod=="nuts") {
                     Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                        Field(hmcSamples,"Samples per chain (100–5000)",Modifier.weight(1f)){m.clearRegression();hmcSamples=it}
-                        Field(hmcWarmup,"Warmup (50–5000)",Modifier.weight(1f)){m.clearRegression();hmcWarmup=it}
+                        Field(nutsSamples,"Samples per chain (100–5000)",Modifier.weight(1f)){m.clearRegression();nutsSamples=it}
+                        Field(nutsWarmup,"Warmup (50–5000)",Modifier.weight(1f)){m.clearRegression();nutsWarmup=it}
                     }
                     Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                        Field(hmcLeapfrog,"Leapfrog steps (1–50)",Modifier.weight(1f)){m.clearRegression();hmcLeapfrog=it}
-                        Field(hmcChains,"Chains (2–4)",Modifier.weight(1f)){m.clearRegression();hmcChains=it}
+                        Field(nutsMaxDepth,"Max tree depth (1–10)",Modifier.weight(1f)){m.clearRegression();nutsMaxDepth=it}
+                        Field(nutsChains,"Chains (2–4)",Modifier.weight(1f)){m.clearRegression();nutsChains=it}
                     }
                     Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                        Field(hmcSeed,"Random seed",Modifier.weight(1f)){m.clearRegression();hmcSeed=it}
+                        Field(nutsSeed,"Random seed",Modifier.weight(1f)){m.clearRegression();nutsSeed=it}
                         Spacer(Modifier.weight(1f))
                     }
-                    Text(tr("Static HMC; step size adapts during warmup. Check split R-hat, ESS and divergences."),fontSize=11.sp,color=LocalInstrument.current.muted)
+                    Text(tr("NUTS adapts trajectory length; step size adapts during warmup. Check split R-hat, ESS and divergences."),fontSize=11.sp,color=LocalInstrument.current.muted)
                 }
 
                 Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
@@ -390,10 +390,10 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
                     Choices(listOf("Auto","Always"),if(firthMode=="firth")"Always" else "Auto",{m.clearRegression();firthMode=if(it=="Always")"firth" else "auto"})
                 }
                 val table=statisticsRegressionTable(numericRows,dataKind,fitMode,responseColumn)
-                val validHmc=bayesianMethod!="hmc"||(hmcSamples.toIntOrNull() in 100..5000&&hmcWarmup.toIntOrNull() in 50..5000&&hmcLeapfrog.toIntOrNull() in 1..50&&hmcChains.toIntOrNull() in 2..4&&hmcSeed.toLongOrNull() in 0L..2147483647L)
-                val samplerOptions=if(bayesianMethod=="hmc")",[hmc,$hmcSamples,$hmcWarmup,$hmcLeapfrog,$hmcSeed,$hmcChains]" else ""
+                val validNuts=bayesianMethod!="nuts"||(nutsSamples.toIntOrNull() in 100..5000&&nutsWarmup.toIntOrNull() in 50..5000&&nutsMaxDepth.toIntOrNull() in 1..10&&nutsChains.toIntOrNull() in 2..4&&nutsSeed.toLongOrNull() in 0L..2147483647L)
+                val samplerOptions=if(bayesianMethod=="nuts")",[nuts,$nutsSamples,$nutsWarmup,$nutsMaxDepth,$nutsSeed,$nutsChains]" else ""
                 val validOptions=when {
-                    bayesian->validHmc&&bayesianPriorSD.toDoubleOrNull()?.let {it.isFinite()&&it in 0.000001..1000000.0}==true&&bayesianLevel.toDoubleOrNull()?.let {it>0&&it<1}==true&&(regression!="bayeslinear"||(bayesianShape.toDoubleOrNull()?.let {it.isFinite()&&it>0}==true&&bayesianScale.toDoubleOrNull()?.let {it.isFinite()&&it>0}==true))
+                    bayesian->validNuts&&bayesianPriorSD.toDoubleOrNull()?.let {it.isFinite()&&it in 0.000001..1000000.0}==true&&bayesianLevel.toDoubleOrNull()?.let {it>0&&it<1}==true&&(regression!="bayeslinear"||(bayesianShape.toDoubleOrNull()?.let {it.isFinite()&&it>0}==true&&bayesianScale.toDoubleOrNull()?.let {it.isFinite()&&it>0}==true))
                     regularized->(lassoAlphaCv||lassoAlpha.toDoubleOrNull()?.let {it.isFinite()&&it>0}==true)&&(regularization!="elasticnet"||l1Ratio.toDoubleOrNull()?.let {it in 0.0..1.0}==true)
                     regression=="randomforest"->forestTrees.toIntOrNull() in 1..200&&forestDepth.toIntOrNull() in 1..20&&forestSeed.toLongOrNull() in 0L..2147483647L
                     else->true
@@ -549,7 +549,7 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
                 }
             }
         }
-        StatisticsAnalysis(m,numericRows,if(dataColumns.size==1)"list" else dataKind)
+        StatisticsAnalysis(m,numericRows,if(dataColumns.size==1)"list" else dataKind,data,parsedRows)
         AdvancedStatistics(m,data,dataKind)
         Display(m,requestInitialFocus=false,showInput=false)
     }

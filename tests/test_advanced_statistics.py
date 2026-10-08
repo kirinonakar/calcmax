@@ -38,6 +38,26 @@ def run(name,*args):
 
 
 class AdvancedStatisticsTests(unittest.TestCase):
+    def test_categorical_report_headers_label_counts_without_changing_answers(self):
+        labels={'table:row':'Treatment (z)','table:column':'Outcome (x4)',
+                'table:row:1':'treated','table:row:2':'control','table:column:1':'yes','table:column:2':'no'}
+        for source in ('fisherexact([1,1,2,2],[1,2,1,2])','chi2independence([1,1,2,2],[1,2,1,2],1)','mcnemar([[20,8],[2,15]],exact)'):
+            with self.subTest(source=source):
+                request={'tree':tree(source),'precision':20,'budget':30}
+                original=json.loads(dispatch(json.dumps(request)))
+                named=json.loads(dispatch(json.dumps({**request,'statisticsTermLabels':labels})))
+                self.assertTrue(named['ok'],named.get('error'))
+                for key in ('exact','decimal','resultAst','reusable'):
+                    self.assertEqual(original.get(key),named.get(key))
+                sections=named['statisticsReport']['sections']
+                self.assertEqual(sections[0]['rows'],[['Treatment (z)','Outcome (x4)']])
+                for section in sections:
+                    if section['title'] in ('observed','expected'):
+                        self.assertEqual(section['columns'],['Treatment (z)','Outcome (x4): yes','Outcome (x4): no'])
+                        self.assertEqual([row[0] for row in section['rows']],['treated','control'])
+                        plain=next(item for item in original['statisticsReport']['sections'] if item['title']==section['title'])
+                        self.assertEqual([row[1:] for row in section['rows']],[row[1:] for row in plain['rows']])
+
     def test_statistics_reports_cover_analysis_examples_with_rectangular_tables(self):
         definitions=json.loads((ROOT/'app/src/main/assets/advanced_statistics.json').read_text(encoding='utf-8'))
         for definition in definitions:

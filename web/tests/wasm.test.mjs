@@ -6,11 +6,27 @@ import {loadPyodide} from '../vendor/pyodide.mjs';
 import {installEngine} from '../engine-bootstrap.js';
 import {parse,latexInput} from '../parser.js';
 import {tipCommand,moneyResult} from '../money.js';
-import {statisticsCommand,distributionCommand,equationCommand} from '../workspace-commands.js';
+import {statisticsCommand,statisticsAnalysisData,statisticsColumnLabels,statisticsCategoryLabels,distributionCommand,equationCommand} from '../workspace-commands.js';
 
 // Reuse the interpreter for sequential integration scenarios. The cold solver
 // scenario below explicitly loads its own interpreter to keep startup coverage.
 let sharedRuntime;
+test('selected categorical columns and headers reach the real WASM contingency report',async()=>{
+  const py=await runtime(),rows=[[6,2],[1,4]].flatMap((row,i)=>row.flatMap((count,j)=>Array.from({length:count},()=>`${i+j},junk,${['treated','control'][i]},${['yes','no'][j]}`)));
+  const source='ID,Unused,Treatment,Outcome\n'+rows.concat('1,junk,,yes','2,,control,').join('\n'),options={op:'fisherexact',kind:'columns:4',firstGroup:'z',secondGroup:'x4'};
+  const plan=statisticsAnalysisData(source,options),headers=statisticsColumnLabels(source,options.kind),labels=statisticsCategoryLabels(plan.pairs,headers[2],headers[3]);
+  for(const op of ['fisherexact','chi2independence']){
+    const request={tree:parse(statisticsCommand(source,{...options,op}))};
+    py.globals.set('payload',JSON.stringify(request));const plain=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));
+    py.globals.set('payload',JSON.stringify({...request,statisticsTermLabels:labels}));const named=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));
+    assert.equal(named.ok,true,named.error);assert.deepEqual(named.resultAst,plain.resultAst);assert.equal(named.exact,plain.exact);
+    assert.deepEqual(named.statisticsReport.sections[0].rows,[['Treatment (z)','Outcome (x4)']]);
+    const observed=named.statisticsReport.sections.find(section=>section.title==='observed');
+    assert.deepEqual(observed.columns,['Treatment (z)','Outcome (x4): yes','Outcome (x4): no']);
+    assert.deepEqual(observed.rows.map(row=>row.slice(1).map(cell=>cell.exact)),[['6','2'],['1','4']]);
+    if(op==='fisherexact'){assert.match(named.exact,/odds ratio: 12/);assert.match(named.exact,/p value: 4\/39/);}
+  }
+});
 test('calculus explanations, special-function primitive and numerical guidance run in real WASM',async()=>{
   const py=await runtime();
   const evaluate=(source,options={})=>{
@@ -79,7 +95,7 @@ test('equation step explanations preserve real WASM answers across workspace met
   assert.equal(system.steps.at(-1).tree.kind,'tuple');
   assert.deepEqual(system.advancedSteps.at(-1).equations.map(formula=>formula.exact),['Eq(x, -1)','Eq(y, -2)']);
 });
-test('Bayesian linear, logistic and HMC run through workspace commands in real WASM',async()=>{
+test('Bayesian linear, logistic and NUTS run through workspace commands in real WASM',async()=>{
   const py=await runtime();
   const reference=JSON.parse(readFileSync(new URL('../../tests/fixtures/bayesian_regression_reference.json',import.meta.url),'utf8'));
   const evaluate=source=>{
@@ -95,19 +111,19 @@ test('Bayesian linear, logistic and HMC run through workspace commands in real W
     }
     assert.ok(result.curve.length>100);
     if(mode==='bayeslogistic')assert.ok(result.curve.every(([,y])=>y>=0&&y<=1));
-    const hmcSource=statisticsCommand('-2,0\n-1,0\n1,1\n2,1',{op:'regression',kind:'xy',regression:mode,
-      bayesianMethod:'hmc',hmcSamples:'200',hmcWarmup:'150',hmcSeed:'11'});
-    const hmc=evaluate(hmcSource);
-    assert.equal(hmc.regression.method,'hmc');
-    assert.equal(hmc.regression.hmc.totalSamples,400);
-    assert.ok(Number(hmc.regression.coefficients[1].ess)>0);
-    assert.deepEqual(evaluate(hmcSource).regression,hmc.regression,'seeded chains reproduce in WASM');
-    assert.ok(hmc.curve.length>100);
+    const nutsSource=statisticsCommand('-2,0\n-1,0\n1,1\n2,1',{op:'regression',kind:'xy',regression:mode,
+      bayesianMethod:'nuts',nutsSamples:'200',nutsWarmup:'150',nutsSeed:'11'});
+    const nuts=evaluate(nutsSource);
+    assert.equal(nuts.regression.method,'nuts');
+    assert.equal(nuts.regression.nuts.totalSamples,400);
+    assert.ok(Number(nuts.regression.coefficients[1].ess)>0);
+    assert.deepEqual(evaluate(nutsSource).regression,nuts.regression,'seeded chains reproduce in WASM');
+    assert.ok(nuts.curve.length>100);
   }
   const multivariate=evaluate(statisticsCommand('10,0,20\n12,1,22',{op:'regression',kind:'xyz',responseColumn:1,regression:'bayeslogistic'}));
   assert.equal(multivariate.regression.coefficients.length,3);assert.equal(multivariate.curve.length,0);
-  const catalogHmc=py.runPython("__import__('symvacas_catalog').regression_report([[-2,0],[-1,0],[1,1],[2,1]],'bayeslogistic',[2.5,.95,['hmc',100,50,10,0,2]])['method']");
-  assert.equal(catalogHmc,'hmc');
+  const catalogNuts=py.runPython("__import__('symvacas_catalog').regression_report([[-2,0],[-1,0],[1,1],[2,1]],'bayeslogistic',[2.5,.95,['nuts',100,50,8,0,2]])['method']");
+  assert.equal(catalogNuts,'nuts');
 });
 
 async function loadRuntime(){

@@ -23,6 +23,14 @@ export function createAppState(saved={},browserLanguage='en') {
     matrixCells:objectOrEmpty(saved.matrixCells),
     rates:objectOrEmpty(saved.rates)
   };
+  // Preserve shared sampling settings while replacing the old static HMC.
+  if(state.fields['regression-bayesian-method']==='hmc')state.fields['regression-bayesian-method']='nuts';
+  for(const suffix of ['samples','warmup','seed','chains']){
+    const legacy=`regression-hmc-${suffix}`,current=`regression-nuts-${suffix}`;
+    if(state.fields[current]===undefined&&state.fields[legacy]!==undefined)state.fields[current]=state.fields[legacy];
+    delete state.fields[legacy];
+  }
+  delete state.fields['regression-hmc-leapfrog'];
   // Older regression options used their translated labels as option values.
   const regressionAliases={'다항':'polynomial','다중':'multiple','로지스틱':'logistic'};
   const regression=state.fields['regression-kind'];

@@ -7,6 +7,20 @@ import org.junit.Test
 
 class WorkspaceStatesTest {
 
+    @Test fun hmcSettingsMigrateToNutsAndNewSettingsPersist() {
+        val prefs=MemoryPreferences(mapOf("statisticsBayesianMethod" to "hmc","statisticsHmcSamples" to "700","statisticsHmcWarmup" to "600","statisticsHmcLeapfrog" to "40","statisticsHmcSeed" to "13","statisticsHmcChains" to "4","regressionReport" to "{\"method\":\"hmc\"}"))
+        val state=com.kirinonakar.symvacas.calculator.StatisticsState(prefs)
+        assertEquals("nuts",state.statisticsBayesianMethod)
+        assertEquals("700",state.statisticsNutsSamples);assertEquals("600",state.statisticsNutsWarmup)
+        assertEquals("8",state.statisticsNutsMaxDepth);assertEquals("13",state.statisticsNutsSeed);assertEquals("4",state.statisticsNutsChains)
+        assertNull(state.regressionReport)
+        state.statisticsNutsSamples="900";state.statisticsNutsMaxDepth="6";state.saveSelection()
+        val restored=com.kirinonakar.symvacas.calculator.StatisticsState(prefs)
+        assertEquals("nuts",restored.statisticsBayesianMethod);assertEquals("900",restored.statisticsNutsSamples);assertEquals("6",restored.statisticsNutsMaxDepth)
+        restored.statisticsNutsMaxDepth="7";val editor=prefs.edit();restored.writeTo(editor);editor.apply()
+        assertEquals("7",com.kirinonakar.symvacas.calculator.StatisticsState(prefs).statisticsNutsMaxDepth)
+    }
+
     @Test fun distributionOrientationPersistsInSelectionAndWorkspaceState() {
         val prefs=MemoryPreferences()
         val state=com.kirinonakar.symvacas.calculator.StatisticsState(prefs)

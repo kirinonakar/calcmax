@@ -11,6 +11,11 @@ internal fun advancedStatisticsTermLabels(definition:JSONObject,rows:List<List<S
     fun column(key:String)=opts[key]?.toIntOrNull()?.let {if(it==-1)n-1 else it} ?: -1
     fun multiple(excluded:List<Int>)=if(opts["predictors"]=="auto")(0 until n).filter {it !in excluded} else opts["predictors"].orEmpty().split(',').filter(String::isNotBlank).map(String::toInt)
     val predictors=when(id) {
+        "mcnemar"->{
+            val first=column("first");val second=column("second")
+            val pairs=if(opts["layout"]=="pairs")statisticsCategoryPairs(rows,first,second) else emptyList()
+            return statisticsCategoryLabels(pairs,columnLabels.getOrElse(first){"x"},columnLabels.getOrElse(second){"y"},shared=true)
+        }
         "glm"->multiple(listOf(column("response"))+if(opts["adjustment"]!="none")listOf(column("offset")) else emptyList())
         "ancova"->{
             val labels=mutableMapOf("Group" to columnLabels.getOrElse(column("group")){"Group"})
@@ -110,7 +115,8 @@ internal fun guidedStatisticsCommand(definition:JSONObject,rows:List<List<String
             require(samples.size>=2) {"Choose at least two groups"};"$id(${samples.joinToString(",",transform=::vector)})"
         }
         "mcnemar"->{
-            val pairs=complete(listOf(col("first"),col("second")))
+            val first=col("first");val second=col("second");distinct(listOf(first,second))
+            val pairs=if(opts["layout"]=="pairs")statisticsCategoryPairs(rows,first,second).map {listOf(it.first,it.second)} else complete(listOf(first,second))
             val counts=if(opts["layout"]=="pairs") {
                 val labels=pairs.flatten().distinct();require(labels.size==2) {"Paired observations require the same two categories"}
                 val bins=Array(2){IntArray(2)};pairs.forEach {bins[labels.indexOf(it[0])][labels.indexOf(it[1])]++};bins.map {row->row.map(Int::toString)}

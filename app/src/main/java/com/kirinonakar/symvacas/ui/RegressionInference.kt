@@ -47,7 +47,7 @@ import kotlin.math.abs
         "Durbin–Watson" to "durbinWatson","Residual Shapiro p" to "shapiroP")
     Text("n=${report.optInt("n")} · "+(if(report.isNull("df"))"" else "df=${report.optInt("df")} · ")+metrics.filter {report.has(it.second)&&(!report.isNull(it.second)||it.second in listOf("rSquared","adjustedRSquared"))}.map {"${tr(it.first)}=${value(report,it.second)}"}.joinToString(" · "),fontSize=11.sp)
     Text(tr(when {
-        bayesian->when(report.optString("method")){"hmc"->"HMC posterior samples; check R-hat, ESS and divergences.";"laplace"->"Gaussian Laplace posterior at the MAP; approximate credible intervals.";else->"Normal-inverse-gamma posterior; exact Student-t credible intervals."}
+        bayesian->when(report.optString("method")){"nuts"->"NUTS posterior samples; check R-hat, ESS and divergences.";"laplace"->"Gaussian Laplace posterior at the MAP; approximate credible intervals.";else->"Normal-inverse-gamma posterior; exact Student-t credible intervals."}
         report.optString("method")=="firth"->"Firth logistic regression; profile penalized-likelihood intervals."
         machineLearning->"Training fit; ordinary coefficient inference is unavailable."
         report.optString("fitScale")=="binomial"->"Binomial MLE; Wald intervals."
@@ -61,10 +61,10 @@ import kotlin.math.abs
         Text(tr(if(report.optString("method")=="laplace")"Training probabilities evaluated at the MAP." else "Training predictions evaluated at posterior mean coefficients."),fontSize=11.sp,color=colors.muted)
         if(report.has("varianceShape"))Text("${tr("Variance prior shape")}=${value(report,"varianceShape")} · ${tr("Variance prior scale")}=${value(report,"varianceScale")} · ${tr("Posterior variance mean")}=${value(report,"posteriorVarianceMean")}",fontSize=11.sp,color=colors.muted)
     }
-    report.optJSONObject("hmc")?.let {h->
-        Text("HMC · ${tr("Samples per chain")}=${h.optInt("samples")} · ${tr("Warmup")}=${h.optInt("warmup")} · ${tr("Leapfrog steps")}=${h.optInt("leapfrog")} · ${tr("Chains")}=${h.optInt("chains")} · ${tr("Random seed")}=${h.optInt("seed")} · ${tr("Acceptance rate")}=${value(h,"acceptanceRate")} · ${tr("Divergences")}=${h.optInt("divergences")}",fontSize=11.sp,color=colors.muted)
+    report.optJSONObject("nuts")?.let {h->
+        Text("NUTS · ${tr("Samples per chain")}=${h.optInt("samples")} · ${tr("Warmup")}=${h.optInt("warmup")} · ${tr("Max tree depth")}=${h.optInt("maxTreeDepth")} · ${tr("Chains")}=${h.optInt("chains")} · ${tr("Random seed")}=${h.optInt("seed")} · ${tr("Mean acceptance probability")}=${value(h,"meanAcceptanceProbability")} · ${tr("Divergences")}=${h.optInt("divergences")} · ${tr("Max tree depth hits")}=${h.optInt("maxTreeDepthHits")} · ${tr("Mean tree depth")}=${value(h,"meanTreeDepth")} · ${tr("Mean leapfrog steps")}=${value(h,"meanLeapfrogSteps")}",fontSize=11.sp,color=colors.muted)
         h.optJSONArray("chainDiagnostics")?.let {array->repeat(array.length()){i->array.optJSONObject(i)?.let {c->
-            Text("${tr("Chain")} ${c.optInt("chain")} · ${tr("Acceptance rate")}=${value(c,"acceptanceRate")} · ${tr("Step size")}=${value(c,"stepSize")} · ${tr("Divergences")}=${c.optInt("divergences")}",fontSize=11.sp,color=colors.muted)
+            Text("${tr("Chain")} ${c.optInt("chain")} · ${tr("Mean acceptance probability")}=${value(c,"meanAcceptanceProbability")} · ${tr("Step size")}=${value(c,"stepSize")} · ${tr("Divergences")}=${c.optInt("divergences")}",fontSize=11.sp,color=colors.muted)
         }}}
     }
     report.optJSONArray("warnings")?.let {warnings->repeat(warnings.length()){Text(tr(warnings.optString(it)),fontSize=11.sp,color=colors.muted)}}
@@ -75,10 +75,10 @@ import kotlin.math.abs
     }.orEmpty()
     val hasVif=coefficients.any {it.has("vif")&&!it.isNull("vif")}
     val hasPenalizedOdds=machineLearning&&coefficients.any {it.has("oddsRatio")&&!it.isNull("oddsRatio")}
-    val headers=((if(bayesian)listOf("Parameter","Posterior estimate","Posterior SD",credibleLabel,"P(β > 0)") else if(machineLearning)listOf("Parameter",if(forest)"Feature importance" else "Estimate") else listOf("Parameter","Estimate","SE","95% CI","p"))+(if(report.has("hmc"))listOf("Split R-hat","Autocorrelation ESS","MCSE") else emptyList())+(if(hasVif)listOf("VIF") else emptyList())+(if(hasPenalizedOdds)listOf("Odds ratio") else emptyList())).map {tr(it)}
+    val headers=((if(bayesian)listOf("Parameter","Posterior estimate","Posterior SD",credibleLabel,"P(β > 0)") else if(machineLearning)listOf("Parameter",if(forest)"Feature importance" else "Estimate") else listOf("Parameter","Estimate","SE","95% CI","p"))+(if(report.has("nuts"))listOf("Split R-hat","Autocorrelation ESS","MCSE") else emptyList())+(if(hasVif)listOf("VIF") else emptyList())+(if(hasPenalizedOdds)listOf("Odds ratio") else emptyList())).map {tr(it)}
     val coefficientRows=coefficients.map {coefficient->
         listOf(parameterName(coefficient),value(coefficient,"estimate"))+(if(bayesian)listOf(value(coefficient,"posteriorSD"),"${value(coefficient,"low")} … ${value(coefficient,"high")}",value(coefficient,"probabilityPositive")) else if(machineLearning)emptyList() else listOf(value(coefficient,"se"),
-            "${value(coefficient,"low")} … ${value(coefficient,"high")}",value(coefficient,"p"))) + (if(report.has("hmc"))listOf(value(coefficient,"rHat"),value(coefficient,"ess"),value(coefficient,"mcse")) else emptyList()) + (if(hasVif)listOf(value(coefficient,"vif")) else emptyList()) + (if(hasPenalizedOdds)listOf(value(coefficient,"oddsRatio")) else emptyList())
+            "${value(coefficient,"low")} … ${value(coefficient,"high")}",value(coefficient,"p"))) + (if(report.has("nuts"))listOf(value(coefficient,"rHat"),value(coefficient,"ess"),value(coefficient,"mcse")) else emptyList()) + (if(hasVif)listOf(value(coefficient,"vif")) else emptyList()) + (if(hasPenalizedOdds)listOf(value(coefficient,"oddsRatio")) else emptyList())
     }
     Column(Modifier.horizontalScroll(rememberScrollState())) {
         Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {
