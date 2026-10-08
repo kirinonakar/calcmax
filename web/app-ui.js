@@ -21,6 +21,7 @@ export function createAppUI() {
   }
   function openDialog(title,content) {
     $('dialog').classList.toggle('catalog-dialog',content.classList.contains('catalog-content'));
+    $('dialog').classList.toggle('history-dialog',content.classList.contains('history-content'));
     setText($('dialog-title'),title);$('dialog-body').replaceChildren(content);
     translateDOM($('dialog'));if(!$('dialog').open)$('dialog').showModal();
   }
