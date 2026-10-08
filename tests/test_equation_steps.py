@@ -62,6 +62,42 @@ class EquationStepTests(unittest.TestCase):
             self.assertFalse(any(step.get("tree", {}).get("kind") == "matrix" for step in report["steps"]))
             self.assertEqual("", report["note"])
 
+    def test_higher_degree_factoring_and_power_substitution(self):
+        x=s.Symbol("x")
+        source=s.expand((x-1)*(x-2)*(x-3)*(x*x+1))
+        _,report=self.report(s.Eq(source,0),x)
+        self.assertEqual("",report["note"])
+        factored=s.sympify(next(step["exact"] for step in report["steps"] if step["title"]=="Factor the polynomial"))
+        self.assertEqual(0,s.expand(factored.lhs-source))
+        for source in [x**4+x*x+1,x**6-5*x**3+6,x**8-2]:
+            result,report=self.report(s.Eq(source,0),x)
+            self.assertEqual("",report["note"])
+            substitution=s.sympify(next(step["exact"] for step in report["steps"] if step["title"]=="Substitute a power of the variable"))
+            reduced=s.sympify(next(step["exact"] for step in report["steps"] if step["title"]=="Solve the reduced polynomial"))
+            self.assertEqual(0,s.expand(reduced.lhs.subs(substitution.lhs,substitution.rhs)-source))
+            roots=Engine({}).build(result["resultAst"])
+            for root in roots:
+                self.assertEqual(0,s.simplify(source.subs(x,root)))
+        # Generated symbols must not shadow an input variable or coefficient.
+        t,k=s.symbols("t k")
+        report=equation_steps(Engine({}),"solve",[t**4+k*t*t+1,t],s.S.EmptySet)
+        change=s.sympify(next(step["exact"] for step in report["steps"] if step["title"]=="Substitute a power of the variable"))
+        self.assertNotIn(change.lhs,{t,k})
+
+    def test_parameter_systems_require_certain_pivots_and_consistency(self):
+        x,y,a,b=s.symbols("x y a b")
+        for equations in [[s.Eq(x+y,a),s.Eq(x-y,b)],
+                          [s.Eq(x+a*y,1),s.Eq(y,b)]]:
+            result,report=self.report(equations,[x,y])
+            self.assertEqual("",report["note"])
+            matrix,rhs=s.linear_eq_to_matrix(equations,[x,y])
+            final_matrix=[s.sympify(formula["exact"]) for step in report["advancedSteps"] for formula in step["equations"] if formula["tree"]["kind"]=="matrix"][-1]
+            self.assertEqual(matrix.row_join(rhs).rref()[0],final_matrix)
+            for solution in Engine({}).build(result["resultAst"]):
+                self.assertTrue(all(s.simplify(equation.lhs.subs(solution,simultaneous=True)-equation.rhs.subs(solution,simultaneous=True))==0 for equation in equations))
+        _,conditional=self.report([s.Eq(a*x+y,1),s.Eq(x+a*y,2)],[x,y])
+        self.assertIn("Detailed transformations are unavailable",conditional["note"])
+
     def test_beginner_substitution_example_preserves_the_visible_substitution(self):
         x, y = s.symbols("x y")
         result, report = self.report([s.Eq(x+y, 3*x), s.Eq(x-y, 1)], [x, y], solutionSteps=True)
@@ -175,6 +211,25 @@ class EquationStepTests(unittest.TestCase):
         mu = s.sympify(factor["exact"]).rhs
         self.assertEqual(0, s.simplify(s.diff(mu*y, t)-mu*(s.diff(y, t)+2*y)))
         self.assertEqual("", report["note"])
+
+    def test_linear_ode_nonpolynomial_factor_and_second_order_solutions(self):
+        t=s.Symbol("t")
+        y=s.Function("y")(t)
+        for p in [1/t,s.sin(t)]:
+            source=s.Eq(s.diff(y,t)+p*y,t)
+            report=equation_steps(Engine({}),"dsolve",[source,y,t],source)
+            self.assertEqual("",report["note"])
+            mu=s.sympify(next(step["exact"] for step in report["steps"] if step["title"]=="Integrating factor")).rhs
+            self.assertEqual(0,s.simplify(s.diff(mu*y,t)-mu*(s.diff(y,t)+p*y)))
+        for b,c in [(-3,2),(-2,1),(0,1)]:
+            expression=s.diff(y,t,2)+b*s.diff(y,t)+c*y
+            report=equation_steps(Engine({}),"dsolve",[s.Eq(expression,0),y,t],s.Eq(y,0))
+            self.assertEqual("",report["note"])
+            candidate=s.sympify(next(step["exact"] for step in report["steps"] if step["title"]=="Build the homogeneous solution")).rhs
+            self.assertEqual(0,s.simplify(expression.subs(y,candidate).doit()))
+        unsupported=s.Eq(s.diff(y,t,2)+t*y,0)
+        report=equation_steps(Engine({}),"dsolve",[unsupported,y,t],unsupported)
+        self.assertIn("Detailed transformations are unavailable",report["note"])
 
     def test_large_powers_do_not_expand_just_to_explain_a_solution(self):
         x = s.Symbol("x")

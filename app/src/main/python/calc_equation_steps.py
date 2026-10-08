@@ -4,10 +4,11 @@ No second solve is run, and every transformation preserves the original domain.
 Unsupported symbolic work is explicitly described as a solver summary.
 """
 import sympy as s
+from math import gcd
 from sympy.solvers.solveset import NonlinearError
 from sympy.core.relational import Relational
 from calc_display import display_tree, readable
-from calc_equation_system_steps import linear_system_steps
+from calc_equation_system_steps import linear_system_steps, can_explain_linear_system
 
 
 SUMMARY = "Detailed transformations are unavailable for this equation; the steps below summarize the solver input and result."
@@ -58,6 +59,12 @@ EXPLANATIONS = {
     "Solve for the dependent function": "Divide by the integrating factor to leave the unknown function by itself.",
     "Apply initial conditions": "Use the supplied values of the function to determine the integration constants.",
     "Check the original domain restrictions": "These excluded values still apply even if the simplified equation no longer contains the original denominator.",
+    "Substitute a power of the variable": "All nonconstant powers share a common exponent. Replace that power with a new variable to reduce the polynomial's degree.",
+    "Solve the reduced polynomial": "Solve the lower-degree equation for the new variable before returning to the original variable.",
+    "Recover roots of the original variable": "For each value of the new variable, take all complex roots of the displayed power equation. The index k is an integer in the displayed range; the final answer applies the original domain restrictions.",
+    "Form the characteristic equation": "For a homogeneous second-order linear equation with constant coefficients, try an exponential solution. Its exponent satisfies this quadratic equation.",
+    "Characteristic roots": "Solve the characteristic quadratic to find the exponents of the independent solutions.",
+    "Build the homogeneous solution": "Distinct roots give two exponential solutions. For a repeated root, multiply one exponential solution by the independent variable. The arbitrary constants describe the general solution.",
 }
 
 
@@ -102,9 +109,11 @@ def equation_steps(engine, method, values, answer):
                 c = linear.coeff_monomial(1)
                 if a.is_zero is False and not any(term.has(function) for term in (a, b, c)):
                     p, q = s.cancel(b/a), s.cancel(-c/a)
-                    # A bounded polynomial antiderivative keeps this explanation inexpensive.
-                    if p.is_polynomial(variable) and s.Poly(p, variable).degree() <= 2:
-                        mu = s.exp(s.integrate(p, variable))
+                    from sympy.integrals.manualintegrate import integral_steps
+                    primitive = integral_steps(p, variable).eval() if s.count_ops(p) <= 30 else s.Integral(p, variable)
+                    if (not primitive.has(s.Integral, s.Piecewise) and s.count_ops(primitive) <= 60
+                            and s.simplify(s.diff(primitive, variable)-p) == 0):
+                        mu = s.exp(primitive)
                         add("Normalize the first-order linear equation", eq(derivative+p*function, q))
                         add("Integrating factor", eq(s.Symbol("mu"), mu))
                         add("Multiply by the integrating factor", eq(s.Derivative(mu*function, variable, evaluate=False), mu*q))
@@ -115,6 +124,32 @@ def equation_steps(engine, method, values, answer):
                         add("Integrate both sides", eq(mu*function, integrated))
                         add("Solve for the dependent function", eq(function, integrated/mu))
                         note = ""
+            if note == SUMMARY:
+                second = s.Derivative(function, variable, 2)
+                try:
+                    linear = s.Poly(expression, second, derivative, function)
+                except s.PolynomialError:
+                    linear = None
+                if linear is not None and linear.total_degree() == 1:
+                    a, b, c = [linear.coeff_monomial(term) for term in (second, derivative, function)]
+                    constant = linear.coeff_monomial(1)
+                    delta = s.expand(b*b-4*a*c)
+                    if (a.is_zero is False and constant == 0 and delta.is_zero is not None
+                            and not any(term.has(variable, function) for term in (a, b, c))):
+                        used = {str(symbol) for symbol in expression.free_symbols}
+                        def fresh(name):
+                            while name in used: name += "1"
+                            used.add(name)
+                            return s.Symbol(name)
+                        r, c1, c2 = fresh("r"), fresh("C1"), fresh("C2")
+                        roots = [s.cancel((-b+sign*s.sqrt(delta))/(2*a)) for sign in (1, -1)]
+                        candidate = ((c1+c2*variable)*s.exp(roots[0]*variable) if delta == 0 else
+                                     c1*s.exp(roots[0]*variable)+c2*s.exp(roots[1]*variable))
+                        if s.simplify(expression.subs(function, candidate).doit()) == 0:
+                            add("Form the characteristic equation", eq(a*r*r+b*r+c))
+                            add("Characteristic roots", [eq(r, root) for root in dict.fromkeys(roots)])
+                            add("Build the homogeneous solution", eq(function, candidate))
+                            note = ""
         if method in ("dsolve", "desolve") and len(values) == 4:
             add("Apply initial conditions", values[3])
     elif method == "nsolve":
@@ -133,9 +168,10 @@ def equation_steps(engine, method, values, answer):
             matrix, rhs = s.linear_eq_to_matrix(expressions, variables)
         except (NonlinearError, ValueError, TypeError):
             matrix = None
-        # Explicit numerical pivots avoid introducing unrecorded parameter assumptions.
+        # Parameter coefficients are safe when the elimination never assumes a pivot
+        # or a consistency residual is nonzero.
         if (matrix is not None and len(variables) <= 6 and len(equations) <= 6
-                and all(item.is_number for item in matrix) and all(item.is_number for item in rhs)):
+                and can_explain_linear_system(matrix, rhs)):
             explanation = linear_system_steps(matrix, rhs, variables, equations)
             steps.extend(explanation.pop("steps"))
             extra.update(explanation)
@@ -159,14 +195,14 @@ def equation_steps(engine, method, values, answer):
             add("Assume the leading coefficient is nonzero", s.Ne(polynomial.LC(), 0, evaluate=False))
             note = "This derivation assumes the leading coefficient is nonzero; degenerate parameter cases require separate solving."
 
-        def quadratic(poly):
+        def quadratic(poly, unknown=var):
             a, b, c = poly.all_coeffs()
             discriminant = s.expand(b*b-4*a*c)
             add("Compute the discriminant", eq(s.Symbol("D"), discriminant))
             # Unevaluated operations keep the formula visible even for double roots.
             radical = s.Pow(discriminant, s.Rational(1, 2), evaluate=False)
             roots = [s.Mul(s.Add(-b, sign*radical, evaluate=False), s.Pow(2*a, -1, evaluate=False), evaluate=False) for sign in (1, -1)]
-            add("Apply the quadratic formula", [eq(var, root) for root in roots])
+            add("Apply the quadratic formula", [eq(unknown, root) for root in roots])
 
         if polynomial is None:
             functions = [function for function in expanded.atoms(s.Function) if function.has(var)]
@@ -212,9 +248,32 @@ def equation_steps(engine, method, values, answer):
             add("Divide by the coefficient of the variable", eq(var, s.cancel(-b/a)))
         elif polynomial.degree() == 2:
             quadratic(polynomial)
-        elif polynomial.degree() <= 4 and all(coefficient.is_Rational for coefficient in polynomial.all_coeffs()):
+        elif polynomial.degree() <= 8:
             _, factors = s.factor_list(polynomial.as_expr(), var)
-            if len(factors) > 1 or factors[0][1] > 1:
+            common_power = 0
+            for (exponent,), coefficient in polynomial.terms():
+                if exponent and coefficient != 0: common_power = gcd(common_power, exponent)
+            if common_power > 1 and polynomial.degree()//common_power <= 2:
+                used = {str(symbol) for symbol in expanded.free_symbols}
+                name = "t"
+                while name in used: name += "1"
+                t = s.Symbol(name)
+                reduced = s.Poly(sum(coefficient*t**(exponent//common_power)
+                                     for (exponent,), coefficient in polynomial.terms()), t)
+                add("Substitute a power of the variable", eq(t, var**common_power))
+                add("Solve the reduced polynomial", eq(reduced.as_expr()))
+                if reduced.degree() == 2:
+                    quadratic(reduced, t)
+                else:
+                    a, b = reduced.all_coeffs()
+                    add("Divide by the coefficient of the variable", eq(t, s.cancel(-b/a)))
+                name = "k"
+                while name in used or name == str(t): name += "1"
+                k = s.Symbol(name, integer=True)
+                add("Recover roots of the original variable", [eq(var**common_power, t),
+                    eq(var, t**s.Rational(1, common_power)*s.exp(2*s.pi*s.I*k/common_power)),
+                    s.And(s.Ge(k, 0), s.Lt(k, common_power))])
+            elif len(factors) > 1 or factors[0][1] > 1:
                 factored = s.Mul(*(s.Pow(factor, power, evaluate=False) if power > 1 else factor for factor, power in factors), evaluate=False)
                 add("Factor the polynomial", eq(factored))
                 add("Set each factor equal to zero", [eq(factor) for factor, _ in factors])

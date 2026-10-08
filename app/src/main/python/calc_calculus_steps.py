@@ -1,13 +1,45 @@
 """Bounded rule explanations for calculus; answers remain owned by the evaluator."""
 import sympy as s
 from calc_display import display_tree, readable
+from calc_limit_steps import limit_steps
 
 SUMMARY = "A detailed derivation is not available for this expression. The computed result is shown below."
+TRUNCATED = "Some intermediate steps were omitted to keep the explanation manageable. The computed result is unchanged."
+
+
+def verified_primitive(primitive, expression, variable):
+    """Check each parameter branch, including exceptional equality cases."""
+    primitive = s.piecewise_fold(primitive)
+    if primitive.has(s.Integral) or s.count_ops(primitive) > 160:
+        return False
+    branches = primitive.args if isinstance(primitive, s.Piecewise) else [(primitive, s.true)]
+    if len(branches) > 8:
+        return False
+    previous = s.false
+    for value, condition in branches:
+        active = s.simplify(s.And(condition, s.Not(previous)))
+        previous = s.Or(previous, condition)
+        # Variable-dependent branches need separate continuity/domain analysis.
+        if condition.has(variable):
+            return False
+        replacements = {}
+        for clause in s.And.make_args(active):
+            if isinstance(clause, s.Equality):
+                if clause.lhs.is_Symbol and not clause.rhs.has(clause.lhs):
+                    replacements[clause.lhs] = clause.rhs
+                elif clause.rhs.is_Symbol and not clause.lhs.has(clause.rhs):
+                    replacements[clause.rhs] = clause.lhs
+        target = expression.subs(replacements, simultaneous=True)
+        candidate = value.subs(replacements, simultaneous=True)
+        if s.simplify(s.diff(candidate, variable)-target) != 0:
+            return False
+    return s.simplify(previous) == s.true
 
 
 def calculus_steps(engine, method, values, answer):
     steps = []
     note = ""
+    truncated = False
     def add(title, explanation, *formulas):
         formulas=[value.xreplace({dummy:auxiliary("u") for dummy in value.atoms(s.Dummy)}) for value in formulas]
         steps.append({"title": title, "explanation": explanation,
@@ -26,8 +58,11 @@ def calculus_steps(engine, method, values, answer):
         add("Differentiate the expression", "Find how the expression changes with respect to the selected variable.", s.Derivative(expression, variable, order, evaluate=False))
         visited = [0]
         def derive(expr, depth=0):
+            nonlocal truncated
             visited[0] += 1
-            if depth > 5 or visited[0] > 24: return
+            if depth > 12 or visited[0] > 96 or len(steps) >= 80 or s.count_ops(expr) > 100:
+                truncated = True
+                return
             derivative = s.Derivative(expr, variable, evaluate=False)
             result = s.diff(expr, variable)
             if not expr.has(variable):
@@ -59,7 +94,14 @@ def calculus_steps(engine, method, values, answer):
                 rule = s.Mul(exponent, s.Pow(base, exponent-1, evaluate=False), s.Derivative(base, variable, evaluate=False), evaluate=False)
                 add("Power and chain rules", "Multiply by the exponent, reduce the exponent by 1, then multiply by the derivative of the inner expression.", eq(derivative, rule))
                 if base != variable: derive(base, depth+1)
-            elif expr.is_Function and len(expr.args) == 1 and expr.func in (s.sin, s.cos, s.tan, s.exp, s.log, s.asin, s.acos, s.atan, s.sinh, s.cosh):
+            elif expr.is_Pow:
+                base, exponent = expr.args
+                rule = expr*(s.Derivative(exponent, variable, evaluate=False)*s.log(base)
+                             + exponent*s.Derivative(base, variable, evaluate=False)/base)
+                add("General power rule", "When the exponent also varies, differentiate both the base and exponent using the logarithmic power rule.", eq(derivative, rule))
+                if base.has(variable): derive(base, depth+1)
+                derive(exponent, depth+1)
+            elif expr.is_Function and len(expr.args) == 1 and expr.func in (s.sin, s.cos, s.tan, s.cot, s.sec, s.csc, s.exp, s.log, s.asin, s.acos, s.atan, s.acot, s.sinh, s.cosh, s.tanh, s.coth, s.asinh, s.acosh, s.atanh):
                 inner = expr.args[0]
                 u = s.Dummy("u")
                 outer = s.diff(expr.func(u), u).subs(u, inner)
@@ -69,13 +111,14 @@ def calculus_steps(engine, method, values, answer):
                 if result.has(s.Derivative):
                     add("Formal derivative", "This function is unspecified. Its derivative remains symbolic until a formula for the function is supplied.", derivative)
                 else: add("Evaluate this derivative", "The symbolic differentiator evaluates this part directly.", eq(derivative, result))
-        if order.is_Integer and 1 <= order <= 3:
+        if order.is_Integer and 1 <= order <= 10:
             current = expression
             for index in range(int(order)):
                 if index: add("Differentiate again", "For a higher derivative, apply the differentiation rules to the previous result.", current)
                 derive(current)
                 current = s.diff(current, variable)
                 add("Combine the derivatives", "Combine the terms obtained from the rules to simplify the derivative.", current)
+                if truncated: break
         else: note = SUMMARY
     elif method == "integrate":
         integral = s.Integral(expression, variable) if len(values) == 2 else s.Integral(expression, (variable, values[2], values[3]))
@@ -89,20 +132,22 @@ def calculus_steps(engine, method, values, answer):
             add("Reduce to a special-function integral", "The remaining integral of atan(x)/x is expressed using the dilogarithm Li₂, rather than elementary functions.", s.log(variable)*s.atan(variable)-s.Integral(s.atan(variable)/variable, variable))
             add("Dilogarithm identity", "The derivative of Li₂(z) is −ln(1−z)/z. Express atan(x) as a difference of complex logarithms to integrate the remaining term.", eq(s.Integral(s.atan(variable)/variable, variable), (s.polylog(2, s.I*variable)-s.polylog(2, -s.I*variable))/(2*s.I)))
         elif (not getattr(answer, "has", lambda *_: False)(s.Integral)
-                and not expression.free_symbols - {variable}
                 and not any(power.exp.has(variable) or power.exp.is_Rational and power.exp.q>1 and power.base.has(s.tan,s.cot) for power in expression.atoms(s.Pow))):
             from sympy.integrals.manualintegrate import integral_steps
             rule = integral_steps(expression, variable)
             # Only use a matching primitive; a different branch must not become a false explanation.
-            primitive = rule.eval()
-            agrees = not primitive.has(s.Integral) and s.count_ops(primitive) <= 100 and s.simplify(s.diff(primitive, variable)-expression) == 0
+            primitive = s.piecewise_fold(rule.eval())
+            agrees = verified_primitive(primitive, expression, variable)
             if agrees:
                 def explain(rule, depth=0):
-                    if depth > 6 or len(steps) >= 28: return
+                    nonlocal truncated
+                    if depth > 10 or len(steps) >= 60:
+                        truncated = True
+                        return
                     name = type(rule).__name__
                     if name == "AlternativeRule":
-                        choice = next((choice for choice in rule.alternatives if not choice.contains_dont_know()), rule.alternatives[0])
-                        explain(choice, depth+1); return
+                        # eval() uses the first alternative; explain that same primitive.
+                        explain(rule.alternatives[0], depth+1); return
                     if name == "AddRule":
                         add("Integrate term by term", "The integral of a sum is the sum of the integrals. Work on each term separately.", s.Add(*(s.Integral(child.integrand, child.variable) for child in rule.substeps), evaluate=False))
                         for child in rule.substeps: explain(child, depth+1)
@@ -125,7 +170,17 @@ def calculus_steps(engine, method, values, answer):
                         title = "Integral power rule" if name == "PowerRule" else "Logarithm integral rule" if name == "ReciprocalRule" else "Standard integral rule"
                         explanation = "Increase the exponent by 1 and divide by that new exponent. The exponent −1 uses the logarithm rule instead." if name == "PowerRule" else "Use the standard antiderivative for this expression; differentiating it gives the integrand."
                         add(title, explanation, eq(s.Integral(rule.integrand, rule.variable), rule.eval()))
-                explain(rule)
+                if isinstance(primitive, s.Piecewise):
+                    # Keep conditions ahead of formulas that divide by a parameter.
+                    # A substitution such as u=a*x is invalid in the a=0 branch.
+                    add("Separate parameter cases", "Parameters are constant with respect to the integration variable. Treat exceptional values separately before dividing by a parameter.", primitive)
+                    previous = s.false
+                    for value, condition in primitive.args:
+                        active = s.simplify(s.And(condition, s.Not(previous)))
+                        add("Integrate each parameter case", "The displayed antiderivative applies under this parameter condition; its derivative has been checked against the integrand.", active, eq(s.Integral(expression, variable), value))
+                        previous = s.Or(previous, condition)
+                else:
+                    explain(rule)
                 add("Combine antiderivatives", "Put the integrated terms and constant multipliers together.", primitive)
             else: note = SUMMARY
         else: note = "An antiderivative was not found. This does not prove that no closed form exists. For a numerical value, supply a finite integration interval." if answer.has(s.Integral) else SUMMARY
@@ -144,33 +199,8 @@ def calculus_steps(engine, method, values, answer):
         else:
             point = values[2]
             direction = str(values[3]) if len(values) > 3 else "both"
-        add("Identify the approach", "Follow the selected approach to the point. Left and right limits may differ.", s.Limit(expression, variable, point, dir={"both":"+-", "left":"-", "right":"+"}.get(direction, direction)))
-        substituted = expression.subs(variable, point)
-        if not substituted.has(s.nan, s.zoo, s.oo, -s.oo) and s.simplify(substituted-answer) == 0:
-            if any(condition.subs(variable,point)==s.false for condition in engine.conditions):
-                add("Evaluate the continuous extension", "The original expression is undefined at the point. Use its simplified form on nearby allowed values to find the limit.", substituted)
-            else: add("Direct substitution", "When the expression is continuous at the approach point, substitute the point directly.", substituted)
-        else:
-            simplified = s.cancel(expression) if expression.is_rational_function(variable) else expression
-            if simplified != expression:
-                add("Cancel a removable factor", "Cancel common factors away from the approach point. The simplified expression has the same limit there.", eq(expression, simplified))
-            numerator, denominator = s.fraction(s.together(simplified))
-            reduced_value=simplified.subs(variable,point)
-            if simplified!=expression and not reduced_value.has(s.nan,s.zoo,s.oo,-s.oo) and s.simplify(reduced_value-answer)==0:
-                add("Evaluate the continuous extension", "The original expression is undefined at the point. Use its simplified form on nearby allowed values to find the limit.", reduced_value)
-            elif point.is_finite and numerator.subs(variable, point) == 0 and denominator.subs(variable, point) == 0 and not expression.has(s.Abs, s.Piecewise):
-                approach={"both":"+-","left":"-","right":"+"}.get(direction,direction)
-                for _ in range(3):
-                    dn, dd = s.diff(numerator, variable), s.diff(denominator, variable)
-                    if dd == 0 or s.count_ops(dn/dd)>80: break
-                    add("L'Hôpital's rule for 0/0", "For this differentiable 0/0 form, differentiate the numerator and denominator separately, then evaluate their ratio along the same approach.", eq(s.Limit(numerator/denominator, variable, point,dir=approach), s.Limit(dn/dd, variable, point,dir=approach)))
-                    candidate=(dn/dd).subs(variable,point)
-                    if not candidate.has(s.nan,s.zoo,s.oo,-s.oo) and s.simplify(candidate-answer)==0:
-                        add("Direct substitution", "When the expression is continuous at the approach point, substitute the point directly.",candidate);break
-                    numerator,denominator=dn,dd
-                    if numerator.subs(variable,point)!=0 or denominator.subs(variable,point)!=0: break
-            elif point.is_infinite and expression.is_rational_function(variable):
-                add("Compare highest powers", "For a rational function at infinity, the highest powers determine whether the ratio tends to 0, a finite coefficient ratio, or infinity.", simplified)
-            else: note = SUMMARY
+        note = limit_steps(engine, expression, variable, point, direction, answer, add)
+    if truncated:
+        note = (note+"\n" if note else "")+TRUNCATED
     add("Computed result", "The result keeps the original domain and the selected calculus settings.", answer)
     return {"steps": steps, "note": note, "method": {"diff":"Differentiation", "integrate":"Integration", "limit":"Limits"}[method]}

@@ -29,6 +29,21 @@ A scientific calculator, computer algebra system (CAS), and graphing workspace f
 
 Both versions support Korean/English, light/dark/system themes, calculation history, stored variables and editable LaTeX paste. Internal precision is configurable from **3–200 significant digits** (default 30); display precision is separate, and `Ans` and stored variables retain their full value. Trigonometry supports **DEG / RAD / GRAD**.
 
+### Step-by-step explanations
+
+Android and Web use the same explanation engine. Explanations retain the computed answer and original domain restrictions; unsupported transformations show a solver summary.
+
+| Area | Detailed explanation coverage |
+| --- | --- |
+| Equations | Linear/quadratic equations, factorable polynomials through degree 8 whose factors are linear or quadratic, cubic Cardano transformations, and power substitutions that reduce to a linear/quadratic equation (such as `x^6-5*x^3+6=0`). Simple trigonometric/exponential/logarithmic equations include inverse and periodic branches. |
+| Systems | Linear systems with at most 6 equations and 6 unknowns, including parameter coefficients/right-hand sides when every pivot and consistency decision is provable. Parameter-dependent rank or consistency falls back to a summary. |
+| ODEs | First-order linear integrating factors with a verified elementary primitive, including nonpolynomial coefficients such as `1/t` and `sin(t)`. Homogeneous second-order equations with constant coefficients include characteristic roots and repeated-root solutions when the root case is decidable. |
+| Integration | Verified SymPy manual-integration rules for the selected variable, including constant parameters. Parameter cases such as `a=0` in `exp(a*x)` and `a=-1` in `x^a` are explained separately. Definite bounds are shown only when the primitive's endpoint difference matches the computed answer. |
+| Differentiation | Sum/product/quotient, constant/variable powers, and common trigonometric/hyperbolic chain rules, through derivative order 10. Traversal is bounded to depth 12, 96 visits and 80 rule steps; omitted detail is reported. |
+| Limits | Substitution, cancellation, square-root conjugates, checked `0/0` and infinity/infinity L'Hôpital transformations, highest-power comparison, one-sided cases, bounded local series, and sine/cosine squeeze cases. |
+
+These explanations have expression-size, traversal and output-size limits. General nonlinear systems, arbitrary ODEs and integrals without a verified rule remain summaries; a missing derivation does not establish that no closed form exists.
+
 ## Examples
 
 ```text

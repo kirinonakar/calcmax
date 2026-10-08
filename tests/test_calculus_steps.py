@@ -8,6 +8,7 @@ import sympy as s
 from calc_engine import Engine,dispatch
 from calc_display import result_ast,display_tree
 from calc_integrals import log_arctan_primitive
+from calc_calculus_steps import calculus_steps, verified_primitive, TRUNCATED
 
 
 def call(name,*args): return {"kind":"call","value":name,"args":list(args)}
@@ -74,6 +75,66 @@ class CalculusExplanationTests(unittest.TestCase):
         combined=run(equation,solutionSteps=True,equationSteps=True)
         self.assertTrue(combined["ok"],combined)
         self.assertIn("Differentiate the expression",[step["title"] for step in combined["solutionSteps"]["steps"]])
+
+    def test_parameter_integrals_verify_exceptional_and_generic_branches(self):
+        x,a=s.symbols("x a")
+        for expression in [a*x*x, a*s.sin(x), s.exp(a*x), s.sin(a*x), x**a, 1/(a*x+1)]:
+            result,report=self.report("integrate",expression)
+            self.assertEqual("",report["note"],expression)
+            self.assertTrue(verified_primitive(Engine({}).build(result["resultAst"]),expression,x),expression)
+            if expression in [s.exp(a*x),s.sin(a*x),x**a,1/(a*x+1)]:
+                cases=[step for step in report["steps"] if step["title"]=="Integrate each parameter case"]
+                self.assertEqual(2,len(cases),expression)
+                for step in cases:
+                    active=s.sympify(step["equations"][0]["exact"])
+                    relation=s.sympify(step["equations"][1]["exact"])
+                    for parameter in [0,-1,2]:
+                        if active.subs(a,parameter)==s.true:
+                            self.assertEqual(0,s.simplify(s.diff(relation.rhs.subs(a,parameter),x)-expression.subs(a,parameter)))
+        self.assertFalse(verified_primitive(s.Piecewise((x,s.Eq(a,0)),(2*s.exp(a*x)/a,True)),s.exp(a*x),x))
+        self.assertFalse(verified_primitive(s.Piecewise((x,x>0),(-x,True)),s.Abs(x),x))
+        _,definite=self.report("integrate",a*x*x,0,2)
+        self.assertIn("Evaluate at the bounds",[step["title"] for step in definite["steps"]])
+        tree=call("integrate",result_ast(a*s.Symbol("t")**2),symbol("t"))
+        self.assertEqual("",run(tree,solutionSteps=True)["solutionSteps"]["note"])
+
+    def test_general_powers_higher_derivatives_and_deeper_chains(self):
+        x=s.Symbol("x")
+        for expression in [x**x,2**x,(x*x+1)**s.sin(x)]:
+            _,report=self.report("diff",expression)
+            rule=next(step for step in report["steps"] if step["title"]=="General power rule")
+            relation=s.sympify(rule["equations"][0]["exact"])
+            self.assertEqual(0,s.simplify(relation.lhs.doit()-relation.rhs.doit()))
+        _,report=self.report("diff",x**9,5)
+        self.assertEqual("",report["note"])
+        self.assertEqual(s.diff(x**9,x,5),s.sympify(report["steps"][-1]["exact"]))
+        expression=x
+        for _ in range(7): expression=s.log(expression)
+        _,report=self.report("diff",expression)
+        self.assertEqual("",report["note"])
+        self.assertEqual(7,sum(step["title"]=="Function and chain rules" for step in report["steps"]))
+        for _ in range(7): expression=s.log(expression)
+        report=calculus_steps(Engine({}),"diff",[expression,x],s.diff(expression,x))
+        self.assertIn(TRUNCATED,report["note"])
+        self.assertEqual(s.diff(expression,x),s.sympify(report["steps"][-1]["equations"][0]["exact"]))
+
+    def test_extended_limits_preserve_direction_and_verified_transformations(self):
+        x=s.Symbol("x")
+        examples=[((s.sqrt(1+x)-1)/x,0,"Rationalize with the conjugate"),
+                  (s.log(x)/x,s.oo,"L'Hôpital's rule for infinity/infinity"),
+                  (x*s.sin(1/x),0,"Squeeze theorem"),
+                  ((1+x)**(1/x),0,"Expand near the approach point"),
+                  ((1+1/x)**x,s.oo,"Expand near the approach point")]
+        for expression,point,title in examples:
+            _,report=self.report("limit",expression,point)
+            self.assertEqual("",report["note"],expression)
+            self.assertIn(title,[step["title"] for step in report["steps"]],expression)
+        for side,value in [("left",-1),("right",1)]:
+            tree=call("limit",result_ast(s.Abs(x)/x),symbol("x"),result_ast(s.Integer(0)),symbol(side))
+            result=run(tree,solutionSteps=True)
+            self.assertEqual(str(value),result["exact"])
+            step=next(step for step in result["solutionSteps"]["steps"] if step["title"]=="Evaluate the one-sided limit")
+            self.assertIn("dir='-'" if side=="left" else "dir='+'",step["equations"][0]["exact"])
 
     def test_substitution_does_not_shadow_the_original_variable(self):
         u=s.Symbol("u")

@@ -37,10 +37,20 @@ test('calculus explanations, special-function primitive and numerical guidance r
   for(const [source,title] of [
     ['diff(sin(x^2),x)','Function and chain rules'],
     ['diff(x*exp(x),x)','Product rule'],
+    ['diff(x^x,x)','General power rule'],
+    ['diff(x^9,x,5)','Differentiate again'],
     ['integrate(x*exp(x),x)','Integration by parts'],
     ['integrate(2*x*sin(x^2),x)','Substitution rule'],
     ['integrate(x^2,x,0,2)','Evaluate at the bounds'],
+    ['integrate(a*x^2,x)','Take out the constant'],
+    ['integrate(exp(a*x),x)','Separate parameter cases'],
+    ['integrate(x^a,x)','Integrate each parameter case'],
     ['limit(sin(x)/x,x,0)',"L'Hôpital's rule for 0/0"],
+    ['limit((sqrt(1+x)-1)/x,x,0)','Rationalize with the conjugate'],
+    ['limit(ln(x)/x,x,oo)',"L'Hôpital's rule for infinity/infinity"],
+    ['limit((1+x)^(1/x),x,0)','Expand near the approach point'],
+    ['limit(x*sin(1/x),x,0)','Squeeze theorem'],
+    ['limit(abs(x)/x,x,0,left)','Evaluate the one-sided limit'],
     ['diff(integrate(x^2,x),x)','Differentiate the expression'],
   ]){
     const traced=evaluate(source),plain=evaluate(source,{solutionSteps:false});
@@ -68,10 +78,16 @@ test('equation step explanations preserve real WASM answers across workspace met
     [{kind:'solve',source:'2x+3=0',variable:'x'},'Divide by the coefficient of the variable'],
     [{kind:'solve',source:'x^2-5x+6=0',variable:'x'},'Apply the quadratic formula'],
     [{kind:'solve',source:'x^3-6x^2+11x-6=0',variable:'x'},'Factor the polynomial'],
+    [{kind:'solve',source:'x^5-6x^4+12x^3-12x^2+11x-6=0',variable:'x'},'Factor the polynomial'],
+    [{kind:'solve',source:'x^4+x^2+1=0',variable:'x'},'Substitute a power of the variable'],
+    [{kind:'solve',source:'x^6-5x^3+6=0',variable:'x'},'Recover roots of the original variable'],
     [{kind:'solve',source:'x+y=3x\nx-y=1',variable:'x,y'},'Substitute into the second equation'],
+    [{kind:'solve',source:'x+a*y=1\ny=b',variable:'x,y'},'Substitute into the second equation'],
     [{kind:'solve',source:'sin(x)=1/2',variable:'x'},'Include periodic branches (n is an integer)'],
     [{kind:'nsolve',source:'x^2=2',variable:'x',extra:'1,2'},'Numerical root'],
     [{kind:'dsolve',source:'diff(y(t),t)=y(t)',variable:'y(t)',extra:'t',initial:'y(0)=1'},'Integrating factor'],
+    [{kind:'dsolve',source:'diff(y(t),t)+y(t)/t=t',variable:'y(t)',extra:'t'},'Integrating factor'],
+    [{kind:'dsolve',source:'diff(y(t),t,2)-2*diff(y(t),t)+y(t)=0',variable:'y(t)',extra:'t'},'Build the homogeneous solution'],
     [{kind:'pdsolve',source:'diff(u(x,y),x)+diff(u(x,y),y)=0',variable:'u(x,y)'},'Move all terms to the left'],
   ];
   for(const [options,title] of cases){

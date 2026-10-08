@@ -4,7 +4,32 @@ import sympy as s
 from calc_display import display_tree, readable
 
 
+def can_explain_linear_system(matrix, rhs):
+    """Only proceed when every pivot and consistency decision is certain."""
+    reduced = matrix.row_join(rhs).applyfunc(s.cancel)
+    row = 0
+    for column in range(matrix.cols):
+        pivot = next((index for index in range(row, reduced.rows)
+                      if reduced[index, column].is_zero is False), None)
+        if pivot is None:
+            if any(reduced[index, column].is_zero is None for index in range(row, reduced.rows)):
+                return False
+            continue
+        reduced.row_swap(row, pivot)
+        divisor = reduced[row, column]
+        for index in range(row+1, reduced.rows):
+            multiplier = s.cancel(reduced[index, column]/divisor)
+            reduced.row_op(index, lambda value, j: s.cancel(value-multiplier*reduced[row, j]))
+        if any(s.count_ops(value) > 60 for value in reduced):
+            return False
+        row += 1
+        if row == reduced.rows: break
+    return all(reduced[index, -1].is_zero is not None for index in range(row, reduced.rows))
+
+
 def linear_system_steps(matrix, rhs, variables, equations):
+    # Use the same normalized coefficients as the pivot preflight.
+    matrix, rhs = matrix.applyfunc(s.cancel), rhs.applyfunc(s.cancel)
     basic, advanced = [], []
 
     def equation(left, right=0):
@@ -38,9 +63,9 @@ def linear_system_steps(matrix, rhs, variables, equations):
     def row_equation(augmented, index):
         return equation(sum(augmented[index, j]*variable for j, variable in enumerate(variables)), augmented[index, -1])
 
-    if matrix.rows == 2 and matrix.cols == 2 and any(matrix[0, j] != 0 for j in range(2)):
+    if matrix.rows == 2 and matrix.cols == 2 and any(matrix[0, j].is_zero is False for j in range(2)):
         # Prefer a coefficient of ±1, and y over x when equally simple.
-        column = min((j for j in range(2) if matrix[0, j] != 0), key=lambda j: (matrix[0, j] not in (1, -1), -j))
+        column = min((j for j in range(2) if matrix[0, j].is_zero is False), key=lambda j: (matrix[0, j] not in (1, -1), -j))
         other = 1-column
         isolated, remaining = variables[column], variables[other]
         replacement = s.cancel((rhs[0]-matrix[0, other]*remaining)/matrix[0, column])
@@ -74,8 +99,8 @@ def linear_system_steps(matrix, rhs, variables, equations):
         step["equations"].append({"exact": readable(original.subs(isolated, replacement)), "tree": shown})
         left, right = s.expand(original.lhs.subs(isolated, replacement)), s.expand(original.rhs.subs(isolated, replacement))
         reduced = s.Poly(left-right, remaining)
-        a, b = reduced.coeff_monomial(remaining), reduced.coeff_monomial(1)
-        if a != 0:
+        a, b = s.cancel(reduced.coeff_monomial(remaining)), s.cancel(reduced.coeff_monomial(1))
+        if a.is_zero is False:
             root = s.cancel(-b/a)
             parts = []
             if shown != display_tree(equation(left, right)): parts.append({"text": "Combine like terms."})
@@ -99,7 +124,7 @@ def linear_system_steps(matrix, rhs, variables, equations):
         pivots = []
         row = 0
         for column in range(matrix.cols):
-            pivot = next((index for index in range(row, reduced.rows) if reduced[index, column] != 0), None)
+            pivot = next((index for index in range(row, reduced.rows) if reduced[index, column].is_zero is False), None)
             if pivot is None: continue
             if pivot != row: reduced.row_swap(row, pivot)
             divisor = reduced[row, column]
@@ -107,7 +132,7 @@ def linear_system_steps(matrix, rhs, variables, equations):
                 if reduced[index, column] == 0: continue
                 multiplier = s.cancel(reduced[index, column]/divisor)
                 before, pivot_equation = row_equation(reduced, index), row_equation(reduced, row)
-                reduced.row_op(index, lambda value, j: s.expand(value-multiplier*reduced[row, j]))
+                reduced.row_op(index, lambda value, j: s.cancel(value-multiplier*reduced[row, j]))
                 combined = equation(s.Add(before.lhs, -multiplier*pivot_equation.lhs, evaluate=False), s.Add(before.rhs, -multiplier*pivot_equation.rhs, evaluate=False))
                 add(basic, "Eliminate one variable", "Subtract a suitable multiple of another equation so one variable disappears. This leaves fewer unknowns to solve.", [combined, row_equation(reduced, index)])
             pivots.append((row, column))
@@ -136,7 +161,7 @@ def linear_system_steps(matrix, rhs, variables, equations):
     advanced[0]["variableOrder"] = formula(variables)
     row = 0
     for column in range(augmented.cols):
-        pivot = next((index for index in range(row, augmented.rows) if augmented[index, column] != 0), None)
+        pivot = next((index for index in range(row, augmented.rows) if augmented[index, column].is_zero is False), None)
         if pivot is None: continue
         if pivot != row:
             augmented.row_swap(row, pivot)
@@ -148,7 +173,7 @@ def linear_system_steps(matrix, rhs, variables, equations):
         for index in range(augmented.rows):
             multiplier = augmented[index, column]
             if index == row or multiplier == 0: continue
-            augmented.row_op(index, lambda value, j: s.expand(value-multiplier*augmented[row, j]))
+            augmented.row_op(index, lambda value, j: s.cancel(value-multiplier*augmented[row, j]))
             snapshot("Eliminate the pivot column from another row", "Subtract a multiple of the pivot row from the entire other row. Its entry in this column becomes 0.", {"kind": "relation", "value": "←", "args": [display_tree(s.Symbol(f"R{index+1}")), display_tree(s.Add(s.Symbol(f"R{index+1}"), -multiplier*s.Symbol(f"R{row+1}"), evaluate=False))]})
         row += 1
         if row == augmented.rows: break
