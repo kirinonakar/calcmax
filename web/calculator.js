@@ -14,6 +14,7 @@ import {graphExpressionTarget} from './graph-workspace.js';
 import {createEquationSteps} from './equation-steps.js';
 import {defineFunction,inputAssignment,resultTarget,resultFunction,removeExpiredAnswerFunctions} from './function-transfer.js';
 import {$,value,element,control} from './app-ui.js';
+import {renderStatisticsReport,statisticsReportTarget} from './statistics-report.js';
 
 export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist,requestOptions,error,changeMode,updateButtons,pressKey,modeDialog,variablesDialog,matrixInsertDialog,graphs,onFunctionsChanged=()=>{}}) {
   const {toast,openDialog,clipboard}=ui;
@@ -24,17 +25,19 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
   const displaySizing=createDisplaySizing(document.querySelector('main'),$('expression-preview'),$('answer'));
   const solutionSteps=createEquationSteps($('result-steps'),$('result-steps-body'),state);
   let displayedStepResult=null;
+  let statisticsResultTarget='';
   const expressionUndo=[];
   let previewSource=value('expression');
   let inputBoundary=null;
   let calculationPreviewTimer=null,calculationPreviewKey=null,calculationPreviewRevision=0;
   const undoStack=()=>calcSession?.undo||expressionUndo;
-  function showResult(result,source='',displaySource=source,{decimalDisplay=false}={}) {
+  function showResult(result,source='',displaySource=source,{decimalDisplay=false,statisticsTarget=''}={}) {
     if(!result.ok){error(result.error||'계산 오류');return;}
     if(decimalDisplay){decimal=true;$('exact-toggle').textContent='≈ Decimal';}
     const previousAnswer=value('mode')==='scientific'?(inputAnswer||state.variables.Ans):state.variables.Ans;
     engineeringConversion=false;engineeringShift=0;syncEngineering();
     lastResult=result;lastResultSource=displaySource;
+    statisticsResultTarget=statisticsReportTarget(result,source,statisticsTarget);
     committed=true;$('commit-indicator').textContent='=';
     if(result.resultAst&&!result.assignment) state.variables.Ans=result.resultAst;
     if(removeExpiredAnswerFunctions(state.functions,state.variables.Ans))onFunctionsChanged();
@@ -55,7 +58,19 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
     return inputAnswer?freeze(tree):tree;
   }
   function resultOptions(){return {notation:engineeringConversion?'eng':state.resultDisplayMode,grouping,engineeringShift,showZeroExponent:engineeringConversion};}
+  function renderStatisticsMenus(){
+    for(const id of ['statistics-analysis-result','statistics-advanced-result']){
+      const target=$(id);if(!target)continue;
+      const visible=value('mode')==='statistics'&&lastResult?.statisticsReport&&statisticsResultTarget===id;
+      target.hidden=!visible;
+      if(visible){
+        renderStatisticsReport(target,lastResult.statisticsReport,{digits:state.digits,...resultOptions(),onCopy:()=>clipboard(resultText(lastResult,{decimal:true,mixed:false,digits:state.digits,...resultOptions()}))});
+        if(lastResult.note)target.append(element('p',lastResult.note,'hint'));
+      }else target.replaceChildren();
+    }
+  }
   function renderResult() {
+    renderStatisticsMenus();
     if(!lastResult){solutionSteps.clear();$('result-guidance').replaceChildren();renderTape();return;}
     const tree=resultDisplayTree(lastResult,{decimal,mixed});
     const text=(decimal ? lastResult.decimal : lastResult.exact)||'';
@@ -256,7 +271,7 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
   }
   $('expression').addEventListener('paste',event=>{const text=event.clipboardData?.getData('text');if(!text)return;try{const converted=latexInput(text);if(converted!==text){event.preventDefault();insert(converted,null,{latexSource:text});}}catch(exc){event.preventDefault();toast(exc.message);}});
   $('expression').addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();event.stopPropagation();if(!event.repeat)evaluate();}if(event.key==='Escape'){event.preventDefault();if(calcSession)cancelCalc();else if(isBusy())engine.cancel();else{$('expression').value='';preview();}}});
-  $('clear').onclick=()=>{if(engineeringConversion)exitEngineering();if(calcSession){cancelCalc();return;}expressionUndo.push(value('expression'));$('expression').value='';committed=false;lastResult=null;activeHistoryEntry=null;inputAnswer=null;$('answer').replaceChildren();$('note').textContent='';$('commit-indicator').textContent='';preview();};
+  $('clear').onclick=()=>{if(engineeringConversion)exitEngineering();if(calcSession){cancelCalc();return;}expressionUndo.push(value('expression'));$('expression').value='';committed=false;lastResult=null;activeHistoryEntry=null;inputAnswer=null;renderStatisticsMenus();$('answer').replaceChildren();$('note').textContent='';$('commit-indicator').textContent='';preview();};
   $('undo').onclick=()=>{if(isBusy())return;const undo=undoStack();if(undo.length){const field=$('expression');field.value=undo.pop();field.setSelectionRange(field.value.length,field.value.length);committed=false;if(!calcSession)$('commit-indicator').textContent='';preview();}};
   $('copy').onclick=()=>{const f=$('expression');clipboard(f.value.slice(f.selectionStart,f.selectionEnd)||f.value);};
   $('cut').onclick=()=>{const field=$('expression'),start=field.selectionStart,end=field.selectionEnd;if(start!==end){clipboard(field.value.slice(start,end));undoStack().push(field.value);field.setRangeText('',start,end,'end');committed=false;preview();}};
@@ -389,7 +404,7 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
   async function transformAnswer(source) {
     if(lastResult?.resultAst){const result=await engine.execute({...requestOptions(),tree:parse(source)});showResult(result);}
   }
-  function clearPreviewResult(){engineeringConversion=false;engineeringShift=0;syncEngineering();lastResult=null;lastResultSource='';$('answer').replaceChildren();$('note').textContent='';solutionSteps.clear();$('result-guidance').replaceChildren();displaySizing.refresh();}
+  function clearPreviewResult(){engineeringConversion=false;engineeringShift=0;syncEngineering();lastResult=null;lastResultSource='';renderStatisticsMenus();$('answer').replaceChildren();$('note').textContent='';solutionSteps.clear();$('result-guidance').replaceChildren();displaySizing.refresh();}
   function syncEngineering(){document.documentElement.dataset.engineeringConversion=String(engineeringConversion);$('keypad').querySelectorAll('[data-input="ENG"]').forEach(button=>button.classList.toggle('active',engineeringConversion));}
   function exitEngineering(){engineeringConversion=false;engineeringShift=0;syncEngineering();renderResult();}
   function applyFonts(){document.documentElement.style.setProperty('--input-font',state.inputFont+'px');document.documentElement.style.setProperty('--output-font',state.outputFont+'px');renderInputCursor();}

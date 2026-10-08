@@ -86,9 +86,5 @@ internal fun survivalStepPoints(curve:JSONArray,index:Int):List<Pair<Double,Doub
 }
 
 @Composable private fun SurvivalTable(headers:List<String>,rows:List<List<String>>) {
-    val weights=if(headers.getOrNull(1)=="HR")listOf(.22f,.16f,.4f,.22f) else listOf(.28f,.12f,.18f,.42f)
-    Column(Modifier.fillMaxWidth()) {
-        Row(Modifier.fillMaxWidth()) {headers.forEachIndexed {i,text->Text(text,Modifier.weight(weights[i]).padding(horizontal=2.dp,vertical=6.dp),fontSize=11.sp,color=LocalInstrument.current.muted)}}
-        rows.forEach {row->Row(Modifier.fillMaxWidth()) {row.forEachIndexed {i,text->Text(text,Modifier.weight(weights[i]).padding(horizontal=2.dp,vertical=5.dp),fontSize=12.sp)}}}
-    }
+    StatisticsTextTable(headers,rows,headerSize=11,cellSize=12)
 }

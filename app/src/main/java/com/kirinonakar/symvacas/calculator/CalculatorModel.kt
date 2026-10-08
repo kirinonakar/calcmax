@@ -813,12 +813,14 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
             return
         }
         if(busy)return
+        val calculationRevision=inputVersion
         job = viewModelScope.launch {
             busy=true; error=""
             try {
                 val response = engine.execute(request().put("tree",JSONObject(tree.json())).put("statisticsTermLabels",JSONObject(statisticsTermLabels)))
                 if(response.optBoolean("ok")) {
                     result=response;dmsDisplay=response.optBoolean("dms");dmsConversion=false
+                    resultSource=source;resultVersion=calculationRevision
                     val exact=response.optString("exact"); val approx=response.optString("decimal")
                     val next=JSONObject(variables.toString())
                     if(response.has("resultAst")) next.put("Ans",response.getJSONObject("resultAst")) else next.remove("Ans")

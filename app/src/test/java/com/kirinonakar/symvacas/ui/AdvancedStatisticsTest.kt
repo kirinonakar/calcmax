@@ -9,6 +9,17 @@ import com.kirinonakar.symvacas.math.Parser
 import com.kirinonakar.symvacas.math.requiresExplicitEvaluation
 
 class AdvancedStatisticsTest {
+    @Test fun structuredReportsRouteToTheirAnalysisMenuIncludingSavedLegacyReports() {
+        val report=JSONObject().put("analysis","gee").put("title","GEE")
+        val result=JSONObject().put("statisticsReport",report)
+        assertSame(report,statisticsReportFor(result,"gee([[1,2,3]])",setOf("gee")))
+        assertSame(report,statisticsReportFor(result,"",setOf("gee")))
+        assertSame(report,statisticsReportFor(result,"previousCalculation([1])",setOf("gee")))
+        assertNull(statisticsReportFor(result,"gee([[1,2,3]])",setOf("stats","ttest")))
+        report.remove("analysis")
+        assertSame(report,statisticsReportFor(result,"stats([1,2,3])",setOf("stats")))
+        assertNull(statisticsReportFor(JSONObject().put("exact","2"),"1+1",setOf("stats")))
+    }
     @Test fun bayesianFormsRejectMissingValuesAndOverlappingCountRoles() {
         val definitions=JSONArray(File("src/main/assets/advanced_statistics.json").readText())
         fun definition(id:String)=(0 until definitions.length()).map {definitions.getJSONObject(it)}.first {it.getString("id")==id}

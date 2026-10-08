@@ -19,6 +19,7 @@ from calc_programmer import programmer
 from calc_statistics import pearson_correlation
 from calc_probability import probability
 from calc_advanced_statistics import FUNCTIONS as ADVANCED_STATISTICS
+from calc_statistics_report import BASIC as BASIC_STATISTICS, statistics_report
 
 # Symbolic calls whose cold first evaluation is heavy enough that the generic step allowance used
 # to cut off legitimate work. Nested calls count too, so 1+fourier(exp(-t^2),t,w) is heavy as well.
@@ -127,6 +128,8 @@ def _dispatch(payload, control=None):
                     "conditions":[readable(c.lhs)+" ≠ "+readable(c.rhs) if isinstance(c,s.Unequality) else str(c) for c in dict.fromkeys(engine.conditions)],"symbolic":bool(getattr(value,"free_symbols",False))}
             result["approximate"]=bool(getattr(display_value,"has",lambda *_:False)(s.Float))
             result["decimalTree"]=display_tree(decimal_value)
+            if tree.get('kind')=='call' and tree.get('value') in BASIC_STATISTICS | (ADVANCED_STATISTICS-{'survivalanalysis'}):
+                result['statisticsReport']=statistics_report(tree['value'],shown_value,engine.precision)
             if request["tree"].get("value")=="survivalanalysis" and hasattr(engine,"survival_report"):
                 result["survival"]=engine.survival_report
             if dms_result:

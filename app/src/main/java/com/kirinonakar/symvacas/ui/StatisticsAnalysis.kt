@@ -67,17 +67,17 @@ import com.kirinonakar.symvacas.ui.theme.LocalInstrument
         Choices(listOf("t test","z test","χ² test","Fisher exact","ANOVA","Tukey HSD","Wilcoxon","Mann–Whitney","Kruskal–Wallis","Shapiro–Wilk","t interval","z interval"),test,{test=it})
         if(kind=="xy"&&test!="Wilcoxon")Choices(listOf("Columns","x=group, y=value"),grouping,{grouping=it})
         if(rankSelection) {
-            Text(tr("First group"),fontSize=11.sp,color=c.muted)
+            StatisticsSelectionTitle("First group")
             Choices(rankColumns,rankFirst,{firstGroup=it},translate=false)
-            Text(tr("Second group"),fontSize=11.sp,color=c.muted)
+            StatisticsSelectionTitle("Second group")
             Choices(rankColumns.filter {it!=rankFirst},rankSecond,{secondGroup=it},translate=false)
         } else if(groupedMode&&groupedTwoSample) {
-            Text(tr("First group"),fontSize=11.sp,color=c.muted)
+            StatisticsSelectionTitle("First group")
             Choices(groupNames,activeFirst,{firstGroup=it},translate=false)
-            Text(tr("Second group"),fontSize=11.sp,color=c.muted)
+            StatisticsSelectionTitle("Second group")
             Choices(groupNames.filter {it!=activeFirst},activeSecond,{secondGroup=it},translate=false)
         } else if(groupedMode&&!multiColumnTest) {
-            Text(tr("Group"),fontSize=11.sp,color=c.muted)
+            StatisticsSelectionTitle("Group")
             Choices(groupNames,activeFirst,{firstGroup=it},translate=false)
         } else if(!groupedMode&&kind!="list"&&!multiColumnTest)Choices(columnOptions,activeColumn,{column=it})
         if(groupedMode)Text("For t/z tests, compare two groups of y values. χ² and Fisher use each row's x/y categories; ANOVA and Tukey use all groups.",fontSize=11.sp,color=c.muted)
@@ -96,7 +96,7 @@ import com.kirinonakar.symvacas.ui.theme.LocalInstrument
             if(test=="z test"&&twoSample)Field(sigmaY,"Known σy",Modifier.fillMaxWidth()){sigmaY=it}
             if(test=="t test"||test=="z test") {
                 Column(verticalArrangement=Arrangement.spacedBy(2.dp)) {
-                    Text(tr("Alternative hypothesis"),fontSize=12.sp,fontWeight=FontWeight.SemiBold)
+                    StatisticsSelectionTitle("Alternative hypothesis")
                     Choices(listOf("Two-sided","Left","Right"),tail,{tail=it})
                 }
             }
@@ -110,7 +110,7 @@ import com.kirinonakar.symvacas.ui.theme.LocalInstrument
     }
     if(test in listOf("Fisher exact","Wilcoxon","Mann–Whitney")) {
         Column(verticalArrangement=Arrangement.spacedBy(2.dp)) {
-            Text(tr(if(test=="Fisher exact")"Alternative odds ratio (ordered categories)" else "Alternative hypothesis"),fontSize=12.sp,fontWeight=FontWeight.SemiBold)
+            StatisticsSelectionTitle(if(test=="Fisher exact")"Alternative odds ratio (ordered categories)" else "Alternative hypothesis")
             Choices(listOf("Two-sided","Left","Right"),tail,{tail=it})
         }
     }
@@ -138,5 +138,6 @@ import com.kirinonakar.symvacas.ui.theme.LocalInstrument
         Button(onClick={command?.let {m.edit(Editor(it));m.calculate()}},enabled=command!=null,modifier=Modifier.testTag("statistics-run-test")){Text(if(test.endsWith("interval"))"Compute interval" else "Run test")}
         SmallAction("Insert expression"){command?.let {m.edit(Editor(it));m.mode="Scientific/CAS"}}
     }
+    statisticsReportFor(m.result,m.resultSource.ifBlank {m.editor.source},statisticsTestAnalyses(test))?.let {StatisticsResultReport(m,it)}
     Text(if(isKorean())"검정의 기본 대립가설은 양측입니다. 신뢰수준은 0.95 또는 95로 입력할 수 있습니다." else "Tests use a two-sided alternative by default. Confidence levels accept 0.95 or 95.",fontSize=11.sp,color=c.muted)
 }

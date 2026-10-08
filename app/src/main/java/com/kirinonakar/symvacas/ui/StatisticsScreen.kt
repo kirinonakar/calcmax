@@ -36,7 +36,7 @@ import kotlin.math.max
 
 @Composable private fun StatHeader(text:String,modifier:Modifier) { val c=LocalInstrument.current; Box(modifier.fillMaxHeight(),contentAlignment=Alignment.Center){Text(text,Modifier.padding(horizontal=4.dp),fontSize=11.sp,color=c.muted,fontWeight=FontWeight.SemiBold,maxLines=1,overflow=TextOverflow.Ellipsis)} }
 @Composable private fun HeatMapAxisPicker(title:String,columns:List<Pair<Int,String>>,selected:Set<Int>,onToggle:(Int)->Unit) {
-    Text(tr(title),fontSize=11.sp,color=LocalInstrument.current.muted)
+    StatisticsSelectionTitle(title)
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(5.dp)) {
         columns.forEach {(index,name)->FilterChip(index in selected,onClick={onToggle(index)},label={Text(name,fontSize=12.sp)})}
     }
@@ -99,10 +99,6 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
     val clipboard=LocalClipboardManager.current
     val scope=rememberCoroutineScope()
     val panelScroll=rememberScrollState()
-    var summaryResultPending by remember {mutableStateOf(false)}
-    LaunchedEffect(m.result) {
-        if(summaryResultPending&&m.result!=null){panelScroll.animateScrollTo(panelScroll.maxValue);summaryResultPending=false}
-    }
     val names=remember(m.dataSets) {m.dataSets.keys().asSequence().toList().sorted()}
     var selected by rememberSaveable {mutableStateOf(m.statisticsSelected)}
     var isNew by rememberSaveable {mutableStateOf(m.statisticsIsNew)}
@@ -305,12 +301,13 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
         Column(verticalArrangement=Arrangement.spacedBy(2.dp)) {
             Text(tr("Quick summaries"),style=MaterialTheme.typography.titleMedium)
             Row(Modifier.horizontalScroll(rememberScrollState())) {
-                fun summarize(command:String) {summaryResultPending=true;m.edit(Editor(command));m.calculate();scope.launch {panelScroll.animateScrollTo(panelScroll.maxValue)}}
+                fun summarize(command:String) {m.edit(Editor(command));m.calculate()}
                 SmallAction(if(dataKind=="list")"List" else "x",translate=false){val values=vector(0);if(values!="[]")summarize("stats($values)")}
                 dataColumns.drop(1).forEachIndexed {index,name->SmallAction(name,translate=false){val values=vector(index+1);if(values!="[]")summarize("stats($values)")}}
                 val correlationCommand=statisticsCorrelationCommand(numericRows,dataKind)
                 if(dataKind=="xy")SmallAction("correlation",active=if(correlationCommand==null)false else null,translate=false,modifier=Modifier.testTag("statistics-correlation")){correlationCommand?.let {summarize(it)}}
             }
+            statisticsReportFor(m.result,m.resultSource,setOf("stats","mean","median","variance","stdev","sumdata","quartiles","correlation","covariance"))?.let {StatisticsResultReport(m,it)}
         }
         Column(verticalArrangement=Arrangement.spacedBy(2.dp)) {
             Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
@@ -330,7 +327,7 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
                 }
             })
             if(dataColumns.size>1&&regression in listOf("linear","multiple","logistic")) {
-                Text(tr("Regularization"),fontSize=11.sp,color=LocalInstrument.current.muted)
+                StatisticsSelectionTitle("Regularization")
                 Choices(listOf("none","ridge","lasso","elasticnet"),regularization,{m.clearRegression();regularization=it})
             }
             if(dataColumns.size>1&&(regularized||regression=="randomforest")) {
@@ -343,7 +340,7 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
                     if(regularization=="elasticnet")Field(l1Ratio,"L1 ratio (0–1)",Modifier.fillMaxWidth()){m.clearRegression();l1Ratio=it}
                     Text(tr("Predictors standardized; coefficients in original units."),fontSize=11.sp,color=LocalInstrument.current.muted)
                 } else {
-                    Text(tr("Forest task"),fontSize=11.sp,color=LocalInstrument.current.muted)
+                    StatisticsSelectionTitle("Forest task")
                     val tasks=mapOf("Auto (0/1 → classification)" to "auto","Regression" to "regression","Binary classification" to "classification")
                     Choices(tasks.keys.toList(),tasks.entries.firstOrNull {it.value==forestTask}?.key ?: tasks.keys.first(),{m.clearRegression();forestTask=tasks[it] ?: "auto"})
                     Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
@@ -354,7 +351,7 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
                 }
             }
             if(dataColumns.size>1&&bayesian) {
-                Text(tr("Inference method"),fontSize=11.sp,color=LocalInstrument.current.muted)
+                StatisticsSelectionTitle("Inference method")
                 val methods=mapOf((if(regression=="bayeslinear")"Conjugate (exact)" else "Laplace approximation") to "analytic","HMC" to "hmc")
                 Choices(methods.keys.toList(),methods.entries.firstOrNull {it.value==bayesianMethod}?.key ?: methods.keys.first(),{m.clearRegression();bayesianMethod=methods[it] ?: "analytic"})
                 if(bayesianMethod=="hmc") {
@@ -385,11 +382,11 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
             }
             if(dataKind!="list"&&regression in listOf("multiple","logistic","bayeslinear","bayeslogistic"))Text(tr(if(regression in listOf("logistic","bayeslogistic"))"Selected column is response; others are predictors. Logistic response: 0 or 1." else "Selected column is response; others are predictors."),fontSize=11.sp,color=LocalInstrument.current.muted)
             if(dataColumns.size>1&&(regularized||regression in listOf("multiple","logistic","polynomial","randomforest","bayeslinear","bayeslogistic"))) {
-                Text(tr("Dependent variable"),fontSize=11.sp,color=LocalInstrument.current.muted)
+                StatisticsSelectionTitle("Dependent variable")
                 if(regression in listOf("polynomial","logistic"))Choices(listOf("first","last"),if(responseColumn==0)"first" else "last",{position->m.clearRegression();logisticResponse=if(position=="first")"0" else ""})
                 else Choices(regressionColumns,regressionColumns.getOrNull(responseColumn).orEmpty(),{name->m.clearRegression();logisticResponse=regressionColumns.indexOf(name).toString()},translate=false)
                 if(regression=="logistic"&&regularization=="none") {
-                    Text(tr("Firth correction"),fontSize=11.sp,color=LocalInstrument.current.muted)
+                    StatisticsSelectionTitle("Firth correction")
                     Choices(listOf("Auto","Always"),if(firthMode=="firth")"Always" else "Auto",{m.clearRegression();firthMode=if(it=="Always")"firth" else "auto"})
                 }
                 val table=statisticsRegressionTable(numericRows,dataKind,fitMode,responseColumn)
@@ -440,20 +437,20 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
             }
             Choices(if(dataKind=="xy")listOf("Scatter","Histogram","Box plot","Violin + points","Heat map") else listOf("Histogram","Box plot","Violin + points","Heat map"),plotType,{plotType=it})
             if(plotType in listOf("Box plot","Violin + points")) {
-                Text(tr("Orientation"),fontSize=11.sp,color=LocalInstrument.current.muted)
+                StatisticsSelectionTitle("Orientation")
                 Choices(listOf("Horizontal","Vertical"),if(plotOrientation=="vertical")"Vertical" else "Horizontal",{plotOrientation=if(it=="Vertical")"vertical" else "horizontal"})
             }
             if(plotType=="Heat map") {
-                Text(tr("Heat map data"),fontSize=11.sp,color=LocalInstrument.current.muted)
+                StatisticsSelectionTitle("Heat map data")
                 Choices(listOf("Raw values","Z-score by row","Z-score by column","Correlation"),when(heatMapMode){"zrow"->"Z-score by row";"zcolumn"->"Z-score by column";"correlation"->"Correlation";else->"Raw values"},{heatMapMode=when(it){"Z-score by row"->"zrow";"Z-score by column"->"zcolumn";"Correlation"->"correlation";else->"raw"}})
                 Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(4.dp)) {
                     Checkbox(heatMapClustering,{heatMapClustering=it},Modifier.size(38.dp))
                     Text(tr("Hierarchical clustering"),fontSize=12.sp,color=LocalInstrument.current.ink)
                 }
                 if(heatMapClustering) {
-                    Text(tr("Cluster linkage"),fontSize=11.sp,color=LocalInstrument.current.muted)
+                    StatisticsSelectionTitle("Cluster linkage")
                     Choices(listOf("Single","Average","Complete","Ward"),when(heatMapLinkage){"single"->"Single";"complete"->"Complete";"ward"->"Ward";else->"Average"},{heatMapLinkage=when(it){"Single"->"single";"Complete"->"complete";"Ward"->"ward";else->"average"};if(heatMapLinkage=="ward")heatMapMetric="euclidean"})
-                    Text(tr("Distance metric"),fontSize=11.sp,color=LocalInstrument.current.muted)
+                    StatisticsSelectionTitle("Distance metric")
                     Choices(listOf("Euclidean","Manhattan","Correlation (1 − r)"),when(heatMapMetric){"manhattan"->"Manhattan";"correlation"->"Correlation (1 − r)";else->"Euclidean"},{heatMapMetric=when(it){"Manhattan"->"manhattan";"Correlation (1 − r)"->"correlation";else->"euclidean"}},enabled=heatMapLinkage!="ward")
                 }
                 Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(4.dp)) {
@@ -461,7 +458,7 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
                     Text(tr("Fit to screen"),fontSize=12.sp,color=LocalInstrument.current.ink)
                 }
                 if(heatMapMode=="correlation") {
-                    Text(tr("Correlation method"),fontSize=11.sp,color=LocalInstrument.current.muted)
+                    StatisticsSelectionTitle("Correlation method")
                     Choices(listOf("Pearson (p)","Spearman (s)","Kendall (k)"),when(heatMapCorrelation){"spearman"->"Spearman (s)";"kendall"->"Kendall (k)";else->"Pearson (p)"},{heatMapCorrelation=when(it){"Spearman (s)"->"spearman";"Kendall (k)"->"kendall";else->"pearson"}})
                     if(heatMapAxisIndices.isEmpty())Text(tr("No numeric columns"),fontSize=11.sp,color=LocalInstrument.current.muted)
                     HeatMapAxisPicker("X axis variables",heatMapAxisIndices.map {it to heatMapColumnNames[it]},heatMapXSelection) {index->
@@ -479,7 +476,7 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
                 }
             }
             if(plotType!="Scatter"&&!(plotType=="Heat map"&&heatMapMode=="correlation")&&dataColumns.size>1) {
-                Text(tr("Plot grouping"),fontSize=11.sp,color=LocalInstrument.current.muted)
+                StatisticsSelectionTitle("Plot grouping")
                 Choices(listOf("Columns","first","last"),if(plotGrouping=="columns")"Columns" else plotGrouping,{plotGrouping=if(it=="Columns")"columns" else it})
             }
         }

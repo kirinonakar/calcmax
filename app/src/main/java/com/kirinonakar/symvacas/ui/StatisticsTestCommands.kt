@@ -1,5 +1,22 @@
 package com.kirinonakar.symvacas.ui
 
+/** Route results by the selected test family, independently of edited input values. */
+internal fun statisticsTestAnalyses(procedure:String):Set<String> = when(procedure) {
+    "t test"->setOf("ttest","ttest2","ttestpaired")
+    "z test"->setOf("ztest","ztest2")
+    "χ² test"->setOf("chi2test","chi2independence")
+    "Fisher exact"->setOf("fisherexact")
+    "ANOVA"->setOf("anova")
+    "Tukey HSD"->setOf("tukey")
+    "Shapiro–Wilk"->setOf("shapiro")
+    "Wilcoxon"->setOf("wilcoxon")
+    "Mann–Whitney"->setOf("mannwhitney")
+    "Kruskal–Wallis"->setOf("kruskal")
+    "t interval"->setOf("tinterval")
+    "z interval"->setOf("zinterval")
+    else->emptySet()
+}
+
 /** Correlation uses complete x,y rows so missing cells cannot shift the pairing. */
 internal fun statisticsCorrelationCommand(rows: List<List<String>>, kind: String): String? {
     if (kind != "xy") return null

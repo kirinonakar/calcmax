@@ -5,6 +5,15 @@ import {advancedStatisticsSchema as schema} from '../advanced-statistics-schema.
 import {guidedStatisticsCommand,survivalAnalysisPlan} from '../advanced-statistics.js';
 import {survivalStepPoints,survivalNumber} from '../survival-report.js';
 import {parse} from '../parser.js';
+import {statisticsReportTarget} from '../statistics-report.js';
+
+test('structured reports route without an explicit target and preserve the invoking menu',()=>{
+  assert.equal(statisticsReportTarget({statisticsReport:{analysis:'gee'}},''),'statistics-advanced-result');
+  assert.equal(statisticsReportTarget({statisticsReport:{analysis:'stats'}},'stats([1,2])'),'statistics-analysis-result');
+  assert.equal(statisticsReportTarget({statisticsReport:{}},'gee([[1,2,3]])'),'statistics-advanced-result');
+  assert.equal(statisticsReportTarget({statisticsReport:{analysis:'stats'}},'stats([1,2])','statistics-advanced-result'),'statistics-advanced-result');
+  assert.equal(statisticsReportTarget({exact:'2'},'1+1','statistics-advanced-result'),'');
+});
 
 test('survival plans validate distinct roles, preserve labels and omit unselected cells',()=>{
   const plan=survivalAnalysisPlan([['1','yes','A','30',''],['2','no','B','40','']],{eventValue:'yes',cox:'1',predictors:'3'},['time','status','arm','age','unused']);

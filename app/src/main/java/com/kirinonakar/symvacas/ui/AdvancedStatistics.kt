@@ -139,6 +139,7 @@ internal fun advancedStatisticsRows(data:String,columnLimit:Int?=null):List<List
             SmallAction(if(ko)"계산기로" else "Insert expression"){command.getOrNull()?.let {m.edit(Editor(it));m.mode="Scientific/CAS"}}
         }
         if(message.isNotBlank())Text(message,color=MaterialTheme.colorScheme.error,fontSize=12.sp)
+        statisticsReportFor(m.result,m.resultSource.ifBlank {m.editor.source},setOf(selected))?.let {StatisticsResultReport(m,it)}
         if(selected=="survivalanalysis") {
             Row(verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) {Checkbox(band,{band=it},modifier=Modifier.testTag("statistics-survival-band"));Text(if(ko)"95% 신뢰구간 밴드" else "95% CI band",fontSize=12.sp)}
             survivalReport?.let {SurvivalReport(it,reportPlan,band)}
@@ -174,12 +175,12 @@ internal fun advancedStatisticsRows(data:String,columnLimit:Int?=null):List<List
             "number"->Field(value,label,Modifier.fillMaxWidth().testTag("statistics-form-$key")){onChange(key,it)}
             "choice"->{
                 val choices=field.getJSONArray("choices");val ids=List(choices.length()){choices.getJSONObject(it).getString("id")};val names=List(choices.length()){choices.getJSONObject(it).getString(if(ko)"ko" else "label")}
-                Text(label,fontSize=11.sp,color=LocalInstrument.current.muted)
+                StatisticsSelectionTitle(label,translate=false)
                 Choices(names,names.getOrElse(ids.indexOf(value)){""},{name->onChange(key,ids[names.indexOf(name)])},translate=false)
             }
             "column"->{
                 val selected=value.toIntOrNull()?.let {if(it==-1)columns.lastIndex else it}
-                Text(label,fontSize=11.sp,color=LocalInstrument.current.muted)
+                StatisticsSelectionTitle(label,translate=false)
                 Choices(columns,columns.getOrNull(selected ?: -1).orEmpty(),{name->onChange(key,columns.indexOf(name).toString())},translate=false)
             }
             "columns"->{
@@ -194,7 +195,7 @@ internal fun advancedStatisticsRows(data:String,columnLimit:Int?=null):List<List
                 val excluded=if(key=="predictors")roles+offsetRoles else emptyList()
                 val reserved=excluded.mapNotNull {option(it).toIntOrNull()?.let {value->if(value==-1)columns.lastIndex else value}}
                 val selected=if(value=="auto")columns.indices.filter {it !in reserved} else value.split(',').mapNotNull(String::toIntOrNull)
-                Text(label,fontSize=11.sp,color=LocalInstrument.current.muted)
+                StatisticsSelectionTitle(label,translate=false)
                 Row(Modifier.horizontalScroll(rememberScrollState())) {
                     columns.forEachIndexed {i,name->
                         if(i !in reserved)Row(verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) {

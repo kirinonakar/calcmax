@@ -38,6 +38,50 @@ def run(name,*args):
 
 
 class AdvancedStatisticsTests(unittest.TestCase):
+    def test_statistics_reports_cover_analysis_examples_with_rectangular_tables(self):
+        definitions=json.loads((ROOT/'app/src/main/assets/advanced_statistics.json').read_text(encoding='utf-8'))
+        for definition in definitions:
+            with self.subTest(analysis=definition['id']):
+                result=evaluate(definition['example'])
+                if definition['id']=='survivalanalysis':
+                    self.assertNotIn('statisticsReport',result)
+                    continue
+                report=result['statisticsReport']
+                self.assertEqual(report['analysis'],definition['id'])
+                self.assertTrue(report['sections'])
+                for section in report['sections']:
+                    self.assertTrue(section['rows'])
+                    self.assertGreaterEqual(section['totalRows'],len(section['rows']))
+                    for row in section['rows']: self.assertEqual(len(row),len(section['columns']))
+
+    def test_statistics_tables_preserve_exact_answers_and_parallel_row_relationships(self):
+        result=evaluate('stats([1,2,4])')
+        summary=result['statisticsReport']['sections'][0]
+        mean=next(row[1] for row in summary['rows'] if row[0]=='mean')
+        self.assertEqual(mean['exact'],'7/3')
+        self.assertEqual(mean['tree']['kind'],'fraction')
+        self.assertIn('mean: 7/3',result['exact'])
+        interval=evaluate('tinterval(95,[1,2,4,5])')['statisticsReport']
+        self.assertEqual(next(section for section in interval['sections'] if section['title']=='confidence interval')['columns'],['Lower','Upper'])
+        adjusted=evaluate('padjust([0.01,0.03,0.2],holm)')['statisticsReport']
+        rows=next(section for section in adjusted['sections'] if section['title']=='P-value adjustment')['rows']
+        self.assertEqual(len(rows),3)
+        self.assertAlmostEqual(float(rows[1][1]['exact']),.03)
+        self.assertAlmostEqual(float(rows[1][2]['exact']),.06)
+        comparisons=evaluate('tukey([1,2,3],[4,5,7],[3,6,8])')['statisticsReport']['sections'][0]
+        self.assertEqual(comparisons['columns'],['Comparison','Mean difference','Adjusted p value'])
+        self.assertEqual([row[0] for row in comparisons['rows']],['x-y','x-z','y-z'])
+
+    def test_report_previews_bound_large_tables_without_truncating_full_results(self):
+        rows=[[i,i+1] for i in range(105)]
+        result=evaluate('impute('+str(rows)+',mean)')
+        section=next(section for section in result['statisticsReport']['sections'] if section['title']=='data')
+        self.assertEqual(section['totalRows'],105)
+        self.assertEqual(len(section['rows']),100)
+        self.assertIn('104',result['exact'])
+        self.assertIn('105',result['exact'])
+        self.assertIn('105',json.dumps(result['tree']))
+
     def test_advanced_analyses_reject_invalid_arity_and_data(self):
         with self.subTest(scenario='registered_analyses_reject_missing_and_excess_arguments'):
             definitions=json.loads((ROOT/'app/src/main/assets/advanced_statistics.json').read_text(encoding='utf-8'))
@@ -70,6 +114,8 @@ class AdvancedStatisticsTests(unittest.TestCase):
             self.assertIn('treatment (z)',json.dumps(labelled[field]))
         self.assertEqual(labelled.get('resultAst'),original.get('resultAst'))
         self.assertEqual(labelled.get('reusable'),original.get('reusable'))
+        coefficient_table=next(section for section in labelled['statisticsReport']['sections'] if section['title']=='coefficients')
+        self.assertIn('treatment (z)',[row[0] for row in coefficient_table['rows']])
         for field in ('exact','decimal','tree','decimalTree'):
             self.assertEqual(json.dumps(labelled[field]).replace('treatment (z)','x1'),json.dumps(original[field]))
         self.assertIn('term: x1',original['exact'])

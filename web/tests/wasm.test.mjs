@@ -118,6 +118,11 @@ test('statistical conventions, solve domains and labeled eigenvalues in real WAS
     const result=run(source,options);assert.equal(result.ok,true,`${source}: ${result.error}`);return result;
   };
   assert.equal(evaluate('variance([1,2,3])').exact,'1');
+  const descriptive=evaluate('stats([1,2,4])');
+  const mean=descriptive.statisticsReport.sections.find(s=>s.title==='Summary').rows.find(r=>r[0]==='mean')[1];
+  assert.equal(mean.exact,'7/3');assert.equal(mean.tree.kind,'fraction');
+  const adjusted=evaluate('padjust([0.01,0.03,0.2],holm)').statisticsReport.sections.find(s=>s.title==='P-value adjustment');
+  assert.equal(adjusted.rows.length,3);assert.deepEqual(adjusted.columns,['Observation','raw p','adjusted p','reject (1=yes)']);
   assert.equal(evaluate('variance([1,2,3],0)').exact,'2/3');
   assert.equal(evaluate('variance([1,2,3],1)').exact,'1');
   assert.equal(evaluate('stdev([2,4,4,4,5,5,7,9],0)').exact,'2');
