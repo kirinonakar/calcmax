@@ -53,7 +53,9 @@ def display_tree(x):
     if isinstance(x,s.Rational) and x.q != 1: return t("fraction",args=[t("text",str(x.p)),t("text",str(x.q))])
     if isinstance(x,s.Pow):
         if x.exp == s.Rational(1,2): return t("root",args=[display_tree(x.base)])
-        if x.exp.is_negative: return t("fraction",args=[t("text","1"),display_tree(s.Pow(x.base,-x.exp,evaluate=False))])
+        if x.exp.is_negative:
+            denominator = x.base if x.exp == -1 else s.Pow(x.base,-x.exp,evaluate=False)
+            return t("fraction",args=[t("text","1"),display_tree(denominator)])
         return t("power",args=[display_tree(x.base),display_tree(x.exp)])
     if isinstance(x,s.Add):
         terms=x.as_ordered_terms()

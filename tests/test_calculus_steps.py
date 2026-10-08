@@ -35,6 +35,24 @@ class CalculusExplanationTests(unittest.TestCase):
             self.assertEqual(s.diff(expression,x),Engine({}).build(result["resultAst"]))
             self.assertTrue(all(step.get("explanation") for step in report["steps"]))
 
+    def test_log_derivative_displays_a_reciprocal_without_a_unit_power(self):
+        x=s.Symbol("x")
+        result,report=self.report("diff",s.log(x))
+        reciprocal={"kind":"fraction","value":"","args":[
+            {"kind":"text","value":"1","args":[]},
+            {"kind":"symbol","value":"x","args":[]}]}
+        self.assertEqual("1/x",result["exact"])
+        self.assertEqual(1/x,Engine({}).build(result["resultAst"]))
+        self.assertEqual(reciprocal,result["tree"])
+        self.assertEqual(reciprocal,result["decimalTree"])
+        self.assertEqual(reciprocal,report["steps"][-1]["tree"])
+        combined=next(step for step in report["steps"] if step["title"]=="Combine the derivatives")
+        self.assertEqual(reciprocal,combined["equations"][0]["tree"])
+        # Compound reciprocal bases stay intact; higher powers and roots remain visible.
+        self.assertEqual(display_tree(x+1),display_tree(1/(x+1))["args"][1])
+        self.assertEqual(display_tree(x**2),display_tree(x**-2)["args"][1])
+        self.assertEqual(display_tree(s.sqrt(x)),display_tree(x**s.Rational(-1,2))["args"][1])
+
     def test_integral_rules_and_definite_bounds(self):
         x=s.Symbol("x")
         for expression,title in [(x*x+2*x,"Integrate term by term"),(2*x*s.sin(x*x),"Substitution rule"),(x*s.exp(x),"Integration by parts"),(1/(1+x*x),"Standard integral rule")]:

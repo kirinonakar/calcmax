@@ -70,6 +70,7 @@ test('calculus explanations, special-function primitive and numerical guidance r
     assert.equal(result.ok,true,`${source}: ${result.error}`);return result;
   };
   for(const [source,title] of [
+    ['diff(ln(x),x)','Function and chain rules'],
     ['diff(sin(x^2),x)','Function and chain rules'],
     ['diff(x*exp(x),x)','Product rule'],
     ['diff(x^x,x)','General power rule'],
@@ -97,6 +98,14 @@ test('calculus explanations, special-function primitive and numerical guidance r
     assert.equal(solutionSteps.steps.filter(step=>step.title==='Computed result'&&
       (step.exact===traced.exact||step.equations?.some(formula=>formula.exact===traced.exact))).length,1,source);
   }
+  const logarithm=evaluate('diff(ln(x),x)');
+  const reciprocal={kind:'fraction',value:'',args:[{kind:'text',value:'1',args:[]},{kind:'symbol',value:'x',args:[]}]};
+  assert.equal(logarithm.exact,'1/x');
+  assert.deepEqual(logarithm.tree,reciprocal);
+  assert.deepEqual(logarithm.decimalTree,reciprocal);
+  assert.deepEqual(logarithm.solutionSteps.steps.at(-1).tree,reciprocal);
+  assert.deepEqual(logarithm.solutionSteps.steps.find(step=>step.title==='Combine the derivatives').equations[0].tree,reciprocal);
+  assert.ok(solutionStepsCopyText(logarithm.solutionSteps).endsWith('1/x'));
   const primitive=evaluate('integrate(ln(x)/(1+x^2),x)');
   assert.ok(primitive.exact.includes('polylog'));assert.ok(!primitive.exact.includes('Integral'));
   assert.equal(primitive.guidance.status,'special_function');assert.ok(primitive.resultAst);
