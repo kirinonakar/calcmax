@@ -14,6 +14,54 @@ def quadratic_candidates(poly):
     return discriminant, roots
 
 
+def symmetric_quadratic_system_steps(polynomials, variables):
+    """Recover both variables from their squared sum and product."""
+    x, y = variables
+    allowed = {(2, 0), (0, 2), (1, 1), (0, 0)}
+    if any(set(poly.monoms())-allowed or poly.coeff_monomial(x*x) != poly.coeff_monomial(y*y)
+           for poly in polynomials):
+        return None
+    a, b = [polynomials[0].coeff_monomial(term) for term in (x*x, x*y)]
+    c, d = [polynomials[1].coeff_monomial(term) for term in (x*x, x*y)]
+    determinant = s.cancel(a*d-b*c)
+    if determinant.is_zero is not False: return None
+    r, t = [-poly.coeff_monomial(1) for poly in polynomials]
+    squares, product = s.cancel((r*d-b*t)/determinant), s.cancel((a*t-r*c)/determinant)
+    if any(s.count_ops(value) > 30 for value in (squares, product)): return None
+    used = {str(symbol) for poly in polynomials for symbol in poly.as_expr().free_symbols}
+    def fresh(name):
+        while name in used: name += "1"
+        symbol = s.Symbol(name)
+        used.add(name)
+        return symbol
+    u, v = fresh("u"), fresh("v")
+    steps = []
+    def eq(left, right): return s.Eq(left, right, evaluate=False)
+    def add(title, explanation, values):
+        steps.append({"title": title, "explanation": explanation,
+                      "equations": [{"exact": readable(value), "tree": display_tree(value)}
+                                    for value in dict.fromkeys(values)]})
+    if {poly.as_expr() for poly in polynomials} != {x*x+y*y-squares, x*y-product}:
+        add("Determine the sum of squares and the product", "Treat the sum of squares and the product as two quantities and combine the equations to determine them.",
+            [eq(x*x+y*y, squares), eq(x*y, product)])
+    add("Introduce the sum and difference", "Use the sum and difference of the two variables as new unknowns.", [eq(u, x+y), eq(v, x-y)])
+    add("Form the squared sum and difference", "Expand the squares of the sum and difference. Their cross terms are twice the product of the original variables.",
+        [eq((x+y)**2, x*x+2*x*y+y*y), eq((x-y)**2, x*x-2*x*y+y*y)])
+    plus, minus = s.simplify(squares+2*product), s.simplify(squares-2*product)
+    add("Substitute the known quadratic values", "Insert the known sum of squares and product, then simplify each squared equation.",
+        [eq(u*u, s.Add(squares, s.Mul(2, product, evaluate=False), evaluate=False)), eq(u*u, plus),
+         eq(v*v, s.Add(squares, s.Mul(-2, product, evaluate=False), evaluate=False)), eq(v*v, minus)])
+    sums = list(dict.fromkeys(s.simplify(sign*s.sqrt(plus)) for sign in (1, -1)))
+    differences = list(dict.fromkeys(s.simplify(sign*s.sqrt(minus)) for sign in (1, -1)))
+    add("Take both square-root signs", "Each squared equation gives both square-root signs. Keep every independent combination of these candidates.",
+        [*[eq(u, value) for value in sums], *[eq(v, value) for value in differences]])
+    add("Recover the original variables", "Add and subtract the sum and difference equations, then divide by two.", [eq(x, (u+v)/2), eq(y, (u-v)/2)])
+    pairs = [s.Tuple(eq(x, s.simplify((total+difference)/2)), eq(y, s.simplify((total-difference)/2)))
+             for total in sums for difference in differences]
+    add("Combine the candidate solution pairs", "Use each sum and difference combination to obtain a pair. The final solution applies the original variable and domain restrictions.", pairs)
+    return {"method": "Sum and difference method", "steps": steps}
+
+
 def nonlinear_system_steps(equations, variables):
     """Explain two-variable polynomial systems reducible to degree at most two.
 
@@ -27,7 +75,7 @@ def nonlinear_system_steps(equations, variables):
     except s.PolynomialError:
         return None
     linear_index = next((index for index, poly in enumerate(polynomials) if poly.total_degree() == 1), None)
-    if linear_index is None: return None
+    if linear_index is None: return symmetric_quadratic_system_steps(polynomials, variables)
     linear, other = polynomials[linear_index], equations[1-linear_index]
     columns = [index for index, var in enumerate(variables) if linear.coeff_monomial(var).is_zero is False]
     if not columns: return None

@@ -9,6 +9,7 @@ from sympy.solvers.solveset import NonlinearError
 from sympy.core.relational import Relational
 from calc_display import display_tree, readable
 from calc_equation_system_steps import linear_system_steps, can_explain_linear_system, nonlinear_system_steps, quadratic_candidates
+from calc_solutions import product_exponential_form
 
 
 SUMMARY = "Detailed transformations are unavailable for this equation; the steps below summarize the solver input and result."
@@ -33,6 +34,13 @@ EXPLANATIONS = {
     "Compute the discriminant": "For ax² + bx + c = 0, calculate D = b² − 4ac. This is the quantity under the square root in the quadratic formula.",
     "Apply the quadratic formula": "Substitute a, b, c and D into x = (−b ± √D)/(2a). The two signs give the candidate roots.",
     "Simplify the candidate roots": "Evaluate the square root and simplify each fraction to obtain the candidate roots.",
+    "Normalize the exponential product": "Introduce a scaled and shifted variable so the equation has the form u·exp(u) = z.",
+    "Rewrite as a Lambert W equation": "Rearrange the equation into a variable times its own exponential equal to a constant.",
+    "Use the Lambert W inverse": "Lambert W inverts w·exp(w): each allowed branch satisfies W(z)·exp(W(z)) = z.",
+    "Apply the allowed Lambert W branches": "Use the Lambert W branches returned for the selected domain. Integer branch indices describe the complex family; the real domain retains only allowed real branches.",
+    "Evaluate the principal real solution": "For a nonnegative Lambert W argument, the principal branch gives the unique real solution. Evaluate it numerically.",
+    "Check the real Lambert W domain": "A real Lambert W value requires its argument to be at least −1/e. If this condition fails, there is no real solution.",
+    "Recover the original variable": "Undo the substitution to express each candidate in the original variables.",
     "Exclude zero denominators": "Division by zero is undefined. Keep this restriction when removing the denominator so invalid roots are not included.",
     "Multiply by the nonzero denominator": "Multiply both sides by the denominator. This is valid only where the denominator is nonzero.",
     "Factor the polynomial": "Rewrite the polynomial as a product. A product is zero when at least one factor is zero.",
@@ -203,9 +211,10 @@ def equation_steps(engine, method, values, answer):
     else:
         var = values[1]
         expression = residual(source)
+        lambert_form = product_exponential_form(expression, var)
         already_isolated = (isinstance(source, s.Equality) and isinstance(source.lhs, s.Function)
                             and source.lhs.func in (s.sin, s.cos, s.tan, s.exp, s.log) and not source.rhs.has(var))
-        if not already_isolated: add_changed("Move all terms to the left", eq(expression))
+        if not already_isolated and lambert_form is None: add_changed("Move all terms to the left", eq(expression))
         numerator, denominator = s.fraction(s.together(expression))
         if denominator != 1:
             if denominator.is_zero is not False:
@@ -238,7 +247,37 @@ def equation_steps(engine, method, values, answer):
             coefficient = expanded.coeff(function) if function is not None else 0
             rest = expanded-coefficient*function if function is not None else expanded
             supported = function is not None and function.func in (s.sin, s.cos, s.tan, s.exp, s.log)
-            if (supported and coefficient.is_zero is False and not coefficient.has(var) and not rest.has(var)
+            if lambert_form is not None:
+                rate, shift, argument = lambert_form
+                used = {str(symbol) for symbol in expression.free_symbols}
+                def fresh(name):
+                    while name in used: name += "1"
+                    used.add(name)
+                    return s.Symbol(name)
+                u = var if rate == 1 and shift == 0 else fresh("u")
+                if u != var: add("Normalize the exponential product", eq(u, rate*(var+shift)))
+                add_changed("Rewrite as a Lambert W equation", eq(u*s.exp(u), argument))
+                z = fresh("z")
+                w = s.LambertW(z)
+                add("Use the Lambert W inverse", eq(s.Mul(w, s.exp(w), evaluate=False), z))
+                if isinstance(answer, s.ImageSet):
+                    k = answer.lamda.variables[0]
+                    inverse = s.ImageSet(s.Lambda(k, s.simplify(rate*(answer.lamda.expr+shift))), answer.base_set)
+                    add("Apply the allowed Lambert W branches", inverse)
+                    if s.Ge(argument, 0) == s.true:
+                        real_root = s.LambertW(argument)/rate-shift
+                        add("Evaluate the principal real solution", [eq(var, real_root), eq(var, s.N(real_root, engine.precision))])
+                else:
+                    roots = (list(answer) if isinstance(answer, s.FiniteSet) else
+                             [item[var] for item in answer if isinstance(item, dict) and var in item] if isinstance(answer, list) else [])
+                    if roots:
+                        add("Apply the allowed Lambert W branches", [eq(u, s.simplify(rate*(root+shift))) for root in roots])
+                        if isinstance(answer, list) and var.is_real is not True:
+                            note = "The system solver returned a finite set of Lambert W candidates; additional complex branches may exist."
+                    elif answer == s.S.EmptySet and s.Lt(argument, -1/s.E) == s.true:
+                        add("Check the real Lambert W domain", s.Ge(argument, -1/s.E, evaluate=False))
+                if u != var: add("Recover the original variable", eq(var, u/rate-shift))
+            elif (supported and coefficient.is_zero is False and not coefficient.has(var) and not rest.has(var)
                     and answer != s.S.EmptySet and answer != []):
                 target = s.cancel(-rest/coefficient)
                 add_changed("Isolate the function", eq(function, target))

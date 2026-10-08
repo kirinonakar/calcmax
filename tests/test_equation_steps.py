@@ -332,6 +332,70 @@ class EquationStepTests(unittest.TestCase):
         _, conditional = self.report([s.Eq(a*x+a*y, 3), s.Eq(x*x+y*y, 5)], [x, y])
         self.assertIn("Detailed transformations are unavailable", conditional["note"])
 
+    def test_squared_sum_and_product_systems_keep_every_sign_combination(self):
+        x, y = s.symbols("x y")
+        examples = [
+            [s.Eq(x*x+y*y, 5), s.Eq(x*y, 2)],
+            [s.Eq(2*x*y, 4), s.Eq(3*x*x+3*y*y, 15)],
+            [s.Eq(x*x+y*y+x*y, 7), s.Eq(x*y, 2)],
+            [s.Eq(x*x+y*y, 2), s.Eq(x*y, 1)],
+            [s.Eq(x*x+y*y, 5), s.Eq(x*y, 0)],
+            [s.Eq(x*x+y*y, 0), s.Eq(x*y, 0)],
+            [s.Eq(x*x+y*y, 1), s.Eq(x*y, 1)],
+        ]
+        for equations in examples:
+            with self.subTest(equations=equations):
+                result, report = self.report(equations, [x, y], solutionSteps=True)
+                self.assertEqual("", report["note"])
+                self.assertEqual("Sum and difference method", report["method"])
+                identities = next(step for step in report["steps"] if step["title"] == "Form the squared sum and difference")
+                for formula in identities["equations"]:
+                    identity = s.sympify(formula["exact"])
+                    self.assertEqual(0, s.expand(identity.lhs-identity.rhs))
+                pairs = next(step for step in report["steps"] if step["title"] == "Combine the candidate solution pairs")
+                candidates = []
+                for formula in pairs["equations"]:
+                    pair = {item.lhs: item.rhs for item in s.sympify(formula["exact"])}
+                    self.assertTrue(all(s.simplify(eq.lhs.subs(pair)-eq.rhs) == 0 for eq in equations))
+                    candidates.append(tuple(pair[var] for var in (x, y)))
+                actual = Engine({}).build(result["resultAst"])
+                self.assertEqual(len(actual), len(candidates))
+                self.assertTrue(all(any(all(s.simplify(s.expand(pair[var]-candidate[index])) == 0
+                                            for index, var in enumerate((x, y))) for candidate in candidates)
+                                    for pair in actual))
+                self.assertEqual(len(candidates), len(set(candidates)))
+        result, _ = self.report(examples[0], [x, y])
+        self.assertEqual({(-2, -1), (-1, -2), (1, 2), (2, 1)},
+                         {tuple(pair[var] for var in (x, y)) for pair in Engine({}).build(result["resultAst"])})
+        result, report = self.report(examples[-1], [x, y], assumptions={"x": ["real"], "y": ["real"]})
+        self.assertEqual("[]", result["exact"])
+        self.assertEqual("", report["note"])
+        # Auxiliary names must not shadow the input variable names.
+        u, v = s.symbols("u v")
+        _, report = self.report([s.Eq(u*u+v*v, 5), s.Eq(u*v, 2)], [u, v])
+        change = next(step for step in report["steps"] if step["title"] == "Introduce the sum and difference")
+        self.assertTrue(all(s.sympify(formula["exact"]).lhs not in {u, v} for formula in change["equations"]))
+
+    def test_exponential_product_steps_use_lambert_w_and_selected_branches(self):
+        x = s.Symbol("x")
+        for source in [s.Eq(x*s.exp(x), 1), s.Eq((2*x+3)*s.exp(4*x+1), 5)]:
+            for extra in [(), (s.Symbol("real"),)]:
+                with self.subTest(source=source, extra=extra):
+                    result, report = self.report(source, x, extra=extra, solutionSteps=True)
+                    self.assertNotIn("Detailed transformations are unavailable", report["note"])
+                    self.assertNotIn("Partial solutions", report["note"])
+                    self.assertIn("Use the Lambert W inverse", [step["title"] for step in report["steps"]])
+                    final = Engine({}).call("solve", [source, x, *extra], [])
+                    roots = [final.lamda(k) for k in range(-2, 3)] if isinstance(final, s.ImageSet) else list(final)
+                    for root in roots:
+                        self.assertLess(abs(s.N((source.lhs-source.rhs).subs(x, root), 40)), s.Rational(1, 10)**30)
+        result, report = self.report(s.Eq(x*s.exp(x), 1), x, extra=(s.Symbol("real"),))
+        self.assertEqual("{LambertW(1)}", result["exact"])
+        self.assertAlmostEqual(0.5671432904097838, float(s.LambertW(1)), places=14)
+        result, report = self.report(s.Eq(x*s.exp(x), -1), x, extra=(s.Symbol("real"),))
+        self.assertEqual("EmptySet", result["exact"])
+        self.assertIn("Check the real Lambert W domain", [step["title"] for step in report["steps"]])
+
     def test_domain_restrictions_reject_extraneous_roots(self):
         x = s.Symbol("x")
         source = {"kind": "call", "value": "solve", "args": [
@@ -364,7 +428,7 @@ class EquationStepTests(unittest.TestCase):
         self.assertIn("Detailed transformations are unavailable", unresolved["note"])
         self.assertEqual("Known real roots (partial)", unresolved["steps"][-1]["title"])
         y = s.Symbol("y")
-        _, nonlinear = self.report([s.Eq(x*x+y*y, 1), s.Eq(x*y, 1)], [x, y])
+        _, nonlinear = self.report([s.Eq(x*x+2*y*y, 1), s.Eq(x*y, 1)], [x, y])
         self.assertIn("Detailed transformations are unavailable", nonlinear["note"])
         a = s.Symbol("a")
         _, conditional = self.report([s.Eq(x+y, 1), s.Eq(x+y, a)], [x, y])

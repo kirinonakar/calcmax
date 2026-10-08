@@ -90,6 +90,8 @@ test('equation step explanations preserve real WASM answers across workspace met
     [{kind:'solve',source:'x+a*y=1\ny=b',variable:'x,y'},'Substitute into the second equation'],
     [{kind:'solve',source:'y+z=3\nx+2y-z=4\n2x-y+z=1',variable:'x,y,z'},'Eliminate one variable'],
     [{kind:'solve',source:'x+y=3\nx^2+y^2=5',variable:'x,y'},'Back-substitute each candidate root'],
+    [{kind:'solve',source:'x²+y²=5\nx*y=2',variable:'x,y'},'Combine the candidate solution pairs'],
+    [{kind:'solve',source:'x·e^x=1',variable:'x'},'Use the Lambert W inverse'],
     [{kind:'solve',source:'sin(x)=1/2',variable:'x'},'Include periodic branches (n is an integer)'],
     [{kind:'nsolve',source:'x^2=2',variable:'x',extra:'1,2'},'Numerical root'],
     [{kind:'dsolve',source:'diff(y(t),t)=y(t)',variable:'y(t)',extra:'t',initial:'y(0)=1'},'Integrating factor'],
@@ -144,6 +146,21 @@ test('equation step explanations preserve real WASM answers across workspace met
   const back=nonlinear.equationSteps.steps.find(step=>step.title==='Back-substitute each candidate root');
   assert.equal(back.equations.length,3);
   assert.deepEqual(back.equations.slice(1).map(formula=>formula.exact),['(Eq(x, 2), Eq(y, 1))','(Eq(x, 1), Eq(y, 2))']);
+  const symmetric=run(equationCommand({kind:'solve',source:'x²+y²=5\nx*y=2',variable:'x,y'}),true,true);
+  assert.equal(symmetric.equationSteps.method,'Sum and difference method');
+  assert.equal(symmetric.equationSteps.note,'');
+  const pairs=symmetric.equationSteps.steps.find(step=>step.title==='Combine the candidate solution pairs');
+  assert.deepEqual(pairs.equations.map(formula=>formula.exact),[
+    '(Eq(x, 2), Eq(y, 1))','(Eq(x, 1), Eq(y, 2))','(Eq(x, -1), Eq(y, -2))','(Eq(x, -2), Eq(y, -1))']);
+  const lambert=run('solve(x*exp(x)=1,x)',true,true);
+  assert.match(lambert.exact,/LambertW\(1, k\)/);
+  assert.match(lambert.note,/All complex solutions/);
+  assert.ok(!lambert.equationSteps.note.includes('Detailed transformations are unavailable'));
+  assert.ok(!lambert.equationSteps.note.includes('Partial solutions'));
+  const principal=lambert.equationSteps.steps.find(step=>step.title==='Evaluate the principal real solution');
+  assert.match(principal.exact,/0\.567143290409/);
+  assert.equal(run('solve(x*exp(x)=1,x,real)').exact,'{LambertW(1)}');
+  assert.equal(run('solve(x*exp(x)=-1,x,real)').exact,'EmptySet');
 });
 test('Bayesian linear, logistic and NUTS run through workspace commands in real WASM',async()=>{
   const py=await runtime();

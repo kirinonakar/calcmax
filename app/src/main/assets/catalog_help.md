@@ -18,9 +18,9 @@ Tap an example to place its expression in the calculator input.
 
 Android and Web use the same explanation engine. Explanations retain the computed answer and original domain restrictions; unsupported transformations show a solver summary.
 
-**Equations:** Linear/quadratic equations, factorable polynomials through degree 8 whose factors are linear or quadratic, cubic Cardano transformations, and power substitutions that reduce to a linear/quadratic equation (such as `x^6-5*x^3+6=0`). Simple trigonometric/exponential/logarithmic equations include inverse and periodic branches.
+**Equations:** Linear/quadratic equations, factorable polynomials through degree 8 whose factors are linear or quadratic, cubic Cardano transformations, and power substitutions that reduce to a linear/quadratic equation (such as `x^6-5*x^3+6=0`). Simple trigonometric/exponential/logarithmic equations include inverse and periodic branches. Affine products with exponentials, such as `x*exp(x)=1`, explain the Lambert W inverse and the selected real or complex branches.
 
-**Systems:** Linear systems with at most 6 equations and 6 unknowns, including parameter coefficients/right-hand sides when every pivot and consistency decision is provable. Two-variable polynomial systems with a linear equation support substitution when the remaining equation reduces to degree 2 or less, including matching each root with the other variable (for example, `x+y=3`, `x^2+y^2=5`). Parameter-dependent rank or consistency falls back to a summary.
+**Systems:** Linear systems with at most 6 equations and 6 unknowns, including parameter coefficients/right-hand sides when every pivot and consistency decision is provable. Two-variable polynomial systems with a linear equation support substitution when the remaining equation reduces to degree 2 or less, including matching each root with the other variable (for example, `x+y=3`, `x^2+y^2=5`). Symmetric quadratic systems determining `x^2+y^2` and `x*y` use the squared sum and difference and retain every sign combination. Parameter-dependent rank or consistency falls back to a summary.
 
 **ODEs:** First-order linear integrating factors with a verified elementary primitive, including nonpolynomial coefficients such as `1/t` and `sin(t)`. Homogeneous second-order equations with constant coefficients include characteristic roots and repeated-root solutions when the root case is decidable.
 
@@ -236,6 +236,8 @@ Example: solve(abs(x-1)=3,x,real)
 `solve(abs(x-1)=3,x)` — Absolute-value equations can be solved without setting a real assumption.
 Example: solve(abs(x-1)=3,x) → {-2, 4}
 `solve(exp(x)=x,x)` — Returns the entire complex family −LambertW(−1,k), k ∈ ℤ. An explicitly real domain returns EmptySet. Affine exponential equations can use this full-branch strategy; auxiliary solve results for other Lambert W equations are labeled partial rather than complete.
+
+`solve(x*exp(x)=1,x)` — Returns all complex branches LambertW(1,k), k ∈ ℤ, with a step-by-step Lambert W explanation. `solve(x*exp(x)=1,x,real)` returns the unique real root LambertW(1) ≈ 0.5671432904. Finite real numeric coefficients are supported in `(a*x+d)*exp(b*x+c)+f=0` when a and b are nonzero.
 Example: solve(exp(x)=x,x)
 `nsolve(expr,x,a,b)` — Numeric root search in the interval [a,b].
 Example: nsolve(cos(x)-x,x,0,1)

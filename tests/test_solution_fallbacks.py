@@ -15,7 +15,8 @@ from calc_shared import MathError
 class SolutionFallbackTests(unittest.TestCase):
     def test_complete_lambert_families_satisfy_equations_across_branches(self):
         x=s.Symbol("x")
-        for expression in [s.exp(x)-x,s.exp(2*x+1)+3*x-1,s.exp(x)-4*x]:
+        for expression in [s.exp(x)-x,s.exp(2*x+1)+3*x-1,s.exp(x)-4*x,
+                           x*s.exp(x)-1,(2*x+3)*s.exp(4*x+1)-5]:
             result,note=affine_exponential_solutions(expression,x,s.S.Complexes)
             self.assertIsInstance(result,s.ImageSet)
             self.assertEqual(s.S.Integers,result.base_set)
@@ -33,12 +34,18 @@ class SolutionFallbackTests(unittest.TestCase):
         self.assertEqual(s.FiniteSet(1),affine_exponential_solutions(s.exp(x)-s.E*x,x,s.S.Reals)[0])
         self.assertEqual(s.S.EmptySet,affine_exponential_solutions(s.exp(x)-4*x,x,s.Interval.open(-s.oo,0))[0])
         self.assertIsNone(affine_exponential_solutions(s.exp(x**2)-x,x,s.S.Complexes))
+        self.assertEqual(s.FiniteSet(s.LambertW(1)),affine_exponential_solutions(x*s.exp(x)-1,x,s.S.Reals)[0])
+        self.assertEqual(s.FiniteSet(s.LambertW(-s.Rational(1,4)),s.LambertW(-s.Rational(1,4),-1)),
+                         affine_exponential_solutions(x*s.exp(x)+s.Rational(1,4),x,s.S.Reals)[0])
+        self.assertEqual(s.S.EmptySet,affine_exponential_solutions(x*s.exp(x)+1,x,s.S.Reals)[0])
+        self.assertEqual(s.FiniteSet(0),affine_exponential_solutions(x*s.exp(x),x,s.S.Complexes)[0])
+        self.assertEqual(s.S.EmptySet,affine_exponential_solutions(x*s.exp(x)-1,x,s.Interval.open(-s.oo,0))[0])
 
     def test_auxiliary_roots_are_verified_and_marked_partial(self):
         x=s.Symbol("x")
         engine=Engine({})
-        roots=engine.call("solve",[x*s.exp(x)-1,x],[])
-        self.assertEqual(s.FiniteSet(s.LambertW(1)),roots)
+        roots=engine.call("solve",[s.log(x)-x,x],[])
+        self.assertTrue(any(root.has(s.LambertW) for root in roots))
         self.assertIn("Partial solutions",engine.note)
         self.assertIn("not the complete",engine.note)
 
