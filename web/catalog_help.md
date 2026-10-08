@@ -97,11 +97,11 @@ Example: gcd(12,18)
 Example: lcm(4,6)
 `prime(n)` — Returns the n-th prime number.
 Example: prime(1000)
-`isprime(n)` — True when n is prime, otherwise false.
+`isprime(n)` — True when n is prime, otherwise false. Requires an integer with |n| < 2^64; for example, isprime(2^61-1) is true.
 Example: isprime(97)
-`factorint(n)` — Prime factorisation of an integer.
+`factorint(n)` — Prime factorisation of a positive integer. No separate 10^15 input cap; execution time and cancellation bound the work, within the calculator's general number limits.
 Example: factorint(360)
-`divisors(n)` — All positive divisors of n.
+`divisors(n)` — All positive divisors of a positive integer, sorted ascending. Factorization is bounded by execution time; output is limited to 2000 divisors and 40000 characters.
 Example: divisors(28)
 `rnd()` — Random real number in the interval [0,1).
 Example: rnd()
@@ -159,6 +159,8 @@ Example: nextprime(100)
 Example: prevprime(100)
 `lambertw(x)` — Lambert W function, the inverse of x·e^x.
 Example: lambertw(1)
+`lambertw(z,k)` — Lambert W branch k (an integer). Branch 0 is the principal branch; branch −1 is also real on [−1/e,0).
+Example: lambertw(-1,1)
 `beta(a,b)` — Beta function B(a,b).
 Example: beta(2,3)
 `digamma(x)` — Logarithmic derivative of the gamma function.
@@ -189,8 +191,10 @@ Example: subs(x^2+1,x,3)
 Example: diff(sin(x),x)
 `diff(expr,x,n)` — n-th derivative with respect to x.
 Example: diff(x^4,x,2)
-`integrate(expr,x)` — Indefinite integral (antiderivative).
+`integrate(expr,x)` — Indefinite integral (antiderivative). An unevaluated Integral means the symbolic algorithm did not finish; use nintegrate(expr,x,a,b) for a definite numeric value on valid finite bounds.
 Example: integrate(x^2,x)
+`integrate(sqrt(tan(x)),x)` — Uses t=sqrt(tan(x)) to reduce the integral to a rational function, returning logarithms, arctangents and C. Valid on continuous real intervals with tan(x)>0; the conditions are retained in Ans. The same rule covers suitable fractional tan/cot powers with affine real arguments and root order up to 4.
+Example: integrate(sqrt(tan(x)),x)
 `integrate(expr,x,a,b)` — Definite integral from a to b.
 Example: integrate(x^2,x,0,1)
 `limit(expr,x,a)` — Two-sided limit as x tends to a.
@@ -207,8 +211,14 @@ Example: taylor(sin(x),x,0,5)
 Example: sum(x^2,x,1,10)
 `product(expr,x,a,b)` — Product of expr over integer x from a to b.
 Example: product(x,x,1,5)
-`solve(eq,x)` — Solve an equation or system for x.
+`solve(eq,x)` — Solve an equation or system for x. Tries the complex domain first, then automatically retries the real domain for unsupported expressions such as absolute values; the result note identifies real-domain solving. In systems, only variables needed by the real-valued terms are changed for that retry. Variable assumptions still apply. A ConditionSet means the symbolic solution is unresolved, not that a root exists. For real numeric roots use nsolve on a continuous interval with a sign change.
 Example: solve(x^2-5x+6=0,x)
+`solve(eq,x,real)` — Explicitly restrict the domain for one equation and one variable; complex and integer are also supported. Existing assumptions still apply. Omit the domain to enable automatic real-domain retry for absolute-value equations.
+Example: solve(abs(x-1)=3,x,real)
+`solve(abs(x-1)=3,x)` — Absolute-value equations can be solved without setting a real assumption.
+Example: solve(abs(x-1)=3,x) → {-2, 4}
+`solve(exp(x)=x,x)` — Returns the entire complex family −LambertW(−1,k), k ∈ ℤ. An explicitly real domain returns EmptySet. Affine exponential equations can use this full-branch strategy; auxiliary solve results for other Lambert W equations are labeled partial rather than complete.
+Example: solve(exp(x)=x,x)
 `nsolve(expr,x,a,b)` — Numeric root search in the interval [a,b].
 Example: nsolve(cos(x)-x,x,0,1)
 `nintegrate(expr,x,a,b)` — Numeric definite integral from a to b.
@@ -343,7 +353,7 @@ Example: rref([[1,2],[3,4]])
 Example: lu([[2,1],[1,3]])
 `linsolve(A,b)` — Solve the linear system A·x = b.
 Example: linsolve([[2,1],[1,3]],[1,2])
-`eigenvalues(A)` — Eigenvalues.
+`eigenvalues(A)` — Each result shows an eigenvalue and its algebraic multiplicity. The reusable numeric result is a list of [eigenvalue, multiplicity] pairs, not a matrix of eigenvalues.
 Example: eigenvalues([[2,0],[0,3]])
 `eigenvectors(A)` — Eigenvectors.
 Example: eigenvectors([[2,0],[0,3]])
@@ -399,10 +409,14 @@ Example: stats([1,2,3,4])
 Example: mean([1,2,3,4])
 `median(list)` — Median.
 Example: median([3,1,2])
-`variance(list)` — Sample variance.
+`variance(list)` — Sample variance by default (division by n−1; ddof=1), requiring at least two values. An optional second argument selects ddof=0 or 1.
 Example: variance([1,2,3,4])
-`stdev(list)` — Sample standard deviation.
-Example: stdev([1,2,3,4])
+`variance(list,0)` — Population variance (division by n).
+Example: variance([1,2,3],0) → 2/3
+`stdev(list)` — Sample standard deviation by default (ddof=1), requiring at least two values. stats(list) shows both population and sample values.
+Example: stdev([1,2,3]) → 1
+`stdev(list,0)` — Population standard deviation (ddof=0).
+Example: stdev([2,4,4,4,5,5,7,9],0) → 2
 `quartiles(list)` — Q1, median and Q3 using inclusive interpolation.
 Example: quartiles([1,2,3,4,5])
 `sumdata(list)` — Sum of the data values.
@@ -411,8 +425,10 @@ Example: sumdata([1,2,3,4])
 Example: regression([[1,2],[2,4],[3,6]],linear)
 Example (y = S(b)/S₀): regression([[0,1],[100,0.9],[200,0.81]],custom,exp(-b*ADC),b)
 Example (exponential decay): regression([[0,4],[1,2.8],[2,2.1],[3,1.6]],custom,A*exp(-k*x)+C,x)
-`covariance(x,y)` — Covariance of two paired lists.
+`covariance(x,y)` — Sample covariance by default (division by n−1; ddof=1), requiring at least two pairs. An optional third argument selects ddof=0 or 1.
 Example: covariance([1,2,3],[2,4,6])
+`covariance(x,y,0)` — Population covariance (division by n).
+Example: covariance([1,2,3],[2,4,6],0) → 4/3
 `correlation(x,y)` — Correlation coefficient of two paired lists.
 Example: correlation([1,2,3],[2,4,6])
 `qty(value,unit)` — Quantity with a unit, for example qty(2,m).

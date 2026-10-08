@@ -21,6 +21,9 @@ def display_tree(x):
     def t(kind,value="",args=()): return {"kind":kind,"value":value,"args":list(args)}
     if isinstance(x,Quantity): return t("quantity",x.unit_text(),[display_tree(x.base)])
     if isinstance(x,dict): return t("rows",args=[t("row",str(k),[display_tree(v)]) for k,v in x.items()])
+    if isinstance(x,s.ImageSet) and len(x.lamda.variables)==1 and x.base_set==s.S.Integers:
+        return t("rows",args=[t("row","solutions",[display_tree(x.lamda.expr)]),
+                              t("row","branch",[t("text",str(x.lamda.variables[0])+" ∈ ℤ")])])
     if isinstance(x,(list,tuple,s.Tuple)): return t("list",args=[display_tree(v) for v in x])
     if isinstance(x,s.MatrixBase): return t("matrix",args=[t("list",args=[display_tree(x[i,j]) for j in range(x.cols)]) for i in range(x.rows)])
     if isinstance(x,s.Rational) and x.q != 1: return t("fraction",args=[t("text",str(x.p)),t("text",str(x.q))])
@@ -55,6 +58,8 @@ def dms_tree(value):
 def readable(x):
     if isinstance(x,Quantity): return readable(x.base)+" "+x.unit_text()
     if isinstance(x,dict): return "\n".join(str(k)+": "+readable(v) for k,v in x.items())
+    if isinstance(x,s.ImageSet) and len(x.lamda.variables)==1 and x.base_set==s.S.Integers:
+        return "{"+readable(x.lamda.expr)+" | "+str(x.lamda.variables[0])+" ∈ ℤ}"
     if isinstance(x,(list,tuple)): return "["+", ".join(readable(v) for v in x)+"]"
     if isinstance(x,s.Add):
         constants=[term for term in x.args if term.is_Symbol and str(term)=="C"]
@@ -121,7 +126,7 @@ def result_ast(x):
     if isinstance(x,Relational): return node("relation",x.rel_op,[result_ast(x.lhs),result_ast(x.rhs)])
     if isinstance(x,s.Function):
         name=x.func.__name__
-        reusable={"log":"ln","Abs":"abs","conjugate":"conj","Piecewise":"piecewise","exp":"exp",
+        reusable={"log":"ln","Abs":"abs","LambertW":"lambertw","conjugate":"conj","Piecewise":"piecewise","exp":"exp",
                   "sin":"sin","cos":"cos","tan":"tan","sec":"sec","csc":"csc","cot":"cot","asin":"asin","acos":"acos","atan":"atan",
                   "sinh":"sinh","cosh":"cosh","tanh":"tanh","asinh":"asinh","acosh":"acosh","atanh":"atanh",
                   "sinc":"sinc","gamma":"gamma","erf":"erf","erfc":"erfc","Ei":"Ei","Si":"Si","Ci":"Ci",

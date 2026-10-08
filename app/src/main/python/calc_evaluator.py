@@ -15,6 +15,9 @@ from calc_shared import (CONSTANTS, UNITS, MathError, canonical_function_name,
 from calc_statistics import distribution_value, fit_custom_regression, fit_regression, pearson_correlation, statistical_test
 from calc_advanced_statistics import FUNCTIONS as ADVANCED_STATISTICS, advanced
 from calc_finance import finance_value
+from calc_integrals import rational_trig_primitive
+from calc_solutions import affine_exponential_solutions
+from calc_number_theory import bounded_divisors
 
 MAX_EXACT_DIGITS = 100000
 MAX_NUMERIC_EXPONENT = 100000
@@ -62,6 +65,23 @@ class Engine:
             options = {k: True for k in self.assumptions.get(name, []) if k in ("real", "positive", "negative", "integer", "nonzero")}
             self.symbols[name] = s.Symbol(name, **options)
         return self.symbols[name]
+    def solve_system(self, equations, variables):
+        """Retry unsupported real-valued terms without making other variables real."""
+        try:
+            return s.solve(equations,variables,dict=True)
+        except (ValueError, NotImplementedError):
+            expressions=equations if isinstance(equations,list) else [equations]
+            unknowns=variables if isinstance(variables,list) else [variables]
+            functions=set().union(*(expr.atoms(s.Abs,s.sign,s.floor,s.ceiling,s.Piecewise) for expr in expressions))
+            affected=set().union(*(function.free_symbols for function in functions))
+            replacements={var:s.Dummy(str(var),**var.assumptions0,real=True)
+                          for var in unknowns if isinstance(var,s.Symbol) and var in affected and var.is_real is None}
+            if not replacements: raise
+            mapped=[expr.xreplace(replacements) for expr in expressions]
+            result=s.solve(mapped,[var.xreplace(replacements) for var in unknowns],dict=True)
+            restore={replacement:original for original,replacement in replacements.items()}
+            self.note="Automatic real-domain solving for "+", ".join(map(str,replacements))+"; other variables keep their original domain."
+            return [{key.xreplace(restore):value.xreplace(restore) for key,value in solution.items()} for solution in result]
     def has_explicit_angle(self, node, seen=()):
         # 사용자가 쓴 각도 표시(π, °, ʳ, ᵍ)만 인정한다. 안쪽 DEG/GRAD 변환이 값을 만들며
         # 끼워 넣은 π를 명시적 라디안으로 오인하면 중첩 호출에서 모드 변환이 누락된다.
@@ -319,7 +339,8 @@ class Engine:
             if name=="prime":
                 require(1<=a[0]<=100000, "prime index must be between 1 and 100000")
                 return s.Integer(s.prime(int(a[0])))
-            require(abs(a[0])<=10**15, "isprime input outside supported range")
+            # SymPy gives a definitive primality result below 2**64.
+            require(abs(a[0])<2**64, "isprime requires an integer with |n| < 2^64")
             return s.true if s.isprime(a[0]) else s.false
         if name == "factorial" and getattr(a[0], "is_Integer", None) is not True:
             # A symbolic factorial (for example the Z-transform of 1/n!) stays unevaluated
@@ -327,7 +348,12 @@ class Engine:
             require(getattr(a[0], "is_integer", False) is not False, "factorial requires an integer argument")
             return s.factorial(a[0])
         if name in ("factorial", "nPr", "factorint", "divisors"):
-            require(a[0].is_Integer and 0 <= a[0] <= (10000 if name in ("factorial", "nPr") else 10**15), "Number theory input outside supported range")
+            if name in ("factorint","divisors"):
+                require(len(a)==1,name+" expects one positive integer")
+                require(a[0].is_Integer and a[0]>0,name+" requires a positive integer")
+            else:
+                require(a[0].is_Integer and 0 <= a[0] <= 10000,
+                        name+" requires an integer from 0 to 10000")
             if name == "factorial": return s.factorial(a[0])
             if name == "nPr":
                 require(a[1].is_Integer and 0 <= a[1] <= a[0], "nPr requires 0 ≤ r ≤ n")
@@ -337,7 +363,7 @@ class Engine:
                 factors=[s.Pow(s.Integer(p),s.Integer(k),evaluate=False) if k>1 else s.Integer(p)
                          for p,k in s.factorint(a[0]).items()]
                 return s.Mul(*factors,evaluate=False)
-            return s.divisors(a[0])
+            return bounded_divisors(a[0])
         if name == "subs": return a[0].subs(a[1],a[2])
         if name in ("apart","partfrac"):
             require(len(a)==2, name+" expects an expression and variable")
@@ -400,7 +426,13 @@ class Engine:
             require(len(a) in (2,4), "integrate expects a variable or integration bounds")
             spec = a[1] if len(a)==2 else (a[1],a[2],a[3])
             result = s.integrate(a[0],spec)
-            if result.has(s.Integral): self.note = "Symbolic solution not found for the remaining integral."
+            if result.has(s.Integral) and len(a)==2 and isinstance(a[1],s.Symbol):
+                substituted=rational_trig_primitive(a[0],a[1])
+                if substituted is not None:
+                    result,conditions,note=substituted
+                    self.conditions.extend(conditions)
+                    self.note=note
+            if result.has(s.Integral): self.note = "Symbolic solution not found for the remaining integral. For a definite value, use nintegrate(expr,x,a,b) with finite bounds in the expression domain."
             elif len(a)==2 and not isinstance(a[1], (list,tuple)): result += self.symbol("C")
             return result
         if name in ("dsolve","desolve"):
@@ -476,18 +508,41 @@ class Engine:
             return (s.summation if name=="sum" else s.product)(a[0],spec)
         if name == "piecewise": return s.Piecewise(*(tuple(x) for x in a))
         if name == "solve":
+            require(1<=len(a)<=3, "Use solve(eq,x[,real|complex|integer])")
+            requested_domain = None
+            if len(a)==3:
+                domains = {"real":s.S.Reals, "complex":s.S.Complexes, "integer":s.S.Integers}
+                require(str(a[2]) in domains, "solve domain must be real, complex or integer")
+                requested_domain = domains[str(a[2])]
+                require(not isinstance(a[0],list) and isinstance(a[1],s.Symbol)
+                        and (not isinstance(a[0],Relational) or isinstance(a[0],s.Equality)),
+                        "An explicit solve domain requires one equation and one variable")
             symbols=set().union(*(e.free_symbols for e in a[0])) if isinstance(a[0],list) else a[0].free_symbols
             var = a[1] if len(a)>1 else sorted(symbols,key=str)
             if isinstance(var,list) and len(var)==1: var = var[0]
-            if isinstance(a[0],list): return s.solve(a[0],var,dict=True)
+            if isinstance(a[0],list): return self.solve_system(a[0],var)
             if isinstance(a[0],Relational) and not isinstance(a[0],s.Equality): return s.reduce_inequalities(a[0],var)
             expr = a[0].lhs-a[0].rhs if isinstance(a[0],s.Equality) else a[0]
-            if isinstance(var,list): return s.solve(expr,var,dict=True)
+            if isinstance(var,list): return self.solve_system(expr,var)
             domain=s.S.Integers if var.is_integer else s.S.Reals if var.is_real else s.S.Complexes
             if var.is_positive: domain=domain.intersect(s.Interval.open(0,s.oo))
             elif var.is_negative: domain=domain.intersect(s.Interval.open(-s.oo,0))
             if var.is_nonzero: domain=domain-s.FiniteSet(0)
-            result = s.solveset(expr,var,domain=domain)
+            if requested_domain is not None: domain=domain.intersect(requested_domain)
+            automatic_real = requested_domain is None and domain.is_subset(s.S.Reals) is not True
+            real_domain = domain.intersect(s.S.Reals)
+            real_note = "Solved over the real domain automatically; the complex-domain solver could not resolve this expression."
+            try:
+                result = s.solveset(expr,var,domain=domain)
+            except (ValueError, NotImplementedError) as exc:
+                if automatic_real:
+                    result = s.solveset(expr,var,domain=real_domain)
+                    domain = real_domain
+                    self.note = real_note
+                elif expr.has(s.Abs) and not domain.is_subset(s.S.Reals):
+                    raise MathError("The complex-domain solver cannot handle this absolute-value equation. Use solve(eq,"+str(var)+",real), or omit the domain for automatic real solving.") from exc
+                else:
+                    raise
             # solveset can leave even algebraic logarithm equations unresolved.
             # solve has a separate logarithm strategy; accept its finite roots
             # only when substitution into the original equation is conclusive.
@@ -512,9 +567,39 @@ class Engine:
                     membership = [domain.contains(root) for root in candidates]
                     if all(check is not None for check in checks) and all(inside in (s.true,s.false) for inside in membership):
                         result = s.FiniteSet(*(root for root,check,inside in zip(candidates,checks,membership) if check and inside == s.true))
+            # A complex ConditionSet can sometimes resolve in the real domain
+            # for non-holomorphic functions. Do not replace arbitrary unresolved
+            # complex equations with only their real roots (e.g. exp(x)=x).
+            real_functions = (s.Abs, s.sign, s.floor, s.ceiling, s.Piecewise)
+            if (automatic_real and domain != real_domain and result.has(s.ConditionSet)
+                    and any(function.has(var) for function in expr.atoms(*real_functions))):
+                try:
+                    real_result = s.solveset(expr,var,domain=real_domain)
+                except (ValueError, NotImplementedError):
+                    real_result = None
+                if real_result is not None and not real_result.has(s.ConditionSet):
+                    result = real_result
+                    domain = real_domain
+                    self.note = real_note
+            if result.has(s.ConditionSet):
+                lambert_family=affine_exponential_solutions(expr,var,domain)
+                if lambert_family is not None:
+                    result,self.note=lambert_family
+                elif expr.has(s.exp,s.log):
+                    # solve() can expose useful Lambert W roots without
+                    # enumerating every branch. Never label this a complete set.
+                    try:
+                        candidates=s.solve(expr,var)
+                    except (ValueError,NotImplementedError):
+                        candidates=[]
+                    verified=[root for root in candidates if root.has(s.LambertW)
+                              and domain.contains(root)==s.true and s.checksol(expr,var,root) is True]
+                    if verified:
+                        result=s.FiniteSet(*verified)
+                        self.note="Partial solutions from the auxiliary solver; additional Lambert W branches may exist. This is not the complete solution set."
             if isinstance(result,s.FiniteSet):
                 result=s.FiniteSet(*(root for root in result if all(condition.subs(var,root)!=s.false for condition in self.conditions)))
-            if result.has(s.ConditionSet): self.note = "Symbolic solution not found. Try nsolve with a bracket."
+            if result.has(s.ConditionSet): self.note = (self.note+" " if self.note else "")+"Symbolic solution not found; ConditionSet describes unresolved solutions, not proof that a root exists. For a real root, try nsolve(expr,x,a,b) on a continuous interval with a sign change."
             return result
         if name == "nsolve":
             expr = a[0].lhs-a[0].rhs if isinstance(a[0],s.Equality) else a[0]
@@ -596,9 +681,14 @@ class Engine:
             if name == "projection": return v*(u.dot(v)/v.dot(v))
             return u.inv()*v
         if name in ("mean", "median", "variance", "stdev", "sumdata", "quartiles", "stats"):
+            dispersion = name in ("variance", "stdev")
+            require(len(a) in ((1,2) if dispersion else (1,)), name+" expects a data list"+(" and optional ddof (0 or 1)" if dispersion else ""))
             data = flatten(a[0]); n = len(data)
             require(n>0,"Enter at least one data value")
-            avg = sum(data)/n; var = sum((x-avg)**2 for x in data)/n
+            ddof = a[1] if dispersion and len(a)==2 else s.Integer(1 if dispersion else 0)
+            require(getattr(ddof,"is_Integer",False) and ddof in (0,1), "ddof must be 0 (population) or 1 (sample)")
+            require(n>ddof,"Sample variance and standard deviation require at least two data values")
+            avg = sum(data)/n; var = sum((x-avg)**2 for x in data)/(n-ddof)
             ordered = sorted(data)
             med = s.Rational(1,2)*(ordered[(n-1)//2]+ordered[n//2])
             if name == "mean": return avg
@@ -612,13 +702,16 @@ class Engine:
                     "population SD": s.sqrt(var), "sample variance": var*n/(n-1) if n>1 else s.nan,
                     "sample SD": s.sqrt(var*n/(n-1)) if n>1 else s.nan, "quartiles (inclusive)": quartiles}
         if name in ("covariance","correlation"):
-            require(len(a)==2, name+" expects two data lists")
+            require(len(a) in ((2,3) if name=="covariance" else (2,)), name+" expects two data lists"+(" and optional ddof (0 or 1)" if name=="covariance" else ""))
             xs=flatten(a[0]); ys=flatten(a[1])
             require(len(xs)==len(ys),"Covariance and correlation require equal data lengths")
             n=len(xs)
             require(n>0,"Enter paired data")
+            ddof=a[2] if len(a)==3 else s.Integer(1 if name=="covariance" else 0)
+            require(getattr(ddof,"is_Integer",False) and ddof in (0,1), "ddof must be 0 (population) or 1 (sample)")
+            require(n>ddof,"Sample covariance requires at least two paired values")
             mx=sum(xs)/n; my=sum(ys)/n
-            covariance=sum((x-mx)*(y-my) for x,y in zip(xs,ys))/n
+            covariance=sum((x-mx)*(y-my) for x,y in zip(xs,ys))/(n-ddof)
             if name=="covariance": return covariance
             return pearson_correlation(xs,ys)
         if name == "regression":

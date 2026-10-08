@@ -60,9 +60,6 @@ for precision in (30,60):
         self.assertEqual('EmptySet',result['exact'])
 
 
-if __name__=='__main__':unittest.main()
-
-
 def node(kind, value="", *args):
     return {"kind": kind, "value": str(value), "args": list(args)}
 
@@ -128,13 +125,13 @@ class LogSolveTests(unittest.TestCase):
             excluded = node("restricted", "", self.equation(), node("relation", "!=", x, node("number", 7)))
             result = evaluate(node("call", "solve", excluded, x))
             self.assertEqual("EmptySet", result.get("exact"), result)
-        with self.subTest(scenario='general_transcendental_log_equations_stay_unresolved'):
+        with self.subTest(scenario='auxiliary_lambert_solutions_are_labeled_partial'):
             x = node("symbol", "x")
             equation = node("relation", "=", node("call", "ln", x), x)
             result = evaluate(node("call", "solve", equation, x))
             self.assertTrue(result["ok"], result)
-            self.assertIn("ConditionSet", result["exact"])
-            self.assertIn("Symbolic solution not found", result["note"])
+            self.assertIn("LambertW", result["exact"])
+            self.assertIn("Partial solutions", result["note"])
 
 
 if __name__ == "__main__":

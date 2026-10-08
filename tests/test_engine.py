@@ -231,7 +231,7 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(derivative["exact"],"1")
         covariance=dispatch(call("covariance",node("list","",num(1),num(2),num(3)),node("list","",num(2),num(4),num(6))))
         self.assertTrue(covariance["ok"],covariance)
-        self.assertEqual(covariance["exact"],"4/3")
+        self.assertEqual(covariance["exact"],"2")
         correlation=dispatch(call("correlation",node("list","",num(1),num(2),num(3)),node("list","",num(6),num(4),num(2))))
         self.assertTrue(correlation["ok"],correlation)
         self.assertEqual(correlation["exact"],"-1")
@@ -414,9 +414,6 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(growth["exact"],"1/10")
         annual=dispatch(call("cagr",num(1000),num(2000),num(5)))
         self.assertAlmostEqual(float(annual["decimal"]),2**0.2-1,9)
-
-
-    if __name__=="__main__": unittest.main(verbosity=2)
 
 
 def number(value): return {"kind": "number", "value": str(value)}

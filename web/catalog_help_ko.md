@@ -97,11 +97,11 @@ Example: gcd(12,18)
 Example: lcm(4,6)
 `prime(n)` — n번째 소수를 반환합니다.
 Example: prime(1000)
-`isprime(n)` — n이 소수이면 true, 아니면 false를 반환합니다.
+`isprime(n)` — n이 소수이면 true, 아니면 false를 반환합니다. |n| < 2^64인 정수를 지원하며, isprime(2^61-1)은 true입니다.
 Example: isprime(97)
-`factorint(n)` — 정수의 소인수분해.
+`factorint(n)` — 양의 정수를 소인수분해합니다. 별도 10^15 입력 제한은 없으며 계산기 공통 숫자 제한 내에서 실행시간과 취소 기능으로 계산량을 제어합니다.
 Example: factorint(360)
-`divisors(n)` — n의 양의 약수를 모두 반환합니다.
+`divisors(n)` — 양의 정수 n의 양의 약수를 오름차순으로 반환합니다. 소인수분해는 실행시간으로 제한하며, 출력은 약수 2000개와 40000자까지 허용합니다.
 Example: divisors(28)
 `rnd()` — [0,1) 구간의 임의 실수.
 Example: rnd()
@@ -159,6 +159,8 @@ Example: nextprime(100)
 Example: prevprime(100)
 `lambertw(x)` — 램버트 W 함수. x·e^x의 역함수입니다.
 Example: lambertw(1)
+`lambertw(z,k)` — 정수 k로 램버트 W 분기를 선택합니다. 0은 주분기이며 −1 분기도 [−1/e,0)에서 실수입니다.
+Example: lambertw(-1,1)
 `beta(a,b)` — 베타 함수 B(a,b).
 Example: beta(2,3)
 `digamma(x)` — 감마 함수의 로그도함수.
@@ -189,8 +191,10 @@ Example: subs(x^2+1,x,3)
 Example: diff(sin(x),x)
 `diff(expr,x,n)` — x에 대한 n계 도함수를 구합니다.
 Example: diff(x^4,x,2)
-`integrate(expr,x)` — 부정적분(원시함수)을 구합니다.
+`integrate(expr,x)` — 부정적분(원시함수)을 구합니다. Integral이 남으면 기호 적분 알고리즘이 해결하지 못한 것입니다. 정의역 내 유한 구간의 수치 정적분에는 nintegrate(expr,x,a,b)를 사용합니다.
 Example: integrate(x^2,x)
+`integrate(sqrt(tan(x)),x)` — t=sqrt(tan(x))로 치환해 유리함수를 적분하며 로그·아크탄젠트·C로 결과를 반환합니다. tan(x)>0인 연속 실수 구간에서 유효하며 조건은 Ans에도 보존합니다. 실수 일차식 인수와 4차 이하 근을 가진 적절한 tan/cot 분수 거듭제곱에도 적용됩니다.
+Example: integrate(sqrt(tan(x)),x)
 `integrate(expr,x,a,b)` — a부터 b까지 정적분을 구합니다.
 Example: integrate(x^2,x,0,1)
 `limit(expr,x,a)` — x가 a에 다가갈 때 양쪽 극한을 구합니다.
@@ -207,8 +211,14 @@ Example: taylor(sin(x),x,0,5)
 Example: sum(x^2,x,1,10)
 `product(expr,x,a,b)` — 정수 x가 a부터 b까지일 때 expr의 곱을 구합니다.
 Example: product(x,x,1,5)
-`solve(eq,x)` — 방정식 또는 연립방정식을 x에 대해 풉니다.
+`solve(eq,x)` — 방정식 또는 연립방정식을 x에 대해 풉니다. 복소수 영역에서 먼저 풀고, 절댓값 등 처리하지 못하는 식은 실수 영역으로 자동 재시도하며 결과 안내에 이를 표시합니다. 연립방정식에서는 실수 처리가 필요한 변수만 재시도 중 실수로 취급합니다. 기존 변수 가정도 적용됩니다. ConditionSet은 기호 풀이 미해결을 뜻하며 근의 존재를 보장하지 않습니다. 실수 근의 수치 계산에는 연속이고 양 끝의 부호가 다른 구간에서 nsolve를 사용합니다.
 Example: solve(x^2-5x+6=0,x)
+`solve(eq,x,real)` — 방정식 하나와 변수 하나에 대해 실수 영역을 명시합니다. complex(복소수)·integer(정수)도 지원하며 기존 변수 가정도 적용됩니다. 영역을 생략하면 절댓값 방정식 등에서 실수 영역으로 자동 재시도합니다.
+Example: solve(abs(x-1)=3,x,real)
+`solve(abs(x-1)=3,x)` — real 가정 없이도 절댓값 방정식을 풀 수 있습니다.
+Example: solve(abs(x-1)=3,x) → {-2, 4}
+`solve(exp(x)=x,x)` — 전체 복소수 해 −LambertW(−1,k), k ∈ ℤ를 반환합니다. 실수 영역을 명시하면 EmptySet입니다. 일차식 지수 방정식에는 전체 분기 전략을 적용하며, 그 밖의 Lambert W 방정식에서 보조 solve로 얻은 해는 완전한 해가 아닌 일부 해로 표시합니다.
+Example: solve(exp(x)=x,x)
 `nsolve(expr,x,a,b)` — [a,b] 구간에서 수치적으로 근을 찾습니다.
 Example: nsolve(cos(x)-x,x,0,1)
 `nintegrate(expr,x,a,b)` — a부터 b까지 수치 적분합니다.
@@ -343,7 +353,7 @@ Example: rref([[1,2],[3,4]])
 Example: lu([[2,1],[1,3]])
 `linsolve(A,b)` — 선형계 A·x = b를 풉니다.
 Example: linsolve([[2,1],[1,3]],[1,2])
-`eigenvalues(A)` — 고유값.
+`eigenvalues(A)` — 고유값과 각각의 대수적 중복도를 함께 표시합니다. 재사용되는 수치 결과는 [고유값, 중복도] 쌍의 목록입니다.
 Example: eigenvalues([[2,0],[0,3]])
 `eigenvectors(A)` — 고유벡터.
 Example: eigenvectors([[2,0],[0,3]])
@@ -399,10 +409,14 @@ Example: stats([1,2,3,4])
 Example: mean([1,2,3,4])
 `median(list)` — 중앙값.
 Example: median([3,1,2])
-`variance(list)` — 표본분산.
+`variance(list)` — 기본은 표본분산(n−1로 나눔; ddof=1)이며 데이터가 2개 이상이어야 합니다. 두 번째 인수로 ddof=0 또는 1을 지정할 수 있습니다.
 Example: variance([1,2,3,4])
-`stdev(list)` — 표본표준편차.
-Example: stdev([1,2,3,4])
+`variance(list,0)` — 모집단분산(n으로 나눔)입니다.
+Example: variance([1,2,3],0) → 2/3
+`stdev(list)` — 기본은 표본표준편차(ddof=1)이며 데이터가 2개 이상이어야 합니다. stats(list)는 모집단·표본 값을 모두 보여 줍니다.
+Example: stdev([1,2,3]) → 1
+`stdev(list,0)` — 모집단표준편차(ddof=0)입니다.
+Example: stdev([2,4,4,4,5,5,7,9],0) → 2
 `quartiles(list)` — 포괄적 보간 방식으로 구한 Q1, 중앙값, Q3.
 Example: quartiles([1,2,3,4,5])
 `sumdata(list)` — 데이터 값의 합계.
@@ -411,8 +425,10 @@ Example: sumdata([1,2,3,4])
 Example: regression([[1,2],[2,4],[3,6]],linear)
 Example (y = S(b)/S₀): regression([[0,1],[100,0.9],[200,0.81]],custom,exp(-b*ADC),b)
 Example (지수 감쇠): regression([[0,4],[1,2.8],[2,2.1],[3,1.6]],custom,A*exp(-k*x)+C,x)
-`covariance(x,y)` — 짝을 이룬 두 목록의 공분산.
+`covariance(x,y)` — 기본은 표본공분산(n−1로 나눔; ddof=1)이며 데이터 쌍이 2개 이상이어야 합니다. 세 번째 인수로 ddof=0 또는 1을 지정할 수 있습니다.
 Example: covariance([1,2,3],[2,4,6])
+`covariance(x,y,0)` — 모집단공분산(n으로 나눔)입니다.
+Example: covariance([1,2,3],[2,4,6],0) → 4/3
 `correlation(x,y)` — 짝을 이룬 두 목록의 상관계수.
 Example: correlation([1,2,3],[2,4,6])
 `qty(value,unit)` — 단위가 있는 양. 예: qty(2,m).

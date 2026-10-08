@@ -60,6 +60,8 @@ class PythonEditorToolsTest {
             assertEquals(1,second.source.lines().count {it=="from symvacas_catalog import x, y, z, t, pi"})
             assertTrue(second.source.contains("calc.diff(,calc.x)"))
             assertEquals(0,second.source.indexOf("import symvacas_catalog as calc"))
+            val domain=PythonEditorTools.insertCatalog("",0,0,"solve(,x,real)",6)
+            assertTrue(domain.source.contains("calc.solve(,calc.x,calc.real)"))
         }
     }
 

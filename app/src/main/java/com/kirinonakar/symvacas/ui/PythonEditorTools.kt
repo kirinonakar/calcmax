@@ -154,7 +154,7 @@ object PythonEditorTools {
     fun insertCatalog(source:String,start:Int,end:Int,template:String,inside:Int):PythonEdit {
         val opening=template.indexOf('(')
         if(opening<0)return replace(source,start,end,template,inside)
-        val symbols=setOf("x","y","z","t","pi","true","false","left","right","linear","m","cm")
+        val symbols=setOf("x","y","z","t","pi","true","false","left","right","linear","real","complex","integer","m","cm")
         val token=Regex("\\b[A-Za-z_][A-Za-z_0-9]*\\b")
         val body=template.substring(opening+1)
         val converted=StringBuilder("calc.").append(template.substring(0,opening+1))

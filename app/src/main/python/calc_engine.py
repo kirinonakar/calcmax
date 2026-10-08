@@ -22,6 +22,7 @@ from calc_advanced_statistics import FUNCTIONS as ADVANCED_STATISTICS
 HEAVY_CALLS=("solve","integrate","dsolve","desolve","laplace","ilaplace","fourier","ifourier","mellin","invmellin","ztrans","invztrans","pdsolve","domain","range","real_roots","rsolve","invt","tinterval","tukey","tvmrate","irr","regression","wilcoxon","mannwhitney")
 MAX_SHOWN_INTEGER_DIGITS=10000
 HEAVY_CALLS += tuple(ADVANCED_STATISTICS)
+HEAVY_CALLS += ("factorint","divisors")
 HEAVY_CALLS += ("mean", "median", "variance", "stdev", "sumdata", "quartiles", "stats",
                 "covariance", "correlation", "ttest", "ttest2", "ttestpaired", "ztest", "ztest2",
                 "chi2test", "chi2independence", "fisherexact", "anova", "shapiro", "kruskal", "zinterval")
@@ -109,6 +110,10 @@ def _dispatch(payload, control=None):
             # applies displayDigits as fractional places after choosing a notation.
             term_labels=request.get('statisticsTermLabels', {}) if tree.get('value') in ADVANCED_STATISTICS else {}
             shown_value=statistics_display_terms(value,term_labels) if term_labels else value
+            if tree.get("kind")=="call" and tree.get("value")=="eigenvalues":
+                # Presentation labels must not change the numeric pairs saved in Ans.
+                shown_value={"eigenvalue "+str(i+1): {"value":pair[0], "multiplicity":pair[1]}
+                             for i,pair in enumerate(value.tolist())}
             display_value=display_rounded(shown_value,engine.precision)
             exact,exact_tree=shown_exact(display_value)
             require(len(exact)<=40000,"Result exceeds display size limit")

@@ -149,10 +149,26 @@ internal fun advancedStatisticsRows(data:String,columnLimit:Int?=null):List<List
 @Composable private fun StatisticsFormFields(definition:JSONObject,settings:JSONObject,columns:List<String>,onChange:(String,String)->Unit) {
     val ko=isKorean();val fields=definition.getJSONArray("controls")
     fun option(key:String):String {val field=(0 until fields.length()).map {fields.getJSONObject(it)}.first {it.getString("key")==key};return settings.optString(key,field.get("default").toString())}
-    for(index in 0 until fields.length()) {
-        val field=fields.getJSONObject(index);val key=field.getString("key");val conditions=field.optJSONObject("when")
-        val visible=conditions==null||conditions.keys().asSequence().all {name->val values=conditions.getJSONArray(name);(0 until values.length()).any {values.getString(it)==option(name)}}
-        if(!visible)continue
+    val visibleFields=(0 until fields.length()).map {fields.getJSONObject(it)}.filter {field->
+        val conditions=field.optJSONObject("when")
+        conditions==null||conditions.keys().asSequence().all {name->val values=conditions.getJSONArray(name);(0 until values.length()).any {values.getString(it)==option(name)}}
+    }
+    val bayesian=definition.getString("id") in listOf("bayesproportion","bayesmean","bayesrate")
+    var index=0
+    while(index<visibleFields.size) {
+        val field=visibleFields[index++];val key=field.getString("key")
+        if(bayesian&&field.getString("type")=="number") {
+            val pair=mutableListOf(field)
+            if(index<visibleFields.size&&visibleFields[index].getString("type")=="number")pair.add(visibleFields[index++])
+            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                pair.forEach {item->
+                    val itemKey=item.getString("key")
+                    Field(option(itemKey),item.getString(if(ko)"ko" else "label"),Modifier.weight(1f).testTag("statistics-form-$itemKey")){onChange(itemKey,it)}
+                }
+                if(pair.size==1)Spacer(Modifier.weight(1f))
+            }
+            continue
+        }
         val label=field.getString(if(ko)"ko" else "label");val value=option(key)
         when(field.getString("type")) {
             "number"->Field(value,label,Modifier.fillMaxWidth().testTag("statistics-form-$key")){onChange(key,it)}

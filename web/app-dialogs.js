@@ -79,7 +79,7 @@ export function createAppDialogs({state,ui,persist,calculator,changeMode,pressKe
       const row=element('div','','catalog-entry');row.append(control(source,()=>{
         state.recent=[source,...state.recent.filter(s=>s!==source)].slice(0,50);persist();
         if(value('mode')==='python'){
-          const field=$('python-source'),at=field.selectionStart;let draft=field.value;const inserted=`calc.${source}`;
+          const field=$('python-source'),at=field.selectionStart;let draft=field.value;const inserted=`calc.${source.replace(/\b(real|complex|integer)\b/g,'calc.$1')}`;
           draft=draft.slice(0,at)+inserted+draft.slice(field.selectionEnd);
           if(!draft.includes('import symvacas_catalog as calc'))draft='import symvacas_catalog as calc\nfrom symvacas_catalog import x, y, z, t, pi\n'+draft;
           field.value=draft;field.focus();persist();

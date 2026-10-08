@@ -49,6 +49,71 @@ async function loadRuntime(){
 }
 function runtime(){return sharedRuntime??=loadRuntime();}
 
+test('statistical conventions, solve domains and labeled eigenvalues in real WASM',async()=>{
+  const py=await runtime();
+  const run=(source,options={})=>{
+    py.globals.set('payload',JSON.stringify({tree:parse(source),...options}));
+    return JSON.parse(py.runPython('calc_engine.dispatch(payload)'));
+  };
+  const evaluate=(source,options={})=>{
+    const result=run(source,options);assert.equal(result.ok,true,`${source}: ${result.error}`);return result;
+  };
+  assert.equal(evaluate('variance([1,2,3])').exact,'1');
+  assert.equal(evaluate('variance([1,2,3],0)').exact,'2/3');
+  assert.equal(evaluate('variance([1,2,3],1)').exact,'1');
+  assert.equal(evaluate('stdev([2,4,4,4,5,5,7,9],0)').exact,'2');
+  assert.equal(evaluate('stdev([1,2,3])').exact,'1');
+  assert.equal(evaluate('covariance([1,2,3],[2,4,6])').exact,'2');
+  assert.equal(evaluate('covariance([1,2,3],[2,4,6],0)').exact,'4/3');
+  assert.equal(evaluate('covariance([1,2,3],[2,4,6],1)').exact,'2');
+  assert.equal(run('stdev([7],1)').ok,false);
+  assert.equal(run('stdev([7])').ok,false);
+  const automatic=evaluate('solve(abs(x-1)=3,x)');
+  assert.equal(automatic.exact,'{-2, 4}');
+  assert.match(automatic.note,/real domain automatically/);
+  assert.equal(evaluate('solve(abs(x-1)=3,x)',{variables:{x:parse('99')}}).exact,'{-2, 4}');
+  assert.equal(evaluate('solve(sign(x)=1,x)').exact,'Interval.open(0, oo)');
+  assert.equal(evaluate('solve(abs(x)=-1,x)').exact,'EmptySet');
+  assert.equal(evaluate('solve(x^2+1=0,x)').exact,'{-I, I}');
+  assert.equal(run('solve(abs(x-1)=3,x,complex)').ok,false);
+  const system=evaluate('solve([abs(x-1)=3,y^2+1=0],[x,y])');
+  assert.equal(system.resultAst.args.length,4);
+  assert.match(system.note,/for x/);
+  assert.equal(evaluate('solve(abs(x-1)=3,x,real)').exact,'{-2, 4}');
+  assert.equal(evaluate('solve(abs(x-1)=3,x,integer)').exact,'{-2, 4}');
+  assert.equal(evaluate('solve(x^2+1=0,x,real)').exact,'EmptySet');
+  assert.equal(evaluate('solve(x^2+1=0,x,complex)').exact,'{-I, I}');
+  const lambert=evaluate('solve(exp(x)=x,x)');
+  assert.match(lambert.exact,/LambertW\(-1, k\)/);
+  assert.match(lambert.note,/All complex solutions/);
+  assert.equal(lambert.tree.kind,'rows');
+  assert.equal(evaluate('solve(exp(x)=x,x,real)').exact,'EmptySet');
+  assert.equal(evaluate('solve(exp(x)=x,x)',{assumptions:{x:['real']}}).exact,'EmptySet');
+  assert.match(evaluate('solve(exp(x)=4*x,x,real)').exact,/LambertW\(-1\/4, -1\)/);
+  assert.match(evaluate('solve(x*exp(x)=1,x)').note,/Partial solutions/);
+  assert.match(evaluate('solve(sin(x)=x,x)').note,/not proof/);
+  const integral=evaluate('integrate(sqrt(tan(x)),x)');
+  assert.doesNotMatch(integral.exact,/Integral/);
+  assert.match(integral.exact,/atan/);
+  assert.match(integral.note,/rational function/);
+  assert.ok(integral.conditions.includes('tan(x) > 0'));
+  assert.equal(evaluate('simplify(diff(Ans,x)-sqrt(tan(x)))',{variables:{Ans:integral.resultAst}}).exact,'0');
+  const applied=evaluate('Ans(0.5)',{variables:{Ans:integral.resultAst},angle:'DEG'});
+  assert.match(applied.exact,/C/);
+  assert.equal(run('Ans(-0.5)',{variables:{Ans:integral.resultAst}}).ok,false);
+  assert.match(evaluate('integrate(sqrt(tan(x)+x),x)').note,/nintegrate/);
+  assert.equal(evaluate('isprime(2^61-1)').exact,'True');
+  assert.equal(run('isprime(2^64)').ok,false);
+  assert.equal(evaluate('factorint(10^20)').exact,'2**20*5**20');
+  assert.equal(evaluate('divisors(10^20)').resultAst.args.length,441);
+  assert.match(run('divisors(2^2000)').error,/2000 results/);
+  assert.match(run('divisors(2^1999)').error,/40000 characters/);
+  const eigen=evaluate('eigenvalues([[2,1],[1,2]])');
+  assert.equal(eigen.tree.kind,'rows');
+  assert.match(eigen.exact,/multiplicity/);
+  assert.deepEqual(evaluate('Ans',{variables:{Ans:eigen.resultAst}}).resultAst,eigen.resultAst);
+});
+
 test('actual CPython WASM reuses the Android engine across workspaces',async()=>{
   const py=await runtime();
   function run(request) {

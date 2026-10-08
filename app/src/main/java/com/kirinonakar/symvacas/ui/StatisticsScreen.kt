@@ -366,7 +366,10 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
                         Field(hmcLeapfrog,"Leapfrog steps (1–50)",Modifier.weight(1f)){m.clearRegression();hmcLeapfrog=it}
                         Field(hmcChains,"Chains (2–4)",Modifier.weight(1f)){m.clearRegression();hmcChains=it}
                     }
-                    Field(hmcSeed,"Random seed",Modifier.fillMaxWidth()){m.clearRegression();hmcSeed=it}
+                    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                        Field(hmcSeed,"Random seed",Modifier.weight(1f)){m.clearRegression();hmcSeed=it}
+                        Spacer(Modifier.weight(1f))
+                    }
                     Text(tr("Static HMC; step size adapts during warmup. Check split R-hat, ESS and divergences."),fontSize=11.sp,color=LocalInstrument.current.muted)
                 }
 

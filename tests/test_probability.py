@@ -1,4 +1,3 @@
-import symvacas_catalog as calc
 import sympy as s
 import itertools
 import json
@@ -9,6 +8,7 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT / "app/src/main/python"))
+import symvacas_catalog as calc
 import calc_engine
 
 SCHEMA = json.loads((ROOT / "app/src/main/assets/probability.json").read_text(encoding="utf-8"))

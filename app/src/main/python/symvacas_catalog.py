@@ -6,6 +6,7 @@ x, y, z, t, u, v, w, s = sp.symbols("x y z t u v w s")
 pi = sp.pi
 true, false = sp.true, sp.false
 left, right, both, linear = "left", "right", "both", "linear"
+real, complex, integer = "real", "complex", "integer"
 begin, end = "begin", "end"
 NA = sp.Symbol("NA")
 m, cm = "m", "cm"
