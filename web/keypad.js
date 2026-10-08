@@ -71,16 +71,33 @@ export function renderKeypad(container,{second=false,shift=false,alpha=false,hyp
     }else face.textContent=k.title;
     button.append(legends,face);bindKeyPress(button,()=>press(k),()=>longPress(k));return button;
   };
-  const top=document.createElement('div');top.className='keypad-top';
-  topKeys(second).forEach((k,i)=>{const button=create(k);button.style.gridColumn=String(i<2?i+1:i+3);button.style.gridRow='1';top.append(button);});
-  topFunctions(second).forEach((k,i)=>{const button=create(k);button.style.gridColumn=String(i<2?i+1:i+3);button.style.gridRow='2';top.append(button);});
-  const directions=document.createElement('div');directions.className='direction-pad';directions.setAttribute('aria-label','Cursor controls');
-  for(const [title,input,position] of [['▲','UP','up'],['◀','LEFT','left'],['▶','RIGHT','right'],['▼','DOWN','down']]){const button=create(key(title,input));button.className=`direction-key ${position}`;button.setAttribute('aria-label',`Cursor ${position}`);directions.append(button);}
-  top.append(directions);
-  const rows=(second?secondRows:scientificRows).concat(numericRows).map((specs,i)=>{const row=document.createElement('div');row.className=`keypad-row ${i<3?'scientific-row':'numeric-row'}`;row.append(...specs.map(create));return row;});
-  container.replaceChildren(top,...rows);container.dataset.page=second?'2':'1';
+  const row=(specs,type)=>{const element=document.createElement('div');element.className=`keypad-row ${type}-row`;element.append(...specs.map(create));return element;};
+  const pages=document.createElement('div');pages.className='keypad-pages';
+  // Keep both function pages mounted so container queries can switch layouts
+  // without resetting SHIFT/ALPHA or the saved compact-page selection.
+  for(const pageSecond of [false,true]){
+    const page=document.createElement('div');page.className='keypad-page';page.dataset.page=pageSecond?'2':'1';page.setAttribute('role','group');page.setAttribute('aria-label',pageSecond?'2nd':'1st');
+    const top=document.createElement('div');top.className='keypad-top';
+    topKeys(pageSecond).forEach((k,i)=>{
+      const button=create(k);button.style.gridColumn=String(i<2?i+1:i+3);button.style.gridRow='1';
+      if(k.input==='SECOND'){
+        const face=button.querySelector('.key-face'),toggle=document.createElement('span'),title=document.createElement('span');
+        toggle.className='keypad-page-switch';toggle.textContent=k.title;
+        title.className='keypad-page-title';title.textContent=pageSecond?'2nd':'1st';title.setAttribute('aria-hidden','true');
+        face.replaceChildren(toggle,title);
+      }
+      top.append(button);
+    });
+    topFunctions(pageSecond).forEach((k,i)=>{const button=create(k);button.style.gridColumn=String(i<2?i+1:i+3);button.style.gridRow='2';top.append(button);});
+    const directions=document.createElement('div');directions.className='direction-pad';directions.setAttribute('aria-label','Cursor controls');
+    for(const [title,input,position] of [['▲','UP','up'],['◀','LEFT','left'],['▶','RIGHT','right'],['▼','DOWN','down']]){const button=create(key(title,input));button.className=`direction-key ${position}`;button.setAttribute('aria-label',`Cursor ${position}`);directions.append(button);}
+    top.append(directions);
+    page.append(top,...(pageSecond?secondRows:scientificRows).map(specs=>row(specs,'scientific')));pages.append(page);
+  }
+  container.replaceChildren(pages,...numericRows.map(specs=>row(specs,'numeric')));container.dataset.page=second?'2':'1';
 }
 export function updateKeypadState(container,{second=false,shift=false,alpha=false,hyperbolic=false}){
+  container.dataset.page=second?'2':'1';
   for(const button of container.querySelectorAll('.key')){const k=button.keySpec;if(!k)continue;
     const symbol=shift&&!alpha?shiftedSymbols[k.alternate]:null;
     const label=alpha&&k.alpha?k.alpha:shift&&k.alternate?symbol||k.alternate:k.title;button.setAttribute('aria-label',label);
