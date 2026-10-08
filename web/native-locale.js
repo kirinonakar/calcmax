@@ -199,6 +199,7 @@ export const nativeKorean = {
   "For a rational function at infinity, the highest powers determine whether the ratio tends to 0, a finite coefficient ratio, or infinity.": "유리함수의 무한대에서의 극한은 최고차항으로 판단합니다. 차수를 비교하면 0, 최고차항 계수의 비 또는 무한대로 향하는지 알 수 있습니다.",
   "The result keeps the original domain and the selected calculus settings.": "원래 식의 정의역과 선택한 미적분 조건을 유지한 계산 결과입니다.",
   "Step-by-step solution": "단계별 풀이",
+  "Calc mode step by step": "계산기 모드 단계별 풀이",
   "Introduce a new variable to remove the squared term. The cubic becomes simpler to solve.": "새 미지수로 치환하여 이차항을 없앱니다. 그러면 삼차방정식을 더 간단한 형태로 풀 수 있습니다.",
   "Collect the transformed equation into t³ + pt + q = 0, using the new variable chosen above.": "위에서 정한 새 미지수를 사용하여 t³ + pt + q = 0 형태로 정리합니다.",
   "Calculate (q/2)² + (p/3)³. This determines the square root used in Cardano's formula.": "(q/2)² + (p/3)³를 계산합니다. 이 값은 카르다노 공식에서 제곱근 안에 들어갑니다.",

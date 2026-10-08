@@ -95,9 +95,9 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
       for(const suggestion of report.suggestions||[])guidance.append(control(`${t(suggestion.label)} · ${suggestion.detail}`,()=>{changeMode('scientific');replaceInput(suggestion.command);}));
       if(report.suggestions?.length)guidance.append(element('p',t('Choose a suggestion to fill the input, then press Solve or =. Numerical convergence is not guaranteed.'),'hint'));
     }
-    if(value('mode')==='scientific'){
+    if(value('mode')==='scientific'&&state.calcModeStepByStep){
       if(displayedStepResult!==lastResult){solutionSteps.show(lastResult);displayedStepResult=lastResult;}else solutionSteps.render();
-    }else solutionSteps.clear();
+    }else{solutionSteps.clear();displayedStepResult=null;}
     displaySizing.refresh();
     renderTape();
   }

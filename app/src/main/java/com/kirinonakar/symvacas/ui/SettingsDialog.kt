@@ -39,6 +39,7 @@ import com.kirinonakar.symvacas.ui.theme.LocalInstrument
         Row(verticalAlignment=Alignment.CenterVertically) { Text(tr("Key sound"),Modifier.weight(1f)); Switch(m.sound,{m.sound=it;m.save()}) }
         Row(verticalAlignment=Alignment.CenterVertically) { Text(tr("Save history locally"),Modifier.weight(1f)); Switch(m.persistHistory,{m.persistHistory=it;m.save()}) }
         Row(verticalAlignment=Alignment.CenterVertically) { Text(tr("Bracket auto-close"),Modifier.weight(1f)); Switch(m.autoCloseBrackets,{m.autoCloseBrackets=it;m.save()}) }
+        Row(verticalAlignment=Alignment.CenterVertically) { Text(tr("Calc mode step by step"),Modifier.weight(1f)); Switch(m.calcModeStepByStep,{m.calcModeStepByStep=it;m.recalculatePreview();m.save()}) }
         Row(verticalAlignment=Alignment.CenterVertically) { Text(if(isKorean())"입력 자동 줄바꿈 (Word wrap)" else "Input word wrap",Modifier.weight(1f)); Switch(m.wordWrap,{m.wordWrap=it;m.save()}) }
     }},confirmButton={TextButton(onClick=close) { Text(tr("Done")) }})
 }

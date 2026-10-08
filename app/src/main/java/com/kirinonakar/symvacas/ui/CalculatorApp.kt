@@ -381,7 +381,7 @@ internal fun largeHistoryTree(root:JSONObject?):Boolean {
         }
         if(m.mode=="Scientific/CAS"&&m.committed) {
             ResultGuidance(m)
-            SolutionSteps(m,m.result?.optJSONObject("solutionSteps"))
+            if(m.calcModeStepByStep)SolutionSteps(m,m.result?.optJSONObject("solutionSteps"))
         }
     }
 }

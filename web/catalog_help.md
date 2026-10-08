@@ -18,6 +18,8 @@ Tap an example to place its expression in the calculator input.
 
 Android and Web use the same explanation engine. Explanations retain the computed answer and original domain restrictions; unsupported transformations show a solver summary.
 
+Equation mode always includes explanations. In calculator mode, enable **Calc mode step by step** in Setup to include them on subsequent calculations; this option is off by default.
+
 **Equations:** Linear/quadratic equations, factorable polynomials through degree 8 whose factors are linear or quadratic, cubic Cardano transformations, and power substitutions that reduce to a linear/quadratic equation (such as `x^6-5*x^3+6=0`). Simple trigonometric/exponential/logarithmic equations include inverse and periodic branches. Affine products with exponentials, such as `x*exp(x)=1`, explain the Lambert W inverse and the selected real or complex branches.
 
 **Systems:** Linear systems with at most 6 equations and 6 unknowns, including parameter coefficients/right-hand sides when every pivot and consistency decision is provable. Two-variable polynomial systems with a linear equation support substitution when the remaining equation reduces to degree 2 or less, including matching each root with the other variable (for example, `x+y=3`, `x^2+y^2=5`). Symmetric quadratic systems determining `x^2+y^2` and `x*y` use the squared sum and difference and retain every sign combination. Parameter-dependent rank or consistency falls back to a summary.
