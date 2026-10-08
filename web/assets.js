@@ -1,4 +1,4 @@
-self.SYMVACAS_CACHE = 'symvacas-static-0afb1b79e0779aa0';
+self.SYMVACAS_CACHE = 'symvacas-static-4bd6c3cee18dd88d';
 self.SYMVACAS_ASSETS = [
   "./",
   "./advanced-statistics-schema.js",
@@ -28,6 +28,7 @@ self.SYMVACAS_ASSETS = [
   "./engine-fetch.js",
   "./engine-ui.js",
   "./engine.zip",
+  "./equation-steps.js",
   "./evaluation-policy.js",
   "./expression-display.js",
   "./expression-tree.js",

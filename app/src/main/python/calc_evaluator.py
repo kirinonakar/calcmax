@@ -237,7 +237,11 @@ class Engine:
                 require(all(c!=s.false for c in updated),"Domain ERROR: substitution at an excluded value")
                 self.conditions[condition_start:]=[c for c in updated if c!=s.true]
                 return values[0].subs(values[1],values[2])
-            return self.call(value, values, args)
+            result = self.call(value, values, args)
+            if (self.request.get("equationSteps") and node is self.request.get("tree")
+                    and value in ("solve", "nsolve", "dsolve", "desolve", "pdsolve") and len(values) > 1):
+                self.equation_step_input = (value, values)
+            return result
         finally:
             self.bindings = old
     def call(self, name, a, nodes):

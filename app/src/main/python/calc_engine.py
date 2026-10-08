@@ -11,6 +11,7 @@ from calc_shared import (Budget, CONSTANTS, MathError, dms_parts, matrix, requir
 from calc_display import (approximate, display_rounded, display_tree, dms_tree,
                           is_dms_expression, readable, result_ast)
 from calc_evaluator import Engine
+from calc_equation_steps import equation_steps, SUMMARY, LIMIT
 from calc_graph import graph, graph_analysis, regression_samples
 from calc_programmer import programmer
 from calc_statistics import pearson_correlation
@@ -172,6 +173,17 @@ def _dispatch(payload, control=None):
                 result["resultAst"]={"kind":"restricted","args":[ast]+[result_ast(c) for c in guards]} if guards else ast
                 if answer_parameters: result["resultAst"]["parameters"]=answer_parameters
             except (MathError,TypeError,AttributeError): result["reusable"]=False
+        if hasattr(engine, "equation_step_input"):
+            method, inputs = engine.equation_step_input
+            try:
+                report = equation_steps(engine, method, inputs, value)
+                if report["steps"]:
+                    report["steps"][-1].update(exact=result["exact"], tree=result["tree"])
+                if len(json.dumps(report, ensure_ascii=False)) > 40000:
+                    report = {"steps": [{"title": "Solution", "exact": result["exact"], "tree": result["tree"]}], "note": LIMIT}
+            except (ValueError, TypeError, NotImplementedError, AttributeError):
+                report = {"steps": [{"title": "Solution", "exact": result["exact"], "tree": result["tree"]}], "note": SUMMARY}
+            result["equationSteps"] = report
         if getattr(engine, "regression_report", None) and engine.regression_report.get("model") == "randomforest":
             result.pop("resultAst", None)
             result["reusable"] = False

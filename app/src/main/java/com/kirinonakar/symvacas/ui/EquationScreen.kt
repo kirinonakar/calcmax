@@ -10,6 +10,8 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import com.kirinonakar.symvacas.calculator.CalculatorModel
 import com.kirinonakar.symvacas.calculator.FunctionTransfer
@@ -18,6 +20,7 @@ import com.kirinonakar.symvacas.math.Editor
 import com.kirinonakar.symvacas.math.LatexInput
 import com.kirinonakar.symvacas.math.Parser
 import org.json.JSONObject
+import org.json.JSONArray
 
 @Composable fun EquationScreen(m:CalculatorModel) {
     val kind=m.equationKind
@@ -106,6 +109,49 @@ import org.json.JSONObject
         if(m.error.isNotBlank())Text(m.error,color=MaterialTheme.colorScheme.error)
         if(m.result!=null) {HorizontalDivider();Text("Solution");Box(Modifier.fillMaxWidth()){ResultMath(m.result!!,m.decimal,m.outputFont,
             displayMode=m.resultDisplayMode,thousandsSeparator=m.thousandsSeparator,displayDigits=m.displayDigits)};SmallAction(if(m.decimal)"Show exact" else "Show decimal",translate=false){m.decimal=!m.decimal}}
+        m.result?.optJSONObject("equationSteps")?.let {report->
+            var expanded by remember(report){mutableStateOf(false)}
+            var advancedExpanded by remember(report){mutableStateOf(false)}
+            val expansionDescription=tr(if(expanded)"Expanded" else "Collapsed")
+            HorizontalDivider()
+            TextButton(onClick={expanded=!expanded},modifier=Modifier.fillMaxWidth().semantics {
+                stateDescription=expansionDescription
+            }) {Text((if(expanded)"▾ " else "▸ ")+tr("Step-by-step solution"))}
+            if(expanded) {
+                report.optString("note").lines().filter{it.isNotBlank()}.forEach {line->Text(tr(line),style=MaterialTheme.typography.bodySmall)}
+                if(report.optString("method").isNotBlank())Text(tr(report.optString("method")),style=MaterialTheme.typography.titleMedium)
+                EquationStepList(report.optJSONArray("steps"),m)
+                report.optJSONArray("advancedSteps")?.let {advanced->
+                    val advancedDescription=tr(if(advancedExpanded)"Expanded" else "Collapsed")
+                    TextButton(onClick={advancedExpanded=!advancedExpanded},modifier=Modifier.fillMaxWidth().semantics{stateDescription=advancedDescription}) {
+                        Text((if(advancedExpanded)"▾ " else "▸ ")+tr("Advanced solution · Gaussian elimination"))
+                    }
+                    if(advancedExpanded)EquationStepList(advanced,m)
+                }
+            }
+        }
+    }
+}
+
+@Composable private fun EquationStepList(steps:JSONArray?,m:CalculatorModel) {
+    if(steps==null)return
+    (0 until steps.length()).forEach {index->
+        val step=steps.getJSONObject(index)
+        Text("${index+1}. ${tr(step.optString("title"))}",style=MaterialTheme.typography.titleSmall)
+        if(step.optString("explanation").isNotBlank())Text(tr(step.optString("explanation")),style=MaterialTheme.typography.bodySmall)
+        step.optJSONObject("variableOrder")?.let{EquationStepFormula(it,m)}
+        step.optJSONObject("operation")?.let{EquationStepFormula(JSONObject().put("tree",it),m)}
+        if(step.has("tree"))EquationStepFormula(step,m)
+        step.optJSONArray("equations")?.let {formulas->
+            (0 until formulas.length()).forEach {EquationStepFormula(formulas.getJSONObject(it),m)}
+        }
+    }
+}
+
+@Composable private fun EquationStepFormula(formula:JSONObject,m:CalculatorModel) {
+    formula.optJSONObject("tree")?.let {tree->
+        if(tree.optString("kind")=="matrix")Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())){MathNode(tree,m.outputFont)}
+        else Box(Modifier.fillMaxWidth()){ResultMath(formula,false,m.outputFont,displayDigits=m.displayDigits)}
     }
 }
 

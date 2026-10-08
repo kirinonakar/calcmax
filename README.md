@@ -19,7 +19,7 @@ A scientific calculator, computer algebra system (CAS), and graphing workspace f
 | --- | --- |
 | Scientific / CAS | Exact arithmetic, symbolic algebra, calculus, limits, series, transforms, complex numbers |
 | Graphing | Function and implicit plots, parametric, polar, sequence, 3D surface and ODE plots; trace, analysis, parameter sliders and animation |
-| Equations | Polynomial equations, systems, exact/numeric solving, differential equations |
+| Equations | Polynomial equations, systems, exact/numeric solving, differential equations, Step-by-step solution |
 | Matrix / Vector | Matrix algebra, determinants, eigenvalues and vector operations |
 | Statistics | Datasets, descriptive statistics, hypothesis tests, confidence intervals, correlation, regression, plots, survival analysis, advanced statistical analysis |
 | Probability | Distributions, tail/interval/quantile queries, and editable coin, dice, card and sampling examples |

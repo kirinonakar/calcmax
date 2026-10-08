@@ -416,7 +416,7 @@ internal fun negativeFractionNumerator(node:JSONObject):JSONObject? {
                     content={child(0,hidden=true)})
                 else RadicalSign{child(0,hidden=true)}
             kind=="matrix"||kind=="list"&&children.isNotEmpty()&&children.all{it.optString("kind")=="list"}->SquareBrackets(close=value!="open") {
-                Column(verticalArrangement=Arrangement.spacedBy(4.dp)){children.forEach{row->MathRow(10.dp){val cells=row.optJSONArray("args");for(i in 0 until(cells?.length() ?: 0))cells?.optJSONObject(i)?.let{MathNode(it,size*.85f,select,selection,depth+1,selectionCoveredByAncestor=selectionCoveredByAncestor||highlighted)}}}}
+                Column(verticalArrangement=Arrangement.spacedBy(4.dp)){children.forEach{row->MathRow(10.dp){val cells=row.optJSONArray("args");for(i in 0 until(cells?.length() ?: 0)){if(i==node.optInt("augmentedColumn",-1))label("│",.85f);cells?.optJSONObject(i)?.let{MathNode(it,size*.85f,select,selection,depth+1,selectionCoveredByAncestor=selectionCoveredByAncestor||highlighted)}}}}}
             }
             kind=="list"&&children.isNotEmpty()->SquareBrackets(close=value!="open") {MathRow(2.dp){children.indices.forEach {i->if(i>0)label(", ");child(i)}}}
             emptyContainer->MathRow {label(if(kind=="list")"[" else "{");if(caret&&cursor==start+1)MathText("│",size,blink=true);label(if(kind=="list")"]" else "}")}

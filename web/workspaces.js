@@ -11,6 +11,7 @@ import {createStatisticsWorkspace} from './statistics-workspace.js';
 import {createFunctionsWorkspace} from './functions-workspace.js';
 import {createPythonWorkspace} from './python-workspace.js';
 import {createProbabilityWorkspace} from './probability-workspace.js';
+import {createEquationSteps} from './equation-steps.js';
 
 export function createWorkspaces({state,engine,ui,persist,restoreSelect,requestOptions,isBusy,error,changeMode,replaceInput,insert,evaluate,showResult,graphs}) {
   const {toast}=ui;
@@ -19,6 +20,7 @@ export function createWorkspaces({state,engine,ui,persist,restoreSelect,requestO
   const functions=createFunctionsWorkspace({state,ui,persist,refreshWorkspaceMath,changeMode,insert});
   const python=createPythonWorkspace({engine,ui,persist,requestOptions,error,run});
   const probability=createProbabilityWorkspace({state,engine,persist,requestOptions});
+  const equationSteps=createEquationSteps($('equation-steps'),$('equation-steps-body'),state);
   function equationSource(){return value('equation-form')==='general'?value('equation-source'):polynomialEquation(['equation-a','equation-b','equation-c','equation-d'].slice(0,Number(value('equation-form'))+1).map(value),value('equation-variable'));}
   function tipExpression(){return tipCommand({bill:value('tip-amount'),percent:value('tip-percent'),fixed:value('tip-fixed'),tax:value('tip-tax'),people:value('tip-people'),method:value('tip-method'),whole:$('tip-whole').checked});}
   function tipMethodControls(){const fixed=value('tip-method')==='amount';$('tip-percent').disabled=fixed;$('tip-fixed').disabled=!fixed;}
@@ -51,6 +53,7 @@ export function createWorkspaces({state,engine,ui,persist,restoreSelect,requestO
   };
 
   async function run(workspace) {
+    if(workspace==='equation')equationSteps.clear();
     try{
       persist();refreshWorkspaceMath();
       if(workspace==='graph'){await graphs.run();return;}
@@ -72,7 +75,8 @@ export function createWorkspaces({state,engine,ui,persist,restoreSelect,requestO
       else if(workspace==='units')source=`convert(${value('unit-value')},${value('unit-from')},${value('unit-to')})`;
       else if(workspace==='tip')source=tipExpression();
       else if(workspace==='currency'){source=`(${value('currency-amount')})*(${value('currency-rate')})`;}
-      let result=await engine.execute({...requestOptions(),tree:parse(latexInput(source)),...(advancedContext?.termLabels?{statisticsTermLabels:advancedContext.termLabels}:{})});if(workspace==='tip'&&result.ok)result=moneyResult(result,Number(value('tip-people')));if(statisticsContext&&result.ok)result={...result,note:[statisticsContext,result.note].filter(Boolean).join('\n')};showResult(result,source,workspace==='equation'?equationSource():source,{decimalDisplay:workspace==='regression'});
+      let result=await engine.execute({...requestOptions(),tree:parse(latexInput(source)),...(workspace==='equation'?{equationSteps:true}:{}),...(advancedContext?.termLabels?{statisticsTermLabels:advancedContext.termLabels}:{})});if(workspace==='tip'&&result.ok)result=moneyResult(result,Number(value('tip-people')));if(statisticsContext&&result.ok)result={...result,note:[statisticsContext,result.note].filter(Boolean).join('\n')};showResult(result,source,workspace==='equation'?equationSource():source,{decimalDisplay:workspace==='regression'});
+      if(workspace==='equation')equationSteps.show(result);
       if(advancedContext)statistics.showAdvancedResult(result,advancedContext);
     }catch(exc){error(exc.message);}
   }
@@ -84,6 +88,6 @@ export function createWorkspaces({state,engine,ui,persist,restoreSelect,requestO
     for(const group of Object.keys(unitGroups)){const option=element('option',group==='Amount'?'amount':group);option.value=group;$('unit-category').append(option);}restoreSelect('unit-category');$('unit-category').onchange();
     statistics.datasetsList();functions.render();equationControls();refreshWorkspaceMath();
   }
-  function render(){refreshWorkspaceMath();statistics.render();probability.render();}
+  function render(){refreshWorkspaceMath();statistics.render();probability.render();equationSteps.render();}
   return {initialize,render,refreshMath:refreshWorkspaceMath,renderMatrix:matrix.render,renderFunctions:functions.render,equationSource};
 }

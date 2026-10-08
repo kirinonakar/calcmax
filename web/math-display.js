@@ -85,7 +85,11 @@ export function mathDisplay(tree,digits=10,decimal=false,{notation='off',groupin
         const name=el('mi',[],value);if(t.start!==undefined){name.setAttribute('data-source-start',String(t.start));name.setAttribute('data-source-end',String(t.start+value.length));}
         return row([name,fenced(join(args,','))]);
       }
-      case 'matrix': return fenced([el('mtable',(t.args || []).map(r => el('mtr',(r.args || []).map(c => el('mtd',[render(c,false)])))))],'[',']');
+      case 'matrix': {
+        const table=el('mtable',(t.args || []).map(r=>el('mtr',(r.args || []).map(c=>el('mtd',[render(c,false)])))));
+        if(Number.isInteger(t.augmentedColumn))table.setAttribute('columnlines',Array.from({length:Math.max(0,(t.args?.[0]?.args?.length||0)-1)},(_,index)=>index===t.augmentedColumn-1?'solid':'none').join(' '));
+        return fenced([table],'[',']');
+      }
       case 'rows': return el('mtable',args.map(a => el('mtr',[el('mtd',[a])])));
       case 'row': return row([el('mtext',[],`${value}: `),...args]);
       case 'list': case 'set': case 'tuple': return fenced(join(args,','),t.kind === 'set' ? '{' : t.kind==='tuple'?'(':'[',t.kind === 'set' ? '}' : t.kind==='tuple'?')':']');

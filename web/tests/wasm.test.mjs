@@ -11,6 +11,35 @@ import {statisticsCommand,distributionCommand,equationCommand} from '../workspac
 // Reuse the interpreter for sequential integration scenarios. The cold solver
 // scenario below explicitly loads its own interpreter to keep startup coverage.
 let sharedRuntime;
+test('equation step explanations preserve real WASM answers across workspace methods',async()=>{
+  const py=await runtime();
+  const run=(source,trace=true)=>{
+    py.globals.set('payload',JSON.stringify({tree:parse(latexInput(source)),equationSteps:trace,angle:'RAD'}));
+    const result=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));
+    assert.equal(result.ok,true,`${source}: ${result.error}`);return result;
+  };
+  const cases=[
+    [{kind:'solve',source:'2x+3=0',variable:'x'},'Divide by the coefficient of the variable'],
+    [{kind:'solve',source:'x^2-5x+6=0',variable:'x'},'Apply the quadratic formula'],
+    [{kind:'solve',source:'x^3-6x^2+11x-6=0',variable:'x'},'Factor the polynomial'],
+    [{kind:'solve',source:'x+y=3x\nx-y=1',variable:'x,y'},'Substitute into the second equation'],
+    [{kind:'solve',source:'sin(x)=1/2',variable:'x'},'Include periodic branches (n is an integer)'],
+    [{kind:'nsolve',source:'x^2=2',variable:'x',extra:'1,2'},'Numerical root'],
+    [{kind:'dsolve',source:'diff(y(t),t)=y(t)',variable:'y(t)',extra:'t',initial:'y(0)=1'},'Integrating factor'],
+    [{kind:'pdsolve',source:'diff(u(x,y),x)+diff(u(x,y),y)=0',variable:'u(x,y)'},'Move all terms to the left'],
+  ];
+  for(const [options,title] of cases){
+    const source=equationCommand(options),plain=run(source,false),traced=run(source);
+    const {equationSteps,...answer}=traced;
+    assert.deepEqual(answer,plain,source);
+    assert.ok(equationSteps.steps.some(step=>step.title===title),source);
+    assert.equal(equationSteps.steps.at(-1).exact,traced.exact,source);
+    assert.ok(equationSteps.steps.every(step=>!step.tree||typeof step.tree.kind==='string'));
+  }
+  const rational=run(equationCommand({kind:'solve',source:'(x^2-1)/(x-1)=2',variable:'x'}));
+  assert.equal(rational.exact,'EmptySet');
+  assert.ok(rational.equationSteps.steps.some(step=>step.title==='Check the original domain restrictions'));
+});
 test('Bayesian linear, logistic and HMC run through workspace commands in real WASM',async()=>{
   const py=await runtime();
   const reference=JSON.parse(readFileSync(new URL('../../tests/fixtures/bayesian_regression_reference.json',import.meta.url),'utf8'));
