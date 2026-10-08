@@ -9,6 +9,17 @@ import com.kirinonakar.symvacas.math.Parser
 import com.kirinonakar.symvacas.math.requiresExplicitEvaluation
 
 class AdvancedStatisticsTest {
+    @Test fun bayesianTwoSamplesKeepIndependentLengthsAndRequireDistinctRoles() {
+        val definitions=JSONArray(File("src/main/assets/advanced_statistics.json").readText())
+        val definition=(0 until definitions.length()).map {definitions.getJSONObject(it)}.first {it.getString("id")=="bayescompare"}
+        val rows=listOf(listOf("10","13"),listOf("11","14"),listOf("","15"))
+        assertEquals("bayescompare([10,11],[13,14,15],equal,0,0.01,2,1,0.95,20000,0)",guidedStatisticsCommand(definition,rows))
+        assertTrue(requiresExplicitEvaluation(Parser("bayescompare([1,2],[3,4])").parse()))
+        for(settings in listOf(JSONObject().put("second","0"),JSONObject().put("kappa",""),JSONObject().put("variance","paired"))) {
+            assertTrue(runCatching {guidedStatisticsCommand(definition,rows,settings)}.exceptionOrNull() is IllegalArgumentException)
+        }
+        assertTrue(runCatching {guidedStatisticsCommand(definition,listOf(listOf("10","13"),listOf("","14")))}.exceptionOrNull() is IllegalArgumentException)
+    }
     @Test fun mcnemarUsesNamedSelectedColumnsAndOmitsIncompletePairs() {
         val definitions=JSONArray(File("src/main/assets/advanced_statistics.json").readText())
         val definition=(0 until definitions.length()).map {definitions.getJSONObject(it)}.first {it.getString("id")=="mcnemar"}

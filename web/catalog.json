@@ -313,6 +313,7 @@
     "glm([],nbinom,log,1)",
     "bayesproportion([],1,1,0.95,0.5)",
     "bayesmean([],0,1,2,1,0.95,0)",
+    "bayescompare([],[],equal,0,0.01,2,1,0.95,20000,0)",
     "bayesrate([],1,1,0.95,1)",
     "padjust([],holm,0.05)",
     "padjust([],bonferroni)",

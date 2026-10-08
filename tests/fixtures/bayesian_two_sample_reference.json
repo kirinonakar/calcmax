@@ -1,0 +1,209 @@
+[
+  {
+    "name": "example equal",
+    "arguments": [
+      [
+        10,
+        11,
+        9,
+        10,
+        12
+      ],
+      [
+        13,
+        14,
+        12,
+        15,
+        13
+      ],
+      "equal",
+      0,
+      0.01,
+      2,
+      1,
+      0.95,
+      20000,
+      0
+    ],
+    "expected": {
+      "Mean A": 10.4,
+      "Mean B": 13.4,
+      "Posterior Mean Difference (B - A)": 2.9940119760479043,
+      "Posterior Effect Size": 2.8159737962978597,
+      "difference posterior SD": 0.7127639893531197,
+      "P(μB > μA)": 0.9997675081336128,
+      "difference credible interval": [
+        1.5786860553234494,
+        4.409337896772359
+      ],
+      "log BF10": 4.020524516493666,
+      "BF10": 55.730329639032945,
+      "BF01": 0.017943550782438047
+    },
+    "source": "SciPy 1.18.1; marginal evidence / Student-t convolution"
+  },
+  {
+    "name": "null equal",
+    "arguments": [
+      [
+        3,
+        3,
+        3
+      ],
+      [
+        3,
+        3,
+        3,
+        3
+      ],
+      "equal",
+      3,
+      0.5,
+      2,
+      1,
+      0.95,
+      20000,
+      0
+    ],
+    "expected": {
+      "Mean A": 3.0,
+      "Mean B": 3.0,
+      "Posterior Mean Difference (B - A)": 0.0,
+      "Posterior Effect Size": 0.0,
+      "difference posterior SD": 0.3359684204526464,
+      "P(μB > μA)": 0.5,
+      "difference credible interval": [
+        -0.6688681003284045,
+        0.6688681003284045
+      ],
+      "log BF10": -1.5768414970462588,
+      "BF10": 0.20662669966181835,
+      "BF01": 4.839645610352773
+    },
+    "source": "SciPy 1.18.1; marginal evidence / Student-t convolution"
+  },
+  {
+    "name": "informative equal",
+    "arguments": [
+      [
+        -2,
+        0,
+        1
+      ],
+      [
+        1,
+        2,
+        2,
+        4
+      ],
+      "equal",
+      1,
+      2,
+      0.25,
+      3,
+      0.95,
+      20000,
+      0
+    ],
+    "expected": {
+      "Mean A": -0.3333333333333333,
+      "Mean B": 2.25,
+      "Posterior Mean Difference (B - A)": 1.6333333333333333,
+      "Posterior Effect Size": 0.9765038896573148,
+      "difference posterior SD": 1.1440668201153676,
+      "P(μB > μA)": 0.9317202953495461,
+      "difference credible interval": [
+        -0.652392932688644,
+        3.9190595993553106
+      ],
+      "log BF10": -0.28154894714584167,
+      "BF10": 0.7546139785708432,
+      "BF01": 1.3251808585548484
+    },
+    "source": "SciPy 1.18.1; marginal evidence / Student-t convolution"
+  },
+  {
+    "name": "example unequal",
+    "arguments": [
+      [
+        10,
+        11,
+        9,
+        10,
+        12
+      ],
+      [
+        13,
+        14,
+        12,
+        15,
+        13
+      ],
+      "unequal",
+      0,
+      0.01,
+      2,
+      1,
+      0.95,
+      20000,
+      0
+    ],
+    "expected": {
+      "Mean A": 10.4,
+      "Mean B": 13.4,
+      "Posterior Mean Difference (B - A)": 2.9940119760479043,
+      "difference posterior SD": 0.7017729205293275,
+      "P(μB > μA)": 0.9997916835697246,
+      "difference credible interval": [
+        1.6023175155296807,
+        4.385706436566125
+      ],
+      "log BF10": 4.064657765277785,
+      "BF10": 58.244971659506845,
+      "BF01": 0.01716886404968794
+    },
+    "source": "SciPy 1.18.1; marginal evidence / Student-t convolution"
+  },
+  {
+    "name": "heterogeneous unequal",
+    "arguments": [
+      [
+        -8,
+        0,
+        8
+      ],
+      [
+        2,
+        3,
+        4,
+        3,
+        3,
+        2,
+        4
+      ],
+      "unequal",
+      1,
+      0.2,
+      3,
+      2,
+      0.95,
+      20000,
+      0
+    ],
+    "expected": {
+      "Mean A": 0.0,
+      "Mean B": 3.0,
+      "Posterior Mean Difference (B - A)": 2.881944444444444,
+      "difference posterior SD": 2.4519498783761104,
+      "P(μB > μA)": 0.8919441625240171,
+      "difference credible interval": [
+        -2.0059198254456807,
+        7.769808714334715
+      ],
+      "log BF10": 0.642566971294916,
+      "BF10": 1.9013553449135057,
+      "BF01": 0.5259406152959225
+    },
+    "source": "SciPy 1.18.1; marginal evidence / Student-t convolution"
+  }
+]

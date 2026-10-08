@@ -270,6 +270,9 @@ input:disabled,select:disabled{opacity:.45;cursor:default}
 .graph-section{padding:12px 0}
 .graph-section>summary{font-size:17px;cursor:pointer}
 .graph-section[open]>summary{margin-bottom:12px}
+.statistics-section{margin:16px 0}
+.statistics-section>summary{font-size:17px;cursor:pointer}
+.statistics-section[open]>summary{margin-bottom:12px}
 .graph-range-actions{display:flex;justify-content:flex-end}
 .graph-range-actions:has(button[hidden]){display:none}
 #graph-help{margin-bottom:12px}

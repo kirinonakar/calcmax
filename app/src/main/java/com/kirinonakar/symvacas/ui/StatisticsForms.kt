@@ -100,6 +100,14 @@ internal fun guidedStatisticsCommand(definition:JSONObject,rows:List<List<String
             val suffix=if(offset==null)"" else ",${vector(complete(listOf(offset)).map {it[0]})},${opts["adjustment"]}"
             "glm(${table(mapped)},${opts["family"]},${opts["link"]},${if(opts["family"]=="nbinom")opts["alpha"] else "1"}$suffix)"
         }
+        "bayescompare"->{
+            val first=col("first");val second=col("second");distinct(listOf(first,second))
+            val samples=listOf(values(first),values(second))
+            require(samples.all {it.size>=2}) {"Enter at least two observations in each group"}
+            val keys=listOf("variance","mu","kappa","alpha","beta","level","samples","seed")
+            require(keys.all {opts.getValue(it).isNotBlank()}) {"Enter all Bayesian prior and interval parameters"}
+            "$id(${samples.joinToString(",",transform=::vector)},${keys.joinToString(",") {opts.getValue(it).trim()}})"
+        }
         "bayesproportion","bayesmean","bayesrate"->{
             val data=when {
                 id=="bayesproportion"&&opts["layout"]=="counts"->table(complete(listOf(col("successes"),col("trials"))))

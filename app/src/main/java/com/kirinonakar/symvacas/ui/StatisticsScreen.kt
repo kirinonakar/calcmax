@@ -18,6 +18,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -47,6 +48,14 @@ private fun parseHeatMapSelection(value:String,count:Int,defaults:Set<Int>):Set<
     else->value.split(',').mapNotNull {it.toIntOrNull()?.takeIf {index->index in 0 until count}}.toSet().ifEmpty {defaults}
 }
 private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinToString(",").ifEmpty {"-"}
+
+@Composable internal fun StatisticsSectionToggle(title:String,expanded:Boolean,tag:String,onClick:()->Unit) {
+    val description=tr(if(expanded)"Expanded" else "Collapsed")
+    TextButton(onClick=onClick,modifier=Modifier.fillMaxWidth().testTag(tag).semantics {stateDescription=description},
+        contentPadding=PaddingValues(horizontal=0.dp,vertical=8.dp)) {
+        Text((if(expanded)"▾ " else "▸ ")+tr(title),Modifier.weight(1f),style=MaterialTheme.typography.titleMedium)
+    }
+}
 
 @Composable private fun StatCell(value:String,modifier:Modifier,focus:FocusRequester,tag:String,onValue:(String)->Unit) {
     val c=LocalInstrument.current
@@ -99,6 +108,7 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
     val clipboard=LocalClipboardManager.current
     val scope=rememberCoroutineScope()
     val panelScroll=rememberScrollState()
+    var visualizeExpanded by rememberSaveable {mutableStateOf(true)}
     val names=remember(m.dataSets) {m.dataSets.keys().asSequence().toList().sorted()}
     var selected by rememberSaveable {mutableStateOf(m.statisticsSelected)}
     var isNew by rememberSaveable {mutableStateOf(m.statisticsIsNew)}
@@ -309,250 +319,252 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
             }
             statisticsReportFor(m.result,m.resultSource,setOf("stats","mean","median","variance","stdev","sumdata","quartiles","correlation","covariance"))?.let {StatisticsResultReport(m,it)}
         }
-        Column(verticalArrangement=Arrangement.spacedBy(2.dp)) {
-            Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
-                Text(tr("Visualize & regression"),Modifier.weight(1f),style=MaterialTheme.typography.titleMedium)
-                if(dataKind!="list")SmallAction("Clear regression"){m.clearRegression()}
-            }
-            val activeRegression=if(m.regressionFit.isNotBlank()&&m.regressionData==data)when {m.regressionMode.startsWith("randomforest")->"randomforest";m.regressionMode.startsWith("logistic")->"logistic";m.regressionMode in listOf("ridge","lasso","elasticnet")->if(dataColumns.size>2)"multiple" else "linear";else->m.regressionMode} else ""
-            if(dataColumns.size>1)Choices(if(dataKind=="xyz"||dataKind.startsWith("columns:"))listOf("multiple","logistic","randomforest","bayeslinear","bayeslogistic") else listOf("linear","quadratic","polynomial","logarithmic","exponential","power","logistic","randomforest","bayeslinear","bayeslogistic","custom"),if(regularized||regression in listOf("custom","polynomial","randomforest","bayeslinear","bayeslogistic"))regression else activeRegression,{selectedMode->
-                regression=selectedMode;plotType=if(dataKind=="xy")"Scatter" else "Histogram"
-                val selectedResponse=if(selectedMode in listOf("polynomial","logistic")) {if(logisticResponse=="0")0 else regressionColumns.lastIndex} else responseColumn
-                if(selectedMode in listOf("polynomial","logistic")&&logisticResponse!="0")logisticResponse=""
-                if(selectedMode in listOf("custom","polynomial","randomforest","bayeslinear","bayeslogistic")||regularization!="none")m.clearRegression()
-                if(selectedMode !in listOf("custom","polynomial","randomforest","bayeslinear","bayeslogistic")&&(selectedMode !in listOf("linear","multiple","logistic")||regularization=="none")) {
-                    val table=statisticsRegressionTable(numericRows,dataKind,selectedMode,selectedResponse)
-                    if(table!=null)m.fitRegression("regression($table,$selectedMode)",data,if(selectedMode in listOf("multiple","logistic"))selectedResponse else null)
-                    else m.error="Add more data points than fit parameters"
+        StatisticsSectionToggle("Visualize & regression",visualizeExpanded,"statistics-visualize-toggle") {visualizeExpanded=!visualizeExpanded}
+        if(visualizeExpanded) {
+            Column(verticalArrangement=Arrangement.spacedBy(2.dp)) {
+                Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+                    if(dataKind!="list")SmallAction("Clear regression"){m.clearRegression()}
                 }
-            })
-            if(dataColumns.size>1&&regression in listOf("linear","multiple","logistic")) {
-                StatisticsSelectionTitle("Regularization")
-                Choices(listOf("none","ridge","lasso","elasticnet"),regularization,{m.clearRegression();regularization=it})
-            }
-            if(dataColumns.size>1&&(regularized||regression=="randomforest")) {
-                if(regularized) {
-                    Field(lassoAlpha,"Regularization α",Modifier.fillMaxWidth()){m.clearRegression();lassoAlpha=it}
-                    Row(verticalAlignment=Alignment.CenterVertically) {
-                        Checkbox(lassoAlphaCv,{m.clearRegression();lassoAlphaCv=it},Modifier.size(38.dp))
-                        Text(tr("Cross-validate α (5 folds)"),fontSize=12.sp,color=LocalInstrument.current.ink)
+                val activeRegression=if(m.regressionFit.isNotBlank()&&m.regressionData==data)when {m.regressionMode.startsWith("randomforest")->"randomforest";m.regressionMode.startsWith("logistic")->"logistic";m.regressionMode in listOf("ridge","lasso","elasticnet")->if(dataColumns.size>2)"multiple" else "linear";else->m.regressionMode} else ""
+                if(dataColumns.size>1)Choices(if(dataKind=="xyz"||dataKind.startsWith("columns:"))listOf("multiple","logistic","randomforest","bayeslinear","bayeslogistic") else listOf("linear","quadratic","polynomial","logarithmic","exponential","power","logistic","randomforest","bayeslinear","bayeslogistic","custom"),if(regularized||regression in listOf("custom","polynomial","randomforest","bayeslinear","bayeslogistic"))regression else activeRegression,{selectedMode->
+                    regression=selectedMode;plotType=if(dataKind=="xy")"Scatter" else "Histogram"
+                    val selectedResponse=if(selectedMode in listOf("polynomial","logistic")) {if(logisticResponse=="0")0 else regressionColumns.lastIndex} else responseColumn
+                    if(selectedMode in listOf("polynomial","logistic")&&logisticResponse!="0")logisticResponse=""
+                    if(selectedMode in listOf("custom","polynomial","randomforest","bayeslinear","bayeslogistic")||regularization!="none")m.clearRegression()
+                    if(selectedMode !in listOf("custom","polynomial","randomforest","bayeslinear","bayeslogistic")&&(selectedMode !in listOf("linear","multiple","logistic")||regularization=="none")) {
+                        val table=statisticsRegressionTable(numericRows,dataKind,selectedMode,selectedResponse)
+                        if(table!=null)m.fitRegression("regression($table,$selectedMode)",data,if(selectedMode in listOf("multiple","logistic"))selectedResponse else null)
+                        else m.error="Add more data points than fit parameters"
                     }
-                    if(regularization=="elasticnet")Field(l1Ratio,"L1 ratio (0–1)",Modifier.fillMaxWidth()){m.clearRegression();l1Ratio=it}
-                    Text(tr("Predictors standardized; coefficients in original units."),fontSize=11.sp,color=LocalInstrument.current.muted)
-                } else {
-                    StatisticsSelectionTitle("Forest task")
-                    val tasks=mapOf("Auto (0/1 → classification)" to "auto","Regression" to "regression","Binary classification" to "classification")
-                    Choices(tasks.keys.toList(),tasks.entries.firstOrNull {it.value==forestTask}?.key ?: tasks.keys.first(),{m.clearRegression();forestTask=tasks[it] ?: "auto"})
-                    Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                        Field(forestTrees,"Trees (1–200)",Modifier.weight(1f)){m.clearRegression();forestTrees=it}
-                        Field(forestDepth,"Max depth (1–20)",Modifier.weight(1f)){m.clearRegression();forestDepth=it}
-                    }
-                    Field(forestSeed,"Random seed",Modifier.fillMaxWidth()){m.clearRegression();forestSeed=it}
+                })
+                if(dataColumns.size>1&&regression in listOf("linear","multiple","logistic")) {
+                    StatisticsSelectionTitle("Regularization")
+                    Choices(listOf("none","ridge","lasso","elasticnet"),regularization,{m.clearRegression();regularization=it})
                 }
-            }
-            if(dataColumns.size>1&&bayesian) {
-                StatisticsSelectionTitle("Inference method")
-                val methods=mapOf((if(regression=="bayeslinear")"Conjugate (exact)" else "Laplace approximation") to "analytic","NUTS" to "nuts")
-                Choices(methods.keys.toList(),methods.entries.firstOrNull {it.value==bayesianMethod}?.key ?: methods.keys.first(),{m.clearRegression();bayesianMethod=methods[it] ?: "analytic"})
-                if(bayesianMethod=="nuts") {
-                    Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                        Field(nutsSamples,"Samples per chain (100–5000)",Modifier.weight(1f)){m.clearRegression();nutsSamples=it}
-                        Field(nutsWarmup,"Warmup (50–5000)",Modifier.weight(1f)){m.clearRegression();nutsWarmup=it}
+                if(dataColumns.size>1&&(regularized||regression=="randomforest")) {
+                    if(regularized) {
+                        Field(lassoAlpha,"Regularization α",Modifier.fillMaxWidth()){m.clearRegression();lassoAlpha=it}
+                        Row(verticalAlignment=Alignment.CenterVertically) {
+                            Checkbox(lassoAlphaCv,{m.clearRegression();lassoAlphaCv=it},Modifier.size(38.dp))
+                            Text(tr("Cross-validate α (5 folds)"),fontSize=12.sp,color=LocalInstrument.current.ink)
+                        }
+                        if(regularization=="elasticnet")Field(l1Ratio,"L1 ratio (0–1)",Modifier.fillMaxWidth()){m.clearRegression();l1Ratio=it}
+                        Text(tr("Predictors standardized; coefficients in original units."),fontSize=11.sp,color=LocalInstrument.current.muted)
+                    } else {
+                        StatisticsSelectionTitle("Forest task")
+                        val tasks=mapOf("Auto (0/1 → classification)" to "auto","Regression" to "regression","Binary classification" to "classification")
+                        Choices(tasks.keys.toList(),tasks.entries.firstOrNull {it.value==forestTask}?.key ?: tasks.keys.first(),{m.clearRegression();forestTask=tasks[it] ?: "auto"})
+                        Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                            Field(forestTrees,"Trees (1–200)",Modifier.weight(1f)){m.clearRegression();forestTrees=it}
+                            Field(forestDepth,"Max depth (1–20)",Modifier.weight(1f)){m.clearRegression();forestDepth=it}
+                        }
+                        Field(forestSeed,"Random seed",Modifier.fillMaxWidth()){m.clearRegression();forestSeed=it}
                     }
-                    Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                        Field(nutsMaxDepth,"Max tree depth (1–10)",Modifier.weight(1f)){m.clearRegression();nutsMaxDepth=it}
-                        Field(nutsChains,"Chains (2–4)",Modifier.weight(1f)){m.clearRegression();nutsChains=it}
-                    }
-                    Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                        Field(nutsSeed,"Random seed",Modifier.weight(1f)){m.clearRegression();nutsSeed=it}
-                        Spacer(Modifier.weight(1f))
-                    }
-                    Text(tr("NUTS adapts trajectory length; step size adapts during warmup. Check split R-hat, ESS and divergences."),fontSize=11.sp,color=LocalInstrument.current.muted)
                 }
+                if(dataColumns.size>1&&bayesian) {
+                    StatisticsSelectionTitle("Inference method")
+                    val methods=mapOf((if(regression=="bayeslinear")"Conjugate (exact)" else "Laplace approximation") to "analytic","NUTS" to "nuts")
+                    Choices(methods.keys.toList(),methods.entries.firstOrNull {it.value==bayesianMethod}?.key ?: methods.keys.first(),{m.clearRegression();bayesianMethod=methods[it] ?: "analytic"})
+                    if(bayesianMethod=="nuts") {
+                        Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                            Field(nutsSamples,"Samples per chain (100–5000)",Modifier.weight(1f)){m.clearRegression();nutsSamples=it}
+                            Field(nutsWarmup,"Warmup (50–5000)",Modifier.weight(1f)){m.clearRegression();nutsWarmup=it}
+                        }
+                        Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                            Field(nutsMaxDepth,"Max tree depth (1–10)",Modifier.weight(1f)){m.clearRegression();nutsMaxDepth=it}
+                            Field(nutsChains,"Chains (2–4)",Modifier.weight(1f)){m.clearRegression();nutsChains=it}
+                        }
+                        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                            Field(nutsSeed,"Random seed",Modifier.weight(1f)){m.clearRegression();nutsSeed=it}
+                            Spacer(Modifier.weight(1f))
+                        }
+                        Text(tr("NUTS adapts trajectory length; step size adapts during warmup. Check split R-hat, ESS and divergences."),fontSize=11.sp,color=LocalInstrument.current.muted)
+                    }
 
-                Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                    Field(bayesianPriorSD,"Prior SD",Modifier.weight(1f)){m.clearRegression();bayesianPriorSD=it}
-                    Field(bayesianLevel,"Credible level (0–1)",Modifier.weight(1f)){m.clearRegression();bayesianLevel=it}
+                    Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                        Field(bayesianPriorSD,"Prior SD",Modifier.weight(1f)){m.clearRegression();bayesianPriorSD=it}
+                        Field(bayesianLevel,"Credible level (0–1)",Modifier.weight(1f)){m.clearRegression();bayesianLevel=it}
+                    }
+                    if(regression=="bayeslinear")Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                        Field(bayesianShape,"Variance prior shape",Modifier.weight(1f)){m.clearRegression();bayesianShape=it}
+                        Field(bayesianScale,"Variance prior scale",Modifier.weight(1f)){m.clearRegression();bayesianScale=it}
+                    }
+                    Text(tr("Zero-mean priors include the intercept on standardized predictors; coefficients in original units."),fontSize=11.sp,color=LocalInstrument.current.muted)
                 }
-                if(regression=="bayeslinear")Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                    Field(bayesianShape,"Variance prior shape",Modifier.weight(1f)){m.clearRegression();bayesianShape=it}
-                    Field(bayesianScale,"Variance prior scale",Modifier.weight(1f)){m.clearRegression();bayesianScale=it}
+                if(dataKind!="list"&&regression in listOf("multiple","logistic","bayeslinear","bayeslogistic"))Text(tr(if(regression in listOf("logistic","bayeslogistic"))"Selected column is response; others are predictors. Logistic response: 0 or 1." else "Selected column is response; others are predictors."),fontSize=11.sp,color=LocalInstrument.current.muted)
+                if(dataColumns.size>1&&(regularized||regression in listOf("multiple","logistic","polynomial","randomforest","bayeslinear","bayeslogistic"))) {
+                    StatisticsSelectionTitle("Dependent variable")
+                    if(regression in listOf("polynomial","logistic"))Choices(listOf("first","last"),if(responseColumn==0)"first" else "last",{position->m.clearRegression();logisticResponse=if(position=="first")"0" else ""})
+                    else Choices(regressionColumns,regressionColumns.getOrNull(responseColumn).orEmpty(),{name->m.clearRegression();logisticResponse=regressionColumns.indexOf(name).toString()},translate=false)
+                    if(regression=="logistic"&&regularization=="none") {
+                        StatisticsSelectionTitle("Firth correction")
+                        Choices(listOf("Auto","Always"),if(firthMode=="firth")"Always" else "Auto",{m.clearRegression();firthMode=if(it=="Always")"firth" else "auto"})
+                    }
+                    val table=statisticsRegressionTable(numericRows,dataKind,fitMode,responseColumn)
+                    val validNuts=bayesianMethod!="nuts"||(nutsSamples.toIntOrNull() in 100..5000&&nutsWarmup.toIntOrNull() in 50..5000&&nutsMaxDepth.toIntOrNull() in 1..10&&nutsChains.toIntOrNull() in 2..4&&nutsSeed.toLongOrNull() in 0L..2147483647L)
+                    val samplerOptions=if(bayesianMethod=="nuts")",[nuts,$nutsSamples,$nutsWarmup,$nutsMaxDepth,$nutsSeed,$nutsChains]" else ""
+                    val validOptions=when {
+                        bayesian->validNuts&&bayesianPriorSD.toDoubleOrNull()?.let {it.isFinite()&&it in 0.000001..1000000.0}==true&&bayesianLevel.toDoubleOrNull()?.let {it>0&&it<1}==true&&(regression!="bayeslinear"||(bayesianShape.toDoubleOrNull()?.let {it.isFinite()&&it>0}==true&&bayesianScale.toDoubleOrNull()?.let {it.isFinite()&&it>0}==true))
+                        regularized->(lassoAlphaCv||lassoAlpha.toDoubleOrNull()?.let {it.isFinite()&&it>0}==true)&&(regularization!="elasticnet"||l1Ratio.toDoubleOrNull()?.let {it in 0.0..1.0}==true)
+                        regression=="randomforest"->forestTrees.toIntOrNull() in 1..200&&forestDepth.toIntOrNull() in 1..20&&forestSeed.toLongOrNull() in 0L..2147483647L
+                        else->true
+                    }
+                    if(regression!="polynomial")Button(onClick={table?.let {when {
+                        bayesian->m.fitRegression("regression($it,$regression,[$bayesianPriorSD,$bayesianLevel${if(regression=="bayeslinear")",$bayesianShape,$bayesianScale" else ""}$samplerOptions])",data,responseColumn)
+                        regularized->{val penalty=if(lassoAlphaCv)"cv" else lassoAlpha;m.fitRegression("regression($it,$fitMode,${if(regularization=="elasticnet")"[$penalty,$l1Ratio]" else penalty})",data,responseColumn)}
+                        regression=="randomforest"->m.fitRegression("regression($it,$fitMode,[$forestTrees,$forestDepth,$forestSeed])",data,responseColumn)
+                        else->m.fitRegression("regression($it,$regression${if(regression=="logistic"&&firthMode=="firth")",firth" else ""})",data,responseColumn)
+                    }}},enabled=table!=null&&validOptions&&!m.regressionBusy){Text(tr("Analyze"))}
                 }
-                Text(tr("Zero-mean priors include the intercept on standardized predictors; coefficients in original units."),fontSize=11.sp,color=LocalInstrument.current.muted)
-            }
-            if(dataKind!="list"&&regression in listOf("multiple","logistic","bayeslinear","bayeslogistic"))Text(tr(if(regression in listOf("logistic","bayeslogistic"))"Selected column is response; others are predictors. Logistic response: 0 or 1." else "Selected column is response; others are predictors."),fontSize=11.sp,color=LocalInstrument.current.muted)
-            if(dataColumns.size>1&&(regularized||regression in listOf("multiple","logistic","polynomial","randomforest","bayeslinear","bayeslogistic"))) {
-                StatisticsSelectionTitle("Dependent variable")
-                if(regression in listOf("polynomial","logistic"))Choices(listOf("first","last"),if(responseColumn==0)"first" else "last",{position->m.clearRegression();logisticResponse=if(position=="first")"0" else ""})
-                else Choices(regressionColumns,regressionColumns.getOrNull(responseColumn).orEmpty(),{name->m.clearRegression();logisticResponse=regressionColumns.indexOf(name).toString()},translate=false)
-                if(regression=="logistic"&&regularization=="none") {
-                    StatisticsSelectionTitle("Firth correction")
-                    Choices(listOf("Auto","Always"),if(firthMode=="firth")"Always" else "Auto",{m.clearRegression();firthMode=if(it=="Always")"firth" else "auto"})
+                if(dataKind=="xy"&&regression=="polynomial") {
+                    Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                        Field(polynomialDegree,"Polynomial degree (1–10)",Modifier.weight(1f)){m.clearRegression();polynomialDegree=it}
+                        Button(onClick={
+                            val table=statisticsRegressionTable(numericRows,dataKind,"polynomial",responseColumn)
+                            if(table!=null)m.fitRegression("regression($table,polynomial,$polynomialDegree)",data,responseColumn)
+                        },enabled=(polynomialDegree.toIntOrNull() ?: 0) in 1..10&&!m.regressionBusy){Text(tr("Analyze"))}
+                    }
                 }
-                val table=statisticsRegressionTable(numericRows,dataKind,fitMode,responseColumn)
-                val validNuts=bayesianMethod!="nuts"||(nutsSamples.toIntOrNull() in 100..5000&&nutsWarmup.toIntOrNull() in 50..5000&&nutsMaxDepth.toIntOrNull() in 1..10&&nutsChains.toIntOrNull() in 2..4&&nutsSeed.toLongOrNull() in 0L..2147483647L)
-                val samplerOptions=if(bayesianMethod=="nuts")",[nuts,$nutsSamples,$nutsWarmup,$nutsMaxDepth,$nutsSeed,$nutsChains]" else ""
-                val validOptions=when {
-                    bayesian->validNuts&&bayesianPriorSD.toDoubleOrNull()?.let {it.isFinite()&&it in 0.000001..1000000.0}==true&&bayesianLevel.toDoubleOrNull()?.let {it>0&&it<1}==true&&(regression!="bayeslinear"||(bayesianShape.toDoubleOrNull()?.let {it.isFinite()&&it>0}==true&&bayesianScale.toDoubleOrNull()?.let {it.isFinite()&&it>0}==true))
-                    regularized->(lassoAlphaCv||lassoAlpha.toDoubleOrNull()?.let {it.isFinite()&&it>0}==true)&&(regularization!="elasticnet"||l1Ratio.toDoubleOrNull()?.let {it in 0.0..1.0}==true)
-                    regression=="randomforest"->forestTrees.toIntOrNull() in 1..200&&forestDepth.toIntOrNull() in 1..20&&forestSeed.toLongOrNull() in 0L..2147483647L
-                    else->true
+                if(m.regressionBusy)Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
+                    Text(if(isKorean())"회귀 적합 중…" else "Fitting regression…",Modifier.weight(1f),fontSize=11.sp,color=LocalInstrument.current.muted)
+                    SmallAction("Cancel",modifier=Modifier.testTag("statistics-regression-cancel")){m.cancelRegression()}
                 }
-                if(regression!="polynomial")Button(onClick={table?.let {when {
-                    bayesian->m.fitRegression("regression($it,$regression,[$bayesianPriorSD,$bayesianLevel${if(regression=="bayeslinear")",$bayesianShape,$bayesianScale" else ""}$samplerOptions])",data,responseColumn)
-                    regularized->{val penalty=if(lassoAlphaCv)"cv" else lassoAlpha;m.fitRegression("regression($it,$fitMode,${if(regularization=="elasticnet")"[$penalty,$l1Ratio]" else penalty})",data,responseColumn)}
-                    regression=="randomforest"->m.fitRegression("regression($it,$fitMode,[$forestTrees,$forestDepth,$forestSeed])",data,responseColumn)
-                    else->m.fitRegression("regression($it,$regression${if(regression=="logistic"&&firthMode=="firth")",firth" else ""})",data,responseColumn)
-                }}},enabled=table!=null&&validOptions&&!m.regressionBusy){Text(tr("Analyze"))}
-            }
-            if(dataKind=="xy"&&regression=="polynomial") {
-                Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-                    Field(polynomialDegree,"Polynomial degree (1–10)",Modifier.weight(1f)){m.clearRegression();polynomialDegree=it}
+                if(dataKind=="xy"&&regression=="custom") {
+                    Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+                        SmallAction("ADC example"){m.clearRegression();customFormula="exp(-b*ADC)";customVariable="b";customInitials=""}
+                        SmallAction("IVIM example"){m.clearRegression();customFormula="(1-f)*exp(-b*D)+f*exp(-b*Dstar)";customVariable="b";customInitials="[[f,0.2,0,1],[D,0.001,0],[Dstar,0.01,0]]"}
+                        SmallAction("Exponential decay example"){m.clearRegression();customFormula="A*exp(-k*x)+C";customVariable="x";customInitials=""}
+                    }
+                    Field(customFormula,"Model y =",Modifier.fillMaxWidth()){m.clearRegression();customFormula=it}
+                    Field(customVariable,"Independent variable",Modifier.fillMaxWidth()){m.clearRegression();customVariable=it}
+                    Field(customInitials,"Initial values and bounds (optional)",Modifier.fillMaxWidth()){m.clearRegression();customInitials=it}
+                    Text(if(isKorean())"형식: [[매개변수1, 시작값, 하한, 상한], [매개변수2, 시작값, 하한, 상한]]; 상한은 생략할 수 있습니다."
+                        else "Format: [[parameter1, initial, lower, upper], [parameter2, initial, lower, upper]]; upper bound can be omitted.",fontSize=11.sp,color=LocalInstrument.current.muted)
                     Button(onClick={
-                        val table=statisticsRegressionTable(numericRows,dataKind,"polynomial",responseColumn)
-                        if(table!=null)m.fitRegression("regression($table,polynomial,$polynomialDegree)",data,responseColumn)
-                    },enabled=(polynomialDegree.toIntOrNull() ?: 0) in 1..10&&!m.regressionBusy){Text(tr("Analyze"))}
+                        val table=numericRows.filter {it.size>=2&&it[0].isNotBlank()&&it[1].isNotBlank()}.joinToString(",","[","]"){it.take(2).joinToString(",","[","]")}
+                        val guesses=customInitials.trim().takeIf(String::isNotEmpty)?.let {",$it"}.orEmpty()
+                        m.fitRegression("regression($table,custom,$customFormula,$customVariable$guesses)",data)
+                    },enabled=customFormula.isNotBlank()&&customVariable.matches(Regex("[A-Za-z][A-Za-z0-9_]*"))&&paired.size>=2&&!m.regressionBusy){Text(tr("Fit custom model"))}
                 }
-            }
-            if(m.regressionBusy)Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
-                Text(if(isKorean())"회귀 적합 중…" else "Fitting regression…",Modifier.weight(1f),fontSize=11.sp,color=LocalInstrument.current.muted)
-                SmallAction("Cancel",modifier=Modifier.testTag("statistics-regression-cancel")){m.cancelRegression()}
-            }
-            if(dataKind=="xy"&&regression=="custom") {
-                Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
-                    SmallAction("ADC example"){m.clearRegression();customFormula="exp(-b*ADC)";customVariable="b";customInitials=""}
-                    SmallAction("IVIM example"){m.clearRegression();customFormula="(1-f)*exp(-b*D)+f*exp(-b*Dstar)";customVariable="b";customInitials="[[f,0.2,0,1],[D,0.001,0],[Dstar,0.01,0]]"}
-                    SmallAction("Exponential decay example"){m.clearRegression();customFormula="A*exp(-k*x)+C";customVariable="x";customInitials=""}
+                Choices(if(dataKind=="xy")listOf("Scatter","Histogram","Box plot","Violin + points","Heat map") else listOf("Histogram","Box plot","Violin + points","Heat map"),plotType,{plotType=it})
+                if(plotType in listOf("Box plot","Violin + points")) {
+                    StatisticsSelectionTitle("Orientation")
+                    Choices(listOf("Horizontal","Vertical"),if(plotOrientation=="vertical")"Vertical" else "Horizontal",{plotOrientation=if(it=="Vertical")"vertical" else "horizontal"})
                 }
-                Field(customFormula,"Model y =",Modifier.fillMaxWidth()){m.clearRegression();customFormula=it}
-                Field(customVariable,"Independent variable",Modifier.fillMaxWidth()){m.clearRegression();customVariable=it}
-                Field(customInitials,"Initial values and bounds (optional)",Modifier.fillMaxWidth()){m.clearRegression();customInitials=it}
-                Text(if(isKorean())"형식: [[매개변수1, 시작값, 하한, 상한], [매개변수2, 시작값, 하한, 상한]]; 상한은 생략할 수 있습니다."
-                    else "Format: [[parameter1, initial, lower, upper], [parameter2, initial, lower, upper]]; upper bound can be omitted.",fontSize=11.sp,color=LocalInstrument.current.muted)
-                Button(onClick={
-                    val table=numericRows.filter {it.size>=2&&it[0].isNotBlank()&&it[1].isNotBlank()}.joinToString(",","[","]"){it.take(2).joinToString(",","[","]")}
-                    val guesses=customInitials.trim().takeIf(String::isNotEmpty)?.let {",$it"}.orEmpty()
-                    m.fitRegression("regression($table,custom,$customFormula,$customVariable$guesses)",data)
-                },enabled=customFormula.isNotBlank()&&customVariable.matches(Regex("[A-Za-z][A-Za-z0-9_]*"))&&paired.size>=2&&!m.regressionBusy){Text(tr("Fit custom model"))}
-            }
-            Choices(if(dataKind=="xy")listOf("Scatter","Histogram","Box plot","Violin + points","Heat map") else listOf("Histogram","Box plot","Violin + points","Heat map"),plotType,{plotType=it})
-            if(plotType in listOf("Box plot","Violin + points")) {
-                StatisticsSelectionTitle("Orientation")
-                Choices(listOf("Horizontal","Vertical"),if(plotOrientation=="vertical")"Vertical" else "Horizontal",{plotOrientation=if(it=="Vertical")"vertical" else "horizontal"})
-            }
-            if(plotType=="Heat map") {
-                StatisticsSelectionTitle("Heat map data")
-                Choices(listOf("Raw values","Z-score by row","Z-score by column","Correlation"),when(heatMapMode){"zrow"->"Z-score by row";"zcolumn"->"Z-score by column";"correlation"->"Correlation";else->"Raw values"},{heatMapMode=when(it){"Z-score by row"->"zrow";"Z-score by column"->"zcolumn";"Correlation"->"correlation";else->"raw"}})
-                Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(4.dp)) {
-                    Checkbox(heatMapClustering,{heatMapClustering=it},Modifier.size(38.dp))
-                    Text(tr("Hierarchical clustering"),fontSize=12.sp,color=LocalInstrument.current.ink)
-                }
-                if(heatMapClustering) {
-                    StatisticsSelectionTitle("Cluster linkage")
-                    Choices(listOf("Single","Average","Complete","Ward"),when(heatMapLinkage){"single"->"Single";"complete"->"Complete";"ward"->"Ward";else->"Average"},{heatMapLinkage=when(it){"Single"->"single";"Complete"->"complete";"Ward"->"ward";else->"average"};if(heatMapLinkage=="ward")heatMapMetric="euclidean"})
-                    StatisticsSelectionTitle("Distance metric")
-                    Choices(listOf("Euclidean","Manhattan","Correlation (1 − r)"),when(heatMapMetric){"manhattan"->"Manhattan";"correlation"->"Correlation (1 − r)";else->"Euclidean"},{heatMapMetric=when(it){"Manhattan"->"manhattan";"Correlation (1 − r)"->"correlation";else->"euclidean"}},enabled=heatMapLinkage!="ward")
-                }
-                Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(4.dp)) {
-                    Checkbox(heatMapFit,{heatMapFit=it},Modifier.size(38.dp))
-                    Text(tr("Fit to screen"),fontSize=12.sp,color=LocalInstrument.current.ink)
-                }
-                if(heatMapMode=="correlation") {
-                    StatisticsSelectionTitle("Correlation method")
-                    Choices(listOf("Pearson (p)","Spearman (s)","Kendall (k)"),when(heatMapCorrelation){"spearman"->"Spearman (s)";"kendall"->"Kendall (k)";else->"Pearson (p)"},{heatMapCorrelation=when(it){"Spearman (s)"->"spearman";"Kendall (k)"->"kendall";else->"pearson"}})
-                    if(heatMapAxisIndices.isEmpty())Text(tr("No numeric columns"),fontSize=11.sp,color=LocalInstrument.current.muted)
-                    HeatMapAxisPicker("X axis variables",heatMapAxisIndices.map {it to heatMapColumnNames[it]},heatMapXSelection) {index->
-                        val adding=index !in heatMapXSelection
-                        val next=if(adding)heatMapXSelection+index else heatMapXSelection-index
-                        heatMapXColumns=encodeHeatMapSelection(next)
-                        heatMapYColumns=encodeHeatMapSelection(heatMapYSelection-index)
+                if(plotType=="Heat map") {
+                    StatisticsSelectionTitle("Heat map data")
+                    Choices(listOf("Raw values","Z-score by row","Z-score by column","Correlation"),when(heatMapMode){"zrow"->"Z-score by row";"zcolumn"->"Z-score by column";"correlation"->"Correlation";else->"Raw values"},{heatMapMode=when(it){"Z-score by row"->"zrow";"Z-score by column"->"zcolumn";"Correlation"->"correlation";else->"raw"}})
+                    Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(4.dp)) {
+                        Checkbox(heatMapClustering,{heatMapClustering=it},Modifier.size(38.dp))
+                        Text(tr("Hierarchical clustering"),fontSize=12.sp,color=LocalInstrument.current.ink)
                     }
-                    HeatMapAxisPicker("Y axis variables",heatMapAxisIndices.map {it to heatMapColumnNames[it]},heatMapYSelection) {index->
-                        val adding=index !in heatMapYSelection
-                        val next=if(adding)heatMapYSelection+index else heatMapYSelection-index
-                        heatMapYColumns=encodeHeatMapSelection(next)
-                        heatMapXColumns=encodeHeatMapSelection(heatMapXSelection-index)
+                    if(heatMapClustering) {
+                        StatisticsSelectionTitle("Cluster linkage")
+                        Choices(listOf("Single","Average","Complete","Ward"),when(heatMapLinkage){"single"->"Single";"complete"->"Complete";"ward"->"Ward";else->"Average"},{heatMapLinkage=when(it){"Single"->"single";"Complete"->"complete";"Ward"->"ward";else->"average"};if(heatMapLinkage=="ward")heatMapMetric="euclidean"})
+                        StatisticsSelectionTitle("Distance metric")
+                        Choices(listOf("Euclidean","Manhattan","Correlation (1 − r)"),when(heatMapMetric){"manhattan"->"Manhattan";"correlation"->"Correlation (1 − r)";else->"Euclidean"},{heatMapMetric=when(it){"Manhattan"->"manhattan";"Correlation (1 − r)"->"correlation";else->"euclidean"}},enabled=heatMapLinkage!="ward")
                     }
-                }
-            }
-            if(plotType!="Scatter"&&!(plotType=="Heat map"&&heatMapMode=="correlation")&&dataColumns.size>1) {
-                StatisticsSelectionTitle("Plot grouping")
-                Choices(listOf("Columns","first","last"),if(plotGrouping=="columns")"Columns" else plotGrouping,{plotGrouping=if(it=="Columns")"columns" else it})
-            }
-        }
-        val fittedResponse=if(m.regressionMode in listOf("multiple","logistic","polynomial","ridge","lasso","elasticnet","logisticridge","logisticlasso","logisticelasticnet","randomforest","randomforestclassifier","randomforestregressor","bayeslinear","bayeslogistic"))m.regressionResponseColumn?.takeIf {it in regressionColumns.indices} ?: regressionColumns.lastIndex else regressionColumns.lastIndex
-        val fittedVariables=statisticsRegressionVariables(dataKind,fittedResponse)
-        val parameterLabels=statisticsRegressionParameterLabels(dataKind,m.regressionMode,fittedResponse,data)
-        val fittedResponseName=regressionColumns.getOrNull(fittedResponse).orEmpty()
-        val fitVisible=dataKind=="xy"&&plotType=="Scatter"&&m.regressionData==data&&m.regressionFit.isNotBlank()
-        val plotPairs=if(fitVisible&&m.regressionMode in listOf("logistic","polynomial","ridge","lasso","elasticnet","logisticridge","logisticlasso","logisticelasticnet","randomforest","randomforestclassifier","randomforestregressor","bayeslinear","bayeslogistic")&&fittedResponse==0)paired.map {(x,y)->y to x} else paired
-        val heatMapInput=remember(parsedRows,dataKind,data,plotGrouping,plotType,heatMapMode,heatMapCorrelation,heatMapXColumns,heatMapYColumns) {
-            if(plotType!="Heat map")null else {
-                if(heatMapMode=="correlation")statisticsCorrelationHeatMap(parsedRows,dataKind,heatMapCorrelation,heatMapXSelection.toList().sorted(),heatMapYSelection.toList().sorted(),heatMapColumnNames)
-                else statisticsHeatMapData(parsedRows,dataKind,plotGrouping,heatMapMode,heatMapColumnNames)
-            }
-        }
-        val clusterRequest=heatMapInput?.takeIf {heatMapClustering}
-        val clustered by produceState<Pair<StatisticsHeatMapData,StatisticsHeatMapData>?>(null,clusterRequest,heatMapLinkage,heatMapMetric) {
-            value=null
-            clusterRequest?.let {request->value=request to withContext(Dispatchers.Default){clusteredHeatMap(request,heatMapLinkage,heatMapMetric)}}
-        }
-        val heatMap=if(heatMapClustering)clustered?.takeIf {it.first==clusterRequest}?.second else heatMapInput
-        if(plotType=="Heat map"&&heatMapClustering&&heatMap==null)Text(tr("Clustering…"),fontSize=12.sp,color=LocalInstrument.current.muted)
-        heatMap?.let {StatisticsHeatMap(it,m.displayDigits,heatMapFit)}
-        val plotPanels=if(plotType=="Heat map")emptyList() else if(plotType=="Scatter")listOf(StatisticsPlotPanel("",emptyList())) else statisticsPlotPanels(parsedRows,dataKind,plotGrouping)
-        plotPanels.forEach {panel->
-            if(panel.label.isNotBlank())Text(panel.label,style=MaterialTheme.typography.titleSmall)
-            StatisticsPlot(plotType,if(plotType=="Scatter")plotPairs else xValues.mapIndexed {i,v->i.toDouble() to v},xValues,yValues,if(fitVisible)m.regressionCurve.orEmpty() else emptyList(),if(fitVisible&&!m.regressionMode.startsWith("randomforest"))m.regressionFit else "",m.displayDigits,fitVisible&&m.regressionMode=="linear",m.regressionCorrelation,tertiary=zValues,allColumns=panel.series,xDateOrigin=if(fitVisible&&fittedResponse==0)null else dateAxis?.origin,
-                xAxisLabel=if(fitVisible)fittedVariables["x"] ?: "x" else "x",yAxisLabel=if(fitVisible)fittedResponseName else "y",
-                fitPrefix=if(fitVisible&&(m.regressionMode.startsWith("logistic")||m.regressionMode=="bayeslogistic"))"P($fittedResponseName = 1) = " else if(fitVisible)"$fittedResponseName ≈ " else "y ≈ ",fitVariables=if(fitVisible&&m.regressionMode in listOf("logistic","polynomial","ridge","lasso","elasticnet","logisticridge","logisticlasso","logisticelasticnet","randomforest","randomforestclassifier","randomforestregressor","bayeslinear","bayeslogistic"))fittedVariables else emptyMap(),orientation=plotOrientation)
-        }
-        if(dateAxis!=null&&plotType=="Scatter")Text((if(isKorean())"회귀식의 x: ${dateAxis.origin.plusDays(1)} = 1일째" else "Regression x: ${dateAxis.origin.plusDays(1)} = day 1"),fontSize=11.sp,color=LocalInstrument.current.muted)
-        if(dataKind!="list"&&m.regressionData==data&&m.regressionFit.isNotBlank()) {
-            Column(verticalArrangement=Arrangement.spacedBy(0.dp)) {
-                if(!m.regressionMode.startsWith("randomforest")&&(dataKind=="xyz"||dataKind.startsWith("columns:"))) {
-                    val equation=remember(m.regressionFit,m.displayDigits,fittedVariables) {regressionFormulaDisplayTree(m.regressionFit,m.displayDigits,fittedVariables)}
-                    CompositionLocalProvider(LocalMathMinimumSize provides 8f) {
-                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical=3.dp).testTag("statistics-regression-equation"),
-                            horizontalArrangement=Arrangement.spacedBy(5.dp)) {
-                            MathText(if((m.regressionMode.startsWith("logistic")||m.regressionMode=="bayeslogistic"))"P($fittedResponseName = 1) = " else "$fittedResponseName = ",12f,Modifier.alignBy(MathAxis))
-                            Box(Modifier.alignBy(MathAxis)) {
-                                if(equation!=null)MathNode(equation,12f)
-                                else Text(m.regressionFit,fontSize=12.sp,fontFamily=FontFamily.Monospace)
-                            }
+                    Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(4.dp)) {
+                        Checkbox(heatMapFit,{heatMapFit=it},Modifier.size(38.dp))
+                        Text(tr("Fit to screen"),fontSize=12.sp,color=LocalInstrument.current.ink)
+                    }
+                    if(heatMapMode=="correlation") {
+                        StatisticsSelectionTitle("Correlation method")
+                        Choices(listOf("Pearson (p)","Spearman (s)","Kendall (k)"),when(heatMapCorrelation){"spearman"->"Spearman (s)";"kendall"->"Kendall (k)";else->"Pearson (p)"},{heatMapCorrelation=when(it){"Spearman (s)"->"spearman";"Kendall (k)"->"kendall";else->"pearson"}})
+                        if(heatMapAxisIndices.isEmpty())Text(tr("No numeric columns"),fontSize=11.sp,color=LocalInstrument.current.muted)
+                        HeatMapAxisPicker("X axis variables",heatMapAxisIndices.map {it to heatMapColumnNames[it]},heatMapXSelection) {index->
+                            val adding=index !in heatMapXSelection
+                            val next=if(adding)heatMapXSelection+index else heatMapXSelection-index
+                            heatMapXColumns=encodeHeatMapSelection(next)
+                            heatMapYColumns=encodeHeatMapSelection(heatMapYSelection-index)
+                        }
+                        HeatMapAxisPicker("Y axis variables",heatMapAxisIndices.map {it to heatMapColumnNames[it]},heatMapYSelection) {index->
+                            val adding=index !in heatMapYSelection
+                            val next=if(adding)heatMapYSelection+index else heatMapYSelection-index
+                            heatMapYColumns=encodeHeatMapSelection(next)
+                            heatMapXColumns=encodeHeatMapSelection(heatMapXSelection-index)
                         }
                     }
                 }
-                m.regressionReport?.let {report->
-                    val language=LocalLanguage.current
-                    val result=remember(report,m.result,m.history){regressionResultForCopy(m.result,m.history,report)}
-                    RegressionInference(report,m.displayDigits,parameterLabels,onCopy=result?.let {snapshot->{
-                        val prefix=if(m.regressionMode.startsWith("logistic")||m.regressionMode=="bayeslogistic")"P($fittedResponseName = 1) = " else "$fittedResponseName = "
-                        clipboard.setText(AnnotatedString(statisticsResultCopyText(m,snapshot,language,fittedVariables,prefix)))
-                    }})
+                if(plotType!="Scatter"&&!(plotType=="Heat map"&&heatMapMode=="correlation")&&dataColumns.size>1) {
+                    StatisticsSelectionTitle("Plot grouping")
+                    Choices(listOf("Columns","first","last"),if(plotGrouping=="columns")"Columns" else plotGrouping,{plotGrouping=if(it=="Columns")"columns" else it})
                 }
-                if(m.regressionParameters.isNotEmpty()) {
-                    Text(tr("Fitted parameters"),fontSize=12.sp,fontWeight=FontWeight.SemiBold)
-                    Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(16.dp)) {
-                        m.regressionParameters.sortedWith(compareBy({listOf("f","ADC","D","Dstar").indexOf(it.first).let {index->if(index<0)Int.MAX_VALUE else index}},{it.first})).forEach {(name,value)->
-                            val label=parameterLabels[name]?.let {if(it=="Intercept")tr(it) else it} ?: if(name=="Dstar")"D*" else name
-                            val displayedValue=ResultDisplayFormat.formatText(value,m.resultDisplayMode,m.thousandsSeparator,maxFractionDigits=m.displayDigits)
-                            val korean=isKorean()
-                            TextButton(onClick={
-                                clipboard.setText(AnnotatedString(displayedValue))
-                                android.widget.Toast.makeText(context,if(korean)"$label 값 복사됨" else "$label copied",android.widget.Toast.LENGTH_SHORT).show()
-                            },contentPadding=PaddingValues(horizontal=8.dp,vertical=0.dp),
-                                modifier=Modifier.semantics {contentDescription=if(korean)"$label 값 복사" else "Copy $label value"}) {
-                                Text("$label = $displayedValue  ⧉",fontSize=11.sp,fontFamily=FontFamily.Monospace)
+            }
+            val fittedResponse=if(m.regressionMode in listOf("multiple","logistic","polynomial","ridge","lasso","elasticnet","logisticridge","logisticlasso","logisticelasticnet","randomforest","randomforestclassifier","randomforestregressor","bayeslinear","bayeslogistic"))m.regressionResponseColumn?.takeIf {it in regressionColumns.indices} ?: regressionColumns.lastIndex else regressionColumns.lastIndex
+            val fittedVariables=statisticsRegressionVariables(dataKind,fittedResponse)
+            val parameterLabels=statisticsRegressionParameterLabels(dataKind,m.regressionMode,fittedResponse,data)
+            val fittedResponseName=regressionColumns.getOrNull(fittedResponse).orEmpty()
+            val fitVisible=dataKind=="xy"&&plotType=="Scatter"&&m.regressionData==data&&m.regressionFit.isNotBlank()
+            val plotPairs=if(fitVisible&&m.regressionMode in listOf("logistic","polynomial","ridge","lasso","elasticnet","logisticridge","logisticlasso","logisticelasticnet","randomforest","randomforestclassifier","randomforestregressor","bayeslinear","bayeslogistic")&&fittedResponse==0)paired.map {(x,y)->y to x} else paired
+            val heatMapInput=remember(parsedRows,dataKind,data,plotGrouping,plotType,heatMapMode,heatMapCorrelation,heatMapXColumns,heatMapYColumns) {
+                if(plotType!="Heat map")null else {
+                    if(heatMapMode=="correlation")statisticsCorrelationHeatMap(parsedRows,dataKind,heatMapCorrelation,heatMapXSelection.toList().sorted(),heatMapYSelection.toList().sorted(),heatMapColumnNames)
+                    else statisticsHeatMapData(parsedRows,dataKind,plotGrouping,heatMapMode,heatMapColumnNames)
+                }
+            }
+            val clusterRequest=heatMapInput?.takeIf {heatMapClustering}
+            val clustered by produceState<Pair<StatisticsHeatMapData,StatisticsHeatMapData>?>(null,clusterRequest,heatMapLinkage,heatMapMetric) {
+                value=null
+                clusterRequest?.let {request->value=request to withContext(Dispatchers.Default){clusteredHeatMap(request,heatMapLinkage,heatMapMetric)}}
+            }
+            val heatMap=if(heatMapClustering)clustered?.takeIf {it.first==clusterRequest}?.second else heatMapInput
+            if(plotType=="Heat map"&&heatMapClustering&&heatMap==null)Text(tr("Clustering…"),fontSize=12.sp,color=LocalInstrument.current.muted)
+            heatMap?.let {StatisticsHeatMap(it,m.displayDigits,heatMapFit)}
+            val plotPanels=if(plotType=="Heat map")emptyList() else if(plotType=="Scatter")listOf(StatisticsPlotPanel("",emptyList())) else statisticsPlotPanels(parsedRows,dataKind,plotGrouping)
+            plotPanels.forEach {panel->
+                if(panel.label.isNotBlank())Text(panel.label,style=MaterialTheme.typography.titleSmall)
+                StatisticsPlot(plotType,if(plotType=="Scatter")plotPairs else xValues.mapIndexed {i,v->i.toDouble() to v},xValues,yValues,if(fitVisible)m.regressionCurve.orEmpty() else emptyList(),if(fitVisible&&!m.regressionMode.startsWith("randomforest"))m.regressionFit else "",m.displayDigits,fitVisible&&m.regressionMode=="linear",m.regressionCorrelation,tertiary=zValues,allColumns=panel.series,xDateOrigin=if(fitVisible&&fittedResponse==0)null else dateAxis?.origin,
+                    xAxisLabel=if(fitVisible)fittedVariables["x"] ?: "x" else "x",yAxisLabel=if(fitVisible)fittedResponseName else "y",
+                    fitPrefix=if(fitVisible&&(m.regressionMode.startsWith("logistic")||m.regressionMode=="bayeslogistic"))"P($fittedResponseName = 1) = " else if(fitVisible)"$fittedResponseName ≈ " else "y ≈ ",fitVariables=if(fitVisible&&m.regressionMode in listOf("logistic","polynomial","ridge","lasso","elasticnet","logisticridge","logisticlasso","logisticelasticnet","randomforest","randomforestclassifier","randomforestregressor","bayeslinear","bayeslogistic"))fittedVariables else emptyMap(),orientation=plotOrientation)
+            }
+            if(dateAxis!=null&&plotType=="Scatter")Text((if(isKorean())"회귀식의 x: ${dateAxis.origin.plusDays(1)} = 1일째" else "Regression x: ${dateAxis.origin.plusDays(1)} = day 1"),fontSize=11.sp,color=LocalInstrument.current.muted)
+            if(dataKind!="list"&&m.regressionData==data&&m.regressionFit.isNotBlank()) {
+                Column(verticalArrangement=Arrangement.spacedBy(0.dp)) {
+                    if(!m.regressionMode.startsWith("randomforest")&&(dataKind=="xyz"||dataKind.startsWith("columns:"))) {
+                        val equation=remember(m.regressionFit,m.displayDigits,fittedVariables) {regressionFormulaDisplayTree(m.regressionFit,m.displayDigits,fittedVariables)}
+                        CompositionLocalProvider(LocalMathMinimumSize provides 8f) {
+                            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical=3.dp).testTag("statistics-regression-equation"),
+                                horizontalArrangement=Arrangement.spacedBy(5.dp)) {
+                                MathText(if((m.regressionMode.startsWith("logistic")||m.regressionMode=="bayeslogistic"))"P($fittedResponseName = 1) = " else "$fittedResponseName = ",12f,Modifier.alignBy(MathAxis))
+                                Box(Modifier.alignBy(MathAxis)) {
+                                    if(equation!=null)MathNode(equation,12f)
+                                    else Text(m.regressionFit,fontSize=12.sp,fontFamily=FontFamily.Monospace)
+                                }
                             }
                         }
                     }
-                }
-                if(dataKind=="xy"&&!m.regressionMode.startsWith("randomforest"))SmallAction("Graph fitted expression"){
-                    val fit=if(m.regressionMode=="custom")m.regressionFit.replace(Regex("(?<![A-Za-z0-9_])${Regex.escape(customVariable)}(?![A-Za-z0-9_])"),"x") else m.regressionFit
-                    val graphSource=regressionFormulaGraphSource(fit,m.displayDigits)
-                    if(graphSource==null)m.error="Could not format fitted expression"
-                    else {m.changeGraphKind("cartesian");m.updateGraphSource(graphSource);m.mode="Graph";m.plot()}
+                    m.regressionReport?.let {report->
+                        val language=LocalLanguage.current
+                        val result=remember(report,m.result,m.history){regressionResultForCopy(m.result,m.history,report)}
+                        RegressionInference(report,m.displayDigits,parameterLabels,onCopy=result?.let {snapshot->{
+                            val prefix=if(m.regressionMode.startsWith("logistic")||m.regressionMode=="bayeslogistic")"P($fittedResponseName = 1) = " else "$fittedResponseName = "
+                            clipboard.setText(AnnotatedString(statisticsResultCopyText(m,snapshot,language,fittedVariables,prefix)))
+                        }})
+                    }
+                    if(m.regressionParameters.isNotEmpty()) {
+                        Text(tr("Fitted parameters"),fontSize=12.sp,fontWeight=FontWeight.SemiBold)
+                        Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(16.dp)) {
+                            m.regressionParameters.sortedWith(compareBy({listOf("f","ADC","D","Dstar").indexOf(it.first).let {index->if(index<0)Int.MAX_VALUE else index}},{it.first})).forEach {(name,value)->
+                                val label=parameterLabels[name]?.let {if(it=="Intercept")tr(it) else it} ?: if(name=="Dstar")"D*" else name
+                                val displayedValue=ResultDisplayFormat.formatText(value,m.resultDisplayMode,m.thousandsSeparator,maxFractionDigits=m.displayDigits)
+                                val korean=isKorean()
+                                TextButton(onClick={
+                                    clipboard.setText(AnnotatedString(displayedValue))
+                                    android.widget.Toast.makeText(context,if(korean)"$label 값 복사됨" else "$label copied",android.widget.Toast.LENGTH_SHORT).show()
+                                },contentPadding=PaddingValues(horizontal=8.dp,vertical=0.dp),
+                                    modifier=Modifier.semantics {contentDescription=if(korean)"$label 값 복사" else "Copy $label value"}) {
+                                    Text("$label = $displayedValue  ⧉",fontSize=11.sp,fontFamily=FontFamily.Monospace)
+                                }
+                            }
+                        }
+                    }
+                    if(dataKind=="xy"&&!m.regressionMode.startsWith("randomforest"))SmallAction("Graph fitted expression"){
+                        val fit=if(m.regressionMode=="custom")m.regressionFit.replace(Regex("(?<![A-Za-z0-9_])${Regex.escape(customVariable)}(?![A-Za-z0-9_])"),"x") else m.regressionFit
+                        val graphSource=regressionFormulaGraphSource(fit,m.displayDigits)
+                        if(graphSource==null)m.error="Could not format fitted expression"
+                        else {m.changeGraphKind("cartesian");m.updateGraphSource(graphSource);m.mode="Graph";m.plot()}
+                    }
                 }
             }
         }

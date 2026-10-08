@@ -16,6 +16,7 @@ from calc_advanced_regression import calculate as regression
 from calc_advanced_resampling import calculate as resampling
 from calc_advanced_learning import calculate as learning
 from calc_advanced_bayesian import calculate as bayesian
+from calc_advanced_two_sample import calculate as two_sample
 from calc_advanced_ancova import calculate as ancova
 from calc_advanced_glm import calculate as glm
 
@@ -26,6 +27,7 @@ _ANALYSES = {
     'glm': (1, 6, glm),
     'bayesproportion': (1, 5, bayesian),
     'bayesmean': (1, 7, bayesian),
+    'bayescompare': (2, 10, two_sample),
     'bayesrate': (1, 5, bayesian),
     'padjust': (1, 3, inference),
     'cohend': (2, 3, inference),

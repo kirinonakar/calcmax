@@ -329,6 +329,7 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
   $('statistics-data').addEventListener('change',()=>{invalidateRegression();statisticsControls();if(!$('statistics-grid').hidden)statisticsGrid();});
   $('statistics-store').onclick=async()=>{const name=value('dataset-name').trim();if(!/^[A-Za-z][A-Za-z0-9_]*$/.test(name)){error('Dataset name must be a valid variable name');return;}try{await storeExpression(name,statisticsDatasetSource(value('statistics-data'),dataKind()));}catch(exc){error(exc.message);}};
   $('statistics-plot-run').onclick=()=>{try{statisticsGraph={...statisticsGraph,rows:numericStatisticsRows(dataRows()),curve:statisticsGraph?.curve||[]};$('statistics-plot').hidden=false;drawStatisticsGraph();}catch(exc){error(exc.message);}};
+  $('statistics-visualize').addEventListener('toggle',()=>{if($('statistics-visualize').open&&statisticsGraph&&!$('statistics-plot').hidden)drawStatisticsGraph();});
   $('statistics-plot-type').onchange=()=>{statisticsControls();$('statistics-plot-run').click();persist();};
   $('statistics-plot-grouping').onchange=()=>{$('statistics-plot-run').click();persist();};
   $('statistics-plot-orientation').onchange=()=>{$('statistics-plot-run').click();persist();};

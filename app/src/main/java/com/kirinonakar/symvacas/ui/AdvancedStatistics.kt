@@ -104,7 +104,7 @@ internal fun advancedStatisticsRows(data:String,columnLimit:Int?=null):List<List
         if(pending&&!m.busy&&m.result!=null&&m.result!==previousResult){survivalReport=m.result?.optJSONObject("survival");survivalCopyResult=m.result?.takeIf {survivalReport!=null};pending=false}
     }
     HorizontalDivider()
-    SmallAction(if(ko)"고급 분석" else "Advanced analysis",active=true,shaded=expanded,fontSize=12.sp){expanded=!expanded}
+    StatisticsSectionToggle("Advanced analysis",expanded,"statistics-advanced-toggle") {expanded=!expanded}
     if(expanded) {
         fun choose(next:JSONObject) {selected=next.getString("id");source=next.getString("example");input=if(next.has("controls"))if(data.isBlank())"example" else "current" else "expression";message="";menuOpen=false;survivalReport=null;pending=false}
         Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
@@ -162,7 +162,7 @@ internal fun advancedStatisticsRows(data:String,columnLimit:Int?=null):List<List
         val conditions=field.optJSONObject("when")
         conditions==null||conditions.keys().asSequence().all {name->val values=conditions.getJSONArray(name);(0 until values.length()).any {values.getString(it)==option(name)}}
     }
-    val bayesian=definition.getString("id") in listOf("bayesproportion","bayesmean","bayesrate")
+    val bayesian=definition.getString("id") in listOf("bayesproportion","bayesmean","bayesrate","bayescompare")
     var index=0
     while(index<visibleFields.size) {
         val field=visibleFields[index++];val key=field.getString("key")

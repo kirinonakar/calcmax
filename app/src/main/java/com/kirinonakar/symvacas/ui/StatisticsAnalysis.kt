@@ -15,6 +15,7 @@ import com.kirinonakar.symvacas.ui.theme.LocalInstrument
 
 @Composable internal fun StatisticsAnalysis(m: CalculatorModel,rows:List<List<String>>,kind:String,data:String="",rawRows:List<List<String>> = rows) {
     val c=LocalInstrument.current
+    var expanded by rememberSaveable {mutableStateOf(true)}
     var test by rememberSaveable {mutableStateOf("t test")}
     var column by rememberSaveable {mutableStateOf("x")}
     var tail by rememberSaveable {mutableStateOf("Two-sided")}
@@ -71,7 +72,8 @@ import com.kirinonakar.symvacas.ui.theme.LocalInstrument
     val command=statisticsTestCommand(test,if(categorySelection)rawRows else rows,kind,activeColumn,tail,mu0,sigma,level,sigmaY,if(groupedMode)"group-value" else "columns",if(categorySelection)categoryFirst else if(rankSelection)rankFirst else activeFirst,if(categorySelection)categorySecond else if(rankSelection)rankSecond else activeSecond,yatesCorrection)
     val categoryLabels=if(categorySelection)statisticsCategoryLabels(categoricalPairs,columnLabels[firstIndex],columnLabels[secondIndex]) else emptyMap()
     HorizontalDivider()
-    Text(tr("Analyze current data"),style=MaterialTheme.typography.titleMedium)
+    StatisticsSectionToggle("Analyze current data",expanded,"statistics-analysis-toggle") {expanded=!expanded}
+    if(!expanded)return
     Text(if(kind.startsWith("columns:"))tr("Blank cells are omitted. Group comparisons use all columns.") else when(kind){"xy"->"Blank cells are omitted. Paired, χ², and Fisher tests use rows with both values; independent tests use each column separately. Fisher requires exactly two categories per column.";"xyz"->"Blank cells are omitted. ANOVA and Tukey HSD use x, y, and z as three independent groups.";else->"Blank cells are omitted from tests. Choose x,y or x,y,z data for group comparisons."},fontSize=12.sp,color=c.muted)
     Column(verticalArrangement=Arrangement.spacedBy(2.dp)) {
         Choices(listOf("t test","z test","χ² test","Fisher exact","ANOVA","Tukey HSD","Wilcoxon","Mann–Whitney","Kruskal–Wallis","Shapiro–Wilk","t interval","z interval"),test,{test=it})

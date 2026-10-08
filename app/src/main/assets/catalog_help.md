@@ -709,6 +709,9 @@ Example: bayesproportion([1,1,0,1,0,1,1,1,0,1],1,1,0.95,0.5)
 `bayesmean` — Normal sample, unknown variance; prior mu0,kappa0,alpha0,beta0; credible level; threshold. Variance ~ InvGamma(alpha0,beta0), mean | variance ~ Normal(mu0,variance/kappa0). Defaults 0,1,2,1 are proper, scale-dependent priors. Returns Student-t mean interval and next-observation predictive interval.
 Example: bayesmean([1,2,3,4,5],0,1,2,1,0.95,0)
 
+`bayescompare` — Two independent normal samples (at least 2 each); variance equal / unequal; mu0,kappa0,alpha0,beta0; credible level; IID posterior draws (2000-100000), seed. H1: independent Normal(mu0,variance/kappa0) means with shared (equal) or independent (unequal) InvGamma(alpha0,beta0) variances. H0: B-A=0 with nuisance prior conditioned from H1. BF10/BF01 use Savage-Dickey, not a JZS/Cauchy prior. Reports B-A mean, equal-tailed credible interval, P(muB>muA), and posterior effect (B-A)/sqrt((varianceA+varianceB)/2). Equal-mode difference summaries and BF are analytic; unequal BF uses numerical t convolution, unequal intervals/probability and effect intervals use simulation. MCSE, draws and seed are reported. Defaults are proper but unit-dependent; choose priors before inspecting outcomes.
+Example: bayescompare([10,11,9,10,12],[13,14,12,15,13],equal,0,0.01,2,1,0.95,20000,0)
+
 `bayesrate` — Count list (one exposure unit each) or [[count,exposure],...]; Gamma prior shape, rate (inverse scale, default 1,1); credible level; nonnegative threshold. Equal-tailed rate interval and predictive count mean/SD for one exposure unit.
 Example: bayesrate([0,2,1,3,2],1,1,0.95,1)
 
@@ -779,3 +782,5 @@ Models return errors on failed convergence or non-identifiability. Cox supports 
 ANCOVA: [partial ANOVA tests](https://www.statsmodels.org/stable/generated/statsmodels.stats.anova.anova_lm.html), [equal slopes](https://itl.nist.gov/div898/software/dataplot/refman1/auxillar/equalslo.htm). GLM: [families, links and dispersion](https://www.statsmodels.org/stable/glm.html).
 
 GLMM: [lme4 adaptive quadrature reference](https://lme4.github.io/lme4/reference/glmer.html).
+
+Bayesian Two-Sample Comparison: [Savage-Dickey density ratio and compatible null priors](https://statproofbook.github.io/P/bf-sddr.html).

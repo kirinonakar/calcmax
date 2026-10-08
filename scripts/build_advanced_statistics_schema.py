@@ -21,6 +21,9 @@ specs = [
     ('mcnemar','McNemar','McNemar','table',',exact','[[20,8],[2,15]]','Paired 2×2 count table; exact / corrected / asymptotic.','대응 2×2 빈도표; exact / corrected / asymptotic.'),
     ('bayesproportion','Bayesian proportion','베이지안 비율','list',',1,1,0.95,0.5','[1,1,0,1,0,1,1,1,0,1]','Binary 0/1 list or [[successes,trials],...]; Beta prior alpha, beta (default 1,1); credible level; threshold p0 in (0,1). Returns equal-tailed interval, P(p>p0), next-success probability and BF10 (Beta alternative / point null p=p0).','0/1 목록 또는 [[성공 수,시행 수],...]; Beta 사전 alpha,beta(기본 1,1), 구간 수준, 기준 p0(0~1 사이). 등꼬리 구간·P(p>p0)·다음 성공 확률·BF10(Beta 대립 / p=p0 점귀무).'),
     ('bayesmean','Bayesian mean','베이지안 평균','list',',0,1,2,1,0.95,0','[1,2,3,4,5]','Normal sample, unknown variance; prior mu0,kappa0,alpha0,beta0; credible level; threshold. Variance ~ InvGamma(alpha0,beta0), mean | variance ~ Normal(mu0,variance/kappa0). Defaults 0,1,2,1 are proper, scale-dependent priors. Returns Student-t mean interval and next-observation predictive interval.','분산 미지의 정규 표본; 사전 mu0,kappa0,alpha0,beta0, 구간 수준, 기준값. 분산 ~ InvGamma(alpha0,beta0), 평균|분산 ~ Normal(mu0,분산/kappa0). 기본 0,1,2,1은 자료 척도에 맞춰 조절할 적정 사전분포. 평균의 t 구간과 다음 관측 예측구간.'),
+    ('bayescompare','Bayesian Two-Sample Comparison','베이지안 두 표본 비교','groups',',equal,0,0.01,2,1,0.95,20000,0','[10,11,9,10,12],[13,14,12,15,13]',
+     'Two independent normal samples (at least 2 each); variance equal / unequal; mu0,kappa0,alpha0,beta0; credible level; IID posterior draws (2000-100000), seed. H1: independent Normal(mu0,variance/kappa0) means with shared (equal) or independent (unequal) InvGamma(alpha0,beta0) variances. H0: B-A=0 with nuisance prior conditioned from H1. BF10/BF01 use Savage-Dickey, not a JZS/Cauchy prior. Reports B-A mean, equal-tailed credible interval, P(muB>muA), and posterior effect (B-A)/sqrt((varianceA+varianceB)/2). Equal-mode difference summaries and BF are analytic; unequal BF uses numerical t convolution, unequal intervals/probability and effect intervals use simulation. MCSE, draws and seed are reported. Defaults are proper but unit-dependent; choose priors before inspecting outcomes.',
+     '독립 정규 표본 두 개(각 2개 이상); 분산 equal·unequal; mu0,kappa0,alpha0,beta0; 구간 수준; IID 사후 추출 수(2000~100000), 시드. H1: 평균|분산은 독립 Normal(mu0,분산/kappa0), 분산은 공통(등분산) 또는 독립(이분산) InvGamma(alpha0,beta0). H0: B-A=0이며 H1을 이 조건으로 제한한 방해모수 사전분포를 사용합니다. BF10/BF01은 Savage-Dickey 방식이며 JZS/Cauchy 검정이 아닙니다. B-A 평균·등꼬리 신용구간·P(muB>muA)·사후 효과크기 (B-A)/sqrt((분산A+분산B)/2)를 출력합니다. 등분산 차이 요약·BF는 해석적, 이분산 BF는 t 합성곱 수치 적분, 이분산 구간·확률 및 효과크기 구간은 시뮬레이션입니다. MCSE·추출 수·시드 포함. 기본 사전분포는 적정하지만 단위에 의존하므로 결과를 보기 전에 척도에 맞게 지정하세요.'),
     ('bayesrate','Bayesian Poisson rate','베이지안 발생률','list',',1,1,0.95,1','[0,2,1,3,2]','Count list (one exposure unit each) or [[count,exposure],...]; Gamma prior shape, rate (inverse scale, default 1,1); credible level; nonnegative threshold. Equal-tailed rate interval and predictive count mean/SD for one exposure unit.','횟수 목록(관측당 노출 1) 또는 [[횟수,노출량],...]; Gamma 사전 shape,rate(척도의 역수, 기본 1,1), 구간 수준, 0 이상 기준값. 발생률 등꼬리 구간과 노출 1단위의 예측 횟수 평균·SD.'),
     ('kaplanmeier','Kaplan–Meier','Kaplan–Meier','table',',0.95',SURVIVAL,'Rows: time, event (1=event, 0=censored); confidence level.','열: 시간, 사건(1=발생, 0=중도절단); 신뢰수준.'),
     ('logrank','Log-rank','로그순위 검정','survivalgroups','','[[1,1],[3,1],[4,0],[6,1]],[[2,0],[4,1],[5,1],[7,0]]','Two time/event tables. Current data: time, event, group (exactly two groups).','두 시간/사건 표. 현재 데이터 열: 시간, 사건, 그룹(2개).'),
@@ -69,6 +72,11 @@ forms={
         dict(col('column','Observation column','관측값 열',0),when={'layout':['binary']}),
         dict(col('successes','Successes','성공 수 열',0),when={'layout':['counts']}),dict(col('trials','Trials','시행 수 열',1),when={'layout':['counts']})]+bayesian_prior+credible_fields+[field('threshold','Threshold p0','기준 비율 p0','number','0.5')],
     'bayesmean':[col('column','Sample column','표본 열',0),field('mu','Prior mean μ0','사전 평균 μ0','number','0'),field('kappa','Prior strength κ0','사전 강도 κ0','number','1'),field('alpha','Variance prior α0','분산 사전 α0','number','2'),field('beta','Variance prior β0','분산 사전 β0','number','1')]+credible_fields+[field('threshold','Threshold mean','기준 평균','number','0')],
+    'bayescompare':[col('first','Group A column','A 집단 열',0),col('second','Group B column','B 집단 열',1),
+        field('variance','Variance model','분산 모형','choice','equal',[('equal','Equal variance','등분산'),('unequal','Unequal variance','이분산')]),
+        field('mu','Prior mean μ0 (both groups)','사전 평균 μ0 (두 집단)','number','0'),field('kappa','Prior strength κ0','사전 강도 κ0','number','0.01'),
+        field('alpha','Variance prior α0','분산 사전 α0','number','2'),field('beta','Variance prior β0','분산 사전 β0','number','1')]+credible_fields+[
+        field('samples','Posterior draws','사후 추출 수','number','20000'),field('seed','Simulation seed','시뮬레이션 시드','number','0')],
     'bayesrate':[field('layout','Data','자료 형태','choice','counts',[('counts','Counts (exposure = 1)','횟수 (노출량 = 1)'),('exposure','Counts / exposure','횟수·노출량')]),
         col('column','Count column','횟수 열',0),dict(col('exposure','Exposure','노출량 열',1),when={'layout':['exposure']}),field('alpha','Prior shape α','사전 shape α','number','1'),field('beta','Prior rate β','사전 rate β','number','1')]+credible_fields+[field('threshold','Threshold rate','기준 발생률','number','1')],
     'padjust':[col('column','p-value column','p값 열',0),field('method','Correction','보정 방법','choice','holm',[('bonferroni','Bonferroni','Bonferroni'),('holm','Holm','Holm'),('fdr','FDR (BH)','FDR (BH)')]),field('alpha','Significance α','유의수준 α','number','0.05')],
@@ -101,6 +109,7 @@ forms={
         dict(field('ratio','L1 ratio','L1 비율','number','0.5'),when={'model':['elasticnet']})]
 }
 form_help={
+ 'bayescompare':('Independent groups; B - A. Blank cells are omitted separately in each selected column, so sample sizes may differ. Choose proper NIG priors in your measurement units. BF uses the H1-conditioned point null, not the default Cauchy t-test. Simulation intervals and MCSE are labeled.','독립 두 집단; 차이는 B - A. 선택한 각 열의 빈 셀은 독립적으로 제외하므로 표본수가 달라도 됩니다. 측정 단위에 맞게 NIG 사전분포를 지정하세요. BF는 H1을 조건부 제한한 점귀무 모형 기준이며 기본 Cauchy t 검정과 다릅니다. 시뮬레이션 구간·MCSE를 표시합니다.'),
  'ancova':('Compare groups after adjusting for selected covariates. Text group labels are accepted. Type II tests, adjusted means, and optional slope homogeneity check.','선택한 공변량을 보정하여 그룹을 비교합니다. 문자 그룹도 사용할 수 있습니다. Type II 검정·조정 평균·선택적 기울기 동질성 검정.'),
  'glm':('Choose a family, its link, response and predictors. Binomial uses 0/1; counts use nonnegative integers; Gamma/inverse Gaussian use positive responses. Exposure requires a log link. NB2 alpha is fixed.','분포·연결함수·반응변수·설명변수를 선택하세요. 이항은 0/1, 빈도는 음이 아닌 정수, Gamma·역가우스는 양수입니다. 노출량은 로그 연결에서만 사용합니다. NB2 alpha는 고정합니다.'),
  'bayesproportion':('Beta prior → posterior proportion · credible interval · P(p > p0). BF10: Beta alternative / point null p=p0.','Beta 사전 → 사후 비율 · 베이지안 구간 · P(p > p0). BF10: Beta 대립 / p=p0 점귀무.'),
@@ -137,8 +146,8 @@ for item in schema:
     arguments=ast.parse(item['example'],mode='eval').body.args
     first=literal(arguments[0])
     if item['id'] in ('padjust','bayesproportion','bayesmean','bayesrate'): rows=[[v] for v in first]
-    elif item['id'] in ('levene','bartlett','kstest'):
-        samples=[literal(arg) for arg in arguments]; rows=[[sample[i] if i<len(sample) else '' for sample in samples] for i in range(max(map(len,samples)))]
+    elif item['id'] in ('levene','bartlett','kstest','bayescompare'):
+        samples=[literal(arg) for arg in (arguments[:2] if item['id']=='bayescompare' else arguments)]; rows=[[sample[i] if i<len(sample) else '' for sample in samples] for i in range(max(map(len,samples)))]
     elif item['id']=='logrank': rows=[r+[i+1] for i,arg in enumerate(arguments) for r in literal(arg)]
     else: rows=first
     item['exampleRows']=[[str(v) for v in row] for row in rows]
@@ -148,6 +157,7 @@ for item in schema:
             if choice['id']!='auto': choice['when']={'family':links[choice['id']]}
 (ROOT/'tests/fixtures').mkdir(exist_ok=True)
 cases=[
+ dict(id='bayescompare',rows=[['13','10','unused'],['14','11',''],['15','','']],settings=dict(first='1',second='0',variance='unequal',mu='12',kappa='0.1',alpha='3',beta='4',level='0.9',samples='5000',seed='7'),expected='bayescompare([10,11],[13,14,15],unequal,12,0.1,3,4,0.9,5000,7)'),
  dict(id='ancova',rows=[['B','4','8','unused'],['A','2','5','']],settings=dict(group='0',response='2',predictors='1',slopes='none',level='0.9'),expected='ancova([[1,4,8],[2,2,5]],0.9,0)'),
  dict(id='ancova',rows=[['8','B','4','1'],['5','A','2','3']],settings=dict(group='1',response='0',predictors='3,2'),expected='ancova([[1,1,4,8],[2,3,2,5]],0.95,1)'),
  dict(id='glm',rows=[['2','4','0',''],['3','2','1','']],settings=dict(response='0',predictors='2',family='poisson',adjustment='exposure',offset='1'),expected='glm([[0,2],[1,3]],poisson,auto,1,[4,2],exposure)'),
@@ -209,4 +219,5 @@ for language in ('','_ko'):
     text+=('모형은 수렴하지 않거나 식별 불가능하면 오류를 반환합니다. Cox는 Breslow/Efron 동률, 선택적 좌측 절단, Grambsch–Therneau 스케일된 Schoenfeld 비례위험 검정을 지원하며 순서형 로지스틱은 비례오즈를 가정합니다. 혼합모형은 랜덤 절편과 최대 세 개의 랜덤 기울기(ML·REML)를, GEE는 독립·교환가능·AR(1) 작업상관을 지원합니다. 반복측정 ANOVA는 GG 보정이 포함된 균형 일·이요인 설계를 다룹니다. 단일 대체(mean·median·mode·회귀·k-NN) 후 추론은 대체 불확실성을 반영하지 않습니다. 교차검증은 linear·ridge·lasso·elasticnet·logistic 모형과 random·blocked·stratified 분할을 지원합니다. Firth 추론은 프로파일 페널티 우도 신뢰구간을, 부트스트랩은 백분위 구간을 사용합니다(BCa 없음).\n' if language else 'Models return errors on failed convergence or non-identifiability. Cox supports Breslow/Efron ties, optional left truncation and a Grambsch–Therneau scaled-Schoenfeld proportional-hazards check; ordinal logistic assumes proportional odds. Mixed models support a random intercept plus up to three random slopes under ML or REML; GEE supports independent, exchangeable and AR(1) working correlations. Repeated-measures ANOVA covers balanced one- and two-way within-subject designs with GG corrections. Single imputation (mean, median, mode, regression or k-NN) does not propagate imputation uncertainty. Cross-validation covers linear, ridge, lasso, elastic-net and logistic fits with random, blocked or stratified splits. Firth inference uses profile penalized-likelihood intervals; bootstrap CIs use the percentile method, not BCa.\n')
     text+='\nANCOVA: [partial ANOVA tests](https://www.statsmodels.org/stable/generated/statsmodels.stats.anova.anova_lm.html), [equal slopes](https://itl.nist.gov/div898/software/dataplot/refman1/auxillar/equalslo.htm). GLM: [families, links and dispersion](https://www.statsmodels.org/stable/glm.html).\n'
     text+='\nGLMM: [lme4 adaptive quadrature reference](https://lme4.github.io/lme4/reference/glmer.html).\n'
+    text+='\nBayesian Two-Sample Comparison: [Savage-Dickey density ratio and compatible null priors](https://statproofbook.github.io/P/bf-sddr.html).\n'
     path.write_text(text,encoding='utf-8')

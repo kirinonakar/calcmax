@@ -244,6 +244,37 @@ async function loadRuntime(){
 }
 function runtime(){return sharedRuntime??=loadRuntime();}
 
+test('Bayesian two-sample evidence and posterior references run through shared WASM',async()=>{
+  const py=await runtime();
+  py.globals.set('reference_json',readFileSync(new URL('../../tests/fixtures/bayesian_two_sample_reference.json',import.meta.url),'utf8'));
+  py.runPython(`
+import json
+from calc_advanced_statistics import advanced
+from calc_evaluator import Engine
+import sympy as s
+for case in json.loads(reference_json):
+    actual = advanced(Engine({}),'bayescompare',[s.sympify(v) for v in case['arguments']])
+    unequal = case['arguments'][2] == 'unequal'
+    for key, expected in case['expected'].items():
+        if key == 'difference credible interval':
+            for i,target in enumerate(expected):
+                tolerance = 6*float(actual['difference interval MCSE'][i])+1e-6 if unequal else 1e-8
+                assert abs(float(actual[key][i])-target) <= tolerance, (case['name'],key,i)
+        else:
+            tolerance = 6*float(actual['probability MCSE'])+1e-6 if unequal and key == 'P(μB > μA)' else 1e-8*max(1,abs(expected))
+            assert abs(float(actual[key])-expected) <= tolerance, (case['name'],key)
+`);
+  for(const mode of ['equal','unequal']){
+    py.globals.set('payload',JSON.stringify({tree:parse(`bayescompare([10,11,9,10,12],[13,14,12,15,13],${mode})`),precision:20}));
+    const result=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));
+    assert.equal(result.ok,true,result.error);
+    assert.equal(result.statisticsReport.title,'Bayesian Two-Sample Comparison');
+    assert.deepEqual(result.statisticsReport.sections.find(s=>s.title==='difference credible interval').columns,['Lower','Upper']);
+    assert.match(result.note,/H0: muB-muA=0/);
+  }
+  assert.equal(py.runPython("callable(__import__('symvacas_catalog').bayescompare)"),true);
+});
+
 test('ANCOVA and GLM match independent references and selected forms in real WASM',async()=>{
   const py=await runtime();
   py.globals.set('reference_json',readFileSync(new URL('../../tests/fixtures/ancova_glm_reference.json',import.meta.url),'utf8'));

@@ -132,6 +132,14 @@ export function guidedStatisticsCommand(definition,rows,settings={},columnLabels
     const suffix=offset===null?'':`,${list(complete([offset]).map(row=>row[0]))},${opts.adjustment}`;
     return `glm(${table(mapped)},${opts.family},${opts.link},${opts.family==='nbinom'?opts.alpha:1}${suffix})`;
   }
+  if(id==='bayescompare'){
+    const first=column('first'),second=column('second');distinct([first,second]);
+    const samples=[values(first),values(second)];
+    if(samples.some(sample=>sample.length<2))throw new Error('Enter at least two observations in each group');
+    const keys=['variance','mu','kappa','alpha','beta','level','samples','seed'];
+    if(keys.some(key=>!String(opts[key]).trim()))throw new Error('Enter all Bayesian prior and interval parameters');
+    return `${id}(${samples.map(list).join(',')},${keys.map(key=>String(opts[key]).trim()).join(',')})`;
+  }
   if(['bayesproportion','bayesmean','bayesrate'].includes(id)){
     let data;
     if(id==='bayesproportion'&&opts.layout==='counts')data=table(complete([column('successes'),column('trials')]));

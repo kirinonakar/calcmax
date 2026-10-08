@@ -10,7 +10,8 @@ TITLES = dict(zip('stats mean median variance stdev sumdata quartiles covariance
 TITLES.update({'ancova':'ANCOVA', 'glm':'Generalized linear model (GLM)',
                'cohend':'Effect size', 'eta2':'Effect size', 'bootstrapci':'Bootstrap confidence interval',
                'testpower':'Power', 'kstest':'Kolmogorov–Smirnov test',
-               'bayesproportion':'Bayesian proportion', 'bayesmean':'Bayesian mean', 'bayesrate':'Bayesian rate'})
+               'bayesproportion':'Bayesian proportion', 'bayesmean':'Bayesian mean', 'bayesrate':'Bayesian rate',
+               'bayescompare':'Bayesian Two-Sample Comparison'})
 
 
 def statistics_report(name, value, precision, labels=None):
@@ -87,7 +88,7 @@ def statistics_report(name, value, precision, labels=None):
                     return
                 add(title, [index]+headers, [[i+1]+list(row) for i,row in enumerate(v)])
             elif vector(v):
-                if title in ('confidence interval','quartiles (inclusive)','Quartiles'):
+                if title in ('confidence interval','credible interval','difference credible interval','effect credible interval','quartiles (inclusive)','Quartiles'):
                     labels = ['Lower','Upper'] if len(v)==2 else ['Q1','Median','Q3']
                     if len(labels)==len(v): add(title, labels, [list(v)]); return
                 add(title, ['Observation','Value'], [[i+1,item] for i,item in enumerate(v)])

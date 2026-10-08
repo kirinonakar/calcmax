@@ -1,6 +1,6 @@
 // Keep the typing-preview policy aligned with math/EvaluationPolicy.kt.
 const multiArgumentFunctions=new Set([
-  'bayesproportion','bayesmean','bayesrate',
+  'bayesproportion','bayesmean','bayesrate','bayescompare',
   'round','roundh','nCr','nPr','gcd','lcm','quotient','remainder','mod','divmod',
   'collect','subs','diff','integrate','limit','series','sum','product','solve',
   'nsolve','nintegrate','nderivative','minimum','maximum','piecewise',

@@ -6,6 +6,17 @@ import {guidedStatisticsCommand,survivalAnalysisPlan,advancedStatisticsTermLabel
 import {survivalStepPoints,survivalNumber} from '../survival-report.js';
 import {parse} from '../parser.js';
 import {statisticsReportTarget} from '../statistics-report.js';
+import {requiresExplicitEvaluation} from '../evaluation-policy.js';
+
+test('Bayesian two-sample forms keep independent samples and enforce distinct roles and settings',()=>{
+  const definition=schema.find(d=>d.id==='bayescompare'),rows=[['10','13'],['11','14'],['','15']];
+  assert.equal(guidedStatisticsCommand(definition,rows),'bayescompare([10,11],[13,14,15],equal,0,0.01,2,1,0.95,20000,0)');
+  assert.equal(requiresExplicitEvaluation(parse(definition.example)),true);
+  assert.throws(()=>guidedStatisticsCommand(definition,rows,{second:'0'}),/different columns/);
+  assert.throws(()=>guidedStatisticsCommand(definition,[['10','13'],['','14']]),/at least two/);
+  assert.throws(()=>guidedStatisticsCommand(definition,rows,{kappa:''}),/Enter all Bayesian/);
+  assert.throws(()=>guidedStatisticsCommand(definition,rows,{variance:'paired'}),/Invalid analysis option/);
+});
 
 test('structured reports route without an explicit target and preserve the invoking menu',()=>{
   assert.equal(statisticsReportTarget({statisticsReport:{analysis:'gee'}},''),'statistics-advanced-result');
