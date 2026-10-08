@@ -1,5 +1,100 @@
 [
   {
+    "id": "ancova",
+    "rows": [
+      [
+        "B",
+        "4",
+        "8",
+        "unused"
+      ],
+      [
+        "A",
+        "2",
+        "5",
+        ""
+      ]
+    ],
+    "settings": {
+      "group": "0",
+      "response": "2",
+      "predictors": "1",
+      "slopes": "none",
+      "level": "0.9"
+    },
+    "expected": "ancova([[1,4,8],[2,2,5]],0.9,0)"
+  },
+  {
+    "id": "ancova",
+    "rows": [
+      [
+        "8",
+        "B",
+        "4",
+        "1"
+      ],
+      [
+        "5",
+        "A",
+        "2",
+        "3"
+      ]
+    ],
+    "settings": {
+      "group": "1",
+      "response": "0",
+      "predictors": "3,2"
+    },
+    "expected": "ancova([[1,1,4,8],[2,3,2,5]],0.95,1)"
+  },
+  {
+    "id": "glm",
+    "rows": [
+      [
+        "2",
+        "4",
+        "0",
+        ""
+      ],
+      [
+        "3",
+        "2",
+        "1",
+        ""
+      ]
+    ],
+    "settings": {
+      "response": "0",
+      "predictors": "2",
+      "family": "poisson",
+      "adjustment": "exposure",
+      "offset": "1"
+    },
+    "expected": "glm([[0,2],[1,3]],poisson,auto,1,[4,2],exposure)"
+  },
+  {
+    "id": "glm",
+    "rows": [
+      [
+        "A",
+        "1",
+        "0"
+      ],
+      [
+        "B",
+        "2",
+        "1"
+      ]
+    ],
+    "settings": {
+      "response": "2",
+      "predictors": "1",
+      "family": "binomial",
+      "link": "probit"
+    },
+    "expected": "glm([[1,0],[2,1]],binomial,probit,1)"
+  },
+  {
     "id": "bayesproportion",
     "rows": [
       [

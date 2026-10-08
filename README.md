@@ -21,7 +21,7 @@ A scientific calculator, computer algebra system (CAS), and graphing workspace f
 | Graphing | Function and implicit plots, parametric, polar, sequence, 3D surface and ODE plots; trace, analysis, parameter sliders and animation |
 | Equations | Polynomial equations, systems, exact/numeric solving, differential equations, Step-by-step solution |
 | Matrix / Vector | Matrix algebra, determinants, eigenvalues and vector operations |
-| Statistics | Datasets, descriptive statistics, hypothesis tests, confidence intervals, correlation, regression, plots, survival analysis, advanced statistical analysis |
+| Statistics | Datasets, descriptive statistics, hypothesis tests, confidence intervals, correlation, regression, ANCOVA, GLM, plots, survival analysis, advanced statistical analysis |
 | Probability | Distributions, tail/interval/quantile queries, and editable coin, dice, card and sampling examples |
 | Python | Script editor, local `.py` files, calculator functions, SymPy/mpmath and interactive input |
 | Programmer | Binary/octal/decimal/hex, fixed-width integers and signed/unsigned shifts |
@@ -127,15 +127,13 @@ npm test
 
 ## Limits
 
-Symbolic operations depend on SymPy's algorithms and computation budgets; some results remain unevaluated. `solve(eq,x)` tries complex solutions first and automatically retries the real domain for unsupported expressions such as absolute-value equations: `solve(abs(x-1)=3,x)` returns `{-2, 4}` without a real assumption. Automatic real-domain results are identified in the result note; systems retain complex solving for unaffected variables. Use `solve(eq,x,real)` or `solve(eq,x,complex)` to explicitly choose a domain. Variable assumptions further restrict the domain. A `ConditionSet` reports unresolved solutions; an unevaluated `Integral` can be replaced by `nintegrate(expr,x,a,b)` when a definite numeric value is wanted. `isprime(n)` supports integers with |n| < 2^64; `factorint(n)` and `divisors(n)` accept larger positive integers within the common number limits and use the computation deadline instead of a separate 10^15 cap. Divisor output is limited to 2000 values and 40000 characters.
+Symbolic operations depend on SymPy's algorithms and computation budgets; some results remain unevaluated.
 
-`integrate(sqrt(tan(x)),x)` uses a verified rational substitution and returns logarithms and arctangents plus C on continuous real intervals where tan(x)>0. Fractional tan/cot powers with suitable affine real arguments and root order up to 4 use the same fallback; branch conditions remain attached to Ans. The substitution does not extend results across poles or into complex branches.
-
-`solve(exp(x)=x,x)` returns all complex branches `-LambertW(-1,k)`, with integer k; `solve(exp(x)=x,x,real)` returns `EmptySet`. Affine exponential equations use complete Lambert W families. Other roots obtained through auxiliary `solve()` are explicitly labeled partial when completeness is unknown.
-
-`variance`, `stdev`, and `covariance` default to **sample** values (divide by n−1; ddof=1). Pass a final `0` for **population** values (divide by n): `variance([1,2,3],0)`, `stdev([1,2,3],0)`, or `covariance([1,2,3],[2,4,6],0)`. Sample values require at least two observations; `stats(list)` shows both conventions. `eigenvalues(A)` labels each value and its multiplicity, while Ans retains [eigenvalue, multiplicity] pairs.
+`variance`, `stdev`, and `covariance` default to **sample** values (divide by n−1; ddof=1). Pass a final `0` for **population** values (divide by n): `variance([1,2,3],0)`, `stdev([1,2,3],0)`, or `covariance([1,2,3],[2,4,6],0)`. Sample values require at least two observations; `stats(list)` shows both conventions.
 
 Expensive calculations and scripts can be stopped, with a 60-second service/Worker deadline. Graphs use finite sampling and may miss very narrow features. Matrix entry grids support up to 9 × 9 values and vectors up to 9 components; larger exact operations may reach computation limits.
+
+For other details, refer to the catalog help.
 
 ## License
 

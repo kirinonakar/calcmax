@@ -304,6 +304,13 @@
     "zinterval(,,,)"
   ],
   "Advanced statistics": [
+    "ancova([],0.95,1)",
+    "glm([],gaussian)",
+    "glm([],binomial)",
+    "glm([],poisson)",
+    "glm([],gamma)",
+    "glm([],inversegaussian)",
+    "glm([],nbinom,log,1)",
     "bayesproportion([],1,1,0.95,0.5)",
     "bayesmean([],0,1,2,1,0.95,0)",
     "bayesrate([],1,1,0.95,1)",

@@ -38,7 +38,7 @@ def statistics_display_terms(value, labels):
     if not isinstance(value, dict): return value
     result = {}
     for key, item in value.items():
-        if key == 'term' and isinstance(item, str):
+        if key in ('term','group') and isinstance(item, str):
             if item in labels: item = labels[item]
             elif ': ' in item:  # Multinomial category contrast followed by a predictor.
                 prefix, term = item.rsplit(': ', 1)

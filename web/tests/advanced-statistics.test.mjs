@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {advancedStatisticsSchema as schema} from '../advanced-statistics-schema.js';
-import {guidedStatisticsCommand,survivalAnalysisPlan} from '../advanced-statistics.js';
+import {guidedStatisticsCommand,survivalAnalysisPlan,advancedStatisticsTermLabels} from '../advanced-statistics.js';
 import {survivalStepPoints,survivalNumber} from '../survival-report.js';
 import {parse} from '../parser.js';
 import {statisticsReportTarget} from '../statistics-report.js';
@@ -35,4 +35,16 @@ test('Android and Web shared form cases select roles, groups, methods and indepe
   assert.equal(guidedStatisticsCommand(km,[['1','0'],['2','0']]),'kaplanmeier([[1,0],[2,0]],0.95)');
   assert.throws(()=>guidedStatisticsCommand(km,[['1','1'],['2','0']],{time:'0',event:'0'}),/different columns/);
   assert.throws(()=>guidedStatisticsCommand(schema.find(d=>d.id==='cox'),[['1','1','3'],['2','0','4']],{predictors:'0'}),/distinct analysis columns/);
+});
+
+test('ANCOVA and GLM reject invalid roles and links and preserve source labels',()=>{
+  const ancova=schema.find(d=>d.id==='ancova'),glm=schema.find(d=>d.id==='glm');
+  const rows=[['Control','1','3'],['Treatment','2','5']];
+  assert.deepEqual(advancedStatisticsTermLabels(ancova,rows,{},['arm','baseline','response']),{Group:'arm','group:1':'Control','group:2':'Treatment',x1:'baseline'});
+  assert.deepEqual(advancedStatisticsTermLabels(glm,rows,{predictors:'1'},['arm','baseline','response']),{x1:'baseline'});
+  assert.throws(()=>guidedStatisticsCommand(ancova,rows,{response:'0'}),/different columns/);
+  assert.throws(()=>guidedStatisticsCommand(ancova,rows,{predictors:'0,1'}),/distinct analysis columns/);
+  assert.throws(()=>guidedStatisticsCommand(ancova,[['A','','3'],['B','2','5']]),/Complete selected rows/);
+  assert.throws(()=>guidedStatisticsCommand(glm,rows,{predictors:'1',family:'poisson',link:'logit'}),/Invalid analysis option/);
+  assert.throws(()=>guidedStatisticsCommand(glm,rows,{predictors:'1',adjustment:'offset',offset:'2'}),/different columns/);
 });

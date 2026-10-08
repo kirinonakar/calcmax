@@ -11,6 +11,13 @@ internal fun advancedStatisticsTermLabels(definition:JSONObject,rows:List<List<S
     fun column(key:String)=opts[key]?.toIntOrNull()?.let {if(it==-1)n-1 else it} ?: -1
     fun multiple(excluded:List<Int>)=if(opts["predictors"]=="auto")(0 until n).filter {it !in excluded} else opts["predictors"].orEmpty().split(',').filter(String::isNotBlank).map(String::toInt)
     val predictors=when(id) {
+        "glm"->multiple(listOf(column("response"))+if(opts["adjustment"]!="none")listOf(column("offset")) else emptyList())
+        "ancova"->{
+            val labels=mutableMapOf("Group" to columnLabels.getOrElse(column("group")){"Group"})
+            rows.map {it.getOrElse(column("group")){""}.trim()}.distinct().forEachIndexed {index,group->labels["group:${index+1}"]=group}
+            multiple(listOf(column("group"),column("response"))).forEachIndexed {index,at->labels["x${index+1}"]=columnLabels.getOrElse(at){"x${index+1}"}}
+            return labels
+        }
         "mixedmodel","gee","glmm"->multiple(listOf(column("subject"),column("response"))+if(id=="glmm"&&opts["family"]!="binomial"&&opts["adjustment"]!="none")listOf(column("offset")) else emptyList())
         "cox"->multiple(listOf(column("time"),column("event"))+if(opts["truncation"]=="entry")listOf(column("entry")) else emptyList())
         "poissonreg","nbreg"->multiple(listOf(column("response"))+if(opts["adjustment"]!="none")listOf(column("offset")) else emptyList())
@@ -44,7 +51,14 @@ internal fun guidedStatisticsCommand(definition:JSONObject,rows:List<List<String
         val field=controls.getJSONObject(i)
         if(field.getString("type")=="choice") {
             val choices=field.getJSONArray("choices")
-            require((0 until choices.length()).any {choices.getJSONObject(it).getString("id")==opts[field.getString("key")]}) {"Invalid analysis option"}
+            require((0 until choices.length()).any {index->
+                val choice=choices.getJSONObject(index);val conditions=choice.optJSONObject("when")
+                choice.getString("id")==opts[field.getString("key")]&&
+                    (conditions==null||conditions.keys().asSequence().all {key->
+                        val values=conditions.getJSONArray(key)
+                        (0 until values.length()).any {values.getString(it)==opts[key]}
+                    })
+            }) {"Invalid analysis option"}
         }
     }
     fun col(key:String):Int {val raw=opts.getValue(key).toIntOrNull();val index=if(raw==-1)n-1 else raw;require(index!=null&&index in 0 until n) {"Choose valid data columns"};return index}
@@ -67,6 +81,20 @@ internal fun guidedStatisticsCommand(definition:JSONObject,rows:List<List<String
     }
     return when(id) {
         "padjust"->"padjust(${vector(values(col("column")))},${opts["method"]},${opts["alpha"]})"
+        "ancova"->{
+            val group=col("group");val response=col("response");distinct(listOf(group,response))
+            val selected=complete(listOf(group)+multiple("predictors",listOf(group,response))+response)
+            val labels=selected.map {it[0]}.distinct();require(labels.size>=2) {"Choose at least two groups"}
+            val mapped=selected.map {row->listOf((labels.indexOf(row[0])+1).toString())+row.drop(1)}
+            "ancova(${table(mapped)},${opts["level"]},${if(opts["slopes"]=="test")1 else 0})"
+        }
+        "glm"->{
+            val response=col("response");val offset=if(opts["adjustment"]!="none")col("offset") else null
+            val reserved=listOfNotNull(response,offset);distinct(reserved)
+            val mapped=complete(multiple("predictors",reserved)+response)
+            val suffix=if(offset==null)"" else ",${vector(complete(listOf(offset)).map {it[0]})},${opts["adjustment"]}"
+            "glm(${table(mapped)},${opts["family"]},${opts["link"]},${if(opts["family"]=="nbinom")opts["alpha"] else "1"}$suffix)"
+        }
         "bayesproportion","bayesmean","bayesrate"->{
             val data=when {
                 id=="bayesproportion"&&opts["layout"]=="counts"->table(complete(listOf(col("successes"),col("trials"))))

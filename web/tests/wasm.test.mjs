@@ -108,6 +108,32 @@ async function loadRuntime(){
 }
 function runtime(){return sharedRuntime??=loadRuntime();}
 
+test('ANCOVA and GLM match independent references and selected forms in real WASM',async()=>{
+  const py=await runtime();
+  py.globals.set('reference_json',readFileSync(new URL('../../tests/fixtures/ancova_glm_reference.json',import.meta.url),'utf8'));
+  py.runPython(`
+import json
+from calc_advanced_statistics import advanced
+from calc_evaluator import Engine
+import sympy as s
+for case in json.loads(reference_json):
+    actual = advanced(Engine({}),case['function'],[s.sympify(v) for v in case['arguments']])
+    for path, expected in case['expected']:
+        cell = actual
+        for key in path: cell = cell[key]
+        assert abs(float(cell)-expected) <= case['tolerance']*max(1,abs(expected)), (case['name'],path)
+`);
+  const definitions=JSON.parse(readFileSync(new URL('../../app/src/main/assets/advanced_statistics.json',import.meta.url),'utf8'));
+  for(const name of ['ancova','glm']){
+    const source=definitions.find(d=>d.id===name).example;
+    py.globals.set('payload',JSON.stringify({tree:parse(source),precision:40,statisticsTermLabels:{x1:'baseline','group:1':'Control'}}));
+    const result=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));
+    assert.equal(result.ok,true,result.error);
+    assert.equal(result.statisticsReport.analysis,name);
+    assert.match(JSON.stringify(result.statisticsReport),/baseline/);
+  }
+});
+
 test('statistical conventions, solve domains and labeled eigenvalues in real WASM',async()=>{
   const py=await runtime();
   const run=(source,options={})=>{

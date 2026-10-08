@@ -9,7 +9,7 @@ private val multiArgumentFunctions = setOf(
     "tpdf", "tcdf", "invt", "chi2pdf", "chi2cdf", "fpdf", "fcdf",
     "binompdf", "binomcdf", "poissonpdf", "poissoncdf", "geometpdf", "geometcdf",
     "ttest", "ztest", "chi2test", "anova", "tukey", "wilcoxon", "mannwhitney", "kruskal", "tinterval", "zinterval",
-    "bayesproportion", "bayesmean", "bayesrate", "padjust", "cohend", "eta2", "levene", "bartlett", "mcnemar", "survivalanalysis", "kaplanmeier", "logrank", "cox", "repeatedanova", "mixedmodel", "glmm", "gee", "multinomial", "ordinal", "poissonreg", "nbreg", "bootstrapci", "testpower", "samplesize", "kstest", "crossvalidate", "pca", "kmeans", "impute",
+    "ancova", "glm", "bayesproportion", "bayesmean", "bayesrate", "padjust", "cohend", "eta2", "levene", "bartlett", "mcnemar", "survivalanalysis", "kaplanmeier", "logrank", "cox", "repeatedanova", "mixedmodel", "glmm", "gee", "multinomial", "ordinal", "poissonreg", "nbreg", "bootstrapci", "testpower", "samplesize", "kstest", "crossvalidate", "pca", "kmeans", "impute",
     "tvmfv", "tvmpv", "tvmpmt", "tvmn", "tvmrate", "npv", "irr", "amort", "cagr"
 )
 

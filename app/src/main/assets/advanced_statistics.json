@@ -1,5 +1,358 @@
 [
   {
+    "id": "ancova",
+    "label": "ANCOVA",
+    "ko": "ANCOVA (공분산분석)",
+    "input": "table",
+    "suffix": ",0.95,1",
+    "example": "ancova([[1,1,3],[1,2,5],[1,3,4],[1,4,8],[2,2,6],[2,3,7],[2,4,9],[2,5,8],[3,1,5],[3,3,8],[3,4,10],[3,6,11]],0.95,1)",
+    "help": "Rows: numeric group ID, one or more covariates, response; confidence level (default .95); slope homogeneity check 0/1 (default 1). One factor, common slopes, Type II F tests and adjusted means at pooled covariate means.",
+    "helpKo": "열: 숫자 그룹 ID, 하나 이상의 공변량, 종속변수; 신뢰수준(기본 .95), 기울기 동질성 검정 0/1(기본 1). 일요인·공통 기울기, Type II F 검정, 전체 공변량 평균에서의 조정 평균.",
+    "controls": [
+      {
+        "key": "group",
+        "label": "Group column",
+        "ko": "그룹 열",
+        "type": "column",
+        "default": 0
+      },
+      {
+        "key": "response",
+        "label": "Response",
+        "ko": "종속변수 열",
+        "type": "column",
+        "default": -1
+      },
+      {
+        "key": "predictors",
+        "label": "Covariates",
+        "ko": "공변량 열",
+        "type": "columns",
+        "default": "auto"
+      },
+      {
+        "key": "level",
+        "label": "Confidence level",
+        "ko": "신뢰수준",
+        "type": "number",
+        "default": "0.95"
+      },
+      {
+        "key": "slopes",
+        "label": "Slope homogeneity",
+        "ko": "회귀 기울기 동질성",
+        "type": "choice",
+        "default": "test",
+        "choices": [
+          {
+            "id": "test",
+            "label": "Test",
+            "ko": "검정"
+          },
+          {
+            "id": "none",
+            "label": "Skip",
+            "ko": "생략"
+          }
+        ]
+      }
+    ],
+    "formHelp": "Compare groups after adjusting for selected covariates. Text group labels are accepted. Type II tests, adjusted means, and optional slope homogeneity check.",
+    "formHelpKo": "선택한 공변량을 보정하여 그룹을 비교합니다. 문자 그룹도 사용할 수 있습니다. Type II 검정·조정 평균·선택적 기울기 동질성 검정.",
+    "exampleRows": [
+      [
+        "1",
+        "1",
+        "3"
+      ],
+      [
+        "1",
+        "2",
+        "5"
+      ],
+      [
+        "1",
+        "3",
+        "4"
+      ],
+      [
+        "1",
+        "4",
+        "8"
+      ],
+      [
+        "2",
+        "2",
+        "6"
+      ],
+      [
+        "2",
+        "3",
+        "7"
+      ],
+      [
+        "2",
+        "4",
+        "9"
+      ],
+      [
+        "2",
+        "5",
+        "8"
+      ],
+      [
+        "3",
+        "1",
+        "5"
+      ],
+      [
+        "3",
+        "3",
+        "8"
+      ],
+      [
+        "3",
+        "4",
+        "10"
+      ],
+      [
+        "3",
+        "6",
+        "11"
+      ]
+    ]
+  },
+  {
+    "id": "glm",
+    "label": "Generalized linear model (GLM)",
+    "ko": "GLM (일반화 선형모형)",
+    "input": "table",
+    "suffix": ",gaussian,auto,1",
+    "example": "glm([[0,2],[1,4],[2,4],[3,7],[4,8],[5,9]],gaussian,auto,1)",
+    "help": "Rows: predictors, response; family gaussian / binomial (0/1) / poisson / gamma / inversegaussian / nbinom; link auto or a supported link; fixed NB2 alpha (default 1); optional offset/exposure vector and mode. Default links: identity, logit, log, log, log, log. Model-based Wald z 95% intervals; Pearson dispersion for Gaussian/Gamma/inverse Gaussian. NB2 alpha is fixed, not estimated.",
+    "helpKo": "열: 설명변수, 반응변수; 분포 gaussian·binomial(0/1)·poisson·gamma·inversegaussian·nbinom; 연결함수 auto 또는 지원 함수; 고정 NB2 alpha(기본 1); 선택적 오프셋·노출량 목록과 유형. 기본 연결함수는 identity·logit·log·log·log·log. 모형 기반 Wald z 95% 구간; 정규·Gamma·역가우스는 Pearson 분산 추정. NB2 alpha는 추정하지 않고 고정합니다.",
+    "controls": [
+      {
+        "key": "response",
+        "label": "Response",
+        "ko": "반응변수 열",
+        "type": "column",
+        "default": -1
+      },
+      {
+        "key": "predictors",
+        "label": "Predictors",
+        "ko": "설명변수 열",
+        "type": "columns",
+        "default": "auto"
+      },
+      {
+        "key": "family",
+        "label": "Family",
+        "ko": "분포",
+        "type": "choice",
+        "default": "gaussian",
+        "choices": [
+          {
+            "id": "gaussian",
+            "label": "Gaussian",
+            "ko": "정규"
+          },
+          {
+            "id": "binomial",
+            "label": "Binomial (0/1)",
+            "ko": "이항 (0/1)"
+          },
+          {
+            "id": "poisson",
+            "label": "Poisson",
+            "ko": "포아송"
+          },
+          {
+            "id": "gamma",
+            "label": "Gamma",
+            "ko": "Gamma"
+          },
+          {
+            "id": "inversegaussian",
+            "label": "Inverse Gaussian",
+            "ko": "역가우스"
+          },
+          {
+            "id": "nbinom",
+            "label": "Negative binomial (NB2)",
+            "ko": "음이항 (NB2)"
+          }
+        ]
+      },
+      {
+        "key": "link",
+        "label": "Link function",
+        "ko": "연결함수",
+        "type": "choice",
+        "default": "auto",
+        "choices": [
+          {
+            "id": "auto",
+            "label": "Default for family",
+            "ko": "분포별 기본값"
+          },
+          {
+            "id": "identity",
+            "label": "Identity",
+            "ko": "항등",
+            "when": {
+              "family": [
+                "gaussian"
+              ]
+            }
+          },
+          {
+            "id": "log",
+            "label": "Log",
+            "ko": "로그",
+            "when": {
+              "family": [
+                "gaussian",
+                "poisson",
+                "gamma",
+                "inversegaussian",
+                "nbinom"
+              ]
+            }
+          },
+          {
+            "id": "logit",
+            "label": "Logit",
+            "ko": "로짓",
+            "when": {
+              "family": [
+                "binomial"
+              ]
+            }
+          },
+          {
+            "id": "probit",
+            "label": "Probit",
+            "ko": "프로빗",
+            "when": {
+              "family": [
+                "binomial"
+              ]
+            }
+          },
+          {
+            "id": "cloglog",
+            "label": "Complementary log-log",
+            "ko": "상보 로그로그",
+            "when": {
+              "family": [
+                "binomial"
+              ]
+            }
+          },
+          {
+            "id": "inverse",
+            "label": "Inverse",
+            "ko": "역수",
+            "when": {
+              "family": [
+                "gamma"
+              ]
+            }
+          },
+          {
+            "id": "inverse_squared",
+            "label": "Inverse squared",
+            "ko": "역수 제곱",
+            "when": {
+              "family": [
+                "inversegaussian"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "key": "alpha",
+        "label": "NB2 alpha (fixed)",
+        "ko": "NB2 alpha (고정)",
+        "type": "number",
+        "default": "1",
+        "when": {
+          "family": [
+            "nbinom"
+          ]
+        }
+      },
+      {
+        "key": "adjustment",
+        "label": "Offset / exposure",
+        "ko": "오프셋·노출량",
+        "type": "choice",
+        "default": "none",
+        "choices": [
+          {
+            "id": "none",
+            "label": "None",
+            "ko": "없음"
+          },
+          {
+            "id": "offset",
+            "label": "Log offset",
+            "ko": "로그 오프셋"
+          },
+          {
+            "id": "exposure",
+            "label": "Exposure",
+            "ko": "노출량"
+          }
+        ]
+      },
+      {
+        "key": "offset",
+        "label": "Offset / exposure column",
+        "ko": "오프셋·노출량 열",
+        "type": "column",
+        "default": 0,
+        "when": {
+          "adjustment": [
+            "offset",
+            "exposure"
+          ]
+        }
+      }
+    ],
+    "formHelp": "Choose a family, its link, response and predictors. Binomial uses 0/1; counts use nonnegative integers; Gamma/inverse Gaussian use positive responses. Exposure requires a log link. NB2 alpha is fixed.",
+    "formHelpKo": "분포·연결함수·반응변수·설명변수를 선택하세요. 이항은 0/1, 빈도는 음이 아닌 정수, Gamma·역가우스는 양수입니다. 노출량은 로그 연결에서만 사용합니다. NB2 alpha는 고정합니다.",
+    "exampleRows": [
+      [
+        "0",
+        "2"
+      ],
+      [
+        "1",
+        "4"
+      ],
+      [
+        "2",
+        "4"
+      ],
+      [
+        "3",
+        "7"
+      ],
+      [
+        "4",
+        "8"
+      ],
+      [
+        "5",
+        "9"
+      ]
+    ]
+  },
+  {
     "id": "padjust",
     "label": "Multiple testing",
     "ko": "다중검정 보정",

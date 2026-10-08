@@ -98,7 +98,7 @@ export function guidedStatisticsCommand(definition,rows,settings={},columnLabels
   if(!rows.some(row=>row.some(cell=>cell.trim())))throw new Error('Enter data first');
   const n=Math.max(...rows.map(row=>row.length)),id=definition.id;
   const opts=Object.fromEntries(definition.controls.map(field=>[field.key,settings[field.key]??field.default]));
-  for(const field of definition.controls)if(field.type==='choice'&&!field.choices.some(choice=>choice.id===opts[field.key]))throw new Error('Invalid analysis option');
+  for(const field of definition.controls)if(field.type==='choice'&&!field.choices.some(choice=>choice.id===opts[field.key]&&(!choice.when||Object.entries(choice.when).every(([key,values])=>values.includes(opts[key])))))throw new Error('Invalid analysis option');
   const column=key=>{let i=Number(opts[key]);if(i===-1)i=n-1;if(!Number.isInteger(i)||i<0||i>=n)throw new Error('Choose valid data columns');return i;};
   const list=values=>`[${values.join(',')}]`,table=values=>list(values.map(list));
   const values=i=>rows.map(row=>(row[i]||'').trim()).filter(Boolean);
@@ -117,6 +117,20 @@ export function guidedStatisticsCommand(definition,rows,settings={},columnLabels
     return selected.map(row=>[row[0],row[1]===opts.eventValue?'1':'0',...row.slice(2)]);
   };
   if(id==='padjust')return `padjust(${list(values(column('column')))},${opts.method},${opts.alpha})`;
+  if(id==='ancova'){
+    const group=column('group'),response=column('response');distinct([group,response]);
+    const selected=complete([group,...multiple('predictors',[group,response]),response]),labels=[...new Set(selected.map(row=>row[0]))];
+    if(labels.length<2)throw new Error('Choose at least two groups');
+    const mapped=selected.map(row=>[String(labels.indexOf(row[0])+1),...row.slice(1)]);
+    return `ancova(${table(mapped)},${opts.level},${opts.slopes==='test'?1:0})`;
+  }
+  if(id==='glm'){
+    const response=column('response'),offset=opts.adjustment!=='none'?column('offset'):null;
+    const reserved=[response,...(offset===null?[]:[offset])];distinct(reserved);
+    const mapped=complete([...multiple('predictors',reserved),response]);
+    const suffix=offset===null?'':`,${list(complete([offset]).map(row=>row[0]))},${opts.adjustment}`;
+    return `glm(${table(mapped)},${opts.family},${opts.link},${opts.family==='nbinom'?opts.alpha:1}${suffix})`;
+  }
   if(['bayesproportion','bayesmean','bayesrate'].includes(id)){
     let data;
     if(id==='bayesproportion'&&opts.layout==='counts')data=table(complete([column('successes'),column('trials')]));
@@ -221,6 +235,13 @@ export function advancedStatisticsTermLabels(definition,rows,settings={},columnL
   const column=key=>Number(opts[key])===-1?n-1:Number(opts[key]);
   const multiple=excluded=>opts.predictors==='auto'?Array.from({length:n},(_,i)=>i).filter(i=>!excluded.includes(i)):String(opts.predictors??'').split(',').filter(Boolean).map(Number);
   let predictors=[];
+  if(id==='ancova'){
+    const groups=[...new Set(rows.map(row=>String(row[column('group')]??'').trim()))],labels={Group:columnLabels[column('group')]};
+    groups.forEach((group,i)=>{labels[`group:${i+1}`]=group;});
+    multiple([column('group'),column('response')]).forEach((at,i)=>{labels[`x${i+1}`]=columnLabels[at]||`x${i+1}`;});
+    return labels;
+  }
+  if(id==='glm')predictors=multiple([column('response'),...(opts.adjustment!=='none'?[column('offset')]:[])]);
   if(['mixedmodel','gee','glmm'].includes(id))predictors=multiple([column('subject'),column('response'),...(id==='glmm'&&opts.family!=='binomial'&&opts.adjustment!=='none'?[column('offset')]:[])]);
   else if(id==='cox')predictors=multiple([column('time'),column('event'),...(opts.truncation==='entry'?[column('entry')]:[])]);
   else if(['poissonreg','nbreg'].includes(id))predictors=multiple([column('response'),...(opts.adjustment!=='none'?[column('offset')]:[])]);
@@ -334,14 +355,15 @@ export function createAdvancedStatistics({state,persist,data,columnLimit}) {
           const caption=korean?field.ko:field.label,id=fieldId(field.key),value=opts[field.key];
           const changed=newValue=>{
             state.fields[id]=newValue;
+            if(definition.id==='glm'&&field.key==='family')state.fields[fieldId('link')]='auto';
             if(['time','event','subject','response','group','grouping','offset','adjustment'].includes(field.key)||(definition.id==='glmm'&&field.key==='family'))state.fields[fieldId('predictors')]=definition.id==='survivalanalysis'?'':'auto';
             if(field.type!=='number')signature='';update();
             persist();
           };
           if(field.type==='columns'){
             const group=element('fieldset'),legend=element('legend',caption);group.append(legend);group.className='form-row statistics-form-columns';
-            const roles=definition.id==='survivalanalysis'?['time','event',...(opts.grouping==='groups'?['group']:[])]:definition.id==='cox'?['time','event']:['poissonreg','nbreg'].includes(definition.id)?['response']:['subject','response'];
-            if(['poissonreg','nbreg','glmm'].includes(definition.id)&&opts.adjustment!=='none'&&(definition.id!=='glmm'||opts.family!=='binomial'))roles.push('offset');
+            const roles=definition.id==='ancova'?['group','response']:definition.id==='survivalanalysis'?['time','event',...(opts.grouping==='groups'?['group']:[])]:definition.id==='cox'?['time','event']:['poissonreg','nbreg','glm'].includes(definition.id)?['response']:['subject','response'];
+            if(['poissonreg','nbreg','glmm','glm'].includes(definition.id)&&opts.adjustment!=='none'&&(definition.id!=='glmm'||opts.family!=='binomial'))roles.push('offset');
             const reserved=field.key==='predictors'?roles.map(key=>Number(opts[key])===-1?count-1:Number(opts[key])):[];
             const columns=value==='auto'?Array.from({length:count},(_,i)=>i).filter(i=>!reserved.includes(i)):String(value).split(',').filter(Boolean).map(Number);
             const store=element('input');store.type='hidden';store.id=id;store.value=String(value);group.append(store);
@@ -354,7 +376,7 @@ export function createAdvancedStatistics({state,persist,data,columnLimit}) {
             const label=element('label',caption),control=element(field.type==='number'?'input':'select');control.id=id;
             if(field.type==='number'){control.value=value;control.oninput=()=>changed(control.value);}
             else{
-              const choices=field.type==='column'?labels.map((name,i)=>({id:String(i),label:name,ko:name})):field.choices;
+              const choices=field.type==='column'?labels.map((name,i)=>({id:String(i),label:name,ko:name})):field.choices.filter(choice=>!choice.when||Object.entries(choice.when).every(([key,values])=>values.includes(opts[key])));
               control.replaceChildren(...choices.map(choice=>{const item=element('option',korean?choice.ko:choice.label);item.value=String(choice.id);return item;}));
               const wanted=field.type==='column'&&Number(value)===-1?String(count-1):String(value);control.value=wanted;
               // Keep an unavailable role invalid until the user picks a column.

@@ -89,6 +89,7 @@ internal fun advancedStatisticsRows(data:String,columnLimit:Int?=null):List<List
     }}
     fun setOption(key:String,value:String) {
         val next=JSONObject(settings.toString()).put(key,value)
+        if(selected=="glm"&&key=="family")next.put("link","auto")
         if(key in listOf("time","event","subject","response","group","grouping","offset","adjustment")||(selected=="glmm"&&key=="family"))next.put("predictors",if(selected=="survivalanalysis")"" else "auto")
         formsText=JSONObject(formsText).put(selected,next).toString();message=""
     }
@@ -174,7 +175,9 @@ internal fun advancedStatisticsRows(data:String,columnLimit:Int?=null):List<List
         when(field.getString("type")) {
             "number"->Field(value,label,Modifier.fillMaxWidth().testTag("statistics-form-$key")){onChange(key,it)}
             "choice"->{
-                val choices=field.getJSONArray("choices");val ids=List(choices.length()){choices.getJSONObject(it).getString("id")};val names=List(choices.length()){choices.getJSONObject(it).getString(if(ko)"ko" else "label")}
+                val rawChoices=field.getJSONArray("choices")
+                val choices=List(rawChoices.length()){rawChoices.getJSONObject(it)}.filter {choice->val conditions=choice.optJSONObject("when");conditions==null||conditions.keys().asSequence().all {name->val values=conditions.getJSONArray(name);(0 until values.length()).any {values.getString(it)==option(name)}}}
+                val ids=choices.map {it.getString("id")};val names=choices.map {it.getString(if(ko)"ko" else "label")}
                 StatisticsSelectionTitle(label,translate=false)
                 Choices(names,names.getOrElse(ids.indexOf(value)){""},{name->onChange(key,ids[names.indexOf(name)])},translate=false)
             }
@@ -188,10 +191,11 @@ internal fun advancedStatisticsRows(data:String,columnLimit:Int?=null):List<List
                 val roles=when(id) {
                     "cox"->listOf("time","event")
                     "survivalanalysis"->listOf("time","event")+if(option("grouping")=="groups")listOf("group") else emptyList()
-                    "poissonreg","nbreg"->listOf("response")
+                    "poissonreg","nbreg","glm"->listOf("response")
+                    "ancova"->listOf("group","response")
                     else->listOf("subject","response")
                 }
-                val offsetRoles=if(id in listOf("poissonreg","nbreg","glmm")&&option("adjustment")!="none"&&(id!="glmm"||option("family")!="binomial"))listOf("offset") else emptyList()
+                val offsetRoles=if(id in listOf("poissonreg","nbreg","glmm","glm")&&option("adjustment")!="none"&&(id!="glmm"||option("family")!="binomial"))listOf("offset") else emptyList()
                 val excluded=if(key=="predictors")roles+offsetRoles else emptyList()
                 val reserved=excluded.mapNotNull {option(it).toIntOrNull()?.let {value->if(value==-1)columns.lastIndex else value}}
                 val selected=if(value=="auto")columns.indices.filter {it !in reserved} else value.split(',').mapNotNull(String::toIntOrNull)

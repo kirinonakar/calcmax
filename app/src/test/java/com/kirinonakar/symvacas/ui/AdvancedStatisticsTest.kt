@@ -116,4 +116,17 @@ class AdvancedStatisticsTest {
     @Test(expected=IllegalArgumentException::class) fun survivalPlanRejectsGroupAsAdditionalPredictor() {
         survivalAnalysisPlan(listOf(listOf("1","1","A")),JSONObject().put("cox","1").put("predictors","2"))
     }
+
+    @Test fun ancovaAndGlmRetainLabelsAndRejectInvalidRolesAndLinks() {
+        val schema=JSONArray(File("src/main/assets/advanced_statistics.json").readText())
+        val definitions=List(schema.length()){schema.getJSONObject(it)}
+        val ancova=definitions.first {it.getString("id")=="ancova"};val glm=definitions.first {it.getString("id")=="glm"}
+        val rows=listOf(listOf("Control","1","3"),listOf("Treatment","2","5"))
+        val labels=listOf("arm","baseline","response")
+        assertEquals(mapOf("Group" to "arm","group:1" to "Control","group:2" to "Treatment","x1" to "baseline"),advancedStatisticsTermLabels(ancova,rows,JSONObject(),labels))
+        assertEquals(mapOf("x1" to "baseline"),advancedStatisticsTermLabels(glm,rows,JSONObject().put("predictors","1"),labels))
+        for((definition,options) in listOf(ancova to JSONObject().put("response","0"),ancova to JSONObject().put("predictors","0,1"),glm to JSONObject().put("predictors","1").put("family","poisson").put("link","logit"))) {
+            assertTrue(runCatching {guidedStatisticsCommand(definition,rows,options)}.exceptionOrNull() is IllegalArgumentException)
+        }
+    }
 }

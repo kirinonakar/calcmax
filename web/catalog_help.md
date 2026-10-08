@@ -659,6 +659,12 @@ References: [Firth logistic regression](https://search.r-project.org/CRAN/refman
 
 In Statistics, Advanced analysis provides controls for correction methods, column roles, groups, predictors and test options. Switch between current data, examples and an editable expression. Table analyses reject blank selected cells; impute converts them to NA. All advanced analyses use binary64 numerics.
 
+`ancova` — Rows: numeric group ID, one or more covariates, response; confidence level (default .95); slope homogeneity check 0/1 (default 1). One factor, common slopes, Type II F tests and adjusted means at pooled covariate means.
+Example: ancova([[1,1,3],[1,2,5],[1,3,4],[1,4,8],[2,2,6],[2,3,7],[2,4,9],[2,5,8],[3,1,5],[3,3,8],[3,4,10],[3,6,11]],0.95,1)
+
+`glm` — Rows: predictors, response; family gaussian / binomial (0/1) / poisson / gamma / inversegaussian / nbinom; link auto or a supported link; fixed NB2 alpha (default 1); optional offset/exposure vector and mode. Default links: identity, logit, log, log, log, log. Model-based Wald z 95% intervals; Pearson dispersion for Gaussian/Gamma/inverse Gaussian. NB2 alpha is fixed, not estimated.
+Example: glm([[0,2],[1,4],[2,4],[3,7],[4,8],[5,9]],gaussian,auto,1)
+
 `padjust` — p values; method bonferroni / holm / fdr (BH) / by; alpha.
 Example: padjust([0.01,0.04,0.03,0.2],holm,0.05)
 
@@ -749,5 +755,7 @@ Example: impute([[1,NA],[2,4],[NA,6],[4,8]],mean)
 Bayesian analyses assume independent observations and the stated likelihood with proper conjugate priors; intervals are equal-tailed posterior credible intervals. A Bayes factor is not a posterior hypothesis probability and depends on the prior. References: [Stanford conjugate priors](https://web.stanford.edu/class/stats200/Lecture21.pdf), [normal-inverse-gamma analysis](https://treese41528.github.io/ComputationalDataScience/Website/part3_bayesian/chapter5/ch5_2-prior-distributions.html).
 
 Models return errors on failed convergence or non-identifiability. Cox supports Breslow/Efron ties, optional left truncation and a Grambsch–Therneau scaled-Schoenfeld proportional-hazards check; ordinal logistic assumes proportional odds. Mixed models support a random intercept plus up to three random slopes under ML or REML; GEE supports independent, exchangeable and AR(1) working correlations. Repeated-measures ANOVA covers balanced one- and two-way within-subject designs with GG corrections. Single imputation (mean, median, mode, regression or k-NN) does not propagate imputation uncertainty. Cross-validation covers linear, ridge, lasso, elastic-net and logistic fits with random, blocked or stratified splits. Firth inference uses profile penalized-likelihood intervals; bootstrap CIs use the percentile method, not BCa.
+
+ANCOVA: [partial ANOVA tests](https://www.statsmodels.org/stable/generated/statsmodels.stats.anova.anova_lm.html), [equal slopes](https://itl.nist.gov/div898/software/dataplot/refman1/auxillar/equalslo.htm). GLM: [families, links and dispersion](https://www.statsmodels.org/stable/glm.html).
 
 GLMM: [lme4 adaptive quadrature reference](https://lme4.github.io/lme4/reference/glmer.html).

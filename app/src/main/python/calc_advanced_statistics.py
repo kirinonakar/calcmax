@@ -16,10 +16,14 @@ from calc_advanced_regression import calculate as regression
 from calc_advanced_resampling import calculate as resampling
 from calc_advanced_learning import calculate as learning
 from calc_advanced_bayesian import calculate as bayesian
+from calc_advanced_ancova import calculate as ancova
+from calc_advanced_glm import calculate as glm
 
 
 # Function names, argument limits and handlers share one registry.
 _ANALYSES = {
+    'ancova': (1, 3, ancova),
+    'glm': (1, 6, glm),
     'bayesproportion': (1, 5, bayesian),
     'bayesmean': (1, 7, bayesian),
     'bayesrate': (1, 5, bayesian),

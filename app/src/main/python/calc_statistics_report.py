@@ -7,7 +7,8 @@ TITLES = dict(zip('stats mean median variance stdev sumdata quartiles covariance
     ['Descriptive statistics','Mean','Median','Variance','Standard deviation','Sum','Quartiles','Covariance','Correlation','One-sample t test','Welch t test','Paired t test','One-sample z test','Two-sample z test','χ² test','χ² independence test','Fisher exact test','ANOVA','Tukey HSD','Shapiro–Wilk','Wilcoxon','Mann–Whitney','Kruskal–Wallis','t interval','z interval','P-value adjustment','Effect size','Levene test','Bartlett test','McNemar test','Kaplan–Meier','Log-rank test','Cox regression','Repeated-measures ANOVA','Poisson regression','Negative binomial regression','Mixed model','GEE','GLMM','Multinomial regression','Ordinal regression','Bootstrap','Power','Sample size','Imputation','Cross-validation','PCA','K-means']))
 
 
-TITLES.update({'cohend':'Effect size', 'eta2':'Effect size', 'bootstrapci':'Bootstrap confidence interval',
+TITLES.update({'ancova':'ANCOVA', 'glm':'Generalized linear model (GLM)',
+               'cohend':'Effect size', 'eta2':'Effect size', 'bootstrapci':'Bootstrap confidence interval',
                'testpower':'Power', 'kstest':'Kolmogorov–Smirnov test',
                'bayesproportion':'Bayesian proportion', 'bayesmean':'Bayesian mean', 'bayesrate':'Bayesian rate'})
 
