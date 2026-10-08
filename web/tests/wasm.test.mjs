@@ -11,6 +11,36 @@ import {statisticsCommand,distributionCommand,equationCommand} from '../workspac
 // Reuse the interpreter for sequential integration scenarios. The cold solver
 // scenario below explicitly loads its own interpreter to keep startup coverage.
 let sharedRuntime;
+test('calculus explanations, special-function primitive and numerical guidance run in real WASM',async()=>{
+  const py=await runtime();
+  const evaluate=(source,options={})=>{
+    py.globals.set('payload',JSON.stringify({tree:parse(latexInput(source)),angle:'RAD',solutionSteps:true,...options}));
+    const result=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));
+    assert.equal(result.ok,true,`${source}: ${result.error}`);return result;
+  };
+  for(const [source,title] of [
+    ['diff(sin(x^2),x)','Function and chain rules'],
+    ['diff(x*exp(x),x)','Product rule'],
+    ['integrate(x*exp(x),x)','Integration by parts'],
+    ['integrate(2*x*sin(x^2),x)','Substitution rule'],
+    ['integrate(x^2,x,0,2)','Evaluate at the bounds'],
+    ['limit(sin(x)/x,x,0)',"L'Hôpital's rule for 0/0"],
+    ['diff(integrate(x^2,x),x)','Differentiate the expression'],
+  ]){
+    const traced=evaluate(source),plain=evaluate(source,{solutionSteps:false});
+    const {solutionSteps,...answer}=traced;assert.deepEqual(answer,plain,source);
+    assert.ok(solutionSteps.steps.some(step=>step.title===title),source);
+  }
+  const primitive=evaluate('integrate(ln(x)/(1+x^2),x)');
+  assert.ok(primitive.exact.includes('polylog'));assert.ok(!primitive.exact.includes('Integral'));
+  assert.equal(primitive.guidance.status,'special_function');assert.ok(primitive.resultAst);
+  assert.equal(evaluate('Ans(1)',{variables:{Ans:primitive.resultAst}}).ok,true);
+  const equation=evaluate('solve(sin(x)=x/2,x)');
+  assert.equal(equation.guidance.knownRoots.exact,'{0}');
+  const positive=equation.guidance.suggestions.find(suggestion=>suggestion.detail==='1…2');
+  assert.ok(positive);const root=evaluate(positive.command);
+  assert.ok(Math.abs(Number(root.decimal)-1.895494267033981)<1e-12);
+});
 test('equation step explanations preserve real WASM answers across workspace methods',async()=>{
   const py=await runtime();
   const run=(source,trace=true)=>{

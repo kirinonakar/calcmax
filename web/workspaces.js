@@ -75,7 +75,7 @@ export function createWorkspaces({state,engine,ui,persist,restoreSelect,requestO
       else if(workspace==='units')source=`convert(${value('unit-value')},${value('unit-from')},${value('unit-to')})`;
       else if(workspace==='tip')source=tipExpression();
       else if(workspace==='currency'){source=`(${value('currency-amount')})*(${value('currency-rate')})`;}
-      let result=await engine.execute({...requestOptions(),tree:parse(latexInput(source)),...(workspace==='equation'?{equationSteps:true}:{}),...(advancedContext?.termLabels?{statisticsTermLabels:advancedContext.termLabels}:{})});if(workspace==='tip'&&result.ok)result=moneyResult(result,Number(value('tip-people')));if(statisticsContext&&result.ok)result={...result,note:[statisticsContext,result.note].filter(Boolean).join('\n')};showResult(result,source,workspace==='equation'?equationSource():source,{decimalDisplay:workspace==='regression'});
+      let result=await engine.execute({...requestOptions(),tree:parse(latexInput(source)),...(workspace==='equation'?{equationSteps:true,solutionSteps:true}:{}),...(advancedContext?.termLabels?{statisticsTermLabels:advancedContext.termLabels}:{})});if(workspace==='tip'&&result.ok)result=moneyResult(result,Number(value('tip-people')));if(statisticsContext&&result.ok)result={...result,note:[statisticsContext,result.note].filter(Boolean).join('\n')};showResult(result,source,workspace==='equation'?equationSource():source,{decimalDisplay:workspace==='regression'});
       if(workspace==='equation')equationSteps.show(result);
       if(advancedContext)statistics.showAdvancedResult(result,advancedContext);
     }catch(exc){error(exc.message);}

@@ -17,7 +17,7 @@ A scientific calculator, computer algebra system (CAS), and graphing workspace f
 
 | Workspace | Features |
 | --- | --- |
-| Scientific / CAS | Exact arithmetic, symbolic algebra, calculus, limits, series, transforms, complex numbers |
+| Scientific / CAS | Exact arithmetic, symbolic algebra, calculus with step-by-step explanations, limits, series, transforms, complex numbers |
 | Graphing | Function and implicit plots, parametric, polar, sequence, 3D surface and ODE plots; trace, analysis, parameter sliders and animation |
 | Equations | Polynomial equations, systems, exact/numeric solving, differential equations, Step-by-step solution |
 | Matrix / Vector | Matrix algebra, determinants, eigenvalues and vector operations |

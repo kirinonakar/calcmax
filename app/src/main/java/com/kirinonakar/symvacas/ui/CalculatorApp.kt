@@ -379,6 +379,10 @@ internal fun largeHistoryTree(root:JSONObject?):Boolean {
             Text(when{m.engineeringConversion->if(isKorean())"ENG 모드 · ←/→로 가수 이동" else "ENG mode · ←/→ shifts mantissa";m.error.isNotBlank()->m.error;calculating&&showCalculationStatus->if(isKorean())"계산 중…" else if(m.busy)"Computing…" else "Calculating…";m.calcSession!=null->if(isKorean())"CALC · 값을 입력하고 = 누르기 · AC는 취소" else "CALC · enter a value, then press = · AC cancels";domainText(m.result).isNotBlank()->domainText(m.result);m.committed->if(isKorean())"다음 입력 시 새 계산 시작" else "Next input starts a new calculation";else->m.result?.optString("note") ?: ""},Modifier.weight(1f),fontSize=10.sp,maxLines=1,color=if(m.error.isNotBlank())c.danger else if(m.engineeringConversion)c.accent else c.muted)
             if(calculating&&showCalculationStatus)Text("Cancel",Modifier.clickable{m.cancel()}.padding(start=8.dp),fontSize=10.sp,color=c.accent)
         }
+        if(m.mode=="Scientific/CAS"&&m.committed) {
+            ResultGuidance(m)
+            SolutionSteps(m,m.result?.optJSONObject("solutionSteps"))
+        }
     }
 }
 
@@ -402,6 +406,17 @@ internal fun largeHistoryTree(root:JSONObject?):Boolean {
 }
 
 @Composable fun ResultMath(result:JSONObject,decimal:Boolean,size:Float,mixed:Boolean=false,displayMode:ResultDisplayMode=ResultDisplayMode.OFF,thousandsSeparator:Boolean=false,engineeringConversion:Boolean=false,engineeringShift:Int=0,dmsDisplay:Boolean=false,dmsConversion:Boolean=false,displayDigits:Int=10) {
+    val guidance=result.optJSONObject("guidance")
+    if(guidance?.optString("status")=="unresolved_equation") {
+        Column {
+            Text(tr(guidance.optString("message")),style=MaterialTheme.typography.bodyMedium)
+            guidance.optJSONObject("knownRoots")?.let {roots->
+                Text(tr("Known real roots (partial)"),style=MaterialTheme.typography.bodySmall)
+                ResultMath(roots,false,size,displayDigits=displayDigits)
+            }
+        }
+        return
+    }
     val useDecimal=decimal||engineeringConversion
     val effectiveMode=if(engineeringConversion)ResultDisplayMode.ENGINEERING else displayMode
     val tree=ResultDisplayFormat.resultTree(result,decimal,mixed,engineeringConversion,dmsDisplay,dmsConversion)

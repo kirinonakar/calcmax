@@ -12,6 +12,8 @@ from calc_display import (approximate, display_rounded, display_tree, dms_tree,
                           is_dms_expression, readable, result_ast)
 from calc_evaluator import Engine
 from calc_equation_steps import equation_steps, SUMMARY, LIMIT
+from calc_calculus_steps import calculus_steps
+from calc_result_guidance import result_guidance
 from calc_graph import graph, graph_analysis, regression_samples
 from calc_programmer import programmer
 from calc_statistics import pearson_correlation
@@ -184,6 +186,45 @@ def _dispatch(payload, control=None):
             except (ValueError, TypeError, NotImplementedError, AttributeError):
                 report = {"steps": [{"title": "Solution", "exact": result["exact"], "tree": result["tree"]}], "note": SUMMARY}
             result["equationSteps"] = report
+        if engine.solution_step_inputs:
+            combined={"steps":[], "note":""}
+            saved_strategy=getattr(engine,"integral_strategy",None)
+            for method,inputs,answer,strategy in engine.solution_step_inputs:
+                engine.integral_strategy=strategy
+                try:
+                    report=(calculus_steps if method in ("diff","integrate","limit") else equation_steps)(engine,method,inputs,answer)
+                except (ValueError,TypeError,NotImplementedError,AttributeError):
+                    report={"steps":[{"title":"Computed result","tree":display_tree(answer),"exact":readable(answer)}],"note":SUMMARY}
+                combined["steps"].extend(report["steps"])
+                if report.get("note"): combined["note"] += ("\n" if combined["note"] else "")+report["note"]
+                for key in ("method","advancedSteps"):
+                    if key in report: combined[key]=report[key]
+                if len(json.dumps(combined,ensure_ascii=False))>40000:
+                    combined={"steps":[],"note":LIMIT};break
+            engine.integral_strategy=saved_strategy
+            if len(engine.solution_step_inputs)>1:
+                combined["steps"].append({"title":"Computed result","tree":result["tree"],"exact":result["exact"]})
+            elif combined["steps"]:
+                # Apply the same presentation precision as the answer view.
+                combined["steps"][-1].update(tree=result["tree"],exact=result["exact"])
+            result["solutionSteps"]=combined
+        if hasattr(engine,"guidance_input"):
+            try:
+                guidance=result_guidance(engine,*engine.guidance_input)
+                if guidance:
+                    result["guidance"]=guidance
+                    if guidance["status"]=="unresolved_equation":
+                        for field in ("equationSteps","solutionSteps"):
+                            report=result.get(field,{})
+                            if engine.note: report["note"]=report.get("note","").replace(engine.note,"").strip()
+                            if report.get("steps"):
+                                last=report["steps"][-1]
+                                last["title"]="Known real roots (partial)" if "knownRoots" in guidance else guidance["message"]
+                                last["explanation"]=guidance["detail"]
+                                if "knownRoots" in guidance: last["tree"]=guidance["knownRoots"]["tree"]
+                                else: last.pop("tree",None)
+            except (ValueError,TypeError,NotImplementedError,AttributeError):
+                pass
         if getattr(engine, "regression_report", None) and engine.regression_report.get("model") == "randomforest":
             result.pop("resultAst", None)
             result["reusable"] = False

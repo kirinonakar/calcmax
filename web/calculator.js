@@ -11,6 +11,7 @@ import {createDisplaySizing} from './display-sizing.js';
 import {fractionInput} from './fraction-input.js';
 import {requiresExplicitEvaluation} from './evaluation-policy.js';
 import {graphExpressionTarget} from './graph-workspace.js';
+import {createEquationSteps} from './equation-steps.js';
 import {defineFunction,inputAssignment,resultTarget,resultFunction,removeExpiredAnswerFunctions} from './function-transfer.js';
 import {$,value,element,control} from './app-ui.js';
 
@@ -21,6 +22,8 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
   let engineeringConversion=false,engineeringShift=0;
   const tapeFollow=followTape($('calculation-tape'),$('tape-active'));
   const displaySizing=createDisplaySizing(document.querySelector('main'),$('expression-preview'),$('answer'));
+  const solutionSteps=createEquationSteps($('result-steps'),$('result-steps-body'),state);
+  let displayedStepResult=null;
   const expressionUndo=[];
   let previewSource=value('expression');
   let inputBoundary=null;
@@ -53,18 +56,32 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
   }
   function resultOptions(){return {notation:engineeringConversion?'eng':state.resultDisplayMode,grouping,engineeringShift,showZeroExponent:engineeringConversion};}
   function renderResult() {
-    if(!lastResult){renderTape();return;}
+    if(!lastResult){solutionSteps.clear();$('result-guidance').replaceChildren();renderTape();return;}
     const tree=resultDisplayTree(lastResult,{decimal,mixed});
     const text=(decimal ? lastResult.decimal : lastResult.exact)||'';
     const output=element('div');
-    if(tree && text.length<=40000) output.append(resultMathDisplay(tree,state.digits,decimal||lastResult.approximate,resultOptions()));
+    if(lastResult.guidance?.status==='unresolved_equation') {
+      output.append(element('p',t(lastResult.guidance.message),'hint'));
+      if(lastResult.guidance.knownRoots){output.append(element('p',t('Known real roots (partial)'),'hint'),resultMathDisplay(lastResult.guidance.knownRoots.tree,state.digits,false));}
+    }else if(tree && text.length<=40000) output.append(resultMathDisplay(tree,state.digits,decimal||lastResult.approximate,resultOptions()));
     else renderFormulas(output,text.split(/\r?\n/),{digits:state.digits});
     if(output.childNodes.length!==$('answer').childNodes.length||[...output.childNodes].some((node,i)=>!node.isEqualNode($('answer').childNodes[i])))$('answer').replaceChildren(...output.childNodes);
     updateResultSource();
     if(!$('result-source').hidden)renderFormulas($('result-source'),[lastResultSource],{digits:state.digits});
-    const notes=[lastResult.note,...(lastResult.conditions||[]),lastResult.calcValues?Object.entries(lastResult.calcValues).map(([name,n])=>`${name} = ${n}`).join(', '):''].filter(Boolean).join('\n');
+    const notes=[lastResult.guidance?.status==='unresolved_equation'?'':lastResult.note,...(lastResult.conditions||[]),lastResult.calcValues?Object.entries(lastResult.calcValues).map(([name,n])=>`${name} = ${n}`).join(', '):''].filter(Boolean).join('\n');
     if(engineeringConversion)setText($('note'),'ENG mode · ←/→ shifts mantissa');else if(notes)$('note').textContent=notes;else if(committed)setText($('note'),'Next input starts a new calculation');else $('note').textContent='';
     $('answer-insert').disabled=!lastResult.resultAst;
+    const guidance=$('result-guidance');guidance.replaceChildren();
+    if(lastResult.guidance){
+      const report=lastResult.guidance;
+      if(report.status!=='unresolved_equation')guidance.append(element('p',t(report.message),'hint'));
+      if(report.detail)guidance.append(element('p',t(report.detail),'hint'));
+      for(const suggestion of report.suggestions||[])guidance.append(control(`${t(suggestion.label)} · ${suggestion.detail}`,()=>{changeMode('scientific');replaceInput(suggestion.command);}));
+      if(report.suggestions?.length)guidance.append(element('p',t('Choose a suggestion to fill the input, then press Solve or =. Numerical convergence is not guaranteed.'),'hint'));
+    }
+    if(value('mode')==='scientific'){
+      if(displayedStepResult!==lastResult){solutionSteps.show(lastResult);displayedStepResult=lastResult;}else solutionSteps.render();
+    }else solutionSteps.clear();
     displaySizing.refresh();
     renderTape();
   }
@@ -372,7 +389,7 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
   async function transformAnswer(source) {
     if(lastResult?.resultAst){const result=await engine.execute({...requestOptions(),tree:parse(source)});showResult(result);}
   }
-  function clearPreviewResult(){engineeringConversion=false;engineeringShift=0;syncEngineering();lastResult=null;lastResultSource='';$('answer').replaceChildren();$('note').textContent='';displaySizing.refresh();}
+  function clearPreviewResult(){engineeringConversion=false;engineeringShift=0;syncEngineering();lastResult=null;lastResultSource='';$('answer').replaceChildren();$('note').textContent='';solutionSteps.clear();$('result-guidance').replaceChildren();displaySizing.refresh();}
   function syncEngineering(){document.documentElement.dataset.engineeringConversion=String(engineeringConversion);$('keypad').querySelectorAll('[data-input="ENG"]').forEach(button=>button.classList.toggle('active',engineeringConversion));}
   function exitEngineering(){engineeringConversion=false;engineeringShift=0;syncEngineering();renderResult();}
   function applyFonts(){document.documentElement.style.setProperty('--input-font',state.inputFont+'px');document.documentElement.style.setProperty('--output-font',state.outputFont+'px');renderInputCursor();}
@@ -422,6 +439,7 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
     document.fonts?.removeEventListener('loadingdone',renderInputCursor);
   }
   return {handleKey,insert,evaluate,showResult,renderResult,renderTape,renderNotation,preview,renderInputCursor,applyFonts,applyWordWrap,replaceInput,updateResultSource,
+    clearExplanations:()=>{solutionSteps.clear();displayedStepResult=null;$('result-guidance').replaceChildren();},
     cancelPreview:cancelCalculationPreview,schedulePreview:scheduleCalculationPreview,
     resetPreview:()=>{calculationPreviewKey=null;scheduleCalculationPreview();},
     resultAst:()=>lastResult?.resultAst,draftSource:()=>calcSession?.source||value('expression'),

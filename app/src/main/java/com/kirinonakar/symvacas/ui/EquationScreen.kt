@@ -109,7 +109,13 @@ import org.json.JSONArray
         if(m.error.isNotBlank())Text(m.error,color=MaterialTheme.colorScheme.error)
         if(m.result!=null) {HorizontalDivider();Text("Solution");Box(Modifier.fillMaxWidth()){ResultMath(m.result!!,m.decimal,m.outputFont,
             displayMode=m.resultDisplayMode,thousandsSeparator=m.thousandsSeparator,displayDigits=m.displayDigits)};SmallAction(if(m.decimal)"Show exact" else "Show decimal",translate=false){m.decimal=!m.decimal}}
-        m.result?.optJSONObject("equationSteps")?.let {report->
+        ResultGuidance(m)
+        SolutionSteps(m,m.result?.optJSONObject("solutionSteps") ?: m.result?.optJSONObject("equationSteps"))
+    }
+}
+
+@Composable fun SolutionSteps(m:CalculatorModel,report:JSONObject?) {
+    if(report!=null) {
             var expanded by remember(report){mutableStateOf(false)}
             var advancedExpanded by remember(report){mutableStateOf(false)}
             val expansionDescription=tr(if(expanded)"Expanded" else "Collapsed")
@@ -130,7 +136,6 @@ import org.json.JSONArray
                 }
             }
         }
-    }
 }
 
 @Composable private fun EquationStepList(steps:JSONArray?,m:CalculatorModel) {
@@ -144,6 +149,22 @@ import org.json.JSONArray
         if(step.has("tree"))EquationStepFormula(step,m)
         step.optJSONArray("equations")?.let {formulas->
             (0 until formulas.length()).forEach {EquationStepFormula(formulas.getJSONObject(it),m)}
+        }
+    }
+}
+
+@Composable fun ResultGuidance(m:CalculatorModel) {
+    m.result?.optJSONObject("guidance")?.let {guidance->
+        if(guidance.optString("status")!="unresolved_equation")Text(tr(guidance.optString("message")),style=MaterialTheme.typography.bodySmall)
+        if(guidance.optString("detail").isNotBlank())Text(tr(guidance.optString("detail")),style=MaterialTheme.typography.bodySmall)
+        guidance.optJSONArray("suggestions")?.let {suggestions->
+            (0 until suggestions.length()).forEach {index->
+                val suggestion=suggestions.getJSONObject(index)
+                TextButton(onClick={m.mode="Scientific/CAS";m.fresh(Editor(suggestion.getString("command")))},enabled=!m.busy) {
+                    Text(tr(suggestion.optString("label"))+" · "+suggestion.optString("detail"))
+                }
+            }
+            if(suggestions.length()>0)Text(tr("Choose a suggestion to fill the input, then press Solve or =. Numerical convergence is not guaranteed."),style=MaterialTheme.typography.bodySmall)
         }
     }
 }

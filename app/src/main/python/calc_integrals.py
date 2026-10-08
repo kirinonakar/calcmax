@@ -2,6 +2,24 @@
 import sympy as s
 
 
+def log_arctan_primitive(expression, variable):
+    """A dilogarithm primitive for log(x)/(1+x²), on its positive real branch."""
+    if (not isinstance(variable, s.Symbol) or variable.is_real is False or variable.is_positive is False
+            or expression.free_symbols - {variable}):
+        return None
+    coefficient = s.cancel(expression*(1+variable**2)/s.log(variable))
+    if coefficient.has(variable) or coefficient.is_number is not True or coefficient.is_real is not True:
+        return None
+    x = s.Dummy("positive_argument", positive=True)
+    primitive = s.log(x)*s.atan(x)-(s.polylog(2, s.I*x)-s.polylog(2, -s.I*x))/(2*s.I)
+    # The logarithmic representation verifies the branch-specific derivative exactly.
+    if s.simplify((s.expand_func(s.diff(primitive, x))-s.log(x)/(1+x*x)).rewrite(s.log)) != 0:
+        return None
+    conditions = [s.Gt(variable, 0)]
+    if variable.is_real is not True: conditions.insert(0, s.Eq(s.im(variable), 0))
+    return coefficient*primitive.xreplace({x:variable}), conditions, "This antiderivative uses the dilogarithm Li₂ (polylog), a special function. It is valid for real x > 0; complex branches are not extended by this rule."
+
+
 def rational_trig_primitive(expression, variable):
     """Rationalize fractional tan/cot powers on a positive real branch.
 

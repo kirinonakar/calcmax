@@ -28,6 +28,7 @@ export function mathDisplay(tree,digits=10,decimal=false,{notation='off',groupin
     if (!t) return el('mtext');
     const args = (t.args || []).map(child=>render(child,allowNotation&&t.kind==='unary')), value = t.value || '';
     switch(t.kind) {
+      case 'call': return draw({...t,kind:({integrate:'integral',diff:'derivative',limit:'limit'})[value]||'function'},allowNotation);
       case 'fraction': {
         // Nested fractions retain normal operand sizes instead of adding
         // another compact MathML script level at every fraction bar.

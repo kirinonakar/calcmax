@@ -14,7 +14,7 @@ _names = set("""
 abs floor ceil round roundh sign sqrt cbrt nthroot atan2 arctan2 frac iPart log ln exp sinc sinh cosh tanh asin acos atan arcsin arccos arctan sin cos tan
 asinh acosh atanh arcsinh arsinh arccosh arcosh arctanh artanh gamma erf erfc Ei Si Ci zeta factorial nCr nPr gcd lcm prime isprime factorint divisors
 fibonacci lucas bernoulli harmonic subfactorial totient divisor_sigma primepi nextprime prevprime
-lambertw beta digamma polygamma besselj bessely besseli besselk
+lambertw polylog beta digamma polygamma besselj bessely besseli besselk
 rnd eng pol rec randInt sexagesimal dms mixed quotient remainder mod divmod sumdata
 percent degree rad gradian
 simplify expand factor collect subs diff integrate limit series taylor sum product solve nsolve nintegrate

@@ -26,6 +26,21 @@ def display_tree(x):
                               t("row","branch",[t("text",str(x.lamda.variables[0])+" ∈ ℤ")])])
     if isinstance(x,(list,tuple,s.Tuple)): return t("list",args=[display_tree(v) for v in x])
     if isinstance(x,s.MatrixBase): return t("matrix",args=[t("list",args=[display_tree(x[i,j]) for j in range(x.cols)]) for i in range(x.rows)])
+    if isinstance(x,s.Integral):
+        tree=display_tree(x.function)
+        for limit in x.limits:
+            tree=t("call","integrate",[tree]+[display_tree(item) for item in limit])
+        return tree
+    if isinstance(x,s.Derivative):
+        tree=display_tree(x.expr)
+        for variable,count in x.variable_count:
+            tree=t("call","diff",[tree,display_tree(variable)]+([display_tree(count)] if count!=1 else []))
+        return tree
+    if isinstance(x,s.Limit):
+        args=[display_tree(item) for item in x.args[:3]]
+        if str(x.args[3]) in ("+","-") and x.args[2].is_finite:
+            args[2]=t("power",args=[args[2],t("text",str(x.args[3]))])
+        return t("call","limit",args)
     if isinstance(x,s.Rational) and x.q != 1: return t("fraction",args=[t("text",str(x.p)),t("text",str(x.q))])
     if isinstance(x,s.Pow):
         if x.exp == s.Rational(1,2): return t("root",args=[display_tree(x.base)])
@@ -131,7 +146,7 @@ def result_ast(x):
                   "sinh":"sinh","cosh":"cosh","tanh":"tanh","asinh":"asinh","acosh":"acosh","atanh":"atanh",
                   "sinc":"sinc","gamma":"gamma","erf":"erf","erfc":"erfc","Ei":"Ei","Si":"Si","Ci":"Ci",
                   "zeta":"zeta","re":"re","im":"im","arg":"arg","sign":"sign","floor":"floor","ceiling":"ceil",
-                  "atan2":"atan2"}
+                  "atan2":"atan2", "polylog":"polylog"}
         require(name in reusable,"This result cannot be stored as a reusable expression")
         return node("frozen_call",reusable[name],[result_ast(v) for v in x.args])
     raise MathError("This result cannot be stored as a reusable expression")

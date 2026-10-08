@@ -21,7 +21,7 @@ const persistence=createPersistence({state,toast:ui.toast,
   snapshot:()=>({expression:calculator.draftSource(),graph:graphs.snapshot()}),
   onPersist:({functionsChanged})=>{if(functionsChanged)workspaces.renderFunctions();calculator.schedulePreview();}});
 const {persist,schedulePersist}=persistence;
-const requestOptions=()=>({angle:value('angle'),precision:state.precision,displayDigits:state.digits,variables:state.variables,functions:state.functions,assumptions:state.assumptions});
+const requestOptions=()=>({angle:value('angle'),precision:state.precision,displayDigits:state.digits,variables:state.variables,functions:state.functions,assumptions:state.assumptions,solutionSteps:value('mode')==='scientific'});
 const engine=new EngineClient();
 const runtime=createEngineUI({engine,onChange:updateButtons,onReady:()=>calculator.resetPreview(),cancelPreview:()=>calculator.cancelPreview()});
 graphs=createGraphWorkspace({execute:(request,settings)=>engine.execute(request,settings),options:requestOptions,onError:error,onClearError:()=>{$('answer').querySelector('.error')?.remove();},persist,isBusy:()=>runtime.busy,isReady:()=>engine.ready,saved:state.graph,getColors:()=>graphColorsForTheme(state.graphColors,document.documentElement.dataset.theme)});
@@ -41,6 +41,7 @@ function updateButtons() {
 }
 function error(message) {
   $('answer').replaceChildren(element('span',message,'error'));$('note').textContent='';
+  calculator?.clearExplanations();
   if(value('mode')==='equation'){try{renderFormulas($('result-source'),workspaces.equationSource().split(/\r?\n/),{digits:state.digits});}catch{}}
   else if(value('mode')==='programmer')setText($('programmer-output'),message);
   else if(value('mode')==='constants')setText($('constants-list'),message);

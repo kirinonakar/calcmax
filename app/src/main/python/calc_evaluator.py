@@ -15,7 +15,7 @@ from calc_shared import (CONSTANTS, UNITS, MathError, canonical_function_name,
 from calc_statistics import distribution_value, fit_custom_regression, fit_regression, pearson_correlation, statistical_test
 from calc_advanced_statistics import FUNCTIONS as ADVANCED_STATISTICS, advanced
 from calc_finance import finance_value
-from calc_integrals import rational_trig_primitive
+from calc_integrals import rational_trig_primitive, log_arctan_primitive
 from calc_solutions import affine_exponential_solutions
 from calc_number_theory import bounded_divisors
 
@@ -60,6 +60,14 @@ class Engine:
         self.regression_report = None
         self.allow_sequence_calls = False
         self.assumptions = request.get("assumptions", {})
+        self.solution_step_inputs = []
+        self.solution_step_nodes = set()
+        pending = [request.get("tree", {})]
+        while pending:
+            current = pending.pop()
+            if isinstance(current, dict):
+                self.solution_step_nodes.add(id(current))
+                pending.extend(current.get("args", []))
     def symbol(self, name):
         if name not in self.symbols:
             options = {k: True for k in self.assumptions.get(name, []) if k in ("real", "positive", "negative", "integer", "nonzero")}
@@ -241,6 +249,13 @@ class Engine:
             if (self.request.get("equationSteps") and node is self.request.get("tree")
                     and value in ("solve", "nsolve", "dsolve", "desolve", "pdsolve") and len(values) > 1):
                 self.equation_step_input = (value, values)
+            if (self.request.get("solutionSteps") and id(node) in self.solution_step_nodes
+                    and value in ("solve", "nsolve", "dsolve", "desolve", "pdsolve", "diff", "integrate", "limit") and len(values) > 1):
+                record=(value, values, result, getattr(self,"integral_strategy",None))
+                if len(self.solution_step_inputs)<6: self.solution_step_inputs.append(record)
+                elif node is self.request.get("tree"): self.solution_step_inputs[-1]=record
+            if node is self.request.get("tree") and value in ("solve", "integrate") and len(values) > 1:
+                self.guidance_input = (value, values, result)
             return result
         finally:
             self.bindings = old
@@ -320,7 +335,7 @@ class Engine:
                  "subfactorial": s.subfactorial, "totient": s.totient, "divisor_sigma": s.divisor_sigma,
                  "primepi": s.primepi, "nextprime": s.nextprime, "prevprime": s.prevprime,
                  "besselj": s.besselj, "bessely": s.bessely, "besseli": s.besseli, "besselk": s.besselk,
-                 "ln": s.log, "log": lambda x, b=10: s.log(x,b), "exp": s.exp,
+                 "ln": s.log, "log": lambda x, b=10: s.log(x,b), "exp": s.exp, "polylog": s.polylog,
                  "sinc": s.sinc, "sinh": s.sinh, "cosh": s.cosh, "tanh": s.tanh, "asinh": s.asinh, "acosh": s.acosh, "atanh": s.atanh,
                  "conj": s.conjugate, "re": s.re, "im": s.im, "arg": s.arg,
                  "simplify": s.simplify, "expand": s.expand, "factor": s.factor, "collect": s.collect,
@@ -427,11 +442,14 @@ class Engine:
                 return s.rsolve(equation,dependent,initial)
             return s.rsolve(equation,dependent)
         if name == "integrate":
+            self.integral_strategy = None
             require(len(a) in (2,4), "integrate expects a variable or integration bounds")
             spec = a[1] if len(a)==2 else (a[1],a[2],a[3])
             result = s.integrate(a[0],spec)
             if result.has(s.Integral) and len(a)==2 and isinstance(a[1],s.Symbol):
-                substituted=rational_trig_primitive(a[0],a[1])
+                substituted=log_arctan_primitive(a[0],a[1])
+                if substituted is not None: self.integral_strategy="log_arctan_polylog"
+                else: substituted=rational_trig_primitive(a[0],a[1])
                 if substituted is not None:
                     result,conditions,note=substituted
                     self.conditions.extend(conditions)

@@ -29,7 +29,7 @@ export function createEquationSteps(details,body,state) {
     }
   }
   return {
-    show(result){report=result.ok?result.equationSteps||null:null;details.open=false;advancedOpen=false;render();},
+    show(result){report=result.ok?result.solutionSteps||result.equationSteps||null:null;details.open=false;advancedOpen=false;render();},
     clear(){report=null;details.open=false;advancedOpen=false;render();},
     render
   };
