@@ -43,8 +43,8 @@ test('calculus explanations, special-function primitive and numerical guidance r
 });
 test('equation step explanations preserve real WASM answers across workspace methods',async()=>{
   const py=await runtime();
-  const run=(source,trace=true)=>{
-    py.globals.set('payload',JSON.stringify({tree:parse(latexInput(source)),equationSteps:trace,angle:'RAD'}));
+  const run=(source,trace=true,solutionSteps=false)=>{
+    py.globals.set('payload',JSON.stringify({tree:parse(latexInput(source)),equationSteps:trace,solutionSteps,angle:'RAD'}));
     const result=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));
     assert.equal(result.ok,true,`${source}: ${result.error}`);return result;
   };
@@ -69,6 +69,15 @@ test('equation step explanations preserve real WASM answers across workspace met
   const rational=run(equationCommand({kind:'solve',source:'(x^2-1)/(x-1)=2',variable:'x'}));
   assert.equal(rational.exact,'EmptySet');
   assert.ok(rational.equationSteps.steps.some(step=>step.title==='Check the original domain restrictions'));
+  const systemResult=run(equationCommand({kind:'solve',source:'x+y=3x\nx-y=1',variable:'x,y'}),true,true);
+  const system=systemResult.equationSteps;
+  assert.deepEqual(systemResult.solutionSteps.steps.at(-1).tree,system.steps.at(-1).tree);
+  assert.equal(system.steps[1].explanationParts[0].text,'Subtract {term} from both sides.');
+  assert.equal(system.steps[1].explanationParts[0].values.term,'x');
+  const solved=system.steps.find(step=>step.title==='Solve the equation with one unknown');
+  assert.deepEqual(solved.equations.map(formula=>formula.exact),['Eq(-x, 1)','Eq(x, -1)']);
+  assert.equal(system.steps.at(-1).tree.kind,'tuple');
+  assert.deepEqual(system.advancedSteps.at(-1).equations.map(formula=>formula.exact),['Eq(x, -1)','Eq(y, -2)']);
 });
 test('Bayesian linear, logistic and HMC run through workspace commands in real WASM',async()=>{
   const py=await runtime();

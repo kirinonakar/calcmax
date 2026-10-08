@@ -55,7 +55,7 @@ class EquationStepTests(unittest.TestCase):
         x, y = s.symbols("x y")
         for expressions in [[y-2, 2*x+3*y-8], [x+y-3, 2*x+2*y-6], [x+y-3, 2*x+2*y-7]]:
             _, report = self.report([s.Eq(item, 0) for item in expressions], [x, y])
-            matrices = [formula for step in report["advancedSteps"] for formula in step["equations"]]
+            matrices = [formula for step in report["advancedSteps"] for formula in step["equations"] if formula["tree"]["kind"] == "matrix"]
             a, b = s.linear_eq_to_matrix(expressions, [x, y])
             self.assertEqual(a.row_join(b).rref()[0], s.sympify(matrices[-1]["exact"]))
             self.assertTrue(all(len(formula["tree"]["args"]) == 2 for formula in matrices))
@@ -64,19 +64,56 @@ class EquationStepTests(unittest.TestCase):
 
     def test_beginner_substitution_example_preserves_the_visible_substitution(self):
         x, y = s.symbols("x y")
-        result, report = self.report([s.Eq(x+y, 3*x), s.Eq(x-y, 1)], [x, y])
+        result, report = self.report([s.Eq(x+y, 3*x), s.Eq(x-y, 1)], [x, y], solutionSteps=True)
         self.assertEqual("Substitution method", report["method"])
         rearrange = next(step for step in report["steps"] if step["title"] == "Rearrange the first equation")
         self.assertEqual(s.Eq(y, 2*x), s.sympify(rearrange["equations"][-1]["exact"]))
+        self.assertEqual("Subtract x from both sides. Combine like terms. Use this expression in the other equation.", rearrange["explanation"])
+        solved = next(step for step in report["steps"] if step["title"] == "Solve the equation with one unknown")
+        self.assertEqual(["Eq(-x, 1)", "Eq(x, -1)"], [formula["exact"] for formula in solved["equations"]])
+        self.assertEqual("Combine like terms. Multiply both sides by −1.", solved["explanation"])
         substitute = next(step for step in report["steps"] if step["title"] == "Substitute into the second equation")
         self.assertEqual("sum", substitute["equations"][0]["tree"]["args"][0]["kind"])
         remaining = next(step for step in report["steps"] if step["title"] == "Calculate the remaining variable")
         self.assertEqual(s.Eq(y, -2), s.sympify(remaining["equations"][-1]["exact"]))
+        product = remaining["equations"][0]["tree"]["args"][1]
+        self.assertEqual("×", product["displayOperator"])
+        self.assertEqual("parentheses", product["args"][1]["kind"])
+        self.assertEqual("-1", product["args"][1]["args"][0]["value"])
+        solution_tree = report["steps"][-1]["tree"]
+        self.assertEqual("tuple", solution_tree["kind"])
+        self.assertEqual(["=", "="], [item["value"] for item in solution_tree["args"]])
+        self.assertEqual(solution_tree, result["solutionSteps"]["steps"][-1]["tree"])
         self.assertEqual([{x: -1, y: -2}], Engine({}).build(result["resultAst"]))
         self.assertTrue(all(step.get("explanation") for step in report["steps"] if step["title"] != "Original equation"))
-        matrices = [s.sympify(formula["exact"]) for step in report["advancedSteps"] for formula in step["equations"]]
+        matrices = [s.sympify(formula["exact"]) for step in report["advancedSteps"] for formula in step["equations"] if formula["tree"]["kind"] == "matrix"]
         self.assertIn(s.Matrix([[1, -s.Rational(1, 2), 0], [0, -s.Rational(1, 2), 1]]), matrices)
         self.assertEqual(s.Matrix([[1, 0, -1], [0, 1, -2]]), matrices[-1])
+        self.assertEqual("Read the solution from the matrix", report["advancedSteps"][-1]["title"])
+        self.assertEqual(["Eq(x, -1)", "Eq(y, -2)"], [formula["exact"] for formula in report["advancedSteps"][-1]["equations"]])
+
+    def test_rearrangement_describes_only_operations_that_are_used(self):
+        x, y = s.symbols("x y")
+        for first, expected in [
+            (s.Eq(2*x+3*y, 6), "Subtract 2*x from both sides. Combine like terms. Divide both sides by 3."),
+            (s.Eq(x-y, 1), "Subtract x from both sides. Combine like terms. Multiply both sides by −1."),
+            (s.Eq(y, 2*x), "Use this expression in the other equation."),
+            (s.Eq(x+2*y, y+3), "Subtract y from both sides. Subtract x from both sides. Combine like terms."),
+            (s.Eq(-x+y, 3), "Add x to both sides. Combine like terms."),
+        ]:
+            with self.subTest(first=first):
+                _, report = self.report([first, s.Eq(x-y, 2)], [x, y])
+                self.assertTrue(report["steps"][1]["explanation"].startswith(expected))
+
+    def test_matrix_conclusion_distinguishes_free_variables_and_conflicts(self):
+        x, y = s.symbols("x y")
+        _, free = self.report([s.Eq(x+y, 3), s.Eq(2*x+2*y, 6)], [x, y])
+        conclusion = free["advancedSteps"][-1]
+        self.assertIn("free", conclusion["explanation"])
+        self.assertEqual(["Eq(x, 3 - y)"], [formula["exact"] for formula in conclusion["equations"]])
+        _, conflict = self.report([s.Eq(x+y, 3), s.Eq(2*x+2*y, 7)], [x, y])
+        self.assertEqual("The equations conflict", conflict["advancedSteps"][-1]["title"])
+        self.assertEqual("Eq(0, 1)", conflict["advancedSteps"][-1]["equations"][0]["exact"])
 
     def test_three_variable_system_uses_equation_elimination_and_back_substitution(self):
         x, y, z = s.symbols("x y z")

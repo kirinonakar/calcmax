@@ -12,6 +12,18 @@ from calc_equation_system_steps import linear_system_steps
 
 SUMMARY = "Detailed transformations are unavailable for this equation; the steps below summarize the solver input and result."
 LIMIT = "The equation is too large for a detailed derivation; showing a solver summary."
+
+
+def equation_solution_tree(tree):
+    """Present system mappings as equalities, retaining answer display precision."""
+    if tree.get("kind") != "list" or not tree.get("args") or not all(item.get("kind") == "rows" for item in tree["args"]):
+        return tree
+    solutions = [{"kind": "tuple", "args": [
+        {"kind": "relation", "value": "=", "args": [{"kind": "symbol", "value": row["value"]}, row["args"][0]]}
+        for row in item["args"]]} for item in tree["args"]]
+    return solutions[0] if len(solutions) == 1 else {"kind": "list", "args": solutions}
+
+
 EXPLANATIONS = {
     "Move all terms to the left": "Subtract the right-hand side from both sides. The equation now has 0 on the right, which makes its structure easier to see.",
     "Expand and collect like terms": "Expand products and combine terms with the same power of the variable.",
@@ -243,6 +255,7 @@ def equation_steps(engine, method, values, answer):
     if method == "solve" and not isinstance(source, list) and not isinstance(values[1], list):
         add("Keep solutions allowed by the original equation and domain")
     add("Solution" if not getattr(answer, "has", lambda *_: False)(s.ConditionSet) else "Unresolved solution set", answer)
+    steps[-1]["tree"] = equation_solution_tree(steps[-1]["tree"])
     if engine.note:
         note = (note+"\n" if note else "")+engine.note
     for step in steps:

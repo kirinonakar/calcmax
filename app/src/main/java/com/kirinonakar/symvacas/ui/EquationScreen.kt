@@ -143,12 +143,23 @@ import org.json.JSONArray
     (0 until steps.length()).forEach {index->
         val step=steps.getJSONObject(index)
         Text("${index+1}. ${tr(step.optString("title"))}",style=MaterialTheme.typography.titleSmall)
-        if(step.optString("explanation").isNotBlank())Text(tr(step.optString("explanation")),style=MaterialTheme.typography.bodySmall)
+        val parts=step.optJSONArray("explanationParts")
+        val explanation=if(parts==null)tr(step.optString("explanation"))else (0 until parts.length()).map {i->
+            val part=parts.getJSONObject(i)
+            var text=tr(part.getString("text"))
+            part.optJSONObject("values")?.let {values->values.keys().forEach {key->text=text.replace("{$key}",values.getString(key))}}
+            text
+        }.joinToString(" ")
+        if(explanation.isNotBlank())Text(explanation,style=MaterialTheme.typography.bodySmall)
         step.optJSONObject("variableOrder")?.let{EquationStepFormula(it,m)}
-        step.optJSONObject("operation")?.let{EquationStepFormula(JSONObject().put("tree",it),m)}
+        val operation=step.optJSONObject("operation")
+        val formulas=step.optJSONArray("equations")
+        val combined=operation!=null&&formulas!=null&&formulas.length()>0
+        if(combined)EquationStepFormula(JSONObject().put("tree",JSONObject().put("kind","row-operation").put("args",JSONArray().put(operation).put(formulas.getJSONObject(0).getJSONObject("tree")))),m)
+        else operation?.let{EquationStepFormula(JSONObject().put("tree",it),m)}
         if(step.has("tree"))EquationStepFormula(step,m)
         step.optJSONArray("equations")?.let {formulas->
-            (0 until formulas.length()).forEach {EquationStepFormula(formulas.getJSONObject(it),m)}
+            ((if(combined)1 else 0) until formulas.length()).forEach {EquationStepFormula(formulas.getJSONObject(it),m)}
         }
     }
 }
@@ -171,8 +182,8 @@ import org.json.JSONArray
 
 @Composable private fun EquationStepFormula(formula:JSONObject,m:CalculatorModel) {
     formula.optJSONObject("tree")?.let {tree->
-        if(tree.optString("kind")=="matrix")Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())){MathNode(tree,m.outputFont)}
-        else Box(Modifier.fillMaxWidth()){ResultMath(formula,false,m.outputFont,displayDigits=m.displayDigits)}
+        val displayTree=ResultDisplayFormat.formatTree(tree,ResultDisplayMode.OFF,false,maxFractionDigits=m.displayDigits)
+        Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())){MathNode(displayTree,m.outputFont)}
     }
 }
 

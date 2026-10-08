@@ -1,5 +1,17 @@
 import {t} from './i18n.js';
-import {resultMathDisplay} from './result-display.js';
+import {mathDisplay} from './math-display.js';
+
+export function equationStepTrees(step) {
+  const equations=(step.equations||[]).map(formula=>formula.tree).filter(Boolean);
+  const formulas=step.operation&&equations.length
+    ? [{kind:'row-operation',args:[step.operation,equations[0]]},...equations.slice(1)]
+    : [step.operation,...equations];
+  return [step.variableOrder?.tree,step.tree,...formulas].filter(Boolean);
+}
+
+export function equationStepExplanation(step) {
+  return step.explanationParts?.map(part=>t(part.text).replace(/\{(\w+)\}/g,(match,key)=>part.values?.[key]??match)).join(' ')||t(step.explanation||'');
+}
 
 // Keep expanded state through formatting/language changes; each solve starts closed.
 export function createEquationSteps(details,body,state) {
@@ -9,8 +21,11 @@ export function createEquationSteps(details,body,state) {
     for(const [index,step] of (steps||[]).entries()){
       const item=document.createElement('div');item.className='equation-step';
       const title=document.createElement('p');title.textContent=`${index+1}. ${t(step.title)}`;item.append(title);
-      if(step.explanation){const text=document.createElement('p');text.className='step-explanation';text.textContent=t(step.explanation);item.append(text);}
-      for(const tree of [step.variableOrder?.tree,step.operation,step.tree,...(step.equations||[]).map(formula=>formula.tree)].filter(Boolean))item.append(resultMathDisplay(tree,state.digits,false));
+      if(step.explanation){const text=document.createElement('p');text.className='step-explanation';text.textContent=equationStepExplanation(step);item.append(text);}
+      for(const tree of equationStepTrees(step)){
+        const formula=document.createElement('div');formula.className='step-formula';
+        formula.append(mathDisplay(tree,state.digits));item.append(formula);
+      }
       target.append(item);
     }
   }

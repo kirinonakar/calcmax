@@ -60,7 +60,7 @@ export function mathDisplay(tree,digits=10,decimal=false,{notation='off',groupin
         return superscript(['sum','product','explicit-product','implicit-product','unary','relation'].includes(t.args[0]?.kind)?fenced([args[0]]):args[0],args[1]);
       }
       case 'sum': return row(args.flatMap((a,i) => i && t.args[i].kind !== 'unary' ? [operator('+'),a] : [a]));
-      case 'product': return row(args.flatMap((a,i)=>{const item=t.args[i].kind==='sum'?fenced([a]):a;return i&&!(t.args[i-1].kind==='number'&&t.args[i].kind==='symbol')?[operator('·'),item]:[item];}));
+      case 'product': return row(args.flatMap((a,i)=>{const item=t.args[i].kind==='sum'?fenced([a]):a;return i&&!(t.args[i-1].kind==='number'&&t.args[i].kind==='symbol')?[operator(t.displayOperator||'·'),item]:[item];}));
       case 'explicit-product': return row(join(args.map((a,i)=>t.args[i].kind==='sum'?fenced([a]):a),'×'));
       case 'implicit-product': return row(args);
       case 'parentheses': return fenced(args);
@@ -80,6 +80,7 @@ export function mathDisplay(tree,digits=10,decimal=false,{notation='off',groupin
         return row([value==='-'&&argument?.kind==='fraction'?fractionMinus():operator(value),...args]);
       }
       case 'relation': return row([args[0],operator(value==='=='?'=':value),args[1]]);
+      case 'row-operation': return row([el('mover',[operator('⟶'),args[0]]),args[1]]);
       case 'function': {
         if(value==='exp')return superscript(el('mi',[],'e'),args[0]);
         if(['abs','Abs'].includes(value))return fenced(args,'|','|');

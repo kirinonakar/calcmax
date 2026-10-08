@@ -11,7 +11,7 @@ from calc_shared import (Budget, CONSTANTS, MathError, dms_parts, matrix, requir
 from calc_display import (approximate, display_rounded, display_tree, dms_tree,
                           is_dms_expression, readable, result_ast)
 from calc_evaluator import Engine
-from calc_equation_steps import equation_steps, SUMMARY, LIMIT
+from calc_equation_steps import equation_steps, equation_solution_tree, SUMMARY, LIMIT
 from calc_calculus_steps import calculus_steps
 from calc_result_guidance import result_guidance
 from calc_graph import graph, graph_analysis, regression_samples
@@ -183,7 +183,7 @@ def _dispatch(payload, control=None):
             try:
                 report = equation_steps(engine, method, inputs, value)
                 if report["steps"]:
-                    report["steps"][-1].update(exact=result["exact"], tree=result["tree"])
+                    report["steps"][-1].update(exact=result["exact"], tree=equation_solution_tree(result["tree"]))
                 if len(json.dumps(report, ensure_ascii=False)) > 40000:
                     report = {"steps": [{"title": "Solution", "exact": result["exact"], "tree": result["tree"]}], "note": LIMIT}
             except (ValueError, TypeError, NotImplementedError, AttributeError):
@@ -209,7 +209,7 @@ def _dispatch(payload, control=None):
                 combined["steps"].append({"title":"Computed result","tree":result["tree"],"exact":result["exact"]})
             elif combined["steps"]:
                 # Apply the same presentation precision as the answer view.
-                combined["steps"][-1].update(tree=result["tree"],exact=result["exact"])
+                combined["steps"][-1].update(tree=equation_solution_tree(result["tree"]) if method=="solve" else result["tree"],exact=result["exact"])
             result["solutionSteps"]=combined
         if hasattr(engine,"guidance_input"):
             try:

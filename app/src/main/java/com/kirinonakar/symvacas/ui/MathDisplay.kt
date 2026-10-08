@@ -97,6 +97,31 @@ private fun Placeable.axis():Int = this[MathAxis].let{if(it==AlignmentLine.Unspe
         layout(width,height,mapOf(MathAxis to barY+stroke/2)){n.place((width-n.width)/2,0);bar.place(0,barY);d.place((width-d.width)/2,barY+stroke+gap)}
     }
 }
+/** Share column widths across rows and draw one continuous augmented divider. */
+@Composable private fun MathMatrix(columns:Int,augmentedColumn:Int,content:@Composable ()->Unit) {
+    val ink=LocalInstrument.current.ink
+    val divider=augmentedColumn in 1 until columns
+    Layout(content={content();if(divider)Box(Modifier.background(ink))}){ms,constraints->
+        val cells=ms.take(ms.size-if(divider)1 else 0).map{it.measure(constraints.copy(minWidth=0,minHeight=0))}
+        val rows=if(columns>0)cells.chunked(columns)else emptyList()
+        val widths=IntArray(columns){column->rows.maxOfOrNull{it.getOrNull(column)?.width ?: 0} ?: 0}
+        val axes=rows.map{row->row.maxOfOrNull{it.axis()} ?: 0}
+        val heights=rows.mapIndexed{index,row->axes[index]+(row.maxOfOrNull{it.height-it.axis()} ?: 0)}
+        val horizontalGap=10.dp.roundToPx();val verticalGap=4.dp.roundToPx()
+        val width=widths.sum()+horizontalGap*(columns-1).coerceAtLeast(0)
+        val height=heights.sum()+verticalGap*(rows.size-1).coerceAtLeast(0)
+        val line=if(divider)ms.last().measure(Constraints.fixed(1.dp.roundToPx().coerceAtLeast(1),height))else null
+        layout(width,height,mapOf(MathAxis to height/2)){
+            var y=0
+            rows.forEachIndexed{index,row->
+                var x=0
+                row.forEachIndexed{column,cell->cell.place(x+(widths[column]-cell.width)/2,y+axes[index]-cell.axis());x+=widths[column]+horizontalGap}
+                y+=heights[index]+verticalGap
+            }
+            line?.place(widths.take(augmentedColumn).sum()+horizontalGap*(augmentedColumn-1)+horizontalGap/2,0)
+        }
+    }
+}
 /** Draw the minus with the fraction rule's thickness and pixel alignment instead of a font axis estimate. */
 @Composable private fun FractionMinus(size:Float) {
     val ink=LocalInstrument.current.ink
@@ -416,8 +441,14 @@ internal fun negativeFractionNumerator(node:JSONObject):JSONObject? {
                     content={child(0,hidden=true)})
                 else RadicalSign{child(0,hidden=true)}
             kind=="matrix"||kind=="list"&&children.isNotEmpty()&&children.all{it.optString("kind")=="list"}->SquareBrackets(close=value!="open") {
-                Column(verticalArrangement=Arrangement.spacedBy(4.dp)){children.forEach{row->MathRow(10.dp){val cells=row.optJSONArray("args");for(i in 0 until(cells?.length() ?: 0)){if(i==node.optInt("augmentedColumn",-1))label("│",.85f);cells?.optJSONObject(i)?.let{MathNode(it,size*.85f,select,selection,depth+1,selectionCoveredByAncestor=selectionCoveredByAncestor||highlighted)}}}}}
+                val columns=children.maxOfOrNull{it.optJSONArray("args")?.length() ?: 0} ?: 0
+                MathMatrix(columns,node.optInt("augmentedColumn",-1)){children.forEach{row->
+                    val cells=row.optJSONArray("args")
+                    for(i in 0 until columns){val cell=cells?.optJSONObject(i);if(cell==null)label("")else MathNode(cell,size*.85f,select,selection,depth+1,selectionCoveredByAncestor=selectionCoveredByAncestor||highlighted)}
+                }}
             }
+            kind=="row-operation"->MathRow(8.dp){MathStack(1){child(0,.6f);label("⟶")};child(1)}
+            kind=="parentheses"->RoundParentheses(size){child(0)}
             kind=="list"&&children.isNotEmpty()->SquareBrackets(close=value!="open") {MathRow(2.dp){children.indices.forEach {i->if(i>0)label(", ");child(i)}}}
             emptyContainer->MathRow {label(if(kind=="list")"[" else "{");if(caret&&cursor==start+1)MathText("│",size,blink=true);label(if(kind=="list")"]" else "}")}
             kind=="rows"->Column{children.forEach{row->MathRow{label(row.optString("value")+": ",.65f);row.optJSONArray("args")?.optJSONObject(0)?.let{MathNode(it,size*.8f,depth=depth+1)}}}}
@@ -512,7 +543,7 @@ internal fun negativeFractionNumerator(node:JSONObject):JSONObject? {
                         if(negativePart!=null){label(if(i==0)"−" else " − ");MathNode(negativePart,size,select,selection,depth+1,selectionCoveredByAncestor=selectionCoveredByAncestor||highlighted)}
                         else {
                             val adjacentCoefficient=kind=="product"&&i>0&&children[i-1].optString("kind")=="number"&&n.optString("kind")=="symbol"
-                            if(i>0&&!coefficient&&!adjacentCoefficient)opLabel(i,when(kind){"sum"->" + ";"product"->" · ";"binary","relation"->when(value){"*"->if(node.optString("displayOperator")=="∘")"" else " × ";"/"->" ÷ ";"-"->" − ";"!="->" ≠ ";"<="->" ≤ ";">="->" ≥ ";else->" $value "};else->", "})
+                            if(i>0&&!coefficient&&!adjacentCoefficient)opLabel(i,when(kind){"sum"->" + ";"product"->if(node.optString("displayOperator")=="×")" × " else " · ";"binary","relation"->when(value){"*"->if(node.optString("displayOperator")=="∘")"" else " × ";"/"->" ÷ ";"-"->" − ";"!="->" ≠ ";"<="->" ≤ ";">="->" ≥ ";else->" $value "};else->", "})
                             if(kind=="product"&&n.optString("kind")=="sum")wrapped(i)
                             // Slots keep their box; directly typed parentheses stay visible.
                             else child(i,hidden=kind=="binary"&&value=="*"&&n.optString("kind")=="group"&&n.optJSONArray("args")?.optJSONObject(0)?.optString("kind")=="hole"&&n.optString("value")!="open"&&!typedParen(n),operandHole=operandHoles)

@@ -18,6 +18,23 @@ def linear_system_steps(matrix, rhs, variables, equations):
         target.append(step)
         return step
 
+    def describe(step, parts):
+        # Translate each template before inserting mathematical values in the UI.
+        step["explanationParts"] = parts
+        step["explanation"] = " ".join(part["text"].format(**part.get("values", {})) for part in parts)
+
+    def subtract(term):
+        negative = term.could_extract_minus_sign()
+        return {"text": "Add {term} to both sides." if negative else "Subtract {term} from both sides.",
+                "values": {"term": readable(-term if negative else term)}}
+
+    def divide(coefficient):
+        return ({"text": "Multiply both sides by −1."} if coefficient == -1 else
+                {"text": "Divide both sides by {coefficient}.", "values": {"coefficient": readable(coefficient)}})
+
+    def distinct(values):
+        return list(dict.fromkeys(values))
+
     def row_equation(augmented, index):
         return equation(sum(augmented[index, j]*variable for j, variable in enumerate(variables)), augmented[index, -1])
 
@@ -28,13 +45,30 @@ def linear_system_steps(matrix, rhs, variables, equations):
         isolated, remaining = variables[column], variables[other]
         replacement = s.cancel((rhs[0]-matrix[0, other]*remaining)/matrix[0, column])
         relation = equation(isolated, replacement)
-        add(basic, "Rearrange the first equation", "Move the other terms to the opposite side and divide by the coefficient. We can then replace this variable in the other equation.", [equations[0], relation])
+        original_first = equations[0] if isinstance(equations[0], s.Equality) else equation(equations[0])
+        first_left, first_right = s.expand(original_first.lhs), s.expand(original_first.rhs)
+        right_coefficient = first_right.coeff(isolated)
+        left_rest = s.expand(first_left-first_left.coeff(isolated)*isolated)
+        parts = []
+        if right_coefficient != 0: parts.append(subtract(right_coefficient*isolated))
+        if left_rest != 0: parts.append(subtract(left_rest))
+        if parts: parts.append({"text": "Combine like terms."})
+        if matrix[0, column] != 1: parts.append(divide(matrix[0, column]))
+        parts.append({"text": "Use this expression in the other equation."})
+        describe(add(basic, "Rearrange the first equation", "", [relation]), parts)
         original = equations[1] if isinstance(equations[1], s.Equality) else equation(equations[1])
         # Replace in the display tree to preserve x - 2x before simplification.
         def replace_tree(node, variable, value):
             if node.get("kind") == "symbol" and node.get("value") == str(variable):
                 return copy.deepcopy(display_tree(value))
-            return {**node, "args": [replace_tree(child, variable, value) for child in node.get("args", [])]}
+            children = [replace_tree(child, variable, value) for child in node.get("args", [])]
+            if node.get("kind") == "product" and node != {**node, "args": children}:
+                # Show numerical substitution explicitly, including negative operands.
+                children = [{"kind": "parentheses", "args": [child]} if
+                            child.get("kind") in ("sum", "unary") or child.get("value", "").startswith("-")
+                            else child for child in children]
+                return {**node, "displayOperator": "×", "args": children}
+            return {**node, "args": children}
         shown = replace_tree(display_tree(original), isolated, replacement)
         step = add(basic, "Substitute into the second equation", "Replace the isolated variable with its expression. The second equation now has only one unknown.")
         step["equations"].append({"exact": readable(original.subs(isolated, replacement)), "tree": shown})
@@ -43,7 +77,13 @@ def linear_system_steps(matrix, rhs, variables, equations):
         a, b = reduced.coeff_monomial(remaining), reduced.coeff_monomial(1)
         if a != 0:
             root = s.cancel(-b/a)
-            add(basic, "Solve the equation with one unknown", "Combine like terms, move the constant to the right, and divide by the coefficient to find the first value.", [equation(left, right), equation(a*remaining, -b), equation(remaining, root)])
+            parts = []
+            if shown != display_tree(equation(left, right)): parts.append({"text": "Combine like terms."})
+            if right.coeff(remaining) != 0: parts.append(subtract(right.coeff(remaining)*remaining))
+            if left.coeff(remaining, 0) != 0: parts.append(subtract(left.coeff(remaining, 0)))
+            if a != 1: parts.append(divide(a))
+            if not parts: parts.append({"text": "The variable is already isolated."})
+            describe(add(basic, "Solve the equation with one unknown", "", distinct([equation(left, right), equation(a*remaining, -b), equation(remaining, root)])), parts)
             substituted_tree = replace_tree(display_tree(relation), remaining, root)
             last = add(basic, "Calculate the remaining variable", "Put the value we found back into the rearranged first equation to find the other variable.")
             last["equations"] = [{"exact": readable(relation.subs(remaining, root)), "tree": substituted_tree}, formula(equation(isolated, s.simplify(replacement.subs(remaining, root))))]
@@ -112,4 +152,20 @@ def linear_system_steps(matrix, rhs, variables, equations):
             snapshot("Eliminate the pivot column from another row", "Subtract a multiple of the pivot row from the entire other row. Its entry in this column becomes 0.", {"kind": "relation", "value": "←", "args": [display_tree(s.Symbol(f"R{index+1}")), display_tree(s.Add(s.Symbol(f"R{index+1}"), -multiplier*s.Symbol(f"R{row+1}"), evaluate=False))]})
         row += 1
         if row == augmented.rows: break
+    conflict = next((index for index in range(augmented.rows)
+                     if all(augmented[index, j] == 0 for j in range(len(variables)))
+                     and augmented[index, -1] != 0), None)
+    if conflict is not None:
+        add(advanced, "The equations conflict", "A row has zero variable coefficients but a nonzero constant. It represents a false equality, so there is no solution.", [row_equation(augmented, conflict)])
+    else:
+        relations = []
+        for index in range(augmented.rows):
+            column = next((j for j in range(len(variables)) if augmented[index, j] != 0), None)
+            if column is not None:
+                rest = sum(augmented[index, j]*variables[j] for j in range(column+1, len(variables)))
+                relations.append(equation(variables[column], s.cancel((augmented[index, -1]-rest)/augmented[index, column])))
+        explanation = ("Each pivot row gives one variable's value in the last column. Read the values in the displayed variable order."
+                       if len(relations) == len(variables) else
+                       "Read each pivot variable in terms of the variables without pivots. Those variables are free, so there are infinitely many solutions.")
+        add(advanced, "Read the solution from the matrix", explanation, relations)
     return {"method": method, "steps": basic, "advancedSteps": advanced}
