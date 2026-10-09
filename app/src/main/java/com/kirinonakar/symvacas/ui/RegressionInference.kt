@@ -78,10 +78,10 @@ import kotlin.math.abs
     }.orEmpty()
     val hasVif=coefficients.any {it.has("vif")&&!it.isNull("vif")}
     val hasPenalizedOdds=machineLearning&&coefficients.any {it.has("oddsRatio")&&!it.isNull("oddsRatio")}
-    val headers=((if(bayesian)listOf("Parameter","Posterior estimate","Posterior SD",credibleLabel,"P(β > 0)") else if(machineLearning)listOf("Parameter",if(forest)"Feature importance" else "Estimate") else listOf("Parameter","Estimate","SE","95% CI","p"))+(if(report.has("nuts"))listOf("Split R-hat","Autocorrelation ESS","MCSE") else emptyList())+(if(hasVif)listOf("VIF") else emptyList())+(if(hasPenalizedOdds)listOf("Odds ratio") else emptyList())).map {tr(it)}
+    val headers=((if(bayesian)listOf("Parameter","Posterior estimate","Posterior SD",credibleLabel,"P(β > 0)") else if(machineLearning)listOf("Parameter",if(forest)"Feature importance" else "Estimate") else listOf("Parameter","Estimate","SE","95% CI","p"))+(if(report.has("nuts"))listOf("Rank-normalized R-hat","Bulk ESS","Tail ESS","MCSE") else emptyList())+(if(hasVif)listOf("VIF") else emptyList())+(if(hasPenalizedOdds)listOf("Odds ratio") else emptyList())).map {tr(it)}
     val coefficientRows=coefficients.map {coefficient->
         listOf(parameterName(coefficient),value(coefficient,"estimate"))+(if(bayesian)listOf(value(coefficient,"posteriorSD"),"${value(coefficient,"low")} … ${value(coefficient,"high")}",value(coefficient,"probabilityPositive")) else if(machineLearning)emptyList() else listOf(value(coefficient,"se"),
-            "${value(coefficient,"low")} … ${value(coefficient,"high")}",value(coefficient,"p"))) + (if(report.has("nuts"))listOf(value(coefficient,"rHat"),value(coefficient,"ess"),value(coefficient,"mcse")) else emptyList()) + (if(hasVif)listOf(value(coefficient,"vif")) else emptyList()) + (if(hasPenalizedOdds)listOf(value(coefficient,"oddsRatio")) else emptyList())
+            "${value(coefficient,"low")} … ${value(coefficient,"high")}",value(coefficient,"p"))) + (if(report.has("nuts"))listOf(value(coefficient,"rHat"),value(coefficient,"bulkEss"),value(coefficient,"tailEss"),value(coefficient,"mcse")) else emptyList()) + (if(hasVif)listOf(value(coefficient,"vif")) else emptyList()) + (if(hasPenalizedOdds)listOf(value(coefficient,"oddsRatio")) else emptyList())
     }
     Column(Modifier.horizontalScroll(rememberScrollState())) {
         Row(horizontalArrangement=Arrangement.spacedBy(12.dp)) {

@@ -34,6 +34,6 @@ test('NUTS reports display aggregate and per-chain acceptance statistics',()=>{
     const text=container.text();
     assert.match(text,/NUTS/);assert.match(text,/Max tree depth=8/);assert.match(text,/Max tree depth hits=3/);
     assert.match(text,/Mean acceptance probability=0.91/);assert.match(text,/Chain 1 · Mean acceptance probability=0.87/);
-    assert.match(text,/Split R-hat/);assert.match(text,/Autocorrelation ESS/);assert.match(text,/MCSE/);
+    assert.match(text,/Rank-normalized R-hat/);assert.match(text,/Bulk ESS/);assert.match(text,/Tail ESS/);assert.match(text,/MCSE/);
   }finally{globalThis.document=previous;}
 });

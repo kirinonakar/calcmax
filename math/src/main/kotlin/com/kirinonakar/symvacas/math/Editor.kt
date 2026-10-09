@@ -18,6 +18,12 @@ data class Editor(val source: String = "", val cursor: Int = source.length, val 
         return insert(prefix+text+suffix,prefix.length+text.length)
     }
     fun insert(text: String, inside: Int = text.length): Editor {
+        if(text=="/")return insert("/()",2)
+        if(cursor==anchor && text=="/()" && exponent==null) {
+            val power=barePower(cursor,cursor)
+            if(power!=null && outside!=(power.start..power.end))
+                return copy(exponent=power.args[1].let {it.start..it.end}).insert(text,inside)
+        }
         matrixFactorPosition(text)?.let {position->
             return Editor(source,position).insert("*$text",inside+1)
         }
@@ -254,6 +260,10 @@ data class Editor(val source: String = "", val cursor: Int = source.length, val 
         }
         if(cursor==source.length&&outside!=null&&delta>0)return this
         if(cursor==anchor && delta>0) {
+            val power=barePower(cursor,cursor)?.takeIf {it.args[1].end==cursor && it.args[1].nodes().none {n->n.kind=="hole"} && outside!=(it.start..it.end)}
+            if(power!=null)return Editor(source,cursor,outside=power.start..power.end)
+        }
+        if(cursor==anchor && delta>0) {
             val power=tree()?.nodes()?.firstOrNull {node->hiddenPowerBase(node)?.end?.minus(1)==cursor}
             val exponent=power?.args?.get(1)
             if(exponent!=null) {
@@ -358,6 +368,18 @@ data class Editor(val source: String = "", val cursor: Int = source.length, val 
     fun selectRange(start:Int,end:Int):Editor=copy(cursor=end,anchor=start,exponent=barePower(start,end)?.args?.get(1)?.let{it.start..it.end},outside=null,activeToken=null)
     fun placeInToken(start:Int,end:Int,position:Int)=Editor(source,position.coerceIn(start,end),exponent=barePower(start,end)?.args?.get(1)?.let{it.start..it.end},activeToken=start..end)
     fun select(node: Expr) = selectRange(node.start,node.end)
+    fun fractionInput():Editor {
+        var target=this
+        if(cursor==anchor) {
+            val nodes=tree()?.nodes().orEmpty()
+            val previous=outside?.let {range->nodes.firstOrNull {it.start==range.first&&it.end==range.last}}
+                ?: nodes.filter {it.end==cursor&&it.start<it.end&&it.nodes().none {n->n.kind=="hole"}}.minByOrNull {it.end-it.start}
+            if(previous!=null)target=target.select(previous)
+        }
+        val a=minOf(target.cursor,target.anchor); val b=maxOf(target.cursor,target.anchor)
+        val numerator=target.source.substring(a,b); val template="($numerator)/()"
+        return target.insert(template,if(numerator.isEmpty())1 else template.length-1)
+    }
     fun after(start:Int,end:Int)=Editor(source,end,outside=start..end)
     /** Exactly one presentation node owns a collapsed cursor, including shared source boundaries. */
     fun cursorTarget():IntRange? {
@@ -394,6 +416,10 @@ data class Editor(val source: String = "", val cursor: Int = source.length, val 
     fun typedRelation(newSource:String,newCursor:Int):Editor? {
         if(cursor!=anchor || newCursor!=cursor+1 || newSource!=source.substring(0,cursor)+"="+source.substring(cursor))return null
         return if(exitForRelation().cursor==cursor)null else insert("=")
+    }
+    fun typedDivision(newSource:String,newCursor:Int):Editor? {
+        if(cursor!=anchor || newCursor!=cursor+1 || newSource!=source.substring(0,cursor)+"/"+source.substring(cursor))return null
+        return insert("/")
     }
     private fun isClosedMatrix(node:Expr):Boolean = node.kind in setOf("list","matrix") &&
         node.args.isNotEmpty() && node.args.all {it.kind=="list"} &&

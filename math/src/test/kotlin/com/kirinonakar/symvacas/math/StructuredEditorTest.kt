@@ -2,6 +2,35 @@ package com.kirinonakar.symvacas.math
 import org.junit.Assert.*
 import org.junit.Test
 class StructuredEditorTest {
+    @Test fun slashStaysInExponentUntilRightExits() {
+        for(editor in listOf(Editor("25^1"),Editor().insert("25").insert("^").insert("1"),Editor("25^(1)",5))) {
+            val divided=editor.insert("/").insert("3")
+            val tree=divided.tree()!!
+            assertEquals("^",tree.value)
+            assertEquals("/",tree.args[1].args[0].value)
+            val outside=editor.move(1).insert("/").insert("3").tree()!!
+            assertEquals("/",outside.value)
+            assertEquals("^",outside.args[0].value)
+        }
+        val direct=Editor("25^1").typedDivision("25^1/",5)!!
+        assertEquals("25^(1/())",direct.source)
+        assertEquals("25^1/()",Editor("25^1").move(1).typedDivision("25^1/",5)?.source)
+        val fraction=Editor("25^1").fractionInput().insert("3").tree()!!
+        assertEquals("^",fraction.value)
+        assertEquals("/",fraction.args[1].args[0].value)
+        val outsideFraction=Editor("25^1").move(1).fractionInput().insert("3").tree()!!
+        assertEquals("/",outsideFraction.value)
+        assertEquals("^",outsideFraction.args[0].args[0].value)
+    }
+    @Test fun divisionKeepsMinusInHiddenDenominatorUntilRight() {
+        val denominator=Editor().insert("25").insert("/").insert("3")
+        assertEquals("25/(3)",denominator.source)
+        val inside=denominator.insert("-").insert("1")
+        assertEquals("25/(3-1)",inside.source)
+        assertEquals("-",inside.tree()!!.args[1].args[0].value)
+        assertEquals("25/(3)-1",denominator.move(1).insert("-").insert("1").source)
+        assertEquals("25/()",Editor("25").typedDivision("25/",3)?.source)
+    }
     @Test fun displayedSymbolsDeleteAsAUnit() {
         for(name in LatexInput.symbolLabels.keys+"oo") {
             val source="sin($name)"
@@ -351,7 +380,7 @@ class StructuredEditorTest {
                 }
             }
             for(operator in listOf("+","-","*","/","^",",", ")", "]"))
-                assertEquals(operator,source.substring(0,end)+operator+source.substring(end),Editor(source,end).insert(operator).source)
+                assertEquals(operator,source.substring(0,end)+(if(operator=="/")"/()" else operator)+source.substring(end),Editor(source,end).insert(operator).source)
         }
         assertEquals(matrix+"*sin(3)","sin(3)".fold(Editor(matrix)){editor,char->editor.insert(char.toString())}.source)
         assertEquals(matrix+"*34",Editor(matrix).insert("3").insert("4").source)

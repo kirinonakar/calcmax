@@ -54,7 +54,8 @@ def calculate(engine,name,a):
     require(nodes_count==1 or nodes_count>=7,'Use 1 (Laplace) or 7-31 quadrature points')
     x,y=clustered_design(rows); n=len(y); p=len(x[0])
     require(within_limit(n,1500) and within_limit(p,8),'GLMM limit: 1500 rows and 8 fixed coefficients')
-    offsets=count_offsets(a,3,n)
+    offsets=count_offsets(a,3,n) if not (len(a)>5 and a[3]==[] and str(a[4])=='offset') else [0.0]*n
+    sensitivity=option(a,5,'likelihood'); require(sensitivity in ('likelihood','refit'),'GLMM quadrature check: likelihood or refit')
     require(family!='binomial' or not any(offsets),'GLMM offsets are supported for count families only')
     if family=='binomial':
         require(all(v in (0,1) for v in y) and len(set(y))==2,'Binomial GLMM response must contain both 0 and 1')
@@ -125,11 +126,11 @@ def calculate(engine,name,a):
     intercept=math.log(mean(y)/(1-mean(y))) if family=='binomial' else math.log(sum(y))-top-math.log(math.fsum(math.exp(v-top) for v in offsets))
     start,_,_,_=newton([intercept]+[0.0]*(p-1),initial_exact)
     is_nb=family=='nbinom'
-    def objective(point,random=True,nb=is_nb):
+    def objective(point,random=True,nb=is_nb,rule=None):
         beta=point[:p]; sd=abs(point[p]) if random else 0.0
         coordinate=point[-1] if nb else 0.0
         if max(map(abs,beta))>=50 or sd>30 or (nb and not -12<=coordinate<=8): return math.inf
-        try: return marginal(beta,sd,math.exp(coordinate) if nb else 0.0)
+        try: return marginal(beta,sd,math.exp(coordinate) if nb else 0.0,rule=rule)
         except (OverflowError,ValueError,ZeroDivisionError): return math.inf
 
     def fit(random,nb):
@@ -155,21 +156,50 @@ def calculate(engine,name,a):
     _,effects=marginal(point[:p],sd,alpha,True)
     result={'coefficients':inference(coefficients,coefficient_cov,['Intercept']+['x'+str(i) for i in range(1,p)],True),
             'family':family,'random intercept variance':sd*sd,'subjects':len(ids),
-            'log likelihood':-value,'AIC':2*(p+1+int(is_nb))+2*value,
+            'log likelihood':-value,'AIC':2*(p+1+int(is_nb))+2*value,'BIC':math.log(n)*(p+1+int(is_nb))+2*value,
             'quadrature points':nodes_count,'estimation':'ML (Laplace)' if nodes_count==1 else 'ML (adaptive Gauss-Hermite)',
             'iterations':it,'optimizer converged':1,'singular fit':int(sd*sd<1e-6),
             'subject random effects':effects}
     if is_nb: result['dispersion alpha (NB2)']=alpha
     if family=='binomial': result['latent ICC']=sd*sd/(sd*sd+math.pi**2/3)
-    if 1<nodes_count<31:
-        check_points=min(31,nodes_count+10)
+    warnings=[]
+    if random:
+        check_points=7 if nodes_count==1 else min(31,nodes_count+10) if nodes_count<31 else 21
         difference=abs(marginal(point[:p],sd,alpha,rule=hermite_rule(check_points))-value)
         result['quadrature check points']=check_points
         result['quadrature log likelihood difference']=difference
-        if difference>1e-3: engine.note += ' Quadrature accuracy warning: increase the point count and compare estimates.'
+        result['quadrature check']='fixed-parameter log likelihood'
+        if difference>1e-3: warnings.append('Quadrature accuracy warning: increase the point count and compare estimates.')
+        if sensitivity=='refit':
+            rule=hermite_rule(check_points)
+            checked,check_value,check_it,check_ok=nelder_mead(lambda b:objective(b,random,nb,rule),point,[.1]*len(point),1200+150*p,True)
+            result['quadrature check']='refitted parameters'
+            result['quadrature refit converged']=int(check_ok)
+            result['quadrature refit iterations']=check_it
+            if check_ok:
+                comparison=list(map(float,transform*mp.matrix(checked[:p])))
+                changes=[abs(other-original)/math.sqrt(float(coefficient_cov[i,i])) for i,(other,original) in enumerate(zip(comparison,coefficients))]
+                result['quadrature refit coefficients']=comparison
+                result['quadrature refit log likelihood']=-check_value
+                result['quadrature max coefficient change / SE']=max(changes)
+                if max(changes)>.1:
+                    warnings.append('Quadrature refit changes a coefficient by more than 0.1 SE; Wald p-values and CI are unavailable until integration is stable.')
+                    for row in result['coefficients']: row['p']=None; row['CI95']=None
+            else:
+                warnings.append('Quadrature refit did not converge; integration sensitivity remains unresolved.')
+                for row in result['coefficients']: row['p']=None; row['CI95']=None
+    else:
+        result['quadrature check']='not needed at zero random-effect variance'
     engine.note += ' Random-intercept GLMM; '+family+' '+('logit' if family=='binomial' else 'log')+' link; subject-specific coefficients. '+result['estimation']+'. Joint marginal observed information by central differences; asymptotic Wald 95% CI.'
     if len(ids)<20: engine.note += ' Few subjects: asymptotic Wald inference may be unreliable.'
     if result['singular fit']: engine.note += ' Singular fit: random-intercept variance is on or near zero.'
     if is_nb and alpha==0: engine.note += ' NB2 dispersion is zero (Poisson boundary).'
     if nodes_count==1: engine.note += ' Laplace approximation; increase quadrature points to assess integration accuracy.'
+    if len(ids)<20: warnings.append('Few subjects; asymptotic Wald inference may be unreliable.')
+    if result['singular fit']: warnings.append('Singular fit; random-intercept variance is on or near zero.')
+    if is_nb and alpha==0: warnings.append('NB2 dispersion is on the Poisson boundary.')
+    result['diagnostics']={'convergence':'converged','random effects':'singular' if result['singular fit'] else 'interior',
+        'inference':'unavailable' if any(row['CI95'] is None for row in result['coefficients']) else 'caution' if warnings else 'asymptotic Wald',
+        'warnings':warnings}
+    for warning in warnings: engine.note+=' '+warning
     return result

@@ -3,11 +3,12 @@
 Hoffman & Gelman (2014), Algorithms 4 and 6:
 https://jmlr.org/papers/v15/hoffman14a.html
 The caller supplies a whitened negative log density and analytic gradient.
-Diagnostics are classical split R-hat and autocorrelation ESS (not rank ESS).
+Diagnostics use rank-normalized/folded split R-hat, bulk ESS and tail ESS.
 """
 from calc_limits import within_limit
 import math
 import random
+from statistics import NormalDist
 from calc_shared import MathError, require
 
 
@@ -18,9 +19,38 @@ def quantile(values, probability):
     return values[lower]*(1-fraction)+values[min(lower+1,len(values)-1)]*fraction
 
 
-def diagnostics(chains):
-    size = len(chains[0])//2
-    split = [part for chain in chains for part in (chain[:size],chain[-size:])]
+def _autocovariance(chain, average):
+    # Radix-2 FFT keeps full-lag ESS practical without NumPy in WASM/Android.
+    n=len(chain); length=1
+    while length<2*n: length*=2
+    values=[complex(v-average) for v in chain]+[0j]*(length-n)
+    def fft(values, inverse=False):
+        j=0
+        for i in range(1,length):
+            bit=length>>1
+            while j&bit: j^=bit; bit>>=1
+            j^=bit
+            if i<j: values[i],values[j]=values[j],values[i]
+        width=2
+        while width<=length:
+            angle=(2 if inverse else -2)*math.pi/width
+            root=complex(math.cos(angle),math.sin(angle))
+            for start in range(0,length,width):
+                factor=1+0j
+                for k in range(width//2):
+                    u=values[start+k]; v=values[start+k+width//2]*factor
+                    values[start+k]=u+v; values[start+k+width//2]=u-v; factor*=root
+            width*=2
+        if inverse:
+            for i in range(length): values[i]/=length
+    fft(values)
+    values=[complex(abs(v)**2) for v in values]
+    fft(values,True)
+    return [values[i].real/n for i in range(n)]
+
+
+def _split_statistics(split):
+    size=len(split[0])
     count = len(split)
     means = [math.fsum(chain)/size for chain in split]
     average = math.fsum(means)/count
@@ -30,19 +60,64 @@ def diagnostics(chains):
     variance = (size-1)/size*within+between/size
     if within <= 0 or variance <= 0: return None, 0.0
     rhat = math.sqrt(variance/within)
+    autocovariances=[_autocovariance(chain,m) for chain,m in zip(split,means)]
     def rho(lag):
-        # Biased autocovariance is stable at long lags and matches rho(0).
-        cov = math.fsum(math.fsum((chain[i]-m)*(chain[i+lag]-m) for i in range(size-lag))/size
-                        for chain,m in zip(split,means))/count
+        cov = math.fsum(c[lag] for c in autocovariances)/count
         return 1-(within-cov)/variance
-    pair_sum = 0.0; previous = math.inf
-    for lag in range(0,min(size-1,1000),2):
-        pair = (1.0 if lag == 0 else rho(lag))+rho(lag+1)
-        if pair <= 0: break
-        previous = min(previous,pair)
-        pair_sum += previous
-    ess = min(count*size, count*size/max(1.0,2*pair_sum-1))
+    correlations=[0.0]*size; even=1.0; correlations[0]=even
+    odd=rho(1); correlations[1]=odd; lag=1
+    while lag<size-3 and even+odd>0:
+        even,odd=rho(lag+1),rho(lag+2)
+        if even+odd>=0: correlations[lag+1:lag+3]=[even,odd]
+        lag+=2
+    last=lag-2
+    if even>0: correlations[last+1]=even
+    for lag in range(1,last-1,2):
+        previous=correlations[lag-1]+correlations[lag]
+        if correlations[lag+1]+correlations[lag+2]>previous:
+            correlations[lag+1]=correlations[lag+2]=previous/2
+    total=count*size
+    tau=-1+2*math.fsum(correlations[:last+1])+math.fsum(correlations[last+1:last+2])
+    ess=total/max(1/math.log10(total),tau)
     return rhat, ess
+
+
+def _rank_normalize(chains):
+    values=[v for chain in chains for v in chain]; total=len(values)
+    ordered=sorted(range(total),key=values.__getitem__); scores=[0.0]*total
+    normal=NormalDist(); first=0
+    while first<total:
+        last=first+1
+        while last<total and values[ordered[last]]==values[ordered[first]]: last+=1
+        rank=(first+1+last)/2  # Average ranks for ties; Blom's transform.
+        score=normal.inv_cdf((rank-.375)/(total+.25))
+        for i in ordered[first:last]: scores[i]=score
+        first=last
+    size=len(chains[0])
+    return [scores[i:i+size] for i in range(0,total,size)]
+
+
+def rank_diagnostics(chains):
+    require(len(chains)>=2 and len({len(c) for c in chains})==1 and len(chains[0])>=4,
+            'Diagnostics require at least two equal chains with four draws')
+    require(all(math.isfinite(v) for c in chains for v in c),'Non-finite posterior draws')
+    size=len(chains[0])//2
+    split=[part for chain in chains for part in (chain[:size],chain[-size:])]
+    values=[v for chain in split for v in chain]
+    ranked=_rank_normalize(split)
+    rhat,bulk=_split_statistics(ranked)
+    median=quantile(values,.5)
+    folded,_=_split_statistics(_rank_normalize([[abs(v-median) for v in chain] for chain in split]))
+    low,high=quantile(values,.05),quantile(values,.95)
+    tail=min(_split_statistics([[float(v<=cut) for v in chain] for chain in split])[1] for cut in (low,high))
+    _,mean_ess=_split_statistics(split)
+    return {'rHat':max(rhat,folded) if rhat is not None and folded is not None else None,
+            'bulkEss':bulk,'tailEss':tail,'ess':mean_ess}
+
+
+def diagnostics(chains):
+    result=rank_diagnostics(chains)
+    return result['rHat'],result['ess']
 
 
 def _leapfrog(target, state, epsilon):
@@ -142,7 +217,7 @@ def sample(target, dimensions, samples=500, warmup=500, max_depth=8, seed=0, cha
             initial_joint = _joint(state)
             log_slice = initial_joint-rng.expovariate(1)
             left = right = candidate = state
-            count = 1; continuing = True; depth = 0; divergent = False; total_steps = 0
+            count = 1; continuing = True; depth = 0; divergent = False; total_steps = 0; total_alpha = 0.0
             while continuing and depth < max_depth:
                 direction = -1 if rng.random() < .5 else 1
                 other_left,other_right,other_candidate,other_count,other_continuing,alpha,steps,other_divergent = _build_tree(
@@ -155,9 +230,9 @@ def sample(target, dimensions, samples=500, warmup=500, max_depth=8, seed=0, cha
                     candidate = other_candidate
                 count += other_count
                 continuing = other_continuing and _no_u_turn(left,right)
-                depth += 1; total_steps += steps; divergent = divergent or other_divergent
+                depth += 1; total_steps += steps; total_alpha += alpha; divergent = divergent or other_divergent
             position,_,value,gradient = candidate
-            probability = alpha/steps  # Acceptance statistic of the final doubling.
+            probability = total_alpha/total_steps
             if iteration <= warmup:
                 eta = 1/(iteration+10)
                 hbar = (1-eta)*hbar+eta*(.8-probability)
@@ -180,5 +255,5 @@ def sample(target, dimensions, samples=500, warmup=500, max_depth=8, seed=0, cha
                    'meanTreeDepth':sum(c['meanTreeDepth'] for c in summaries)/chains,
                    'meanLeapfrogSteps':sum(c['meanLeapfrogSteps'] for c in summaries)/chains,
                    'gradientEvaluations':evaluations,'targetAcceptance':.8,'chainDiagnostics':summaries,
-                   'diagnosticMethod':'classical split R-hat; initial monotone autocorrelation ESS (up to 1000 lags)'}
+                   'diagnosticMethod':'rank-normalized/folded split R-hat; bulk/tail ESS; mean ESS for MCSE (full-lag initial monotone sequence)'}
 

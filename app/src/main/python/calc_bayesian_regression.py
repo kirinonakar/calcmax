@@ -100,7 +100,7 @@ def fit_bayesian(engine, rows, mode, options=None):
         exact_beta = beta.copy()
         sampled_coefficients = None
         if sampler is not None:
-            from calc_nuts import sample, diagnostics, quantile
+            from calc_nuts import sample, rank_diagnostics, quantile
             samples,warmup,max_depth,seed,chains = nuts_options
             require(within_limit(n*p*chains*(samples+warmup),200000000),
                     'NUTS workload exceeds 200 million row/parameter gradient evaluations; reduce data or sampler settings')
@@ -143,19 +143,22 @@ def fit_bayesian(engine, rows, mode, options=None):
                 values = [v for chain in parameter_chains for v in chain]
                 average = math.fsum(values)/len(values)
                 deviation = math.sqrt(math.fsum((v-average)**2 for v in values)/(len(values)-1))
-                rhat,ess = diagnostics(parameter_chains)
+                diagnostic = rank_diagnostics(parameter_chains)
+                rhat,ess = diagnostic['rHat'],diagnostic['ess']
                 sampled_coefficients.append({'name':'b'+str(j),'estimate':out(average),'posteriorSD':out(deviation),
                     'low':out(quantile(values,float((1-level)/2))), 'high':out(quantile(values,float((1+level)/2))),
                     'probabilityPositive':out(sum(v>0 for v in values)/len(values)),
-                    'rHat':None if rhat is None else out(rhat),'ess':out(ess),'mcse':out(deviation/math.sqrt(ess)) if ess else None})
+                    'rHat':None if rhat is None else out(rhat),'ess':out(ess),
+                    'bulkEss':out(diagnostic['bulkEss']),'tailEss':out(diagnostic['tailEss']),
+                    'mcse':out(deviation/math.sqrt(ess)) if ess else None})
             beta = mp.matrix([math.fsum(b[j] for chain in beta_chains for b in chain)/(samples*chains) for j in range(p)])
             report.update(method='nuts',approximate=True,nuts=nuts)
             if nuts['maxTreeDepthHits']: report['warnings'].append('NUTS reached max tree depth; increase max tree depth and inspect mixing.')
             if nuts['divergences']: report['warnings'].append('NUTS divergences detected; posterior summaries may be unreliable.')
-            if any(c['rHat'] is None or float(c['rHat']) > 1.05 for c in sampled_coefficients):
-                report['warnings'].append('NUTS split R-hat exceeds 1.05 or is unavailable; increase warmup and samples.')
-            if any(float(c['ess']) < 100 for c in sampled_coefficients):
-                report['warnings'].append('NUTS effective sample size is below 100; increase samples and inspect mixing.')
+            if any(c['rHat'] is None or float(c['rHat']) > 1.01 for c in sampled_coefficients):
+                report['warnings'].append('NUTS rank-normalized R-hat exceeds 1.01 or is unavailable; increase warmup and samples.')
+            if any(min(float(c['bulkEss']),float(c['tailEss'])) < 100*chains for c in sampled_coefficients):
+                report['warnings'].append('NUTS bulk or tail ESS is below 100 per chain; increase samples and inspect mixing.')
             if binary:
                 logits, fitted, _ = evaluate(beta)
             else: fitted = list(design*beta)
@@ -217,6 +220,6 @@ def fit_bayesian(engine, rows, mode, options=None):
         engine.note = ('Bayesian logistic regression: Gaussian Laplace approximation at the MAP; training probabilities evaluated at the MAP.' if binary else
                        'Bayesian linear regression: normal-inverse-gamma prior; exact Student-t marginal posterior and posterior predictive intervals.')+' Zero-mean priors include the intercept on the centered, RMS-standardized design; coefficients are in original units. Equal-tailed credible intervals.'
         if sampler is not None:
-            engine.note = 'Bayesian regression: slice NUTS with recursive doubling, U-turn termination, warmup-only dual averaging and multiple seeded chains; empirical equal-tailed credible intervals. Classical split R-hat and autocorrelation ESS. Priors include the intercept on centered, RMS-standardized predictors; coefficients in original units. Training predictions evaluated at posterior mean coefficients.'
+            engine.note = 'Bayesian regression: slice NUTS with recursive doubling, U-turn termination, warmup-only dual averaging and multiple seeded chains; empirical equal-tailed credible intervals. Rank-normalized/folded split R-hat, bulk ESS and 5%/95% tail ESS; raw-value mean ESS for MCSE. Priors include the intercept on centered, RMS-standardized predictors; coefficients in original units. Training predictions evaluated at posterior mean coefficients.'
             if not binary: engine.note += ' Error variance integrated out; predictive intervals from the exact conjugate posterior.'
         return 1/(1+s.exp(-expression)) if binary else expression

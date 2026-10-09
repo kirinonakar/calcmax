@@ -6,7 +6,7 @@ import {calcVariables,calcBindings} from './calc-session.js';
 import {previousCalculations,renderPreviousCalculations,followTape} from './calculation-tape.js';
 import {renderFormulas} from './formula-preview.js';
 import {markInputCursor,followInputCursor,followTextCursor,inputPointPosition} from './input-cursor.js';
-import {moveMathCursor,mathStructureExit,functionRelationExit,emptyCallDeletion,emptyPowerDeletion,emptyFractionDeletion,symbolDeletion,powerInput,matrixFactorInput} from './input-navigation.js';
+import {moveMathCursor,mathStructureExit,functionRelationExit,emptyCallDeletion,emptyPowerDeletion,emptyFractionDeletion,symbolDeletion,powerInput,matrixFactorInput,divisionInput} from './input-navigation.js';
 import {createDisplaySizing} from './display-sizing.js';
 import {fractionInput} from './fraction-input.js';
 import {requiresExplicitEvaluation} from './evaluation-policy.js';
@@ -238,7 +238,8 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
     }
     if(state.autoCloseBrackets&&text.length===1&&field.selectionStart===field.selectionEnd&&!overwrite){const pairs={'(' : ')','[':']','{':'}'};if(pairs[text]){text+=pairs[text];cursor=1;}else if(')]}'.includes(text)&&field.value[field.selectionStart]===text){field.setSelectionRange(field.selectionStart+1,field.selectionStart+1);preview();return;}}
     let start=field.selectionStart,end=!fraction&&overwrite&&field.selectionEnd===start?Math.min(field.value.length,start+text.length):field.selectionEnd;
-    if(fraction){({start,end,text,cursor}=fractionInput(field.value,start,end));}
+    if(fraction){({start,end,text,cursor}=fractionInput(field.value,start,end,outsideStructure?inputBoundary:null));}
+    else {const division=divisionInput(field.value,start,end,text,outsideStructure?inputBoundary:null);if(division)({start,end,text,cursor}=division);}
     let prefix='',suffix='';
     const matrixFactor=!fraction?matrixFactorInput(field.value,start,end,text):null;
     if(matrixFactor){start=end=matrixFactor.position;prefix=matrixFactor.prefix;}
@@ -261,6 +262,7 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
     if(event.inputType==='historyUndo'&&!event.isComposing){event.preventDefault();undoInput();return;}
     if(typing&&!event.isComposing&&event.inputType==='insertText'&&event.data){
       const field=$('expression');
+      if(divisionInput(field.value,field.selectionStart,field.selectionEnd,event.data,inputBoundary)){event.preventDefault();insert(event.data);return;}
       if(matrixFactorInput(field.value,field.selectionStart,field.selectionEnd,event.data)){event.preventDefault();insert(event.data);return;}
     }
     if(typing&&!event.isComposing&&event.inputType==='insertText'&&event.data==='='){
@@ -369,8 +371,8 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
     else if(['LEFT','RIGHT','UP','DOWN'].includes(input)){
       const f=$('expression');let start=f.selectionStart,end=f.selectionEnd;
       const outside=inputBoundary?.edge==='after'&&inputBoundary.source===f.value&&inputBoundary.position===start&&start===end?inputBoundary:null;
-      const exit=!typing?mathStructureExit(f.value,start,end,input,outside):null;
-      const position=typing?null:outside&&input==='LEFT'?(outside.exponentEnd??outside.denominatorEnd):exit?.position??moveMathCursor(f.value,start,end,input,outside);
+      const exit=mathStructureExit(f.value,start,end,input,outside);
+      const position=exit?.position??(typing?null:outside&&input==='LEFT'?(outside.exponentEnd??outside.denominatorEnd):moveMathCursor(f.value,start,end,input,outside));
       if(position!==null)start=end=position;
       else if(input==='LEFT'||input==='RIGHT')start=end=Math.max(0,Math.min(f.value.length,(input==='LEFT'?start:end)+(input==='LEFT'?-1:1)));
       else try{const nodes=[];const visit=n=>{if(n.start<=start&&n.end>=end)nodes.push(n);n.args?.forEach(visit);};visit(parse(f.value,{allowHoles:true}));nodes.sort((a,b)=>(a.end-a.start)-(b.end-b.start));const selected=input==='UP'?nodes.find(n=>n.start<start||n.end>end):nodes[0]?.args?.[0];if(selected){start=selected.start;end=selected.end;}}catch{}
@@ -422,6 +424,10 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
   applyWordWrap();
   applyFonts();
   document.addEventListener('keydown',event=>{
+    if(typing&&event.target===$('expression')&&event.key==='ArrowRight'&&!event.shiftKey&&!event.ctrlKey&&!event.metaKey&&!event.altKey&&!event.isComposing){
+      const field=$('expression'),exit=mathStructureExit(field.value,field.selectionStart,field.selectionEnd,'RIGHT',inputBoundary);
+      if(exit?.position===field.selectionStart&&exit.exponentEnd!==undefined){event.preventDefault();inputBoundary={...exit,source:field.value,edge:'after'};renderInputCursor();return;}
+    }
     if(!event.defaultPrevented&&!event.isComposing&&!event.altKey&&!event.shiftKey&&(event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='z'&&value('mode')==='scientific'&&!$('dialog').open&&!$('settings-dialog').open&&(!event.target.closest('input,select,textarea,[contenteditable]')||event.target===$('expression'))){
       event.preventDefault();event.stopPropagation();undoInput();return;
     }

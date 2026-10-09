@@ -58,6 +58,19 @@ export function powerInput(source,start,end,suffix){
   const emptyBase=!source.trim()||start===end&&(!before||'+-−×*÷/([,='.includes(before));
   return emptyBase?{text:`()${suffix}`,cursor:1}:{text:suffix,cursor:suffix==='^()'?2:suffix.length};
 }
+// Hidden denominator delimiters keep subsequent operators inside the fraction.
+// A slash also extends a bare exponent until Right explicitly leaves its scope.
+export function divisionInput(source,start,end,text,outside=null){
+  if(text!=='/')return null;
+  const division={start,end,text:'/()',cursor:2};
+  if(start!==end)return division;
+  const powers=[];
+  try{const visit=node=>{if(node.kind==='binary'&&node.value==='^'&&node.args[1].kind!=='group'&&start>=node.args[1].start&&start<=node.args[1].end&&
+    !(outside?.start===node.start&&outside?.end===node.end))powers.push(node);node.args.forEach(visit);};visit(parse(source,{allowHoles:true}));}catch{return division;}
+  const exponent=powers.sort((a,b)=>(a.end-a.start)-(b.end-b.start))[0]?.args[1];
+  if(!exponent)return division;
+  return {start:exponent.start,end:exponent.end,text:`(${source.slice(exponent.start,start)}/()${source.slice(start,exponent.end)})`,cursor:start-exponent.start+3};
+}
 export function emptyPowerDeletion(source,start,end){
   if(start!==end)return null;
   const nodes=[];

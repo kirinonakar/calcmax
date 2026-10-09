@@ -48,6 +48,8 @@ def statistics_report(name, value, precision, labels=None):
         if isinstance(v, s.MatrixBase): v = v.tolist()
         if isinstance(v, dict):
             remaining = dict(v)
+            if isinstance(remaining.get('diagnostics'),dict):
+                visit('Model diagnostics',remaining.pop('diagnostics'))
             if name == 'tukey':
                 pairs = [key[:-16] for key in remaining if key.endswith(' mean difference')]
                 add('Pairwise comparisons', ['Comparison','Mean difference','Adjusted p value'],

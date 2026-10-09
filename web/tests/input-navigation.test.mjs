@@ -1,10 +1,38 @@
 import test from 'node:test';
-import {functionRelationExit,emptyPowerDeletion,emptyFractionDeletion,moveMathCursor,mathStructureExit,matrixFactorInput} from '../input-navigation.js';
+import {functionRelationExit,emptyPowerDeletion,emptyFractionDeletion,moveMathCursor,mathStructureExit,matrixFactorInput,divisionInput} from '../input-navigation.js';
+import {fractionInput} from '../fraction-input.js';
+import {expressionTree} from '../expression-tree.js';
 import assert from 'node:assert/strict';
 import {bindKeyPress} from '../keypad.js';
 
 import {parse} from '../parser.js';
 import {requiresExplicitEvaluation} from '../evaluation-policy.js';
+
+test('slash and fraction stay in a bare exponent until Right leaves it',()=>{
+  const apply=(source,edit)=>source.slice(0,edit.start)+edit.text+source.slice(edit.end);
+  const edit=divisionInput('25^1',4,4,'/');
+  assert.equal(apply('25^1',edit),'25^(1/())');assert.equal(edit.cursor+edit.start,7);
+  const outside=mathStructureExit('25^1',4,4,'RIGHT');
+  assert.deepEqual(divisionInput('25^1',4,4,'/',outside),{start:4,end:4,text:'/()',cursor:2});
+  assert.deepEqual(divisionInput('25^(1)',5,5,'/'),{start:5,end:5,text:'/()',cursor:2});
+  const fraction=fractionInput('25^1',4,4);
+  const source=apply('25^1',fraction);assert.equal(source,'25^((1)/())');
+  assert.equal(source[fraction.start+fraction.cursor],')','caret is in denominator');
+  const full=fractionInput('25^1',4,4,outside);
+  assert.equal(apply('25^1',full),'(25^1)/()');
+  assert.deepEqual(divisionInput('25^1',3,4,'/'),{start:3,end:4,text:'/()',cursor:2});
+});
+
+test('division groups the denominator invisibly and Right exits before subtraction',()=>{
+  assert.deepEqual(divisionInput('25',2,2,'/'),{start:2,end:2,text:'/()',cursor:2});
+  assert.equal(parse('25/(3-1)').args[1].args[0].value,'-');
+  const displayed=expressionTree('25/(3-1)');
+  assert.equal(displayed.kind,'fraction');assert.equal(displayed.args[1].kind,'relation');
+  assert.equal(displayed.args[1].value,'-','hidden denominator group renders only its contents');
+  const exit=mathStructureExit('25/(3)',5,5,'RIGHT');
+  assert.equal(exit.position,6);
+  assert.equal(parse('25/(3)-1').value,'-');
+});
 
 test('structured navigation preserves equation scope and empty-template editing',()=>{
   { // equality moves

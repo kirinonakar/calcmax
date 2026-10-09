@@ -646,15 +646,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
             nextEntry();inputAnswer=if(assignment)null else variables.optJSONObject("Ans");answerDisplay=previous
             if(inputAnswer!=null)editor=Editor("Ans")
         }
-        var target=editor
-        if(target.cursor==target.anchor) {
-            val previous=target.tree()?.nodes()?.filter{it.end==target.cursor && it.start<it.end}?.minByOrNull{it.end-it.start}
-            if(previous!=null)target=target.select(previous)
-        }
-        val a=minOf(target.cursor,target.anchor);val b=maxOf(target.cursor,target.anchor)
-        val numerator=target.source.substring(a,b)
-        val template="($numerator)/()"
-        edit(target.insert(template,if(numerator.isEmpty())1 else template.length-1),recordUndo=recordInEdit)
+        edit(editor.fractionInput(),recordUndo=recordInEdit)
     }
     fun resetSetup(){angle="DEG";precision=30;displayDigits=10;decimal=false;resultDisplayMode=ResultDisplayMode.OFF;thousandsSeparator=false;mixedNumbers=false;overwrite=false;clear(recordUndo=false);save()}
     fun cycleResultDisplayMode(){resultDisplayMode=when(resultDisplayMode){ResultDisplayMode.OFF->ResultDisplayMode.ENGINEERING;ResultDisplayMode.ENGINEERING->ResultDisplayMode.SCIENTIFIC;ResultDisplayMode.SCIENTIFIC->ResultDisplayMode.OFF};save()}

@@ -16,6 +16,26 @@ import {advancedStatisticsSchema} from '../advanced-statistics-schema.js';
 // Reuse the interpreter for sequential integration scenarios. The cold solver
 // scenario below explicitly loads its own interpreter to keep startup coverage.
 let sharedRuntime;
+test('model diagnostic options and guarded inference run through real WASM dispatch',async()=>{
+  const py=await runtime();
+  const fixture=JSON.parse(readFileSync(new URL('../../tests/fixtures/model_diagnostics_reference.json',import.meta.url),'utf8'));
+  const evaluate=source=>{
+    py.globals.set('payload',JSON.stringify({tree:parse(source),precision:20,budget:60}));
+    const result=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));
+    assert.equal(result.ok,true,result.error);return result;
+  };
+  for(const option of ['profile','[bootstrap,100,7]']){
+    const result=evaluate(`mixedmodel(${JSON.stringify(fixture['mixed rows'])},0,ml,${option})`);
+    assert.equal(result.statisticsReport.sections[0].title,'Model diagnostics');
+    assert.ok(result.statisticsReport.sections.some(section=>section.title==='coefficients'));
+    assert.match(result.exact,option==='profile'?/ML profile likelihood/:/Parametric bootstrap/);
+    assert.match(result.exact,/p: unavailable/);
+  }
+  const gee=fixture.gee.find(c=>c.family==='gaussian'&&c.correlation==='exchangeable');
+  const result=evaluate(`gee(${JSON.stringify(gee.rows)},gaussian,exchangeable,[],small)`);
+  assert.match(result.exact,/Mancl-DeRouen/);
+  assert.match(result.exact,/inference df: 6/);
+});
 test('statistics Markdown copy includes every real WASM table row and dedicated regression results',async()=>{
   const py=await runtime();
   const run=source=>{
@@ -283,6 +303,9 @@ test('Bayesian linear, logistic and NUTS run through workspace commands in real 
     assert.equal(nuts.regression.method,'nuts');
     assert.equal(nuts.regression.nuts.totalSamples,400);
     assert.ok(Number(nuts.regression.coefficients[1].ess)>0);
+    assert.ok(Number(nuts.regression.coefficients[1].bulkEss)>0);
+    assert.ok(Number(nuts.regression.coefficients[1].tailEss)>0);
+    assert.match(nuts.regression.nuts.diagnosticMethod,/rank-normalized/);
     assert.deepEqual(evaluate(nutsSource).regression,nuts.regression,'seeded chains reproduce in WASM');
     assert.ok(nuts.curve.length>100);
   }

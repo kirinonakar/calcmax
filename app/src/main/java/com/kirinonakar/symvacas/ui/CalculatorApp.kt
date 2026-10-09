@@ -293,10 +293,13 @@ internal fun largeHistoryTree(root:JSONObject?):Boolean {
             onValueChange={
                 val relation=if(!m.committed&&it.selection.collapsed&&it.composition==null)m.editor.typedRelation(it.text,it.selection.end) else null
                 val matrixFactor=if(!m.committed&&it.selection.collapsed&&it.composition==null)m.editor.typedMatrixFactor(it.text,it.selection.end) else null
+                val division=if(!m.committed&&it.selection.collapsed&&it.composition==null)m.editor.typedDivision(it.text,it.selection.end) else null
                 val symbolDeleted=m.editor.atomicSymbolDeletion(it.text)
                 val latex=LatexInput.convertEdit(m.editor,it.text)
                 if(relation!=null) {
                     m.edit(relation)
+                } else if(division!=null) {
+                    m.edit(division)
                 } else if(matrixFactor!=null) {
                     m.edit(matrixFactor)
                 } else if(symbolDeleted!=null) {
@@ -321,7 +324,11 @@ internal fun largeHistoryTree(root:JSONObject?):Boolean {
                 }
                 }
             },
-            modifier=Modifier.fillMaxWidth().heightIn(min=60.dp).focusRequester(focus).onPreviewKeyEvent{if(it.key in listOf(Key.MoveHome,Key.MoveEnd))handleMathInputKey(m,it)else if(it.type==KeyEventType.KeyDown&&it.key in listOf(Key.Enter,Key.NumPadEnter)){m.calculate();true}else false}.semantics{contentDescription="Expression input"},
+            modifier=Modifier.fillMaxWidth().heightIn(min=60.dp).focusRequester(focus).onPreviewKeyEvent{
+                val right=if(it.type==KeyEventType.KeyDown&&it.key==Key.DirectionRight&&!it.isShiftPressed&&!it.isCtrlPressed&&!it.isAltPressed&&!it.isMetaPressed)m.editor.move(1) else null
+                if(right?.outside!=null&&right.cursor==m.editor.cursor&&right.outside!=m.editor.outside){m.edit(right);true}
+                else if(it.key in listOf(Key.MoveHome,Key.MoveEnd))handleMathInputKey(m,it)else if(it.type==KeyEventType.KeyDown&&it.key in listOf(Key.Enter,Key.NumPadEnter)){m.calculate();true}else false
+            }.semantics{contentDescription="Expression input"},
             textStyle=TextStyle(color=c.ink,fontSize=m.inputFont.sp,fontFamily=FontFamily.Monospace),
             singleLine=!m.wordWrap,
             maxLines=if(m.wordWrap)4 else 1,

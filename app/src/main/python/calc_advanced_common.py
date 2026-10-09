@@ -120,11 +120,57 @@ def newton(start, exact):
     return beta, inverse(info), value, iteration+1
 
 
-def inference(beta, covariance, names, ratio=False):
+def validated_covariance(covariance):
+    """Validate before inference; only roundoff-scale negative eigenvalues are repaired.
+
+    Normalize by marginal scales so PSD/symmetry checks survive unit changes.
+    An invalid covariance is an error, never an apparently precise zero SE.
+    """
+    matrix=mp.matrix(covariance); size=matrix.rows
+    require(size>0 and matrix.cols==size,'Covariance matrix must be square')
+    require(all(math.isfinite(float(v)) for v in matrix),'Covariance matrix is not finite')
+    scale=max(abs(float(v)) for v in matrix)
+    tolerance=1e-10*scale
+    require(all(float(matrix[i,i])>=-tolerance for i in range(size)),
+            'Covariance matrix has a negative variance beyond numeric tolerance')
+    for i in range(size):
+        if matrix[i,i]<0: matrix[i,i]=0
+    scales=[math.sqrt(max(abs(float(matrix[i,i])),scale*1e-15)) if scale else 1.0 for i in range(size)]
+    normalized=mp.matrix([[matrix[i,j]/(scales[i]*scales[j]) for j in range(size)] for i in range(size)])
+    norm=max(1.0,max(abs(float(v)) for v in normalized)); tol=1e-10*norm
+    require(max(abs(float(normalized[i,j]-normalized[j,i])) for i in range(size) for j in range(size))<=tol,
+            'Covariance matrix is not symmetric beyond numeric tolerance')
+    normalized=(normalized+normalized.T)/2
+    values,vectors=mp.eigsy(normalized)
+    require(min(map(float,values))>=-tol,'Covariance matrix is not positive semidefinite')
+    if min(values)<0:
+        normalized=vectors*mp.diag([max(0,v) for v in values])*vectors.T
+    return mp.matrix([[normalized[i,j]*scales[i]*scales[j] for j in range(size)] for i in range(size)])
+
+
+def inference(beta, covariance, names, ratio=False, reliable=True, df=None):
+    covariance=validated_covariance(covariance)
+    require(covariance.rows==len(beta)==len(names),'Coefficient covariance dimensions do not match')
     rows = []
+    critical=1.95996398454
+    if df is not None:
+        from calc_statistics import _t_sf
+        require(df>0,'Positive inference degrees of freedom are required')
+        lower=0.0; upper=2.0
+        while float(_t_sf(upper,df))>.025: upper*=2
+        for _ in range(60):
+            middle=(lower+upper)/2
+            if float(_t_sf(middle,df))>.025: lower=middle
+            else: upper=middle
+        critical=(lower+upper)/2
     for i,b in enumerate(beta):
-        se = math.sqrt(max(0,float(covariance[i,i])))
-        row = {'term':names[i], 'estimate':b, 'SE':se, 'p':normal_p(b/se) if se else None, 'CI95':[b-1.95996398454*se,b+1.95996398454*se] if se else None}
+        se = math.sqrt(float(covariance[i,i]))
+        available=reliable and se>0
+        if available and df is not None:
+            from calc_statistics import _t_sf
+            probability=float(2*_t_sf(abs(b/se),df))
+        else: probability=normal_p(b/se) if available else None
+        row = {'term':names[i], 'estimate':b, 'SE':se if reliable else None, 'p':probability, 'CI95':[b-critical*se,b+critical*se] if available else None}
         if ratio: row['exp(coef)'] = math.exp(b) if b<709.782712893384 else math.inf
         rows.append(row)
     return rows

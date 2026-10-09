@@ -163,7 +163,23 @@ def small_inverse(values):
     return [[work[i][size+j] for j in range(size)] for i in range(size)]
 
 
-def intercept_fit(x,y,clusters,method):
+def gls_solution(information,vector,total,fixed=None):
+    """Solve GLS, optionally fixing one coefficient for a likelihood profile."""
+    vector=mp.matrix(vector); p=information.rows
+    if fixed is None:
+        beta=inverse(information)*vector
+    else:
+        index,value=fixed; free=[j for j in range(p) if j!=index]; beta=mp.zeros(p,1); beta[index]=value
+        if free:
+            matrix=mp.matrix([[information[i,j] for j in free] for i in free])
+            right=mp.matrix([vector[i]-information[i,index]*value for i in free])
+            fitted=inverse(matrix)*right
+            for i,b in zip(free,fitted): beta[i]=b
+    rss=total-float((2*vector.T*beta-beta.T*information*beta)[0])
+    return beta,rss
+
+
+def intercept_fit(x,y,clusters,method,fixed=None):
     """Gaussian random-intercept ML/REML fit with per-cluster algebra (no n x n matrices)."""
     n=len(y); p=len(x[0])
     gram=[[math.fsum(r[i]*r[j] for r in x) for j in range(p)] for i in range(p)]
@@ -180,8 +196,7 @@ def intercept_fit(x,y,clusters,method):
                 for j in range(i,p):
                     matrix[i][j]-=factor*moment[i]*moment[j]
                     if i!=j: matrix[j][i]=matrix[i][j]
-        information=mp.matrix(matrix); beta=inverse(information)*mp.matrix(vector)
-        rss=total-float((mp.matrix(vector).T*beta)[0])
+        information=mp.matrix(matrix); beta,rss=gls_solution(information,vector,total,fixed)
         require(rss>1e-12,'Mixed model requires residual variation')
         if method=='reml':
             extra=small_logdet(matrix); require(extra is not None,'Mixed model information is singular')
@@ -198,17 +213,21 @@ def intercept_fit(x,y,clusters,method):
     return boundary if boundary[0]<=chosen[0] else chosen
 
 
-def mixed_intercept(engine,x,y,clusters,ids,method):
-    _,beta,information,rss,ratio=intercept_fit(x,y,clusters,method)
+def mixed_intercept(engine,x,y,clusters,ids,method,ci_options=None):
+    objective,beta,information,rss,ratio=intercept_fit(x,y,clusters,method)
     sigma=rss/(len(y)-len(x[0])) if method=='reml' else rss/len(y)
     engine.note += ' Gaussian random-intercept mixed model, '+('restricted maximum likelihood (REML)' if method=='reml' else 'maximum likelihood (ML)')+', Wald inference. Rows: subject ID, predictors, response.'
     result={'coefficients':inference(list(map(float,beta)),inverse(information)*sigma,['Intercept']+['x'+str(i) for i in range(1,len(x[0]))]),'residual variance':sigma,'random intercept variance':ratio*sigma,'ICC':ratio/(1+ratio),'subjects':len(ids),'estimation':method.upper(),'singular fit':int(ratio==0)}
     result['subject random effects (BLUP)']=[{'subject':id_,'Intercept':ratio*math.fsum(y[i]-dot(x[i],beta) for i in c)/(1+len(c)*ratio)} for id_,c in zip(ids,clusters)]
     if ratio==0: engine.note += ' Singular fit: random-intercept variance is zero.'
+    mixed_diagnostics(engine,result,objective,len(y),len(x[0]),1,True)
+    if ci_options:
+        from calc_mixed_intervals import intervals
+        intervals(engine,result,x,y,clusters,[],method,ci_options)
     return result
 
 
-def mixed_random_effects(engine,x,y,clusters,ids,slopes,method):
+def random_effects_fit(x,y,clusters,slopes,method,fixed=None):
     """Gaussian random intercept plus up to three random slopes (ML or REML)."""
     n=len(y); p=len(x[0]); count=1+len(slopes); pairs=[(i,j) for i in range(count) for j in range(i+1)]
     blocks=[]
@@ -255,8 +274,7 @@ def mixed_random_effects(engine,x,y,clusters,ids,slopes,method):
             for u in range(count):
                 for v in range(count): quadratic+=outcome[u]*values[u][v]*outcome[v]
             total+=energy-quadratic
-        matrix=mp.matrix(information); beta=inverse(matrix)*mp.matrix(vector)
-        rss=total-float((mp.matrix(vector).T*beta)[0])
+        matrix=mp.matrix(information); beta,rss=gls_solution(matrix,vector,total,fixed)
         if not math.isfinite(rss) or rss<=1e-12: return None
         if method=='reml':
             extra=small_logdet(information)
@@ -267,7 +285,7 @@ def mixed_random_effects(engine,x,y,clusters,ids,slopes,method):
     def objective(parameters):
         result=evaluate(parameters)
         return math.inf if result is None else result[0]
-    seed=intercept_fit(x,y,clusters,method)[4]
+    seed=intercept_fit(x,y,clusters,method,fixed)[4]
     start=math.sqrt(max(0,seed))
     best=None
     for scale in (max(.1,start),.25,0.0):
@@ -279,9 +297,63 @@ def mixed_random_effects(engine,x,y,clusters,ids,slopes,method):
     if best is None or boundary_value<=best[1]+1e-8: best=(boundary,boundary_value,0,True)
     require(best is not None,'Random-slope model did not converge')
     fields=evaluate(best[0]); require(fields is not None,'Random-slope model did not converge')
+    return fields,best
+
+
+def mixed_diagnostics(engine,result,objective,n,p,random_parameters,converged):
+    reml=result['estimation']=='REML'; degrees=n-p if reml else n
+    likelihood=-.5*(objective+degrees*(1+math.log(2*math.pi)))
+    parameters=p+random_parameters+1
+    result.update({'restricted log likelihood' if reml else 'log likelihood':likelihood,
+                   'AIC':-2*likelihood+2*parameters,'BIC':-2*likelihood+math.log(n)*parameters,
+                   'likelihood parameters':parameters,'optimizer converged':int(converged)})
+    warnings=[]
+    if not converged: warnings.append('Optimizer iteration limit reached; Wald SE, p-values and CI are unavailable.')
+    if result['singular fit']: warnings.append('Singular random-effect covariance; variance-component uncertainty is nonstandard.')
+    if result['subjects']<20: warnings.append('Few subjects; asymptotic Wald inference may be unreliable.')
+    if reml:
+        warnings.append('REML AIC/BIC comparisons require identical fixed-effect design and response data; use ML to compare fixed effects.')
+    result['diagnostics']={'convergence':'converged' if converged else 'iteration limit',
+        'random effects':'singular' if result['singular fit'] else 'interior',
+        'inference':'unavailable' if not converged else 'caution' if result['singular fit'] or result['subjects']<20 else 'asymptotic Wald',
+        'warnings':warnings}
+    result['CI method']='Wald (fixed effects)' if converged else 'unavailable'
+    for warning in warnings: engine.note+=' '+warning
+
+
+def gee_covariance(fisher,scores,cluster_information,correction,clusters,p):
+    """Mancl-DeRouen sandwich via p-dimensional leverage correction.
+
+    D' V^-1 (I-H)^-1 e = (I - F_cluster B)^-1 score; avoids
+    constructing a cluster-sized leverage matrix. Small mode uses t(G-p).
+    """
+    bread=inverse(fisher); meat=mp.zeros(p)
+    if correction=='small': require(clusters>p,'Small-sample GEE requires more clusters than coefficients')
+    for score,information in zip(scores,cluster_information):
+        if correction=='small':
+            leverage=mp.eye(p)-information*bread
+            require(abs(float(mp.det(leverage)))>1e-12,'GEE cluster leverage is singular; small-sample correction unavailable')
+            score=inverse(leverage)*score
+        meat+=score*score.T
+    return bread*meat*bread
+
+
+def gee_diagnostics(result,clusters,p,correction):
+    warnings=[]
+    if clusters<20: warnings.append('Few clusters; inference can remain unreliable even after a small-sample correction.')
+    if any(row['SE']==0 for row in result['coefficients']): warnings.append('Zero robust SE; corresponding p-values and CI are unavailable.')
+    result['covariance correction']='Mancl-DeRouen' if correction=='small' else 'none (asymptotic sandwich)'
+    if correction=='small': result['inference df']=clusters-p
+    result['diagnostics']={'convergence':'converged','inference':'caution' if warnings else 't inference' if correction=='small' else 'asymptotic Wald','warnings':warnings}
+    return result
+
+
+def mixed_random_effects(engine,x,y,clusters,ids,slopes,method,ci_options=None):
+    fields,best=random_effects_fit(x,y,clusters,slopes,method)
+    n=len(y); p=len(x[0]); count=1+len(slopes)
     _,beta,information,rss,theta=fields
     sigma=rss/(n-p) if method=='reml' else rss/n
-    result={'coefficients':inference(list(map(float,beta)),inverse(information)*sigma,['Intercept']+['x'+str(i) for i in range(1,p)]),'residual variance':sigma,'random intercept variance':sigma*float(theta[0,0])}
+    result={'coefficients':inference(list(map(float,beta)),inverse(information)*sigma,['Intercept']+['x'+str(i) for i in range(1,p)],reliable=best[3]),'residual variance':sigma,'random intercept variance':sigma*float(theta[0,0])}
     for index,slope in enumerate(slopes):
         result['random slope variance x'+str(slope)]=sigma*float(theta[index+1,index+1])
         denominator=math.sqrt(float(theta[0,0])*float(theta[index+1,index+1]))
@@ -309,6 +381,10 @@ def mixed_random_effects(engine,x,y,clusters,ids,slopes,method):
     engine.note += ' ICC at x=0; within-subject correlation varies with the predictors.'
     if result['singular fit']: engine.note += ' Singular fit: random-effect covariance is on or near a boundary.'
     if not best[3]: engine.note += ' Optimizer iteration limit reached; estimates may be unreliable.'
+    mixed_diagnostics(engine,result,fields[0],n,p,count*(count+1)//2,best[3])
+    if ci_options:
+        from calc_mixed_intervals import intervals
+        intervals(engine,result,x,y,clusters,slopes,method,ci_options)
     return result
 
 
@@ -325,7 +401,8 @@ def clustered(engine,name,a):
         family=option(a,1,'gaussian'); require(family in ('gaussian','binomial','poisson'),'GEE family: gaussian, binomial, or poisson')
         corr=option(a,2,'independence'); require(corr in ('independence','exchangeable','ar1'),'GEE working correlation: independence, exchangeable, or ar1')
         width=len(rows[0])-2; require(width>=1,'Choose at least one predictor')
-        pairs=interaction_pairs(a[3] if len(a)>3 else None,width)
+        pairs=interaction_pairs(a[3] if len(a)>3 and not (len(a)>4 and a[3]==[]) else None,width)
+        correction=option(a,4,'robust'); require(correction in ('robust','small'),'GEE covariance: robust or small (Mancl-DeRouen, t with clusters minus coefficients df)')
         names=['Intercept']+['x'+str(i) for i in range(1,width+1)]+[('x'+str(i)+'^2') if i==j else ('x'+str(i)+':x'+str(j)) for i,j in pairs]
         terms=', '.join(('x'+str(i)+'^2') if i==j else ('x'+str(i)+':x'+str(j)) for i,j in pairs)
         if pairs: rows=[row[:1]+row[1:-1]+[row[i]*row[j] for i,j in pairs]+row[-1:] for row in rows]
@@ -338,11 +415,13 @@ def clustered(engine,name,a):
         else:
             selected=integer(argument,0,19,capacity=True); slopes=[] if selected==0 else [selected]
         method=option(a,2,'reml'); require(method in ('ml','reml'),'Estimation: ml or reml')
+        from calc_mixed_intervals import options
+        ci_options=options(a[3] if len(a)>3 else 'wald')
         require(any(len(c)>1 for c in clusters),'Random intercept requires repeated subjects')
         for slope in slopes: require(1<=slope<p,'Random-slope predictor position is out of range')
-        if not slopes: return mixed_intercept(engine,x,y,clusters,ids,method)
+        if not slopes: return mixed_intercept(engine,x,y,clusters,ids,method,ci_options)
         require(within_limit(len(clusters)*(p*(len(slopes)+1))**2,20000),'Random-slope model is too large; reduce predictors, random effects, or subjects')
-        return mixed_random_effects(engine,x,y,clusters,ids,slopes,method)
+        return mixed_random_effects(engine,x,y,clusters,ids,slopes,method,ci_options)
     x,transform,_,_=standardized_design(x); X=mp.matrix(x)
     if pairs: engine.note += ' GEE interactions: '+terms+'.'
     if family=='binomial': require(all(v in (0,1) for v in y),'Binomial GEE response must be 0/1')
@@ -371,13 +450,15 @@ def clustered(engine,name,a):
             margins=[(2*v-1)*dot(r,b) for r,v in zip(x,y)]
             require(not (min(margins)>=-1e-8 and max(margins)>1e-8),'Complete or quasi separation: binomial GEE estimates are not finite')
     if corr=='independence':
-        bread=inverse([[sum(weights[t]*x[t][i]*x[t][j] for t in range(n)) for j in range(p)] for i in range(p)]); meat=mp.zeros(p)
+        fisher=mp.matrix([[sum(weights[t]*x[t][i]*x[t][j] for t in range(n)) for j in range(p)] for i in range(p)]); scores=[]; cluster_information=[]
         for c in clusters:
-            score=mp.matrix([sum(x[t][i]*(y[t]-mu[t]) for t in c) for i in range(p)]); meat+=score*score.T
-        cov=bread*meat*bread
+            scores.append(mp.matrix([sum(x[t][i]*(y[t]-mu[t]) for t in c) for i in range(p)]))
+            cluster_information.append(mp.matrix([[sum(weights[t]*x[t][i]*x[t][j] for t in c) for j in range(p)] for i in range(p)]))
+        cov=gee_covariance(fisher,scores,cluster_information,correction,len(ids),p)
         b=list(map(float,transform*mp.matrix(b))); cov=transform*cov*transform.T
-        engine.note += ' GEE: independent working correlation, cluster sandwich covariance, asymptotic Wald inference. Rows: cluster ID, predictors, response. Zero robust SE leaves p/CI unavailable.'
-        return {'coefficients':inference(b,cov,names,family!='gaussian'),'clusters':len(ids),'family':family}
+        engine.note += ' GEE: independent working correlation, cluster sandwich covariance, '+('t inference' if correction=='small' else 'asymptotic Wald inference')+'. Rows: cluster ID, predictors, response. Zero robust SE leaves p/CI unavailable.'
+        if correction=='small': engine.note+=' Mancl-DeRouen leverage-adjusted covariance; t inference with clusters minus coefficients degrees of freedom.'
+        return gee_diagnostics({'coefficients':inference(b,cov,names,family!='gaussian',df=len(ids)-p if correction=='small' else None),'clusters':len(ids),'family':family},len(ids),p,correction)
     largest=max(len(c) for c in clusters)
     def moments(alpha,beta):
         mean_values=[]; variances=[]; derivatives=[]
@@ -390,7 +471,7 @@ def clustered(engine,name,a):
         require(all(math.isfinite(v) for v in mean_values),'GEE mean function exceeded the numeric range')
         correlation=alpha
         if corr=='exchangeable' and largest>1: correlation=max(correlation,-1/(largest-1)+1e-6)
-        fisher=mp.zeros(p); scores=[]; standardized=[0.0]*n
+        fisher=mp.zeros(p); scores=[]; cluster_information=[]; standardized=[0.0]*n
         for c in clusters:
             size=len(c); scaled=[]; residual=[]
             for i in c:
@@ -403,7 +484,8 @@ def clustered(engine,name,a):
                 gram=mp.zeros(p)
                 for k in range(size): gram+=scaled[k]*scaled[k].T
                 score=first*mp.matrix([mp.fsum(scaled[k][j,0]*residual[k] for k in range(size)) for j in range(p)])-second*math.fsum(residual)*columns_sum
-                fisher+=first*gram-second*columns_sum*columns_sum.T
+                information=first*gram-second*columns_sum*columns_sum.T
+                fisher+=information
             else:
                 if size==1: coefficient=1.0; diagonals=[1.0]
                 else:
@@ -416,9 +498,10 @@ def clustered(engine,name,a):
                     for k in range(size-1):
                         vector-=correlation*mp.matrix([scaled[k][j,0]*residual[k+1]+scaled[k+1][j,0]*residual[k] for j in range(p)])
                         gram-=correlation*(scaled[k]*scaled[k+1].T+scaled[k+1]*scaled[k].T)
-                score=coefficient*vector; fisher+=coefficient*gram
+                score=coefficient*vector; information=coefficient*gram; fisher+=information
             scores.append(score)
-        return fisher,scores,standardized
+            cluster_information.append(information)
+        return fisher,scores,standardized,cluster_information
     def update(standardized):
         numerator=0.0; denominator=0.0
         # Estimate Pearson dispersion before estimating a dimensionless
@@ -441,7 +524,7 @@ def clustered(engine,name,a):
         return max(lower,min(0.9999,numerator/denominator))
     alpha=0.0
     for iteration in range(200):
-        fisher,scores,standardized=moments(alpha,b)
+        fisher,scores,standardized,_=moments(alpha,b)
         previous_alpha=alpha; alpha=update(standardized)
         total=mp.zeros(p,1)
         for vector in scores: total+=vector
@@ -450,13 +533,12 @@ def clustered(engine,name,a):
         b=[b[j]+float(step[j,0]) for j in range(p)]
         require(all(math.isfinite(v) for v in b) and (family=='gaussian' or max(abs(v) for v in b)<40),'GEE estimates diverged; simplify the working correlation')
     else: raise MathError('GEE did not converge; simplify the working correlation')
-    fisher,scores,standardized=moments(alpha,b)
-    bread=inverse(fisher); meat=mp.zeros(p)
-    for vector in scores: meat+=vector*vector.T
-    cov=bread*meat*bread
+    fisher,scores,standardized,cluster_information=moments(alpha,b)
+    cov=gee_covariance(fisher,scores,cluster_information,correction,len(ids),p)
     b=list(map(float,transform*mp.matrix(b))); cov=transform*cov*transform.T
-    engine.note += ' GEE: '+corr+' working correlation'+(' (moment estimate alpha='+format(alpha,'.4g')+')' if corr!='independence' else '')+', cluster sandwich covariance, asymptotic Wald inference. Rows: cluster ID, predictors, response'+('; AR(1) uses the within-cluster row order as the time order' if corr=='ar1' else '')+'. Zero robust SE leaves p/CI unavailable.'
-    return {'coefficients':inference(b,cov,names,family!='gaussian'),'clusters':len(ids),'family':family,'working correlation':corr,'alpha':alpha,'Pearson dispersion':math.fsum(v*v for v in standardized)/(n-p)}
+    engine.note += ' GEE: '+corr+' working correlation'+(' (moment estimate alpha='+format(alpha,'.4g')+')' if corr!='independence' else '')+', cluster sandwich covariance, '+('t inference' if correction=='small' else 'asymptotic Wald inference')+'. Rows: cluster ID, predictors, response'+('; AR(1) uses the within-cluster row order as the time order' if corr=='ar1' else '')+'. Zero robust SE leaves p/CI unavailable.'
+    if correction=='small': engine.note+=' Mancl-DeRouen leverage-adjusted covariance; t inference with clusters minus coefficients degrees of freedom.'
+    return gee_diagnostics({'coefficients':inference(b,cov,names,family!='gaussian',df=len(ids)-p if correction=='small' else None),'clusters':len(ids),'family':family,'working correlation':corr,'alpha':alpha,'Pearson dispersion':math.fsum(v*v for v in standardized)/(n-p)},len(ids),p,correction)
 
 
 def calculate(engine, name, a):

@@ -105,7 +105,14 @@ class BayesianRegressionTests(unittest.TestCase):
             chains = [[row[j] for row in chain] for chain in draws]
             values = [v for chain in chains for v in chain]
             self.assertLess(abs(sum(values)/len(values)),.12)
-            self.assertAlmostEqual(sum(v*v for v in values)/len(values),second_moment,delta=.2)
+            # A curved target has heavy-tailed squared draws: calibrate the
+            # moment check to their autocorrelation, rather than a seed-specific
+            # fixed tolerance. The analytic fourth moment gives its true variance.
+            squared=[[v*v for v in chain] for chain in chains]
+            _,moment_ess=diagnostics(squared)
+            fourth=3 if j==0 else 3+12*.7**2+60*.7**4
+            moment_mcse=math.sqrt((fourth-second_moment**2)/moment_ess)
+            self.assertAlmostEqual(sum(v*v for v in values)/len(values),second_moment,delta=5*moment_mcse)
             rhat,ess = diagnostics(chains)
             self.assertLess(rhat,1.05);self.assertGreater(ess,100)
         self.assertEqual(summary['divergences'],sum(chain['divergences'] for chain in summary['chainDiagnostics']))

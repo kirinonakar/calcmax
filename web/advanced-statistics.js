@@ -197,20 +197,23 @@ export function guidedStatisticsCommand(definition,rows,settings={},columnLabels
     const selected=complete([subject,...selectedColumns,response]);const labels=[...new Set(selected.map(row=>row[0]))];
     const mapped=selected.map(row=>[String(labels.indexOf(row[0])+1),...row.slice(1)]);
     if(id==='glmm'){
-      const suffix=offset===null?'':`,${list(complete([offset]).map(row=>row[0]))},${opts.adjustment}`;
+      let suffix=offset===null?'':`,${list(complete([offset]).map(row=>row[0]))},${opts.adjustment}`;
+      if(opts.sensitivity==='refit')suffix=(suffix||',[],offset')+',refit';
       return `glmm(${table(mapped)},${opts.family},${opts.points}${suffix})`;
     }
     if(id==='gee'){
       const pairs=interactionPairs(opts.interactions,selectedColumns,columnLabels);
       if(new Set(pairs.map(pair=>pair.join(','))).size!==pairs.length)throw new Error('Interaction pairs must be distinct');
-      return `gee(${table(mapped)},${opts.family},${opts.corr}${pairs.length?','+JSON.stringify(pairs):''})`;
+      const correction=opts.correction==='small';
+      return `gee(${table(mapped)},${opts.family},${opts.corr}${pairs.length||correction?','+JSON.stringify(pairs):''}${correction?',small':''})`;
     }
     const positions=String(opts.slope).split(',').map(value=>value.trim()).filter(Boolean);
     if(!positions.length||positions.some(value=>!Number.isInteger(Number(value))))throw new Error('Enter random-slope positions like 0 or 1,2');
     const numbers=positions.map(Number).filter(value=>value!==0);
     if(numbers.some(value=>value<1||value>19)||new Set(numbers).size!==numbers.length)throw new Error('Random-slope positions must be distinct predictor numbers');
     const argument=numbers.length===0?'0':numbers.length===1?String(numbers[0]):'['+numbers.join(',')+']';
-    return `mixedmodel(${table(mapped)},${argument},${opts.method})`;
+    const ci=opts.ci==='profile'?',profile':opts.ci==='bootstrap'?`,[bootstrap,${opts.ciSamples||200},${opts.ciSeed||0}]`:'';
+    return `mixedmodel(${table(mapped)},${argument},${opts.method}${ci})`;
   }
   if(id==='impute'){
     const width=Math.max(...rows.map(row=>row.length));

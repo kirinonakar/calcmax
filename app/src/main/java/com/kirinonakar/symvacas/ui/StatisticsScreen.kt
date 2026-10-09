@@ -378,7 +378,7 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
                             Field(nutsSeed,"Random seed",Modifier.weight(1f)){m.clearRegression();nutsSeed=it}
                             Spacer(Modifier.weight(1f))
                         }
-                        Text(tr("NUTS adapts trajectory length; step size adapts during warmup. Check split R-hat, ESS and divergences."),fontSize=11.sp,color=LocalInstrument.current.muted)
+                        Text(tr("NUTS adapts trajectory length; step size adapts during warmup. Check rank-normalized R-hat, bulk/tail ESS and divergences."),fontSize=11.sp,color=LocalInstrument.current.muted)
                     }
 
                     Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {

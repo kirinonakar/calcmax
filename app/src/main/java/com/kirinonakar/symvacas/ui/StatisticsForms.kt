@@ -159,12 +159,14 @@ internal fun guidedStatisticsCommand(definition:JSONObject,rows:List<List<String
             val selected=complete(listOf(subject)+selectedColumns+response);val labels=selected.map {it[0]}.distinct()
             val mapped=selected.map {row->listOf((labels.indexOf(row[0])+1).toString())+row.drop(1)}
             if(id=="glmm") {
-                val suffix=if(offset==null)"" else ",${vector(complete(listOf(offset)).map {it[0]})},${opts["adjustment"]}"
+                var suffix=if(offset==null)"" else ",${vector(complete(listOf(offset)).map {it[0]})},${opts["adjustment"]}"
+                if(opts["sensitivity"]=="refit")suffix=(suffix.ifEmpty {",[],offset"})+",refit"
                 "glmm(${table(mapped)},${opts["family"]},${opts["points"]}$suffix)"
             } else if(id=="gee") {
                 val pairs=interactionPairs(opts["interactions"],selectedColumns,columnLabels)
                 require(pairs.distinct().size==pairs.size) {"Interaction pairs must be distinct"}
-                val suffix=if(pairs.isEmpty())"" else ","+pairs.joinToString(",","[","]") {pair->"[${pair.first},${pair.second}]"}
+                val correction=opts["correction"]=="small"
+                val suffix=(if(pairs.isEmpty()&&!correction)"" else ","+pairs.joinToString(",","[","]") {pair->"[${pair.first},${pair.second}]"})+(if(correction)",small" else "")
                 "gee(${table(mapped)},${opts["family"]},${opts["corr"]}$suffix)"
             } else {
                 val positions=(opts["slope"] ?: "0").split(',').map(String::trim).filter(String::isNotBlank)
@@ -172,7 +174,8 @@ internal fun guidedStatisticsCommand(definition:JSONObject,rows:List<List<String
                 val numbers=positions.mapNotNull {it.toIntOrNull()}.filter {it!=0}
                 require(numbers.all {it in 1..19}&&numbers.distinct().size==numbers.size) {"Random-slope positions must be distinct predictor numbers"}
                 val argument=when(numbers.size) {0->"0";1->numbers[0].toString();else->"["+numbers.joinToString(",")+"]"}
-                "mixedmodel(${table(mapped)},$argument,${opts["method"]})"
+                val ci=when(opts["ci"]) {"profile"->",profile";"bootstrap"->",[bootstrap,${opts["ciSamples"] ?: "200"},${opts["ciSeed"] ?: "0"}]";else->""}
+                "mixedmodel(${table(mapped)},$argument,${opts["method"]}$ci)"
             }
         }
         "kstest"->{
