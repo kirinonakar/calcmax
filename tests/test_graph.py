@@ -24,6 +24,70 @@ circle = equation(binary("+", x2, y2), number(1))
 
 
 class ImplicitGraphTests(unittest.TestCase):
+    def test_derivative_analysis_uses_the_selected_order_for_every_action(self):
+        cubic=binary("-",binary("^",x,number(3)),binary("*",number(3),x))
+        def analyze(action,order=1,**options):
+            result=self.analyze(cubic,analysis=action,selectedDerivativeOrder=order,**options)
+            self.assertTrue(result["ok"],result)
+            self.assertEqual(order,result["selectedDerivativeOrder"])
+            return result
+        roots=analyze("root")["points"]
+        self.assertEqual(2,len(roots))
+        for point,expected in zip(roots,(-1,1)):self.assertAlmostEqual(expected,point[0],delta=1e-7)
+        self.assertEqual([[0.0,-3.0]],analyze("minimum")["points"])
+        self.assertEqual([[-2.0,9.0],[2.0,9.0]],analyze("maximum")["points"])
+        self.assertEqual([],analyze("inflection")["points"])
+        self.assertEqual([[0.0,-3.0]],analyze("yintercept",a=100,b=101)["points"])
+        self.assertAlmostEqual(3,analyze("derivative",a=.5)["value"])
+        tangent=analyze("tangent",a=.5)
+        self.assertEqual([[.5,-2.25]],tangent["points"]);self.assertAlmostEqual(3,tangent["value"])
+        integral=analyze("integral",a=-1,b=1)
+        self.assertAlmostEqual(-4,integral["value"]);self.assertTrue(integral["integralFill"])
+        self.assertAlmostEqual(.5*math.sqrt(37)+math.asinh(6)/12,analyze("arclength",a=0,b=1)["value"])
+        self.assertEqual([[0.0,0.0]],analyze("root",2)["points"])
+        self.assertAlmostEqual(6,analyze("derivative",2,a=.5)["value"])
+        self.assertAlmostEqual(0,analyze("integral",2,a=-1,b=1)["value"])
+        self.assertAlmostEqual(2*math.sqrt(37),analyze("arclength",2,a=-1,b=1)["value"])
+        tangent=analyze("tangent",2,a=1)
+        self.assertEqual([[1.0,6.0]],tangent["points"]);self.assertAlmostEqual(6,tangent["value"])
+
+    def test_intersections_accept_original_first_and_second_derivative_targets(self):
+        for source,orders in ((x2,(0,1)),(binary("^",x,number(3)),(1,2))):
+            for first,second in (orders,tuple(reversed(orders))):
+                result=self.analyze(source,analysis="intersection",selected=0,other=0,selectedDerivativeOrder=first,otherDerivativeOrder=second,a=-1,b=3)
+                self.assertTrue(result["ok"],result);self.assertEqual(2,len(result["points"]))
+                for point,expected in zip(result["points"],(0,2)):self.assertAlmostEqual(expected,point[0],delta=1e-7)
+        parameterized=binary("*",symbol("a"),binary("^",x,number(3)))
+        other=binary("*",symbol("b"),x)
+        result=self.analyze(parameterized,other,analysis="intersection",selectedDerivativeOrder=1,parameters={"a":2,"b":6},variables={"a":number(999)},a=-1,b=2)
+        self.assertTrue(result["ok"],result)
+        self.assertEqual(2,len(result["points"]));self.assertAlmostEqual(1,result["points"][1][0],delta=1e-7);self.assertAlmostEqual(6,result["points"][1][1],delta=1e-7)
+        coincident=self.analyze({"kind":"call","value":"exp","args":[x]},analysis="intersection",selected=0,other=0,selectedDerivativeOrder=1)
+        self.assertFalse(coincident["ok"]);self.assertIn("not isolated",coincident["error"])
+        zero=self.analyze(x,analysis="root",selectedDerivativeOrder=2)
+        self.assertFalse(zero["ok"]);self.assertIn("not isolated",zero["error"])
+
+    def test_implicit_derivative_analysis_preserves_traced_branches_and_intersections(self):
+        hint=[.25,-.25/math.sqrt(1-.25**2)]
+        tangent=self.analyze(circle,analysis="tangent",a=0,selectedDerivativeOrder=1,tracePoint=hint)
+        self.assertTrue(tangent["ok"],tangent);self.assertAlmostEqual(-1,tangent["value"])
+        integral=self.analyze(circle,analysis="integral",a=-.5,b=.5,selectedDerivativeOrder=1,tracePoint=hint)
+        self.assertTrue(integral["ok"],integral);self.assertAlmostEqual(0,integral["value"])
+        ambiguous=self.analyze(circle,analysis="tangent",a=0,selectedDerivativeOrder=1,tracePoint=[0,0])
+        self.assertFalse(ambiguous["ok"]);self.assertIn("choose a branch",ambiguous["error"])
+        roots=self.analyze(circle,analysis="root",a=-.8,b=.8,selectedDerivativeOrder=1)
+        self.assertTrue(roots["ok"],roots);self.assertEqual([[0.0,0.0]],roots["points"])
+        intersections=self.analyze(circle,number(2),analysis="intersection",a=-.8,b=.8,selectedDerivativeOrder=2)
+        self.assertTrue(intersections["ok"],intersections);self.assertEqual(2,len(intersections["points"]))
+        for point in intersections["points"]:
+            self.assertAlmostEqual(math.sqrt(1-2**(-2/3)),abs(point[0]),delta=1e-7);self.assertAlmostEqual(2,point[1],delta=1e-7)
+
+    def test_derivative_integrals_respect_poles_and_allow_integrable_endpoints(self):
+        pole=self.analyze(binary("/",number(1),x),analysis="integral",a=-1,b=1,selectedDerivativeOrder=1)
+        self.assertFalse(pole["ok"]);self.assertIn("continuous interval",pole["error"])
+        endpoint=self.analyze({"kind":"call","value":"sqrt","args":[x]},analysis="integral",a=0,b=1,selectedDerivativeOrder=1)
+        self.assertTrue(endpoint["ok"],endpoint);self.assertAlmostEqual(1,endpoint["value"])
+
     def test_first_and_second_derivative_curves_are_independent(self):
         cubic=binary("^",x,number(3))
         result=self.graph(cubic,x2,graphKind="cartesian",derivativeSelected=0,secondDerivativeSelected=1)

@@ -16,6 +16,21 @@ import {advancedStatisticsSchema} from '../advanced-statistics-schema.js';
 // Reuse the interpreter for sequential integration scenarios. The cold solver
 // scenario below explicitly loads its own interpreter to keep startup coverage.
 let sharedRuntime;
+test('derived graph analysis and mixed derivative intersections run through WASM dispatch',async()=>{
+  const py=await runtime();
+  const analyze=options=>{
+    py.globals.set('payload',JSON.stringify({action:'graphAnalysis',graphKind:'cartesian',trees:[parse('x^3')],selected:0,other:0,a:-1,b:3,...options}));
+    const result=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));assert.equal(result.ok,true,result.error);return result;
+  };
+  const intersections=analyze({analysis:'intersection',selectedDerivativeOrder:1,otherDerivativeOrder:2});
+  assert.equal(intersections.points.length,2);
+  for(const [point,expected] of [[intersections.points[0],0],[intersections.points[1],2]])assert.ok(Math.abs(point[0]-expected)<1e-7);
+  const tangent=analyze({analysis:'tangent',selectedDerivativeOrder:2,a:1});
+  assert.deepEqual(tangent.points,[[1,6]]);assert.equal(tangent.value,6);
+  assert.equal(analyze({analysis:'integral',selectedDerivativeOrder:1,a:-1,b:1}).value,2);
+  const cancelling=analyze({trees:[parse('x^2+y^2=1')],analysis:'integral',selectedDerivativeOrder:1,a:-.5,b:.5,tracePoint:[.25,-.25/Math.sqrt(1-.25**2)]});
+  assert.equal(cancelling.value,0);
+});
 test('first and second graph derivatives run together through WASM dispatch',async()=>{
   const py=await runtime();
   py.globals.set('payload',JSON.stringify({action:'graph',graphKind:'cartesian',trees:[parse('x^3')],min:-2,max:2,derivativeSelected:0,secondDerivativeSelected:0}));

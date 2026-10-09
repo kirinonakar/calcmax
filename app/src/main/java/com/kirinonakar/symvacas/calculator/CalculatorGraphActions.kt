@@ -43,6 +43,13 @@ internal fun removeGraphSource(existing:String,index:Int,kind:String="cartesian"
     return lines.filterIndexed {i,_->i!=target.index}.joinToString("\n")
 }
 
+internal data class GraphAnalysisTarget(val source:Int,val order:Int=0)
+internal fun graphAnalysisTarget(curve:Int,derivative:Int?,secondDerivative:Int?):GraphAnalysisTarget? = when(curve) {
+    -1->derivative?.let {GraphAnalysisTarget(it,1)}
+    -2->secondDerivative?.let {GraphAnalysisTarget(it,2)}
+    else->curve.takeIf {it>=0}?.let {GraphAnalysisTarget(it)}
+}
+
 internal object CalculatorGraphActions {
     private suspend fun nextAnimationFrame():Long = suspendCancellableCoroutine {continuation->
         val clock=Choreographer.getInstance()
@@ -200,12 +207,14 @@ internal object CalculatorGraphActions {
         val current=if(order==2)graphSecondDerivativeSelected else graphDerivativeSelected
         if(current!=null) {
             graphState.rememberInput()
+            clearGraphTangent()
             if(order==2)graphSecondDerivativeSelected=null else graphDerivativeSelected=null
             return
         }
         val sources=graphSource.lines().filter(String::isNotBlank).take(8).map(String::trim).filter {!isGraphShading(it)}.take(6)
         if(selected !in sources.indices) {error="Select a function";return}
         graphState.rememberInput()
+        clearGraphTangent()
         if(order==2)graphSecondDerivativeSelected=selected else graphDerivativeSelected=selected
     }
     fun CalculatorModel.performSendExpressionToGraph() {
@@ -229,19 +238,22 @@ internal object CalculatorGraphActions {
         val a=if(fixedIntercept)0.0 else first.toDoubleOrNull();val b=if(singled)a else second.toDoubleOrNull()
         if(a==null || !a.isFinite() || b==null || !b.isFinite() || (!singled && a>=b)) {error="Enter finite values with a < b";return}
         val sources=graphSource.lines().filter {it.isNotBlank()}.take(8).filter {graphKind!="cartesian" || !isGraphShading(it)}.take(6)
-        if(sources.isEmpty() || selected !in sources.indices || action=="intersection" && (other !in sources.indices || other==selected)) {error="Select two different functions";return}
+        val selectedTarget=graphAnalysisTarget(selected,graphDerivativeSelected,graphSecondDerivativeSelected)
+        val otherTarget=graphAnalysisTarget(other,graphDerivativeSelected,graphSecondDerivativeSelected)
+        if(selectedTarget==null || selectedTarget.source !in sources.indices || action=="intersection" && (otherTarget==null || otherTarget.source !in sources.indices || otherTarget==selectedTarget)) {error="Select two different functions";return}
         val trees=try {JSONArray(sources.map {JSONObject(graphInputTree(it,graphKind,removeComputationLimit).json())})} catch(e:Exception) {error=e.message ?: "Syntax ERROR";return}
         analysisJob?.cancel()
         val source=graphSource
         val kind=graphKind
         val parameters=graphState.parameterPayload()
-        val analysisRequest=request("graphAnalysis").put("angle","RAD").put("trees",trees).put("graphKind",kind).put("analysis",action).put("a",a).put("b",b).put("selected",selected).put("other",other).put("variable",if(kind=="cartesian")"x" else "t").put("parameters",parameters).put("xMin",xMin).put("xMax",xMax).put("yMin",yMin).put("yMax",yMax)
+        val derivative=graphDerivativeSelected;val secondDerivative=graphSecondDerivativeSelected
+        val analysisRequest=request("graphAnalysis").put("angle","RAD").put("trees",trees).put("graphKind",kind).put("analysis",action).put("a",a).put("b",b).put("selected",selectedTarget.source).put("selectedDerivativeOrder",selectedTarget.order).put("other",otherTarget?.source ?: 0).put("otherDerivativeOrder",otherTarget?.order ?: 0).put("variable",if(kind=="cartesian")"x" else "t").put("parameters",parameters).put("xMin",xMin).put("xMax",xMax).put("yMin",yMin).put("yMax",yMax)
         trace?.let {analysisRequest.put("tracePoint",JSONArray(listOf(it.first,it.second)))}
         analysisJob=viewModelScope.launch {
             graphState.graphAnalysisBusy=true;error="";graphState.graphAnalysis=null
             try {
                 val response=engine.execute(analysisRequest)
-                if(source==graphSource && kind==graphKind && parameters.toString()==graphState.parameterPayload().toString()) {
+                if(source==graphSource && kind==graphKind && derivative==graphDerivativeSelected && secondDerivative==graphSecondDerivativeSelected && parameters.toString()==graphState.parameterPayload().toString()) {
                     if(response.optBoolean("ok")) {
                         graphState.graphAnalysis=response
                         shadedInterval=if(action=="integral" && graphKind=="cartesian")a to b else null

@@ -9,6 +9,8 @@ import com.kirinonakar.symvacas.calculator.graphShadingBody
 import com.kirinonakar.symvacas.calculator.isGraphShading
 import com.kirinonakar.symvacas.ui.graphTracePointAtX
 import com.kirinonakar.symvacas.ui.graphSelectedCurveIndex
+import com.kirinonakar.symvacas.calculator.graphAnalysisTarget
+import com.kirinonakar.symvacas.calculator.GraphAnalysisTarget
 import org.json.JSONArray
 import org.junit.Assert.*
 import org.junit.Assert.assertEquals
@@ -16,6 +18,15 @@ import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class GraphFormulaTest {
+    @Test fun analysisTargetsDistinguishDerivativesFromTheirSourceForIntersections() {
+        val original=graphAnalysisTarget(0,0,0)
+        val first=graphAnalysisTarget(-1,0,0)
+        val second=graphAnalysisTarget(-2,0,0)
+        assertEquals(GraphAnalysisTarget(0,0),original);assertEquals(GraphAnalysisTarget(0,1),first);assertEquals(GraphAnalysisTarget(0,2),second)
+        assertNotEquals(original,first);assertNotEquals(first,second)
+        assertEquals(GraphAnalysisTarget(2,1),graphAnalysisTarget(-1,2,1))
+        assertNull(graphAnalysisTarget(-1,null,0));assertNull(graphAnalysisTarget(-2,0,null))
+    }
     @Test fun selectedDerivativesTraceTheirOwnSamplesAndFollowResponseIndices() {
         val curves=listOf(listOf(-1.0 to -1.0,1.0 to 1.0),listOf(-1.0 to 2.0,1.0 to 2.0),listOf(-1.0 to 6.0,1.0 to 6.0))
         for((order,expected) in listOf(0 to .5,1 to 2.0,2 to 6.0)) {

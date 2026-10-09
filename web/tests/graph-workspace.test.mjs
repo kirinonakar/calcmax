@@ -1,7 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {graphShadings,createGraphInputHistory,removeGraphSource,graphSelectedCurveIndex} from '../graph-workspace.js';
+import {graphShadings,createGraphInputHistory,removeGraphSource,graphSelectedCurveIndex,graphAnalysisTarget,graphAnalysisCurves} from '../graph-workspace.js';
 import {curvePointAtX} from '../graph-view.js';
+
+test('intersection choices include original and both derivatives with distinct analysis targets',()=>{
+  const curves=graphAnalysisCurves(1,0,0);
+  assert.deepEqual(curves,[{key:0,label:'f1'},{key:-1,label:'f1′'},{key:-2,label:'f1″'}]);
+  assert.deepEqual(curves.map(curve=>graphAnalysisTarget(curve.key,0,0)),[{source:0,order:0},{source:0,order:1},{source:0,order:2}]);
+  assert.deepEqual(graphAnalysisCurves(1,null,0),[{key:0,label:'f1'},{key:-2,label:'f1″'}]);
+  assert.deepEqual(graphAnalysisCurves(1,2,null),[{key:0,label:'f1'}]);
+  assert.equal(graphAnalysisTarget(-1,null,0),null);assert.equal(graphAnalysisTarget(-2,0,null),null);
+});
 
 test('selected derivatives trace their own samples and keep the correct curve when indices shift',()=>{
   const curves=[[[-1,-1],[1,1]],[[-1,2],[1,2]],[[-1,6],[1,6]]];

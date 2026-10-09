@@ -236,6 +236,15 @@ import kotlin.math.*
         }
         val visibleSources=m.graphSource.lines().filter(String::isNotBlank).take(if(m.graphKind in listOf("surface","differential"))1 else 8)
         val sources=visibleSources.filter {!(m.graphKind=="cartesian" && isGraphShading(it))}.take(if(m.graphKind in listOf("surface","differential"))1 else 6)
+        val analysisCurveKey=if(selectedDerivativeOrder==0)selected else -selectedDerivativeOrder
+        val analysisCurveLabels=buildMap {
+            sources.indices.forEach {put(it,"f${it+1}")}
+            m.graphDerivativeSelected?.takeIf {it in sources.indices}?.let {put(-1,"f${it+1}′")}
+            m.graphSecondDerivativeSelected?.takeIf {it in sources.indices}?.let {put(-2,"f${it+1}″")}
+        }
+        LaunchedEffect(analysisCurveLabels,analysisCurveKey,other) {
+            if(other !in analysisCurveLabels || other==analysisCurveKey)other=analysisCurveLabels.keys.firstOrNull {it!=analysisCurveKey} ?: 0
+        }
         val shadeSources=visibleSources.map(String::trim).filter {m.graphKind=="cartesian" && isGraphShading(it)}.take(4)
         val removeSource:(Int,Boolean)->Unit={index,shading->
             focusManager.clearFocus()
@@ -337,6 +346,12 @@ import kotlin.math.*
             val targetY=m.yMax-(m.yMax-m.yMin)*p.y/size.height
             val xSpan=m.xMax-m.xMin;val ySpan=m.yMax-m.yMin
             if(xSpan<=0.0 || ySpan<=0.0)return@detectTapGestures
+            if(selectedDerivativeOrder!=0 && m.graphAnalysis?.optString("analysis")=="tangent" && m.graphAnalysis?.optJSONArray("line")!=null) {
+                val point=latestTraceCurve?.let {graphTracePointAtX(it,target,targetY)}
+                m.trace=point
+                if(point!=null){pointAt=target.toString();m.analyzeGraph("tangent",pointAt,pointAt,analysisCurveKey,other)}
+                return@detectTapGestures
+            }
             if(selectedDerivativeOrder==0 && m.graphAnalysis?.optString("analysis")=="tangent" && m.graphAnalysis?.optJSONArray("line")!=null) {
                 var nearestCurve=-1;var nearestIndex=-1;var nearestDistance=Double.POSITIVE_INFINITY
                 var nearestPoint:Pair<Double,Double>?=null
@@ -420,7 +435,7 @@ import kotlin.math.*
                         val path=Path()
                         polygon.forEachIndexed {i,point->if(i==0)path.moveTo(px(point.first),py(point.second)) else path.lineTo(px(point.first),py(point.second))}
                         path.close()
-                        drawPath(path,c.curves[selected%c.curves.size].copy(alpha=.18f))
+                        drawPath(path,(if(selectedDerivativeOrder==0)c.curves[selected%c.curves.size] else c.accent).copy(alpha=.18f))
                     }
                 }
                 curves.forEachIndexed { ci,points ->
@@ -466,7 +481,7 @@ import kotlin.math.*
         GraphHeightToggle(halfGraphHeight,{halfGraphHeight=!halfGraphHeight},Modifier.align(Alignment.TopEnd))
         }
         Column(Modifier.fillMaxWidth()) {
-        if(m.graphKind!="surface")GraphFormulas(m.graphKind,sources,selected,derivativeSelected,derivativeExpression,shadeSources,{i->m.clearGraphTangent();selected=i;selectedDerivativeOrder=0;if(other==selected)other=(i+1)%sources.size},{m.toggleGraphDerivative(selected)},removeSource,m.displayDigits,c.curves,secondDerivativeSelected,secondDerivativeExpression,{m.toggleGraphDerivative(selected,2)},selectedDerivativeOrder,{order->m.clearGraphTangent();selectedDerivativeOrder=order})
+        if(m.graphKind!="surface")GraphFormulas(m.graphKind,sources,selected,derivativeSelected,derivativeExpression,shadeSources,{i->m.clearGraphTangent();tangentPositionOpen=false;selected=i;selectedDerivativeOrder=0;if(other==selected)other=(i+1)%sources.size},{m.toggleGraphDerivative(selected)},removeSource,m.displayDigits,c.curves,secondDerivativeSelected,secondDerivativeExpression,{m.toggleGraphDerivative(selected,2)},selectedDerivativeOrder,{order->m.clearGraphTangent();tangentPositionOpen=false;selectedDerivativeOrder=order})
         if(m.graphKind!="surface")Row(Modifier.horizontalScroll(rememberScrollState()),verticalAlignment=Alignment.CenterVertically) {
             SmallAction("−") { val cx=(m.xMin+m.xMax)/2;val cy=(m.yMin+m.yMax)/2;val halfX=(m.xMax-m.xMin);val halfY=(m.yMax-m.yMin);m.xMin=cx-halfX;m.xMax=cx+halfX;m.yMin=cy-halfY;m.yMax=cy+halfY }
             SmallAction("+") { val cx=(m.xMin+m.xMax)/2;val cy=(m.yMin+m.yMax)/2;val halfX=(m.xMax-m.xMin)/4;val halfY=(m.yMax-m.yMin)/4;m.xMin=cx-halfX;m.xMax=cx+halfX;m.yMin=cy-halfY;m.yMax=cy+halfY }
@@ -486,7 +501,7 @@ import kotlin.math.*
         }
         if(showTable && m.graphKind!="surface") Box(Modifier.bringIntoViewRequester(tableRequester)) {GraphValueTable(curves,selected,{if(selectedDerivativeOrder!=0){selectedDerivativeOrder=0;m.clearGraphTangent()};m.trace=it},m.graphKind,m.displayDigits)}
         if(analysis && m.graphKind in listOf("cartesian","parametric","polar")) Column(Modifier.padding(horizontal=10.dp)) {
-            Text(if(isKorean())"${if(m.graphKind=="cartesian")"직교좌표 곡선" else "선택한 곡선"} 분석 · ${if(m.graphKind=="cartesian")"x" else "t"} 구간" else "Analyze ${if(m.graphKind=="cartesian")"Cartesian curves" else "the selected curve"} · ${if(m.graphKind=="cartesian")"x" else "t"} interval",fontSize=12.sp,color=c.muted)
+            Text(if(isKorean())"${analysisCurveLabels[analysisCurveKey] ?: "선택한 곡선"} 분석 · ${if(m.graphKind=="cartesian")"x" else "t"} 구간" else "Analyze ${analysisCurveLabels[analysisCurveKey] ?: "the selected curve"} · ${if(m.graphKind=="cartesian")"x" else "t"} interval",fontSize=12.sp,color=c.muted)
             Row(horizontalArrangement=Arrangement.spacedBy(6.dp)) { GraphNumberField(first,"a",m.displayDigits,Modifier.weight(1f)) {first=it};GraphNumberField(second,"b",m.displayDigits,Modifier.weight(1f)) {second=it} }
             val sliderMin=if(m.graphKind=="cartesian")m.xMin else m.parameterMin
             val sliderMax=if(m.graphKind=="cartesian")m.xMax else m.parameterMax
@@ -503,12 +518,12 @@ import kotlin.math.*
                 SmallAction("Use visible ${if(m.graphKind=="cartesian")"x" else "t"} range") {if(m.graphKind=="cartesian"){first=m.xMin.toString();second=m.xMax.toString()}else{first=m.parameterMin.toString();second=m.parameterMax.toString()}}
                 SmallAction("Clear analysis") {focusManager.clearFocus();tangentPositionOpen=false;m.clearGraphTangent()}
             }
-            if(m.graphKind=="cartesian"&&sources.size>1) {
+            if(m.graphKind=="cartesian"&&analysisCurveLabels.size>1) {
                 Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
-                    Text("Intersection: selected f${selected+1} with",fontSize=12.sp,color=c.muted)
+                    Text("Intersection: selected ${analysisCurveLabels[analysisCurveKey]} with",fontSize=12.sp,color=c.muted)
                     Spacer(Modifier.width(6.dp))
                     Row(Modifier.weight(1f).horizontalScroll(rememberScrollState())) {
-                        sources.indices.filter {it!=selected}.forEach {i->SmallAction("f${i+1}",i==other) {other=i}}
+                        analysisCurveLabels.filterKeys {it!=analysisCurveKey}.forEach {(key,label)->SmallAction(label,key==other) {m.clearGraphTangent();tangentPositionOpen=false;other=key}}
                     }
                 }
             }
@@ -524,8 +539,7 @@ import kotlin.math.*
                             m.clearGraphTangent()
                         } else {
                             tangentPositionOpen=isTangent
-                            if(selectedDerivativeOrder!=0){selectedDerivativeOrder=0;m.trace=null}
-                            m.analyzeGraph(key,if(isTangent)pointAt else first,second,selected,other)
+                            m.analyzeGraph(key,if(isTangent)pointAt else first,second,analysisCurveKey,other)
                         }
                     }
                 }
@@ -536,8 +550,7 @@ import kotlin.math.*
                 if(sliderMin.isFinite() && sliderMax.isFinite() && sliderSpan.isFinite() && sliderSpan>0.0) {
                     val position=((pointAt.toDoubleOrNull()?.takeIf(Double::isFinite) ?: sliderMin)-sliderMin).div(sliderSpan).coerceIn(0.0,1.0).toFloat()
                     CompactSlider(position,{pointAt=(sliderMin+it*sliderSpan).toString()},Modifier.fillMaxWidth(),onValueChangeFinished={
-                        if(selectedDerivativeOrder!=0){selectedDerivativeOrder=0;m.trace=null}
-                        m.analyzeGraph("tangent",pointAt,pointAt,selected,other)
+                        m.analyzeGraph("tangent",pointAt,pointAt,analysisCurveKey,other)
                     })
                 }
             }

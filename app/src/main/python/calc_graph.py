@@ -899,10 +899,60 @@ def implicit_analysis(engine, request, curves, x, y, numeric, zeroes, tangent_po
         points = [point for point in points if abs(point[1]-limit)<=max(1e-8,abs(limit)*1e-8)]
     return collect(points)
 
-def graph_analysis(engine, request, _expressions=None):
+def graph_analysis(engine, request, _expressions=None, _derivative_primitive=None):
     bind_graph_parameters(engine,request)
     kind = request.get("graphKind","cartesian")
     trees = request.get("trees",[])
+    selected_order = request.get("selectedDerivativeOrder", 0)
+    other_order = request.get("otherDerivativeOrder", 0) if request.get("analysis") == "intersection" else 0
+    require(isinstance(selected_order,int) and selected_order in (0,1,2) and isinstance(other_order,int) and other_order in (0,1,2), "Invalid derivative order")
+    if _expressions is None and (selected_order or other_order):
+        require(kind == "cartesian", "Derivative analysis requires Cartesian curves")
+        selected, other = int(request.get("selected",0)), int(request.get("other",1))
+        require(0 <= selected < len(trees), "Select a function")
+        if request.get("analysis") == "intersection": require(0 <= other < len(trees), "Select two different functions")
+        x, y = engine.symbol("x"), engine.symbol("y")
+        engine.bindings.update({"x":x,"y":y})
+        raw = list(graph_expressions(engine,trees,("x","y")))
+        targets = {}
+        primitives = {}
+        def target(index, order):
+            if not order: return index
+            key = (index,order)
+            if key not in targets:
+                function, residual = cartesian_curve(raw[index],x,y)
+                branches = (function,) if function is not None else cartesian_branches(residual,y)
+                require(branches, "Derivative graph requires branches expressible as y=f(x)")
+                derivative_primitives = {s.diff(branch,x,order):s.diff(branch,x,order-1) for branch in branches}
+                derivatives = tuple(derivative_primitives)
+                if index == selected and order == selected_order and len(derivatives)>1 and request.get("analysis") in ("derivative","tangent","integral","arclength"):
+                    hint = request.get("tracePoint")
+                    require(isinstance(hint,(list,tuple)) and len(hint)==2, "Tap a point on the curve to choose a branch")
+                    hint_x,hint_y = map(float,hint)
+                    require(math.isfinite(hint_x) and math.isfinite(hint_y), "Invalid trace point")
+                    sliders = {symbol:value for symbol,value in resolved_parameters(engine,request,raw,{"x","y"}).items() if symbol not in (x,y)}
+                    candidates = []
+                    for branch in derivatives:
+                        value = _finite_real(substitute_parameters(branch,sliders).subs(x,hint_x).evalf(engine.precision))
+                        if value is not None: candidates.append((abs(value-hint_y),branch))
+                    candidates.sort(key=lambda pair:pair[0])
+                    require(candidates, "Curve is undefined at this x coordinate")
+                    require(len(candidates)==1 or candidates[1][0]-candidates[0][0]>1e-8, "Tap a point on the curve to choose a branch")
+                    derivatives = (candidates[0][1],)
+                # A product retains every y branch for intersection/search analysis;
+                # local tangents and integrals use the existing traced-branch rule.
+                expression = derivatives[0] if len(derivatives)==1 else s.prod(y-branch for branch in derivatives)
+                targets[key] = len(raw)
+                raw.append(expression)
+                if len(derivatives)==1: primitives[targets[key]] = derivative_primitives[derivatives[0]]
+            return targets[key]
+        resolved = {key:value for key,value in request.items() if key not in ("selectedDerivativeOrder","otherDerivativeOrder")}
+        resolved["selected"] = target(selected,selected_order)
+        if request.get("analysis") == "intersection": resolved["other"] = target(other,other_order)
+        response = graph_analysis(engine,resolved,tuple(raw),primitives.get(resolved["selected"]))
+        response.update(selected=selected,selectedDerivativeOrder=selected_order)
+        if request.get("analysis") == "intersection": response.update(other=other,otherDerivativeOrder=other_order)
+        return response
     require(kind in ("cartesian","parametric","polar"), "Analysis supports Cartesian, parametric and polar curves")
     selected = int(request.get("selected", 0)); other = int(request.get("other", 1))
     size = len(trees) if _expressions is None else len(_expressions)
@@ -974,6 +1024,8 @@ def graph_analysis(engine, request, _expressions=None):
         expressions = [function for function,_ in curves]
         expression = expressions[selected]
         target = expression-expressions[other] if action == "intersection" else expression
+        if action == "intersection": require(target != 0, "The curves coincide; intersections are not isolated")
+        if action == "root": require(expression != 0, "The curve lies on the x axis; roots are not isolated")
         value = numeric(expression, x)
         if action == "yintercept":
             intercept = value(0)
@@ -1001,7 +1053,22 @@ def graph_analysis(engine, request, _expressions=None):
             require(result.is_real and result.is_finite, "Numerical convergence failed")
             return {"analysis":action,"points":[],"value":float(result)}
         if action == "integral":
-            result = numeric_integral(expression, x, a, b, engine.precision)
+            result = None
+            if _derivative_primitive is not None:
+                from sympy.calculus.util import continuous_domain
+                primitive = substitute_parameters(_derivative_primitive,sliders)
+                continuous = primitive_continuous = None
+                try:
+                    continuous = (s.Interval.open(a,b)-continuous_domain(expression,x,s.S.Reals)).is_empty
+                    primitive_continuous = (s.Interval(a,b)-continuous_domain(primitive,x,s.S.Reals)).is_empty
+                except (NotImplementedError, ValueError, TypeError): pass
+                require(continuous is not False, "Integral crosses a discontinuity; choose a continuous interval")
+                if continuous is True and primitive_continuous is True:
+                    # The stored primitive avoids relative-accuracy failure for
+                    # cancelling integrals, after checking for domain breaks.
+                    exact = primitive.xreplace({value:s.Rational(value) for value in primitive.atoms(s.Float)})
+                    result = (exact.subs(x,s.Rational(b))-exact.subs(x,s.Rational(a))).evalf(engine.precision,strict=True)
+            if result is None: result = numeric_integral(expression, x, a, b, engine.precision)
             require(result.is_real and result.is_finite, "Numerical convergence failed")
             return {"analysis":action,"points":[],"value":float(result),"integralFill":integral_fill(expression,x,a,b)}
         tested = numeric(target, x)
