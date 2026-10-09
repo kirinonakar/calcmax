@@ -9,6 +9,24 @@ import com.kirinonakar.symvacas.math.Parser
 import com.kirinonakar.symvacas.math.requiresExplicitEvaluation
 
 class AdvancedStatisticsTest {
+    @Test fun bootstrapGroupsRetainNamesWithoutHeadersAndRejectIncompletePairs() {
+        val definitions=JSONArray(File("src/main/assets/advanced_statistics.json").readText())
+        val definition=(0 until definitions.length()).map {definitions.getJSONObject(it)}.first {it.getString("id")=="bayesbootstrap"}
+        val rows=listOf(listOf("control","1"),listOf("treatment","4"),listOf("control","2"),listOf("treatment","5"))
+        val settings=JSONObject().put("layout","groups").put("order","reverse")
+        assertEquals("bayesbootstrap([4,5],[1,2],mean,0.95,10000,0,independent)",guidedStatisticsCommand(definition,rows,settings))
+        assertEquals(mapOf("sample:A" to "treatment","sample:B" to "control"),advancedStatisticsTermLabels(definition,rows,settings,emptyList()))
+        assertTrue(runCatching {guidedStatisticsCommand(definition,rows+listOf(listOf("other","9")),settings)}.isFailure)
+        assertTrue(runCatching {guidedStatisticsCommand(definition,listOf(listOf("1","4"),listOf("2","")),JSONObject().put("layout","columns").put("comparison","paired"))}.isFailure)
+    }
+    @Test fun pcaFeatureLabelsFollowTheSelectedColumnOrder() {
+        val definitions=JSONArray(File("src/main/assets/advanced_statistics.json").readText())
+        val definition=(0 until definitions.length()).map {definitions.getJSONObject(it)}.first {it.getString("id")=="pca"}
+        val rows=listOf(listOf("A","1","2"),listOf("B","2","1"))
+        val settings=JSONObject().put("columns","2,1").put("components","1").put("standardize","0")
+        assertEquals("pca([[2,1],[1,2]],1,0)",guidedStatisticsCommand(definition,rows,settings))
+        assertEquals(mapOf("feature:1" to "weight","feature:2" to "height"),advancedStatisticsTermLabels(definition,rows,settings,listOf("id","height","weight")))
+    }
     @Test fun bayesianTwoSamplesKeepIndependentLengthsAndRequireDistinctRoles() {
         val definitions=JSONArray(File("src/main/assets/advanced_statistics.json").readText())
         val definition=(0 until definitions.length()).map {definitions.getJSONObject(it)}.first {it.getString("id")=="bayescompare"}

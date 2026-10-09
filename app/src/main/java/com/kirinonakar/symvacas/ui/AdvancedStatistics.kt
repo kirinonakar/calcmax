@@ -140,7 +140,7 @@ internal fun advancedStatisticsRows(data:String,columnLimit:Int?=null,removeComp
                 survivalReport=null;previousResult=m.result;pending=selected=="survivalanalysis"
                 reportPlan=if(pending&&input!="expression")survivalAnalysisPlan(rows,settings,columns) else null
                 val usesCurrentData=input=="current"&&(definition.has("controls")||it==runCatching {advancedStatisticsCommand(definition,rows)}.getOrNull())
-                val termLabels=if(usesCurrentData&&statisticsHasHeader(statisticsCsvRows(data))&&statisticsCsvRows(data).first().none {cell->cell=="NA"})advancedStatisticsTermLabels(definition,rows,settings,columns) else emptyMap()
+                val termLabels=if(usesCurrentData&&statisticsHasHeader(statisticsCsvRows(data))&&statisticsCsvRows(data).first().none {cell->cell=="NA"}||selected=="bayesbootstrap"&&input!="expression")advancedStatisticsTermLabels(definition,rows,settings,columns) else emptyMap()
                 m.calculationAction="statistics-advanced";m.edit(Editor(it));m.calculate(statisticsTermLabels=termLabels)
             }},enabled=command.isSuccess&&command.getOrDefault("").isNotBlank()&&!m.busy&&!m.regressionBusy,modifier=Modifier.testTag("statistics-advanced-run"))
             SmallAction(if(ko)"계산기로" else "Insert expression"){command.getOrNull()?.let {m.edit(Editor(it));m.mode="Scientific/CAS"}}

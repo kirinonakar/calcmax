@@ -119,6 +119,31 @@ export function guidedStatisticsCommand(definition,rows,settings={},columnLabels
     return selected.map(row=>[row[0],row[1]===opts.eventValue?'1':'0',...row.slice(2)]);
   };
   if(id==='padjust')return `padjust(${list(values(column('column')))},${opts.method},${opts.alpha})`;
+  if(id==='bayesbootstrap'){
+    if(['level','samples','seed'].some(key=>!String(opts[key]).trim()))throw new Error('Enter all interval and simulation parameters');
+    const suffix=`${opts.statistic},${opts.level},${opts.samples},${opts.seed}`;
+    if(opts.layout==='single'){
+      const data=values(column('column'));if(data.length<2)throw new Error('Enter at least two observations');
+      return `bayesbootstrap(${list(data)},${suffix})`;
+    }
+    let samples,method=opts.comparison;
+    if(opts.layout==='groups'){
+      const pairs=complete([column('group'),column('value')]),groups=[...new Set(pairs.map(row=>row[0]))];
+      if(groups.length!==2)throw new Error('Choose exactly two groups');
+      if(opts.order==='reverse')groups.reverse();
+      samples=groups.map(group=>pairs.filter(row=>row[0]===group).map(row=>row[1]));method='independent';
+    }else{
+      const first=column('first'),second=column('second');distinct([first,second]);
+      samples=method==='paired'?(()=>{const pairs=complete([first,second]);return [pairs.map(row=>row[0]),pairs.map(row=>row[1])];})():[values(first),values(second)];
+    }
+    if(samples.some(sample=>sample.length<2))throw new Error('Enter at least two observations in each group');
+    return `bayesbootstrap(${samples.map(list).join(',')},${suffix},${method})`;
+  }
+  if(id==='pca'){
+    const columns=multiple('columns'),count=Number(opts.components);
+    if(!Number.isInteger(count)||count<1||count>columns.length)throw new Error('Components must be between 1 and the selected feature count');
+    return `pca(${table(complete(columns))},${count},${opts.standardize})`;
+  }
   if(id==='ancova'){
     const group=column('group'),response=column('response');distinct([group,response]);
     const selected=complete([group,...multiple('predictors',[group,response]),response]),labels=[...new Set(selected.map(row=>row[0]))];
@@ -243,12 +268,24 @@ export function guidedStatisticsCommand(definition,rows,settings={},columnLabels
 
 // Predictor positions in the engine follow the selected order, not the table order.
 export function advancedStatisticsTermLabels(definition,rows,settings={},columnLabels=[]){
-  if(!columnLabels.length)return {};
   const n=Math.max(0,...rows.map(row=>row.length)),id=definition.id;
   const opts=Object.fromEntries((definition.controls||[]).map(field=>[field.key,settings[field.key]??field.default]));
   const column=key=>Number(opts[key])===-1?n-1:Number(opts[key]);
+  if(id==='bayesbootstrap'&&opts.layout!=='single'){
+    let names;
+    if(opts.layout==='groups'){
+      names=[...new Set(rows.map(row=>String(row[column('group')]??'').trim()).filter(Boolean))];
+      if(opts.order==='reverse')names.reverse();
+    }else names=[columnLabels[column('first')]||'Group A',columnLabels[column('second')]||'Group B'];
+    return {'sample:A':names[0]||'Group A','sample:B':names[1]||'Group B'};
+  }
+  if(!columnLabels.length)return {};
   const multiple=excluded=>opts.predictors==='auto'?Array.from({length:n},(_,i)=>i).filter(i=>!excluded.includes(i)):String(opts.predictors??'').split(',').filter(Boolean).map(Number);
   let predictors=[];
+  if(id==='pca'){
+    const columns=opts.columns==='auto'?Array.from({length:n},(_,i)=>i):String(opts.columns).split(',').filter(Boolean).map(Number);
+    return Object.fromEntries(columns.map((at,i)=>['feature:'+String(i+1),columnLabels[at]||`Feature ${i+1}`]));
+  }
   if(id==='mcnemar'){
     const first=column('first'),second=column('second'),pairs=opts.layout==='pairs'?rows.filter(row=>row[first]&&row[second]).map(row=>[row[first],row[second]]):[];
     return statisticsCategoryLabels(pairs,columnLabels[first],columnLabels[second],true);
@@ -334,7 +371,7 @@ export function createAdvancedStatistics({state,persist,data,columnLimit,copy}) 
     const plan=selected().id==='survivalanalysis'&&input.value!=='expression'?survivalAnalysisPlan(currentRows(),settings(),columnNames()):{expression:expression(),groups:[],predictors:[]};
     let usesCurrentData=input.value==='current'&&!!selected().controls;
     if(input.value==='current'&&!selected().controls)try{usesCurrentData=source.value.trim()===advancedStatisticsCommand(selected(),currentRows());}catch{}
-    if(usesCurrentData)plan.termLabels=advancedStatisticsTermLabels(selected(),currentRows(),settings(),columnNames());
+    if(usesCurrentData||selected().id==='bayesbootstrap'&&input.value!=='expression')plan.termLabels=advancedStatisticsTermLabels(selected(),currentRows(),settings(),columnNames());
     return plan;
   };
   function columnNames(){if(input.value!=='current'||!data().trim())return [];const rows=csvRows(data(),{skipHeader:false});const count=Math.min(limit()??Infinity,Math.max(0,...rows.map(row=>row.length)));return statisticsCsvHasHeader(rows)&&!rows[0].some(cell=>cell==='NA')?statisticsColumnLabels(data(),`columns:${count}`):[];}

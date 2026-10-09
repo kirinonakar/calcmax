@@ -24,6 +24,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -88,6 +89,7 @@ import kotlin.math.*
     var analysis by remember { mutableStateOf(false) }
     var showTable by rememberSaveable { mutableStateOf(false) }
     var parametersOpen by rememberSaveable { mutableStateOf(true) }
+    var inputHelpOpen by rememberSaveable { mutableStateOf(false) }
     var rangeParameter by remember { mutableStateOf<String?>(null) }
     var surfaceRotation by rememberSaveable { mutableFloatStateOf(35f) }
     var surfaceElevation by rememberSaveable { mutableFloatStateOf(32f) }
@@ -143,7 +145,20 @@ import kotlin.math.*
     Column(Modifier.fillMaxSize().verticalScroll(graphScrollState)) {
     Column(Modifier.fillMaxWidth().zIndex(1f)) {
         OutlinedTextField(m.graphSource,{m.updateGraphSource(it)},Modifier.fillMaxWidth().padding(start=10.dp,end=10.dp,top=8.dp).keepInputVisible(),label={Text(tr(when(m.graphKind){"parametric"->"One [x(t),y(t)] pair per line";"polar"->"r(t) · radians · one curve per line";"sequence"->"u(n) · use u(n−1) for recurrences";"surface"->"z = f(x,y)";"differential"->"dy/dt = f(t,y)";else->"Function / y=f(x) · Implicit / F(x,y)=0"}))},minLines=if(m.graphKind in listOf("surface","differential"))1 else 2,maxLines=4)
-        if(m.graphKind=="cartesian")Text(tr("One curve per line · [shade] / [s] -1<x<1 ,-1<y<x · between functions: [s] f, g"),Modifier.padding(horizontal=14.dp,vertical=3.dp),fontSize=11.sp,color=c.muted)
+        TextButton(onClick={inputHelpOpen=!inputHelpOpen},modifier=Modifier.padding(horizontal=4.dp).testTag("graph-input-help-toggle")) {
+            Text("${if(inputHelpOpen)"▾" else "▸"} ${tr("Graph input help")}",fontSize=12.sp)
+        }
+        if(inputHelpOpen)Column(Modifier.fillMaxWidth().padding(horizontal=14.dp).testTag("graph-input-help"),verticalArrangement=Arrangement.spacedBy(6.dp)) {
+            Text(tr("Function / y=f(x) · Implicit / F(x,y)=0 · e.g. x+1, y=x+1, y^2+x^2=1"),fontSize=12.sp,color=c.muted)
+            Text(tr("Piecewise functions / domain restrictions"),fontSize=12.sp,color=c.ink,fontWeight=FontWeight.SemiBold)
+            Text(tr("Use {condition:value,condition:value,default}. The first matching condition wins; without a default, unmatched values are undefined."),fontSize=12.sp,color=c.muted)
+            Text("f(x)={x<0:x^2,x>=0:2*x}",fontSize=12.sp,color=c.ink)
+            Text(tr("Append {condition} to restrict the whole preceding expression. Spaces and outer parentheses are optional; chained inequalities are supported."),fontSize=12.sp,color=c.muted)
+            Text("y=x^2 {0<=x<=2}\ny=2*x {x>2}",fontSize=12.sp,color=c.ink)
+            Text(tr("One curve per line · [shade] / [s] -1<x<1 ,-1<y<x · between functions: [s] f, g"),fontSize=12.sp,color=c.muted)
+            Text(tr("Other graph types"),fontSize=12.sp,color=c.ink,fontWeight=FontWeight.SemiBold)
+            Text(tr("Parametric: [cos(t),sin(t)] · Polar: 1+cos(t) (radians) · Sequence: u(n-1)+1 (enter initial values) · 3D surface: z=sin(x)*cos(y) · Differential equation: -y (dy/dt; enter t₀ and initial y values)"),fontSize=12.sp,color=c.muted)
+        }
         Column(Modifier.fillMaxWidth().zIndex(1f).background(c.body)) {
             Row(Modifier.fillMaxWidth().zIndex(2f).padding(top=2.dp,bottom=1.dp).horizontalScroll(rememberScrollState()).semantics { contentDescription="Graph types" },horizontalArrangement=Arrangement.spacedBy(6.dp)) {
                 listOf("cartesian" to "Cartesian","parametric" to "Parametric","polar" to "Polar","sequence" to "Sequence","surface" to "3D surface","differential" to "Diff eq").forEach {(kind,label)->
@@ -440,13 +455,13 @@ import kotlin.math.*
                 }
                 curves.forEachIndexed { ci,points ->
                     val color=c.curves[ci%c.curves.size]
-                    drawPath(curvePath(points),color,style=Stroke(if(selectedDerivativeOrder==0 && ci==selected)4.dp.toPx() else 1.5.dp.toPx()))
+                    drawPath(curvePath(points),color,style=Stroke(if(selectedDerivativeOrder==0 && ci==selected)4.dp.toPx() else 1.5.dp.toPx(),cap=StrokeCap.Round,join=StrokeJoin.Round))
                 }
                 derivativeCurve?.let {points->
-                    drawPath(curvePath(points),c.accent,style=Stroke(if(selectedDerivativeOrder==1)4.dp.toPx() else 2.5.dp.toPx(),pathEffect=derivativeDash))
+                    drawPath(curvePath(points),c.accent,style=Stroke(if(selectedDerivativeOrder==1)4.dp.toPx() else 2.5.dp.toPx(),cap=StrokeCap.Round,join=StrokeJoin.Round,pathEffect=derivativeDash))
                 }
                 secondDerivativeCurve?.let {points->
-                    drawPath(curvePath(points),c.accent,style=Stroke(if(selectedDerivativeOrder==2)4.dp.toPx() else 2.5.dp.toPx(),pathEffect=PathEffect.dashPathEffect(floatArrayOf(3.dp.toPx(),5.dp.toPx()))))
+                    drawPath(curvePath(points),c.accent,style=Stroke(if(selectedDerivativeOrder==2)4.dp.toPx() else 2.5.dp.toPx(),cap=StrokeCap.Round,join=StrokeJoin.Round,pathEffect=PathEffect.dashPathEffect(floatArrayOf(3.dp.toPx(),5.dp.toPx()))))
                 }
                 if(m.graphKind=="differential") {
                     val fieldData=m.graphData?.optJSONArray("fields")

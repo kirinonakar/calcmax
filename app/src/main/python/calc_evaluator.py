@@ -191,6 +191,35 @@ class Engine:
         if kind == "answer_call":
             return self.call_answer(args[0], [build(a) for a in args[1:]])
         if kind == "float": return s.Float(value,self.precision)
+        if kind == "piecewise":
+            def condition(tree):
+                if tree.get('kind') == 'group': return condition(tree['args'][0])
+                if tree.get('kind') == 'relation' and tree['args'][0].get('kind') == 'relation':
+                    left, right = tree['args']
+                    return s.And(condition(left), condition({**tree, 'args':[left['args'][1],right]}))
+                result = build(tree)
+                require(isinstance(result, (Relational, s.logic.boolalg.Boolean)), 'Piecewise condition must be a relation')
+                return s.simplify(result) if not result.free_symbols else result
+            branches=[]; previous=s.false
+            for branch in args:
+                require(branch.get('kind')=='tuple' and len(branch.get('args',[]))==2,'Invalid piecewise branch')
+                body, guard=branch['args']; test=condition(guard)
+                if test == s.false: continue
+                selected=s.And(test,s.Not(previous))
+                if selected == s.false: continue
+                old_conditions=self.conditions
+                self.conditions=[]
+                try:
+                    result=build(body)
+                    local_guards=self.conditions
+                finally: self.conditions=old_conditions
+                # Domain guards apply only where this branch is selected.
+                for local in local_guards:
+                    self.conditions.append(s.Or(s.Not(selected),local))
+                branches.append((result,test))
+                previous=s.Or(previous,test)
+                if test == s.true: break
+            return s.Piecewise(*branches) if branches else s.nan
         if kind == "restricted":
             result=build(args[0])
             for guard in args[1:]:

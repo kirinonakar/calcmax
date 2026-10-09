@@ -6,6 +6,23 @@ import org.junit.Test
 class ParserTest {
     private fun p(s: String) = Parser(s).parse()
     @Test fun precedence() { assertEquals("*",p("2+3*4").args[1].value); assertEquals("unary",p("-2^2").kind); assertEquals("^",p("2^3^2").args[1].value) }
+    @Test fun desmosPiecewiseAndRestrictionsPreserveWholeExpressionScope() {
+        val piece=p("f(x)={x<0:x^2,x>=0:2*x}").args[1]
+        assertEquals("piecewise",piece.kind)
+        assertEquals(listOf("^","*"),piece.args.map {it.args[0].value})
+        assertEquals(listOf("<",">="),piece.args.map {it.args[1].value})
+        for(source in listOf("y=(1-e^(-x/900)){0<=x<=3000}","y=1-e^(-x/900) {0<=x<=3000}")) {
+            val rhs=p(source).args[1];assertEquals("restriction",rhs.value)
+            assertEquals("<=",rhs.args[0].args[1].value)
+            assertEquals("<=",rhs.args[0].args[1].args[0].value)
+            assertEquals("3000",rhs.args[0].args[1].args[1].value)
+        }
+        assertEquals("*",p("y=(1-e^(-3000/900))*e^(-(x-3000)/80){x>3000}").args[1].args[0].args[0].value)
+        assertEquals("-",p("y=1-e^(-x/900) {0<=x<=3000}").args[1].args[0].args[0].value)
+        assertEquals("true",p("{x<0:x^2,2*x}").args.last().args[1].value)
+        assertEquals("set",p("{1,2}").kind)
+        for(source in listOf("{x<0:}","{x<0:1,2,x>0:3}","x{}"))assertThrows(SyntaxException::class.java){p(source)}
+    }
 
     @Test fun structuredParserPreservesOperatorSlotsSetsAndMatrixTemplates() {
         run { // operatorSlotBetweenOperandsParses

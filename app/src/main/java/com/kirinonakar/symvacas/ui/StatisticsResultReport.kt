@@ -64,6 +64,7 @@ internal fun statisticsCellText(m:CalculatorModel,cell:JSONObject)=ResultDisplay
             Text(tr(report.getString("title")),Modifier.weight(1f),style=MaterialTheme.typography.titleMedium,color=c.ink)
             TextButton(onClick={m.result?.let {clipboard.setText(AnnotatedString(statisticsResultCopyText(m,it,language)))}}){Text(tr("Copy result"),fontSize=12.sp)}
         }
+        StatisticsVisualizations(report.optJSONArray("plots"))
         for(index in 0 until sections.length()) {
             val section=sections.getJSONObject(index)
             val columns=section.getJSONArray("columns")

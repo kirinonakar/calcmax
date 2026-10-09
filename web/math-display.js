@@ -9,7 +9,15 @@ function el(tag,children=[],text='') {
   result.append(...children);
   return result;
 }
-const operator = value => el('mo',[],value);
+const operator = value => {
+  const result=el('mo',[],value);
+  if(['{','}'].includes(value)){
+    result.setAttribute('fence','true');
+    result.setAttribute('stretchy','true');result.setAttribute('symmetric','false');
+    result.setAttribute('minsize','1');result.setAttribute('maxsize','infinity');
+  }
+  return result;
+};
 const fractionMinus = () => {const sign=operator('−');sign.setAttribute('rspace','0.18em');return sign;};
 const row = children => el('mrow',children);
 const join = (nodes,separator) => nodes.flatMap((n,i) => i ? [operator(separator),n] : [n]);
@@ -80,6 +88,13 @@ export function mathDisplay(tree,digits=10,decimal=false,{notation='off',groupin
         return row([value==='-'&&argument?.kind==='fraction'?fractionMinus():operator(value),...args]);
       }
       case 'relation': return row([args[0],operator(value==='=='?'=':value),args[1]]);
+      case 'piecewise': {
+        if(value==='restriction')return row([render(t.args[0].args[0]),fenced([row([render(t.args[0].args[1])])],'{','}')]);
+        const table=el('mtable',t.args.map(branch=>el('mtr',[
+          el('mtd',[render(branch.args[0])]),el('mtd',[branch.args[1].value==='true'?el('mtext',[],'otherwise'):render(branch.args[1])])
+        ])));
+        table.setAttribute('columnalign','left left');return row([operator('{'),table]);
+      }
       case 'row-operation': return row([el('mover',[operator('⟶'),args[0]]),args[1]]);
       case 'function': {
         if(value==='exp')return superscript(el('mi',[],'e'),args[0]);

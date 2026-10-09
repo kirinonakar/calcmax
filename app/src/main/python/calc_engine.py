@@ -133,6 +133,8 @@ def _dispatch(payload, control=None):
             result["decimalTree"]=display_tree(decimal_value)
             if tree.get('kind')=='call' and tree.get('value') in BASIC_STATISTICS | (ADVANCED_STATISTICS-{'survivalanalysis'}):
                 result['statisticsReport']=statistics_report(tree['value'],shown_value,engine.precision,request.get('statisticsTermLabels', {}))
+                if hasattr(engine,'statistics_plots'):
+                    result['statisticsReport']['plots']=engine.statistics_plots
             if request["tree"].get("value")=="survivalanalysis" and hasattr(engine,"survival_report"):
                 result["survival"]=engine.survival_report
                 result["statisticsCopyReport"]=statistics_copy_report('survivalanalysis',value,engine.survival_report,engine.precision)

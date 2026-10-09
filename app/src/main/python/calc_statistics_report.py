@@ -11,7 +11,7 @@ TITLES.update({'ancova':'ANCOVA', 'glm':'Generalized linear model (GLM)',
                'cohend':'Effect size', 'eta2':'Effect size', 'bootstrapci':'Bootstrap confidence interval',
                'testpower':'Power', 'kstest':'Kolmogorov–Smirnov test',
                'bayesproportion':'Bayesian proportion', 'bayesmean':'Bayesian mean', 'bayesrate':'Bayesian rate',
-               'bayescompare':'Bayesian Two-Sample Comparison'})
+               'bayescompare':'Bayesian Two-Sample Comparison','bayesbootstrap':'Bayesian Bootstrap'})
 
 
 def statistics_report(name, value, precision, labels=None):
@@ -56,7 +56,7 @@ def statistics_report(name, value, precision, labels=None):
                     [[pair, remaining.pop(pair+' mean difference'), remaining.pop(pair+' adjusted p value')] for pair in pairs])
             # Preserve row relationships for known parallel arrays.
             bundles = [('P-value adjustment', 'Observation', ['raw p','adjusted p','reject (1=yes)']),
-                       ('Components', 'Component', ['eigenvalues','explained variance ratio']),
+                       ('Components', 'Component', ['eigenvalues','explained variance ratio','cumulative explained variance']),
                        ('Feature scaling', 'Feature', ['centers','scales']),
                        ('Fold scores', 'Fold', ['fold MSE','fold log loss'])]
             summary = [[key, item] for key, item in remaining.items() if not isinstance(item, (dict, list, tuple, s.MatrixBase))]
@@ -67,7 +67,7 @@ def statistics_report(name, value, precision, labels=None):
                 if not present: continue
                 lengths = {len(remaining[key]) for key in present}
                 if len(lengths) != 1: continue
-                add(heading, [index]+present, [[i+1]+[remaining[key][i] for key in present] for i in range(next(iter(lengths)))])
+                add(heading, [index]+present, [[table_labels.get('feature:'+str(i+1),i+1) if name=='pca' and index=='Feature' else i+1]+[remaining[key][i] for key in present] for i in range(next(iter(lengths)))])
                 for key in present: remaining.pop(key)
             for key, item in remaining.items(): visit(key, item)
         elif isinstance(v, (list, tuple)):
@@ -88,7 +88,7 @@ def statistics_report(name, value, precision, labels=None):
                     add(title, [table_labels['table:row']]+headers,
                         [[table_labels.get('table:row:'+str(i+1), str(i+1))]+list(row) for i,row in enumerate(v)])
                     return
-                add(title, [index]+headers, [[i+1]+list(row) for i,row in enumerate(v)])
+                add(title, [index]+headers, [[table_labels.get('feature:'+str(i+1),i+1) if name=='pca' and index=='Feature' else i+1]+list(row) for i,row in enumerate(v)])
             elif vector(v):
                 if title in ('confidence interval','credible interval','difference credible interval','effect credible interval','quartiles (inclusive)','Quartiles'):
                     labels = ['Lower','Upper'] if len(v)==2 else ['Q1','Median','Q3']
@@ -100,6 +100,8 @@ def statistics_report(name, value, precision, labels=None):
 
     if categorical:
         add('Compared columns', ['First column', 'Second column'] if name == 'mcnemar' else ['Row variable', 'Column variable'], [[table_labels['table:row'], table_labels['table:column']]])
+    if name=='bayesbootstrap' and isinstance(value,dict) and value.get('comparison'):
+        add('Compared groups',['Group A','Group B'],[[table_labels.get('sample:A','A'),table_labels.get('sample:B','B')]])
     visit('Summary' if isinstance(value, dict) else TITLES.get(name, name), value)
     return {'analysis': name, 'title': TITLES.get(name, name), 'sections': sections}
 

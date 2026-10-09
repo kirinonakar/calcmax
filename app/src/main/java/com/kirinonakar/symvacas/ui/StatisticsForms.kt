@@ -4,13 +4,24 @@ import org.json.JSONObject
 
 /** Map engine predictor positions to the labels of the selected data columns. */
 internal fun advancedStatisticsTermLabels(definition:JSONObject,rows:List<List<String>>,settings:JSONObject,columnLabels:List<String>):Map<String,String> {
-    if(columnLabels.isEmpty())return emptyMap()
     val n=rows.maxOfOrNull {it.size} ?: 0;val id=definition.getString("id")
     val controls=definition.optJSONArray("controls")
     val opts=(0 until (controls?.length() ?: 0)).associate {index->val field=controls!!.getJSONObject(index);val key=field.getString("key");key to settings.optString(key,field.get("default").toString())}
     fun column(key:String)=opts[key]?.toIntOrNull()?.let {if(it==-1)n-1 else it} ?: -1
+    if(id=="bayesbootstrap"&&opts["layout"]!="single") {
+        val names=if(opts["layout"]=="groups") {
+            val labels=rows.map {it.getOrElse(column("group")){""}.trim()}.filter(String::isNotBlank).distinct()
+            if(opts["order"]=="reverse")labels.reversed() else labels
+        } else listOf(columnLabels.getOrElse(column("first")){"Group A"},columnLabels.getOrElse(column("second")){"Group B"})
+        return mapOf("sample:A" to names.getOrElse(0){"Group A"},"sample:B" to names.getOrElse(1){"Group B"})
+    }
+    if(columnLabels.isEmpty())return emptyMap()
     fun multiple(excluded:List<Int>)=if(opts["predictors"]=="auto")(0 until n).filter {it !in excluded} else opts["predictors"].orEmpty().split(',').filter(String::isNotBlank).map(String::toInt)
     val predictors=when(id) {
+        "pca"->{
+            val columns=if(opts["columns"]=="auto")(0 until n).toList() else opts["columns"].orEmpty().split(',').filter(String::isNotBlank).map(String::toInt)
+            return columns.mapIndexed {index,at->"feature:${index+1}" to columnLabels.getOrElse(at){"Feature ${index+1}"}}.toMap()
+        }
         "mcnemar"->{
             val first=column("first");val second=column("second")
             val pairs=if(opts["layout"]=="pairs")statisticsCategoryPairs(rows,first,second) else emptyList()
@@ -85,6 +96,33 @@ internal fun guidedStatisticsCommand(definition:JSONObject,rows:List<List<String
         return selected.map {row->listOf(row[0],if(row[1]==eventValue)"1" else "0")+row.drop(2)}
     }
     return when(id) {
+        "bayesbootstrap"->{
+            require(listOf("level","samples","seed").all {opts[it].orEmpty().isNotBlank()}) {"Enter all interval and simulation parameters"}
+            val suffix="${opts["statistic"]},${opts["level"]},${opts["samples"]},${opts["seed"]}"
+            if(opts["layout"]=="single") {
+                val data=values(col("column"));require(data.size>=2) {"Enter at least two observations"}
+                "bayesbootstrap(${vector(data)},$suffix)"
+            } else {
+                var method=opts["comparison"]
+                val samples=if(opts["layout"]=="groups") {
+                    val pairs=complete(listOf(col("group"),col("value")));var labels=pairs.map {it[0]}.distinct()
+                    require(labels.size==2) {"Choose exactly two groups"}
+                    if(opts["order"]=="reverse")labels=labels.reversed()
+                    method="independent";labels.map {label->pairs.filter {it[0]==label}.map {it[1]}}
+                } else {
+                    val first=col("first");val second=col("second");distinct(listOf(first,second))
+                    if(method=="paired") {val pairs=complete(listOf(first,second));listOf(pairs.map {it[0]},pairs.map {it[1]})}
+                    else listOf(values(first),values(second))
+                }
+                require(samples.all {it.size>=2}) {"Enter at least two observations in each group"}
+                "bayesbootstrap(${samples.joinToString(",",transform=::vector)},$suffix,$method)"
+            }
+        }
+        "pca"->{
+            val columns=multiple("columns");val count=opts["components"]?.toIntOrNull()
+            require(count!=null&&count in 1..columns.size) {"Components must be between 1 and the selected feature count"}
+            "pca(${table(complete(columns))},$count,${opts["standardize"]})"
+        }
         "padjust"->"padjust(${vector(values(col("column")))},${opts["method"]},${opts["alpha"]})"
         "ancova"->{
             val group=col("group");val response=col("response");distinct(listOf(group,response))

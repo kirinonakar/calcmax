@@ -1,5 +1,124 @@
 [
   {
+    "id": "bayesbootstrap",
+    "rows": [
+      [
+        "1",
+        "4"
+      ],
+      [
+        "2",
+        "5"
+      ],
+      [
+        "",
+        "6"
+      ]
+    ],
+    "settings": {
+      "layout": "columns",
+      "first": "0",
+      "second": "1"
+    },
+    "expected": "bayesbootstrap([1,2],[4,5,6],mean,0.95,10000,0,independent)"
+  },
+  {
+    "id": "bayesbootstrap",
+    "rows": [
+      [
+        "1",
+        "4"
+      ],
+      [
+        "2",
+        "5"
+      ]
+    ],
+    "settings": {
+      "layout": "columns",
+      "comparison": "paired",
+      "statistic": "median"
+    },
+    "expected": "bayesbootstrap([1,2],[4,5],median,0.95,10000,0,paired)"
+  },
+  {
+    "id": "bayesbootstrap",
+    "rows": [
+      [
+        "B",
+        "4"
+      ],
+      [
+        "A",
+        "1"
+      ],
+      [
+        "B",
+        "5"
+      ],
+      [
+        "A",
+        "2"
+      ]
+    ],
+    "settings": {
+      "layout": "groups",
+      "order": "reverse"
+    },
+    "expected": "bayesbootstrap([1,2],[4,5],mean,0.95,10000,0,independent)"
+  },
+  {
+    "id": "pca",
+    "rows": [
+      [
+        "A",
+        "1",
+        "9"
+      ],
+      [
+        "B",
+        "2",
+        "8"
+      ],
+      [
+        "C",
+        "3",
+        "7"
+      ]
+    ],
+    "settings": {
+      "columns": "2,1",
+      "components": "1",
+      "standardize": "0"
+    },
+    "expected": "pca([[9,1],[8,2],[7,3]],1,0)"
+  },
+  {
+    "id": "bayesbootstrap",
+    "rows": [
+      [
+        "A",
+        "1"
+      ],
+      [
+        "B",
+        "2"
+      ],
+      [
+        "C",
+        "8"
+      ]
+    ],
+    "settings": {
+      "column": "1",
+      "statistic": "median",
+      "level": "0.9",
+      "samples": "500",
+      "seed": "7"
+    },
+    "expected": "bayesbootstrap([1,2,8],median,0.9,500,7)"
+  },
+  {
     "id": "bayescompare",
     "rows": [
       [

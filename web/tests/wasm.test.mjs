@@ -12,10 +12,83 @@ import {statisticsResultMarkdown} from '../statistics-markdown.js';
 import {statisticsRequest} from '../statistics-request.js';
 import {guidedStatisticsCommand} from '../advanced-statistics.js';
 import {advancedStatisticsSchema} from '../advanced-statistics-schema.js';
+import {graphInputTree} from '../graph-workspace.js';
 
 // Reuse the interpreter for sequential integration scenarios. The cold solver
 // scenario below explicitly loads its own interpreter to keep startup coverage.
 let sharedRuntime;
+test('Bayesian bootstrap column and named-group comparisons run through real WASM',async()=>{
+  const py=await runtime(),definition=advancedStatisticsSchema.find(d=>d.id==='bayesbootstrap');
+  const evaluate=(rows,settings,labels={})=>{
+    const command=guidedStatisticsCommand(definition,rows,{samples:'1000',seed:'7',...settings});
+    py.globals.set('payload',JSON.stringify({tree:parse(command),statisticsTermLabels:labels}));
+    const result=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));assert.equal(result.ok,true,result.error);return result;
+  };
+  const independent=evaluate([['1','4'],['2','5'],['','6']],{layout:'columns'});
+  assert.match(independent.exact,/P\(difference < 0\): 0/);
+  assert.match(independent.exact,/n A: 2/);assert.match(independent.exact,/n B: 3/);
+  assert.equal(independent.statisticsReport.plots[0].statistic,'Difference (B − A)');
+  const paired=evaluate([['1','4'],['2','5'],['3','6']],{layout:'columns',comparison:'paired'});
+  assert.deepEqual(paired.statisticsReport.plots[0].interval,[3,3]);
+  const rows=[['control','1'],['treatment','4'],['control','2'],['treatment','5']];
+  const labels={'sample:A':'treatment','sample:B':'control'};
+  const grouped=evaluate(rows,{layout:'groups',order:'reverse'},labels);
+  assert.deepEqual(grouped.statisticsReport.plots[0].groupLabels,['treatment','control']);
+  assert.deepEqual(grouped.statisticsReport.sections[0].rows,[['treatment','control']]);
+  assert.ok(grouped.statisticsReport.plots[0].interval.every(v=>v<0));
+  assert.match(statisticsResultMarkdown(grouped),/treatment.*control/);
+  assert.match(statisticsResultMarkdown(grouped),/P\(difference &lt; 0\)/);
+  py.globals.set('payload',JSON.stringify({tree:parse('bayesbootstrap([1,2],median)')}));
+  const median=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));assert.equal(median.ok,true,median.error);
+  assert.equal(median.statisticsReport.plots[0].counts.reduce((a,b)=>a+b,0),10000);
+  assert.match(median.exact,/Lower weighted quantile/);assert.match(median.exact,/draws: 10000/);
+  assert.equal(median.statisticsReport.plots[0].estimate,1.5);
+  const references=JSON.parse(readFileSync(new URL('../../tests/fixtures/bayesian_bootstrap_median_reference.json',import.meta.url),'utf8'));
+  for(const reference of references){
+    const command=`bayesbootstrap(${JSON.stringify(reference.first)}${reference.second?','+JSON.stringify(reference.second):''},median,0.95,${reference.draws},${reference.seed}${reference.second?','+reference.mode:''})`;
+    py.globals.set('payload',JSON.stringify({tree:parse(command)}));
+    const result=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));assert.equal(result.ok,true,result.error);
+    const plot=result.statisticsReport.plots[0];
+    assert.equal(plot.estimate,reference.second?1.5:5);
+    assert.deepEqual(plot.counts,reference.histogram.counts);assert.deepEqual(plot.interval,reference.histogram.interval);
+    const summary=result.statisticsReport.sections.find(section=>section.title==='Summary');
+    for(const [key,value] of Object.entries(reference.posterior)){
+      if(Array.isArray(value))continue;
+      const cell=summary.rows.find(row=>row[0]===key)[1];
+      assert.ok(Math.abs(Number(cell.decimal)-value)<1e-12,`${reference.mode}: ${key}`);
+    }
+    if(reference.second){
+      assert.equal(Number(summary.rows.find(row=>row[0]==='estimate A')[1].decimal),3);
+      assert.equal(Number(summary.rows.find(row=>row[0]==='estimate B')[1].decimal),4.5);
+    }
+  }
+});
+test('Desmos restrictions, branch joins, Bayesian bootstrap and PCA forms run through real WASM',async()=>{
+  const py=await runtime();
+  const run=request=>{
+    py.globals.set('payload',JSON.stringify(request));
+    const result=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));assert.equal(result.ok,true,result.error);return result;
+  };
+  const graph=source=>run({action:'graph',graphKind:'cartesian',trees:[graphInputTree(source)],min:-1,max:3,yMin:-1,yMax:6}).curves[0];
+  const domain=graph('y=x^2 {0<=x<=2}').filter(Boolean);
+  assert.equal(domain[0][0],0);assert.equal(domain.at(-1)[0],2);
+  assert.ok(domain.every(([x,y])=>x>=0&&x<=2&&Math.abs(y-x*x)<1e-12));
+  const piece=graph('f(x)={x<0:x^2,x>=0:2*x}');
+  assert.ok(piece.every(Boolean));assert.ok(piece.some(([x,y])=>x===0&&y===0));
+  const jump=graph('y={x<0:1,2}');assert.ok(jump.includes(null));
+  for(let i=1;i<jump.length;i++)if(jump[i-1]&&jump[i])assert.equal(jump[i-1][1],jump[i][1]);
+  const bootstrap=advancedStatisticsSchema.find(d=>d.id==='bayesbootstrap');
+  const command=guidedStatisticsCommand(bootstrap,[['0'],['1']],{samples:'2000',seed:'7'});
+  const posterior=run({tree:parse(command)}).statisticsReport;
+  assert.equal(posterior.analysis,'bayesbootstrap');assert.equal(posterior.plots[0].counts.reduce((a,b)=>a+b,0),2000);
+  assert.ok(Math.abs(posterior.plots[0].interval[0]-.025)<.02);assert.ok(Math.abs(posterior.plots[0].interval[1]-.975)<.02);
+  const pca=advancedStatisticsSchema.find(d=>d.id==='pca');
+  const source=guidedStatisticsCommand(pca,[['A','1','2'],['B','2','1'],['C','3','4'],['D','4','3']],{columns:'2,1',components:'1'});
+  const report=run({tree:parse(source),statisticsTermLabels:{'feature:1':'weight','feature:2':'height'}}).statisticsReport;
+  assert.deepEqual(report.plots[2].labels,['weight','height']);assert.equal(report.plots[0].ratios.length,2);
+  assert.equal(report.plots[1].points[0].length,1);assert.equal(report.plots[1].points.length,4);
+  const scaling=report.sections.find(section=>section.title==='Feature scaling');assert.equal(scaling.rows[0][0],'weight');
+});
 test('derived graph analysis and mixed derivative intersections run through WASM dispatch',async()=>{
   const py=await runtime();
   const analyze=options=>{

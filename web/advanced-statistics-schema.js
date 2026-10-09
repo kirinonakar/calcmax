@@ -2494,6 +2494,222 @@ export const advancedStatisticsSchema = [
     "helpKo": "통계량 mean / median / stdev, 신뢰수준, 재추출 수, 시드. IID 백분위 방식."
   },
   {
+    "id": "bayesbootstrap",
+    "label": "Bayesian Bootstrap",
+    "ko": "베이지안 부트스트랩",
+    "input": "list",
+    "suffix": ",mean,0.95,10000,0",
+    "example": "bayesbootstrap([1,2,3,4,5,8],mean,0.95,10000,0)",
+    "help": "Dirichlet(1,…,1) weights on IID observed values; mean / median / variance / stdev, credible level, draws, seed. Median estimate uses the ordinary sample median (average the two middle values for even n); posterior draws use the Lower weighted quantile (smallest value with weighted CDF >= 0.5); variance/SD use population weights. Equal-tailed simulated posterior interval and histogram. Two samples: bayesbootstrap(A,B,mean,0.95,10000,0,independent); paired uses shared row weights. Comparison is statistic(B) - statistic(A).",
+    "helpKo": "독립 관측값의 Dirichlet(1,…,1) 가중치; mean / median / variance / stdev, 베이지안 구간 수준·추출 수·시드. 중앙값 estimate는 일반 표본 중앙값(짝수 표본은 가운데 두 값의 평균)이고 사후추출은 Lower weighted quantile(가중 누적확률이 0.5 이상인 최소값), 분산·SD는 모집단 가중치 기준. 등꼬리 사후 구간·히스토그램. 두 표본: bayesbootstrap(A,B,mean,0.95,10000,0,independent); paired는 같은 행의 가중치를 공유합니다. 차이는 통계량(B) - 통계량(A)입니다.",
+    "controls": [
+      {
+        "key": "layout",
+        "label": "Data layout",
+        "ko": "자료 구성",
+        "type": "choice",
+        "default": "single",
+        "choices": [
+          {
+            "id": "single",
+            "label": "Single sample",
+            "ko": "단일 표본"
+          },
+          {
+            "id": "columns",
+            "label": "Two columns",
+            "ko": "두 컬럼"
+          },
+          {
+            "id": "groups",
+            "label": "Group / value columns",
+            "ko": "그룹·값 컬럼"
+          }
+        ]
+      },
+      {
+        "key": "column",
+        "label": "Sample column",
+        "ko": "표본 열",
+        "type": "column",
+        "default": 0,
+        "when": {
+          "layout": [
+            "single"
+          ]
+        }
+      },
+      {
+        "key": "first",
+        "label": "Group A column",
+        "ko": "A 그룹 열",
+        "type": "column",
+        "default": 0,
+        "when": {
+          "layout": [
+            "columns"
+          ]
+        }
+      },
+      {
+        "key": "second",
+        "label": "Group B column",
+        "ko": "B 그룹 열",
+        "type": "column",
+        "default": 1,
+        "when": {
+          "layout": [
+            "columns"
+          ]
+        }
+      },
+      {
+        "key": "comparison",
+        "label": "Comparison",
+        "ko": "비교 방식",
+        "type": "choice",
+        "default": "independent",
+        "choices": [
+          {
+            "id": "independent",
+            "label": "Independent samples",
+            "ko": "독립 표본"
+          },
+          {
+            "id": "paired",
+            "label": "Paired rows",
+            "ko": "대응 행"
+          }
+        ],
+        "when": {
+          "layout": [
+            "columns"
+          ]
+        }
+      },
+      {
+        "key": "group",
+        "label": "Group column",
+        "ko": "그룹 열",
+        "type": "column",
+        "default": 0,
+        "when": {
+          "layout": [
+            "groups"
+          ]
+        }
+      },
+      {
+        "key": "value",
+        "label": "Value column",
+        "ko": "값 열",
+        "type": "column",
+        "default": 1,
+        "when": {
+          "layout": [
+            "groups"
+          ]
+        }
+      },
+      {
+        "key": "order",
+        "label": "Group A",
+        "ko": "A 그룹",
+        "type": "choice",
+        "default": "first",
+        "choices": [
+          {
+            "id": "first",
+            "label": "First observed group",
+            "ko": "먼저 나온 그룹"
+          },
+          {
+            "id": "reverse",
+            "label": "Second observed group",
+            "ko": "둘째로 나온 그룹"
+          }
+        ],
+        "when": {
+          "layout": [
+            "groups"
+          ]
+        }
+      },
+      {
+        "key": "statistic",
+        "label": "Statistic",
+        "ko": "통계량",
+        "type": "choice",
+        "default": "mean",
+        "choices": [
+          {
+            "id": "mean",
+            "label": "Mean",
+            "ko": "평균"
+          },
+          {
+            "id": "median",
+            "label": "Median (sample estimate / weighted posterior)",
+            "ko": "중앙값 (표본 추정치 / 가중 사후추출)"
+          },
+          {
+            "id": "variance",
+            "label": "Population variance",
+            "ko": "모분산"
+          },
+          {
+            "id": "stdev",
+            "label": "Population SD",
+            "ko": "모표준편차"
+          }
+        ]
+      },
+      {
+        "key": "level",
+        "label": "Credible level",
+        "ko": "베이지안 구간 수준",
+        "type": "number",
+        "default": "0.95"
+      },
+      {
+        "key": "samples",
+        "label": "Posterior draws",
+        "ko": "사후 추출 수",
+        "type": "number",
+        "default": "10000"
+      },
+      {
+        "key": "seed",
+        "label": "Seed",
+        "ko": "시드",
+        "type": "number",
+        "default": "0"
+      }
+    ],
+    "formHelp": "Single sample or statistic(B) − statistic(A). Independent columns omit blanks separately; paired columns require complete matching rows and share Dirichlet weights (difference of marginal statistics, not the statistic of row differences). Group/value columns require exactly two labels and complete selected rows; choose which observed group is A. Dirichlet(1,…,1) weights; equal-tailed posterior credible interval, P(difference > 0), P(difference < 0), P(difference = 0) and histogram. Median estimate is the ordinary sample median (average the two middle values for even n); posterior draws use the Lower weighted quantile (smallest value with weighted CDF >= 0.5); variance/SD use population weights. Seed makes draws reproducible.",
+    "formHelpKo": "단일 표본 또는 통계량(B) − 통계량(A)을 분석합니다. 독립 컬럼은 빈 셀을 각각 제외하며, 대응 컬럼은 완전한 같은 행에 공통 Dirichlet 가중치를 적용합니다(각 컬럼 통계량의 차이이며, 행별 차이의 통계량과 다릅니다). 그룹·값 컬럼은 두 그룹과 완전한 선택 행이 필요하며 먼저·둘째로 나온 그룹 중 A를 선택합니다. Dirichlet(1,…,1) 가중치·등꼬리 사후 구간·P(차이 > 0)·P(차이 < 0)·P(차이 = 0)·히스토그램. 중앙값 estimate는 일반 표본 중앙값(짝수 표본은 가운데 두 값의 평균)이고 사후추출은 Lower weighted quantile(가중 누적확률이 0.5 이상인 최소값), 분산·SD는 모집단 가중치 기준이며 시드로 재현합니다.",
+    "exampleRows": [
+      [
+        "1"
+      ],
+      [
+        "2"
+      ],
+      [
+        "3"
+      ],
+      [
+        "4"
+      ],
+      [
+        "5"
+      ],
+      [
+        "8"
+      ]
+    ]
+  },
+  {
     "id": "testpower",
     "label": "Power",
     "ko": "검정력",
@@ -2773,7 +2989,66 @@ export const advancedStatisticsSchema = [
     "suffix": ",2,1",
     "example": "pca([[1,2],[2,1],[3,4],[4,3],[5,7]],2,1)",
     "help": "Rows=observations, columns=features; components, standardize 1/0.",
-    "helpKo": "행=관측, 열=변수; 주성분 수, 표준화 1/0."
+    "helpKo": "행=관측, 열=변수; 주성분 수, 표준화 1/0.",
+    "controls": [
+      {
+        "key": "columns",
+        "label": "Feature columns",
+        "ko": "변수 열",
+        "type": "columns",
+        "default": "auto"
+      },
+      {
+        "key": "components",
+        "label": "Components",
+        "ko": "주성분 수",
+        "type": "number",
+        "default": "2"
+      },
+      {
+        "key": "standardize",
+        "label": "Scaling",
+        "ko": "척도",
+        "type": "choice",
+        "default": "1",
+        "choices": [
+          {
+            "id": "1",
+            "label": "Standardize (sample SD)",
+            "ko": "표준화 (표본 표준편차)"
+          },
+          {
+            "id": "0",
+            "label": "Center only",
+            "ko": "중심화만"
+          }
+        ]
+      }
+    ],
+    "formHelp": "Choose numeric feature columns, components and sample-SD standardization or centering only. Selected rows must be complete. Scree plot includes all components; score and loading plots use the retained components. Loading arrows show eigenvector coefficients, on separate axes from scores.",
+    "formHelpKo": "숫자 변수 열·주성분 수·표본 표준편차 표준화 또는 중심화를 선택합니다. 선택한 열의 모든 행이 완전해야 합니다. 설명분산 그래프는 모든 주성분을, 점수·로딩 그래프는 유지한 주성분을 표시합니다. 로딩 화살표는 고유벡터 계수이며 점수와 별도 좌표를 사용합니다.",
+    "exampleRows": [
+      [
+        "1",
+        "2"
+      ],
+      [
+        "2",
+        "1"
+      ],
+      [
+        "3",
+        "4"
+      ],
+      [
+        "4",
+        "3"
+      ],
+      [
+        "5",
+        "7"
+      ]
+    ]
   },
   {
     "id": "kmeans",

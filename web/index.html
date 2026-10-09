@@ -27,9 +27,17 @@
       <div class="form-row"><label>Type<select id="graph-kind"><option value="cartesian">Cartesian</option><option value="parametric">Parametric (x(t), y(t))</option><option value="polar">Polar r = f(t)</option><option value="sequence">Sequence u(n)</option><option value="surface">3D z = f(x,y)</option><option value="differential">Differential equation dy/dt</option></select></label></div>
       <label>Expressions · one per line<textarea id="graph-source" rows="3" spellcheck="false">sin(x)
 cos(x)</textarea></label>
-      <details id="graph-help" open><summary>Help</summary>
-      <p id="graph-cartesian-help">Function / y=f(x) · Implicit / F(x,y)=0 · e.g. x+1, y=x+1, y^2+x^2=1</p>
-      <p class="hint">Implicit Graph: x^2+y^2=1<br>Parametric: (cos(t),sin(t)) · Polar: 1+cos(t) · Sequence: u(n-1)+1 · 3D: sin(x)*cos(y)<br>Use [shade] or [s] for shading. Example: [s] -1&lt;x&lt;1 ,-1&lt;y&lt;x. Between functions: [s] sin(x), cos(x), 0..pi.</p>
+      <details id="graph-help"><summary>Graph input help</summary>
+        <p id="graph-cartesian-help" class="hint">Function / y=f(x) · Implicit / F(x,y)=0 · e.g. x+1, y=x+1, y^2+x^2=1</p>
+        <p><strong>Piecewise functions / domain restrictions</strong></p>
+        <p class="hint">Use {condition:value,condition:value,default}. The first matching condition wins; without a default, unmatched values are undefined.</p>
+        <code>f(x)={x&lt;0:x^2,x&gt;=0:2*x}</code>
+        <p class="hint">Append {condition} to restrict the whole preceding expression. Spaces and outer parentheses are optional; chained inequalities are supported.</p>
+        <pre>y=x^2 {0&lt;=x&lt;=2}
+y=2*x {x&gt;2}</pre>
+        <p class="hint">One curve per line · [shade] / [s] -1&lt;x&lt;1 ,-1&lt;y&lt;x · between functions: [s] f, g</p>
+        <p><strong>Other graph types</strong></p>
+        <p class="hint">Parametric: [cos(t),sin(t)] · Polar: 1+cos(t) (radians) · Sequence: u(n-1)+1 (enter initial values) · 3D surface: z=sin(x)*cos(y) · Differential equation: -y (dy/dt; enter t₀ and initial y values)</p>
       </details>
       <div class="form-row"><label>Sequence seeds / differential y₀<input id="graph-initial" value="1" placeholder="1, 1"></label><label>t₀<input id="graph-t0" type="number" value="0" step="any"></label></div>
       <div class="graph-toolbar"><button id="graph-zoom-in" aria-label="Zoom in">+</button><button id="graph-zoom-out" aria-label="Zoom out">−</button><button id="graph-left" aria-label="Pan left">◀</button><button id="graph-right" aria-label="Pan right">▶</button><button id="graph-up" aria-label="Pan up">▲</button><button id="graph-down" aria-label="Pan down">▼</button><button id="graph-fit">Fit Y</button><button id="graph-undo" disabled>Undo</button><button id="graph-reset">Reset</button><button id="graph-axis">x: decimal</button><label class="graph-curve-picker" hidden><span>Selected curve</span><select id="graph-selected"></select></label><label class="check"><input id="graph-derivative" type="checkbox"><span id="graph-derivative-label">Derivative curve f1′</span></label><label class="check"><input id="graph-second-derivative" type="checkbox"><span id="graph-second-derivative-label">Derivative curve f1″</span></label></div>

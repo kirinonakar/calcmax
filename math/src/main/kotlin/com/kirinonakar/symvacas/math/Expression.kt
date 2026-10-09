@@ -127,9 +127,26 @@ class Parser(private val source: String, private val allowHoles: Boolean = false
             }
             first.text == "{" -> {
                 val args = mutableListOf<Expr>()
-                if(token.text != "}" || allowHoles) { args += expression(0); while(token.text == ",") { take(); args += expression(0) } }
-                val unclosed = allowHoles && token.text.isEmpty()
-                Expr("set", if(unclosed) "open" else "", args = args, start = first.start, end = expect("}").end)
+                if(token.text != "}" || allowHoles) args += expression(0)
+                if(token.text==":") {
+                    val branches=mutableListOf<Expr>()
+                    var condition=args.first()
+                    while(true) {
+                        expect(":");val body=expression(0)
+                        branches+=Expr("tuple",args=listOf(body,condition),start=condition.start,end=body.end)
+                        if(token.text!=",")break
+                        take();condition=expression(0)
+                        if(token.text!=":") {
+                            branches+=Expr("tuple",args=listOf(condition,Expr("symbol","true",start=condition.end,end=condition.end)),start=condition.start,end=condition.end)
+                            break
+                        }
+                    }
+                    Expr("piecewise",args=branches,start=first.start,end=expect("}").end)
+                } else {
+                    while(token.text == ",") { take(); args += expression(0) }
+                    val unclosed = allowHoles && token.text.isEmpty()
+                    Expr("set", if(unclosed) "open" else "", args = args, start = first.start, end = expect("}").end)
+                }
             }
             first.text.firstOrNull()?.let { it.isDigit() || it == '.' } == true -> {
                 try { first.text.toBigDecimal() } catch(_: Exception) { throw SyntaxException("Invalid number", first.start) }
@@ -148,6 +165,11 @@ class Parser(private val source: String, private val allowHoles: Boolean = false
         }
         while(true) {
             val op = token.text
+            if(op=="{" && min<=6) {
+                take();val condition=expression(0);val end=expect("}").end
+                left=Expr("piecewise","restriction",listOf(Expr("tuple",args=listOf(left,condition),start=left.start,end=end)),left.start,end)
+                continue
+            }
             if(op=="°" && min<=40) {
                 val dms=tryDms(left)
                 if(dms!=null) { left=dms; continue }

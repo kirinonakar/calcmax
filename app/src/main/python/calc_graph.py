@@ -184,7 +184,45 @@ def graph_cartesian(engine, request, trees, xmin, xmax):
     require(math.isfinite(ymin) and math.isfinite(ymax) and ymax > ymin, "Invalid implicit y range")
     curves, implicit = [], []
     def sample(expression):
-        points, parameters = adaptive_samples(graph_function(expression, (x,), sliders), xmin, xmax, count, "cartesian")
+        function=graph_function(expression, (x,), sliders)
+        # Split at explicit branch boundaries, including same-sign jumps and
+        # narrow restricted intervals that a uniform grid can entirely miss.
+        boundaries=set()
+        resolved=substitute_parameters(expression,sliders)
+        for piece in resolved.atoms(s.Piecewise):
+            for _,condition in piece.args:
+                for relation in condition.atoms(s.core.relational.Relational):
+                    difference=relation.lhs-relation.rhs
+                    if difference.free_symbols-set((x,)): continue
+                    try:
+                        polynomial=s.Poly(difference,x)
+                        if not 1<=polynomial.degree()<=4: continue
+                        for root in s.solve(difference,x):
+                            value=_finite_real(root)
+                            if value is not None and xmin<value<xmax: boundaries.add(value)
+                    except (s.PolynomialError,NotImplementedError,ValueError): pass
+        if not boundaries:
+            points, parameters = adaptive_samples(function, xmin, xmax, count, "cartesian",screen_bounds=(xmin,xmax,ymin,ymax))
+        else:
+            breaks=[xmin]+sorted(boundaries)+[xmax];points=[];parameters=[]
+            for low,high in zip(breaks,breaks[1:]):
+                left=math.nextafter(low,high) if low in boundaries else low
+                right=math.nextafter(high,low) if high in boundaries else high
+                part,positions=adaptive_samples(function,left,right,max(100,int(count*(high-low)/(xmax-xmin))),"cartesian",screen_bounds=(xmin,xmax,ymin,ymax))
+                for edge,index in ((low,0),(high,-1)):
+                    if edge not in boundaries or part[index] is None: continue
+                    try: actual=_finite_real(function(edge))
+                    except (ValueError,TypeError,ZeroDivisionError,OverflowError): actual=None
+                    if actual is not None and abs(actual-part[index][1])<=1e-8*max(1,abs(actual)):
+                        part[index]=[edge,actual];positions[index]=edge
+                if points:
+                    try: exact=_finite_real(function(low))
+                    except (ValueError,TypeError,ZeroDivisionError,OverflowError): exact=None
+                    continuous=(exact is not None and points[-1] is not None and part[0] is not None
+                                and abs(points[-1][1]-exact)<=1e-8*max(1,abs(exact))
+                                and abs(part[0][1]-exact)<=1e-8*max(1,abs(exact)))
+                    if not continuous: points.append(None);parameters.append(low)
+                points.extend(part);parameters.extend(positions)
         return simplify_samples(points, parameters, request, xmin, xmax)[0]
     for function, residual in curvespecs:
         # A parameter may make a linear equation degenerate (e.g. a*y=x at a=0).
@@ -581,7 +619,7 @@ def simplify_samples(points, parameters, request, start, end):
     return [points[i] for i in indices], [parameters[i] for i in indices]
 
 
-def adaptive_samples(function, start, end, base_count, kind="cartesian"):
+def adaptive_samples(function, start, end, base_count, kind="cartesian",screen_bounds=None):
     """Sample coarsely first, then add points where the curve bends or breaks."""
     def point(at):
         try:
@@ -594,14 +632,18 @@ def adaptive_samples(function, start, end, base_count, kind="cartesian"):
         except (TypeError, ValueError, ZeroDivisionError, OverflowError):
             return None
     intervals = capped(max(100, base_count),512)
-    values = {start + (end-start)*i/intervals: None for i in range(intervals+1)}
+    values = {start + (end-start)*i/intervals: None for i in range(1,intervals)}
+    # Preserve nextafter endpoints: interpolation can round an open endpoint
+    # back onto the excluded boundary, especially when that boundary is zero.
+    values.update({start:None,end:None})
     for at in values:
         values[at] = point(at)
     max_points = capped(max(base_count+1, 1200),1800)
     def refine(left, right, depth):
-        if depth >= 4 or len(values) >= max_points:
+        if depth >= (7 if screen_bounds else 4) or len(values) >= max_points:
             return
         middle = (left+right)/2
+        if middle==left or middle==right: return
         actual = point(middle)
         a, b = values[left], values[right]
         split = a is None or b is None or actual is None
@@ -610,6 +652,10 @@ def adaptive_samples(function, start, end, base_count, kind="cartesian"):
             span = max(abs(b[0]-a[0]), abs(b[1]-a[1]), 1e-9)
             error = max(abs(actual[0]-linear[0]), abs(actual[1]-linear[1]))/span
             split = error > 0.012 or abs(b[1]-a[1]) > 0.22*max(abs(end-start),1e-9)
+            if screen_bounds:
+                _,_,view_low,view_high=screen_bounds
+                if min(a[1],b[1],actual[1])<=view_high and max(a[1],b[1],actual[1])>=view_low:
+                    split=split or abs(actual[1]-linear[1])*800/(view_high-view_low)>.2
         if split:
             values[middle] = actual
             refine(left, middle, depth+1)

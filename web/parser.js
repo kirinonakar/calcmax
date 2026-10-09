@@ -73,13 +73,29 @@ export function parse(source,{allowHoles=false}={}) {
       let tuple = false;
       if (first.text === '(' || current().text !== close) {
         args.push(expression(0));
-        while (current().text === ',') {
-          take(); tuple = true;
-          if (first.text === '(' && current().text === close) break;
-          args.push(expression(0));
+        if(first.text==='{' && current().text===':'){
+          const branches=[];
+          let condition=args[0];
+          while(true){
+            expect(':');const value=expression(0);
+            branches.push(node('tuple','',[value,condition],condition.start,value.end));
+            if(current().text!==',')break;
+            take();condition=expression(0);
+            if(current().text!==':'){
+              branches.push(node('tuple','',[condition,node('symbol','true',[],condition.end,condition.end)],condition.start,condition.end));break;
+            }
+          }
+          left=node('piecewise','',branches,first.start,expect('}').end);
+        }
+        if(left?.kind!=='piecewise'){
+          while (current().text === ',') {
+            take(); tuple = true;
+            if (first.text === '(' && current().text === close) break;
+            args.push(expression(0));
+          }
         }
       }
-      left = node(first.text === '(' ? (tuple ? 'tuple' : 'group') : first.text === '[' ? 'list' : 'set','',args,first.start,expect(close).end);
+      if(left?.kind!=='piecewise')left = node(first.text === '(' ? (tuple ? 'tuple' : 'group') : first.text === '[' ? 'list' : 'set','',args,first.start,expect(close).end);
     } else if (digit(first.text[0]) || first.text[0] === '.') {
       if (!numeric(first.text)) fail('Invalid number');
       left = node('number',first.text,[],first.start,first.end);
@@ -96,6 +112,10 @@ export function parse(source,{allowHoles=false}={}) {
     } else fail('Expected an expression');
     while (true) {
       const op = current().text;
+      if(op==='{'&&min<=6){
+        take();const condition=expression(0),end=expect('}').end;
+        left=node('piecewise','restriction',[node('tuple','',[left,condition],left.start,end)],left.start,end);continue;
+      }
       if (op === '°' && min <= 40) { const dms = tryDms(left); if (dms) { left = dms; continue; } }
       if (['!','%','°','²','³'].includes(op) && min <= 40) {
         const end = take().end;

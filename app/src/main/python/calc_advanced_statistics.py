@@ -48,6 +48,7 @@ _ANALYSES = {
     'poissonreg': (1, 3, regression),
     'nbreg': (1, 3, regression),
     'bootstrapci': (1, 5, resampling),
+    'bayesbootstrap': (1, 7, resampling),
     'testpower': (2, 5, resampling),
     'samplesize': (1, 5, resampling),
     'kstest': (2, 4, resampling),

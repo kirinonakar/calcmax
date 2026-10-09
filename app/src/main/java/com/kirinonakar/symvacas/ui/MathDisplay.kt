@@ -335,6 +335,39 @@ internal fun negativeFractionNumerator(node:JSONObject):JSONObject? {
     return numerator.takeIf {it.optString("kind")=="unary" && it.optString("value")=="-" && it.optJSONArray("args")?.length()==1}
 }
 
+/** Measure the complete rows/powers before drawing braces; fixed glyphs cannot enclose them. */
+@Composable private fun CurlyBraces(fontSize:Float,close:Boolean=true,content:@Composable ()->Unit) {
+    val ink=LocalInstrument.current.ink
+    Layout(content={
+        Canvas(Modifier.semantics {testTag="math-curly-braces"}) {
+            val stroke=(fontSize.sp.toPx()*.045f).coerceAtLeast(.75.dp.toPx())
+            val width=(fontSize.sp.toPx()*.38f).coerceAtLeast(8.dp.toPx())
+            val top=stroke/2;val bottom=size.height-stroke/2;val middle=size.height/2
+            fun brace(closing:Boolean) {
+                fun x(fraction:Float)=if(closing)size.width-width*fraction else width*fraction
+                drawPath(Path().apply {
+                    moveTo(x(.9f),top)
+                    cubicTo(x(.35f),top,x(.35f),top,x(.35f),size.height*.22f)
+                    cubicTo(x(.35f),size.height*.40f,x(.35f),size.height*.44f,x(.06f),middle)
+                    cubicTo(x(.35f),size.height*.56f,x(.35f),size.height*.60f,x(.35f),size.height*.78f)
+                    cubicTo(x(.35f),bottom,x(.35f),bottom,x(.9f),bottom)
+                },ink,style=Stroke(stroke,cap=StrokeCap.Round,join=StrokeJoin.Round))
+            }
+            brace(false);if(close)brace(true)
+        }
+        MathRow(modifier=Modifier.semantics {testTag="math-curly-content"},content=content)
+    }){ms,constraints->
+        val expression=ms[1].measure(constraints.copy(minWidth=0,minHeight=0))
+        val arm=(fontSize.sp.toPx()*.38f).coerceAtLeast(8.dp.toPx()).roundToInt()+2.dp.roundToPx()
+        val padding=1.dp.roundToPx();val height=expression.height+2*padding
+        val width=expression.width+arm+if(close)arm else 0
+        val braces=ms[0].measure(Constraints.fixed(width,height))
+        layout(width,height,mapOf(MathAxis to padding+expression.axis())) {
+            braces.place(0,0);expression.place(arm,padding)
+        }
+    }
+}
+
 @Composable fun MathNode(node:JSONObject,size:Float=25f,select:((Int,Int)->Unit)?=null,selection:IntRange?=null,depth:Int=0,hideGroup:Boolean=false,compactRootIndexHole:Boolean=false,compactLogBaseHole:Boolean=false,compactExponentHole:Boolean=false,operandHole:Boolean=false,selectionCoveredByAncestor:Boolean=false,functionExponent:(@Composable ()->Unit)?=null) {
     if(depth>36){MathText("…",size);return}
     val c=LocalInstrument.current
@@ -529,7 +562,22 @@ internal fun negativeFractionNumerator(node:JSONObject):JSONObject? {
                 if(value=="integrate"){label("d");integralPart(1)}
             }
             kind=="call"&&value=="limit"->MathRow(4.dp){MathStack(0){label("lim");MathRow{child(1,.55f);if(children.size>2){label("→",.55f);child(2,.55f)}}};child(0)}
-            kind in listOf("call","function")&&value in listOf("piecewise","Piecewise")->MathRow{label("{",1.7f);Column{children.indices.forEach{child(it,.85f)}}}
+            kind=="piecewise"->MathRow{
+                if(value=="restriction") {
+                    val branch=children[0].getJSONArray("args")
+                    MathNode(branch.getJSONObject(0),size,select,selection,depth+1,selectionCoveredByAncestor=selectionCoveredByAncestor||highlighted)
+                    CurlyBraces(size){MathNode(branch.getJSONObject(1),size,select,selection,depth+1,selectionCoveredByAncestor=selectionCoveredByAncestor||highlighted)}
+                } else {
+                    CurlyBraces(size,close=false){
+                    Column{children.forEach {branch->val pair=branch.getJSONArray("args");MathRow(8.dp){
+                        MathNode(pair.getJSONObject(0),size*.85f,select,selection,depth+1,selectionCoveredByAncestor=selectionCoveredByAncestor||highlighted)
+                        if(pair.getJSONObject(1).optString("value")=="true")label(if(isKorean())"그 외" else "otherwise",.85f)
+                        else MathNode(pair.getJSONObject(1),size*.85f,select,selection,depth+1,selectionCoveredByAncestor=selectionCoveredByAncestor||highlighted)
+                    }}}
+                    }
+                }
+            }
+            kind in listOf("call","function")&&value in listOf("piecewise","Piecewise")->CurlyBraces(size,close=false){Column{children.indices.forEach{child(it,.85f)}}}
             else->MathRow(if(coefficient)0.dp else 2.dp){
                 val wrap=kind in listOf("call","function","list","tuple","set")
                 val openContainer=value=="open"&&kind in listOf("list","set")
@@ -552,6 +600,7 @@ internal fun negativeFractionNumerator(node:JSONObject):JSONObject? {
                     if(kind=="tuple"&&children.size==1)label(",")
                 }
                 if(wrap&&kind !in listOf("list","set"))RoundParentheses(size){operands()}
+                else if(kind=="set")CurlyBraces(size,close=!openContainer){operands()}
                 else {
                     if(wrap)label(if(kind=="list")"[" else "{")
                     operands()

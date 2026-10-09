@@ -253,6 +253,8 @@ Example: minimum(x^2,x,-1,2)
 Example: maximum(x^2,x,-1,2)
 `piecewise([expr,cond],...)` — 조건별로 값이 다른 조각별 함수를 만듭니다.
 Example: piecewise([1,x>0],[0,true])
+
+그래프에서 Desmos 방식 `{조건:값,조건:값,기본값}`도 사용할 수 있습니다. 먼저 만족하는 조건의 값을 사용하고, 기본값을 생략하면 어느 조건도 만족하지 않는 곳은 정의되지 않습니다. 예: `f(x)={x<0:x^2,x>=0:2*x}`. 식 뒤에 `{조건}`을 붙이면 앞의 식 전체의 정의역을 제한합니다. 공백·바깥 괄호 유무와 관계없이 `y=x^2 {0<=x<=2}`, `y=2*x {x>2}`을 지원합니다. 연쇄 부등식도 사용할 수 있습니다. 제외한 구간은 그리지 않으며 명시적인 다항식 조건 경계는 따로 샘플링하여 점프가 선으로 연결되지 않게 합니다.
 `apart(expr,x)` — x에 대해 부분분수로 분해합니다.
 Example: apart(1/(x*(x+1)),x)
 `partfrac(expr,x)` — 부분분수 분해. apart의 별칭입니다.
@@ -755,6 +757,9 @@ Example: nbreg([[0,0],[0,0],[0,1],[0,8],[1,0],[1,1],[1,3],[1,15],[2,0],[2,2],[2,
 `bootstrapci` — 통계량 mean / median / stdev, 신뢰수준, 재추출 수, 시드. IID 백분위 방식.
 Example: bootstrapci([1,2,3,4,5,8],mean,0.95,2000,0)
 
+`bayesbootstrap` — 독립 관측값의 Dirichlet(1,…,1) 가중치; mean / median / variance / stdev, 베이지안 구간 수준·추출 수·시드. 중앙값 estimate는 일반 표본 중앙값(짝수 표본은 가운데 두 값의 평균)이고 사후추출은 Lower weighted quantile(가중 누적확률이 0.5 이상인 최소값), 분산·SD는 모집단 가중치 기준. 등꼬리 사후 구간·히스토그램. 두 표본: bayesbootstrap(A,B,mean,0.95,10000,0,independent); paired는 같은 행의 가중치를 공유합니다. 차이는 통계량(B) - 통계량(A)입니다.
+Example: bayesbootstrap([1,2,3,4,5,8],mean,0.95,10000,0)
+
 `testpower` — Cohen d, 그룹별 n/쌍 수, 유의수준, independent / paired / onesample, 대립가설 two(기본) / greater / less. 정확 noncentral-t 검정력.
 Example: testpower(0.5,64,0.05,independent)
 
@@ -777,6 +782,8 @@ Example: kmeans([[1,1],[1,2],[2,1],[8,8],[8,9],[9,8]],2,0)
 Example: impute([[1,NA],[2,4],[NA,6],[4,8]],mean)
 
 베이지안 분석은 독립 관측과 지정한 우도·적정 공액 사전분포를 사용하며 구간은 등꼬리 사후확률 구간입니다. Bayes factor는 가설의 사후확률이 아니며 사전분포에 영향을 받습니다. 계산 근거: [Stanford conjugate priors](https://web.stanford.edu/class/stats200/Lecture21.pdf), [normal-inverse-gamma analysis](https://treese41528.github.io/ComputationalDataScience/Website/part3_bayesian/chapter5/ch5_2-prior-distributions.html).
+
+베이지안 부트스트랩은 관측값 위의 Dirichlet(1,…,1) 가중치와 등꼬리 사후 구간을 사용하며 공액 모수 모형의 사전을 사용하지 않습니다. 계산 근거: [Rubin, The Bayesian Bootstrap (1981)](https://people.eecs.berkeley.edu/~jordan/sail/readings/rubin.pdf).
 
 모형은 수렴하지 않거나 식별 불가능하면 오류를 반환합니다. 유한한 미수렴 랜덤 기울기 적합은 추정치·진단을 반환하되 Wald SE·p값·CI는 표시하지 않습니다. Cox는 Breslow/Efron 동률, 선택적 좌측 절단, Grambsch–Therneau 스케일된 Schoenfeld 비례위험 검정을 지원하며 순서형 로지스틱은 비례오즈를 가정합니다. 혼합모형은 랜덤 절편과 최대 세 개의 랜덤 기울기(ML·REML)를, GEE는 독립·교환가능·AR(1) 작업상관을 지원합니다. 반복측정 ANOVA는 GG 보정이 포함된 균형 일·이요인 설계를 다룹니다. 단일 대체(mean·median·mode·회귀·k-NN) 후 추론은 대체 불확실성을 반영하지 않습니다. 교차검증은 linear·ridge·lasso·elasticnet·logistic 모형과 random·blocked·stratified 분할을 지원합니다. Firth 추론은 프로파일 페널티 우도 신뢰구간을, 부트스트랩은 백분위 구간을 사용합니다(BCa 없음).
 

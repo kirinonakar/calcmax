@@ -1,6 +1,7 @@
 import {element,control} from './app-ui.js';
 import {t} from './i18n.js';
 import {resultDisplayTree,resultMathDisplay} from './result-display.js';
+import {renderStatisticsVisualizations} from './statistics-visualization.js';
 
 const basicAnalyses=new Set('mean median variance stdev sumdata quartiles stats covariance correlation ttest ttest2 ttestpaired ztest ztest2 chi2test chi2independence fisherexact anova tukey shapiro wilcoxon mannwhitney kruskal tinterval zinterval'.split(' '));
 export function statisticsReportTarget(result,source='',requested=''){
@@ -15,6 +16,7 @@ export function renderStatisticsReport(container,report,{digits=10,onCopy,...opt
   const panel=element('div','','statistics-result-report');
   const heading=element('div','','statistics-result-heading');heading.append(element('h3',t(report.title)));
   if(onCopy)heading.append(control('Copy result',onCopy));panel.append(heading);
+  renderStatisticsVisualizations(panel,report.plots);
   for(const section of report.sections){
     const block=element('section');
     const scroll=element('div','','statistics-result-scroll');

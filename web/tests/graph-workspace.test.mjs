@@ -1,7 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {graphShadings,createGraphInputHistory,removeGraphSource,graphSelectedCurveIndex,graphAnalysisTarget,graphAnalysisCurves} from '../graph-workspace.js';
+import {graphInputTree,graphShadings,createGraphInputHistory,removeGraphSource,graphSelectedCurveIndex,graphAnalysisTarget,graphAnalysisCurves} from '../graph-workspace.js';
 import {curvePointAtX} from '../graph-view.js';
+
+test('named piecewise functions and unrestricted-parenthesis exponential inputs retain restriction scope',()=>{
+  const named=graphInputTree('f(x)={x<0:x^2,x>=0:2*x}');assert.equal(named.kind,'piecewise');
+  assert.deepEqual(named.args.map(branch=>branch.args[0].value),['^','*']);
+  for(const source of ['y=(1-e^(-x/900)){0<=x<=3000}','y=1-e^(-x/900) {0<=x<=3000}']){
+    const tree=graphInputTree(source),restriction=tree.args[1];assert.equal(restriction.kind,'piecewise');
+    assert.equal(restriction.value,'restriction');assert.equal(restriction.args[0].args[1].args[0].value,'<=');
+  }
+  const tail=graphInputTree('y=(1-e^(-3000/900))*e^(-(x-3000)/80){x>3000}').args[1];
+  assert.equal(tail.args[0].args[0].value,'*');
+});
 
 test('intersection choices include original and both derivatives with distinct analysis targets',()=>{
   const curves=graphAnalysisCurves(1,0,0);

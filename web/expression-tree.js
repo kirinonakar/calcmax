@@ -8,6 +8,7 @@ export function expressionTree(source) {
     if(n.kind==='symbol')return mapped('symbol',{pi:'π',oo:'∞',Ans:'Ans'}[n.value]||n.value);
     if(n.kind==='group')return mapped('parentheses');
     if(n.kind==='unary'||n.kind==='relation')return mapped(n.kind,n.value);
+    if(n.kind==='piecewise')return mapped(n.kind,n.value);
     if(n.kind==='list'&&n.args.length&&n.args[0].args.length&&
       n.args.every(row=>row.kind==='list'&&row.args.length===n.args[0].args.length))return mapped('matrix');
     if(['list','set','tuple'].includes(n.kind))return mapped(n.kind);

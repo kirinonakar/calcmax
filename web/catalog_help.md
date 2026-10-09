@@ -253,6 +253,8 @@ Example: minimum(x^2,x,-1,2)
 Example: maximum(x^2,x,-1,2)
 `piecewise([expr,cond],...)` — Piecewise-defined function.
 Example: piecewise([1,x>0],[0,true])
+
+Graphs also accept Desmos-style `{condition:value,condition:value,default}`. The first matching branch wins; omit the default to leave unmatched values undefined. Example: `f(x)={x<0:x^2,x>=0:2*x}`. Append `{condition}` to restrict the whole preceding expression, with or without spaces or outer parentheses: `y=x^2 {0<=x<=2}` and `y=2*x {x>2}`. Chained inequalities are supported; excluded intervals are omitted and explicit polynomial branch boundaries are sampled separately to avoid connecting jumps.
 `apart(expr,x)` — Partial-fraction decomposition in x.
 Example: apart(1/(x*(x+1)),x)
 `partfrac(expr,x)` — Partial fractions; alias of apart.
@@ -756,6 +758,9 @@ Example: nbreg([[0,0],[0,0],[0,1],[0,8],[1,0],[1,1],[1,3],[1,15],[2,0],[2,2],[2,
 `bootstrapci` — Statistic mean / median / stdev, confidence level, resamples, seed. Percentile IID bootstrap.
 Example: bootstrapci([1,2,3,4,5,8],mean,0.95,2000,0)
 
+`bayesbootstrap` — Dirichlet(1,…,1) weights on IID observed values; mean / median / variance / stdev, credible level, draws, seed. Median estimate uses the ordinary sample median (average the two middle values for even n); posterior draws use the Lower weighted quantile (smallest value with weighted CDF >= 0.5); variance/SD use population weights. Equal-tailed simulated posterior interval and histogram. Two samples: bayesbootstrap(A,B,mean,0.95,10000,0,independent); paired uses shared row weights. Comparison is statistic(B) - statistic(A).
+Example: bayesbootstrap([1,2,3,4,5,8],mean,0.95,10000,0)
+
 `testpower` — Cohen d, n per group/pairs, alpha, independent / paired / onesample, alternative two (default) / greater / less. Exact noncentral-t power.
 Example: testpower(0.5,64,0.05,independent)
 
@@ -778,6 +783,8 @@ Example: kmeans([[1,1],[1,2],[2,1],[8,8],[8,9],[9,8]],2,0)
 Example: impute([[1,NA],[2,4],[NA,6],[4,8]],mean)
 
 Bayesian analyses assume independent observations and the stated likelihood with proper conjugate priors; intervals are equal-tailed posterior credible intervals. A Bayes factor is not a posterior hypothesis probability and depends on the prior. References: [Stanford conjugate priors](https://web.stanford.edu/class/stats200/Lecture21.pdf), [normal-inverse-gamma analysis](https://treese41528.github.io/ComputationalDataScience/Website/part3_bayesian/chapter5/ch5_2-prior-distributions.html).
+
+The Bayesian bootstrap uses Dirichlet(1,…,1) weights on observed values and equal-tailed posterior intervals, rather than a conjugate parametric prior. Reference: [Rubin, The Bayesian Bootstrap (1981)](https://people.eecs.berkeley.edu/~jordan/sail/readings/rubin.pdf).
 
 Models return errors on failed convergence or non-identifiability; a finite nonconverged random-slope fit retains estimates and diagnostics but withholds Wald SE, p-values and CI. Cox supports Breslow/Efron ties, optional left truncation and a Grambsch–Therneau scaled-Schoenfeld proportional-hazards check; ordinal logistic assumes proportional odds. Mixed models support a random intercept plus up to three random slopes under ML or REML; GEE supports independent, exchangeable and AR(1) working correlations. Repeated-measures ANOVA covers balanced one- and two-way within-subject designs with GG corrections. Single imputation (mean, median, mode, regression or k-NN) does not propagate imputation uncertainty. Cross-validation covers linear, ridge, lasso, elastic-net and logistic fits with random, blocked or stratified splits. Firth inference uses profile penalized-likelihood intervals; bootstrap CIs use the percentile method, not BCa.
 

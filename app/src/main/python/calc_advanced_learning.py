@@ -221,7 +221,18 @@ def calculate(engine,name,a):
             if V[dominant,j]<0:
                 for i in range(p): V[i,j]=-V[i,j]
         engine.note += ' PCA: covariance eigendecomposition, sample-SD standardization by default. Loadings rows=features, columns=components.'
-        return {'eigenvalues':[max(0,float(vals[j])) for j in order[:count]],'explained variance ratio':[max(0,float(vals[j]/total)) for j in order[:count]],'loadings':V.tolist(),'scores':(X*V).tolist(),'centers':centers,'scales':scales}
+        eigenvalues=[max(0,float(vals[j])) for j in order]
+        ratios=[max(0,float(vals[j]/total)) for j in order]
+        scores=[[float(v) for v in row] for row in (X*V).tolist()]
+        loadings=[[float(v) for v in row] for row in V.tolist()]
+        labels=engine.request.get('statisticsTermLabels',{})
+        features=[labels.get('feature:'+str(i+1),'Feature '+str(i+1)) for i in range(p)]
+        engine.statistics_plots=[{'kind':'scree','title':'Explained variance','ratios':ratios,'eigenvalues':eigenvalues},
+                                 {'kind':'scores','title':'PCA scores','points':scores,'ratios':ratios[:count]},
+                                 {'kind':'loadings','title':'PCA loadings','points':loadings,'labels':features,'ratios':ratios[:count]}]
+        return {'eigenvalues':eigenvalues[:count],'explained variance ratio':ratios[:count],
+                'cumulative explained variance':[math.fsum(ratios[:i+1]) for i in range(count)],
+                'loadings':loadings,'scores':scores,'centers':centers,'scales':scales}
     k=integer(a[1],1,n); seed=integer(a[2],0,2**32-1) if len(a)>2 else 0; rng=random.Random(seed); distinct=list(dict.fromkeys(tuple(r) for r in rows)); require(len(distinct)>=k,'k exceeds number of distinct observations')
     require(within_limit(n*k*p,1000000),'Clustering size limit exceeded')
     def distance(x,y): return sum((u-v)**2 for u,v in zip(x,y))

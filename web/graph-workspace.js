@@ -334,7 +334,7 @@ export function createGraphWorkspace({execute,options,onError:reportError,onClea
   }
   $('graph-parameters-toggle').onclick=()=>{parametersOpen=!parametersOpen;parameterVisibility();persist();};
   for(const [id,preference] of [['graph-ranges','rangesOpen'],['graph-help','helpOpen']]){
-    $(id).open=saved[preference]!==false;
+    $(id).open=id==='graph-help'?saved[preference]===true:saved[preference]!==false;
     $(id).addEventListener('toggle',persist);
   }
   function parameterChanged(){analysisRevision++;analysis=null;trace=null;integral=null;queueDraw();queue();}
