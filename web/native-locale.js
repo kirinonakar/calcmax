@@ -870,6 +870,8 @@ export const nativeKorean = {
   "x,y,z data": "x,y,z 데이터",
   "Direct input": "직접 입력",
   "Table editor": "표 편집",
+  "Expand": "확장",
+  "Collapse": "축소",
   "Move column left": "열 왼쪽으로 이동",
   "Move column right": "열 오른쪽으로 이동",
   "Delete column": "열 삭제",

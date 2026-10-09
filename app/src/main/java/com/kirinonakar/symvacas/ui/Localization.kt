@@ -625,7 +625,7 @@ private val korean = mapOf(
     "Stored values · tap to use as the second operand" to "저장된 값 · 누르면 두 번째 피연산자로 사용",
     "Enter values once, then summarize, test, or plot the current dataset." to "데이터를 입력한 뒤 요약, 검정 또는 그래프로 분석합니다.",
     "Dataset name" to "데이터 이름", "Add row" to "행 추가", "One value per line" to "한 줄에 값 하나", "x,y,z data" to "x,y,z 데이터",
-    "Direct input" to "직접 입력", "Table editor" to "표 편집",
+    "Direct input" to "직접 입력", "Table editor" to "표 편집", "Expand" to "확장", "Collapse" to "축소",
     "Move column left" to "열 왼쪽으로 이동", "Move column right" to "열 오른쪽으로 이동", "Delete column" to "열 삭제",
     "ANCOVA" to "ANCOVA (공분산분석)", "Generalized linear model (GLM)" to "GLM (일반화 선형모형)",
     "ANCOVA table" to "공분산분석 표", "Adjusted means" to "조정 평균", "Covariate coefficients" to "공변량 계수",

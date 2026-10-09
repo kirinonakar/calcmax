@@ -318,6 +318,11 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
     $('statistics-table-toggle').setAttribute('aria-pressed',String(tableMode));
   };
   $('statistics-add-row').onclick=()=>{try{const rows=editorRows(),columns=Math.max(dataColumns(),rows[0]?.length||0);rows.push(Array(columns).fill(''));writeRows(rows);if(!$('statistics-grid').hidden)statisticsGrid();}catch(exc){error(exc.message);}};
+  $('statistics-editor-expand').onclick=()=>{
+    const expanded=$('statistics-editor').classList.toggle('expanded');
+    setText($('statistics-editor-expand'),expanded?'Collapse':'Expand');
+    $('statistics-editor-expand').setAttribute('aria-pressed',String(expanded));
+  };
   $('statistics-data').addEventListener('input',()=>{invalidateRegression();statisticsControls();});
   $('statistics-data').addEventListener('scroll',syncLineNumberScroll);
   $('statistics-data').addEventListener('paste',event=>{

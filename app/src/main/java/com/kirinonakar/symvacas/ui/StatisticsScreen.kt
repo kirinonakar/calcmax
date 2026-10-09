@@ -67,7 +67,7 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
     }
 }
 
-@Composable private fun StatDirectInput(value:String,onValue:(String)->Unit,label:String) {
+@Composable private fun StatDirectInput(value:String,onValue:(String)->Unit,label:String,expanded:Boolean) {
     val c=LocalInstrument.current
     val vertical=rememberScrollState();val horizontal=rememberScrollState()
     val fieldFocus=remember {FocusRequester()}
@@ -76,7 +76,7 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
     val lineCount=value.count {it=='\n'}+1
     Column(Modifier.fillMaxWidth()) {
         Text(label,fontSize=11.sp,color=c.muted)
-        Row(Modifier.fillMaxWidth().height(180.dp).border(1.dp,if(focused)c.accent else c.grid)) {
+        Row(Modifier.fillMaxWidth().height(if(expanded)360.dp else 180.dp).border(1.dp,if(focused)c.accent else c.grid)) {
             Box(Modifier.width(38.dp).fillMaxHeight().background(c.scientific).verticalScroll(vertical).then(statCellTouch(fieldFocus))) {
                 Text((1..lineCount).joinToString("\n"),Modifier.fillMaxWidth().padding(horizontal=4.dp,vertical=10.dp),fontSize=12.sp,fontFamily=FontFamily.Monospace,lineHeight=lineHeight,color=c.muted,textAlign=TextAlign.End,softWrap=false)
             }
@@ -164,6 +164,7 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
     var heatMapLinkage by rememberSaveable {mutableStateOf("average")}
     var heatMapMetric by rememberSaveable {mutableStateOf("euclidean")}
     var csv by rememberSaveable {mutableStateOf(m.statisticsCsv)}
+    var editorExpanded by rememberSaveable {mutableStateOf(false)}
     var importPreview by remember {mutableStateOf<StatisticsCsvImport?>(null)}
     var importSheets by remember {mutableStateOf<List<StatisticsXlsxSheet>?>(null)}
     val importCsv=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {uri->
@@ -247,8 +248,10 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
             SmallAction("Export CSV"){exportCsv.launch("${datasetName.ifBlank {"dataset"}}.csv")}
             SmallAction(if(csv)"Table editor" else "Direct input"){csv=!csv}
             SmallAction("Add row"){if(parsedRows.size<999)data+="\n"+",".repeat(dataColumns.size-1)}
+            val editorStateDescription=tr(if(editorExpanded)"Expanded" else "Collapsed")
+            SmallAction(if(editorExpanded)"Collapse" else "Expand",modifier=Modifier.testTag("statistics-editor-expand").semantics {stateDescription=editorStateDescription}) {editorExpanded=!editorExpanded}
         }
-        if(csv)StatDirectInput(data,{updated->data=normalizeStatisticsMarkdownPaste(data,updated)?:updated},if(dataKind=="list")tr("One value per line") else statisticsTableColumnLabels(data,dataKind).joinToString(", ")+(if(dataKind=="xy"||dataKind=="xyz")(if(isKorean())" 값" else " values") else ""))
+        if(csv)StatDirectInput(data,{updated->data=normalizeStatisticsMarkdownPaste(data,updated)?:updated},if(dataKind=="list")tr("One value per line") else statisticsTableColumnLabels(data,dataKind).joinToString(", ")+(if(dataKind=="xy"||dataKind=="xyz")(if(isKorean())" 값" else " values") else ""),editorExpanded)
         else {
             val grid=LocalInstrument.current.grid
             val tableColumns=statisticsTableColumnLabels(data,dataKind)
@@ -286,7 +289,7 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
                             }
                             HorizontalDivider(color=grid,thickness=1.dp)
                         }
-                        Column(Modifier.fillMaxWidth().heightIn(max=300.dp-headerHeight).verticalScroll(rememberScrollState())) {
+                        Column(Modifier.fillMaxWidth().heightIn(max=(if(editorExpanded)600.dp else 300.dp)-headerHeight).verticalScroll(rememberScrollState())) {
                             parsedRows.forEachIndexed {index,row->
                                 val cellFocus=remember(index,tableColumns.size) {List(tableColumns.size){FocusRequester()} }
                                 Row(Modifier.fillMaxWidth().height(44.dp)) {
