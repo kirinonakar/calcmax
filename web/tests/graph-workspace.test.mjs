@@ -1,6 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {graphShadings,createGraphInputHistory,removeGraphSource} from '../graph-workspace.js';
+import {graphShadings,createGraphInputHistory,removeGraphSource,graphSelectedCurveIndex} from '../graph-workspace.js';
+import {curvePointAtX} from '../graph-view.js';
+
+test('selected derivatives trace their own samples and keep the correct curve when indices shift',()=>{
+  const curves=[[[-1,-1],[1,1]],[[-1,2],[1,2]],[[-1,6],[1,6]]];
+  for(const [order,expected] of [[0,.5],[1,2],[2,6]]){
+    const index=graphSelectedCurveIndex(0,order,1,2);
+    assert.deepEqual(curvePointAtX(curves[index],.5,0,{fallbackToNearest:false}),[.5,expected]);
+  }
+  const withoutFirst=[curves[0],curves[2]];
+  assert.deepEqual(curvePointAtX(withoutFirst[graphSelectedCurveIndex(0,2,-1,1)],.5,0),[.5,6]);
+  assert.equal(graphSelectedCurveIndex(0,1),-1);assert.equal(graphSelectedCurveIndex(0,2),-1);
+});
 
 test('graph undo restores deleted curves, shading, derivatives and parameter settings',()=>{
   const history=createGraphInputHistory();

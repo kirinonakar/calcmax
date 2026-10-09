@@ -2,6 +2,10 @@ package com.kirinonakar.symvacas.ui
 
 import kotlin.math.abs
 
+/** Derivative selection stays stable when sampled derivative indices change. */
+internal fun graphSelectedCurveIndex(sourceIndex:Int,derivativeOrder:Int,derivativeIndex:Int=-1,secondDerivativeIndex:Int=-1):Int =
+    when(derivativeOrder) {1->derivativeIndex;2->secondDerivativeIndex;else->sourceIndex}
+
 /** Trace at the touched x coordinate, choosing the closest y branch for implicit curves. */
 internal fun graphTracePointAtX(
     curve:List<Pair<Double,Double>?>,

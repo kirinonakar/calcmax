@@ -99,15 +99,19 @@ import kotlin.math.*
     val graphScrollState=rememberScrollState()
     val tableRequester=remember {BringIntoViewRequester()}
     var selected by rememberSaveable { mutableIntStateOf(0) }
+    var selectedDerivativeOrder by rememberSaveable { mutableIntStateOf(0) }
     var other by rememberSaveable { mutableIntStateOf(1) }
     var viewportDragging by remember { mutableStateOf(false) }
     LaunchedEffect(m.graphKind){
-        selected=0;other=1;tangentPositionOpen=false
+        selected=0;selectedDerivativeOrder=0;other=1;tangentPositionOpen=false
         val low=if(m.graphKind=="cartesian")m.xMin else m.parameterMin
         val high=if(m.graphKind=="cartesian")m.xMax else m.parameterMax
         first=low.toString();second=high.toString();pointAt=((low+high)/2).toString()
     }
     LaunchedEffect(m.graphSource) {tangentPositionOpen=false}
+    LaunchedEffect(m.graphDerivativeSelected,m.graphSecondDerivativeSelected,selectedDerivativeOrder) {
+        if(selectedDerivativeOrder==1 && m.graphDerivativeSelected==null || selectedDerivativeOrder==2 && m.graphSecondDerivativeSelected==null)selectedDerivativeOrder=0
+    }
     LaunchedEffect(scrollToSection,analysis,showTable) {
         delay(100)
         when(scrollToSection) {
@@ -200,6 +204,8 @@ import kotlin.math.*
         val secondDerivativeCurve=allCurves.getOrNull(secondDerivativeIndex)?.takeIf {secondDerivativeSelected==m.graphData?.optInt("secondDerivativeSelected",-1)}
         val secondDerivativeExpression=if(secondDerivativeCurve!=null)m.graphData?.optString("secondDerivativeExpression").orEmpty() else ""
         val latestCurves by rememberUpdatedState(curves)
+        val activeCurveIndex=graphSelectedCurveIndex(selected,selectedDerivativeOrder,if(derivativeCurve!=null)derivativeIndex else -1,if(secondDerivativeCurve!=null)secondDerivativeIndex else -1)
+        val latestTraceCurve by rememberUpdatedState(allCurves.getOrNull(activeCurveIndex))
         val integralFill=remember(m.graphAnalysis) {
             val polygons=m.graphAnalysis?.optJSONArray("integralFill")
             (0 until (polygons?.length() ?: 0)).map {index->
@@ -326,12 +332,12 @@ import kotlin.math.*
             }
         } else Box(Modifier.fillMaxWidth().height(plotHeight).clipToBounds()) {
         val derivativeDash=remember {PathEffect.dashPathEffect(floatArrayOf(10f,6f))}
-        ExportableGraphCanvas(Modifier.fillMaxSize().clipToBounds().background(c.display).then(transform).pointerInput(m.graphKind,selected) { detectTapGestures { p ->
+        ExportableGraphCanvas(Modifier.fillMaxSize().clipToBounds().background(c.display).then(transform).pointerInput(m.graphKind,selected,selectedDerivativeOrder) { detectTapGestures { p ->
             val target=m.xMin+(m.xMax-m.xMin)*p.x/size.width
             val targetY=m.yMax-(m.yMax-m.yMin)*p.y/size.height
             val xSpan=m.xMax-m.xMin;val ySpan=m.yMax-m.yMin
             if(xSpan<=0.0 || ySpan<=0.0)return@detectTapGestures
-            if(m.graphAnalysis?.optString("analysis")=="tangent" && m.graphAnalysis?.optJSONArray("line")!=null) {
+            if(selectedDerivativeOrder==0 && m.graphAnalysis?.optString("analysis")=="tangent" && m.graphAnalysis?.optJSONArray("line")!=null) {
                 var nearestCurve=-1;var nearestIndex=-1;var nearestDistance=Double.POSITIVE_INFINITY
                 var nearestPoint:Pair<Double,Double>?=null
                 fun considerPoint(curveIndex:Int,pointIndex:Int,point:Pair<Double,Double>) {
@@ -356,7 +362,7 @@ import kotlin.math.*
                     }
                 }
             }
-            val curve=latestCurves.getOrNull(selected)
+            val curve=latestTraceCurve
             m.trace=if(m.graphKind=="cartesian")curve?.let {graphTracePointAtX(it,target,targetY)}
                 else curve?.filterNotNull()?.minByOrNull { ((it.first-target)/xSpan).pow(2)+((it.second-targetY)/ySpan).pow(2) }
         } }.semantics { contentDescription="Graph with ${curves.size} curves. Pinch to zoom, drag to pan, tap to trace${if(m.graphAnalysis?.optString("analysis")=="tangent")" or move the tangent" else ""}. Use Range and Analyze for accessible controls." },c.display,exports) {
@@ -419,13 +425,13 @@ import kotlin.math.*
                 }
                 curves.forEachIndexed { ci,points ->
                     val color=c.curves[ci%c.curves.size]
-                    drawPath(curvePath(points),color,style=Stroke(if(ci==selected)4.dp.toPx() else 1.5.dp.toPx()))
+                    drawPath(curvePath(points),color,style=Stroke(if(selectedDerivativeOrder==0 && ci==selected)4.dp.toPx() else 1.5.dp.toPx()))
                 }
                 derivativeCurve?.let {points->
-                    drawPath(curvePath(points),c.accent,style=Stroke(2.5.dp.toPx(),pathEffect=derivativeDash))
+                    drawPath(curvePath(points),c.accent,style=Stroke(if(selectedDerivativeOrder==1)4.dp.toPx() else 2.5.dp.toPx(),pathEffect=derivativeDash))
                 }
                 secondDerivativeCurve?.let {points->
-                    drawPath(curvePath(points),c.accent,style=Stroke(2.5.dp.toPx(),pathEffect=PathEffect.dashPathEffect(floatArrayOf(3.dp.toPx(),5.dp.toPx()))))
+                    drawPath(curvePath(points),c.accent,style=Stroke(if(selectedDerivativeOrder==2)4.dp.toPx() else 2.5.dp.toPx(),pathEffect=PathEffect.dashPathEffect(floatArrayOf(3.dp.toPx(),5.dp.toPx()))))
                 }
                 if(m.graphKind=="differential") {
                     val fieldData=m.graphData?.optJSONArray("fields")
@@ -453,14 +459,14 @@ import kotlin.math.*
                     val at=Offset(px(p.first),py(p.second))
                     drawLine(c.muted,Offset(at.x,0f),Offset(at.x,size.height),1.dp.toPx(),pathEffect=PathEffect.dashPathEffect(floatArrayOf(3.dp.toPx(),3.dp.toPx())))
                     drawCircle(c.display,8.dp.toPx(),at)
-                    drawCircle(c.curves[selected%c.curves.size],6.dp.toPx(),at)
+                    drawCircle(if(selectedDerivativeOrder==0)c.curves[selected%c.curves.size] else c.accent,6.dp.toPx(),at)
                 }
             }
         }
         GraphHeightToggle(halfGraphHeight,{halfGraphHeight=!halfGraphHeight},Modifier.align(Alignment.TopEnd))
         }
         Column(Modifier.fillMaxWidth()) {
-        if(m.graphKind!="surface")GraphFormulas(m.graphKind,sources,selected,derivativeSelected,derivativeExpression,shadeSources,{i->m.clearGraphTangent();selected=i;if(other==selected)other=(i+1)%sources.size},{m.toggleGraphDerivative(selected)},removeSource,m.displayDigits,c.curves,secondDerivativeSelected,secondDerivativeExpression,{m.toggleGraphDerivative(selected,2)})
+        if(m.graphKind!="surface")GraphFormulas(m.graphKind,sources,selected,derivativeSelected,derivativeExpression,shadeSources,{i->m.clearGraphTangent();selected=i;selectedDerivativeOrder=0;if(other==selected)other=(i+1)%sources.size},{m.toggleGraphDerivative(selected)},removeSource,m.displayDigits,c.curves,secondDerivativeSelected,secondDerivativeExpression,{m.toggleGraphDerivative(selected,2)},selectedDerivativeOrder,{order->m.clearGraphTangent();selectedDerivativeOrder=order})
         if(m.graphKind!="surface")Row(Modifier.horizontalScroll(rememberScrollState()),verticalAlignment=Alignment.CenterVertically) {
             SmallAction("−") { val cx=(m.xMin+m.xMax)/2;val cy=(m.yMin+m.yMax)/2;val halfX=(m.xMax-m.xMin);val halfY=(m.yMax-m.yMin);m.xMin=cx-halfX;m.xMax=cx+halfX;m.yMin=cy-halfY;m.yMax=cy+halfY }
             SmallAction("+") { val cx=(m.xMin+m.xMax)/2;val cy=(m.yMin+m.yMax)/2;val halfX=(m.xMax-m.xMin)/4;val halfY=(m.yMax-m.yMin)/4;m.xMin=cx-halfX;m.xMax=cx+halfX;m.yMin=cy-halfY;m.yMax=cy+halfY }
@@ -478,7 +484,7 @@ import kotlin.math.*
         }
         if(m.graphKind!="surface")Text(if(m.graphBusy&&!m.graphAnimating) {if(isKorean())"그래프 계산 중…" else "Sampling locally…"} else m.trace?.let { "Trace ≈ x: ${graphDisplayNumber(it.first,m.displayDigits)}   y: ${graphDisplayNumber(it.second,m.displayDigits)}" } ?: if(isKorean()) {if(m.graphKind=="differential")"방향장 · 해를 눌러 추적 · 드래그/확대로 탐색" else "눌러 추적 · 드래그하여 이동 · 두 손가락으로 확대"} else if(m.graphKind=="differential")"Direction field · tap a solution to trace · drag/pinch to explore" else "Tap to trace · drag to pan · pinch to zoom",Modifier.padding(horizontal=14.dp,vertical=5.dp),fontSize=11.sp,color=c.muted)
         }
-        if(showTable && m.graphKind!="surface") Box(Modifier.bringIntoViewRequester(tableRequester)) {GraphValueTable(curves,selected,{m.trace=it},m.graphKind,m.displayDigits)}
+        if(showTable && m.graphKind!="surface") Box(Modifier.bringIntoViewRequester(tableRequester)) {GraphValueTable(curves,selected,{if(selectedDerivativeOrder!=0){selectedDerivativeOrder=0;m.clearGraphTangent()};m.trace=it},m.graphKind,m.displayDigits)}
         if(analysis && m.graphKind in listOf("cartesian","parametric","polar")) Column(Modifier.padding(horizontal=10.dp)) {
             Text(if(isKorean())"${if(m.graphKind=="cartesian")"직교좌표 곡선" else "선택한 곡선"} 분석 · ${if(m.graphKind=="cartesian")"x" else "t"} 구간" else "Analyze ${if(m.graphKind=="cartesian")"Cartesian curves" else "the selected curve"} · ${if(m.graphKind=="cartesian")"x" else "t"} interval",fontSize=12.sp,color=c.muted)
             Row(horizontalArrangement=Arrangement.spacedBy(6.dp)) { GraphNumberField(first,"a",m.displayDigits,Modifier.weight(1f)) {first=it};GraphNumberField(second,"b",m.displayDigits,Modifier.weight(1f)) {second=it} }
@@ -518,6 +524,7 @@ import kotlin.math.*
                             m.clearGraphTangent()
                         } else {
                             tangentPositionOpen=isTangent
+                            if(selectedDerivativeOrder!=0){selectedDerivativeOrder=0;m.trace=null}
                             m.analyzeGraph(key,if(isTangent)pointAt else first,second,selected,other)
                         }
                     }
@@ -529,6 +536,7 @@ import kotlin.math.*
                 if(sliderMin.isFinite() && sliderMax.isFinite() && sliderSpan.isFinite() && sliderSpan>0.0) {
                     val position=((pointAt.toDoubleOrNull()?.takeIf(Double::isFinite) ?: sliderMin)-sliderMin).div(sliderSpan).coerceIn(0.0,1.0).toFloat()
                     CompactSlider(position,{pointAt=(sliderMin+it*sliderSpan).toString()},Modifier.fillMaxWidth(),onValueChangeFinished={
+                        if(selectedDerivativeOrder!=0){selectedDerivativeOrder=0;m.trace=null}
                         m.analyzeGraph("tangent",pointAt,pointAt,selected,other)
                     })
                 }
@@ -657,7 +665,7 @@ internal fun graphShadeFormula(source:String,displayDigits:Int?=null):GraphShade
     GraphShadeFormula(expressions,range).takeIf {it.expressions.isNotEmpty()}
 }.getOrNull()
 
-@Composable private fun GraphFormulas(kind:String,sources:List<String>,selected:Int,derivativeSelected:Int?,derivativeExpression:String,shadeSources:List<String>,onSelect:((Int)->Unit)?,onDerivative:()->Unit,onRemove:(Int,Boolean)->Unit,displayDigits:Int,colors:List<Color>,secondDerivativeSelected:Int?=null,secondDerivativeExpression:String="",onSecondDerivative:()->Unit={}) {
+@Composable private fun GraphFormulas(kind:String,sources:List<String>,selected:Int,derivativeSelected:Int?,derivativeExpression:String,shadeSources:List<String>,onSelect:((Int)->Unit)?,onDerivative:()->Unit,onRemove:(Int,Boolean)->Unit,displayDigits:Int,colors:List<Color>,secondDerivativeSelected:Int?=null,secondDerivativeExpression:String="",onSecondDerivative:()->Unit={},selectedDerivativeOrder:Int=0,onSelectDerivative:(Int)->Unit={}) {
     val c=LocalInstrument.current
     val equations=remember(kind,sources,displayDigits) {sources.mapIndexed {index,source->graphEquationTree(kind,source,index,displayDigits)}}
     val derivative=remember(derivativeSelected,derivativeExpression,displayDigits) {
@@ -673,18 +681,19 @@ internal fun graphShadeFormula(source:String,displayDigits:Int?=null):GraphShade
     CompositionLocalProvider(LocalMathMinimumSize provides 8f) {
     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal=10.dp,vertical=3.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
         equations.forEachIndexed {index,tree->
-            if(tree!=null)Row(Modifier.background(if(index==selected)c.accent.copy(alpha=.16f) else c.scientific,RoundedCornerShape(8.dp))
+            if(tree!=null)Row(Modifier.background(if(selectedDerivativeOrder==0 && index==selected)c.accent.copy(alpha=.16f) else c.scientific,RoundedCornerShape(8.dp))
                 .then(if(onSelect==null)Modifier else Modifier.clickable {onSelect(index)}.semantics {contentDescription="Select curve ${index+1}"})
                 .padding(horizontal=7.dp,vertical=3.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(5.dp)) {
-                MathText(if(index==selected)"●" else "○",11f,Modifier.alignBy(MathAxis),tint=colors[index%colors.size])
+                MathText(if(selectedDerivativeOrder==0 && index==selected)"●" else "○",11f,Modifier.alignBy(MathAxis),tint=colors[index%colors.size])
                 Box(Modifier.alignBy(MathAxis)){MathNode(tree,12f)}
                 GraphRemoveButton((if(isKorean())"그래프 삭제" else "Delete graph")+": f${index+1}") {onRemove(index,false)}
             }
         }
         listOf(derivative to onDerivative,secondDerivative to onSecondDerivative).forEachIndexed {index,(tree,toggle)->
-        if(tree!=null)Row(Modifier.background(c.accent.copy(alpha=.16f),RoundedCornerShape(8.dp)).clickable(onClick=toggle)
+        val isSelected=selectedDerivativeOrder==index+1
+        if(tree!=null)Row(Modifier.background(if(isSelected)c.accent.copy(alpha=.16f) else c.scientific,RoundedCornerShape(8.dp)).clickable {onSelectDerivative(index+1)}.semantics {contentDescription="Select derivative curve of order ${index+1}";this.selected=isSelected}
             .padding(horizontal=7.dp,vertical=3.dp),verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(5.dp)) {
-            MathText("●",11f,Modifier.alignBy(MathAxis),tint=c.accent)
+            MathText(if(isSelected)"●" else "○",11f,Modifier.alignBy(MathAxis),tint=c.accent)
             Box(Modifier.alignBy(MathAxis)){MathNode(tree,12f)}
             GraphRemoveButton((if(isKorean())"도함수 그래프 삭제" else "Delete derivative curve")+if(index==0)" f′" else " f″",toggle)
         }

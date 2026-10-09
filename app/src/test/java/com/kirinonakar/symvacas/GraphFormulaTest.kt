@@ -8,6 +8,7 @@ import com.kirinonakar.symvacas.calculator.graphShadeEntry
 import com.kirinonakar.symvacas.calculator.graphShadingBody
 import com.kirinonakar.symvacas.calculator.isGraphShading
 import com.kirinonakar.symvacas.ui.graphTracePointAtX
+import com.kirinonakar.symvacas.ui.graphSelectedCurveIndex
 import org.json.JSONArray
 import org.junit.Assert.*
 import org.junit.Assert.assertEquals
@@ -15,6 +16,17 @@ import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class GraphFormulaTest {
+    @Test fun selectedDerivativesTraceTheirOwnSamplesAndFollowResponseIndices() {
+        val curves=listOf(listOf(-1.0 to -1.0,1.0 to 1.0),listOf(-1.0 to 2.0,1.0 to 2.0),listOf(-1.0 to 6.0,1.0 to 6.0))
+        for((order,expected) in listOf(0 to .5,1 to 2.0,2 to 6.0)) {
+            val index=graphSelectedCurveIndex(0,order,1,2)
+            assertEquals(.5 to expected,graphTracePointAtX(curves[index],.5,0.0))
+        }
+        val withoutFirst=listOf(curves[0],curves[2])
+        assertEquals(.5 to 6.0,graphTracePointAtX(withoutFirst[graphSelectedCurveIndex(0,2,-1,1)],.5,0.0))
+        assertEquals(-1,graphSelectedCurveIndex(0,1))
+        assertEquals(-1,graphSelectedCurveIndex(0,2))
+    }
     @Test fun chainedShadingBoundsAndAliasPreserveCurveIndices() {
         run { // chainedShadingBoundsAndAliasPreserveCurveIndices
             for(prefix in listOf("[shade]","[s]")) {
