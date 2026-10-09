@@ -1,5 +1,5 @@
 import test from 'node:test';
-import {functionRelationExit,emptyPowerDeletion,emptyFractionDeletion,moveMathCursor,mathStructureExit,matrixFactorInput,divisionInput} from '../input-navigation.js';
+import {inputEnd,functionRelationExit,emptyPowerDeletion,emptyFractionDeletion,moveMathCursor,mathStructureExit,matrixFactorInput,divisionInput} from '../input-navigation.js';
 import {fractionInput} from '../fraction-input.js';
 import {expressionTree} from '../expression-tree.js';
 import assert from 'node:assert/strict';
@@ -7,6 +7,26 @@ import {bindKeyPress} from '../keypad.js';
 
 import {parse} from '../parser.js';
 import {requiresExplicitEvaluation} from '../evaluation-policy.js';
+
+test('trailing placement exits all fractions, powers and function arguments',()=>{
+  for(const source of ['25^1','2^3^4','1/2^3','25/(3)','2^(1/(3^4))',
+    'integrate(x^2,x)','diff(sin(x^2),x)','sin(integrate(x/(2^3),x))']){
+    const outside=inputEnd(source),at=outside.position;
+    assert.equal(outside.source,source);assert.equal(at,source.length);assert.equal(outside.edge,'end');
+    assert.equal(mathStructureExit(source,at,at,'RIGHT',outside),null,source);
+    assert.deepEqual(divisionInput(source,at,at,'/',outside),{start:at,end:at,text:'/()',cursor:2},source);
+    const fraction=fractionInput(source,at,at,outside);
+    assert.equal(source.slice(0,fraction.start)+fraction.text+source.slice(fraction.end),`(${source})/()`,source);
+    assert.deepEqual(fractionInput(source,at,at,{position:at,edge:'end'}),fraction,'End uses the same outer scope');
+    assert.equal(parse(source+'+1').value,'+',source);
+  }
+  for(const source of ['sin(9','diff(sin(x),x','integrate(diff(x^2,x),x','sin(integrate(x,x']){
+    const outside=inputEnd(source);
+    assert.equal(outside.position,outside.source.length);
+    assert.equal(parse(outside.source+'+1').value,'+',source);
+    assert.equal(parse(outside.source+'/2').value,'/',source);
+  }
+});
 
 test('slash and fraction stay in a bare exponent until Right leaves it',()=>{
   const apply=(source,edit)=>source.slice(0,edit.start)+edit.text+source.slice(edit.end);

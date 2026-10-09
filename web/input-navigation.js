@@ -1,5 +1,12 @@
-import {parse,scanInputTokens,latexSymbolLabels} from './parser.js';
+import {parse,scanInputTokens,latexSymbolLabels,closeInputBrackets} from './parser.js';
 const equationCalls=new Set(['solve','nsolve','linsolve','dsolve','desolve','pdsolve','rsolve','piecewise']);
+// The trailing input area belongs outside every fraction, power and function.
+export function inputEnd(source){
+  source=closeInputBrackets(source);
+  let start=0,end=source.length;
+  try{const tree=parse(source,{allowHoles:true});start=tree.start;end=tree.end;}catch{}
+  return {source,position:source.length,start,end,edge:'end'};
+}
 // An equation following a formula belongs outside its calls. Solvers and
 // piecewise conditions keep their own equation input scope.
 export function functionRelationExit(source,start,end){
@@ -64,6 +71,7 @@ export function divisionInput(source,start,end,text,outside=null){
   if(text!=='/')return null;
   const division={start,end,text:'/()',cursor:2};
   if(start!==end)return division;
+  if(outside?.edge==='end')return division;
   const powers=[];
   try{const visit=node=>{if(node.kind==='binary'&&node.value==='^'&&node.args[1].kind!=='group'&&start>=node.args[1].start&&start<=node.args[1].end&&
     !(outside?.start===node.start&&outside?.end===node.end))powers.push(node);node.args.forEach(visit);};visit(parse(source,{allowHoles:true}));}catch{return division;}
@@ -100,6 +108,7 @@ export function fractionExit(source,start,end,direction,outside=null){
 // Source offsets alone cannot distinguish an operand end from its parent edge.
 export function mathStructureExit(source,start,end,direction,outside=null,operators=['/','^']){
   if(direction!=='RIGHT'||start!==end)return null;
+  if(outside?.edge==='end'&&start===outside.position)return null;
   const structures=[];
   try{
     const visit=node=>{if(node.kind==='binary'&&operators.includes(node.value)&&node.displayOperator!=='÷')structures.push(node);node.args.forEach(visit);};

@@ -11,7 +11,7 @@ export function fractionInput(source,start,end=start,outside=null){
       visit(parse(source,{allowHoles:true}));
     }catch{}
     candidates.sort((a,b)=>(a.end-a.start)-(b.end-b.start));
-    const parent=outside&&candidates.find(node=>node.start===outside.start&&node.end===outside.end);
+    const parent=outside&&(outside.edge==='end'?candidates.at(-1):candidates.find(node=>node.start===outside.start&&node.end===outside.end));
     if(parent)start=parent.start;
     else if(candidates.length){
       start=candidates[0].start;

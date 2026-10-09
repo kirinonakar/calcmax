@@ -12,6 +12,15 @@ data class BracketEdit(val source:String,val cursor:Int)
 object BracketAutoClose {
     private val pairs=mapOf('(' to ')','[' to ']','{' to '}')
     private val closers=setOf(')',']','}')
+    fun close(source:String):String {
+        val stack=mutableListOf<Char>()
+        for(character in source) {
+            val closer=pairs[character]
+            if(closer!=null)stack+=closer
+            else if(character in closers && (stack.isEmpty() || stack.removeAt(stack.lastIndex)!=character))return source
+        }
+        return source+stack.asReversed().joinToString("")
+    }
     fun typed(previousText:String,previousCursor:Int,nextText:String,nextCursor:Int):BracketEdit? {
         if(previousCursor !in 0..previousText.length)return null
         if(nextText.length!=previousText.length+1 || nextCursor!=previousCursor+1)return null

@@ -21,7 +21,7 @@ data class Editor(val source: String = "", val cursor: Int = source.length, val 
         if(text=="/")return insert("/()",2)
         if(cursor==anchor && text=="/()" && exponent==null) {
             val power=barePower(cursor,cursor)
-            if(power!=null && outside!=(power.start..power.end))
+            if(power!=null && outside?.let{it.first<=power.start&&it.last>=power.end}!=true)
                 return copy(exponent=power.args[1].let {it.start..it.end}).insert(text,inside)
         }
         matrixFactorPosition(text)?.let {position->
@@ -39,7 +39,7 @@ data class Editor(val source: String = "", val cursor: Int = source.length, val 
         }
         // A newly filled bare exponent is still being edited. Give it a group before
         // the first character so later digits do not become factors at its end.
-        if(cursor==anchor && exponent==null && text.isNotEmpty()) {
+        if(cursor==anchor && exponent==null && outside==null && text.isNotEmpty()) {
             val pending=emptyExponentAt(cursor)?.args?.get(1)?.takeIf {it.kind=="hole"}
             if(pending!=null)return copy(exponent=pending.start..pending.end).insert(text,inside)
         }
@@ -52,12 +52,12 @@ data class Editor(val source: String = "", val cursor: Int = source.length, val 
                 node.kind=="binary" && (node.value=="^" || fraction(node)) &&
                     node.args[1].kind=="group" && node.args[1].end==cursor
             }
-            if(completed!=null) {
+            if(completed!=null && outside==null) {
                 val slot=completed.args[1]
                 if(slot.args.firstOrNull()?.kind=="hole")return Editor(source,slot.start+1).insert(text,inside)
             }
             val emptyGroup=nodes?.firstOrNull {it.kind=="group" && it.end==cursor && it.args.firstOrNull()?.kind=="hole"}
-            if(emptyGroup!=null)return Editor(source,emptyGroup.start+1).insert(text,inside)
+            if(emptyGroup!=null && outside==null)return Editor(source,emptyGroup.start+1).insert(text,inside)
             return Editor(source,cursor).insert("*$text",inside+1)
         }
         exponent?.let {region->
@@ -381,6 +381,12 @@ data class Editor(val source: String = "", val cursor: Int = source.length, val 
         return target.insert(template,if(numerator.isEmpty())1 else template.length-1)
     }
     fun after(start:Int,end:Int)=Editor(source,end,outside=start..end)
+    /** Explicit trailing-space placement exits every structure, including unclosed calls. */
+    fun atEnd():Editor {
+        val closed=BracketAutoClose.close(source)
+        val end=Editor(closed)
+        return end.copy(outside=end.tree()?.let{it.start..it.end} ?: (0..closed.length))
+    }
     /** Exactly one presentation node owns a collapsed cursor, including shared source boundaries. */
     fun cursorTarget():IntRange? {
         if(cursor!=anchor)return null

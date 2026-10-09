@@ -6,7 +6,7 @@ import {calcVariables,calcBindings} from './calc-session.js';
 import {previousCalculations,renderPreviousCalculations,followTape} from './calculation-tape.js';
 import {renderFormulas} from './formula-preview.js';
 import {markInputCursor,followInputCursor,followTextCursor,inputPointPosition} from './input-cursor.js';
-import {moveMathCursor,mathStructureExit,functionRelationExit,emptyCallDeletion,emptyPowerDeletion,emptyFractionDeletion,symbolDeletion,powerInput,matrixFactorInput,divisionInput} from './input-navigation.js';
+import {inputEnd,moveMathCursor,mathStructureExit,functionRelationExit,emptyCallDeletion,emptyPowerDeletion,emptyFractionDeletion,symbolDeletion,powerInput,matrixFactorInput,divisionInput} from './input-navigation.js';
 import {createDisplaySizing} from './display-sizing.js';
 import {fractionInput} from './fraction-input.js';
 import {requiresExplicitEvaluation} from './evaluation-policy.js';
@@ -222,15 +222,20 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
       committed=false;$('commit-indicator').textContent='';
       if(engineeringConversion)exitEngineering();else renderResult();
     }
-    const target=event.target.closest('[data-source-start]');
-    if(target){const field=$('expression'),start=Number(target.getAttribute('data-source-start')),end=Number(target.getAttribute('data-source-end'));if(target.classList.contains('selected')||field.selectionStart===field.selectionEnd&&field.selectionStart>=start&&field.selectionStart<=end){const at=inputPointPosition(target,field.value,event.clientX,event.clientY);field.setSelectionRange(at,at);}else field.setSelectionRange(start,end);}else{$('expression').setSelectionRange(value('expression').length,value('expression').length);}
+    const clicked=event.target.closest('[data-source-start]');
+    const target=clicked?.classList.contains('input-caret')&&clicked.dataset.boundary==='end'?null:clicked;
+    if(target){const field=$('expression'),start=Number(target.getAttribute('data-source-start')),end=Number(target.getAttribute('data-source-end'));if(target.classList.contains('selected')||field.selectionStart===field.selectionEnd&&field.selectionStart>=start&&field.selectionStart<=end){const at=inputPointPosition(target,field.value,event.clientX,event.clientY);field.setSelectionRange(at,at);}else field.setSelectionRange(start,end);}else{
+      const field=$('expression');inputBoundary=inputEnd(field.value);
+      if(field.value!==inputBoundary.source)undoStack().push(field.value);
+      field.value=inputBoundary.source;field.setSelectionRange(inputBoundary.position,inputBoundary.position);
+    }
     preview();
   };
   function insert(text,cursor=null,{factor=false,fraction=false,latexSource=null}={}) {
     if(isBusy())return;
     if(engineeringConversion)exitEngineering();
     const field=$('expression'),undo=undoStack();undo.push(field.value);if(undo.length>100)undo.shift();
-    const outsideStructure=inputBoundary?.edge==='after'&&inputBoundary.source===field.value&&inputBoundary.position===field.selectionStart&&field.selectionStart===field.selectionEnd;
+    const outsideStructure=['after','end'].includes(inputBoundary?.edge)&&inputBoundary.source===field.value&&inputBoundary.position===field.selectionStart&&field.selectionStart===field.selectionEnd;
     if(committed){inputAnswer=null;field.value=!lastResult?.assignment&&(fraction||/^[+\-*/÷^%!∠]/.test(text))?'Ans':'';field.setSelectionRange(field.value.length,field.value.length);committed=false;$('commit-indicator').textContent='';}
     if(text.startsWith('=')){
       const position=functionRelationExit(field.value,field.selectionStart,field.selectionEnd);
@@ -243,7 +248,8 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
     let prefix='',suffix='';
     const matrixFactor=!fraction?matrixFactorInput(field.value,start,end,text):null;
     if(matrixFactor){start=end=matrixFactor.position;prefix=matrixFactor.prefix;}
-    if(outsideStructure&&!fraction&&/^[\p{L}\p{N}_.(]/u.test(text))prefix='*';
+    if(outsideStructure&&!fraction&&/^[\p{L}\p{N}_.(]/u.test(text)&&
+      (inputBoundary.edge==='after'||/[)\]}]$/.test(field.value.slice(0,start))||mathStructureExit(field.value,start,start,'RIGHT')))prefix='*';
     // Keypad operands are separate factors; typed/pasted names remain intact.
     if(factor&&(start===end||/^[\p{L}_][\p{L}\p{N}_]*$/u.test(text))){
       const before=field.value[start-1]||'',after=field.value[end]||'';
@@ -370,9 +376,9 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
     }
     else if(['LEFT','RIGHT','UP','DOWN'].includes(input)){
       const f=$('expression');let start=f.selectionStart,end=f.selectionEnd;
-      const outside=inputBoundary?.edge==='after'&&inputBoundary.source===f.value&&inputBoundary.position===start&&start===end?inputBoundary:null;
+      const outside=['after','end'].includes(inputBoundary?.edge)&&inputBoundary.source===f.value&&inputBoundary.position===start&&start===end?inputBoundary:null;
       const exit=mathStructureExit(f.value,start,end,input,outside);
-      const position=exit?.position??(typing?null:outside&&input==='LEFT'?(outside.exponentEnd??outside.denominatorEnd):moveMathCursor(f.value,start,end,input,outside));
+      const position=exit?.position??(typing?null:outside?.edge==='after'&&input==='LEFT'?(outside.exponentEnd??outside.denominatorEnd):moveMathCursor(f.value,start,end,input,outside));
       if(position!==null)start=end=position;
       else if(input==='LEFT'||input==='RIGHT')start=end=Math.max(0,Math.min(f.value.length,(input==='LEFT'?start:end)+(input==='LEFT'?-1:1)));
       else try{const nodes=[];const visit=n=>{if(n.start<=start&&n.end>=end)nodes.push(n);n.args?.forEach(visit);};visit(parse(f.value,{allowHoles:true}));nodes.sort((a,b)=>(a.end-a.start)-(b.end-b.start));const selected=input==='UP'?nodes.find(n=>n.start<start||n.end>end):nodes[0]?.args?.[0];if(selected){start=selected.start;end=selected.end;}}catch{}

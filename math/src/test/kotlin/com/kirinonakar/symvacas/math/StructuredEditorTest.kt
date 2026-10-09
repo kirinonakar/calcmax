@@ -2,6 +2,30 @@ package com.kirinonakar.symvacas.math
 import org.junit.Assert.*
 import org.junit.Test
 class StructuredEditorTest {
+    @Test fun trailingPlacementExitsAllFractionsPowersAndCalls() {
+        for(source in listOf("25^1","2^3^4","1/2^3","25/(3)","2^(1/(3^4))",
+            "integrate(x^2,x)","diff(sin(x^2),x)","sin(integrate(x/(2^3),x))")) {
+            val editor=Editor(source,source.indexOf('^').takeIf{it>=0} ?: 1,activeToken=0..1).atEnd()
+            assertEquals(source,source,editor.source)
+            assertEquals(source,source.length,editor.cursor)
+            assertEquals(source,editor.cursor,editor.anchor)
+            assertNull(editor.exponent);assertNull(editor.activeToken)
+            assertEquals(source,editor.tree()!!.let{it.start..it.end},editor.cursorTarget())
+            assertEquals(source,source+"+1",editor.insert("+1").source)
+            assertEquals(source,source+"/()",editor.insert("/").source)
+            assertEquals(source,"($source)/()",editor.fractionInput().source)
+        }
+        assertEquals("2^3^4*5",Editor("2^3^4",3,exponent=2..5).atEnd().insert("5").source)
+        assertEquals("25/()*2",Editor("25/()",4).atEnd().insert("2").source)
+        assertEquals("5^()*2",Editor("5^()",3).atEnd().insert("2").source)
+        assertEquals("1234",Editor("123",1).atEnd().insert("4").source)
+        for(source in listOf("sin(9","diff(sin(x),x","integrate(diff(x^2,x),x","sin(integrate(x,x")) {
+            val editor=Editor(source,1).atEnd()
+            assertEquals(source,editor.source.length,editor.cursor)
+            assertEquals(source,"+",editor.insert("+1").tree()!!.value)
+            assertEquals(source,"/",editor.insert("/").tree()!!.value)
+        }
+    }
     @Test fun slashStaysInExponentUntilRightExits() {
         for(editor in listOf(Editor("25^1"),Editor().insert("25").insert("^").insert("1"),Editor("25^(1)",5))) {
             val divided=editor.insert("/").insert("3")
