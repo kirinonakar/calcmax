@@ -128,7 +128,7 @@ private val korean = mapOf(
     "For a rational function at infinity, the highest powers determine whether the ratio tends to 0, a finite coefficient ratio, or infinity." to "유리함수의 무한대에서의 극한은 최고차항으로 판단합니다. 차수를 비교하면 0, 최고차항 계수의 비 또는 무한대로 향하는지 알 수 있습니다.",
     "The result keeps the original domain and the selected calculus settings." to "원래 식의 정의역과 선택한 미적분 조건을 유지한 계산 결과입니다.",
     "Step-by-step solution" to "단계별 풀이",
-    "remove computation limit" to "계산 제한 해제",
+    "Remove computation limit" to "계산 제한 해제",
     "Disables app time, workload, input size and exponent limits. Result size and precision settings stay unchanged; manual cancellation remains available." to "앱의 시간·계산량·입력 크기·지수 제한을 해제합니다. 결과 길이와 정밀도 설정은 그대로 유지하며 수동 취소할 수 있습니다.",
     "Calc mode step by step" to "계산기 모드 단계별 풀이",
     "Introduce a new variable to remove the squared term. The cubic becomes simpler to solve." to "새 미지수로 치환하여 이차항을 없앱니다. 그러면 삼차방정식을 더 간단한 형태로 풀 수 있습니다.",
