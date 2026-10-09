@@ -69,6 +69,7 @@ internal object CalculatorGraphActions {
         } catch(e:Exception) { error=e.message ?: "Syntax ERROR"; return }
         if(trees.isEmpty() && shadings.length()==0) { if(!auto)error="Enter a function"; return }
         val derivativeSelected=graphDerivativeSelected?.takeIf {graphKind=="cartesian" && it in trees.indices}
+        val secondDerivativeSelected=graphSecondDerivativeSelected?.takeIf {graphKind=="cartesian" && it in trees.indices}
         val source=graphSource;val kind=graphKind;val min=if(kind in listOf("cartesian","implicit","surface"))xMin else parameterMin;val max=if(kind in listOf("cartesian","implicit","surface"))xMax else parameterMax
         val viewYMin=yMin;val viewYMax=yMax;val parameters=graphState.parameterPayload()
         val initials=sequenceInitials;val differentialSeeds=differentialInitials;val initialTime=differentialT0
@@ -84,6 +85,7 @@ internal object CalculatorGraphActions {
                 .put("yMin",viewYMin-dy).put("yMax",viewYMax+dy)
         }
         if(derivativeSelected!=null)request.put("derivativeSelected",derivativeSelected)
+        if(secondDerivativeSelected!=null)request.put("secondDerivativeSelected",secondDerivativeSelected)
         if(shadings.length()>0)request.put("shadings",shadings)
         if(kind=="surface") {
             val density=SurfaceMesh.sampleCount(xMin,xMax,yMin,yMax,surfaceSamples,surfaceAutoDensity,surfaceZoom.toDouble())
@@ -119,7 +121,7 @@ internal object CalculatorGraphActions {
                 val domainMatches=if(kind in listOf("cartesian","implicit","surface"))preview || min==xMin && max==xMax else min==parameterMin && max==parameterMax
                 // Keep useful preview geometry even if another pan happened while
                 // Python was running. The Canvas projects it into the latest view.
-                if(source==graphSource && kind==graphKind && derivativeSelected==graphDerivativeSelected && domainMatches && (preview || viewYMin==yMin && viewYMax==yMax) && initials==sequenceInitials && differentialSeeds==differentialInitials && initialTime==differentialT0 && environment==request("graph").put("angle","RAD").toString() && (graphAnimating || parameters.toString()==graphState.parameterPayload().toString())) {
+                if(source==graphSource && kind==graphKind && derivativeSelected==graphDerivativeSelected && secondDerivativeSelected==graphSecondDerivativeSelected && domainMatches && (preview || viewYMin==yMin && viewYMax==yMax) && initials==sequenceInitials && differentialSeeds==differentialInitials && initialTime==differentialT0 && environment==request("graph").put("angle","RAD").toString() && (graphAnimating || parameters.toString()==graphState.parameterPayload().toString())) {
                     if(response.optBoolean("ok")) {
                     } else error=response.optString("error")
                     graphState.applyPlotResponse(response,signature)
@@ -176,6 +178,13 @@ internal object CalculatorGraphActions {
         graphState.updateSource(source)
         save()
     }
+    fun CalculatorModel.performUndoGraph() {
+        if(!graphState.canUndoInput)return
+        graphJob?.cancel();analysisJob?.cancel();animationJob?.cancel();animationJob=null;graphPendingPlot=null
+        clearGraphTangent()
+        graphState.undoInput()
+        save()
+    }
     fun CalculatorModel.performRemoveGraphSource(index:Int,shading:Boolean) {
         val next=removeGraphSource(graphSource,index,graphKind,shading)
         if(next==graphSource)return
@@ -186,12 +195,18 @@ internal object CalculatorGraphActions {
         if(next.isBlank())graphState.graphParameters=emptyMap()
         save()
     }
-    fun CalculatorModel.performToggleGraphDerivative(selected:Int) {
+    fun CalculatorModel.performToggleGraphDerivative(selected:Int,order:Int) {
         if(graphKind!="cartesian")return
-        if(graphDerivativeSelected!=null) {graphDerivativeSelected=null;return}
+        val current=if(order==2)graphSecondDerivativeSelected else graphDerivativeSelected
+        if(current!=null) {
+            graphState.rememberInput()
+            if(order==2)graphSecondDerivativeSelected=null else graphDerivativeSelected=null
+            return
+        }
         val sources=graphSource.lines().filter(String::isNotBlank).take(8).map(String::trim).filter {!isGraphShading(it)}.take(6)
         if(selected !in sources.indices) {error="Select a function";return}
-        graphDerivativeSelected=selected
+        graphState.rememberInput()
+        if(order==2)graphSecondDerivativeSelected=selected else graphDerivativeSelected=selected
     }
     fun CalculatorModel.performSendExpressionToGraph() {
         val source=editor.source.trim()

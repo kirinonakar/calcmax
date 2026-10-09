@@ -10,7 +10,7 @@ export const scientificRows=[
 export const secondRows=[
   [key('simp','simplify()'),key('factor','factor()','factorint','factorint()'),key('expand','expand()'),key('x','x','xʸ','^()'),key('y','y','x²','^2'),key('z','z','=','RELATION')],
   [key('⌊x⌋','floor()','mod','mod(,)','a'),key('⌈x⌉','ceil()','divmod','divmod(,)','b'),key('∞','oo','sign','sign()','c'),key(',',',','√','sqrt()','d'),key('{','{','[','['),key('}','}',']',']')],
-  [key('MATRIX','MATRIX_INPUT','n×m','MATRIX_SIZE','','action'),key('det','det()','Pol','pol(,)'),key('inv','inverse()','Rec','rec(,)'),key('T','transpose()'),key('‖v‖','norm()'),key('GRAPH','TO_GRAPH','MODE','Graph','','action')]
+  [key('MATRIX','MATRIX_INPUT','n×m','MATRIX_SIZE','','action'),key('det','det()','Pol','pol(,)'),key('inv','inverse()','Rec','rec(,)'),key('T','transpose()'),key('‖v‖','norm()'),key('GRAPH','TO_GRAPH','EQN','TO_SYSTEM','','action')]
 ];
 export const numericRows=[
   [key('7','7','CONST','Constants'),key('8','8','CONV','Units'),key('9','9','CLR','Clear'),key('DEL','DEL','INS','INS','','danger'),key('AC','AC','CLR ALL','CLR ALL','','danger')],

@@ -193,20 +193,22 @@ def graph_cartesian(engine, request, trees, xmin, xmax):
         else:
             curves.append(contour_curve(residual, x, y, sliders, xmin, xmax, ymin, ymax, contour_count)); implicit.append(True)
     result = {"curves": curves, "parameters": sorted(names), "implicitCurves": implicit}
-    selected = request.get("derivativeSelected")
-    if isinstance(selected, int) and 0 <= selected < len(curvespecs):
+    for order, prefix in ((1, "derivative"), (2, "secondDerivative")):
+        selected = request.get(prefix+"Selected")
+        if not isinstance(selected, int) or not 0 <= selected < len(curvespecs):
+            continue
         function, residual = curvespecs[selected]
         branches = (function,) if function is not None else cartesian_branches(residual, y)
         require(branches, "Derivative graph requires branches expressible as y=f(x)")
-        derivatives = tuple(s.diff(branch, x) for branch in branches)
+        derivatives = tuple(s.diff(branch, x, order) for branch in branches)
         points = []
         for derivative in derivatives:
             if points: points.append(None)
             points.extend(sample(derivative))
-        result.update(derivativeCurveIndex=len(curves), derivativeSelected=selected,
-                      derivativeExpression=readable(derivatives[0] if len(derivatives)==1 else s.Tuple(*derivatives)))
+        result.update({prefix+"CurveIndex": len(curves), prefix+"Selected": selected,
+                       prefix+"Expression": readable(derivatives[0] if len(derivatives)==1 else s.Tuple(*derivatives))})
         curves.append(points)
-    else:
+    if "derivativeCurveIndex" not in result:
         index = request.get("derivativeCurveIndex")
         if isinstance(index, int) and 0 <= index < len(curvespecs):
             result["derivativeExpression"] = readable(curvespecs[index][0])

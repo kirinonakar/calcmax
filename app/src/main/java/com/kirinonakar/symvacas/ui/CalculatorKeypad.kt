@@ -40,7 +40,7 @@ private val ScientificKeys=listOf(
 private val SecondKeys=listOf(
     listOf(KeySpec("simp","simplify()"),KeySpec("factor","factor()","factorint","factorint()"),KeySpec("expand","expand()"),KeySpec("x", "x", "xʸ", "^()"),KeySpec("y",secondary="x²",alternate="^2"),KeySpec("z",secondary="=",alternate="RELATION")),
     listOf(KeySpec("⌊x⌋","floor()","mod","mod(,)","a"),KeySpec("⌈x⌉","ceil()","divmod","divmod(,)","b"),KeySpec("∞","oo","sign","sign()","c"),KeySpec(",",secondary="√",alternate="sqrt()",alpha="d"),KeySpec("{",secondary="[",alternate="["),KeySpec("}",secondary="]",alternate="]")),
-    listOf(KeySpec("MATRIX","MATRIX_INPUT",secondary="n×m",alternate="MATRIX_SIZE",type="action"),KeySpec("det","det()",secondary="Pol",alternate="pol(,)"),KeySpec("inv","inverse()",secondary="Rec",alternate="rec(,)"),KeySpec("T","transpose()"),KeySpec("‖v‖","norm()"),KeySpec("GRAPH","TO_GRAPH",secondary="MODE",alternate="Graph",type="action"))
+    listOf(KeySpec("MATRIX","MATRIX_INPUT",secondary="n×m",alternate="MATRIX_SIZE",type="action"),KeySpec("det","det()",secondary="Pol",alternate="pol(,)"),KeySpec("inv","inverse()",secondary="Rec",alternate="rec(,)"),KeySpec("T","transpose()"),KeySpec("‖v‖","norm()"),KeySpec("GRAPH","TO_GRAPH",secondary="EQN",alternate="TO_SYSTEM",type="action"))
 )
 private val NumericKeys=listOf(
     listOf(KeySpec("7",secondary="CONST",alternate="Constants"),KeySpec("8",secondary="CONV",alternate="Units"),KeySpec("9",secondary="CLR",alternate="Clear"),KeySpec("DEL",secondary="INS",alternate="INS",type="danger"),KeySpec("AC",secondary="CLR ALL",alternate="CLR ALL",type="danger")),
@@ -93,7 +93,7 @@ internal fun performKeypadInput(m:CalculatorModel,requestedValue:String,open:(St
             "LEFT"->m.editCalcValue(m.calcSession!!.input.move(-1))
             "RIGHT"->m.editCalcValue(m.calcSession!!.input.move(1))
             "NEG"->m.insertCalcValue("-")
-            "RCL","STO","Clear","CLR ALL","MODE","SETUP","ENG","ENG−","S⇔D","MIXED","M+","M−","SOLVE","RELATION","Graph","Equations","Scientific/CAS","Python","TO_GRAPH","MATRIX_INPUT","MATRIX_SIZE"->Unit
+            "RCL","STO","Clear","CLR ALL","MODE","SETUP","ENG","ENG−","S⇔D","MIXED","M+","M−","SOLVE","RELATION","Graph","Equations","Scientific/CAS","Python","TO_GRAPH","TO_SYSTEM","MATRIX_INPUT","MATRIX_SIZE"->Unit
             else->{val input=keypadOperandInput(value,m.calcSession!!.input,false);val at=if(input.contains('('))input.indexOf('(')+1 else input.length;m.insertCalcValue(input,at)}
         }
         m.shift=false;m.alpha=false
@@ -129,6 +129,7 @@ internal fun performKeypadInput(m:CalculatorModel,requestedValue:String,open:(St
         "DMS_INPUT"->m.insertDmsSymbol()
         "DMS"->m.toggleDms()
         "TO_GRAPH"->m.sendExpressionToGraph()
+        "TO_SYSTEM"->m.sendExpressionToSystem()
         "MATRIX_INPUT"->m.insert(matrixTemplate(2,2),2)
         "MATRIX_SIZE"->open("MatrixSize")
         "*10^()"->{val text=if(m.editor.source.isBlank()||m.committed)"1$value" else value;m.insert(text,text.indexOf('(')+1)}

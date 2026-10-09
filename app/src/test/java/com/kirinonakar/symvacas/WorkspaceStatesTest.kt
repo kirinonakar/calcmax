@@ -6,6 +6,32 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class WorkspaceStatesTest {
+    @Test fun graphUndoRestoresDeletedInputsAndParametersWithoutRecordingUndo() {
+        val state=GraphState(MemoryPreferences())
+        val source="a*x\ncos(x)\n[s] x, 2, -1..1"
+        state.updateSource(source)
+        state.syncParameters(org.json.JSONArray("[\"a\"]"))
+        state.setParameter("a",2.5)
+        val parameters=state.graphParameters
+        state.graphDerivativeSelected=0
+        state.graphSecondDerivativeSelected=1
+        state.updateSource("a*x\ncos(x)")
+        assertNull(state.graphDerivativeSelected);assertNull(state.graphSecondDerivativeSelected)
+        state.updateSource("")
+        state.graphParameters=emptyMap()
+        assertTrue(state.canUndoInput)
+        assertTrue(state.undoInput());assertEquals("a*x\ncos(x)",state.graphSource)
+        assertEquals(parameters,state.graphParameters)
+        assertTrue(state.undoInput());assertEquals(source,state.graphSource)
+        assertEquals(0,state.graphDerivativeSelected)
+        assertEquals(1,state.graphSecondDerivativeSelected)
+        assertTrue(state.undoInput());assertEquals("sin(x)\ncos(x)",state.graphSource)
+        assertFalse(state.canUndoInput);assertFalse(state.undoInput())
+        state.updateSource("")
+        state.changeKind("polar");assertFalse(state.canUndoInput)
+        state.changeKind("cartesian");assertTrue(state.canUndoInput)
+        assertTrue(state.undoInput());assertEquals("sin(x)\ncos(x)",state.graphSource)
+    }
 
     @Test fun hmcSettingsMigrateToNutsAndNewSettingsPersist() {
         val prefs=MemoryPreferences(mapOf("statisticsBayesianMethod" to "hmc","statisticsHmcSamples" to "700","statisticsHmcWarmup" to "600","statisticsHmcLeapfrog" to "40","statisticsHmcSeed" to "13","statisticsHmcChains" to "4","regressionReport" to "{\"method\":\"hmc\"}"))

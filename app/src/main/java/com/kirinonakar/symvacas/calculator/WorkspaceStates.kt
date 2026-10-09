@@ -35,6 +35,7 @@ internal class GraphState(private val prefs:SharedPreferences) {
     var graphData by mutableStateOf<JSONObject?>(null)
     var graphResultSignature:String?=null
     var graphDerivativeSelected by mutableStateOf<Int?>(null)
+    var graphSecondDerivativeSelected by mutableStateOf<Int?>(null)
     var graphAnalysis by mutableStateOf<JSONObject?>(null)
     var graphAnalysisBusy by mutableStateOf(false)
     var graphBusy by mutableStateOf(false)
@@ -47,6 +48,25 @@ internal class GraphState(private val prefs:SharedPreferences) {
     var animationPhase=0.0
     private val animationOffsets=mutableMapOf<String,Double>()
     var radianAxis by mutableStateOf(prefs.getBoolean("radianAxis",false))
+    private data class InputSnapshot(val source:String,val derivative:Int?,val secondDerivative:Int?,val parameters:Map<String,GraphParameter>)
+    private val inputUndo=mutableStateMapOf<String,List<InputSnapshot>>()
+    val canUndoInput get()=inputUndo[graphKind].orEmpty().isNotEmpty()
+
+    fun rememberInput() {
+        val history=inputUndo[graphKind].orEmpty()
+        inputUndo[graphKind]=(history+InputSnapshot(graphSource,graphDerivativeSelected,graphSecondDerivativeSelected,graphParameters)).takeLast(100)
+    }
+
+    fun undoInput():Boolean {
+        val history=inputUndo[graphKind].orEmpty()
+        val previous=history.lastOrNull() ?: return false
+        inputUndo[graphKind]=history.dropLast(1)
+        clearAnalysis()
+        graphSource=previous.source;graphDerivativeSelected=previous.derivative;graphParameters=previous.parameters
+        graphSecondDerivativeSelected=previous.secondDerivative
+        graphAnimating=false
+        return true
+    }
 
     private fun loadParameters():Map<String,GraphParameter> = runCatching {
         val stored=prefs.jsonObject("graphParameters")
@@ -62,6 +82,7 @@ internal class GraphState(private val prefs:SharedPreferences) {
 
     fun updateSource(source:String) {
         if(source==graphSource)return
+        rememberInput()
         graphSource=source
         clearAnalysis(clearGraph=graphKind!="surface")
     }
@@ -94,7 +115,7 @@ internal class GraphState(private val prefs:SharedPreferences) {
     }
 
     private fun clearAnalysis(clearGraph:Boolean=true) {
-        graphDerivativeSelected=null;graphAnalysis=null;trace=null;shadedInterval=null
+        graphDerivativeSelected=null;graphSecondDerivativeSelected=null;graphAnalysis=null;trace=null;shadedInterval=null
         if(clearGraph) {graphData=null;graphResultSignature=null}
     }
 

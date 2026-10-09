@@ -269,6 +269,9 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     var graphDerivativeSelected
         get()=graphState.graphDerivativeSelected
         set(value) {graphState.graphDerivativeSelected=value}
+    var graphSecondDerivativeSelected
+        get()=graphState.graphSecondDerivativeSelected
+        set(value) {graphState.graphSecondDerivativeSelected=value}
     var graphAnalysis
         get()=graphState.graphAnalysis
         private set(value) {graphState.graphAnalysis=value}
@@ -870,8 +873,16 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     fun stopPython() = with(CalculatorPythonActions) { performStopPython() }
     fun updateGraphSource(source:String) = with(CalculatorGraphActions) { performUpdateGraphSource(source) }
     fun removeGraphSource(index:Int,shading:Boolean=false) = with(CalculatorGraphActions) { performRemoveGraphSource(index,shading) }
-    fun toggleGraphDerivative(selected:Int) = with(CalculatorGraphActions) { performToggleGraphDerivative(selected) }
+    fun toggleGraphDerivative(selected:Int,order:Int=1) = with(CalculatorGraphActions) { performToggleGraphDerivative(selected,order) }
     fun sendExpressionToGraph() = with(CalculatorGraphActions) { performSendExpressionToGraph() }
+    fun sendExpressionToSystem() {
+        val source=editor.source.trim()
+        if(source.isBlank())return
+        equationSystem=equationSystem.trimEnd()+(if(equationSystem.isBlank())"" else "\n")+source
+        equationKind="System";error="";mode="Equations";save()
+    }
+    val canUndoGraph get()=graphState.canUndoInput
+    fun undoGraph() = with(CalculatorGraphActions) { performUndoGraph() }
     fun changeGraphKind(kind:String) = with(CalculatorGraphActions) { performChangeGraphKind(kind) }
     fun analyzeGraph(action:String,first:String,second:String,selected:Int,other:Int) =
         with(CalculatorGraphActions) { performAnalyzeGraph(action,first,second,selected,other) }

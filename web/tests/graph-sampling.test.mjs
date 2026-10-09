@@ -34,7 +34,7 @@ test('preview fills a margin without changing the visible bounds or source reque
 });
 
 test('sampling identity rejects changed expressions, derivatives, parameters and options',()=>{
-  for(const changed of [{trees:[{kind:'symbol',value:'y'}]},{graphKind:'implicit'},{derivativeSelected:1},{parameters:{a:2}},{precision:30}]){
+  for(const changed of [{trees:[{kind:'symbol',value:'y'}]},{graphKind:'implicit'},{derivativeSelected:1},{secondDerivativeSelected:0},{parameters:{a:2}},{precision:30}]){
     assert.notEqual(graphSamplingIdentity({...request,...changed}),graphSamplingIdentity(request));
   }
   for(const graphKind of ['parametric','polar','differential','sequence']){

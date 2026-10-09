@@ -16,6 +16,17 @@ import {advancedStatisticsSchema} from '../advanced-statistics-schema.js';
 // Reuse the interpreter for sequential integration scenarios. The cold solver
 // scenario below explicitly loads its own interpreter to keep startup coverage.
 let sharedRuntime;
+test('first and second graph derivatives run together through WASM dispatch',async()=>{
+  const py=await runtime();
+  py.globals.set('payload',JSON.stringify({action:'graph',graphKind:'cartesian',trees:[parse('x^3')],min:-2,max:2,derivativeSelected:0,secondDerivativeSelected:0}));
+  const result=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));
+  assert.equal(result.ok,true,result.error);
+  assert.equal(result.derivativeCurveIndex,1);assert.equal(result.secondDerivativeCurveIndex,2);
+  for(const [index,expected] of [[1,x=>3*x*x],[2,x=>6*x]]){
+    const points=result.curves[index].filter(Boolean);assert.ok(points.length);
+    for(const [x,y] of points)assert.ok(Math.abs(y-expected(x))<1e-8);
+  }
+});
 test('model diagnostic options and guarded inference run through real WASM dispatch',async()=>{
   const py=await runtime();
   const fixture=JSON.parse(readFileSync(new URL('../../tests/fixtures/model_diagnostics_reference.json',import.meta.url),'utf8'));

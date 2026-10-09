@@ -24,6 +24,35 @@ circle = equation(binary("+", x2, y2), number(1))
 
 
 class ImplicitGraphTests(unittest.TestCase):
+    def test_first_and_second_derivative_curves_are_independent(self):
+        cubic=binary("^",x,number(3))
+        result=self.graph(cubic,x2,graphKind="cartesian",derivativeSelected=0,secondDerivativeSelected=1)
+        self.assertTrue(result["ok"],result)
+        self.assertEqual(4,len(result["curves"]))
+        self.assertEqual(2,result["derivativeCurveIndex"])
+        self.assertEqual(3,result["secondDerivativeCurveIndex"])
+        self.assertEqual(0,result["derivativeSelected"])
+        self.assertEqual(1,result["secondDerivativeSelected"])
+        for at,value in filter(None,result["curves"][2]):self.assertAlmostEqual(3*at**2,value,delta=1e-8)
+        for at,value in filter(None,result["curves"][3]):self.assertAlmostEqual(2,value,delta=1e-8)
+        for source,expected in ((cubic,lambda at:6*at),(x,lambda at:0)):
+            result=self.graph(source,graphKind="cartesian",secondDerivativeSelected=0)
+            self.assertTrue(result["ok"],result)
+            self.assertNotIn("derivativeCurveIndex",result)
+            self.assertEqual(1,result["secondDerivativeCurveIndex"])
+            self.assertTrue(result["secondDerivativeExpression"])
+            points=list(filter(None,result["curves"][1]));self.assertTrue(points)
+            for at,value in points:self.assertAlmostEqual(expected(at),value,delta=1e-8)
+
+    def test_second_derivative_of_implicit_circle_samples_both_branches(self):
+        result=self.graph(circle,graphKind="cartesian",min=-.8,max=.8,secondDerivativeSelected=0)
+        self.assertTrue(result["ok"],result)
+        points=result["curves"][result["secondDerivativeCurveIndex"]]
+        self.assertIn(None,points)
+        values=[value for at,value in filter(None,points)]
+        self.assertTrue(any(value<0 for value in values));self.assertTrue(any(value>0 for value in values))
+        for at,value in filter(None,points):self.assertAlmostEqual((1-at**2)**-1.5,abs(value),delta=1e-8)
+
     def test_band_y_constraints_keep_disconnected_negative_regions(self):
         with self.subTest(scenario='band_y_constraints_keep_disconnected_negative_regions'):
             with self.subTest(scenario='band_y_constraints_keep_disconnected_negative_regions'):

@@ -391,6 +391,13 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
       try{const target=graphExpressionTarget(original);source=target.source;graphKind=target.kind;graphs.addExpression(source,graphKind);}catch(exc){error(exc.message);return;}
       changeMode('graph');
     }
+    else if(input==='TO_SYSTEM'){
+      const source=value('expression').trim();if(!source)return;
+      $('equation-source').value=value('equation-source').trimEnd()+(value('equation-source').trim()?'\n':'')+source;
+      $('equation-kind').value='solve';$('equation-form').value='general';
+      if(value('equation-variable').includes('('))$('equation-variable').value='x,y';
+      $('equation-form').onchange();changeMode('equation');persist();
+    }
     else if(jumps[input])changeMode(jumps[input]);
     else if(input==='M+'||input==='M−'){
       return updateMemory(input);
