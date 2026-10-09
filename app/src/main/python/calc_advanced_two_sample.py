@@ -79,7 +79,7 @@ def calculate(engine, name, args):
     mu, kappa, alpha, beta, level = [mp.mpf(number(args[i+3])) if len(args)>i+3 else mp.mpf(value) for i,value in enumerate(defaults)]
     require(kappa > 0 and alpha > 0 and beta > 0, 'Prior kappa, alpha and beta must be positive')
     require(0 < level < 1, 'Credible level must lie in (0,1)')
-    samples = integer(args[8], 2000, 100000) if len(args)>8 else 20000
+    samples = integer(args[8], 2000, 100000,capacity=True) if len(args)>8 else 20000
     seed = integer(args[9], 0, 2**32-1) if len(args)>9 else 0
     require(samples*(1-level)/2 >= 10, 'Increase posterior draws or reduce credible level (at least 10 expected draws per tail)')
     pa, pb = posterior(a, mu, kappa, alpha, beta), posterior(b, mu, kappa, alpha, beta)

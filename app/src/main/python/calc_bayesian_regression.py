@@ -4,6 +4,7 @@ Priors are on the centered, RMS-standardized design, including the intercept.
 Linear: beta|sigma² ~ N(0, sd² sigma² I), sigma² ~ InvGamma(shape, scale).
 Logistic: beta ~ N(0, sd² I); Gaussian Laplace posterior at the MAP.
 """
+from calc_limits import within_limit, limits_removed
 import math
 import mpmath as mp
 import sympy as s
@@ -17,7 +18,7 @@ def fit_bayesian(engine, rows, mode, options=None):
     require(isinstance(rows, (list, tuple)) and len(rows) >= 2 and
             all(isinstance(row, (list, tuple)) and len(row) >= 2 for row in rows),
             'Regression requires at least two complete predictor/response rows')
-    require(len(rows) <= 5000 and len(rows[0]) <= 21 and
+    require(within_limit(len(rows),5000) and within_limit(len(rows[0]),21) and
             all(len(row) == len(rows[0]) for row in rows),
             'Bayesian regression supports 5000 rows and 20 predictors with equal column counts')
     for row in rows: _numbers(row)
@@ -36,7 +37,7 @@ def fit_bayesian(engine, rows, mode, options=None):
     with mp.workdps(max(40, engine.precision+10)):
         settings = [_mpf(v, engine.precision+10) for v in args]
         sd, level, shape, scale = (settings+[mp.mpf(v) for v in ('2.5', '.95', '2', '1')[len(settings):]])
-        require(mp.mpf('1e-6') <= sd <= mp.mpf('1e6'), 'Prior SD must be between 0.000001 and 1000000')
+        require(sd > 0 and (limits_removed() or mp.mpf('1e-6') <= sd <= mp.mpf('1e6')), 'Prior SD must be between 0.000001 and 1000000')
         require(0 < level < 1, 'Credible level must be between 0 and 1')
         require(shape > 0 and scale > 0, 'Variance prior shape and scale must be positive')
         data = [[_mpf(v, engine.precision+10) for v in row] for row in rows]
@@ -101,7 +102,7 @@ def fit_bayesian(engine, rows, mode, options=None):
         if sampler is not None:
             from calc_nuts import sample, diagnostics, quantile
             samples,warmup,max_depth,seed,chains = nuts_options
-            require(n*p*chains*(samples+warmup) <= 200000000,
+            require(within_limit(n*p*chains*(samples+warmup),200000000),
                     'NUTS workload exceeds 200 million row/parameter gradient evaluations; reduce data or sampler settings')
             # Whiten with the local covariance; the sampled target still uses
             # the full posterior, not the Gaussian approximation.

@@ -1,3 +1,4 @@
+import {computationLimitsRemoved} from './computation-limits.js';
 import {parse} from './parser.js';
 
 const numericToken=/[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?/y;
@@ -22,7 +23,7 @@ function numericList(source){
 // Only Statistics execution uses this path. Keep its formula small and send
 // decimal strings separately, preserving precision and the normal parser caps.
 export function statisticsRequest(source){
-  if(source.length>16*1024*1024)throw new SyntaxError('Statistics input size limit');
+  if(!computationLimitsRemoved()&&source.length>16*1024*1024)throw new SyntaxError('Statistics input size limit');
   const statisticsDatasets={};let formula='',from=0;
   while(from<source.length){
     const start=source.indexOf('[',from);if(start<0){formula+=source.slice(from);break;}

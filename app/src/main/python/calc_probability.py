@@ -4,6 +4,7 @@ Tails are evaluated directly; subtracting a rounded CDF loses rare-event accurac
 Geometric X counts trials through the first success (support 1, 2, ...).
 Negative binomial X counts failures before the r-th success (support 0, 1, ...).
 """
+from calc_limits import within_limit
 import math
 import re
 import mpmath
@@ -46,7 +47,7 @@ def probability(request):
 
     def number(key, infinite=False):
         text = str(raw.get(key, "")).strip()
-        require(len(text) <= 200, "Numeric input is too long")
+        require(within_limit(len(text),200), "Numeric input is too long")
         if infinite and text.lower() in ("inf", "+inf", "infinity", "∞", "+∞", "-inf", "-infinity", "-∞"):
             return -mp.inf if text.startswith("-") else mp.inf
         percent = text.endswith("%")
@@ -54,7 +55,7 @@ def probability(request):
             text = text[:-1].strip()
         require(bool(NUMBER.fullmatch(text)), "Enter a number, fraction, or percentage" + f" ({key})")
         parts = text.split("/")
-        require(all(abs(int(part.lower().split("e")[1])) <= 1000 for part in parts if "e" in part.lower()), "Numeric exponent is too large")
+        require(all(within_limit(abs(int(part.lower().split("e")[1])),1000) for part in parts if "e" in part.lower()), "Numeric exponent is too large")
         value = mp.mpf(parts[0])
         if len(parts) == 2:
             divisor = mp.mpf(parts[1])
@@ -65,7 +66,7 @@ def probability(request):
 
     def integer(key, maximum=100000):
         value = number(key)
-        require(value == mp.floor(value) and 0 <= value <= maximum, "Enter an integer within the allowed range" + f" ({key})")
+        require(value == mp.floor(value) and 0 <= value and within_limit(value,maximum), "Enter an integer within the allowed range" + f" ({key})")
         return int(value)
 
     def chance(key):
@@ -313,7 +314,7 @@ def probability(request):
             sf = lambda k: beta_cdf(k+1,n-k,p)
         elif kind == "poisson":
             rate = number("rate")
-            require(0 <= rate <= 100000, "Average count must be between 0 and 100000")
+            require(0 <= rate and within_limit(rate,100000), "Average count must be between 0 and 100000")
             lo, hi = 0, 0 if rate == 0 else mp.inf
             mean, variance = rate, rate
             pdf = lambda k: mp.exp(-rate)*rate**k/mp.factorial(k)

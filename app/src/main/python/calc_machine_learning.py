@@ -1,4 +1,5 @@
 """Portable regression models shared by Chaquopy and Pyodide (no native dependencies)."""
+from calc_limits import within_limit
 import math
 import random
 
@@ -12,7 +13,7 @@ def _data(rows):
     require(len(rows) >= 2 and len(rows[0]) >= 2 and
             all(len(row) == len(rows[0]) for row in rows),
             "Regression requires at least two complete predictor/response rows")
-    require(len(rows) <= 5000 and len(rows[0]) <= 101,
+    require(within_limit(len(rows),5000) and within_limit(len(rows[0]),101),
             "Use at most 5000 observations and 100 predictors")
     for row in rows:
         _numbers(row)
@@ -107,7 +108,7 @@ def _logistic_core(columns, active, ys, l1, l2, intercept=None, beta=None, toler
 def _select_alpha(xs, ys, columns, scales, ratio, penalty_mode, logistic):
     """Choose the penalty by shuffled five-fold cross-validation over a geometric path."""
     n, p = len(xs), len(columns)
-    require(n*p <= 20000, "Cross-validated alpha supports at most 20000 rows x predictors")
+    require(within_limit(n*p,20000), "Cross-validated alpha supports at most 20000 rows x predictors")
     folds = 5 if n >= 10 else 2
     order = list(range(n)); random.Random(0).shuffle(order)
     assignment = [0]*n
@@ -312,7 +313,7 @@ def fit_random_forest(engine, rows, options=None, task="auto"):
     require(all(getattr(v, "is_Integer", False) for v in options),
             "Random Forest options must be integers")
     trees, depth, seed = map(int, options)
-    require(1 <= trees <= 200 and 1 <= depth <= 20 and 0 <= seed <= 2147483647,
+    require(1 <= trees and within_limit(trees,200) and 1 <= depth and within_limit(depth,20) and 0 <= seed <= 2147483647,
             "Use 1–200 trees, depth 1–20, and seed 0–2147483647")
     n, p = len(xs), len(xs[0])
     origin = 0.0 if classification else ys[0]

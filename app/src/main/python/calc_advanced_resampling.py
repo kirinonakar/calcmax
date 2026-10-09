@@ -1,4 +1,5 @@
 """Bootstrap intervals, noncentral-t power and sample size, and KS tests."""
+from calc_limits import within_limit
 import math
 import random
 import statistics
@@ -44,9 +45,9 @@ def t_test_power(effect,size,alpha,kind,sides):
 
 def calculate(engine,name,a):
     if name=='bootstrapci':
-        x=vector(a[0],2); statistic=option(a,1,'mean'); level=number(a[2]) if len(a)>2 else .95; count=integer(a[3],100,20000) if len(a)>3 else 2000; seed=integer(a[4],0,2**32-1) if len(a)>4 else 0
+        x=vector(a[0],2); statistic=option(a,1,'mean'); level=number(a[2]) if len(a)>2 else .95; count=integer(a[3],100,20000,capacity=True) if len(a)>3 else 2000; seed=integer(a[4],0,2**32-1) if len(a)>4 else 0
         require(statistic in ('mean','median','stdev') and 0<level<1,'Statistic: mean, median, stdev; confidence level in (0,1)')
-        require(len(x)*count<=2000000,'Bootstrap limit: two million sampled values')
+        require(within_limit(len(x)*count,2000000),'Bootstrap limit: two million sampled values')
         f={'mean':mean,'median':statistics.median,'stdev':statistics.stdev}[statistic]; rng=random.Random(seed); draws=sorted(f(rng.choices(x,k=len(x))) for _ in range(count))
         def quantile(q): pos=q*(count-1); j=int(pos); return draws[j]+(pos-j)*(draws[min(j+1,count-1)]-draws[j])
         engine.note += ' Nonparametric percentile bootstrap CI; IID observations, deterministic seed.'
@@ -57,20 +58,20 @@ def calculate(engine,name,a):
         require(sides in ('two','greater','less'),'Alternative: two, greater, or less')
         engine.note += ' Exact noncentral-t power for standardized mean differences; equal independent groups. n is per group or number of pairs.'
         if name=='testpower':
-            n=integer(a[1],2,10000000); return {'power':t_test_power(effect,n,alpha,kind,sides),'n per group / pairs':n,'alpha':alpha,'alternative':sides}
+            n=integer(a[1],2,10000000,capacity=True); return {'power':t_test_power(effect,n,alpha,kind,sides),'n per group / pairs':n,'alpha':alpha,'alternative':sides}
         target=number(a[1]) if len(a)>1 else .8
         # samplesize(d,target,alpha,kind,alternative), unlike testpower(d,n,alpha,kind,alternative).
         require(0<target<1,'Target power must lie in (0,1)')
         z=statistics.NormalDist().inv_cdf(1-alpha/(2 if sides=='two' else 1)); zpower=statistics.NormalDist().inv_cdf(target)
         estimate=int(math.ceil(2*((z+zpower)/effect)**2 if kind=='independent' else ((z+zpower)/effect)**2))
-        require(estimate<=10000000,'Required sample size exceeds limit')
+        require(within_limit(estimate,10000000),'Required sample size exceeds limit')
         low=max(2,estimate-8); high=max(2,estimate+8)
         if t_test_power(effect,low,alpha,kind,sides)>=target:
             low,high=2,max(2,estimate)
         else:
             while t_test_power(effect,high,alpha,kind,sides)<target:
                 low=high+1; high*=2
-                require(high<=20000000,'Required sample size exceeds limit')
+                require(within_limit(high,20000000),'Required sample size exceeds limit')
         while low<high:
             middle=(low+high)//2
             if t_test_power(effect,middle,alpha,kind,sides)>=target: high=middle

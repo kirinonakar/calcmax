@@ -1,4 +1,5 @@
 """Time-value-of-money and cash-flow calculations."""
+from calc_limits import within_limit
 import mpmath as mp
 import sympy as s
 from calc_shared import MathError, flatten, require
@@ -29,7 +30,7 @@ def finance_value(engine, name, a, nodes):
         else:
             require(isinstance(args[2], (list, tuple)), "npv needs a cash-flow list")
             flows = [args[1]] + list(args[2])
-        require(2 <= len(flows) <= 500, "npv needs between 2 and 500 cash flows")
+        require(2 <= len(flows) and within_limit(len(flows),500), "npv needs between 2 and 500 cash flows")
         for flow in flows: _real_value(flow, "Cash flows must be numbers")
         return s.Add(*[flow/(1 + rate)**index for index, flow in enumerate(flows)])
     if name == "irr":
@@ -40,7 +41,7 @@ def finance_value(engine, name, a, nodes):
         else:
             require(isinstance(args[1], (list, tuple)), "irr needs a cash-flow list")
             flows = [args[0]] + list(args[1])
-        require(2 <= len(flows) <= 100, "irr needs between 2 and 100 cash flows")
+        require(2 <= len(flows) and within_limit(len(flows),100), "irr needs between 2 and 100 cash flows")
         for flow in flows: _real_value(flow, "Cash flows must be numbers")
         if s.Add(*flows) == 0: return s.Integer(0)
         with mp.workdps(digits + 15):

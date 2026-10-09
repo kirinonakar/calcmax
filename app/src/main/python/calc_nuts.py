@@ -5,6 +5,7 @@ https://jmlr.org/papers/v15/hoffman14a.html
 The caller supplies a whitened negative log density and analytic gradient.
 Diagnostics are classical split R-hat and autocorrelation ESS (not rank ESS).
 """
+from calc_limits import within_limit
 import math
 import random
 from calc_shared import MathError, require
@@ -115,14 +116,14 @@ def _initial_step_size(target, state):
 
 def sample(target, dimensions, samples=500, warmup=500, max_depth=8, seed=0, chains=2,
            max_evaluations=None):
-    require(100 <= samples <= 5000 and 50 <= warmup <= 5000 and 1 <= max_depth <= 10 and
-            0 <= seed <= 2147483647 and 2 <= chains <= 4, 'NUTS options: samples 100–5000, warmup 50–5000, max tree depth 1–10, seed 0–2147483647, chains 2–4')
+    require(100 <= samples and within_limit(samples,5000) and 50 <= warmup and within_limit(warmup,5000) and 1 <= max_depth and within_limit(max_depth,10) and
+            0 <= seed <= 2147483647 and 2 <= chains and within_limit(chains,4), 'NUTS options: samples 100–5000, warmup 50–5000, max tree depth 1–10, seed 0–2147483647, chains 2–4')
     require(isinstance(dimensions,int) and dimensions > 0, 'NUTS requires positive dimensions')
     evaluations = 0
     def evaluate(position):
         nonlocal evaluations
         evaluations += 1
-        require(max_evaluations is None or evaluations <= max_evaluations,
+        require(max_evaluations is None or within_limit(evaluations,max_evaluations),
                 'NUTS workload exceeds 200 million row/parameter gradient evaluations; reduce data or sampler settings')
         return target(position)
     draws = []; summaries = []

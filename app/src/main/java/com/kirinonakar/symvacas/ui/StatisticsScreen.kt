@@ -176,7 +176,7 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
                 }?:error("Could not read the selected file")
                 val mime=context.contentResolver.getType(uri).orEmpty()
                 val xlsx=mime.contains("spreadsheetml.sheet")||bytes.size>=4&&bytes[0]==0x50.toByte()&&bytes[1]==0x4b.toByte()&&bytes[2]==0x03.toByte()&&bytes[3]==0x04.toByte()
-                if(xlsx)previewStatisticsXlsx(bytes) else previewStatisticsCsv(String(bytes,StandardCharsets.UTF_8))
+                if(xlsx)previewStatisticsXlsx(bytes,m.removeComputationLimit) else previewStatisticsCsv(String(bytes,StandardCharsets.UTF_8))
             }}
             result.onSuccess {parsed->when(parsed) {
                 is StatisticsXlsxWorkbook->{val sheets=parsed.sheets.filter {it.preview.columnCount>0};if(sheets.size==1)importPreview=sheets.single().preview else importSheets=sheets}
@@ -401,12 +401,13 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
                         Choices(listOf("Auto","Always"),if(firthMode=="firth")"Always" else "Auto",{m.clearRegression();firthMode=if(it=="Always")"firth" else "auto"})
                     }
                     val table=statisticsRegressionTable(numericRows,dataKind,fitMode,responseColumn)
-                    val validNuts=bayesianMethod!="nuts"||(nutsSamples.toIntOrNull() in 100..5000&&nutsWarmup.toIntOrNull() in 50..5000&&nutsMaxDepth.toIntOrNull() in 1..10&&nutsChains.toIntOrNull() in 2..4&&nutsSeed.toLongOrNull() in 0L..2147483647L)
+                    fun capacityOption(raw:String,minimum:Int,maximum:Int)=raw.toIntOrNull()?.let{it>=minimum&&(m.removeComputationLimit||it<=maximum)}==true
+                    val validNuts=bayesianMethod!="nuts"||(capacityOption(nutsSamples,100,5000)&&capacityOption(nutsWarmup,50,5000)&&capacityOption(nutsMaxDepth,1,10)&&capacityOption(nutsChains,2,4)&&nutsSeed.toLongOrNull() in 0L..2147483647L)
                     val samplerOptions=if(bayesianMethod=="nuts")",[nuts,$nutsSamples,$nutsWarmup,$nutsMaxDepth,$nutsSeed,$nutsChains]" else ""
                     val validOptions=when {
-                        bayesian->validNuts&&bayesianPriorSD.toDoubleOrNull()?.let {it.isFinite()&&it in 0.000001..1000000.0}==true&&bayesianLevel.toDoubleOrNull()?.let {it>0&&it<1}==true&&(regression!="bayeslinear"||(bayesianShape.toDoubleOrNull()?.let {it.isFinite()&&it>0}==true&&bayesianScale.toDoubleOrNull()?.let {it.isFinite()&&it>0}==true))
+                        bayesian->validNuts&&bayesianPriorSD.toDoubleOrNull()?.let {it.isFinite()&&it>0&&(m.removeComputationLimit||it in 0.000001..1000000.0)}==true&&bayesianLevel.toDoubleOrNull()?.let {it>0&&it<1}==true&&(regression!="bayeslinear"||(bayesianShape.toDoubleOrNull()?.let {it.isFinite()&&it>0}==true&&bayesianScale.toDoubleOrNull()?.let {it.isFinite()&&it>0}==true))
                         regularized->(lassoAlphaCv||lassoAlpha.toDoubleOrNull()?.let {it.isFinite()&&it>0}==true)&&(regularization!="elasticnet"||l1Ratio.toDoubleOrNull()?.let {it in 0.0..1.0}==true)
-                        regression=="randomforest"->forestTrees.toIntOrNull() in 1..200&&forestDepth.toIntOrNull() in 1..20&&forestSeed.toLongOrNull() in 0L..2147483647L
+                        regression=="randomforest"->capacityOption(forestTrees,1,200)&&capacityOption(forestDepth,1,20)&&forestSeed.toLongOrNull() in 0L..2147483647L
                         else->true
                     }
                     if(regression!="polynomial")CalculationButton("Analyze",m.regressionBusy,m.regressionJob ?: m.inputVersion,

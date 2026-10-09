@@ -1,3 +1,4 @@
+import {computationLimitsRemoved} from './computation-limits.js';
 import {parse,latexInput} from './parser.js';
 function csvRecordDelimiter(source,start){
   // Excel separates columns with tabs; commas inside those cells are literal.
@@ -26,10 +27,10 @@ export function csvRows(source,{maxColumns=100,skipHeader=true,preserveEmptyRows
   const rows=[];let row=[],cell='',quoted=false,delimiter=csvRecordDelimiter(source,0);
   for(let i=0;i<source.length;i++){const ch=source[i];if(ch==='"'){if(quoted&&source[i+1]==='"'){cell+='"';i++;}else quoted=!quoted;}else if(!quoted&&ch===delimiter){row.push(cell.trim());cell='';}else if(!quoted&&(ch==='\n'||ch==='\r')){if(ch==='\r'&&source[i+1]==='\n')i++;row.push(cell.trim());if(row.some(Boolean)||preserveEmptyRows)rows.push(row);row=[];cell='';delimiter=csvRecordDelimiter(source,i+1);}else cell+=ch;}
   if(quoted)throw new Error('Unclosed CSV quote');row.push(cell.trim());if(row.some(Boolean)||preserveEmptyRows&&source.length&&!/[\r\n]$/.test(source))rows.push(row);
-  if(!rows.length||rows.length>5000)throw new Error('Enter 1–5000 data rows');
+  if(!rows.length||!computationLimitsRemoved()&&rows.length>5000)throw new Error('Enter 1–5000 data rows');
   if(skipHeader&&statisticsCsvHasHeader(rows))rows.shift();
   if(!rows.length)throw new Error('Enter data below the header');
-  const columns=Math.max(...rows.map(r=>r.length));if(columns>maxColumns)throw new Error(`Use up to ${maxColumns} data columns`);return rows.map(r=>Array.from({length:columns},(_,i)=>r[i]||''));
+  const columns=Math.max(...rows.map(r=>r.length));if(!computationLimitsRemoved()&&columns>maxColumns)throw new Error(`Use up to ${maxColumns} data columns`);return rows.map(r=>Array.from({length:columns},(_,i)=>r[i]||''));
 }
 function markdownCells(line){
   line=line.trim();if(line.startsWith('|'))line=line.slice(1);if(line.endsWith('|')&&!line.endsWith('\\|'))line=line.slice(0,-1);

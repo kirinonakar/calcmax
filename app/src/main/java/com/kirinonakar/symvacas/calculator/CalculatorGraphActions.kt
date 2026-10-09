@@ -10,8 +10,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.coroutines.resume
 
-internal fun graphInputTree(source:String,kind:String="cartesian"):Expr {
-    val tree=Parser(LatexInput.convert(source) ?: source).parse()
+internal fun graphInputTree(source:String,kind:String="cartesian",removeComputationLimit:Boolean=false):Expr {
+    val tree=Parser(LatexInput.convert(source) ?: source,removeComputationLimit=removeComputationLimit).parse()
     return if(kind=="cartesian")FunctionTransfer.graphExpression(tree)else tree
 }
 
@@ -61,10 +61,10 @@ internal object CalculatorGraphActions {
                 val line=raw.trim()
                 if(isGraphShading(line)) {
                     if(graphKind!="cartesian")throw SyntaxException("Shading is available on Cartesian graphs",0)
-                    if(shadings.length()<4)shadings.put(graphShadeEntry(graphShadingBody(line)))
+                    if(shadings.length()<4)shadings.put(graphShadeEntry(graphShadingBody(line),removeComputationLimit))
                     return@forEach
                 }
-                if(trees.size<limit) trees+=JSONObject(graphInputTree(line,graphKind).json())
+                if(trees.size<limit) trees+=JSONObject(graphInputTree(line,graphKind,removeComputationLimit).json())
             }
         } catch(e:Exception) { error=e.message ?: "Syntax ERROR"; return }
         if(trees.isEmpty() && shadings.length()==0) { if(!auto)error="Enter a function"; return }
@@ -91,7 +91,7 @@ internal object CalculatorGraphActions {
         }
         if(kind=="sequence") {
             try {
-                val seeds=sequenceInitials.split(',').map(String::trim).filter(String::isNotEmpty).map { JSONObject(Parser(it).parse().json()) }
+                val seeds=sequenceInitials.split(',').map(String::trim).filter(String::isNotEmpty).map { JSONObject(Parser(it,removeComputationLimit=removeComputationLimit).parse().json()) }
                 require(seeds.isNotEmpty()) { "Enter at least one initial sequence value" }
                 request.put("initialTrees",JSONArray(seeds))
             } catch(e:Exception) { error=e.message ?: "Invalid initial sequence values";return }
@@ -215,7 +215,7 @@ internal object CalculatorGraphActions {
         if(a==null || !a.isFinite() || b==null || !b.isFinite() || (!singled && a>=b)) {error="Enter finite values with a < b";return}
         val sources=graphSource.lines().filter {it.isNotBlank()}.take(8).filter {graphKind!="cartesian" || !isGraphShading(it)}.take(6)
         if(sources.isEmpty() || selected !in sources.indices || action=="intersection" && (other !in sources.indices || other==selected)) {error="Select two different functions";return}
-        val trees=try {JSONArray(sources.map {JSONObject(graphInputTree(it,graphKind).json())})} catch(e:Exception) {error=e.message ?: "Syntax ERROR";return}
+        val trees=try {JSONArray(sources.map {JSONObject(graphInputTree(it,graphKind,removeComputationLimit).json())})} catch(e:Exception) {error=e.message ?: "Syntax ERROR";return}
         analysisJob?.cancel()
         val source=graphSource
         val kind=graphKind

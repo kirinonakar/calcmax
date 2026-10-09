@@ -3,8 +3,8 @@ package com.kirinonakar.symvacas.math
 data class StatisticsRequest(val tree:Expr,val datasets:Map<String,List<Any>>)
 
 /** Parse the small formula and carry decimal dataset cells separately. */
-fun statisticsRequest(source:String):StatisticsRequest {
-    require(source.length<=16*1024*1024) {"Statistics input size limit"}
+fun statisticsRequest(source:String,removeComputationLimit:Boolean=false):StatisticsRequest {
+    require(removeComputationLimit||source.length<=16*1024*1024) {"Statistics input size limit"}
     val datasets=linkedMapOf<String,List<Any>>()
     val formula=StringBuilder()
     var from=0
@@ -23,7 +23,7 @@ fun statisticsRequest(source:String):StatisticsRequest {
         }
         from=end
     }
-    return StatisticsRequest(Parser(formula.toString()).parse(),datasets)
+    return StatisticsRequest(Parser(formula.toString(),removeComputationLimit=removeComputationLimit).parse(),datasets)
 }
 
 private class NumericStatisticsList(val source:String) {

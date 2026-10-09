@@ -788,3 +788,7 @@ ANCOVA: [partial ANOVA tests](https://www.statsmodels.org/stable/generated/stats
 GLMM: [lme4 adaptive quadrature reference](https://lme4.github.io/lme4/reference/glmer.html).
 
 Bayesian Two-Sample Comparison: [Savage-Dickey density ratio and compatible null priors](https://statproofbook.github.io/P/bf-sddr.html).
+
+## remove computation limit
+
+Enable **remove computation limit** in Setup to remove app time limits (including 60 seconds), workload budgets, input size/number/exponent, matrix/statistics data and sampling ceilings. It is off by default and saved locally. Result length limits and internal precision/display digit settings and ceilings remain unchanged, as do mathematical domains, required inputs and algorithm convergence checks. Manual cancellation remains available; device memory and underlying engine limits still apply.

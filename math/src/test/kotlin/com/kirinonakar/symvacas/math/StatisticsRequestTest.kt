@@ -20,4 +20,14 @@ class StatisticsRequestTest {
         assertEquals(Parser("mean([1/2,2+3])").parse(),statisticsRequest("mean([1/2,2+3])").tree)
         assertThrows(IllegalArgumentException::class.java) {statisticsRequest("mean([1,,2])")}
     }
+    @Test fun computationLimitsCanBeRemovedWithoutAllowingInvalidSyntax() {
+        val literal="1"+"0".repeat(8192)
+        val list="["+List(2100){"1"}.joinToString(",")+"]"
+        assertThrows(IllegalArgumentException::class.java) {Parser(literal).parse()}
+        assertThrows(IllegalArgumentException::class.java) {Parser(list).parse()}
+        assertEquals(literal,Parser(literal,removeComputationLimit=true).parse().value)
+        assertEquals(2100,Parser(list,removeComputationLimit=true).parse().args.size)
+        assertThrows(IllegalArgumentException::class.java) {Parser("1+*2",removeComputationLimit=true).parse()}
+        assertThrows(IllegalArgumentException::class.java) {Parser(literal).parse()}
+    }
 }

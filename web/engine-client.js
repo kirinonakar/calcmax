@@ -55,7 +55,7 @@ export class EngineClient extends EventTarget {
       pending.waitingInput=false;
       pending.inputController=null;
       pending.started=Date.now();
-      pending.timer=setTimeout(()=>this.cancel(EXECUTION_TIMEOUT_ERROR),pending.remaining);
+      if(Number.isFinite(pending.remaining))pending.timer=setTimeout(()=>this.cancel(EXECUTION_TIMEOUT_ERROR),pending.remaining);
       worker.postMessage({type:'input',id:data.id,inputId:data.inputId,value:String(value)});
     } catch(error) {
       if(this.pending===pending&&this.worker===worker)this.cancel(String(error));
@@ -74,7 +74,8 @@ export class EngineClient extends EventTarget {
     let resolve;
     const promise = new Promise(done => { resolve = done; });
     const id = ++this.counter;
-    this.pending = {id,resolve,promise,background,onInput,context,remaining:EXECUTION_TIMEOUT_MS,started:Date.now(),timer:setTimeout(() => this.cancel(EXECUTION_TIMEOUT_ERROR),EXECUTION_TIMEOUT_MS)};
+    const remaining=request.removeComputationLimit===true?Infinity:EXECUTION_TIMEOUT_MS;
+    this.pending = {id,resolve,promise,background,onInput,context,remaining,started:Date.now(),timer:Number.isFinite(remaining)?setTimeout(() => this.cancel(EXECUTION_TIMEOUT_ERROR),remaining):null};
     this.emit('activity',true);
     if (!background) this.emit('busy',true);
     this.worker.postMessage({id,request});

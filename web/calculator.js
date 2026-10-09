@@ -346,7 +346,7 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
       if(input==='AC'){cancelCalc();return;}
       if(input==='='||input==='CALC')return submitCalcValue();
     }
-    if(engineeringConversion&&['LEFT','RIGHT'].includes(input)){engineeringShift=Math.max(-40000,Math.min(40000,engineeringShift+(input==='LEFT'?1:-1)));renderResult();return;}
+    if(engineeringConversion&&['LEFT','RIGHT'].includes(input)){engineeringShift=state.removeComputationLimit?engineeringShift+(input==='LEFT'?1:-1):Math.max(-40000,Math.min(40000,engineeringShift+(input==='LEFT'?1:-1)));renderResult();return;}
     if(engineeringConversion&&!['ENG','ENG−','=','CALC','AC','CLR ALL'].includes(input))exitEngineering();
     if(input==='CALC')startCalc();
     else if(input==='=')evaluate();

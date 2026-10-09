@@ -34,7 +34,7 @@ internal object CalculatorVariableActions {
     fun CalculatorModel.performStore(name: String, source: String = editor.source.ifBlank { "Ans" },showResult:Boolean=true,finishInput:Boolean=false) {
         try {
             require(name.matches(Regex("[A-Za-z][A-Za-z0-9_]*"))) { "Use a letter followed by letters, digits or underscores" }
-            val tree=Parser(source).parse()
+            val tree=Parser(source,removeComputationLimit=removeComputationLimit).parse()
             require(name !in listOf("pi","e","i","I","oo","Ans","c0","hP","hbar","G","qe","NA","kB0","me","mp0")) { "Reserved constant or answer name" }
             if(busy) return
             val sourceTree=JSONObject(tree.json())

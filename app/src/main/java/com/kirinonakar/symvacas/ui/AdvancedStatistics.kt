@@ -49,12 +49,12 @@ internal fun advancedStatisticsCommand(definition:JSONObject,rows:List<List<Stri
 }
 
 /** Only the columns selected on the statistics screen are analyzed; extra pasted cells are ignored. */
-internal fun advancedStatisticsRows(data:String,columnLimit:Int?=null):List<List<String>> {
+internal fun advancedStatisticsRows(data:String,columnLimit:Int?=null,removeComputationLimit:Boolean=false):List<List<String>> {
     val normalized=data.removePrefix("\uFEFF").replace("\r\n","\n").replace('\r','\n').trimEnd('\n')
     val rows=normalized.split('\n').map {line->line.splitCsvRecord().map(String::trim)}
     val width=rows.maxOfOrNull {it.size} ?: 0
     val columns=if(columnLimit==null)width else minOf(width,columnLimit)
-    require(columns<=20&&rows.size<=5000) {"Limit: 5000 rows and 20 columns"}
+    require(removeComputationLimit||(columns<=20&&rows.size<=5000)) {"Limit: 5000 rows and 20 columns"}
     val rectangular=rows.map {row->List(columns){row.getOrElse(it){""}}}
     return if(statisticsHasHeader(rectangular)&&rectangular.first().none {it=="NA"})rectangular.drop(1) else rectangular
 }
@@ -83,14 +83,14 @@ internal fun advancedStatisticsRows(data:String,columnLimit:Int?=null):List<List
     val forms=JSONObject(formsText)
     val settings=forms.optJSONObject(selected) ?: JSONObject()
     val columnLimit=statisticsColumnCount(kind)
-    val currentRows=runCatching {advancedStatisticsRows(data,columnLimit)}
+    val currentRows=runCatching {advancedStatisticsRows(data,columnLimit,m.removeComputationLimit)}
     val rows=if(input=="example"&&definition.has("exampleRows"))definition.getJSONArray("exampleRows").let {array->List(array.length()){i->array.getJSONArray(i).let {row->List(row.length()){row.getString(it)}}}} else currentRows.getOrDefault(emptyList())
     val count=rows.maxOfOrNull {it.size} ?: statisticsColumnCount(kind)
     val labels=if(input=="example")statisticsColumnNames(statisticsKindForColumns(count)) else statisticsColumnLabels(data,statisticsKindForColumns(count))
     val columns=List(count){i->labels.getOrNull(i) ?: "x${i+1}"}
     val command=runCatching {if(input=="expression"||!definition.has("controls"))source else {
         if(input=="current")currentRows.getOrThrow()
-        guidedStatisticsCommand(definition,rows,settings,columns)
+        guidedStatisticsCommand(definition,rows,settings,columns,m.removeComputationLimit)
     }}
     fun setOption(key:String,value:String) {
         val next=JSONObject(settings.toString()).put(key,value)
@@ -133,7 +133,7 @@ internal fun advancedStatisticsRows(data:String,columnLimit:Int?=null):List<List
             if(!definition.has("controls"))SmallAction(if(ko)"예제" else "Example"){source=definition.getString("example");message=""}
             if(definition.getString("input")!="none")SmallAction(if(ko)"현재 데이터" else "Use current data"){
                 if(definition.has("controls")){input="current";message=""}
-                else runCatching {advancedStatisticsCommand(definition,advancedStatisticsRows(data,columnLimit))}.onSuccess {source=it;input="current";message=""}.onFailure {message=it.message.orEmpty()}
+                else runCatching {advancedStatisticsCommand(definition,advancedStatisticsRows(data,columnLimit,m.removeComputationLimit))}.onSuccess {source=it;input="current";message=""}.onFailure {message=it.message.orEmpty()}
             }
             CalculationButton("Analyze",m.busy&&m.calculationAction=="statistics-advanced",m.inputVersion,
                 onCancel={pending=false;m.cancel()},onClick={command.getOrNull()?.let {

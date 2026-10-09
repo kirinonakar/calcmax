@@ -145,6 +145,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
     var sound by mutableStateOf(prefs.getBoolean("sound",false))
     var persistHistory by mutableStateOf(prefs.getBoolean("historyEnabled",true))
     var autoCloseBrackets by mutableStateOf(prefs.getBoolean("autoCloseBrackets",false))
+    var removeComputationLimit by mutableStateOf(prefs.getBoolean("removeComputationLimit",false))
     var calcModeStepByStep by mutableStateOf(prefs.getBoolean("calcModeStepByStep",false))
     var wordWrap by mutableStateOf(prefs.getBoolean("wordWrap",false))
     var typedParens by mutableStateOf<List<IntRange>>(emptyList())
@@ -483,6 +484,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
             .putString("language",language)
             .putFloat("inputFont",inputFont).putFloat("outputFont",outputFont).putBoolean("wordWrap",wordWrap)
             .putBoolean("calcModeStepByStep",calcModeStepByStep)
+            .putBoolean("removeComputationLimit",removeComputationLimit)
             .putString("graphColors",JSONArray(graphColors).toString())
             .putString("variables",variables.toString()).putString("functions",functions.toString()).putString("assumptions",assumptions.toString())
             .putString("equationKind",equationKind).putString("equationCoefficients",JSONArray(equationCoefficients).toString())
@@ -534,7 +536,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
             dmsDisplay=false
             dmsConversion=false
             inputVersion++;commitRequested=false;busy=false
-            val tree=runCatching {Parser(value.source,true).parse()}.getOrNull()
+            val tree=runCatching {Parser(value.source,true,removeComputationLimit).parse()}.getOrNull()
             if(tree!=null&&requiresExplicitEvaluation(tree,multiArgumentUserFunctions())) {result=null;resultSource="";resultVersion=-1}
             schedulePreview()
         }
@@ -689,7 +691,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
                                 if(commitRequested)commit(source,response)
                             } else {error=response.optString("error");resultVersion=-1;commitRequested=false;busy=false}
                         }
-                    } else if(commitRequested) {error=runCatching {Parser(source).parse();"Enter a complete expression"}.exceptionOrNull()?.message ?: "Enter a complete expression";commitRequested=false;busy=false}
+                    } else if(commitRequested) {error=runCatching {Parser(source,removeComputationLimit=removeComputationLimit).parse();"Enter a complete expression"}.exceptionOrNull()?.message ?: "Enter a complete expression";commitRequested=false;busy=false}
                     previewBusy=false
                     if(revision==inputVersion)break
                     delay(50)
@@ -710,9 +712,9 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         appendHistory(HistoryEntry(System.currentTimeMillis(),source,response.optString("exact"),response.optString("decimal"),mode,inputTree=inputTree()?.toString() ?: "",response=response.toString(),answer=inputAnswer?.toString() ?: ""))
         save()
     }
-    fun request(action: String = "evaluate") = JSONObject().put("action",action).put("precision",precision).put("displayDigits",displayDigits).put("angle",angle).put("variables",JSONObject(variables.toString()).apply{inputAnswer?.let{put("Ans",it)}}).put("functions",functions).put("assumptions",assumptions).put("equationSteps",action=="evaluate" && mode=="Equations").put("solutionSteps",action=="evaluate" && (mode=="Equations" || (mode=="Scientific/CAS" && calcModeStepByStep)))
+    fun request(action: String = "evaluate") = JSONObject().put("action",action).put("removeComputationLimit",removeComputationLimit).put("precision",precision).put("displayDigits",displayDigits).put("angle",angle).put("variables",JSONObject(variables.toString()).apply{inputAnswer?.let{put("Ans",it)}}).put("functions",functions).put("assumptions",assumptions).put("equationSteps",action=="evaluate" && mode=="Equations").put("solutionSteps",action=="evaluate" && (mode=="Equations" || (mode=="Scientific/CAS" && calcModeStepByStep)))
     internal fun calculationTree(source:String):Expr {
-        val tree=Parser(source,true).parse()
+        val tree=Parser(source,true,removeComputationLimit).parse()
         if(tree.nodes().any {it.kind=="hole"})throw SyntaxException("Complete the empty expression slots",source.length)
         return tree
     }
@@ -797,7 +799,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
             return
         }
         if(committed && source==editor.source)return
-        val statisticsInput=try {if(mode=="Statistics")statisticsRequest(source) else null} catch(e:Exception) {error=e.message ?: "Syntax ERROR";return}
+        val statisticsInput=try {if(mode=="Statistics")statisticsRequest(source,removeComputationLimit) else null} catch(e:Exception) {error=e.message ?: "Syntax ERROR";return}
         val tree = try { statisticsInput?.tree ?: calculationTree(source) } catch(e: Exception) { error=e.message ?: "Syntax ERROR"; return }
         val target=try {FunctionTransfer.resultTarget(tree)} catch(e:Exception) {error=e.message ?: "Invalid function";return}
         if(target!=null) {
@@ -914,7 +916,7 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         else insert(suffix,if(suffix=="^()")2 else suffix.length)
     }
     fun enterEngineering() { if(!poweredOn||result==null)return;engineeringConversion=true;engineeringShift=0 }
-    fun shiftEngineering(delta:Int) { if(engineeringConversion)engineeringShift=(engineeringShift+delta).coerceIn(-40_000,40_000) }
+    fun shiftEngineering(delta:Int) { if(engineeringConversion)engineeringShift=if(removeComputationLimit)engineeringShift+delta else (engineeringShift+delta).coerceIn(-40_000,40_000) }
     fun exitEngineering() { engineeringConversion=false;engineeringShift=0 }
     override fun onCleared() { save(); engine.close(); super.onCleared() }
 }

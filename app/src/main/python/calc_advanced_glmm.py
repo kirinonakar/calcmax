@@ -4,6 +4,7 @@ No SciPy/NumPy dependency. Conditional mode derivatives are analytic; the
 joint marginal observed information uses central differences of the integrated
 log likelihood. Coefficients describe subject-specific conditional effects.
 """
+from calc_limits import within_limit
 import math
 from functools import lru_cache
 import mpmath as mp
@@ -49,10 +50,10 @@ def observed_information(objective,point):
 def calculate(engine,name,a):
     rows=table(a[0],6,3); family=option(a,1,'binomial')
     require(family in ('binomial','poisson','nbinom'),'GLMM family: binomial, poisson, or nbinom (NB2)')
-    nodes_count=integer(a[2],1,31) if len(a)>2 else 15
+    nodes_count=integer(a[2],1,31,capacity=True) if len(a)>2 else 15
     require(nodes_count==1 or nodes_count>=7,'Use 1 (Laplace) or 7-31 quadrature points')
     x,y=clustered_design(rows); n=len(y); p=len(x[0])
-    require(n<=1500 and p<=8,'GLMM limit: 1500 rows and 8 fixed coefficients')
+    require(within_limit(n,1500) and within_limit(p,8),'GLMM limit: 1500 rows and 8 fixed coefficients')
     offsets=count_offsets(a,3,n)
     require(family!='binomial' or not any(offsets),'GLMM offsets are supported for count families only')
     if family=='binomial':

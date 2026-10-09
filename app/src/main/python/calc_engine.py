@@ -4,6 +4,7 @@ The public Engine, Quantity, and dispatch names stay at this import path.
 """
 import json
 from calc_runtime import ExecutionStopped
+from calc_limits import computation_limits, limits_removed, within_limit
 import sympy as s
 from sympy.core.relational import Relational
 from quantities import Quantity
@@ -71,7 +72,8 @@ def dispatch(payload, control=None):
     # Monitoring a backward jump may raise at the edge of a local exception
     # table on CPython. Keep the public error boundary in a separate caller frame.
     try:
-        return _dispatch(payload, control)
+        with computation_limits(json.loads(payload).get("removeComputationLimit", False)):
+            return _dispatch(payload, control)
     except ExecutionStopped as exc:
         return json.dumps({"ok":False,"error":str(exc)},ensure_ascii=False)
 
@@ -90,6 +92,7 @@ def _dispatch(payload, control=None):
         if seconds>=8: seconds=max(seconds,60)
     else:
         steps=3000000
+    if limits_removed(): seconds=steps=float("inf")
     budget=Budget(seconds,steps=steps,control=control)
     try:
         budget.__enter__()
@@ -141,7 +144,7 @@ def _dispatch(payload, control=None):
                 result["dms"]=True
             if request["tree"].get("value")=="eng" and getattr(value,"is_number",False):
                 offset=engine.build(request["tree"]["args"][1]) if len(request["tree"]["args"])>1 else 0
-                require(-300<=offset<=300,"Engineering exponent limit")
+                require(within_limit(abs(offset),300),"Engineering exponent limit")
                 exponent=(int(s.floor(s.log(s.Abs(value),10)/3))*3 if value!=0 else 0)+int(offset)
                 mantissa=s.N(value/s.Integer(10)**exponent,engine.precision)
                 power={"kind":"power","args":[{"kind":"text","value":"10"},{"kind":"text","value":str(exponent)}]}

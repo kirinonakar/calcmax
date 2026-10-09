@@ -1,4 +1,5 @@
 """Repeated-measures ANOVA, Gaussian mixed effects and clustered GEE models."""
+from calc_limits import within_limit
 import math
 import mpmath as mp
 from calc_shared import MathError, require
@@ -12,7 +13,7 @@ from calc_advanced_common import (
 def repeated_anova(engine, a):
     """Balanced one- or two-factor within-subjects ANOVA with GG corrections."""
     rows=table(a[0],2,2); n=len(rows); k=len(rows[0])
-    factor2=integer(a[1],1,20) if len(a)>1 else 1
+    factor2=integer(a[1],1,20,capacity=True) if len(a)>1 else 1
     if factor2==1:
         overall=mean(sum(rows,[])); cols=list(zip(*rows))
         total=sum((v-overall)**2 for r in rows for v in r); sscondition=n*sum((mean(c)-overall)**2 for c in cols); sssubject=k*sum((mean(r)-overall)**2 for r in rows); error=total-sscondition-sssubject
@@ -332,15 +333,15 @@ def clustered(engine,name,a):
     if name=='mixedmodel':
         argument=a[1] if len(a)>1 else 0
         if isinstance(argument,(list,tuple)):
-            slopes=[integer(v,1,19) for v in argument]
+            slopes=[integer(v,1,19,capacity=True) for v in argument]
             require(slopes and len(slopes)<=3 and len(set(slopes))==len(slopes),'Use 0, a predictor position, or up to three distinct positions such as [1,2]')
         else:
-            selected=integer(argument,0,19); slopes=[] if selected==0 else [selected]
+            selected=integer(argument,0,19,capacity=True); slopes=[] if selected==0 else [selected]
         method=option(a,2,'reml'); require(method in ('ml','reml'),'Estimation: ml or reml')
         require(any(len(c)>1 for c in clusters),'Random intercept requires repeated subjects')
         for slope in slopes: require(1<=slope<p,'Random-slope predictor position is out of range')
         if not slopes: return mixed_intercept(engine,x,y,clusters,ids,method)
-        require(len(clusters)*(p*(len(slopes)+1))**2<=20000,'Random-slope model is too large; reduce predictors, random effects, or subjects')
+        require(within_limit(len(clusters)*(p*(len(slopes)+1))**2,20000),'Random-slope model is too large; reduce predictors, random effects, or subjects')
         return mixed_random_effects(engine,x,y,clusters,ids,slopes,method)
     x,transform,_,_=standardized_design(x); X=mp.matrix(x)
     if pairs: engine.note += ' GEE interactions: '+terms+'.'

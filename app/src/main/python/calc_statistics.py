@@ -1,4 +1,5 @@
 """Probability distributions, statistical tests, and regression."""
+from calc_limits import within_limit
 import math
 from statistics import NormalDist
 import mpmath as mp
@@ -367,7 +368,7 @@ def distribution_value(engine, name, a):
     if name in ("binompdf", "binomcdf"):
         require(len(a) in (2, 3), name + " takes n, p and optionally k")
         n, p = a[0], a[1]
-        require(n.is_Integer and 0 < n <= 1000, "binom n must be an integer from 1 to 1000")
+        require(n.is_Integer and 0 < n and within_limit(n,1000), "binom n must be an integer from 1 to 1000")
         require(getattr(p, "is_number", False) and 0 <= p <= 1, "binom p must be a probability")
         count = int(n)
         if len(a) == 3:
@@ -375,7 +376,7 @@ def distribution_value(engine, name, a):
             require(k.is_Integer and 0 <= k <= n, "binom k must be an integer from 0 to n")
             if name == "binompdf": return _binom_term(count, p, int(k))
             return s.Add(*[_binom_term(count, p, index) for index in range(int(k) + 1)])
-        require(count <= 100, "Use a k value for a single probability when n is above 100")
+        require(within_limit(count,100), "Use a k value for a single probability when n is above 100")
         probabilities = [_binom_term(count, p, index) for index in range(count + 1)]
         if name == "binompdf": return probabilities
         running, cumulative = s.Integer(0), []
@@ -387,7 +388,7 @@ def distribution_value(engine, name, a):
         require(len(a) == 2, name + " takes the mean μ and k")
         mu, k = a
         _positive(mu, "The Poisson mean must be positive")
-        require(k.is_Integer and 0 <= k <= 10000, "Poisson k must be an integer from 0 to 10000")
+        require(k.is_Integer and 0 <= k and within_limit(k,10000), "Poisson k must be an integer from 0 to 10000")
         count = int(k)
         if name == "poissonpdf": return s.exp(-mu)*mu**count/s.factorial(count)
         if count <= 200: return s.exp(-mu)*s.Add(*[mu**index/s.factorial(index) for index in range(count + 1)])
@@ -397,13 +398,13 @@ def distribution_value(engine, name, a):
         require(len(a) == 2, name + " takes p and k")
         p, k = a
         require(getattr(p, "is_number", False) and 0 < p <= 1, "geomet p must be a probability above 0")
-        require(k.is_Integer and 1 <= k <= 10**6, "geomet k must be a positive integer")
+        require(k.is_Integer and 1 <= k and within_limit(k,10**6), "geomet k must be a positive integer")
         if name == "geometpdf": return (1 - p)**(int(k) - 1)*p
         return 1 - (1 - p)**int(k)
     if name in ("nbinompdf", "nbinomcdf"):
         require(len(a) == 3, name + " takes required successes r, probability p and failures k")
         r, p, k = a
-        require(r.is_Integer and 1 <= r <= 100000, "nbinom r must be an integer from 1 to 100000")
+        require(r.is_Integer and 1 <= r and within_limit(r,100000), "nbinom r must be an integer from 1 to 100000")
         require(getattr(p, "is_number", False) and p.is_real and 0 < p <= 1, "nbinom p must be a probability above 0")
         _real_or_infinite(k, name + " requires a real count")
         engine.note = "Negative binomial X counts failures before the r-th success (starting at 0). Total trials = X + r."
@@ -421,7 +422,7 @@ def distribution_value(engine, name, a):
     if name in ("hgeompdf", "hgeomcdf"):
         require(len(a) == 4, name + " takes population N, success items K, draws n and count k")
         population, successes, draws, k = a
-        require(all(v.is_Integer for v in (population,successes,draws)) and 1 <= population <= 10000 and 0 <= successes <= population and 0 <= draws <= population,
+        require(all(v.is_Integer for v in (population,successes,draws)) and 1 <= population and within_limit(population,10000) and 0 <= successes <= population and 0 <= draws <= population,
                 "hgeom requires 1 ≤ N ≤ 10000 and integer 0 ≤ K, n ≤ N")
         _real_or_infinite(k, name + " requires a real count")
         lo, hi = max(0,draws-(population-successes)), min(draws,successes)
@@ -765,7 +766,7 @@ def fit_regression(engine, rows, mode, degree=None):
     if mode in ("logarithmic", "exponential", "power"):
         return _fit_transformed_regression(engine, xs, ys, mode)
     if mode == "polynomial":
-        require(degree is not None and getattr(degree,"is_Integer",False) and 1<=degree<=10, "Polynomial degree must be an integer from 1 to 10")
+        require(degree is not None and getattr(degree,"is_Integer",False) and 1<=degree and within_limit(degree,10), "Polynomial degree must be an integer from 1 to 10")
         degree = int(degree)
     else: degree = 2 if mode == "quadratic" else 1
     require(len(rows)>=degree+1 and len(set(xs))>=degree+1,"Use at least degree + 1 distinct x values")
@@ -1007,7 +1008,7 @@ def fit_custom_regression(engine, rows, expression, independent, options=None):
     require(not expression.has(s.I, s.oo, s.zoo, s.nan), "Custom model must be real and finite")
     parameters = sorted(expression.free_symbols - {independent}, key=str)
     require(parameters, "Custom model needs at least one parameter")
-    require(len(parameters) <= 8, "Custom model supports up to 8 parameters")
+    require(within_limit(len(parameters),8), "Custom model supports up to 8 parameters")
     require(len(rows) >= len(parameters) + 1, "Add more data points than fit parameters")
     try:
         xs = [float(row[0]) for row in rows]

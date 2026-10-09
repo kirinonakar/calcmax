@@ -143,7 +143,7 @@ private fun readXlsxCell(parser:XmlPullParser,type:String,style:Int,shared:List<
     }
 }
 
-private fun previewXlsxWorksheet(bytes:ByteArray,shared:List<String>,styles:XlsxStyles):StatisticsCsvImport {
+private fun previewXlsxWorksheet(bytes:ByteArray,shared:List<String>,styles:XlsxStyles,removeComputationLimit:Boolean=false):StatisticsCsvImport {
     val parser=xlsxXml(bytes);val rows=mutableListOf<List<String>>();var current:MutableMap<Int,String>?=null
     while(parser.eventType!=XmlPullParser.END_DOCUMENT) {
         when {
@@ -157,7 +157,7 @@ private fun previewXlsxWorksheet(bytes:ByteArray,shared:List<String>,styles:Xlsx
             }
             parser.eventType==XmlPullParser.END_TAG&&parser.name=="row"->{
                 val row=current.orEmpty();if(row.values.any(String::isNotBlank)) {
-                    if(rows.size>=5000)error("Use up to 5000 XLSX data rows")
+                    if(!removeComputationLimit&&rows.size>=5000)error("Use up to 5000 XLSX data rows")
                     rows+=List((row.keys.maxOrNull()?:-1)+1){row[it].orEmpty().trim()}
                 }
                 current=null
@@ -169,12 +169,12 @@ private fun previewXlsxWorksheet(bytes:ByteArray,shared:List<String>,styles:Xlsx
     return StatisticsCsvImport(rows,header,rows.maxOfOrNull(List<String>::size)?:0)
 }
 
-internal fun previewStatisticsXlsx(bytes:ByteArray):StatisticsXlsxWorkbook {
+internal fun previewStatisticsXlsx(bytes:ByteArray,removeComputationLimit:Boolean=false):StatisticsXlsxWorkbook {
     val entries=readXlsxEntries(bytes)
     val worksheets=xlsxWorksheetList(entries)
     require(worksheets.isNotEmpty()) {"XLSX workbook does not contain any worksheets"}
     val shared=xlsxSharedStrings(entries["xl/sharedStrings.xml"]);val styles=xlsxStyles(entries["xl/styles.xml"])
-    val sheets=worksheets.mapNotNull {(name,path)->entries[path]?.let {StatisticsXlsxSheet(name,previewXlsxWorksheet(it,shared,styles))}}
+    val sheets=worksheets.mapNotNull {(name,path)->entries[path]?.let {StatisticsXlsxSheet(name,previewXlsxWorksheet(it,shared,styles,removeComputationLimit))}}
     require(sheets.any {it.preview.columnCount>0}) {"The XLSX workbook has no data sheets"}
     return StatisticsXlsxWorkbook(sheets)
 }

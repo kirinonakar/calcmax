@@ -16,8 +16,8 @@ class SyntaxException(message: String, val position: Int) : IllegalArgumentExcep
 data class Token(val text: String, val start: Int, val end: Int)
 
 object Lexer {
-    fun scan(source: String): List<Token> {
-        if (source.length > 8192) throw SyntaxException("Expression exceeds 8192 characters", 0)
+    fun scan(source: String, removeComputationLimit: Boolean = false): List<Token> {
+        if (!removeComputationLimit && source.length > 8192) throw SyntaxException("Expression exceeds 8192 characters", 0)
         val result = mutableListOf<Token>()
         var i = 0
         while (i < source.length) {
@@ -42,8 +42,8 @@ object Lexer {
 }
 
 /** Pratt parser: right-associative powers bind tighter than unary minus. No eval. */
-class Parser(private val source: String, private val allowHoles: Boolean = false) {
-    private val tokens = Lexer.scan(source)
+class Parser(private val source: String, private val allowHoles: Boolean = false, private val removeComputationLimit: Boolean = false) {
+    private val tokens = Lexer.scan(source,removeComputationLimit)
     private var index = 0
     private var depth = 0
     private var count = 0
@@ -101,7 +101,7 @@ class Parser(private val source: String, private val allowHoles: Boolean = false
     }
     private fun expression(min: Int): Expr {
         if(allowHoles && token.text in listOf("", ")", "]", "}", ",")) return Expr("hole", start=token.start,end=token.start)
-        if(++depth > 96 || ++count > 2048) fail("Expression complexity limit")
+        if((++depth > 96 || ++count > 2048) && !removeComputationLimit) fail("Expression complexity limit")
         val first = take()
         var left = when {
             first.text in listOf("+", "-") -> Expr("unary", first.text, listOf(expression(25)), first.start, tokens[index-1].end)

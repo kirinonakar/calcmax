@@ -1,4 +1,5 @@
 """Shared validation, result conversion and numerical tools for advanced statistics."""
+from calc_limits import within_limit
 import math
 import mpmath as mp
 import sympy as s
@@ -18,7 +19,7 @@ def number(x):
 def vector(x, minimum=1):
     require(isinstance(x, (list, tuple)), 'Enter a data list')
     values = [number(v) for v in x]
-    require(minimum <= len(values) <= 5000, 'Enter enough observations (limit: 5000)')
+    require(minimum <= len(values) and within_limit(len(values),5000), 'Enter enough observations (limit: 5000)')
     return values
 
 
@@ -26,13 +27,13 @@ def table(x, minimum=2, columns=1):
     require(isinstance(x, (list, tuple)) and len(x) >= minimum, 'Enter a data table with enough rows')
     rows = [vector(row, columns) for row in x]
     require(all(len(row) == len(rows[0]) for row in rows), 'Rows must have equal column counts')
-    require(len(rows) <= 5000 and len(rows[0]) <= 20, 'Limit: 5000 rows and 20 columns')
+    require(within_limit(len(rows),5000) and within_limit(len(rows[0]),20), 'Limit: 5000 rows and 20 columns')
     return rows
 
 
-def integer(x, low, high):
+def integer(x, low, high, capacity=False):
     v = number(x)
-    require(v.is_integer() and low <= v <= high, 'Integer option out of range')
+    require(v.is_integer() and low <= v and (within_limit(v,high) if capacity else v <= high), 'Integer option out of range')
     return int(v)
 
 
@@ -89,7 +90,7 @@ def newton(start, exact):
     instead of differences.
     """
     beta = start[:]; n = len(beta)
-    require(n <= 30, 'Model limit: 30 parameters')
+    require(within_limit(n,30), 'Model limit: 30 parameters')
     try: value, grad, info = exact(beta)
     except (OverflowError, ValueError): raise MathError('Model did not converge; check separation, scaling and identifiability')
     require(math.isfinite(value), 'Model did not converge; check separation, scaling and identifiability')

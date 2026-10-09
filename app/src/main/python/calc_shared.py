@@ -1,15 +1,15 @@
 """Validation, limits, units, constants, and shared math helpers."""
+from calc_limits import within_limit
 import sys
 from calc_runtime import Budget
 import sympy as s
 from sympy.core.relational import Relational
 from sympy.core.function import AppliedUndef
 
-# Exact integers (e.g. factorial) are serialized to text; CPython 3.11+ caps
-# int -> str conversion at 4300 digits, which is below the display limit used
-# below. Raise it so the advertised range (factorial up to 10000) is usable.
+# App capacity checks are request-scoped; disable CPython's process-wide
+# text conversion cap so unlimited requests can serialize their exact results.
 if hasattr(sys, "set_int_max_str_digits"):
-    sys.set_int_max_str_digits(100000)
+    sys.set_int_max_str_digits(0)
 
 class MathError(ValueError):
     pass
@@ -88,7 +88,7 @@ def canonical_function_name(name):
 def matrix(a):
     if isinstance(a, s.MatrixBase): return a
     require(isinstance(a, (list, tuple)), "Expected a vector or matrix")
-    require(len(a) <= 32 and all(not isinstance(row,(list,tuple)) or len(row)<=32 for row in a), "Matrix size limit: 32 × 32")
+    require(within_limit(len(a),32) and all(not isinstance(row,(list,tuple)) or within_limit(len(row),32) for row in a), "Matrix size limit: 32 × 32")
     return s.Matrix(a)
 
 def flatten(a):
@@ -150,7 +150,7 @@ def numeric_derivative(expression, variable, point, precision, step=None):
 
 def discrete_fourier(values, inverse=False):
     values=flatten(values)
-    require(1<=len(values)<=256, "FFT length must be between 1 and 256")
+    require(1<=len(values) and within_limit(len(values),256), "FFT length must be between 1 and 256")
     count=len(values); sign=1 if inverse else -1
     divisor=count if inverse else 1
     return [s.simplify(sum((values[index]*s.exp(sign*2*s.pi*s.I*s.Rational(output*index,count)) for index in range(count)), s.Integer(0))/divisor)
@@ -196,7 +196,7 @@ def inverse_z_transform(expression, transform, sequence):
     except Exception:
         poles = {}
     require(poles, "Could not factor the denominator of the Z-domain expression")
-    require(sum(poles.values()) <= 24, "Too many poles for the inverse Z-transform")
+    require(within_limit(sum(poles.values()),24), "Too many poles for the inverse Z-transform")
     total = s.Integer(0)
     for pole in poles:
         total += s.residue(expression*transform**(sequence-1), transform, pole)

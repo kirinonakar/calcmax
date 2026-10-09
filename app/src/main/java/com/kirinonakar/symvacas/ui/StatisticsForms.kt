@@ -46,7 +46,7 @@ internal fun advancedStatisticsTermLabels(definition:JSONObject,rows:List<List<S
 }
 
 /** Construct the same selected-column analysis plan used by the Web form. */
-internal fun guidedStatisticsCommand(definition:JSONObject,rows:List<List<String>>,settings:JSONObject=JSONObject(),columnLabels:List<String> = emptyList()):String {
+internal fun guidedStatisticsCommand(definition:JSONObject,rows:List<List<String>>,settings:JSONObject=JSONObject(),columnLabels:List<String> = emptyList(),removeComputationLimit:Boolean=false):String {
     if(definition.getString("id")=="survivalanalysis")return survivalAnalysisPlan(rows,settings,columnLabels).command
     if(!definition.has("controls"))return advancedStatisticsCommand(definition,rows)
     require(rows.any {row->row.any(String::isNotBlank)}) {"Enter data first"}
@@ -185,7 +185,7 @@ internal fun guidedStatisticsCommand(definition:JSONObject,rows:List<List<String
             val cells=rows.map {row->List(width){index->row.getOrElse(index){""}.trim().ifBlank{"NA"}}}
             val method=opts.getValue("method")
             require(method in listOf("mean","median","mode","regression","knn")) {"Invalid imputation method"}
-            val neighbors=if(method=="knn") {val k=opts.getValue("k").trim();require(k.toIntOrNull()?.let {it in 1..100}==true) {"Enter 1-100 neighbours"};",$k"} else ""
+            val neighbors=if(method=="knn") {val k=opts.getValue("k").trim();require(k.toIntOrNull()?.let {it>=1&&(removeComputationLimit||it<=100)}==true) {"Enter 1-100 neighbours"};",$k"} else ""
             "impute(${table(cells)},$method$neighbors)"
         }
         "crossvalidate"->{

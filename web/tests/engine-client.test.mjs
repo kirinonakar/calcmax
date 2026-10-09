@@ -201,3 +201,29 @@ test('solve and analysis buttons become Cancel after one second and recover afte
   assert.equal(elements.get('stop').style.visibility,'');assert.equal(elements.get('stop').disabled,false);
   elements.get('stop').onclick();await result;
 });
+
+
+test('unlimited requests survive the execution deadline and can still be cancelled',async t=>{
+  const {engine,workers,tick}=runtime(t);
+  workers[0].message({type:'ready'});
+  const result=engine.execute({tree:{kind:'number',value:'2'},removeComputationLimit:true});
+  tick(600000);
+  assert.ok(engine.pending);assert.equal(workers.length,1);
+  engine.cancel();
+  assert.equal((await result).ok,false);assert.equal(workers[0].terminated,true);
+  workers[1].message({type:'ready'});
+  const limited=engine.execute({});tick(60000);
+  assert.equal((await limited).ok,false);assert.equal(workers[1].terminated,true);
+});
+
+test('unlimited Python input resumes without reinstalling an execution timer',async t=>{
+  const {engine,workers,tick}=runtime(t);
+  workers[0].message({type:'ready'});
+  const result=engine.execute({action:'python',removeComputationLimit:true},{onInput:async()=> 'answer'});
+  workers[0].message({type:'input',id:engine.pending.id,inputId:1});
+  await Promise.resolve();await Promise.resolve();
+  tick(600000);
+  assert.ok(engine.pending);assert.equal(workers.length,1);
+  workers[0].message({type:'result',id:engine.pending.id,result:{ok:true}});
+  assert.equal((await result).ok,true);
+});

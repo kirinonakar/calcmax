@@ -787,3 +787,7 @@ ANCOVA: [partial ANOVA tests](https://www.statsmodels.org/stable/generated/stats
 GLMM: [lme4 adaptive quadrature reference](https://lme4.github.io/lme4/reference/glmer.html).
 
 Bayesian Two-Sample Comparison: [Savage-Dickey density ratio and compatible null priors](https://statproofbook.github.io/P/bf-sddr.html).
+
+## remove computation limit
+
+설정의 **계산 제한 해제 (remove computation limit)**를 켜면 앱이 정한 시간(60초 포함), 계산량, 입력 크기·숫자·지수, 행렬·통계 데이터 및 샘플링 상한을 해제합니다. 기본값은 꺼짐이며 설정은 저장됩니다. 결과 길이 제한과 내부 정밀도·표시 자릿수 설정 및 상한은 그대로 유지합니다. 수학적 정의역, 필수 입력 조건, 알고리즘의 수렴 판정도 유지됩니다. 실행 중 수동 취소할 수 있으며 기기 메모리와 엔진 자체의 한계는 그대로 적용됩니다.

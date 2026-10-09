@@ -429,7 +429,9 @@ test('statistical conventions, solve domains and labeled eigenvalues in real WAS
   assert.equal(evaluate('solve(exp(x)=x,x,real)').exact,'EmptySet');
   assert.equal(evaluate('solve(exp(x)=x,x)',{assumptions:{x:['real']}}).exact,'EmptySet');
   assert.match(evaluate('solve(exp(x)=4*x,x,real)').exact,/LambertW\(-1\/4, -1\)/);
-  assert.match(evaluate('solve(x*exp(x)=1,x)').note,/Partial solutions/);
+  const productLambert=evaluate('solve(x*exp(x)=1,x)');
+  assert.match(productLambert.note,/All complex solutions/);
+  assert.match(productLambert.exact,/LambertW\(1, k\)/);
   assert.match(evaluate('solve(sin(x)=x,x)').note,/not proof/);
   const integral=evaluate('integrate(sqrt(tan(x)),x)');
   assert.doesNotMatch(integral.exact,/Integral/);
@@ -584,4 +586,23 @@ for(const degree of [5])test(`fresh WASM solves x^${degree}-x+1=0 and produces e
     assert.equal(result.note,'');
     console.log(`WASM degree ${degree} ${attempt?'warm':'cold'}: ${(performance.now()-started).toFixed(0)} ms`);
   }
+});
+
+
+test('real WASM removes computation capacity while preserving result size and precision',async()=>{
+  const py=await runtime();
+  const run=request=>{py.globals.set('payload',JSON.stringify(request));return JSON.parse(py.runPython('calc_engine.dispatch(payload)'));};
+  const number={kind:'number',value:'1e100001'};
+  assert.equal(run({tree:number}).ok,false);
+  const result=run({tree:number,removeComputationLimit:true,budget:-1,precision:1000});
+  assert.equal(result.ok,true,result.error);
+  assert.match(result.exact,/full value in Ans/);
+  assert.ok(result.exact.length<10000);
+  assert.equal(run({tree:number}).ok,false,'request-scoped policy restores the default');
+  const mean={kind:'call',value:'mean',args:[{kind:'symbol',value:'data'}]};
+  const request={tree:mean,statisticsDatasets:{data:Array(5001).fill('2')}};
+  assert.equal(run(request).ok,false);
+  assert.equal(run({...request,removeComputationLimit:true}).exact,'2');
+  const huge=run({tree:{kind:'symbol',value:'x'.repeat(40001)},removeComputationLimit:true});
+  assert.equal(huge.ok,false);assert.match(huge.error,/display size limit/);
 });

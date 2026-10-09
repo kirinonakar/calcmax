@@ -1,4 +1,5 @@
 """Kaplan-Meier, log-rank, Cox models and grouped survival reports."""
+from calc_limits import within_limit
 import math
 import statistics
 import mpmath as mp
@@ -21,7 +22,7 @@ def calculate(engine, name, a):
     if name=='survivalanalysis': return survival_analysis(engine,a)
     if name=='kaplanmeier':
         rows=table(a[0],1,2); level=number(a[1]) if len(a)>1 else .95; require(0<level<1,'Confidence level must lie in (0,1)')
-        entry=integer(a[2],-1,19) if len(a)>2 else -1
+        entry=integer(a[2],-1,19,capacity=True) if len(a)>2 else -1
         require(entry>=0 or len(rows[0])==2,'Rows are [time,event]')
         survival(rows,entry); starts=[r[entry] for r in rows] if entry>=0 else None
         z=statistics.NormalDist().inv_cdf((1+level)/2); prob=1; greenwood=0; curve=[]; median=None
@@ -51,7 +52,7 @@ def calculate(engine, name, a):
     if name=='cox':
         rows=table(a[0],3,3)
         ties=option(a,1,'efron'); require(ties in ('breslow','efron'),'Cox ties: breslow or efron')
-        entry=integer(a[2],-1,19) if len(a)>2 else -1
+        entry=integer(a[2],-1,19,capacity=True) if len(a)>2 else -1
         check=integer(a[3],0,1) if len(a)>3 else 1
         survival(rows,entry)
         columns=[j for j in range(len(rows[0])) if j not in (0,1) and j!=entry]
@@ -132,12 +133,12 @@ def survival_analysis(engine,a):
     """
     rows=table(a[0],2,3); fit=integer(a[1],0,1) if len(a)>1 else 0
     ties=option(a,2,'efron'); require(ties in ('breslow','efron'),'Cox ties: breslow or efron')
-    entry=integer(a[3],-1,19) if len(a)>3 else -1; require(entry in (-1,2),'Entry time follows the event column')
+    entry=integer(a[3],-1,19,capacity=True) if len(a)>3 else -1; require(entry in (-1,2),'Entry time follows the event column')
     check=integer(a[4],0,1) if len(a)>4 else 1
     survival(rows,entry)
     base=3 if entry>=0 else 2
     ids=list(dict.fromkeys(r[base] for r in rows))
-    require(len(ids)<=20,'Survival analysis limit: 20 groups')
+    require(within_limit(len(ids),20),'Survival analysis limit: 20 groups')
     def truncated(r,time): return entry<0 or r[entry]<time
     groups=[]
     for label in ids:

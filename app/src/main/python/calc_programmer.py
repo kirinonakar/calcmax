@@ -1,4 +1,5 @@
 """Fixed-width integer operations for the programmer workspace."""
+from calc_limits import within_limit
 import sympy as s
 from calc_shared import MathError, require
 from calc_display import display_tree
@@ -8,7 +9,7 @@ def programmer(request):
     base = int(request.get("base",10)); require(base in (2,8,10,16),"Invalid base")
     mask=(1<<width)-1
     def parse(text):
-        require(len(str(text))<=128,"Integer too long")
+        require(within_limit(len(str(text)),128),"Integer too long")
         return int(str(text),base)&mask
     a=parse(request.get("a","0")); op=request.get("op","")
     b=parse(request.get("b","0")) if op else 0

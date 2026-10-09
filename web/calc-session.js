@@ -1,3 +1,4 @@
+import {computationLimitsRemoved} from './computation-limits.js';
 // Android startCalc's source-AST traversal. Numeric stored values remain editable
 // inputs; source formulas stored by STO expose their underlying input variables.
 const constants=new Set('pi e i I oo true false Ans c0 hP hbar G qe NA kB0 me mp0 epsilon0 mu0 Z0 sigmaSB'.split(' '));
@@ -5,7 +6,7 @@ const binders=new Set('integrate diff nderivative limit sum product solve nsolve
 export function calcVariables(tree,variables={}) {
   const names=new Set();let visited=0;
   function collect(node,bound=new Set(),expanding=new Set(),depth=0){
-    if(!node||depth>96||++visited>12000)throw new Error('Expression complexity limit');
+    if(!node||!computationLimitsRemoved()&&(depth>96||++visited>12000))throw new Error('Expression complexity limit');
     if(node.kind==='symbol'||node.kind==='snapshot_symbol'){
       const name=node.value;
       if(constants.has(name)||bound.has(name))return false;
@@ -32,7 +33,7 @@ export function calcVariables(tree,variables={}) {
 export function calcBindings(variables) {
   let visited=0;
   function editable(node,depth=0){
-    if(!node||depth>96||++visited>12000)throw new Error('Expression complexity limit');
+    if(!node||!computationLimitsRemoved()&&(depth>96||++visited>12000))throw new Error('Expression complexity limit');
     return {...node,...(node.kind==='snapshot_symbol'?{kind:'symbol'}:{}),...(node.args?{args:node.args.map(child=>editable(child,depth+1))}:{})};
   }
   return Object.fromEntries(Object.entries(variables).map(([name,tree])=>[name,name==='Ans'?tree:editable(tree)]));

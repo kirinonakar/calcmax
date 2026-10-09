@@ -1,3 +1,4 @@
+import {computationLimitsRemoved} from './computation-limits.js';
 const MAX_UNCOMPRESSED_BYTES=64*1024*1024;
 
 function bitReader(bytes) {
@@ -211,7 +212,7 @@ function worksheetRows(sheetBytes,sharedStrings,styles) {
       values[index]=cellValue(cell,sharedStrings,styles);
     }
     if(values.some(value=>String(value??'').trim())) {
-      if(rows.length>=5000)throw new Error('Use up to 5000 XLSX data rows');
+      if(!computationLimitsRemoved()&&rows.length>=5000)throw new Error('Use up to 5000 XLSX data rows');
       rows.push(Array.from({length:Math.max(1,values.length)},(_,index)=>String(values[index]??'').trim()));
     }
   }

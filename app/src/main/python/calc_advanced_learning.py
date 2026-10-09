@@ -1,4 +1,5 @@
 """Cross-validation, PCA, clustering and missing-data imputation."""
+from calc_limits import within_limit
 import math
 import random
 import statistics
@@ -56,7 +57,7 @@ def regression_imputation(values):
 def neighbor_imputation(values,neighbors):
     """k-nearest-neighbour (single) imputation on standardized observed coordinates."""
     n=len(values); columns=len(values[0])
-    require(sum(1 for row in values for v in row if v is None)*n*columns<=8000000,'k-NN imputation is too large; use regression or mean for this table')
+    require(within_limit(sum(1 for row in values for v in row if v is None)*n*columns,8000000),'k-NN imputation is too large; use regression or mean for this table')
     centers=[]; scales=[]
     for j in range(columns):
         sample=[row[j] for row in values if row[j] is not None]
@@ -137,7 +138,7 @@ def calculate(engine,name,a):
         require(isinstance(a[0],list) and len(a[0])>=2 and all(isinstance(r,list) for r in a[0]),'Enter a rectangular table; use NA for missing cells')
         rows=a[0]; require(all(len(r)==len(rows[0]) for r in rows) and len(rows[0])>0,'Enter a nonempty rectangular table')
         method=option(a,1,'mean'); require(method in ('mean','median','mode','regression','knn'),'Use mean, median, mode, regression, or knn')
-        neighbors=integer(a[2],1,100) if len(a)>2 else 5
+        neighbors=integer(a[2],1,100,capacity=True) if len(a)>2 else 5
         missing=lambda v: str(v) in ('NA','nan')
         values=[[None if missing(v) else number(v) for v in row] for row in rows]
         for column in zip(*values): require(any(v is not None for v in column),'Cannot impute a completely missing column')
@@ -222,7 +223,7 @@ def calculate(engine,name,a):
         engine.note += ' PCA: covariance eigendecomposition, sample-SD standardization by default. Loadings rows=features, columns=components.'
         return {'eigenvalues':[max(0,float(vals[j])) for j in order[:count]],'explained variance ratio':[max(0,float(vals[j]/total)) for j in order[:count]],'loadings':V.tolist(),'scores':(X*V).tolist(),'centers':centers,'scales':scales}
     k=integer(a[1],1,n); seed=integer(a[2],0,2**32-1) if len(a)>2 else 0; rng=random.Random(seed); distinct=list(dict.fromkeys(tuple(r) for r in rows)); require(len(distinct)>=k,'k exceeds number of distinct observations')
-    require(n*k*p<=1000000,'Clustering size limit exceeded')
+    require(within_limit(n*k*p,1000000),'Clustering size limit exceeded')
     def distance(x,y): return sum((u-v)**2 for u,v in zip(x,y))
     best=None
     for restart in range(10):

@@ -1,4 +1,5 @@
 """Graph sampling, parameters, shading, and curve analysis."""
+from calc_limits import within_limit, capped
 import math
 import json
 from collections import OrderedDict
@@ -68,7 +69,7 @@ def regression_samples(engine, value, rows, request):
     if high<=low: low-=1.0; high+=1.0
     padding=(high-low)*0.05
     start,end=low-padding,high+padding
-    count=min(600,max(120,int(request.get("samples",240))))
+    count=capped(max(120,int(request.get("samples",240))),600)
     if getattr(engine, "regression_predict", None) is not None:
         function = lambda x: engine.regression_predict([x])
     else:
@@ -109,7 +110,7 @@ def graph(engine, request):
     all_expressions = list(expressions)+[expression for group in shade_expressions for expression in group]
     names = parameter_names(all_expressions, {str(var)})
     sliders = resolved_parameters(engine, request, all_expressions, {str(var)})
-    count = min(1600,max(100,int(request.get("samples",500))))
+    count = capped(max(100,int(request.get("samples",500))),1600)
     curves=[]
     curve_parameters=[]
     for expression in expressions:
@@ -177,8 +178,8 @@ def graph_cartesian(engine, request, trees, xmin, xmax):
     all_expressions += list(graph_expressions(engine,bound_trees,("x","y")))
     names = parameter_names(all_expressions, {"x", "y"})
     sliders = {symbol: value for symbol, value in resolved_parameters(engine, request, all_expressions, {"x", "y"}).items() if symbol not in (x, y)}
-    count = min(1600, max(100, int(request.get("samples", 500))))
-    contour_count = min(240, max(80, int(math.sqrt(count))*8))
+    count = capped(max(100, int(request.get("samples", 500))),1600)
+    contour_count = capped(max(80, int(math.sqrt(count))*8),240)
     ymin, ymax = float(request.get("yMin", -5)), float(request.get("yMax", 5))
     require(math.isfinite(ymin) and math.isfinite(ymax) and ymax > ymin, "Invalid implicit y range")
     curves, implicit = [], []
@@ -230,7 +231,7 @@ def graph_implicit(engine, request, trees, xmin, xmax):
     sliders = resolved_parameters(engine, request, expressions, {"x", "y"})
     # Coordinate names remain axes even if a previous graph stored slider values for them.
     sliders = {key: value for key, value in sliders.items() if key not in (x, y)}
-    count = min(240, max(80, int(math.sqrt(max(1, int(request.get("samples", 500))))*8)))
+    count = capped(max(80, int(math.sqrt(max(1, int(request.get("samples", 500))))*8)),240)
     curves = []
     for expression in expressions:
         curves.append(contour_curve(expression, x, y, sliders, xmin, xmax, ymin, ymax, count))
@@ -366,7 +367,7 @@ def graph_shading(engine, request, items, groups, sliders, xmin, xmax):
     span = ymax-ymin; low_edge,high_edge = ymin-span,ymax+span
     def clamp(value): return min(max(value,low_edge),high_edge)
     x = engine.symbol("x"); engine.bindings["x"] = x
-    count = min(1200,max(200,int(request.get("samples",500))))
+    count = capped(max(200,int(request.get("samples",500))),1200)
     def endpoint(item, key, default):
         tree = item.get(key)
         if tree is None: return default
@@ -590,11 +591,11 @@ def adaptive_samples(function, start, end, base_count, kind="cartesian"):
             return [x, y] if math.isfinite(x) and math.isfinite(y) and abs(x) < 1e100 and abs(y) < 1e100 else None
         except (TypeError, ValueError, ZeroDivisionError, OverflowError):
             return None
-    intervals = min(512, max(100, base_count))
+    intervals = capped(max(100, base_count),512)
     values = {start + (end-start)*i/intervals: None for i in range(intervals+1)}
     for at in values:
         values[at] = point(at)
-    max_points = min(1800, max(base_count+1, 1200))
+    max_points = capped(max(base_count+1, 1200),1800)
     def refine(left, right, depth):
         if depth >= 4 or len(values) >= max_points:
             return
@@ -638,9 +639,9 @@ def adaptive_samples(function, start, end, base_count, kind="cartesian"):
     return [values[at] for at in positions], positions
 
 def graph_sequence(engine, request, trees, start, end):
-    require(start >= 0 and end <= 2000, "Sequence range must be between 0 and 2000")
+    require(start >= 0 and within_limit(end,2000), "Sequence range must be between 0 and 2000")
     first, last = math.ceil(start), math.floor(end)
-    require(last >= first and last-first <= 1200, "Sequence range is too large")
+    require(last >= first and within_limit(last-first,1200), "Sequence range is too large")
     n = engine.symbol("n"); engine.bindings["n"] = n
     engine.allow_sequence_calls = True
     expressions = graph_expressions(engine, trees, ("n",))
@@ -700,7 +701,7 @@ def graph_surface(engine, request, trees, xmin, xmax):
     expression = graph_expressions(engine, trees, ("x", "y"))[0]
     names = parameter_names([expression], {"x","y"})
     fn = graph_function(expression, (x,y), resolved_parameters(engine, request, [expression], {"x","y"}))
-    count = min(96, max(12, int(request.get("surfaceSamples", 26))))
+    count = capped(max(12, int(request.get("surfaceSamples", 26))),96)
     mesh = []
     for row in range(count+1):
         yy = ymin+(ymax-ymin)*row/count
@@ -911,7 +912,7 @@ def graph_analysis(engine, request, _expressions=None):
     fixed_intercept = action == "yintercept" and kind == "cartesian"
     a = 0.0 if fixed_intercept else float(request.get("a", -10)); b = a if fixed_intercept else float(request.get("b", 10))
     singled = action in ("derivative", "tangent") or fixed_intercept
-    require(math.isfinite(a) and math.isfinite(b) and (singled or a < b) and abs(b-a) <= 1e9, "Invalid analysis range")
+    require(math.isfinite(a) and math.isfinite(b) and (singled or a < b) and within_limit(abs(b-a),1e9), "Invalid analysis range")
     def numeric(expr, variable):
         raw = s.lambdify(variable, expr, modules="math", cse=True, docstring_limit=0)
         def value(at):

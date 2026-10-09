@@ -9,7 +9,7 @@ private val shadingPrefix=Regex("^\\[(?:shade|s)\\]")
 internal fun isGraphShading(source:String)=shadingPrefix.containsMatchIn(source.trim())
 internal fun graphShadingBody(source:String)=source.trim().replaceFirst(shadingPrefix,"").trim()
 
-internal fun graphShadeEntry(body:String):JSONObject {
+internal fun graphShadeEntry(body:String,removeComputationLimit:Boolean=false):JSONObject {
     val parts=mutableListOf<String>();var depth=0;var start=0
     val sections=body.split(';')
     sections[0].forEachIndexed {index,ch->
@@ -29,9 +29,9 @@ internal fun graphShadeEntry(body:String):JSONObject {
     intervals.firstOrNull()?.let {range->
         val ends=range.split("..")
         require(ends.size==2 && ends.all(String::isNotBlank)) {"Enter a..b for the shading interval"}
-        entry.put("a",JSONObject(Parser(ends[0].trim()).parse().json())).put("b",JSONObject(Parser(ends[1].trim()).parse().json()))
+        entry.put("a",JSONObject(Parser(ends[0].trim(),removeComputationLimit=removeComputationLimit).parse().json())).put("b",JSONObject(Parser(ends[1].trim(),removeComputationLimit=removeComputationLimit).parse().json()))
     }
-    val parsed=expressions.map {graphInputTree(it)}
+    val parsed=expressions.map {graphInputTree(it,removeComputationLimit=removeComputationLimit)}
     val relation=parsed[0]
     if(parsed.size==1 && relation.kind=="relation" && relation.args.all {it.kind!="relation"} && relation.args.any {it.kind=="symbol" && it.value=="y"}) {
         require(relation.value in listOf("<","<=",">",">=")) {"Enter y < f(x) or y > f(x)"}

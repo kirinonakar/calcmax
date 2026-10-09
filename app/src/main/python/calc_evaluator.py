@@ -1,4 +1,5 @@
 """Validated expression AST evaluation and calculator functions."""
+from calc_limits import limits_removed, within_limit
 import random
 import statistics
 import math
@@ -29,7 +30,7 @@ def _ast_symbols(node):
 
 def oversized_rational_power(base, exponent):
     """Estimate the larger exact numerator/denominator before SymPy expands it."""
-    if not (base.is_Rational and exponent.is_Integer): return False
+    if limits_removed() or not (base.is_Rational and exponent.is_Integer): return False
     if base in (0, 1, -1): return False
     magnitude = max(abs(int(base.p)), int(base.q))
     log_magnitude=math.log10(magnitude)
@@ -106,11 +107,11 @@ class Engine:
                     and name not in CONSTANTS and isinstance(stored, dict) and self.has_explicit_angle(stored, seen + (name,)))
         return any(self.has_explicit_angle(child, seen) for child in node.get("args", []))
     def number(self, value):
-        require(len(value.lstrip("-")) <= MAX_EXACT_DIGITS, "Number too large")
+        require(within_limit(len(value.lstrip("-")), MAX_EXACT_DIGITS), "Number too large")
         if "e" in value.lower():
             mantissa, exponent = value.lower().split("e", 1)
             exponent = int(exponent)
-            if abs(exponent) > MAX_NUMERIC_EXPONENT:
+            if not within_limit(abs(exponent), MAX_NUMERIC_EXPONENT):
                 raise MathError("Decimal exponent limit: 100000")
             coefficient = s.Rational(mantissa)
             if oversized_rational_power(s.Integer(10), s.Integer(exponent)):
@@ -118,7 +119,7 @@ class Engine:
                 return power if coefficient == 1 else s.Mul(coefficient, power, evaluate=False)
         number = s.Rational(value)
         max_bits=math.ceil(MAX_EXACT_DIGITS*math.log2(10))
-        require(abs(number.p).bit_length() <= max_bits and number.q.bit_length() <= max_bits, "Number size limit")
+        require(within_limit(abs(number.p).bit_length(), max_bits) and within_limit(number.q.bit_length(), max_bits), "Number size limit")
         return number
 
     def prepare_statistics_dataset(self, node):
@@ -130,7 +131,7 @@ class Engine:
             require(isinstance(rows,list), 'Numeric statistics dataset expected')
             table = bool(rows) and all(isinstance(row,list) for row in rows)
             cells = rows if table else [rows]
-            require(len(rows)<=5000 and (not table or all(len(row)<=101 for row in cells)),
+            require(within_limit(len(rows),5000) and (not table or all(within_limit(len(row),101) for row in cells)),
                     'Statistics dataset limit: 5000 rows and 101 columns')
             require(all(isinstance(cell,str) for row in cells for cell in row),
                     'Numeric statistics dataset expected')
@@ -150,7 +151,7 @@ class Engine:
                     and len(cell.get("args", [])) == 1 and cell["args"][0].get("kind") == "number")
         if not all(literal(cell) for row in cells for cell in row):
             return
-        require(len(rows) <= 5000 and (not table or all(len(row) <= 101 for row in cells)),
+        require(within_limit(len(rows),5000) and (not table or all(within_limit(len(row),101) for row in cells)),
                 "Statistics dataset limit: 5000 rows and 101 columns")
         def value(cell):
             if cell["kind"] == "number": return self.number(cell["value"])
@@ -160,7 +161,7 @@ class Engine:
 
     def build(self, node, depth=0):
         self.visited += 1
-        require(depth < 100 and self.visited <= 12000, "Expression complexity limit")
+        require(within_limit(depth,99) and within_limit(self.visited,12000), "Expression complexity limit")
         if id(node) in self.statistics_datasets: return self.statistics_datasets[id(node)][1]
         kind, value = node["kind"], node.get("value", "")
         args = node.get("args", [])
@@ -241,7 +242,7 @@ class Engine:
                 if getattr(a, "is_Rational", False) and getattr(b, "is_Integer", False):
                     if oversized_rational_power(a, b): return s.Pow(a, b, evaluate=False)
                 elif getattr(a, "is_number", False) and getattr(b, "is_number", False):
-                    require(abs(b) <= MAX_NUMERIC_EXPONENT, "Exponent limit: 100000")
+                    require(within_limit(abs(b), MAX_NUMERIC_EXPONENT), "Exponent limit: 100000")
                 return a**b
             if value == "mod": require(b != 0, "Division by zero"); return s.Mod(a,b)
             relations = {"=": s.Eq, "==": s.Eq, "!=": s.Ne, "<": s.Lt, ">": s.Gt, "<=": s.Le, ">=": s.Ge, "->": s.Eq}
@@ -365,7 +366,7 @@ class Engine:
             require(a[0].is_number and a[0].is_real,name+" requires a real number")
             require(len(a)==1 or a[1].is_Integer,name+" requires integer decimal places")
             places=int(a[1]) if len(a)==2 else 0
-            require(abs(places)<=200,name+" decimal places must be between -200 and 200")
+            require(within_limit(abs(places),200),name+" decimal places must be between -200 and 200")
             # Scale an exact rational before rounding so the result does not inherit
             # SymPy's low-precision Float from Number.round().
             number=a[0] if isinstance(a[0],s.Rational) else s.Rational(str(s.N(a[0],max(self.precision,abs(places)+5))))
@@ -405,10 +406,12 @@ class Engine:
             require(len(a)==1, name+" expects one integer")
             require(a[0].is_Integer, name+" requires an integer")
             if name=="prime":
-                require(1<=a[0]<=100000, "prime index must be between 1 and 100000")
+                require(1<=a[0] and within_limit(a[0],100000), "prime index must be between 1 and 100000")
                 return s.Integer(s.prime(int(a[0])))
             # SymPy gives a definitive primality result below 2**64.
-            require(abs(a[0])<2**64, "isprime requires an integer with |n| < 2^64")
+            if limits_removed() and abs(a[0])>=2**64:
+                self.note="Above 2^64, isprime uses a probable-prime test."
+            require(limits_removed() or abs(a[0])<2**64, "isprime requires an integer with |n| < 2^64")
             return s.true if s.isprime(a[0]) else s.false
         if name == "factorial" and getattr(a[0], "is_Integer", None) is not True:
             # A symbolic factorial (for example the Z-transform of 1/n!) stays unevaluated
@@ -420,7 +423,7 @@ class Engine:
                 require(len(a)==1,name+" expects one positive integer")
                 require(a[0].is_Integer and a[0]>0,name+" requires a positive integer")
             else:
-                require(a[0].is_Integer and 0 <= a[0] <= 10000,
+                require(a[0].is_Integer and 0 <= a[0] and within_limit(a[0],10000),
                         name+" requires an integer from 0 to 10000")
             if name == "factorial": return s.factorial(a[0])
             if name == "nPr":
@@ -722,7 +725,7 @@ class Engine:
             m=matrix(a[0]); variable=a[1] if len(a)==2 else s.Symbol("lambda")
             return m.charpoly(variable).as_expr()
         if name=="identity":
-            require(len(a)==1 and a[0].is_Integer and 0<a[0]<=32, "identity size must be an integer from 1 to 32")
+            require(len(a)==1 and a[0].is_Integer and 0<a[0] and within_limit(a[0],32), "identity size must be an integer from 1 to 32")
             return s.eye(int(a[0]))
         if name=="diag":
             require(len(a)==1 and isinstance(a[0],(list,tuple)), "diag expects a list of diagonal entries")

@@ -1,3 +1,4 @@
+import {computationLimitsRemoved} from './computation-limits.js';
 import {advancedStatisticsSchema} from './advanced-statistics-schema.js';
 import {csvRows,statisticsCsvHasHeader,statisticsColumnLabels,statisticsCategoryLabels} from './workspace-commands.js';
 import {$,element} from './app-ui.js';
@@ -304,7 +305,7 @@ export function advancedStatisticsRows(source,columnLimit){
   const limit=Number.isInteger(columnLimit)&&columnLimit>0?columnLimit:null;
   const rows=csvRows(source,{preserveEmptyRows:true,skipHeader:false,maxColumns:limit===null?20:100});
   const columns=Math.min(limit??Infinity,Math.max(...rows.map(row=>row.length)));
-  if(columns>20)throw new Error('Use up to 20 data columns');
+  if(!computationLimitsRemoved()&&columns>20)throw new Error('Use up to 20 data columns');
   const selected=rows.map(row=>Array.from({length:columns},(_,index)=>row[index]||''));
   if(statisticsCsvHasHeader(selected)&&!selected[0].some(cell=>cell==='NA'))return selected.slice(1);
   return selected;

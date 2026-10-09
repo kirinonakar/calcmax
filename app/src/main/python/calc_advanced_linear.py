@@ -1,4 +1,5 @@
 """Small portable least-squares fits with reorthogonalized QR (no NumPy)."""
+from calc_limits import within_limit
 import math
 import mpmath as mp
 from calc_shared import require
@@ -7,7 +8,7 @@ from calc_advanced_common import dot
 
 def least_squares(x, y, weights=None):
     n, p = len(x), len(x[0])
-    require(n > p and p <= 30, 'More observations than coefficients are required (limit: 30 coefficients)')
+    require(n > p and within_limit(p,30), 'More observations than coefficients are required (limit: 30 coefficients)')
     roots = [1.0]*n if weights is None else [math.sqrt(w) for w in weights]
     require(all(math.isfinite(w) and w > 0 for w in roots), 'Model weights are invalid')
     columns = [[row[j]*w for row, w in zip(x, roots)] for j in range(p)]

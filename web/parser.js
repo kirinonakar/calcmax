@@ -1,11 +1,12 @@
 // Port of math/Expression.kt. User math is converted to the existing validated AST,
 // never evaluated as JavaScript or passed to SymPy's parse_expr.
+import {computationLimitsRemoved} from './computation-limits.js';
 const letter = c => !!c && /\p{L}/u.test(c);
 const digit = c => !!c && /[0-9]/.test(c);
 const numeric = value => /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(value);
 const aliases = {"×":"*", "·":"*", "÷":"/", "−":"-", "π":"pi", "θ":"theta", "∞":"oo", "**":"^", "≤":"<=", "≥":">=", "→":"->"};
 function scan(source) {
-  if (source.length > 8192) throw new SyntaxError('Expression exceeds 8192 characters');
+  if (!computationLimitsRemoved() && source.length > 8192) throw new SyntaxError('Expression exceeds 8192 characters');
   const tokens = [];
   let i = 0;
   while (i < source.length) {
@@ -61,7 +62,7 @@ export function parse(source,{allowHoles=false}={}) {
   }
   function expression(min) {
     if(allowHoles&&['',')',']','}',','].includes(current().text))return node('hole','',[],current().start,current().start);
-    if (++depth > 96 || ++count > 2048) fail('Expression complexity limit');
+    if ((++depth > 96 || ++count > 2048) && !computationLimitsRemoved()) fail('Expression complexity limit');
     const first = take();
     let left;
     if (['+','-','√'].includes(first.text)) {

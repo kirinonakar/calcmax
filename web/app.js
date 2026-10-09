@@ -1,3 +1,4 @@
+import {setComputationLimitsRemoved} from './computation-limits.js';
 import {EngineClient} from './engine-client.js';
 import {readState} from './storage.js';
 import {translateDOM,setText,setLanguage} from './i18n.js';
@@ -15,13 +16,14 @@ import {graphColorsForTheme} from './graph-colors.js';
 
 const saved=readState(),state=createAppState(saved,navigator.language),ui=createAppUI();
 setLanguage(state.language);
+setComputationLimitsRemoved(state.removeComputationLimit);
 restoreFields(state);
 let calculator,graphs,workspaces,keypad,dialogs;
 const persistence=createPersistence({state,toast:ui.toast,
   snapshot:()=>({expression:calculator.draftSource(),graph:graphs.snapshot()}),
   onPersist:({functionsChanged})=>{if(functionsChanged)workspaces.renderFunctions();calculator.schedulePreview();}});
 const {persist,schedulePersist}=persistence;
-const requestOptions=()=>({angle:value('angle'),precision:state.precision,displayDigits:state.digits,variables:state.variables,functions:state.functions,assumptions:state.assumptions,solutionSteps:value('mode')==='scientific'&&state.calcModeStepByStep});
+const requestOptions=()=>({removeComputationLimit:state.removeComputationLimit,angle:value('angle'),precision:state.precision,displayDigits:state.digits,variables:state.variables,functions:state.functions,assumptions:state.assumptions,solutionSteps:value('mode')==='scientific'&&state.calcModeStepByStep});
 const engine=new EngineClient();
 const runtime=createEngineUI({engine,onChange:updateButtons,onReady:()=>calculator.resetPreview(),cancelPreview:()=>calculator.cancelPreview()});
 graphs=createGraphWorkspace({execute:(request,settings)=>engine.execute(request,settings),options:requestOptions,onError:error,onClearError:()=>{$('answer').querySelector('.error')?.remove();},persist,isBusy:()=>runtime.busy,isReady:()=>engine.ready,saved:state.graph,getColors:()=>graphColorsForTheme(state.graphColors,document.documentElement.dataset.theme)});
