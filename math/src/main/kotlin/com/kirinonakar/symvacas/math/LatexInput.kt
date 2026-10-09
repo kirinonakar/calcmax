@@ -370,7 +370,10 @@ object LatexInput {
                 require(c!=null && (c.isLetterOrDigit() || c=='.')) {"Expected LaTeX argument"}
                 index++
                 if(!singleToken) {
-                    if(c.isDigit() || c=='.')while(source.getOrNull(index)?.let {it.isDigit() || it=='.'}==true)index++
+                    if(c.isDigit() || c=='.') {
+                        while(source.getOrNull(index)?.let {it.isDigit() || it=='.'}==true)index++
+                        while(source.getOrNull(index)?.isLetterOrDigit()==true)index++
+                    }
                     else while(source.getOrNull(index)?.isLetterOrDigit()==true)index++
                 }
             }

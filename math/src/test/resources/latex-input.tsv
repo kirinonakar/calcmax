@@ -34,3 +34,5 @@ x \alpha+\beta\sin x	x*alpha+beta*sin(x)	alpha*x + beta*sin(x)
 2\frac{1}{5}	2(1/5)	2/5
 1-\frac{2+3}{4}	1-(2+3)/4	-1/4
 \frac{1}{2}\frac{3}{4}	1/2(3/4)	3/8
+\sin4x+\sin4y+\sin4z	sin(4x)+sin(4y)+sin(4z)
+C(t)=4(\sin t,\cos t,0.6\sin(2t))	C(t)=4(sin(t),cos(t),0.6sin(2t))

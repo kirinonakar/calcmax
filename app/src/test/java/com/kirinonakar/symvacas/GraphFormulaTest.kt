@@ -4,6 +4,9 @@ import com.kirinonakar.symvacas.calculator.appendGraphSource
 import com.kirinonakar.symvacas.calculator.loadGraphColors
 import com.kirinonakar.symvacas.calculator.normalizeGraphColors
 import com.kirinonakar.symvacas.calculator.removeGraphSource
+import com.kirinonakar.symvacas.calculator.removeGraphInputLine
+import com.kirinonakar.symvacas.calculator.graphExpressionTarget
+import com.kirinonakar.symvacas.calculator.isImplicitSurface
 import com.kirinonakar.symvacas.calculator.graphShadeEntry
 import com.kirinonakar.symvacas.calculator.graphShadingBody
 import com.kirinonakar.symvacas.calculator.isGraphShading
@@ -18,6 +21,30 @@ import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class GraphFormulaTest {
+    @Test fun threeDimensionalTransferPreservesImplicitEquationsAndScaledCurves() {
+        val implicit="x^2+y^2+z^2+sin(4*x)+sin(4*y)+sin(4*z)=a"
+        assertEquals("surface" to implicit,graphExpressionTarget(implicit));assertTrue(isImplicitSurface(implicit))
+        assertFalse(isImplicitSurface("z=sin(x)*cos(y)"))
+        assertEquals("surface" to "z=x+z",graphExpressionTarget("z=x+z"))
+        val curve="C(t)=4*(sin(t),cos(t),0.6*sin(2*t))"
+        assertEquals("space" to curve,graphExpressionTarget(curve))
+    }
+    @Test fun twentyCurvesAllowShadingAndDeletingTheLastCurve() {
+        var source=(1..4).joinToString("\n") {"[s] $it<x<${it+1},y<1"}
+        for(index in 1..20)source=appendGraphSource(source,"x+$index")
+        assertEquals(24,source.lines().size)
+        val full=source
+        assertThrows(IllegalArgumentException::class.java) {appendGraphSource(full,"x+21")}
+        assertEquals(source.lines().dropLast(1).joinToString("\n"),removeGraphSource(source,19))
+    }
+    @Test fun inputLineDeletionIncludesBlankAndDuplicateLines() {
+        val source="x\n\nx\n[s] y<x\n"
+        assertEquals("x\nx\n[s] y<x\n",removeGraphInputLine(source,1))
+        assertEquals("x\n\n[s] y<x\n",removeGraphInputLine(source,2))
+        assertEquals("x\n\nx\n[s] y<x",removeGraphInputLine(source,4))
+        assertEquals("",removeGraphInputLine("x",0))
+        assertEquals(source,removeGraphInputLine(source,20))
+    }
     @Test fun analysisTargetsDistinguishDerivativesFromTheirSourceForIntersections() {
         val original=graphAnalysisTarget(0,0,0)
         val first=graphAnalysisTarget(-1,0,0)

@@ -1,7 +1,7 @@
 // Geometry stays in data coordinates until clipping is complete.
-export function surfaceSampleCount(bounds,requested=26,automatic=true,zoom=1){
+export function surfaceSampleCount(bounds,requested=26,automatic=true,zoom=1,implicit=false){
   const density=automatic?Math.max(26,Math.max(bounds.xmax-bounds.xmin,bounds.ymax-bounds.ymin)*8)*Math.sqrt(zoom):requested;
-  return Math.max(12,Math.min(96,Math.ceil(Number.isFinite(density)?density:96)));
+  return Math.max(12,Math.min(implicit?32:96,Math.ceil(Number.isFinite(density)?density:96)));
 }
 export function surfaceZRange(min,max){
   if(!Number.isFinite(min)||!Number.isFinite(max))return [-1,1];
@@ -49,19 +49,22 @@ export function surfaceProjection(bounds,rotation,elevation){
   };
   return {project,normalize};
 }
-export function surfaceFaces(mesh,bounds,projection){
+export function surfaceFaces(mesh,bounds,projection,triangles=null){
   const faces=[];
+  const input=triangles?[...triangles]:[];
   for(let row=0;row<mesh.length-1;row++)for(let col=0;col<Math.min(mesh[row].length,mesh[row+1].length)-1;col++){
     const cell=[mesh[row][col],mesh[row][col+1],mesh[row+1][col+1],mesh[row+1][col]];
     if(!cell.every(finite))continue;
-    for(const triangle of [[cell[0],cell[1],cell[2]],[cell[0],cell[2],cell[3]]]){
+    input.push([cell[0],cell[1],cell[2]],[cell[0],cell[2],cell[3]]);
+  }
+  for(const triangle of input){
+      if(triangle.length!==3||!triangle.every(finite))continue;
       const points=clipSurfacePolygon(triangle,bounds);if(!points.length)continue;
       const [a,b,c]=triangle.map(projection.normalize),u=b.map((v,i)=>v-a[i]),v=c.map((n,i)=>n-a[i]);
       const normal=[u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0]],length=Math.hypot(...normal);
       if(!length)continue;
       const light=.35+.65*Math.abs((normal[0]*-.4+normal[1]*-.5+normal[2]*.75)/(length*Math.hypot(.4,.5,.75)));
       faces.push({points,depth:points.reduce((sum,p)=>sum+projection.project(p)[2],0)/points.length,light,height:points.reduce((sum,p)=>sum+(p[2]-bounds.zmin)/(bounds.zmax-bounds.zmin),0)/points.length});
-    }
   }
   return faces.sort((a,b)=>a.depth-b.depth);
 }

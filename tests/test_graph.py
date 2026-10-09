@@ -8,7 +8,7 @@ import time
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "app/src/main/python"))
 import calc_engine
 from calc_evaluator import Engine
-from calc_graph import simplify_samples, graph_expressions, _graph_programs
+from calc_graph import adaptive_samples, simplify_samples, graph_expressions, _graph_programs
 from unittest.mock import patch
 import sympy as s
 
@@ -24,6 +24,16 @@ circle = equation(binary("+", x2, y2), number(1))
 
 
 class ImplicitGraphTests(unittest.TestCase):
+    def test_twenty_implicit_equations_and_differential_curves(self):
+        equations=[equation(y,number(i/10)) for i in range(20)]
+        result=self.graph(*equations,samples=100)
+        self.assertTrue(result['ok'],result)
+        self.assertEqual(20,len(result['curves']))
+        self.assertFalse(self.graph(*equations,equation(y,number(2)))['ok'])
+        result=self.graph(number(0),graphKind='differential',initialValues=list(range(20)),t0=0,samples=100)
+        self.assertTrue(result['ok'],result)
+        self.assertEqual(20,len(result['curves']))
+
     def test_derivative_analysis_uses_the_selected_order_for_every_action(self):
         cubic=binary("-",binary("^",x,number(3)),binary("*",number(3),x))
         def analyze(action,order=1,**options):
@@ -288,11 +298,38 @@ class ImplicitGraphTests(unittest.TestCase):
     def test_invalid_equations_and_ranges(self):
         inequality = {"kind": "relation", "value": "<", "args": [x, y]}
         for result in [self.graph(inequality), self.graph(equation(x, x)),
-                       self.graph(circle, yMin=2, yMax=1), self.graph(), self.graph(*([circle]*7))]:
+                       self.graph(circle, yMin=2, yMax=1), self.graph(), self.graph(*([circle]*21))]:
             self.assertFalse(result["ok"])
 
 
 class GraphPerformanceTests(unittest.TestCase):
+    def test_steep_continuous_polynomial_keeps_visible_section_when_zoomed_out(self):
+        for span in (10,1000,10000,1e6):
+            function=lambda x:x**23-4
+            curve,_=adaptive_samples(function,-span,span,500,screen_bounds=(-span,span,-5,5))
+            self.assertFalse(any(p is None and a and b and a[1]<0<b[1] for a,p,b in zip(curve,curve[1:],curve[2:])),span)
+            visible=[p for p in curve if p and -5<=p[1]<=5]
+            self.assertGreater(len(visible),20,span)
+            self.assertTrue(any(p[1]>4 for p in visible),span)
+            for a,b in zip(curve,curve[1:]):
+                if a and b and min(a[1],b[1])<=5 and max(a[1],b[1])>=-5:
+                    error=abs(function((a[0]+b[0])/2)-(a[1]+b[1])/2)*80
+                    self.assertLessEqual(error,.21,(span,a,b))
+
+    def test_exponential_refinement_spends_work_on_visible_curvature(self):
+        calls=0
+        def function(x):
+            nonlocal calls
+            calls+=1
+            return x*math.exp(x)
+        curve,_=adaptive_samples(function,-100,100,500,screen_bounds=(-100,100,-50,50))
+        self.assertLess(calls,1400)
+        self.assertTrue(any(p and p[1]>1e40 for p in curve))  # Fit Y retains real samples.
+        for a,b in zip(curve,curve[1:]):
+            if a and b and min(a[1],b[1])<=50 and max(a[1],b[1])>=-50:
+                error=abs(function((a[0]+b[0])/2)-(a[1]+b[1])/2)*8
+                self.assertLessEqual(error,.21)
+
     def test_symbolic_programs_reuse_builds_and_invalidate_saved_context(self):
         with self.subTest(scenario='symbolic_programs_reuse_builds_and_invalidate_saved_context'):
             _graph_programs.clear()

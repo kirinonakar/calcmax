@@ -17,30 +17,42 @@ internal fun graphInputTree(source:String,kind:String="cartesian",removeComputat
 
 internal fun graphExpressionTarget(source:String):Pair<String,String> {
     val tree=Parser(source).parse()
+    if(tree.nodes().any {it.kind in listOf("list","tuple") && it.args.size==3})return "space" to source
     if(tree.kind=="relation") {
         require(tree.value in listOf("=","==")) {"Graph an expression, y = f(x), or an equation F(x,y)=0"}
-        if(tree.args[0].kind=="symbol" && tree.args[0].value=="z") {
+        if(tree.args[0].kind=="symbol" && tree.args[0].value=="z" && tree.args[1].nodes().none {it.kind=="symbol" && it.value=="z"}) {
             val rhs=tree.args[1]
             return "surface" to source.substring(rhs.start,rhs.end)
         }
     }
-    return "cartesian" to source
+    return (if(tree.nodes().any {it.kind=="symbol" && it.value=="z"})"surface" else "cartesian") to source
 }
+
+internal fun isImplicitSurface(source:String):Boolean = runCatching {
+    val tree=Parser(LatexInput.convert(source) ?: source).parse()
+    if(tree.kind=="relation")!(tree.args[0].kind=="symbol" && tree.args[0].value=="z" && tree.args[1].nodes().none {it.kind=="symbol" && it.value=="z"})
+    else tree.nodes().any {it.kind=="symbol" && it.value=="z"}
+}.getOrDefault(false)
 
 internal fun appendGraphSource(existing:String,source:String,kind:String="cartesian"):String {
     val lines=existing.lines().filter(String::isNotBlank)
-    val limit=if(kind in listOf("surface","differential"))1 else 6
+    val limit=if(kind in listOf("surface","differential"))1 else 20
     if(lines.any {it.trim()==source.trim()})return existing
-    require(lines.size<8 && lines.count {!isGraphShading(it)}<limit) {"Graph limit reached. Remove a function before adding another."}
+    require(lines.size<24 && lines.count {!isGraphShading(it)}<limit) {"Graph limit reached. Remove a function before adding another."}
     return existing.trimEnd()+(if(lines.isEmpty())"" else "\n")+source
 }
 
 internal fun removeGraphSource(existing:String,index:Int,kind:String="cartesian",shading:Boolean=false):String {
     val lines=existing.lines()
-    val visible=lines.withIndex().filter {it.value.isNotBlank()}.take(if(kind in listOf("surface","differential"))1 else 8)
+    val visible=lines.withIndex().filter {it.value.isNotBlank()}.take(if(kind in listOf("surface","differential"))1 else 24)
     val target=visible.filter {isGraphShading(it.value)==shading}
-        .take(if(shading)4 else if(kind in listOf("surface","differential"))1 else 6).getOrNull(index) ?: return existing
+        .take(if(shading)4 else if(kind in listOf("surface","differential"))1 else 20).getOrNull(index) ?: return existing
     return lines.filterIndexed {i,_->i!=target.index}.joinToString("\n")
+}
+
+internal fun removeGraphInputLine(source:String,index:Int):String {
+    val lines=source.lines()
+    return if(index in lines.indices)lines.filterIndexed {i,_->i!=index}.joinToString("\n") else source
 }
 
 internal data class GraphAnalysisTarget(val source:Int,val order:Int=0)
@@ -58,13 +70,13 @@ internal object CalculatorGraphActions {
         continuation.invokeOnCancellation {Handler(Looper.getMainLooper()).post {clock.removeFrameCallback(callback)}}
     }
     fun CalculatorModel.performPlot(auto: Boolean = false, preview: Boolean = false) {
-        val limit=if(graphKind in listOf("surface","differential")) 1 else 6
+        val limit=if(graphKind in listOf("surface","differential")) 1 else 20
         // Coalesce animation ticks before reparsing or allocating another request.
         if((graphAnimating || preview) && graphJob?.isActive==true) {graphPendingPlot={performPlot(auto,preview)};return}
         val trees=mutableListOf<JSONObject>()
         val shadings=JSONArray()
         try {
-            graphSource.lines().filter { it.isNotBlank() }.take(if(graphKind in listOf("surface","differential")) 1 else 8).forEach { raw->
+            graphSource.lines().filter { it.isNotBlank() }.take(if(graphKind in listOf("surface","differential")) 1 else 24).forEach { raw->
                 val line=raw.trim()
                 if(isGraphShading(line)) {
                     if(graphKind!="cartesian")throw SyntaxException("Shading is available on Cartesian graphs",0)
@@ -95,9 +107,12 @@ internal object CalculatorGraphActions {
         if(secondDerivativeSelected!=null)request.put("secondDerivativeSelected",secondDerivativeSelected)
         if(shadings.length()>0)request.put("shadings",shadings)
         if(kind=="surface") {
-            val density=SurfaceMesh.sampleCount(xMin,xMax,yMin,yMax,surfaceSamples,surfaceAutoDensity,surfaceZoom.toDouble())
-            request.put("surfaceYMin",yMin).put("surfaceYMax",yMax).put("surfaceSamples",if(graphAnimating)minOf(density,32) else density)
+            val implicit=isImplicitSurface(source)
+            val density=SurfaceMesh.sampleCount(xMin,xMax,yMin,yMax,surfaceSamples,surfaceAutoDensity,surfaceZoom.toDouble(),implicit)
+            request.put("surfaceYMin",yMin).put("surfaceYMax",yMax).put("surfaceSamples",if(graphAnimating)minOf(density,if(implicit)16 else 32) else density)
+            request.put("surfaceZMin",zMin ?: yMin).put("surfaceZMax",zMax ?: yMax)
         }
+        if(kind=="space")request.put("surfaceZMin",zMin ?: -5.0).put("surfaceZMax",zMax ?: 5.0)
         if(kind=="sequence") {
             try {
                 val seeds=sequenceInitials.split(',').map(String::trim).filter(String::isNotEmpty).map { JSONObject(Parser(it,removeComputationLimit=removeComputationLimit).parse().json()) }
@@ -108,8 +123,8 @@ internal object CalculatorGraphActions {
         if(kind=="differential") {
             val t0=differentialT0.trim().toDoubleOrNull()
             val initials=differentialInitials.split(',').map(String::trim).filter(String::isNotEmpty).mapNotNull(String::toDoubleOrNull)
-            if(t0==null || !t0.isFinite() || initials.isEmpty() || initials.size>6 || differentialInitials.split(',').map(String::trim).filter(String::isNotEmpty).size!=initials.size) {
-                error="Enter t₀ and one to six finite initial y values";return
+            if(t0==null || !t0.isFinite() || initials.isEmpty() || initials.size>20 || differentialInitials.split(',').map(String::trim).filter(String::isNotEmpty).size!=initials.size) {
+                error="Enter t₀ and one to twenty finite initial y values";return
             }
             request.put("t0",t0).put("initialValues",JSONArray(initials))
         }
@@ -211,7 +226,7 @@ internal object CalculatorGraphActions {
             if(order==2)graphSecondDerivativeSelected=null else graphDerivativeSelected=null
             return
         }
-        val sources=graphSource.lines().filter(String::isNotBlank).take(8).map(String::trim).filter {!isGraphShading(it)}.take(6)
+        val sources=graphSource.lines().filter(String::isNotBlank).take(24).map(String::trim).filter {!isGraphShading(it)}.take(20)
         if(selected !in sources.indices) {error="Select a function";return}
         graphState.rememberInput()
         clearGraphTangent()
@@ -237,7 +252,7 @@ internal object CalculatorGraphActions {
         val singled=action in listOf("derivative","tangent") || fixedIntercept
         val a=if(fixedIntercept)0.0 else first.toDoubleOrNull();val b=if(singled)a else second.toDoubleOrNull()
         if(a==null || !a.isFinite() || b==null || !b.isFinite() || (!singled && a>=b)) {error="Enter finite values with a < b";return}
-        val sources=graphSource.lines().filter {it.isNotBlank()}.take(8).filter {graphKind!="cartesian" || !isGraphShading(it)}.take(6)
+        val sources=graphSource.lines().filter {it.isNotBlank()}.take(24).filter {graphKind!="cartesian" || !isGraphShading(it)}.take(20)
         val selectedTarget=graphAnalysisTarget(selected,graphDerivativeSelected,graphSecondDerivativeSelected)
         val otherTarget=graphAnalysisTarget(other,graphDerivativeSelected,graphSecondDerivativeSelected)
         if(selectedTarget==null || selectedTarget.source !in sources.indices || action=="intersection" && (otherTarget==null || otherTarget.source !in sources.indices || otherTarget==selectedTarget)) {error="Select two different functions";return}

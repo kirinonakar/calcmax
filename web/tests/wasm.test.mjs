@@ -17,6 +17,42 @@ import {graphInputTree} from '../graph-workspace.js';
 // Reuse the interpreter for sequential integration scenarios. The cold solver
 // scenario below explicitly loads its own interpreter to keep startup coverage.
 let sharedRuntime;
+test('implicit 3D surfaces and named scaled space curves run through real WASM and LaTeX input',async()=>{
+  const py=await runtime();
+  const run=(source,graphKind,options={})=>{
+    py.globals.set('payload',JSON.stringify({action:'graph',graphKind,trees:[parse(latexInput(source))],min:-2,max:2,surfaceYMin:-2,surfaceYMax:2,surfaceSamples:20,...options}));
+    const started=performance.now(),result=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));
+    console.log('WASM 3D:',graphKind,Math.round(performance.now()-started),'ms');
+    assert.equal(result.ok,true,result.error);return result;
+  };
+  const surface=run(String.raw`x^{2}+y^{2}+z^{2}+\sin4x+\sin4y+\sin4z=a`,'surface',{parameters:{a:1}});
+  assert.equal(surface.implicitSurface,true);assert.deepEqual(surface.parameters,['a']);assert.ok(surface.surfaceTriangles.length>100);
+  assert.ok(surface.surfaceVertices.some(p=>p[2]<-.5)&&surface.surfaceVertices.some(p=>p[2]>.5));
+  const curve=run(String.raw`C(t)=4(\sin t,\cos t,0.6\sin(2t))`,'space',{min:0,max:2*Math.PI});
+  assert.deepEqual(curve.parameters,[]);assert.deepEqual(curve.spaceCurves[0][0],[0,4,0]);
+  for(const [i,point] of curve.spaceCurves[0].entries()){
+    const at=curve.curveParameters[0][i];
+    for(const [value,expected] of point.map((v,k)=>[v,[4*Math.sin(at),4*Math.cos(at),2.4*Math.sin(2*at)][k]]))assert.ok(Math.abs(value-expected)<1e-11);
+  }
+});
+
+test('steep exponential and polynomial graphs stay connected in wide viewports through real WASM',async()=>{
+  const py=await runtime(),durations=[];
+  const run=(source,span)=>{
+    py.globals.set('payload',JSON.stringify({action:'graph',graphKind:'cartesian',trees:[parse(latexInput(source))],min:-span,max:span,yMin:-5,yMax:5,samples:500}));
+    const before=performance.now(),result=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));
+    durations.push({source,span,ms:Math.round(performance.now()-before)});
+    assert.equal(result.ok,true,result.error);return result.curves[0];
+  };
+  for(const source of ['x*e^{x}','x^23-4'])for(const span of [100,10000,1e6]){
+    const curve=run(source,span),visible=curve.filter(p=>p&&p[1]>=-5&&p[1]<=5);
+    assert.ok(visible.length>20,`${source}: visible section at ${span}`);
+    assert.ok(visible.some(p=>p[1]>4),`${source}: upper visible branch at ${span}`);
+    assert.ok(!curve.some((point,i)=>point===null&&curve[i-1]&&curve[i+1]&&curve[i-1][1]<0&&curve[i+1][1]>0),`${source}: false discontinuity`);
+  }
+  console.log('WASM wide graph dispatch:',JSON.stringify(durations));
+});
+
 test('Bayesian bootstrap column and named-group comparisons run through real WASM',async()=>{
   const py=await runtime(),definition=advancedStatisticsSchema.find(d=>d.id==='bayesbootstrap');
   const evaluate=(rows,settings,labels={})=>{

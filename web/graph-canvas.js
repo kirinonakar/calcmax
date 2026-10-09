@@ -1,5 +1,6 @@
 import {displayNumber} from './display-format.js';
 import {integralPolygons} from './graph-integral.js';
+import {clipGraphSegment} from './graph-geometry.js';
 import {clipSurfaceSegment,surfaceFaces,surfaceProjection,surfaceZRange} from './surface-geometry.js';
 
 import {defaultGraphColors} from './graph-colors.js';
@@ -56,9 +57,10 @@ export function plotGraph(container,result,bounds,{colors=defaultGraphColors,dig
     const {rotation=35,elevation=32,zoom=1,renderMode='wireframe'}=surfaceView;
     const color=/^#[0-9a-f]{6}$/i.test(surfaceView.color||'')?surfaceView.color:colors[0],rgb=[1,3,5].map(i=>parseInt(color.slice(i,i+2),16));
     const [zmin,zmax]=surfaceZRange(result.zMin,result.zMax),box={...bounds,zmin,zmax},projection=surfaceProjection(box,rotation,elevation),scale=ih*.3*zoom;
+    const triangles=(result.surfaceTriangles||[]).map(face=>face.map(i=>result.surfaceVertices?.[i]));
     const project=p=>{const [x,y]=projection.project(p);return [w/2+x*scale,h/2+y*scale];};
     clip();
-    if(renderMode!=='wireframe')for(const face of surfaceFaces(result.surface,box,projection)){
+    if(renderMode!=='wireframe')for(const face of surfaceFaces(result.surface,box,projection,triangles)){
       const fill=`rgb(${rgb.map(v=>Math.round(v*(.65+.35*face.height)*face.light)).join(',')})`;
       polygon(face.points.map(project),fill,1,renderMode==='surface-wireframe'?muted:fill,renderMode==='surface-wireframe'?.65:.35);
     }
@@ -66,9 +68,21 @@ export function plotGraph(container,result,bounds,{colors=defaultGraphColors,dig
       ctx.beginPath();
       const wire=points=>{for(let i=1;i<points.length;i++){const segment=clipSurfaceSegment(points[i-1],points[i],box);if(segment){ctx.moveTo(...project(segment[0]));ctx.lineTo(...project(segment[1]));}}};
       for(const row of result.surface)wire(row);
+      for(const triangle of triangles)if(triangle.every(finite))wire([...triangle,triangle[0]]);
       const columns=Math.max(0,...result.surface.map(row=>row.length));
       for(let col=0;col<columns;col++)wire(result.surface.map(row=>row[col]));
       ctx.strokeStyle=color;ctx.lineWidth=1.3;ctx.stroke();
+    }
+    for(const [i,curve] of (result.spaceCurves||[]).entries()){
+      ctx.beginPath();let pen=null;
+      for(let k=1;k<curve.length;k++){
+        const segment=clipSurfaceSegment(curve[k-1],curve[k],box);
+        if(!segment){pen=null;continue;}
+        const [a,b]=segment,from=project(a),to=project(b);
+        if(!pen||from[0]!==pen[0]||from[1]!==pen[1])ctx.moveTo(...from);
+        ctx.lineTo(...to);pen=to;
+      }
+      ctx.strokeStyle=result.spaceCurves.length===1?color:colors[i%colors.length];ctx.lineWidth=3;ctx.stroke();
     }
     ctx.restore();
     const origin=[xmin,ymin,zmin];
@@ -101,14 +115,20 @@ export function plotGraph(container,result,bounds,{colors=defaultGraphColors,dig
   for(const [i,shade] of (result.shadings||[]).entries())for(const points of shade.fill||[])polygon(points.map(project),colors[i%colors.length],.16);
   ctx.beginPath();for(const [at,value,slope] of result.fields||[]){const angle=Math.atan(slope*(xmax-xmin)/(ymax-ymin)*ih/iw),dx=7*Math.cos(angle),dy=-7*Math.sin(angle);ctx.moveTo(x(at)-dx,y(value)-dy);ctx.lineTo(x(at)+dx,y(value)+dy);}ctx.strokeStyle=muted;ctx.globalAlpha=.6;ctx.lineWidth=1;ctx.stroke();ctx.globalAlpha=1;
   const path=(points,i)=>{
-    const color=colors[i%colors.length];ctx.beginPath();let pen=false;
-    for(const point of points){if(!finite(point)){pen=false;continue;}const at=project(point);if(!at.every(Number.isFinite)){pen=false;continue;}if(pen)ctx.lineTo(...at);else ctx.moveTo(...at);pen=true;}
+    const color=colors[i%colors.length];ctx.beginPath();let previous=null,pen=null;
+    for(const point of points){
+      const segment=clipGraphSegment(previous,point,bounds);previous=finite(point)?point:null;
+      if(!segment){pen=null;continue;}
+      const [a,b]=segment;
+      if(!pen||a[0]!==pen[0]||a[1]!==pen[1])ctx.moveTo(...project(a));
+      ctx.lineTo(...project(b));pen=b;
+    }
     ctx.strokeStyle=color;ctx.lineWidth=i===selected?4:2;ctx.stroke();
-    if(dots)for(const point of points)if(finite(point))circle(project(point),3,color);
+    if(dots)for(const point of points)if(finite(point)&&point[0]>=xmin&&point[0]<=xmax&&point[1]>=ymin&&point[1]<=ymax)circle(project(point),3,color);
   };
   (result.curves||[]).forEach((curve,i)=>{if(i!==selected)path(curve,i);});if(result.curves?.[selected])path(result.curves[selected],selected);
   if(integral)for(const points of analysis?.integralFill||integralPolygons(result.curves?.[selected]||[],integral))polygon(points.map(project),colors[selected%colors.length],.18);
-  if(analysis?.line?.length===2){ctx.setLineDash([6,4]);line(...analysis.line.map(project),accent,2);ctx.setLineDash([]);}
+  if(analysis?.line?.length===2){const segment=clipGraphSegment(...analysis.line,bounds);if(segment){ctx.setLineDash([6,4]);line(...segment.map(project),accent,2);ctx.setLineDash([]);}}
   for(const point of analysis?.points||[])if(finite(point))circle(project(point),5,accent);
   if(finite(trace)){ctx.setLineDash([3,3]);line([x(trace[0]),pad],[x(trace[0]),h-pad]);ctx.setLineDash([]);circle(project(trace),6,colors[selected%colors.length]);}
   ctx.restore();return canvas;

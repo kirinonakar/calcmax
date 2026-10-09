@@ -30,8 +30,27 @@ test('SVG keeps the rotated 3D surface as vector faces and axis labels',()=>{
   assert.doesNotMatch(svg,/<image|NaN|Infinity/);
 });
 
+test('indexed implicit triangles and space curves use the actual 3D export path',()=>{
+  const bounds={xmin:-1,xmax:1,ymin:-1,ymax:1};
+  const result={surface:[],surfaceVertices:[[-1,-1,0],[1,-1,0],[0,1,1]],surfaceTriangles:[[0,1,2]],zMin:-1,zMax:1};
+  const svg=graphSvg(plotContainer(),result,bounds,{surfaceView:{renderMode:'surface'}});
+  assert.match(svg,/fill="rgb\(/);assert.doesNotMatch(svg,/NaN|Infinity/);
+  const curve=graphSvg(plotContainer(),{surface:[],spaceCurves:[[[-1,0,0],[0,1,1],[1,0,0]]],zMin:-1,zMax:1},bounds);
+  assert.match(curve,/stroke-width="3"/);assert.doesNotMatch(curve,/NaN|Infinity/);
+});
+
 test('PNG encoding returns the image blob and reports encoding failure',async()=>{
   const blob=new Blob(['png'],{type:'image/png'});
   assert.equal(await graphPng({toBlob(callback,type){assert.equal(type,'image/png');callback(blob);}}),blob);
   await assert.rejects(graphPng({toBlob(callback){callback(null);}}),/Could not export/);
+});
+
+test('the actual Canvas/SVG path rejects invisible exponential segments and bounds crossings',()=>{
+  const svg=graphSvg(plotContainer(),{curves:[[[0,0],[1,1e99],[2,1e99],null,[-1,-1e99],[0,0]]]},
+    {xmin:-10,xmax:10,ymin:-5,ymax:5});
+  assert.doesNotMatch(svg,/NaN|Infinity|e\+\d/);
+  for(const match of svg.matchAll(/d="([ML][^"]*)"/g)){
+    const coordinates=match[1].match(/-?\d+(?:\.\d+)?/g).map(Number);
+    assert.ok(coordinates.every(n=>Math.abs(n)<=800),match[1]);
+  }
 });

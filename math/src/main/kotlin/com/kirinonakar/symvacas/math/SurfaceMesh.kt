@@ -21,9 +21,10 @@ class SurfaceProjection(val bounds:SurfaceBounds,rotation:Double,elevation:Doubl
 }
 
 object SurfaceMesh {
-    fun sampleCount(xmin:Double,xmax:Double,ymin:Double,ymax:Double,requested:Int=26,automatic:Boolean=true,zoom:Double=1.0):Int {
-        if(!automatic)return requested.coerceIn(12,96)
-        return ceil(max(26.0,max(xmax-xmin,ymax-ymin)*8)*sqrt(zoom)).coerceIn(12.0,96.0).toInt()
+    fun sampleCount(xmin:Double,xmax:Double,ymin:Double,ymax:Double,requested:Int=26,automatic:Boolean=true,zoom:Double=1.0,implicit:Boolean=false):Int {
+        val maximum=if(implicit)32 else 96
+        if(!automatic)return requested.coerceIn(12,maximum)
+        return ceil(max(26.0,max(xmax-xmin,ymax-ymin)*8)*sqrt(zoom)).coerceIn(12.0,maximum.toDouble()).toInt()
     }
     fun zRange(low:Double,high:Double):Pair<Double,Double> {
         if(!low.isFinite()||!high.isFinite())return -1.0 to 1.0
@@ -63,13 +64,17 @@ object SurfaceMesh {
         }
         return if(polygon.size>=3)polygon else emptyList()
     }
-    fun faces(mesh:List<List<DoubleArray?>>,projection:SurfaceProjection):List<SurfaceFace> {
+    fun faces(mesh:List<List<DoubleArray?>>,projection:SurfaceProjection,triangles:List<List<DoubleArray>> = emptyList()):List<SurfaceFace> {
         val bounds=projection.bounds;val faces=mutableListOf<SurfaceFace>()
+        val input=triangles.toMutableList()
         for(row in 0 until mesh.lastIndex)for(col in 0 until min(mesh[row].size,mesh[row+1].size)-1) {
             val cell=listOf(mesh[row][col],mesh[row][col+1],mesh[row+1][col+1],mesh[row+1][col])
             if(!cell.all(::finite))continue
-            for(indices in listOf(listOf(0,1,2),listOf(0,2,3))) {
-                val triangle=indices.map {cell[it]!!};val points=clipPolygon(triangle,bounds)
+            input.add(listOf(cell[0]!!,cell[1]!!,cell[2]!!));input.add(listOf(cell[0]!!,cell[2]!!,cell[3]!!))
+        }
+        for(triangle in input) {
+                if(triangle.size!=3 || !triangle.all(::finite))continue
+                val points=clipPolygon(triangle,bounds)
                 if(points.isEmpty())continue
                 val (a,b,c)=triangle.map(projection::normalize)
                 val u=DoubleArray(3) {b[it]-a[it]};val v=DoubleArray(3) {c[it]-a[it]}
@@ -77,7 +82,6 @@ object SurfaceMesh {
                 val length=sqrt(normal.sumOf {it*it});if(length==0.0)continue
                 val light=.35+.65*abs((normal[0]*-.4+normal[1]*-.5+normal[2]*.75)/(length*sqrt(.4*.4+.5*.5+.75*.75)))
                 faces.add(SurfaceFace(points,points.map {projection.project(it)[2]}.average(),points.map {(it[2]-bounds.zmin)/(bounds.zmax-bounds.zmin)}.average(),light))
-            }
         }
         return faces.sortedBy {it.depth}
     }

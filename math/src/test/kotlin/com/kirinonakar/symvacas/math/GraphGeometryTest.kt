@@ -3,6 +3,20 @@ package com.kirinonakar.symvacas.math
 import org.junit.Assert.*
 import org.junit.Test
 
+class GraphClipTest {
+    private fun clip(a:Pair<Double,Double>?,b:Pair<Double,Double>?)=GraphClip.segment(a,b,-10.0,10.0,-5.0,5.0)
+    @Test fun hugeExponentialSegmentsClipBeforeConversionToScreenFloats() {
+        val segment=clip(0.0 to 0.0,1.0 to 1e99)!!
+        assertEquals(0.0 to 0.0,segment.first)
+        assertEquals(5e-99,segment.second.first,1e-110);assertEquals(5.0,segment.second.second,0.0)
+        assertEquals(segment.second to segment.first,clip(1.0 to 1e99,0.0 to 0.0))
+        assertNull(clip(1.0 to 1e50,2.0 to 1e99))
+        assertNull(clip(null,0.0 to 0.0))
+        assertEquals((-5.0 to -5.0) to (5.0 to 5.0),clip(-100.0 to -100.0,100.0 to 100.0))
+        assertEquals((0.0 to -5.0) to (0.0 to 5.0),clip(0.0 to -1e99,0.0 to 1e99))
+    }
+}
+
 class SurfaceMeshTest {
     private val bounds=SurfaceBounds(-1.0,1.0,-1.0,1.0,-1.0,1.0)
     private fun p(x:Double,y:Double,z:Double)=doubleArrayOf(x,y,z)

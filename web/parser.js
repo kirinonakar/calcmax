@@ -217,7 +217,7 @@ export function latexInput(input,{prefix='',suffix=''}={}) {
         if (!letter(c) && !digit(c) && c!=='.') throw new SyntaxError('Expected LaTeX argument');
         i++;
         if (!singleToken) {
-          if (digit(c) || c==='.') while(digit(text[i]) || text[i]==='.')i++;
+          if (digit(c) || c==='.') {while(digit(text[i]) || text[i]==='.')i++;while(letter(text[i]) || digit(text[i]))i++;}
           else while(letter(text[i]) || digit(text[i]))i++;
         }
       }

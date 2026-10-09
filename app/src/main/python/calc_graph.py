@@ -101,6 +101,8 @@ def graph(engine, request):
         return graph_sequence(engine, request, trees, start, end)
     if kind == "surface":
         return graph_surface(engine, request, trees, start, end)
+    if kind == "space":
+        return graph_space(engine,request,trees,start,end)
     if kind == "differential":
         return graph_differential(engine, request, trees, start, end)
     var = engine.symbol(request.get("variable","x")); engine.bindings[str(var)] = var
@@ -258,7 +260,7 @@ def graph_implicit(engine, request, trees, xmin, xmax):
     """Contour F(x,y)=0 with finite, independently separated line segments."""
     ymin, ymax = float(request.get("yMin", -3)), float(request.get("yMax", 3))
     require(math.isfinite(ymin) and math.isfinite(ymax) and ymax > ymin, "Invalid implicit y range")
-    require(1 <= len(trees) <= 6, "Enter one to six implicit equations")
+    require(1 <= len(trees) <= 20, "Enter one to twenty implicit equations")
     x, y = engine.symbol("x"), engine.symbol("y")
     engine.bindings.update({"x": x, "y": y})
     expressions = []
@@ -640,12 +642,25 @@ def adaptive_samples(function, start, end, base_count, kind="cartesian",screen_b
         values[at] = point(at)
     max_points = capped(max(base_count+1, 1200),1800)
     def refine(left, right, depth):
-        if depth >= (7 if screen_bounds else 4) or len(values) >= max_points:
+        # A fixed seven levels loses narrow visible sections when zoomed out
+        # (e.g. x**23-4 in a million-unit range). Offscreen pruning keeps deeper
+        # viewport refinement bounded by the existing point budget.
+        if depth >= (48 if screen_bounds else 4) or len(values) >= max_points:
             return
         middle = (left+right)/2
         if middle==left or middle==right: return
         actual = point(middle)
         a, b = values[left], values[right]
+        # Skip all-undefined probes and monotone probes well outside the view.
+        # Keep a full viewport of margin and still refine turns near reentry.
+        if screen_bounds and a is None and b is None and actual is None:
+            return
+        if screen_bounds and a is not None and b is not None and actual is not None:
+            _,_,view_low,view_high=screen_bounds
+            margin=view_high-view_low
+            monotone=min(a[1],b[1])<=actual[1]<=max(a[1],b[1])
+            if monotone and (max(a[1],b[1],actual[1])<view_low-margin or min(a[1],b[1],actual[1])>view_high+margin):
+                return
         split = a is None or b is None or actual is None
         if a is not None and b is not None and actual is not None:
             linear = ((a[0]+b[0])/2, (a[1]+b[1])/2)
@@ -673,7 +688,7 @@ def adaptive_samples(function, start, end, base_count, kind="cartesian",screen_b
             if a is None or b is None or (a[1] < 0) == (b[1] < 0) or abs(b[1]-a[1]) <= .22*max(end-start, 1e-9): continue
             lo, hi, low = left, right, a[1]
             tolerance = max(min(abs(a[1]), abs(b[1]))*1e-6, 1e-12)
-            for _ in range(20):
+            for _ in range(48):
                 middle = (lo+hi)/2
                 actual = point(middle)
                 if actual is None: break
@@ -740,13 +755,51 @@ def graph_sequence(engine, request, trees, start, end):
         curves.append([[index, sequence[index]] for index in range(first, last+1) if index in sequence])
     return {"curves": curves, "discrete": True, "parameters": sorted(names)}
 
+def graph_space(engine,request,trees,start,end):
+    from calc_graph3d import space_coordinate_trees,space_curve_samples
+    require(1<=len(trees)<=20,"Enter one to twenty 3D curves [x(t),y(t),z(t)]")
+    coordinates=[space_coordinate_trees(tree) for tree in trees]
+    require(all(coordinates),"Enter a 3D curve [x(t),y(t),z(t)] or C(t)=(x(t),y(t),z(t))")
+    t=engine.symbol('t');engine.bindings['t']=t
+    flat=graph_expressions(engine,[coordinate for group in coordinates for coordinate in group],('t',))
+    names=parameter_names(flat,{'t'});sliders=resolved_parameters(engine,request,flat,{'t'})
+    bounds=tuple((float(request.get(low,default[0])),float(request.get(high,default[1]))) for low,high,default in (
+        ('xMin','xMax',(-5,5)),('yMin','yMax',(-5,5)),('surfaceZMin','surfaceZMax',(-5,5))))
+    require(all(math.isfinite(low) and math.isfinite(high) and high>low for low,high in bounds),'Enter finite increasing ranges')
+    curves=[];parameters=[]
+    for i in range(0,len(flat),3):
+        curve,positions=space_curve_samples(graph_function(tuple(flat[i:i+3]),(t,),sliders),start,end,int(request.get('samples',500)),bounds)
+        curves.append(curve);parameters.append(positions)
+    zs=[p[2] for curve in curves for p in curve if p]
+    return {'surface':[],'spaceCurves':curves,'curveParameters':parameters,'parameters':sorted(names),
+            'zMin':min(zs) if zs else -1,'zMax':max(zs) if zs else 1}
+
+
 def graph_surface(engine, request, trees, xmin, xmax):
-    require(len(trees) == 1, "Enter one surface expression z=f(x,y)")
+    require(len(trees) == 1, "Enter one surface expression z=f(x,y) or F(x,y,z)=0")
     ymin, ymax = float(request.get("surfaceYMin", -3)), float(request.get("surfaceYMax", 3))
     require(math.isfinite(ymin) and math.isfinite(ymax) and ymax > ymin, "Invalid surface y range")
-    x, y = engine.symbol("x"), engine.symbol("y")
-    engine.bindings.update({"x":x, "y":y})
-    expression = graph_expressions(engine, trees, ("x", "y"))[0]
+    x, y, z = engine.symbol("x"), engine.symbol("y"), engine.symbol("z")
+    engine.bindings.update({"x":x, "y":y, "z":z})
+    expression = graph_expressions(engine, trees, ("x", "y", "z"))[0]
+    if isinstance(expression,s.Equality):
+        implicit=not (expression.lhs==z and not expression.rhs.has(z))
+        expression=expression.lhs-expression.rhs if implicit else expression.rhs
+    else:
+        implicit=isinstance(expression,s.Expr) and expression.has(z)
+    require(isinstance(expression,s.Expr),"Enter one surface expression z=f(x,y) or F(x,y,z)=0")
+    if implicit:
+        from calc_graph3d import implicit_surface_samples
+        require(expression!=0,"Equation is true everywhere; enter a surface equation")
+        zmin,zmax=float(request.get('surfaceZMin',ymin)),float(request.get('surfaceZMax',ymax))
+        require(math.isfinite(zmin) and math.isfinite(zmax) and zmax>zmin,"Invalid surface z range")
+        axes={"x","y","z"}
+        names=parameter_names([expression],axes)
+        sliders=resolved_parameters(engine,request,[expression],axes)
+        fn=graph_function(expression,(x,y,z),sliders)
+        vertices,triangles,count=implicit_surface_samples(fn,((xmin,xmax),(ymin,ymax),(zmin,zmax)),int(request.get('surfaceSamples',26)))
+        return {"surface":[],"surfaceVertices":vertices,"surfaceTriangles":triangles,"implicitSurface":True,
+                "zMin":zmin,"zMax":zmax,"surfaceSamples":count,"parameters":sorted(names)}
     names = parameter_names([expression], {"x","y"})
     fn = graph_function(expression, (x,y), resolved_parameters(engine, request, [expression], {"x","y"}))
     count = capped(max(12, int(request.get("surfaceSamples", 26))),96)
@@ -776,7 +829,7 @@ def graph_differential(engine, request, trees, start, end):
     require(math.isfinite(ymin) and math.isfinite(ymax) and ymax > ymin, "Invalid solution y range")
     require(math.isfinite(t0) and start <= t0 <= end, "Initial time must be inside the t range")
     initials = request.get("initialValues", [1])
-    require(1 <= len(initials) <= 6, "Enter between one and six initial y values")
+    require(1 <= len(initials) <= 20, "Enter between one and twenty initial y values")
     def slope(at, value):
         try: return _finite_real(fn(at,value))
         except (TypeError, ValueError, ZeroDivisionError, OverflowError): return None

@@ -1,7 +1,41 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {graphInputTree,graphShadings,createGraphInputHistory,removeGraphSource,graphSelectedCurveIndex,graphAnalysisTarget,graphAnalysisCurves} from '../graph-workspace.js';
+import {graphInputTree,graphExpressionTarget,isImplicitSurface,surfaceFormula,graphShadings,graphExpressions,appendGraphSource,removeGraphInputLine,createGraphInputHistory,removeGraphSource,graphSelectedCurveIndex,graphAnalysisTarget,graphAnalysisCurves} from '../graph-workspace.js';
 import {curvePointAtX} from '../graph-view.js';
+
+test('3D transfers keep implicit equations and named scaled space curves intact',()=>{
+  const implicit='x^2+y^2+z^2+sin(4*x)+sin(4*y)+sin(4*z)=a';
+  assert.deepEqual(graphExpressionTarget(implicit),{kind:'surface',source:implicit});
+  assert.equal(isImplicitSurface(implicit),true);assert.equal(surfaceFormula(implicit),implicit);
+  assert.equal(isImplicitSurface('z=sin(x)*cos(y)'),false);
+  assert.deepEqual(graphExpressionTarget('z=x+z'),{kind:'surface',source:'z=x+z'});
+  assert.deepEqual(graphExpressions('z=x+z','surface'),['z=x+z']);
+  const curve='C(t)=4*(sin(t),cos(t),0.6*sin(2*t))';
+  assert.deepEqual(graphExpressionTarget(curve),{kind:'space',source:curve});
+});
+
+test('twenty curves coexist with four shading rows and the last curve can be removed',()=>{
+  const shades=Array.from({length:4},(_,i)=>`[s] ${i}<x<${i+1},y<1`);
+  let source=shades.join('\n');
+  for(let i=1;i<=20;i++)source=appendGraphSource(source,`x+${i}`);
+  assert.equal(graphExpressions(source,'cartesian').length,20);
+  assert.equal(graphShadings(source,'cartesian').length,4);
+  assert.throws(()=>appendGraphSource(source,'x+21'),/Graph limit/);
+  assert.equal(graphExpressions(removeGraphSource(source,19),'cartesian').length,19);
+  assert.equal(graphExpressions(source+'\nx+21','cartesian').length,20);
+  for(const kind of ['parametric','polar','sequence','implicit'])assert.equal(graphExpressions(Array.from({length:21},(_,i)=>String(i)).join('\n'),kind).length,20);
+});
+
+test('line deletion uses actual input lines including blanks and duplicate expressions',()=>{
+  const source='x\n\nx\n[s] y<x\n';
+  assert.equal(removeGraphInputLine(source,1),'x\nx\n[s] y<x\n');
+  assert.equal(removeGraphInputLine(source,2),'x\n\n[s] y<x\n');
+  assert.equal(removeGraphInputLine(source,4),'x\n\nx\n[s] y<x');
+  assert.equal(removeGraphInputLine('x',0),'');
+  assert.equal(removeGraphInputLine(source,20),source);
+  const history=createGraphInputHistory();history.remember('cartesian',{source});
+  assert.equal(history.undo('cartesian').source,source);
+});
 
 test('named piecewise functions and unrestricted-parenthesis exponential inputs retain restriction scope',()=>{
   const named=graphInputTree('f(x)={x<0:x^2,x>=0:2*x}');assert.equal(named.kind,'piecewise');

@@ -90,6 +90,7 @@ internal class GraphState(private val prefs:SharedPreferences) {
     fun sourceForKind(kind:String):String = if(kind==graphKind)graphSource else sources.optString(kind,when(kind){
         "implicit"->"x^2+y^2=1"
         "parametric"->"[cos(t),sin(t)]";"polar"->"2*cos(3*t)";"sequence"->"n\nu(n-1)+u(n-2)"
+        "space"->"C(t)=4*(sin(t),cos(t),0.6*sin(2*t))"
         "surface"->"sin(sqrt(x^2+y^2))";"differential"->"y-t";else->"sin(x)\ncos(x)"
     })
 
@@ -102,7 +103,9 @@ internal class GraphState(private val prefs:SharedPreferences) {
         graphSource=nextSource
         clearAnalysis()
         graphAnimating=false
-        if(kind=="sequence") {
+        if(kind=="space") {
+            parameterMin=0.0;parameterMax=2*PI;xMin=-5.0;xMax=5.0;yMin=-5.0;yMax=5.0;zMin=null;zMax=null
+        } else if(kind=="sequence") {
             parameterMin=0.0;parameterMax=20.0;xMin=0.0;xMax=20.0;yMin=-2.0;yMax=20.0
         } else if(kind=="differential") {
             parameterMin=-5.0;parameterMax=5.0;xMin=-5.0;xMax=5.0;yMin=-3.0;yMax=5.0
@@ -131,7 +134,8 @@ internal class GraphState(private val prefs:SharedPreferences) {
     fun parameterPayload():JSONObject = JSONObject().also {payload->graphParameters.forEach {(name,spec)->payload.put(name,spec.value)}}
 
     fun resetSurfaceRanges() {
-        xMin=-3.0;xMax=3.0;yMin=-3.0;yMax=3.0;zMin=null;zMax=null
+        val extent=if(graphKind=="space")5.0 else 3.0
+        xMin=-extent;xMax=extent;yMin=-extent;yMax=extent;zMin=null;zMax=null
     }
 
     fun syncParameters(names:JSONArray?) {
