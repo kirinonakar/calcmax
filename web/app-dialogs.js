@@ -119,7 +119,27 @@ export function createAppDialogs({state,ui,persist,calculator,changeMode,pressKe
     const content=element('div'),name=element('input');name.placeholder='변수 이름 · A, b, M';name.setAttribute('aria-label','변수 이름');const expression=element('input');expression.placeholder='값 또는 수식';expression.setAttribute('aria-label','변수 수식');const list=element('div');
     const deleteAll=control(Object.keys(state.datasets).length?'Delete all variables':'Delete all',()=>{state.variables={};persist();render();});
     function store(ast){if(!/^[A-Za-z][A-Za-z0-9_]*$/.test(name.value)||name.value==='Ans')throw new Error('Ans 이외의 영문 변수 이름을 입력하세요.');state.variables[name.value]=ast;persist();render();}
-    function render(){deleteAll.hidden=!Object.keys(state.variables).length;list.replaceChildren();for(const key of Object.keys(state.variables)){const row=element('div','','list-row'),shown=element('div','','content formula-preview');renderFormulas(shown,[`${key}=${astSource(state.variables[key])}`],{digits:state.digits});shown.onclick=()=>{name.value=key;expression.value=astSource(state.variables[key]);};row.append(shown,control('삽입',()=>{changeMode('scientific');calculator.insert(key,null,{factor:true});$('dialog').close();}),control('삭제',()=>{delete state.variables[key];persist();render();}));list.append(row);}{const datasets=Object.entries(state.datasets);if(datasets.length)list.append(element('p',t('Stats data'),'list-heading'));for(const [key,data] of datasets){list.append(control(key,()=>{try{const kind=statisticsColumnCount(state.datasetKinds[key])?state.datasetKinds[key]:statisticsKindForColumns(csvRows(data)[0].length),source=statisticsDatasetSource(data,kind);changeMode('scientific');calculator.insert(source,null,{factor:true});$('dialog').close();}catch(exc){error(exc.message);}}));}}}
+    function render(){
+      deleteAll.hidden=!Object.keys(state.variables).length;list.replaceChildren();
+      for(const key of Object.keys(state.variables)){
+        const row=element('div','','list-row'),shown=element('div','','content formula-preview');
+        renderFormulas(shown,[`${key}=${astSource(state.variables[key])}`],{digits:state.digits});
+        shown.onclick=()=>{name.value=key;expression.value=astSource(state.variables[key]);};
+        row.append(shown,control('삽입',()=>{changeMode('scientific');calculator.insert(key,null,{factor:true});$('dialog').close();}),control('삭제',()=>{delete state.variables[key];persist();render();}));list.append(row);
+      }
+      const functions=Object.keys(state.functions).sort();
+      if(functions.length)list.append(element('p','Custom functions','list-heading'));
+      for(const key of functions){
+        const definition=state.functions[key],row=element('div','','list-row'),shown=element('div','','content formula-preview');
+        renderFormulas(shown,[`${key}(${definition.parameters.join(',')}) = ${definition.source||astSource(definition.body)}`],{digits:state.digits});
+        const recall=()=>{changeMode('scientific');calculator.insert(`${key}(${','.repeat(Math.max(0,definition.parameters.length-1))})`,key.length+1,{factor:true});$('dialog').close();};
+        shown.onclick=recall;
+        row.append(shown,control('삽입',recall),control('삭제',()=>{delete state.functions[key];persist();refreshDisplays();render();}));list.append(row);
+      }
+      const datasets=Object.entries(state.datasets);
+      if(datasets.length)list.append(element('p',t('Stats data'),'list-heading'));
+      for(const [key,data] of datasets){list.append(control(key,()=>{try{const kind=statisticsColumnCount(state.datasetKinds[key])?state.datasetKinds[key]:statisticsKindForColumns(csvRows(data)[0].length),source=statisticsDatasetSource(data,kind);changeMode('scientific');calculator.insert(source,null,{factor:true});$('dialog').close();}catch(exc){error(exc.message);}}));}
+    }
     const assumption=element('select');for(const key of ['none','real','positive','negative','integer','nonzero']){const option=element('option',key);option.value=key;assumption.append(option);}assumption.setAttribute('aria-label',t('Symbol assumption'));
     content.append(name,expression,control('수식 저장',()=>{try{store(parse(latexInput(expression.value)));}catch(exc){toast(exc.message);}}),control('현재 결과 STO',()=>{try{if(!calculator.resultAst())throw new Error('저장 가능한 결과가 없습니다.');store(calculator.resultAst());}catch(exc){toast(exc.message);}}),assumption,control('Set assumption',()=>{if(!/^[A-Za-z][A-Za-z0-9_]*$/.test(name.value)){toast('Enter a valid variable name');return;}state.assumptions[name.value]=assumption.value==='none'?[]:[assumption.value];persist();}),deleteAll,list);render();openDialog('RCL / STO',content);
   }
