@@ -30,6 +30,7 @@ graphs=createGraphWorkspace({execute:(request,settings)=>engine.execute(request,
 calculator=createCalculator({state,engine,isBusy:()=>runtime.busy,ui,persist,schedulePersist,requestOptions,error,changeMode,updateButtons,graphs,
   onFunctionsChanged:()=>workspaces.renderFunctions(),
   onResultCleared:result=>workspaces?.clearStatisticsResult(result),
+  onStatisticsModelWorkflow:plan=>workspaces.runStatisticsModelWorkflow(plan),
   pressKey:input=>keypad.press(input),modeDialog:()=>dialogs.mode(),variablesDialog:()=>dialogs.variables(),matrixInsertDialog:()=>dialogs.matrixInsert()});
 keypad=createCalculatorKeypad({state,persist,isCalcActive:()=>calculator.calcActive,isBusy:()=>runtime.busy,handleKey:calculator.handleKey,updateButtons});
 workspaces=createWorkspaces({state,engine,ui,persist,restoreSelect:id=>restoreSelect(state,id),requestOptions,isBusy:()=>runtime.busy,error,changeMode,

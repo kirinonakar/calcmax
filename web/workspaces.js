@@ -92,5 +92,6 @@ export function createWorkspaces({state,engine,ui,persist,restoreSelect,requestO
     statistics.datasetsList();functions.render();equationControls();refreshWorkspaceMath();
   }
   function render(){refreshWorkspaceMath();statistics.render();probability.render();equationSteps.render();}
-  return {initialize,render,refreshMath:refreshWorkspaceMath,renderMatrix:matrix.render,renderFunctions:functions.render,equationSource,clearStatisticsResult:statistics.clearResult};
+  return {initialize,render,refreshMath:refreshWorkspaceMath,renderMatrix:matrix.render,renderFunctions:functions.render,equationSource,clearStatisticsResult:statistics.clearResult,
+    runStatisticsModelWorkflow:plan=>{if(isBusy()||!engine.ready)return;changeMode('statistics');statistics.prepareModelWorkflow(plan);return run('statistics-advanced');}};
 }

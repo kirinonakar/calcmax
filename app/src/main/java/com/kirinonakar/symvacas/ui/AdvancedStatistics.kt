@@ -104,6 +104,8 @@ internal fun advancedStatisticsFormSettings(analysis:String,input:String,formsTe
     var input by rememberSaveable {mutableStateOf(draft.optString("input",if(definition.has("controls")&&source==definition.getString("example"))if(data.isBlank()||definition.getString("input")=="none")"example" else "current" else "expression"))}
     var formsText by rememberSaveable {mutableStateOf(draft.optJSONObject("forms")?.toString() ?: "{}")}
     var exampleFormsText by rememberSaveable {mutableStateOf(draft.optJSONObject("exampleForms")?.toString() ?: "{}")}
+    var workflowSource by rememberSaveable {mutableStateOf(draft.optString("workflowSource"))}
+    var workflowLabels by rememberSaveable {mutableStateOf(draft.optJSONObject("workflowLabels")?.toString() ?: "{}")}
     var message by remember {mutableStateOf("")}
     var menuOpen by remember {mutableStateOf(false)}
     var band by rememberSaveable {mutableStateOf(draft.optBoolean("band",true))}
@@ -139,10 +141,10 @@ internal fun advancedStatisticsFormSettings(analysis:String,input:String,formsTe
         else formsText=JSONObject(formsText).put(selected,next).toString()
         message=""
     }
-    LaunchedEffect(selected,source,input,formsText,exampleFormsText,band) {
+    LaunchedEffect(selected,source,input,formsText,exampleFormsText,band,workflowSource,workflowLabels) {
         val next=JSONObject(m.advancedStatisticsDraft.toString())
         val panels=next.optJSONObject("panels") ?: JSONObject()
-        panels.put(section,JSONObject().put("kind",selected).put("source",source).put("input",input).put("forms",JSONObject(formsText)).put("exampleForms",JSONObject(exampleFormsText)).put("band",band))
+        panels.put(section,JSONObject().put("kind",selected).put("source",source).put("input",input).put("forms",JSONObject(formsText)).put("exampleForms",JSONObject(exampleFormsText)).put("band",band).put("workflowSource",workflowSource).put("workflowLabels",JSONObject(workflowLabels)))
         m.updateAdvancedStatisticsDraft(next.put("panels",panels))
     }
     LaunchedEffect(selected,source,input,formsText,exampleFormsText,data) {survivalReport=null;survivalCopyResult=null;pending=false}
@@ -204,7 +206,7 @@ internal fun advancedStatisticsFormSettings(analysis:String,input:String,formsTe
                 survivalReport=null;previousResult=m.result;pending=selected=="survivalanalysis"
                 reportPlan=if(pending&&input!="expression")survivalAnalysisPlan(rows,settings,columns) else null
                 val usesCurrentData=input=="current"&&(definition.has("controls")||it==runCatching {advancedStatisticsCommand(definition,rows)}.getOrNull())
-                val termLabels=if(usesCurrentData||input!="expression")advancedStatisticsTermLabels(definition,rows,settings,columns) else emptyMap()
+                val termLabels=if(usesCurrentData||input!="expression")advancedStatisticsTermLabels(definition,rows,settings,columns) else if(it==workflowSource)JSONObject(workflowLabels).let {labels->labels.keys().asSequence().associateWith {key->labels.getString(key)}} else emptyMap()
                 m.calculationAction="statistics-$section";m.edit(Editor(it));m.calculate(statisticsTermLabels=termLabels)
             }},enabled=command.isSuccess&&command.getOrDefault("").isNotBlank()&&!m.busy&&!m.regressionBusy,modifier=Modifier.testTag("statistics-$section-run"))
             SmallAction(if(ko)"계산기로" else "Insert expression"){command.getOrNull()?.let {m.edit(Editor(it));m.mode="Scientific/CAS"}}
@@ -219,7 +221,10 @@ internal fun advancedStatisticsFormSettings(analysis:String,input:String,formsTe
             Text(tr("Apply replaces only missing cells in the current data; observed values and headers are retained. Reanalyze after editing data."),fontSize=11.sp,color=LocalInstrument.current.muted)
         }
         if(message.isNotBlank())Text(message,color=MaterialTheme.colorScheme.error,fontSize=12.sp)
-        statisticsReportFor(m.result,m.resultSource.ifBlank {m.editor.source},setOf(selected))?.let {StatisticsResultReport(m,it)}
+        statisticsReportFor(m.result,m.resultSource.ifBlank {m.editor.source},setOf(selected))?.let {report->StatisticsResultReport(m,report){plan->
+            selected=plan.target;source=plan.expression;input="expression";workflowSource=plan.expression;workflowLabels=JSONObject(plan.termLabels).toString();message=""
+            survivalReport=null;pending=false;m.calculationAction="statistics-$section";m.edit(Editor(plan.expression));m.calculate(statisticsTermLabels=plan.termLabels)
+        }}
         if(selected=="survivalanalysis") {
             Row(verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) {Checkbox(band,{band=it},modifier=Modifier.testTag("statistics-survival-band"));Text(if(ko)"95% 신뢰구간 밴드" else "95% CI band",fontSize=12.sp)}
             survivalReport?.let {report->SurvivalReport(report,reportPlan,band,onClear={m.clearStatisticsResult(survivalCopyResult)},clearEnabled=!m.busy&&!m.regressionBusy,onCopy=survivalCopyResult?.let {snapshot->{

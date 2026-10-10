@@ -284,12 +284,17 @@ def calculate(engine,name,a):
                'Latent covariance':[[float(v) for v in latent[i,:]] for i in range(k)]}
         count=sum(map(len,g['thresholds']))
         discrepancy+=g['n']/n*sum(float(values[count+j]-g['values'][count+j])**2 for j in range(len(g['pairs'])))
+        from calc_advanced_sem_summary import augment
+        def summary_model(x):
+            values,load,latent,path,errors,means,thresholds,sigma=model(x,g)
+            return sigma,load,latent,path
+        augment(local,estimates,cov,summary_model,g['local'],paths)
         locals.append(local)
     result['SRMR']=math.sqrt(discrepancy/(p*(p+1)/2))
     if len(labels)==1: result.update(locals[0])
     else:
         result.update({'Groups':len(labels),'Invariance':invariance})
-        for key in ('Loadings','Structural paths','Thresholds','Residual variances','Latent means'):
+        for key in ('Loadings','Structural paths','Thresholds','Residual variances','Latent means','Latent R²','Exogenous correlations','Indicator R²'):
             result[key]=[dict(row,Group='group:'+format(label,'.15g')) for label,local in zip(labels,locals) for row in local[key]]
         result['Group summary']=[{'Group':'group:'+format(label,'.15g'),'n':local['n']} for label,local in zip(labels,locals)]
         for index,local in enumerate(locals):

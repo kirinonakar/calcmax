@@ -30,6 +30,18 @@ def varimax(loadings):
     if k==1: return loadings
     norms=[math.sqrt(float(sum(loadings[i,j]**2 for j in range(k)))) for i in range(p)]
     scaled=mp.matrix([[loadings[i,j]/(norms[i] or 1.) for j in range(k)] for i in range(p)])
+    if k==2:
+        # The Kaiser-normalized two-column criterion is A*cos(4θ)+B*sin(4θ).
+        # Solve its maximum directly: SVD fixed-point updates can take thousands
+        # of iterations when the initial columns describe a broad common factor.
+        u=[scaled[i,0]**2-scaled[i,1]**2 for i in range(p)]
+        v=[2*scaled[i,0]*scaled[i,1] for i in range(p)]
+        a=sum(x*x-y*y for x,y in zip(u,v))-(sum(u)**2-sum(v)**2)/p
+        b=2*(sum(x*y for x,y in zip(u,v))-sum(u)*sum(v)/p)
+        angle=mp.atan2(b,a)/4 if a or b else mp.mpf(0)
+        cosine=mp.cos(angle); sine=mp.sin(angle)
+        rotated=scaled*mp.matrix([[cosine,-sine],[sine,cosine]])
+        return mp.matrix([[rotated[i,j]*norms[i] for j in range(k)] for i in range(p)])
     rotation=mp.eye(k); previous=0.
     for _ in range(200):
         current=scaled*rotation
@@ -100,9 +112,28 @@ def calculate(engine,name,a):
     require(n-1>(2*p+5)/6,'More observations are required for Bartlett sphericity inference')
     structure=loadings*phi
     scores=mp.matrix([[(v-centers[j])/scales[j] for j,v in enumerate(row)] for row in rows])*inv*structure
+    unrotated=[float(eigen[j]) for j in selected]
+    rotated_sums=[float(sum(loadings[i,j]**2 for i in range(p))) for j in range(k)]
+    variance_rows=[]; cumulative=0.; rotated_cumulative=0.
+    for j,(root,squares) in enumerate(zip(unrotated,rotated_sums)):
+        percentage=100*root/p; cumulative+=percentage
+        row={'Component' if extraction=='pca' else 'Factor':j+1,'Extraction eigenvalue':root,
+             'Explained variance (%)':percentage,'Cumulative explained variance (%)':cumulative}
+        if rotation=='varimax':
+            rotated_percentage=100*squares/p; rotated_cumulative+=rotated_percentage
+            row.update({'Rotated sum of squared loadings':squares,'Rotated explained variance (%)':rotated_percentage,
+                        'Rotated cumulative explained variance (%)':rotated_cumulative})
+        variance_rows.append(row)
+    features=[engine.request.get('statisticsTermLabels',{}).get('feature:'+str(i+1),'Feature '+str(i+1)) for i in range(p)]
+    axis_names=[('Component ' if extraction=='pca' else 'Factor ')+str(j+1) for j in range(k)]
+    engine.statistics_plots=[{'kind':'loadings','title':'Principal component loadings' if extraction=='pca' else 'Factor loadings',
+                             'points':[[float(v) for v in row] for row in loadings.tolist()],
+                             'labels':features,'axisLabels':axis_names,
+                             'caption':'Arrows: pattern loadings after the selected rotation; oblique pattern coefficients may exceed ±1.' if rotation in ('promax','oblimin') else 'Arrows: loadings after the selected rotation.'}]
     return {'n':n,'Extraction':'Principal axis factoring (SMC start)' if extraction=='pa' else 'Principal components (correlation PCA)','Rotation':rotation,'Factors':k,'KMO':r2/(r2+q2),**parallel,
             'Bartlett χ²':bartlett,'Bartlett df':df,'Bartlett p':float(_chisq_sf(bartlett,df)),
             'Item diagnostics':[{'term':'feature:'+str(i+1),'Communality':updated[i],'Uniqueness':1-updated[i],'KMO':float(sum(corr[i,j]**2 for j in range(p) if j!=i)/sum(corr[i,j]**2+partial[i,j]**2 for j in range(p) if j!=i))} for i in range(p)],
             'loadings':loadings.tolist(),'Structure loadings':structure.tolist(),'Factor correlations':phi.tolist(),'scores':scores.tolist(),'Correlation eigenvalues':list(reversed(list(mp.eigsy(corr,eigvals_only=True)))),
-            ('Pattern squared-loading sums' if rotation in ('promax','oblimin') else 'Factor variance'):[float(sum(loadings[i,j]**2 for i in range(p))) for j in range(k)],
-            'Assumptions':'Pearson correlations of complete numeric rows. Principal axis estimates common factors; PCA extracts components. Promax (power 4, Kaiser normalization) and oblimin (delta 0) allow correlated factors: loadings are pattern coefficients, structure loadings are correlations. For correlated factors, communalities include the factor correlations. Scores are regression estimates. Parallel analysis uses seeded normal simulations with the selected extraction eigenvalues.'}
+            'Explained variance':variance_rows,
+            ('Pattern squared-loading sums' if rotation in ('promax','oblimin') else 'Factor variance'):rotated_sums,
+            'Assumptions':'Pearson correlations of complete numeric rows. Principal axis estimates common factors; PCA extracts components. Promax (power 4, Kaiser normalization) and oblimin (delta 0) allow correlated factors: loadings are pattern coefficients, structure loadings are correlations. For correlated factors, communalities include the factor correlations. Explained variance percentages use extraction eigenvalues divided by the number of standardized indicators; Varimax also reports rotated squared-loading shares. Oblique squared-loading sums are not additive explained variance. Scores are regression estimates. Parallel analysis uses seeded normal simulations with the selected extraction eigenvalues.'}

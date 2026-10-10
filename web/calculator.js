@@ -17,7 +17,7 @@ import {$,value,element,control} from './app-ui.js';
 import {renderStatisticsReport,statisticsReportTarget} from './statistics-report.js';
 import {statisticsResultMarkdown} from './statistics-markdown.js';
 
-export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist,requestOptions,error,changeMode,updateButtons,pressKey,modeDialog,variablesDialog,matrixInsertDialog,graphs,onFunctionsChanged=()=>{},onResultCleared=()=>{}}) {
+export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist,requestOptions,error,changeMode,updateButtons,pressKey,modeDialog,variablesDialog,matrixInsertDialog,graphs,onFunctionsChanged=()=>{},onResultCleared=()=>{},onStatisticsModelWorkflow}) {
   const {toast,openDialog,clipboard}=ui;
   let lastResult=null,decimal=false,typing=false,overwrite=false,committed=false,screenExpanded=false,grouping=false,mixed=false,lastResultSource='';
   let calcSession=null,activeHistoryEntry=null,inputAnswer=null,tapeRows=null,tapeFormat='';
@@ -65,7 +65,7 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
       const visible=value('mode')==='statistics'&&lastResult?.statisticsReport&&statisticsResultTarget===id;
       target.hidden=!visible;
       if(visible){
-        renderStatisticsReport(target,lastResult.statisticsReport,{digits:state.digits,...resultOptions(),onCopy:()=>clipboard(statisticsResultMarkdown(lastResult,{digits:state.digits,...resultOptions()})),onClear:()=>clearResult()});
+        renderStatisticsReport(target,lastResult.statisticsReport,{digits:state.digits,...resultOptions(),onCopy:()=>clipboard(statisticsResultMarkdown(lastResult,{digits:state.digits,...resultOptions()})),onClear:()=>clearResult(),onModelWorkflow:onStatisticsModelWorkflow,isBusy:()=>isBusy()||!engine.ready});
         if(lastResult.note)target.append(element('p',lastResult.note,'hint'));
       }else target.replaceChildren();
     }
@@ -490,6 +490,7 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
     $('expression').readOnly=!typing||isBusy();
   }
   function updateResultSource(){ $('result-source').hidden=['scientific','statistics','tip'].includes(value('mode'))||!lastResultSource;
+    $('answer').closest('.answer-panel').classList.toggle('compact-output',value('mode')!=='scientific'&&$('result-source').hidden);
     const statistics=value('mode')==='statistics';setText($('answer-copy'),statistics?'Copy':'Copy result');$('answer-clear').hidden=!statistics;$('answer-clear').disabled=!lastResult||isBusy();
   }
   function dispose() {

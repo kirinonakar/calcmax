@@ -71,7 +71,7 @@ internal fun statisticsResultMarkdown(result:JSONObject,formatCell:(JSONObject)-
             if(regressionEquation!=null&&columns.optString(0)=="Metric"&&row.optString(0)=="Fitted expression")continue
             table.add(line(List(columns.length()){column->
                 val text=row.optJSONObject(column)?.let(formatCell) ?: row.optString(column).let {
-                    if(columns.optString(column) in listOf("Metric","Check","Interpretation","Sample"))translate(it)
+                    if(columns.optString(column) in listOf("Metric","Check","Interpretation","Sample","Role","R²"))translate(it)
                     else if(report===result.optJSONObject("statisticsCopyReport")&&it.toBigDecimalOrNull()!=null)formatCell(JSONObject().put("decimal",it).put("exact",it)) else it
                 }
                 markdownCell(text)

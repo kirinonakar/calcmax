@@ -42,6 +42,11 @@ test('Q-Q, original-feature cluster axes and interval plots retain numerical mea
   assert.deepEqual(cluster.centroids.map(point=>[point.x,point.y]),[[170,20],[180,40]]);
   const forest=statisticsPlotModel({kind:'intervals',rows:[['a',2,1,3],['b',-1,-2,.5]],reference:0});
   assert.ok(forest.xmin<-2&&forest.xmax>3);assert.equal(forest.intervals[0].estimate,2);assert.equal(forest.reference,0);
+  const efa=statisticsPlotModel({kind:'loadings',points:[[1.4,-.2,.3],[.5,.8,.1]],labels:['x','y'],axisLabels:['Factor 1','Factor 2','Factor 3']},2,0);
+  assert.equal(efa.points[0].x,.3);assert.equal(efa.points[0].y,1.4);
+  assert.ok(efa.ymax>1.4&&efa.ymin<-1.4);assert.ok(!efa.xlabel.includes('NaN')&&!efa.ylabel.includes('PC'));
+  const one=statisticsPlotModel({kind:'loadings',points:[[.8]],labels:['x'],axisLabels:['Component 1']});
+  assert.equal(one.points[0].y,0);assert.equal(one.ylabel,'');
 });
 
 test('both help documents preserve the selection flowchart and searchable use cases',()=>{

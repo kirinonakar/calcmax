@@ -1,12 +1,13 @@
-import {element} from './app-ui.js';
-import {t} from './i18n.js';
+import {element,control} from './app-ui.js';
+import {t,setText} from './i18n.js';
 import {appendPlotExportButtons} from './svg-export.js';
+import {semDiagramSvg} from './statistics-sem-diagram.js';
 
 const ns='http://www.w3.org/2000/svg';
 const activeCharts=new Map();
 globalThis.addEventListener?.('resize',()=>{for(const [view,draw] of activeCharts){if(view.isConnected)draw();else activeCharts.delete(view);}});
 const number=value=>Number(value).toLocaleString(undefined,{maximumSignificantDigits:4});
-const pc=(plot,index)=>['clusters','interaction'].includes(plot.kind)?(plot.features?.[index]||`Feature ${index+1}`).replace(/^Feature (\d+)$/,`${t('Feature')} $1`):`PC${index+1} (${number(100*plot.ratios[index])}%)`;
+const pc=(plot,index)=>plot.axisLabels?.[index]?.replace(/^(Component|Factor) (\d+)$/,(_,label,n)=>`${t(label)} ${n}`)||(['clusters','interaction'].includes(plot.kind)?(plot.features?.[index]||`Feature ${index+1}`).replace(/^Feature (\d+)$/,`${t('Feature')} $1`):`PC${index+1} (${number(100*plot.ratios[index])}%)`);
 
 // Raw engine arrays retain every observation and all component coordinates.
 export function statisticsPlotModel(plot,xAxis=0,yAxis=1){
@@ -39,13 +40,14 @@ export function statisticsPlotModel(plot,xAxis=0,yAxis=1){
   let xmin=Math.min(0,...points.map(p=>p.x)),xmax=Math.max(0,...points.map(p=>p.x));
   let ymin=Math.min(0,...points.map(p=>p.y)),ymax=Math.max(0,...points.map(p=>p.y));
   const dx=(xmax-xmin||1)*.14,dy=(ymax-ymin||1)*.14;
-  if(plot.kind==='loadings'){xmin=ymin=-1.2;xmax=ymax=1.2;}
+  if(plot.kind==='loadings'){const limit=Math.max(1.2,1.1*Math.max(...points.flatMap(point=>[Math.abs(point.x),Math.abs(point.y)])));xmin=ymin=-limit;xmax=ymax=limit;}
   else{xmin-=dx;xmax+=dx;ymin-=dy;ymax+=dy;}
   const centroids=plot.centroids?.map((row,i)=>({x:row[xAxis],y:yAxis<0?0:row[yAxis],group:i+1}));
   return {xmin,xmax,ymin,ymax,points,centroids,referenceLine:plot.referenceLine,vectors:plot.kind==='loadings',xlabel:plot.kind==='qq'?t('Theoretical normal quantiles'):pc(plot,xAxis),ylabel:plot.kind==='qq'?t('Ordered sample values'):yAxis<0?'':pc(plot,yAxis)};
 }
 
 function chart(plot,xAxis,yAxis,displayWidth){
+  if(plot.kind==='sem-diagram')return semDiagramSvg(plot);
   const model=statisticsPlotModel(plot,xAxis,yAxis);
   const height=model?.intervals?Math.max(240,model.intervals.length*32+90):340,width=Math.max(320,Math.min(620,displayWidth||(globalThis.innerWidth||720)-56));
   const svg=document.createElementNS(ns,'svg');svg.setAttribute('viewBox',`0 0 ${width} ${height}`);svg.setAttribute('role','img');
@@ -115,10 +117,15 @@ export function renderStatisticsVisualizations(container,plots=[]){
   for(const view of activeCharts.keys())if(!view.isConnected)activeCharts.delete(view);
   for(const plot of plots){
     const block=element('section','','statistics-visualization');block.append(element('h4',t(plot.title)));
-    const view=element('div');let x=0,y=(plot.points?.[0]?.length||0)>1?1:-1,sample=0;
+    const view=element('div');if(plot.kind==='sem-diagram')view.style.cssText='overflow-x:auto;max-width:100%';
+    let x=0,y=(plot.points?.[0]?.length||0)>1?1:-1,sample=0,fitToScreen=false;
     const selected=()=>plot.series?{...plot,...plot.series[sample]}:plot;
-    const draw=()=>{const svg=chart(selected(),x,plot.kind==='qq'?1:y,view.clientWidth);view.replaceChildren(svg);appendPlotExportButtons(svg,`symvacas-${plot.kind}`,{captions:[{text:t(plot.title)},...(plot.series?[{text:`${plot.series[sample].label} · n=${plot.series[sample].n}`}]:[])]});};
+    const draw=()=>{const svg=plot.kind==='sem-diagram'?semDiagramSvg(selected(),{fitToScreen,viewportWidth:view.clientWidth||container.clientWidth||(globalThis.innerWidth||720)-56,viewportHeight:(globalThis.innerHeight||800)*.65}):chart(selected(),x,plot.kind==='qq'?1:y,view.clientWidth);view.replaceChildren(svg);appendPlotExportButtons(svg,`symvacas-${plot.kind}`,{captions:[{text:t(plot.title)},...(plot.series?[{text:`${plot.series[sample].label} · n=${plot.series[sample].n}`}]:[])]});};
     activeCharts.set(view,draw);
+    if(plot.kind==='sem-diagram'){
+      const button=control('Fit diagram to screen',()=>{fitToScreen=!fitToScreen;setText(button,fitToScreen?'Original size':'Fit diagram to screen');button.setAttribute('aria-pressed',String(fitToScreen));draw();});
+      button.setAttribute('aria-pressed','false');block.append(button);
+    }
     const width=plot.points?.[0]?.length||0;
     if(plot.series){
       const label=element('label',t('Sample')),select=element('select');
@@ -137,11 +144,13 @@ export function renderStatisticsVisualizations(container,plots=[]){
       block.append(controls);
     }
     draw();block.append(view);
+    if(plot.kind==='sem-diagram')block.append(element('p',t('Ellipses: latent factors · rectangles: indicators · arrows: standardized coefficients [95% CI] · dashed double arrows: exogenous correlations.'),'hint'));
     if(plot.kind==='scree')block.append(element('p',t('Bars: explained variance · line: cumulative variance'),'hint'));
     if(plot.kind==='histogram')block.append(element('p',`${number(plot.level*100)}% ${t('credible interval')}: ${plot.interval.map(number).join(' – ')} · ${t('estimate')}: ${number(plot.estimate)}`,'hint'));
     if(plot.kind==='histogram')block.append(element('p',t('Dashed: credible bounds · dotted: estimate')+(statisticsPlotModel(plot).zero?' · '+t('Solid: zero difference'):''),'hint'));
     if(plot.groupLabels)block.append(element('p',`A: ${plot.groupLabels[0]} · B: ${plot.groupLabels[1]} · ${t('Difference (B − A)')}`,'hint'));
     if(plot.kind==='loadings')block.append(element('p',plot.labels.map((label,i)=>`${i+1}: ${label}`).join(' · '),'hint'));
+    if(plot.caption)block.append(element('p',t(plot.caption),'hint'));
     if(plot.kind==='qq')block.append(element('p',t('Reference line passes through the first and third quartiles. Curvature or tail departures suggest non-normality; up to 200 ordered points are shown.'),'hint'));
     if(plot.kind==='clusters')block.append(element('p',t('Colors: cluster membership · crosses: centroids. Axes show original feature values.'),'hint'));
     if(plot.kind==='interaction'){
@@ -154,5 +163,6 @@ export function renderStatisticsVisualizations(container,plots=[]){
     }
     if(plot.secondary)block.append(element('p',t('Bars: adjusted p · dots: raw p · dashed line: α'),'hint'));
     container.append(block);
+    if(plot.kind==='sem-diagram')draw(); // Measure after the view enters its responsive container.
   }
 }

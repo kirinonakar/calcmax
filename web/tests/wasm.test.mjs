@@ -6,15 +6,69 @@ import {loadPyodide} from '../vendor/pyodide.mjs';
 import {installEngine} from '../engine-bootstrap.js';
 import {parse,latexInput} from '../parser.js';
 import {tipCommand,moneyResult} from '../money.js';
-import {statisticsCommand,distributionCommand,equationCommand} from '../workspace-commands.js';
+import {statisticsCommand,distributionCommand,equationCommand,csvRows,statisticsColumnLabels} from '../workspace-commands.js';
 import {guidedStatisticsCommand,advancedStatisticsExampleRows} from '../advanced-statistics.js';
 import {advancedStatisticsSchema} from '../advanced-statistics-schema.js';
 import {graphInputTree} from '../graph-workspace.js';
 import {setComputationLimitsRemoved} from '../computation-limits.js';
+import {statisticsModelWorkflowPlan} from '../statistics-model-workflow.js';
 
 // Reuse the interpreter for sequential integration scenarios. The cold solver
 // scenario below explicitly loads its own interpreter to keep startup coverage.
 let sharedRuntime;
+
+test('analyzed EFA data executes CFA then SEM and keeps ordinal group options in real WASM',async()=>{
+  const py=await runtime();
+  const calculate=(expression,termLabels={})=>{
+    py.globals.set('payload',JSON.stringify({tree:parse(expression),statisticsTermLabels:termLabels,precision:15,budget:60}));
+    const result=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));
+    assert.equal(result.ok,true,result.error);return result.statisticsReport;
+  };
+  const csv=readFileSync(new URL('../../tests/fixtures/efa_study_habits_sample.csv',import.meta.url),'utf8');
+  const rows=csvRows(csv).map(row=>[row[5],row[4],row[3],row[2],row[1],row[0]]);
+  const names=statisticsColumnLabels(csv,'columns:6').reverse(),labels=Object.fromEntries(names.map((name,i)=>[`feature:${i+1}`,name]));
+  const efa=calculate(guidedStatisticsCommand(advancedStatisticsSchema.find(d=>d.id==='efa'),rows,{factors:'2',rotation:'varimax'}),labels);
+  const cfaPlan=statisticsModelWorkflowPlan(efa.modelWorkflow),cfa=calculate(cfaPlan.expression,cfaPlan.termLabels);
+  assert.equal(cfa.sections.find(section=>section.title==='Indicator R²').rows.length,6);
+  assert.ok(!cfa.sections.some(section=>section.title==='Latent R²'));
+  assert.ok(cfa.plots.find(plot=>plot.kind==='sem-diagram').nodes.filter(node=>node.kind==='observed').every(node=>node.r2>=0&&node.r2<=1));
+  assert.deepEqual(cfa.modelWorkflow.data,efa.modelWorkflow.data);assert.deepEqual(cfa.modelWorkflow.factors,efa.modelWorkflow.factors);
+  assert.deepEqual(cfa.modelWorkflow.termLabels,labels);
+  const semPlan=statisticsModelWorkflowPlan(cfa.modelWorkflow,{paths:'2,1'}),sem=calculate(semPlan.expression,semPlan.termLabels);
+  assert.ok(sem.sections.some(section=>section.title==='Structural paths'));
+  assert.deepEqual(sem.plots.find(plot=>plot.kind==='sem-diagram').nodes.filter(n=>n.kind==='observed').map(n=>n.label).sort(),names.slice().sort());
+  const definition=advancedStatisticsSchema.find(d=>d.id==='cfa'),settings={estimator:'wlsmv',groupMode:'multi',invariance:'strict'};
+  const grouped=calculate(guidedStatisticsCommand(definition,advancedStatisticsExampleRows(definition,settings),settings));
+  assert.equal(grouped.sections.find(section=>section.title==='Indicator R²').rows.length,12);
+  const transferred=statisticsModelWorkflowPlan(grouped.modelWorkflow,{paths:'1,2'});
+  assert.equal(grouped.modelWorkflow.estimator,'wlsmv');assert.equal(grouped.modelWorkflow.invariance,'strict');assert.ok(grouped.modelWorkflow.groups.length);
+  const ordinal=calculate(transferred.expression,transferred.termLabels);
+  assert.equal(ordinal.sections.find(section=>section.title==='Group summary').rows.length,2);
+  assert.equal(ordinal.plots.find(plot=>plot.kind==='sem-diagram').series.length,2);
+});
+
+test('EFA study-habits CSV returns rotated loading plots and variance percentages in real WASM',async()=>{
+  const py=await runtime(),definition=advancedStatisticsSchema.find(d=>d.id==='efa');
+  const source=readFileSync(new URL('../../tests/fixtures/efa_study_habits_sample.csv',import.meta.url),'utf8'),rows=csvRows(source);
+  const names=statisticsColumnLabels(source,'columns:6'),labels=Object.fromEntries(names.map((label,i)=>[`feature:${i+1}`,label]));
+  const references=JSON.parse(readFileSync(new URL('../../tests/fixtures/efa_rotation_reference.json',import.meta.url),'utf8')).cases;
+  assert.equal(rows.length,180);
+  for(const reference of references){
+    const command=guidedStatisticsCommand(definition,rows,{factors:'2',rotation:'varimax',extraction:reference.extraction});
+    py.globals.set('payload',JSON.stringify({tree:parse(command),precision:20,budget:60,statisticsTermLabels:labels}));
+    const result=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));
+    assert.equal(result.ok,true,result.error);
+    const plot=result.statisticsReport.plots.find(p=>p.kind==='loadings');
+    assert.deepEqual(plot.labels,names);assert.equal(plot.points.length,6);
+    for(let i=0;i<6;i++)for(let j=0;j<2;j++)assert.ok(Math.abs(plot.points[i][j]-reference.loadings[i][j])<1e-6);
+    const variance=result.statisticsReport.sections.find(section=>section.title==='Explained variance');
+    const percentages=variance.columns.indexOf('Explained variance (%)'),cumulative=variance.columns.indexOf('Cumulative explained variance (%)');
+    assert.ok(percentages>=0&&cumulative>=0);
+    assert.ok(Math.abs(Number(variance.rows[0][percentages].decimal)-reference.percentages[0])<1e-6);
+    assert.ok(Math.abs(Number(variance.rows[1][cumulative].decimal)-reference.percentages.reduce((a,b)=>a+b))<1e-6);
+    assert.ok(Object.hasOwn(result,'reusable'));
+  }
+});
 
 test('SEM sample presets execute with separate group columns and ordinal indicators',async()=>{
   const py=await runtime(),definition=advancedStatisticsSchema.find(d=>d.id==='sem');
@@ -28,6 +82,17 @@ test('SEM sample presets execute with separate group columns and ordinal indicat
     const sections=result.statisticsReport.sections;
     assert.equal(sections.find(s=>s.title==='Loadings').rows.length,groupMode==='multi'?12:6);
     assert.equal(sections.find(s=>s.title==='Structural paths').rows.length,groupMode==='multi'?2:1);
+    const loadings=sections.find(s=>s.title==='Loadings');
+    assert.ok(loadings.columns.includes('Standardized lower 95% CI'));
+    assert.ok(loadings.columns.includes('Standardized upper 95% CI'));
+    assert.equal(sections.find(s=>s.title==='Latent R²').rows.length,groupMode==='multi'?4:2);
+    const diagram=result.statisticsReport.plots.find(p=>p.kind==='sem-diagram');
+    assert.ok(diagram);assert.equal(diagram.nodes.length,8);assert.equal(diagram.edges.length,7);
+    assert.ok(diagram.edges.every(edge=>edge.interval[0]<edge.estimate&&edge.estimate<edge.interval[1]));
+    assert.equal(diagram.nodes.find(node=>node.id==='f1').r2,null);
+    assert.ok(diagram.nodes.find(node=>node.id==='f2').r2>0);
+    if(groupMode==='multi')assert.equal(diagram.series.length,2);
+    assert.equal(result.statisticsReport.plots.find(p=>p.title==='Standardized factor loadings (95% CI)').rows.length,groupMode==='multi'?12:6);
     if(estimator==='wlsmv')assert.ok(sections.some(s=>s.title==='Thresholds'));
     if(groupMode==='multi')assert.equal(sections.find(s=>s.title==='Group summary').rows.length,2);
   }

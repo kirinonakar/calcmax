@@ -1,0 +1,623 @@
+[
+  {
+    "name": "EFA to CFA in analyzed column order",
+    "workflow": {
+      "target": "cfa",
+      "data": [
+        [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6"
+        ]
+      ],
+      "factors": [
+        1,
+        1,
+        1,
+        2,
+        2,
+        2
+      ],
+      "factorCount": 2,
+      "cross": [],
+      "missing": "complete",
+      "groups": [],
+      "invariance": "configural",
+      "estimator": "ml",
+      "termLabels": {
+        "feature:1": "z",
+        "feature:2": "y",
+        "feature:3": "x",
+        "feature:4": "Scale B",
+        "feature:5": "Scale B",
+        "feature:6": "Item 6"
+      }
+    },
+    "expected": "cfa([[1,2,3,4,5,6]],[1,1,1,2,2,2],[],complete,[],configural,ml)"
+  },
+  {
+    "name": "Editable memberships",
+    "workflow": {
+      "target": "cfa",
+      "data": [
+        [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6"
+        ]
+      ],
+      "factors": [
+        1,
+        1,
+        1,
+        2,
+        2,
+        2
+      ],
+      "factorCount": 2,
+      "cross": [],
+      "missing": "complete",
+      "groups": [],
+      "invariance": "configural",
+      "estimator": "ml",
+      "termLabels": {
+        "feature:1": "z",
+        "feature:2": "y",
+        "feature:3": "x",
+        "feature:4": "Scale B",
+        "feature:5": "Scale B",
+        "feature:6": "Item 6"
+      }
+    },
+    "settings": {
+      "factors": "2,1,2,1,2,1"
+    },
+    "expected": "cfa([[1,2,3,4,5,6]],[2,1,2,1,2,1],[],complete,[],configural,ml)"
+  },
+  {
+    "name": "Too few indicators",
+    "workflow": {
+      "target": "cfa",
+      "data": [
+        [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6"
+        ]
+      ],
+      "factors": [
+        1,
+        1,
+        1,
+        1,
+        2,
+        2
+      ],
+      "factorCount": 2,
+      "cross": [],
+      "missing": "complete",
+      "groups": [],
+      "invariance": "configural",
+      "estimator": "ml",
+      "termLabels": {
+        "feature:1": "z",
+        "feature:2": "y",
+        "feature:3": "x",
+        "feature:4": "Scale B",
+        "feature:5": "Scale B",
+        "feature:6": "Item 6"
+      }
+    },
+    "error": "Each factor needs at least three indicators"
+  },
+  {
+    "name": "Missing factor",
+    "workflow": {
+      "target": "cfa",
+      "data": [
+        [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6"
+        ]
+      ],
+      "factors": [
+        1,
+        1,
+        1,
+        2,
+        2,
+        2
+      ],
+      "factorCount": 2,
+      "cross": [],
+      "missing": "complete",
+      "groups": [],
+      "invariance": "configural",
+      "estimator": "ml",
+      "termLabels": {
+        "feature:1": "z",
+        "feature:2": "y",
+        "feature:3": "x",
+        "feature:4": "Scale B",
+        "feature:5": "Scale B",
+        "feature:6": "Item 6"
+      }
+    },
+    "settings": {
+      "factors": "1,1,1,1,1,1"
+    },
+    "error": "Keep all analyzed factor IDs consecutive from 1"
+  },
+  {
+    "name": "Wrong membership width",
+    "workflow": {
+      "target": "cfa",
+      "data": [
+        [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6"
+        ]
+      ],
+      "factors": [
+        1,
+        1,
+        1,
+        2,
+        2,
+        2
+      ],
+      "factorCount": 2,
+      "cross": [],
+      "missing": "complete",
+      "groups": [],
+      "invariance": "configural",
+      "estimator": "ml",
+      "termLabels": {
+        "feature:1": "z",
+        "feature:2": "y",
+        "feature:3": "x",
+        "feature:4": "Scale B",
+        "feature:5": "Scale B",
+        "feature:6": "Item 6"
+      }
+    },
+    "settings": {
+      "factors": "1,1,1"
+    },
+    "error": "Factor ID count must match selected indicators"
+  },
+  {
+    "name": "CFA options and cross-loadings to SEM",
+    "workflow": {
+      "target": "sem",
+      "data": [
+        [
+          "1",
+          "NA",
+          "3",
+          "4",
+          "5",
+          "6"
+        ],
+        [
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7"
+        ]
+      ],
+      "factors": [
+        1,
+        1,
+        1,
+        2,
+        2,
+        2
+      ],
+      "factorCount": 2,
+      "cross": [
+        [
+          2,
+          2
+        ]
+      ],
+      "missing": "fiml",
+      "groups": [
+        "1",
+        "2"
+      ],
+      "invariance": "scalar",
+      "estimator": "ml",
+      "termLabels": {
+        "feature:1": "z",
+        "feature:2": "y",
+        "feature:3": "x",
+        "feature:4": "Scale B",
+        "feature:5": "Scale B",
+        "feature:6": "Item 6",
+        "group:1": "Control",
+        "group:2": "Treatment"
+      }
+    },
+    "settings": {
+      "paths": "2,1"
+    },
+    "expected": "sem([[1,NA,3,4,5,6],[2,3,4,5,6,7]],[1,1,1,2,2,2],[[2,1]],[[2,2]],fiml,[1,2],scalar,ml)"
+  },
+  {
+    "name": "Explicit structural paths required",
+    "workflow": {
+      "target": "sem",
+      "data": [
+        [
+          "1",
+          "NA",
+          "3",
+          "4",
+          "5",
+          "6"
+        ],
+        [
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7"
+        ]
+      ],
+      "factors": [
+        1,
+        1,
+        1,
+        2,
+        2,
+        2
+      ],
+      "factorCount": 2,
+      "cross": [
+        [
+          2,
+          2
+        ]
+      ],
+      "missing": "fiml",
+      "groups": [
+        "1",
+        "2"
+      ],
+      "invariance": "scalar",
+      "estimator": "ml",
+      "termLabels": {
+        "feature:1": "z",
+        "feature:2": "y",
+        "feature:3": "x",
+        "feature:4": "Scale B",
+        "feature:5": "Scale B",
+        "feature:6": "Item 6",
+        "group:1": "Control",
+        "group:2": "Treatment"
+      }
+    },
+    "error": "Enter at least one latent structural path"
+  },
+  {
+    "name": "Cyclic path",
+    "workflow": {
+      "target": "sem",
+      "data": [
+        [
+          "1",
+          "NA",
+          "3",
+          "4",
+          "5",
+          "6"
+        ],
+        [
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7"
+        ]
+      ],
+      "factors": [
+        1,
+        1,
+        1,
+        2,
+        2,
+        2
+      ],
+      "factorCount": 2,
+      "cross": [
+        [
+          2,
+          2
+        ]
+      ],
+      "missing": "fiml",
+      "groups": [
+        "1",
+        "2"
+      ],
+      "invariance": "scalar",
+      "estimator": "ml",
+      "termLabels": {
+        "feature:1": "z",
+        "feature:2": "y",
+        "feature:3": "x",
+        "feature:4": "Scale B",
+        "feature:5": "Scale B",
+        "feature:6": "Item 6",
+        "group:1": "Control",
+        "group:2": "Treatment"
+      }
+    },
+    "settings": {
+      "paths": "1,2;2,1"
+    },
+    "error": "SEM requires acyclic directed paths"
+  },
+  {
+    "name": "Repeated path",
+    "workflow": {
+      "target": "sem",
+      "data": [
+        [
+          "1",
+          "NA",
+          "3",
+          "4",
+          "5",
+          "6"
+        ],
+        [
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7"
+        ]
+      ],
+      "factors": [
+        1,
+        1,
+        1,
+        2,
+        2,
+        2
+      ],
+      "factorCount": 2,
+      "cross": [
+        [
+          2,
+          2
+        ]
+      ],
+      "missing": "fiml",
+      "groups": [
+        "1",
+        "2"
+      ],
+      "invariance": "scalar",
+      "estimator": "ml",
+      "termLabels": {
+        "feature:1": "z",
+        "feature:2": "y",
+        "feature:3": "x",
+        "feature:4": "Scale B",
+        "feature:5": "Scale B",
+        "feature:6": "Item 6",
+        "group:1": "Control",
+        "group:2": "Treatment"
+      }
+    },
+    "settings": {
+      "paths": "1,2;1,2"
+    },
+    "error": "Use distinct paths between different analyzed factors"
+  },
+  {
+    "name": "Unknown factor",
+    "workflow": {
+      "target": "sem",
+      "data": [
+        [
+          "1",
+          "NA",
+          "3",
+          "4",
+          "5",
+          "6"
+        ],
+        [
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7"
+        ]
+      ],
+      "factors": [
+        1,
+        1,
+        1,
+        2,
+        2,
+        2
+      ],
+      "factorCount": 2,
+      "cross": [
+        [
+          2,
+          2
+        ]
+      ],
+      "missing": "fiml",
+      "groups": [
+        "1",
+        "2"
+      ],
+      "invariance": "scalar",
+      "estimator": "ml",
+      "termLabels": {
+        "feature:1": "z",
+        "feature:2": "y",
+        "feature:3": "x",
+        "feature:4": "Scale B",
+        "feature:5": "Scale B",
+        "feature:6": "Item 6",
+        "group:1": "Control",
+        "group:2": "Treatment"
+      }
+    },
+    "settings": {
+      "paths": "1,3"
+    },
+    "error": "Use distinct paths between different analyzed factors"
+  },
+  {
+    "name": "Malformed path",
+    "workflow": {
+      "target": "sem",
+      "data": [
+        [
+          "1",
+          "NA",
+          "3",
+          "4",
+          "5",
+          "6"
+        ],
+        [
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7"
+        ]
+      ],
+      "factors": [
+        1,
+        1,
+        1,
+        2,
+        2,
+        2
+      ],
+      "factorCount": 2,
+      "cross": [
+        [
+          2,
+          2
+        ]
+      ],
+      "missing": "fiml",
+      "groups": [
+        "1",
+        "2"
+      ],
+      "invariance": "scalar",
+      "estimator": "ml",
+      "termLabels": {
+        "feature:1": "z",
+        "feature:2": "y",
+        "feature:3": "x",
+        "feature:4": "Scale B",
+        "feature:5": "Scale B",
+        "feature:6": "Item 6",
+        "group:1": "Control",
+        "group:2": "Treatment"
+      }
+    },
+    "settings": {
+      "paths": "1,2,3"
+    },
+    "error": "Use distinct paths between different analyzed factors"
+  },
+  {
+    "name": "Ordinal strict groups",
+    "workflow": {
+      "target": "sem",
+      "data": [
+        [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6"
+        ],
+        [
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7"
+        ]
+      ],
+      "factors": [
+        1,
+        1,
+        1,
+        2,
+        2,
+        2
+      ],
+      "factorCount": 2,
+      "cross": [
+        [
+          2,
+          2
+        ]
+      ],
+      "missing": "complete",
+      "groups": [
+        "1",
+        "2"
+      ],
+      "invariance": "strict",
+      "estimator": "wlsmv",
+      "termLabels": {
+        "feature:1": "z",
+        "feature:2": "y",
+        "feature:3": "x",
+        "feature:4": "Scale B",
+        "feature:5": "Scale B",
+        "feature:6": "Item 6",
+        "group:1": "Control",
+        "group:2": "Treatment"
+      }
+    },
+    "settings": {
+      "paths": "1,2"
+    },
+    "expected": "sem([[1,2,3,4,5,6],[2,3,4,5,6,7]],[1,1,1,2,2,2],[[1,2]],[[2,2]],complete,[1,2],strict,wlsmv)"
+  }
+]

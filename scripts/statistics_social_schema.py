@@ -31,6 +31,22 @@ SPECS=[
  ('hcluster','Hierarchical clustering','계층적 군집분석','table',',2,ward,1','[[1,1],[1,2],[2,1],[8,8],[8,9],[9,8]]','Independent agglomerative analysis; clusters, single/complete/average/Ward Euclidean linkage, standardize 1/0. Returns all merges, heights, sizes and cut assignments. Leaves 1…n, merge nodes n+1…2n−1.','독립 응집 분석; 군집 수·single/complete/average/Ward 유클리드 연결·표준화 1/0. 전체 병합·거리·크기·절단 배정. 잎 1…n, 병합 노드 n+1…2n−1.'),
 ]
 
+REPORT_HELP={
+ 'efa':(' Loading plots show selected rotated components/factors with selectable axes and item labels. Explained variance (%) and cumulative explained variance (%) use extraction eigenvalues / standardized item count; Varimax also reports rotated squared-loading shares. Oblique pattern squared-loading sums are not additive variance shares.',
+        ' 적재량 시각화는 선택한 회전 후의 주성분·요인과 문항 이름을 표시하며 축을 선택할 수 있습니다. 설명 분산(%)·누적 설명 분산(%)은 추출 고유값 / 표준화 문항 수 기준이며 Varimax는 회전 후 제곱적재량 합의 비율도 제공합니다. 사각회전의 패턴 제곱적재량 합은 누적 가능한 분산 비율이 아닙니다.'),
+ 'cfa':(' Reports fully standardized loadings and paths with delta-method 95% Wald confidence intervals, including standardized marker uncertainty. The diagram uses ellipses for latent factors, rectangles for indicators, standardized coefficients with intervals, and latent R² = 1 − disturbance variance / total latent variance for endogenous factors (not applicable to exogenous factors). Multi-group diagrams are selectable by group; WLSMV loadings describe underlying probit responses. Use Fit diagram to screen to scale the whole diagram to the available width and height; Original size restores scrolling.',
+        ' 완전 표준화 요인적재량·경로계수와 델타 방법의 95% Wald 신뢰구간을 제공하며 고정 첫 적재량의 표준화 불확실성도 반영합니다. 도표는 잠재변수(타원)·관측지표(사각형)·표준화 계수와 신뢰구간을 표시합니다. 내생 잠재변수 R² = 1 − 교란분산 / 전체 잠재분산을 결과와 도표에 표시하며 외생변수에는 해당하지 않습니다. 다집단 도표는 집단을 선택해 볼 수 있고 WLSMV 적재량은 기저 probit 반응 척도입니다. 화면에 맞추기는 전체 도표를 표시 영역의 가로·세로 크기에 맞게 축소하며 원래 크기로 스크롤 보기를 복원합니다.')
+}
+REPORT_HELP['sem']=REPORT_HELP['cfa']
+REPORT_HELP['efa']=(REPORT_HELP['efa'][0]+' Run CFA transfers the analyzed data and column order, assigning each indicator to its largest absolute rotated loading. Review/edit memberships; every factor requires at least three indicators.',
+                    REPORT_HELP['efa'][1]+' CFA 실행은 분석 당시의 데이터·컬럼 순서를 유지하고 절댓값이 가장 큰 회전 적재량으로 컬럼 소속을 배정합니다. 소속을 확인·수정할 수 있으며 요인마다 지표가 최소 3개 필요합니다.')
+REPORT_HELP['cfa']=(REPORT_HELP['cfa'][0]+' Run SEM keeps the fitted measurement model, cross-loadings, data, group IDs and estimation options. Enter acyclic latent paths before execution; structural direction is not inferred from CFA.',
+                    REPORT_HELP['cfa'][1]+' SEM 실행은 적합한 측정모형·교차적재·데이터·집단 ID·추정 옵션을 유지합니다. 비순환 잠재 경로를 입력한 뒤 실행하며 구조 경로 방향은 CFA에서 자동 추정하지 않습니다.')
+for model in ('cfa','sem'):
+    REPORT_HELP[model]=(REPORT_HELP[model][0]+' Indicator R² reports variance explained by the latent factors in each observed indicator, including factor covariance for cross-loadings; WLSMV uses the underlying probit response. Indicator R² is displayed in both tables and diagrams.',
+                        REPORT_HELP[model][1]+' 관측지표별 R²는 각 컬럼에서 잠재요인이 설명하는 분산 비율이며 교차적재 시 요인 간 공분산도 반영합니다. WLSMV는 기저 probit 반응 척도이며 결과표와 도표 모두에 표시합니다.')
+SPECS=[(*spec[:6],spec[6]+REPORT_HELP.get(spec[0],('',''))[0],spec[7]+REPORT_HELP.get(spec[0],('',''))[1]) for spec in SPECS]
+
 def forms(field,col,multi,group_fields):
     choice=lambda key,en,ko,default,values: field(key,en,ko,'choice',default,[(v,e,k) for v,e,k in values])
     scaling=choice('standardize','Scaling','척도','1',[('1','Standardize','표준화'),('0','Raw scale','원척도')])

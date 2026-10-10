@@ -17,6 +17,7 @@ export function createEngineUI({engine,onChange,onReady,cancelPreview}) {
     }
     for(const button of document.querySelectorAll('[data-imputation-apply]'))button.disabled=!engine.ready||busy||button.dataset.invalidAnalysis==='true';
     for(const button of document.querySelectorAll('[data-quick-summary]'))button.disabled=!engine.ready||busy;
+    for(const button of document.querySelectorAll('[data-model-workflow-run]'))button.disabled=!engine.ready||busy||button.dataset.invalidAnalysis==='true';
     const fallback=visible&&$('mode').value==='scientific';
     $('stop').disabled=!fallback;$('stop').hidden=false;$('stop').style.visibility=fallback?'':'hidden';
   }

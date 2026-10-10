@@ -138,6 +138,10 @@ def _dispatch(payload, control=None):
                 if hasattr(engine,'statistics_plots'):
                     result['statisticsReport']['plots']=engine.statistics_plots+result['statisticsReport']['plots']
                 companion_report(result['statisticsReport'],tree['value'],shown_value,getattr(engine,'statistics_inputs',None),engine.precision,request.get('statisticsTermLabels',{}),getattr(engine,'statistics_residuals',None))
+                if tree['value'] in ('efa','cfa'):
+                    from calc_statistics_model_workflow import model_workflow
+                    workflow=model_workflow(tree['value'],value,getattr(engine,'statistics_inputs',None),request.get('statisticsTermLabels',{}))
+                    if workflow: result['statisticsReport']['modelWorkflow']=workflow
             if request["tree"].get("value")=="survivalanalysis" and hasattr(engine,"survival_report"):
                 result["survival"]=engine.survival_report
                 result["statisticsCopyReport"]=statistics_copy_report('survivalanalysis',value,engine.survival_report,engine.precision)

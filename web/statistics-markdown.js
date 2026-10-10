@@ -50,7 +50,7 @@ export function statisticsResultMarkdown(result,options={}){
       if(equation&&section.columns[0]==='Metric'&&row[0]==='Fitted expression')continue;
       table.push(line(section.columns.map((column,index)=>{
       const value=row[index];
-      const text=value&&typeof value==='object'?statisticsFormattedCopyCell(value,settings):['Metric','Check','Interpretation','Sample'].includes(column)?t(String(value??'')):
+      const text=value&&typeof value==='object'?statisticsFormattedCopyCell(value,settings):['Metric','Check','Interpretation','Sample','Role','R²'].includes(column)?t(String(value??'')):
         dedicated&&/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(String(value))?roundNumber(String(value),options.digits??10):String(value??'');
       return markdownCell(text);
     })));}

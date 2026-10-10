@@ -443,6 +443,7 @@ export function createAdvancedStatistics({state,persist,data,columnLimit,copy,cl
     let usesCurrentData=input.value==='current'&&!!selected().controls;
     if(input.value==='current'&&!selected().controls)try{usesCurrentData=source.value.trim()===advancedStatisticsCommand(selected(),currentRows());}catch{}
     if(usesCurrentData||input.value!=='expression')plan.termLabels=advancedStatisticsTermLabels(selected(),currentRows(),settings(),resolvedColumnNames());
+    if(input.value==='expression'&&source.value===state.fields[panelId+'-workflow-source'])try{plan.termLabels=JSON.parse(state.fields[panelId+'-workflow-labels']||'{}');}catch{}
     if(selected().id==='impute'&&input.value==='current')Object.assign(plan,{dataSnapshot:data(),columnCount:limit()});
     return plan;
   };
@@ -561,7 +562,13 @@ export function createAdvancedStatistics({state,persist,data,columnLimit,copy,cl
     renderSurvivalReport(report,displayed.result,{...displayed.context,band:$('statistics-survival-band').checked,digits:state.digits,
       onCopy:copy&&snapshot?()=>copy(statisticsResultMarkdown(snapshot,{digits:state.digits,notation:state.resultDisplayMode})):null,onClear:snapshot?()=>clearResult(snapshot):null});
   }
-  return {expression,context,render:update,clearResult:result=>{
+  return {expression,context,render:update,prepareModelWorkflow:plan=>{
+    select.value=plan.target;source.value=plan.expression;input.value='expression';
+    state.fields[select.id]=plan.target;state.fields[source.id]=plan.expression;state.fields[input.id]='expression';
+    state.fields[panelId+'-workflow-source']=plan.expression;state.fields[panelId+'-workflow-labels']=JSON.stringify(plan.termLabels);
+    panel('help-details').open=false;signature='';update();persist();
+    $(panelId)?.setAttribute('open','');
+  },clearResult:result=>{
     if(displayed?.copyResult===result){displayed=null;reportKey='';report.replaceChildren();report.hidden=true;}
     if(imputation&&imputation.result===result.imputation){imputation=null;update();}
   },showResult:(result,runContext)=>{

@@ -111,4 +111,9 @@ def calculate(engine,name,a):
             'Latent covariance':[[float(total[i,j])*latent_scales[i]*latent_scales[j] for j in range(k)] for i in range(k)],
             'Implied covariance':[[float(sigma[i,j])*scales[i]*scales[j] for j in range(p)] for i in range(p)],'Iterations':iterations,
             'Assumptions':'Continuous multivariate-normal indicators and complete rows. One factor per indicator, at least three indicators per factor, first loading fixed at 1. Acyclic latent paths, correlated exogenous factors, independent endogenous disturbances and indicator errors. Observed-information Wald inference.'}
+    from calc_advanced_sem_summary import augment
+    def summary_model(x):
+        sigma,load,total,psi,structural,theta=model(x)
+        return sigma,load,total,structural
+    augment(result,parameters,cov,summary_model,[(kind,i,j,index) for index,(kind,i,j) in enumerate(specs)],paths)
     return result

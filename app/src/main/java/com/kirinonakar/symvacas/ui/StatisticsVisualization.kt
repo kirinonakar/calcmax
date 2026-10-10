@@ -45,6 +45,7 @@ private fun plotNumber(value:Double)=String.format(Locale.ROOT,"%.4g",value)
 @Composable private fun StatisticsVisualizationBody(plot:JSONObject) {
     val c=LocalInstrument.current
     val title=tr(plot.getString("title"));val kind=plot.getString("kind")
+    if(kind=="sem-diagram"){StatisticsSemDiagram(plot);return}
     if(kind in listOf("intervals","bars")){StatisticsComparisonPlot(plot);return}
     val ratios=plot.optJSONArray("ratios")?.numbers().orEmpty()
     val matrix=plot.optJSONArray("points")
@@ -53,7 +54,8 @@ private fun plotNumber(value:Double)=String.format(Locale.ROOT,"%.4g",value)
     var xAxis by remember(plot) {mutableIntStateOf(0)}
     var yAxis by remember(plot) {mutableIntStateOf(if(dimensions>1)1 else -1)}
     val featureLabel=tr("Feature")
-    val names=if(kind in listOf("clusters","interaction"))List(dimensions){val name=plot.optJSONArray("features")?.optString(it) ?: "Feature ${it+1}";name.replace(Regex("^Feature (\\d+)$"),"$featureLabel $1")} else ratios.mapIndexed {i,value->"PC${i+1} (${plotNumber(100*value)}%)"}
+    val componentName=tr("Component");val factorName=tr("Factor")
+    val names=if(plot.has("axisLabels"))List(dimensions){plot.getJSONArray("axisLabels").getString(it).replace(Regex("^Component "),"$componentName ").replace(Regex("^Factor "),"$factorName ")} else if(kind in listOf("clusters","interaction"))List(dimensions){val name=plot.optJSONArray("features")?.optString(it) ?: "Feature ${it+1}";name.replace(Regex("^Feature (\\d+)$"),"$featureLabel $1")} else ratios.mapIndexed {i,value->"PC${i+1} (${plotNumber(100*value)}%)"}
     val exports=remember {GraphExportState()}
     val componentLabel=tr("Component");val drawsLabel=tr("Draws")
     val xlabel=when(kind){"scree"->componentLabel;"histogram"->tr(plot.getString("statistic"));"distribution"->tr("Value");"qq"->tr("Theoretical normal quantiles");else->names.getOrElse(xAxis){""}}
@@ -81,7 +83,7 @@ private fun plotNumber(value:Double)=String.format(Locale.ROOT,"%.4g",value)
             when(kind) {
                 "scree"->{xmin=.5;xmax=ratios.size+.5;ymax=100.0}
                 "histogram","distribution"->{xmin=histogramLow-histogramPadding;xmax=histogramHigh+histogramPadding;ymax=max(1.0,counts.maxOrNull() ?: 1.0)*1.1}
-                "loadings"->{xmin=-1.2;xmax=1.2;ymin=-1.2;ymax=1.2}
+                "loadings"->{val limit=max(1.2,(xy.maxOfOrNull {max(abs(it.first),abs(it.second))} ?: 0.0)*1.1);xmin=-limit;xmax=limit;ymin=-limit;ymax=limit}
                 else->{
                     xmin=min(0.0,xy.minOfOrNull {it.first} ?: 0.0);xmax=max(0.0,xy.maxOfOrNull {it.first} ?: 0.0)
                     ymin=min(0.0,xy.minOfOrNull {it.second} ?: 0.0);ymax=max(0.0,xy.maxOfOrNull {it.second} ?: 0.0)
@@ -150,6 +152,7 @@ private fun plotNumber(value:Double)=String.format(Locale.ROOT,"%.4g",value)
         if(kind=="histogram")Text(tr("Dashed: credible bounds · dotted: estimate")+if(zeroReference)" · ${tr("Solid: zero difference")}" else "",fontSize=11.sp,color=c.muted)
         plot.optJSONArray("groupLabels")?.let {labels->Text("A: ${labels.getString(0)} · B: ${labels.getString(1)} · ${tr("Difference (B − A)")}",fontSize=11.sp,color=c.muted)}
         if(kind=="loadings")plot.optJSONArray("labels")?.let {labels->Text(List(labels.length()){"${it+1}: ${labels.getString(it)}"}.joinToString(" · "),fontSize=11.sp,color=c.muted)}
+        plot.optString("caption").takeIf {it.isNotBlank()}?.let {Text(tr(it),fontSize=11.sp,color=c.muted)}
         if(kind=="qq")Text(tr("Reference line passes through the first and third quartiles. Curvature or tail departures suggest non-normality; up to 200 ordered points are shown."),fontSize=11.sp,color=c.muted)
         if(kind=="interaction") {
             val labels=plot.getJSONArray("lineLabels")

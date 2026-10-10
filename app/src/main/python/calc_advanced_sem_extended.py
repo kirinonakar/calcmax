@@ -244,6 +244,8 @@ def calculate(engine,name,a):
             local['Indicator intercepts']=[{'term':'feature:'+str(i+1),'Intercept':parameters[index]*scales[i]+g['centers'][i]} for kind,i,j,index in g['local'] if kind=='mean']
             free_means={i:index for kind,i,j,index in g['local'] if kind=='latentmean'}
             local['Latent means']=[dict(Factor=i+1,**inference([parameters[free_means[i]]*scales[markers[i]]],[[cov[free_means[i],free_means[i]]*scales[markers[i]]**2]],[str(i+1)])[0]) if i in free_means else {'Factor':i+1,'estimate':0.,'Fixed':1} for i in range(k)]
+        from calc_advanced_sem_summary import augment
+        augment(local,parameters,cov,lambda x:model(x,g)[:4],g['local'],paths)
         results.append(local)
     statistic=max(0.,2*totaln*loss); base=max(0.,sum(g['baseline'] for g in prepared)); basedf=len(labels)*p*(p-1)/2
     result={'n':totaln,'Estimator':'Normal-theory observed-data FIML' if missing=='fiml' else 'Normal-theory mean/covariance ML (N divisor)' if scalar else 'Normal-theory covariance ML (N divisor)',
@@ -264,7 +266,7 @@ def calculate(engine,name,a):
     else:
         result['Groups']=len(labels); result['Invariance']=invariance
         # Flat report tables retain group identity and avoid opaque nested objects.
-        for key in ('Loadings','Structural paths','Residual variances','Indicator means','Indicator intercepts','Latent means'):
+        for key in ('Loadings','Structural paths','Residual variances','Indicator means','Indicator intercepts','Latent means','Latent R²','Exogenous correlations','Indicator R²'):
             result[key]=[dict(Group='group:'+format(label,'.15g'),**row) for label,local in zip(labels,results) for row in local.get(key,[])]
         result['Group summary']=[{'Group':'group:'+format(label,'.15g'),'n':local['n']} for label,local in zip(labels,results)]
         for index,local in enumerate(results):

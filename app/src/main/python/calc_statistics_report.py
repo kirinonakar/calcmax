@@ -73,6 +73,7 @@ def statistics_report(name, value, precision, labels=None):
         if isinstance(v, s.MatrixBase): v = v.tolist()
         if isinstance(v, dict):
             remaining = dict(v)
+            if name=='cfa': remaining.pop('Latent R²',None)
             if isinstance(remaining.get('Assumptions'), str):
                 assumptions.append(remaining.pop('Assumptions'))
             if isinstance(remaining.get('diagnostics'),dict):
@@ -112,19 +113,29 @@ def statistics_report(name, value, precision, labels=None):
                 intervals=[]; expanded=[]
                 for raw in v:
                     row=dict(raw)
+                    if name in ('cfa','sem') and title=='Latent R²' and row.get('Role')=='Exogenous (R² not applicable)': row['R²']='Not applicable'
                     bounds=row.pop('CI95',None)
                     if isinstance(bounds,(list,tuple)) and len(bounds)==2: row['Lower 95% CI'],row['Upper 95% CI']=bounds
                     elif 'CI95' in raw: row['Lower 95% CI']=row['Upper 95% CI']=None
+                    standardized_bounds=row.pop('Standardized CI95',None)
+                    if isinstance(standardized_bounds,(list,tuple)) and len(standardized_bounds)==2:
+                        row['Standardized lower 95% CI'],row['Standardized upper 95% CI']=standardized_bounds
                     label=row.get('term',row.get('Term',row.get('group',row.get('Group',row.get('Comparison','')))))
                     estimate=row.get('estimate',row.get('Estimate',row.get('Mean',row.get('adjusted mean',row.get('Mean difference')))))
                     low=row.get('Lower 95% CI',row.get('Lower CI'))
                     high=row.get('Upper 95% CI',row.get('Upper CI'))
+                    standardized=name in ('cfa','sem') and title in ('Loadings','Structural paths')
+                    if standardized:
+                        estimate=row.get('Standardized loading',row.get('Standardized path'))
+                        low=row.get('Standardized lower 95% CI'); high=row.get('Standardized upper 95% CI')
                     if label:
                         if name in ('cfa','sem') and 'Group' in row: label=str(row['Group'])+' / '+str(label)
                         if name in ('cfa','sem') and 'Factor' in row: label=str(label)+' / Factor '+str(row['Factor'])
                         intervals.append((label,estimate,low,high))
                     expanded.append(row)
-                if intervals: interval_plot(title+' intervals',intervals,0 if (name=='gameshowell' or 'coefficients' in title.lower() or 'post-hoc' in title.lower()) else None)
+                if intervals:
+                    plot_title={'Loadings':'Standardized factor loadings (95% CI)','Structural paths':'Standardized structural paths (95% CI)'}.get(title,title+' intervals') if name in ('cfa','sem') else title+' intervals'
+                    interval_plot(plot_title,intervals,0 if (name in ('cfa','sem','gameshowell') or 'coefficients' in title.lower() or 'post-hoc' in title.lower()) else None)
                 v=expanded
                 keys = list(dict.fromkeys(key for row in v for key in row))
                 add(title, keys, [[row.get(key, 'unavailable') for key in keys] for row in v])
@@ -169,6 +180,11 @@ def statistics_report(name, value, precision, labels=None):
         ranks=value['mean ranks'];plots.append({'kind':'bars','title':'Mean ranks by condition','values':list(map(float,ranks)),'labels':[table_labels.get('feature:'+str(i+1),'Condition '+str(i+1)) for i in range(len(ranks))],'ylabel':'Mean rank'})
     if name=='padjust' and isinstance(value,dict):
         plots.append({'kind':'bars','title':'Raw and adjusted p values','values':list(map(float,value['adjusted p'])),'secondary':list(map(float,value['raw p'])),'labels':[str(i+1) for i in range(len(value['raw p']))],'ylabel':'p value','reference':float(value['alpha']),'maximum':1})
+    if name in ('cfa','sem') and isinstance(value,dict):
+        from calc_statistics_sem_diagram import diagrams
+        plots.extend(diagrams(value,table_labels))
+        assumptions.append('Fully standardized coefficients: 95% Wald confidence intervals by the delta method using the full parameter covariance. Fixed raw marker loadings retain standardized uncertainty. Latent R² = 1 − disturbance variance / total latent variance; R² is not applicable to exogenous factors. WLSMV loadings refer to underlying probit responses. Diagram arrows show specified effects, not proof of causality.')
+        assumptions.append('Indicator R² = 1 − indicator residual variance / model-implied indicator variance. Cross-loadings include factor covariance terms. With WLSMV, R² refers to the underlying probit response.')
     visit('Summary' if isinstance(value, dict) else TITLES.get(name, name), value)
     priority=['Cronbach α','Cohen κ',"Cramér’s V",'phi','Indirect effect a×b','CFI','RMSEA','KMO','p value','p','mean difference','posterior mean','Posterior Mean Difference (B - A)','Posterior Effect Size','BF10','P(μB > μA)','estimate','power','achieved power','n per group / pairs','R²','Adjusted R²','Kendall W','eta2','Cohen d','Cohen dz','RMSE','R2','inertia']
     report_title=TITLES.get(name,name)

@@ -70,7 +70,7 @@ internal fun statisticsCellText(m:CalculatorModel,cell:JSONObject)=ResultDisplay
     }
 }
 
-@Composable internal fun StatisticsResultReport(m:CalculatorModel,report:JSONObject) {
+@Composable internal fun StatisticsResultReport(m:CalculatorModel,report:JSONObject,onModelWorkflow:((StatisticsModelWorkflowPlan)->Unit)?=null) {
     val c=LocalInstrument.current
     val clipboard=LocalClipboardManager.current
     val language=LocalLanguage.current
@@ -82,6 +82,7 @@ internal fun statisticsCellText(m:CalculatorModel,cell:JSONObject)=ResultDisplay
             TextButton(onClick={m.result?.let {clipboard.setText(AnnotatedString(statisticsResultCopyText(m,it,language)))}}){Text(tr("Copy"),fontSize=12.sp)}
             TextButton(onClick={m.clearStatisticsResult()},enabled=!m.busy&&!m.regressionBusy,modifier=Modifier.testTag("statistics-result-clear")){Text(tr("Clear"),fontSize=12.sp)}
         }
+        if(onModelWorkflow!=null)report.optJSONObject("modelWorkflow")?.let {StatisticsModelWorkflow(it,!m.busy&&!m.regressionBusy,onModelWorkflow)}
         report.optJSONArray("highlights")?.let {highlights->
             for(start in 0 until highlights.length() step 2)Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
                 for(index in start until minOf(start+2,highlights.length())) {
@@ -102,7 +103,7 @@ internal fun statisticsCellText(m:CalculatorModel,cell:JSONObject)=ResultDisplay
             }
         }
         val primary=setOf("Summary","ANOVA","Overall model","Overall ANOVA","Overall Welch ANOVA",report.getString("title"))
-        val prominent=primary+setOf("Summary","Sample summaries","Assumption checks","Effect size","Mean confidence interval (95%, two-sided)","Overall ANOVA","Expected-count diagnostics")
+        val prominent=primary+setOf("Indicator R²","Explained variance","Latent R²","Summary","Sample summaries","Assumption checks","Effect size","Mean confidence interval (95%, two-sided)","Overall ANOVA","Expected-count diagnostics")
         val ordered=(0 until sections.length()).sortedBy {when(sections.getJSONObject(it).getString("title")){in primary->0;in prominent->1;else->2}}
         var plotsShown=false
         for(index in ordered) {
@@ -120,7 +121,7 @@ internal fun statisticsCellText(m:CalculatorModel,cell:JSONObject)=ResultDisplay
                 val row=rows.getJSONArray(rowIndex)
                 List(columns.length()){column->
                     row.optJSONObject(column)?.let {statisticsCellText(m,it)}
-                        ?: if(columns.optString(column) in listOf("Metric","Check","Interpretation","Sample"))tr(row.optString(column)) else row.optString(column)
+                        ?: if(columns.optString(column) in listOf("Metric","Check","Interpretation","Sample","Role","R²"))tr(row.optString(column)) else row.optString(column)
                 }
             })
             if(section.optInt("totalRows")>rows.length())Text("${rows.length()} / ${section.optInt("totalRows")} · ${tr("Copy result includes all rows.")}",fontSize=11.sp,color=c.muted)

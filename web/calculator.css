@@ -150,6 +150,9 @@ input:disabled,select:disabled{opacity:.45;cursor:default}
 .tape-note{font-size:10px;line-height:1.5;color:var(--muted);overflow-wrap:anywhere}
 .formula-preview{min-width:0;overflow-x:auto;padding:8px 0;font-family:"Cambria Math",Cambria,serif;font-size:clamp(16px,2.6vw,24px);color:var(--ink)}
 .formula-line{min-width:0;overflow-x:auto;padding:4px 0}.formula-preview math{margin:0;display:inline-block}
+/* A hidden source leaves only the result's natural height in the lower Output. */
+:root:not([data-workspace="scientific"]) .answer-panel.compact-output{padding-top:6px;padding-bottom:8px}
+:root:not([data-workspace="scientific"]) .answer-panel.compact-output #answer{min-height:0;padding-top:4px;padding-bottom:4px}
 /* Tall fractions can overflow MathML line boxes. Keep scrolling available
    without native scrollbar tracks inside the calculation display. */
 .expression-preview,#answer,.tape-expression,.tape-result,.formula-preview,.formula-line{scrollbar-width:none}

@@ -8,6 +8,22 @@ import org.json.JSONArray
 import com.kirinonakar.symvacas.math.Parser
 
 class AdvancedStatisticsTest {
+    @Test fun modelWorkflowsShareMeasurementDataAndValidateAssignmentsAndPaths() {
+        val cases=JSONArray(File("../tests/fixtures/statistics_model_workflow.json").readText())
+        for(i in 0 until cases.length()) {
+            val item=cases.getJSONObject(i);val workflow=item.getJSONObject("workflow");val settings=item.optJSONObject("settings") ?: JSONObject()
+            val factors=workflow.getJSONArray("factors")
+            val assignment=settings.optString("factors",List(factors.length()){factors.getInt(it).toString()}.joinToString(","))
+            val result=runCatching {statisticsModelWorkflowPlan(workflow,assignment,settings.optString("paths"))}
+            if(item.has("error"))assertEquals(item.getString("name"),item.getString("error"),result.exceptionOrNull()?.message)
+            else {
+                val plan=result.getOrThrow()
+                assertEquals(item.getString("name"),Parser(item.getString("expected")).parse(),Parser(plan.expression).parse())
+                val labels=workflow.getJSONObject("termLabels")
+                assertEquals(labels.keys().asSequence().associateWith {labels.getString(it)},plan.termLabels)
+            }
+        }
+    }
     @Test fun measurementExamplesIgnoreCurrentDataSelectionsAndKeepTheirOwnDrafts() {
         val schema=JSONArray(File("src/main/assets/advanced_statistics.json").readText())
         val sem=List(schema.length()){schema.getJSONObject(it)}.first {it.getString("id")=="sem"}

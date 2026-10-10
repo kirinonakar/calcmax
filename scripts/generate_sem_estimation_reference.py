@@ -89,9 +89,23 @@ def ordinal_reference(rows,assignment,paths=[],cross=[]):
     adjusted,scale,shift=t3(raw,u,gamma,df)
     expected=[(['χ²'],adjusted),(['df'],df),(['p'],chi2.sf(adjusted,df)),(['Unadjusted DWLS χ²'],raw),(['Scaling factor'],scale),(['Shift parameter'],shift)]
     _,load,path,latent,sigma=model(fit.x)
+    expected += [(['Indicator R²',i,'R²'],1-1/sigma[i,i]) for i in range(p)]
     expected += [(['Implied covariance',i,j],sigma[i,j]) for i in range(p) for j in range(p)]
     for i in range(p):
         expected.append((['Loadings',i,'Standardized loading'],load[i,assignment[i]-1]*np.sqrt(latent[assignment[i]-1,assignment[i]-1]/sigma[i,i])))
+    def standardized(x):
+        _,loading,beta,total,implied=model(x)
+        return np.r_[[loading[i,assignment[i]-1]*np.sqrt(total[assignment[i]-1,assignment[i]-1]/implied[i,i]) for i in range(p)],
+                     [beta[target-1,source-1]*np.sqrt(total[source-1,source-1]/total[target-1,target-1]) for source,target in paths]]
+    if not cross:
+        standardized_jac=approx_derivative(standardized,fit.x,method='3-point')
+        standardized_se=np.sqrt(np.diag(standardized_jac@cov@standardized_jac.T)); standardized_est=standardized(fit.x)
+        for i,(estimate,se) in enumerate(zip(standardized_est,standardized_se)):
+            at=['Loadings',i] if i<p else ['Structural paths',i-p]
+            expected += [(at+['Standardized SE'],se),(at+['Standardized CI95',0],estimate-norm.ppf(.975)*se),(at+['Standardized CI95',1],estimate+norm.ppf(.975)*se)]
+    disturbance=(np.eye(k)-path)@latent@(np.eye(k)-path).T
+    for target in sorted({target-1 for source,target in paths}):
+        expected.append((['Latent R²',target,'R²'],1-disturbance[target,target]/latent[target,target]))
     for pos,(kind,i,j) in enumerate(specs):
         if kind=='loading' and not cross:
             expected += [(['Loadings',i,'estimate'],fit.x[pos]),(['Loadings',i,'SE'],np.sqrt(cov[pos,pos]))]
@@ -119,13 +133,29 @@ def continuous_reference(rows,ids,invariance):
         return out-sat
     fit=minimize(objective,initial,method='BFGS',options=dict(gtol=1e-5,maxiter=3000))
     assert np.max(abs(fit.jac))<1e-3
+    def gradient(x):
+        score=np.zeros(len(x))
+        for g,(mean,s,n) in enumerate(zip(means,samples,ns)):
+            mu,cov,*_=unpack(x,g); delta=mu-mean; inv=np.linalg.inv(cov)
+            jac=approx_derivative(lambda v:np.r_[unpack(v,g)[0],unpack(v,g)[1].ravel()],x,method='3-point')
+            gc=n*(inv-inv@(s+np.outer(delta,delta))@inv)/2
+            score+=jac.T@np.r_[n*inv@delta,gc.ravel()]
+        return score
+    parameter_cov=np.linalg.inv(approx_derivative(gradient,fit.x,method='3-point'))
+    def standardized(x):
+        load=np.r_[1.,x[:p-1]]
+        return np.concatenate([load*np.sqrt((unpack(x,g)[1][0,0]-unpack(x,g)[4][0])/np.diag(unpack(x,g)[1])) for g in range(len(labels))])
+    stdjac=approx_derivative(standardized,fit.x,method='3-point'); stdse=np.sqrt(np.diag(stdjac@parameter_cov@stdjac.T)); stdest=standardized(fit.x)
     df=len(labels)*(p*(p+1)//2+p)-len(initial); expected=[(['χ²'],2*fit.fun),(['df'],df)]
+    for i,(estimate,se) in enumerate(zip(stdest,stdse)):
+        expected += [(['Loadings',i,'Standardized SE'],se),(['Loadings',i,'Standardized CI95',0],estimate-norm.ppf(.975)*se),(['Loadings',i,'Standardized CI95',1],estimate+norm.ppf(.975)*se)]
     for g in range(len(labels)):
         mu,cov,intercept,latentmean,errors=unpack(fit.x,g)
         expected += [(['Implied covariance group '+str(g+1),i,j],cov[i,j]) for i in range(p) for j in range(p)]
         expected += [(['Indicator means',g*p+i,'Mean'],mu[i]) for i in range(p)]
         expected += [(['Indicator intercepts',g*p+i,'Intercept'],intercept[i]) for i in range(p)]
         expected += [(['Residual variances',g*p+i,'Variance'],errors[i]) for i in range(p)]
+        expected += [(['Indicator R²',g*p+i,'R²'],1-errors[i]/cov[i,i]) for i in range(p)]
         expected += [(['Latent means',g,'estimate'],latentmean)]
     add('cfa',[rows.tolist(),[1]*p,[],'complete',ids.tolist(),invariance],expected)
 
@@ -156,6 +186,7 @@ def ordinal_group_reference(rows,ids,invariance):
     for g in range(2):
         expected += [(['Implied covariance group '+str(g+1),i,j],matrices[g][i,j]) for i in range(p) for j in range(p)]
         expected += [(['Residual variances',g*p+i,'Variance'],errors[g][i]) for i in range(p)]
+        expected += [(['Indicator R²',g*p+i,'R²'],1-errors[g][i]/matrices[g][i,i]) for i in range(p)]
         expected += [(['Loadings',g*p+i,'SE'],np.sqrt(cov[i-1,i-1])) for i in range(1,p)]
     add('cfa',[rows.tolist(),[1]*p,[],'complete',ids.tolist(),invariance,'wlsmv'],expected,tolerance=5e-4)
 

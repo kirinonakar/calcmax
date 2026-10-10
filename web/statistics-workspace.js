@@ -470,6 +470,6 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
   }});
   advanced=analysisPanels['statistics-advanced'];
   statisticsControls();
-  return {datasetsList,summaryExpression,summaryTermLabels,expression:statisticsExpression,analysisTermLabels,advancedExpression:(panel='statistics-advanced')=>analysisPanels[panel].expression(),advancedContext:(panel='statistics-advanced')=>analysisPanels[panel].context(),showAdvancedResult:(result,context,panel='statistics-advanced')=>analysisPanels[panel]?.showResult(result,context),analysisSummary,render,showRegression,runRegression,
+  return {datasetsList,summaryExpression,summaryTermLabels,expression:statisticsExpression,analysisTermLabels,prepareModelWorkflow:plan=>advanced.prepareModelWorkflow(plan),advancedExpression:(panel='statistics-advanced')=>analysisPanels[panel].expression(),advancedContext:(panel='statistics-advanced')=>analysisPanels[panel].context(),showAdvancedResult:(result,context,panel='statistics-advanced')=>analysisPanels[panel]?.showResult(result,context),analysisSummary,render,showRegression,runRegression,
     clearResult:result=>{if(statisticsGraph?.result===result)clearRegression();for(const panel of Object.values(analysisPanels))panel.clearResult(result);}};
 }
