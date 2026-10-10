@@ -619,5 +619,336 @@
       "paths": "1,2"
     },
     "expected": "sem([[1,2,3,4,5,6],[2,3,4,5,6,7]],[1,1,1,2,2,2],[[1,2]],[[2,2]],complete,[1,2],strict,wlsmv)"
+  },
+  {
+    "name": "EFA detects signed secondary pattern loadings including marker candidates",
+    "workflow": {
+      "target": "cfa",
+      "data": [
+        [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6"
+        ]
+      ],
+      "factors": [
+        1,
+        1,
+        1,
+        2,
+        2,
+        2
+      ],
+      "factorCount": 2,
+      "cross": [],
+      "missing": "complete",
+      "groups": [],
+      "invariance": "configural",
+      "estimator": "ml",
+      "termLabels": {
+        "feature:1": "z",
+        "feature:2": "y",
+        "feature:3": "x",
+        "feature:4": "Scale B",
+        "feature:5": "Scale B",
+        "feature:6": "Item 6"
+      },
+      "efaLoadings": [
+        [
+          0.8,
+          -0.4
+        ],
+        [
+          0.9,
+          0.1
+        ],
+        [
+          0.7,
+          0.3
+        ],
+        [
+          0.35,
+          0.8
+        ],
+        [
+          0.1,
+          0.9
+        ],
+        [
+          0.1,
+          0.7
+        ]
+      ],
+      "crossThreshold": 0.3
+    },
+    "detected": [
+      {
+        "indicator": 1,
+        "factor": 2,
+        "loading": -0.4
+      },
+      {
+        "indicator": 3,
+        "factor": 2,
+        "loading": 0.3
+      },
+      {
+        "indicator": 4,
+        "factor": 1,
+        "loading": 0.35
+      }
+    ],
+    "expected": "cfa([[1,2,3,4,5,6]],[1,1,1,2,2,2],[[1,2],[3,2],[4,1]],complete,[],configural,ml)"
+  },
+  {
+    "name": "Explicit exclusions retain pure indicators",
+    "workflow": {
+      "target": "cfa",
+      "data": [
+        [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6"
+        ]
+      ],
+      "factors": [
+        1,
+        1,
+        1,
+        2,
+        2,
+        2
+      ],
+      "factorCount": 2,
+      "cross": [],
+      "missing": "complete",
+      "groups": [],
+      "invariance": "configural",
+      "estimator": "ml",
+      "termLabels": {
+        "feature:1": "z",
+        "feature:2": "y",
+        "feature:3": "x",
+        "feature:4": "Scale B",
+        "feature:5": "Scale B",
+        "feature:6": "Item 6"
+      },
+      "efaLoadings": [
+        [
+          0.8,
+          -0.4
+        ],
+        [
+          0.9,
+          0.1
+        ],
+        [
+          0.7,
+          0.3
+        ],
+        [
+          0.35,
+          0.8
+        ],
+        [
+          0.1,
+          0.9
+        ],
+        [
+          0.1,
+          0.7
+        ]
+      ],
+      "crossThreshold": 0.3
+    },
+    "settings": {
+      "cross": [
+        [
+          1,
+          2
+        ]
+      ]
+    },
+    "expected": "cfa([[1,2,3,4,5,6]],[1,1,1,2,2,2],[[1,2]],complete,[],configural,ml)"
+  },
+  {
+    "name": "Pure marker required per factor",
+    "workflow": {
+      "target": "cfa",
+      "data": [
+        [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6"
+        ]
+      ],
+      "factors": [
+        1,
+        1,
+        1,
+        2,
+        2,
+        2
+      ],
+      "factorCount": 2,
+      "cross": [],
+      "missing": "complete",
+      "groups": [],
+      "invariance": "configural",
+      "estimator": "ml",
+      "termLabels": {
+        "feature:1": "z",
+        "feature:2": "y",
+        "feature:3": "x",
+        "feature:4": "Scale B",
+        "feature:5": "Scale B",
+        "feature:6": "Item 6"
+      },
+      "efaLoadings": [
+        [
+          0.8,
+          0.4
+        ],
+        [
+          0.9,
+          0.4
+        ],
+        [
+          0.7,
+          0.4
+        ],
+        [
+          0.1,
+          0.8
+        ],
+        [
+          0.1,
+          0.9
+        ],
+        [
+          0.1,
+          0.7
+        ]
+      ],
+      "crossThreshold": 0.3
+    },
+    "error": "Keep at least one indicator without cross-loadings per factor"
+  },
+  {
+    "name": "No primary pair in cross-loadings",
+    "workflow": {
+      "target": "cfa",
+      "data": [
+        [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6"
+        ]
+      ],
+      "factors": [
+        1,
+        1,
+        1,
+        2,
+        2,
+        2
+      ],
+      "factorCount": 2,
+      "cross": [],
+      "missing": "complete",
+      "groups": [],
+      "invariance": "configural",
+      "estimator": "ml",
+      "termLabels": {
+        "feature:1": "z",
+        "feature:2": "y",
+        "feature:3": "x",
+        "feature:4": "Scale B",
+        "feature:5": "Scale B",
+        "feature:6": "Item 6"
+      }
+    },
+    "settings": {
+      "cross": [
+        [
+          1,
+          1
+        ]
+      ]
+    },
+    "error": "Cross-loadings must be distinct additional indicator-factor pairs"
+  },
+  {
+    "name": "CFA to SEM ignores attempts to replace fitted cross-loadings",
+    "workflow": {
+      "target": "sem",
+      "data": [
+        [
+          "1",
+          "NA",
+          "3",
+          "4",
+          "5",
+          "6"
+        ],
+        [
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7"
+        ]
+      ],
+      "factors": [
+        1,
+        1,
+        1,
+        2,
+        2,
+        2
+      ],
+      "factorCount": 2,
+      "cross": [
+        [
+          2,
+          2
+        ]
+      ],
+      "missing": "fiml",
+      "groups": [
+        "1",
+        "2"
+      ],
+      "invariance": "scalar",
+      "estimator": "ml",
+      "termLabels": {
+        "feature:1": "z",
+        "feature:2": "y",
+        "feature:3": "x",
+        "feature:4": "Scale B",
+        "feature:5": "Scale B",
+        "feature:6": "Item 6",
+        "group:1": "Control",
+        "group:2": "Treatment"
+      }
+    },
+    "settings": {
+      "paths": "1,2",
+      "cross": []
+    },
+    "expected": "sem([[1,NA,3,4,5,6],[2,3,4,5,6,7]],[1,1,1,2,2,2],[[1,2]],[[2,2]],fiml,[1,2],scalar,ml)"
   }
 ]

@@ -11,7 +11,7 @@ import {guidedStatisticsCommand,advancedStatisticsExampleRows} from '../advanced
 import {advancedStatisticsSchema} from '../advanced-statistics-schema.js';
 import {graphInputTree} from '../graph-workspace.js';
 import {setComputationLimitsRemoved} from '../computation-limits.js';
-import {statisticsModelWorkflowPlan} from '../statistics-model-workflow.js';
+import {statisticsModelWorkflowPlan,statisticsDetectedCrossLoadings} from '../statistics-model-workflow.js';
 
 // Reuse the interpreter for sequential integration scenarios. The cold solver
 // scenario below explicitly loads its own interpreter to keep startup coverage.
@@ -28,13 +28,17 @@ test('analyzed EFA data executes CFA then SEM and keeps ordinal group options in
   const rows=csvRows(csv).map(row=>[row[5],row[4],row[3],row[2],row[1],row[0]]);
   const names=statisticsColumnLabels(csv,'columns:6').reverse(),labels=Object.fromEntries(names.map((name,i)=>[`feature:${i+1}`,name]));
   const efa=calculate(guidedStatisticsCommand(advancedStatisticsSchema.find(d=>d.id==='efa'),rows,{factors:'2',rotation:'varimax'}),labels);
-  const cfaPlan=statisticsModelWorkflowPlan(efa.modelWorkflow),cfa=calculate(cfaPlan.expression,cfaPlan.termLabels);
+  const cross=statisticsDetectedCrossLoadings(efa.modelWorkflow,{threshold:.25}).map(row=>[row.indicator,row.factor]);
+  assert.equal(cross.length,3);
+  const cfaPlan=statisticsModelWorkflowPlan(efa.modelWorkflow,{cross}),cfa=calculate(cfaPlan.expression,cfaPlan.termLabels);
+  assert.deepEqual(cfa.modelWorkflow.cross,cross);assert.equal(cfa.sections.find(section=>section.title==='Loadings').rows.length,9);
   assert.equal(cfa.sections.find(section=>section.title==='Indicator R²').rows.length,6);
   assert.ok(!cfa.sections.some(section=>section.title==='Latent R²'));
   assert.ok(cfa.plots.find(plot=>plot.kind==='sem-diagram').nodes.filter(node=>node.kind==='observed').every(node=>node.r2>=0&&node.r2<=1));
   assert.deepEqual(cfa.modelWorkflow.data,efa.modelWorkflow.data);assert.deepEqual(cfa.modelWorkflow.factors,efa.modelWorkflow.factors);
   assert.deepEqual(cfa.modelWorkflow.termLabels,labels);
   const semPlan=statisticsModelWorkflowPlan(cfa.modelWorkflow,{paths:'2,1'}),sem=calculate(semPlan.expression,semPlan.termLabels);
+  assert.equal(sem.sections.find(section=>section.title==='Loadings').rows.length,9);
   assert.ok(sem.sections.some(section=>section.title==='Structural paths'));
   assert.deepEqual(sem.plots.find(plot=>plot.kind==='sem-diagram').nodes.filter(n=>n.kind==='observed').map(n=>n.label).sort(),names.slice().sort());
   const definition=advancedStatisticsSchema.find(d=>d.id==='cfa'),settings={estimator:'wlsmv',groupMode:'multi',invariance:'strict'};
@@ -119,6 +123,7 @@ test('PCA defaults, scalar/strict ML and ordinal WLSMV execute in real WASM',asy
   }
   const efa=advancedStatisticsSchema.find(d=>d.id==='efa');
   assert.equal(efa.controls.find(field=>field.key==='extraction').default,'pca');
+  assert.equal(efa.controls.find(field=>field.key==='rotation').default,'oblimin');
   py.globals.set('payload',JSON.stringify({tree:parse(guidedStatisticsCommand(efa,efa.exampleRows)),budget:60}));
   const result=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));
   assert.equal(result.ok,true,result.error);assert.match(result.exact,/Principal components/);

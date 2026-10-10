@@ -14,7 +14,13 @@ class AdvancedStatisticsTest {
             val item=cases.getJSONObject(i);val workflow=item.getJSONObject("workflow");val settings=item.optJSONObject("settings") ?: JSONObject()
             val factors=workflow.getJSONArray("factors")
             val assignment=settings.optString("factors",List(factors.length()){factors.getInt(it).toString()}.joinToString(","))
-            val result=runCatching {statisticsModelWorkflowPlan(workflow,assignment,settings.optString("paths"))}
+            val crosses=settings.optJSONArray("cross")?.let {array->List(array.length()){j->val pair=array.getJSONArray(j);List(pair.length()){pair.getInt(it)}}}
+            val result=runCatching {statisticsModelWorkflowPlan(workflow,assignment,settings.optString("paths"),crosses)}
+            item.optJSONArray("detected")?.let {expected->
+                val actual=statisticsDetectedCrossLoadings(workflow,assignment,settings.optDouble("threshold",workflow.optDouble("crossThreshold",.3)))
+                assertEquals(expected.length(),actual.size)
+                for(j in actual.indices){val row=expected.getJSONObject(j);assertEquals(row.getInt("indicator"),actual[j].indicator);assertEquals(row.getInt("factor"),actual[j].factor);assertEquals(row.getDouble("loading"),actual[j].loading,1e-12)}
+            }
             if(item.has("error"))assertEquals(item.getString("name"),item.getString("error"),result.exceptionOrNull()?.message)
             else {
                 val plan=result.getOrThrow()

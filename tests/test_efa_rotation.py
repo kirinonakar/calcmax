@@ -9,6 +9,10 @@ from calc_engine import dispatch
 
 
 class EFARotationTests(unittest.TestCase):
+    def test_default_rotation_is_oblimin(self):
+        default=run('efa',self.rows,2);explicit=run('efa',self.rows,2,'oblimin')
+        self.assertEqual(default['Rotation'],'oblimin');self.assertEqual(default['loadings'],explicit['loadings'])
+        self.assertEqual(default['Factor correlations'],explicit['Factor correlations'])
     @classmethod
     def setUpClass(cls):
         with (ROOT/'tests/fixtures/efa_study_habits_sample.csv').open(encoding='utf-8-sig',newline='') as stream:

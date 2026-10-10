@@ -6,6 +6,15 @@ fixed only in raw units and still have standardized uncertainty.
 """
 import math
 import mpmath as mp
+from calc_shared import require
+
+
+def measurement_markers(groups,cross):
+    """Use the first pure primary indicator without changing column order."""
+    complex_indicators={i for i,j in cross}
+    pure=[[i for i in group if i not in complex_indicators] for group in groups]
+    require(all(pure),'Keep at least one indicator without cross-loadings per factor')
+    return [group[0] for group in pure]
 
 
 def augment(result, parameters, covariance, model, specs, paths):

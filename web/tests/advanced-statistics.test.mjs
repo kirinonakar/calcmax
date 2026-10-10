@@ -62,6 +62,7 @@ test('weighted kappa requires an explicit shared ordinal category order',()=>{
 });
 
 test('CFA/SEM presets retain six indicators when switching estimator or groups',()=>{
+  assert.equal(schema.find(item=>item.id==='efa').controls.find(field=>field.key==='rotation').default,'oblimin');
   for(const id of ['cfa','sem']){
     const definition=schema.find(item=>item.id===id);
     for(const estimator of ['ml','wlsmv'])for(const groupMode of ['single','multi'])for(const invariance of ['configural','metric','scalar','strict']){

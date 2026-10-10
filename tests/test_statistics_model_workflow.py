@@ -2,7 +2,7 @@
 import csv
 import json
 import unittest
-from test_advanced_statistics import ROOT, tree
+from test_advanced_statistics import ROOT, tree, run
 from calc_engine import dispatch
 from calc_statistics_model_workflow import model_workflow
 
@@ -15,6 +15,9 @@ class StatisticsModelWorkflowTests(unittest.TestCase):
         plan=model_workflow('efa',value,inputs,labels)
         self.assertEqual(plan['factors'],[2,1,1]);self.assertEqual(plan['factorCount'],3)
         self.assertEqual(plan['data'],[['1.0','2.0','3.0'],['4.0','5.0','6.0']]);self.assertEqual(plan['termLabels'],labels)
+        self.assertEqual(plan['cross'],[[1,1],[2,2]])
+        self.assertEqual(plan['crossThreshold'],.3)
+        self.assertEqual(plan['efaLoadings'],value['loadings'])
 
     def test_cfa_preserves_crossloadings_missingness_and_all_options(self):
         plan=model_workflow('cfa',{},('cfa',[[[1,'NA',3,4,5,6],[2,3,4,5,6,7]],[1,1,1,2,2,2],[[2,2]],'fiml',[2,5],'scalar','ml'],[]),{'group:2':'Control','group:5':'Treatment'})
@@ -40,6 +43,15 @@ class StatisticsModelWorkflowTests(unittest.TestCase):
         self.assertEqual(next_plan['data'],plan['data']);self.assertEqual(next_plan['factors'],plan['factors'])
         self.assertEqual(next_plan['termLabels'],labels)
         self.assertEqual(next_plan['target'],'sem')
+
+    def test_first_column_crossloadings_use_pure_markers_and_survive_sem(self):
+        with (ROOT/'tests/fixtures/efa_study_habits_sample.csv').open(encoding='utf-8-sig',newline='') as file: rows=[[float(v) for v in row] for row in list(csv.reader(file))[1:]]
+        factors=[2,2,2,1,1,1];cross=[[1,1],[2,1],[6,2]]
+        cfa=run('cfa',rows,factors,cross);sem=run('sem',rows,factors,[[1,2]],cross)
+        for result in (cfa,sem):
+            self.assertEqual(len(result['Loadings']),9)
+            self.assertEqual([row['term'] for row in result['Loadings'] if row.get('Fixed')],['feature:3','feature:4'])
+            self.assertEqual([(int(row['term'].split(':')[1]),int(row['Factor'])) for row in result['Loadings'] if int(row['Factor'])!=factors[int(row['term'].split(':')[1])-1]],[(1,1),(2,1),(6,2)])
 
 
 if __name__=='__main__': unittest.main()

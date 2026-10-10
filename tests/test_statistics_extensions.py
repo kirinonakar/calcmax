@@ -69,7 +69,7 @@ class StatisticsExtensionTests(unittest.TestCase):
     def test_invalid_model_designs_and_missing_coverage(self):
         rows=self.cases[0]['arguments'][0]; assignment=[1,1,1,2,2,2]
         cases=[('efa',[rows,2,'unknown']),('efa',[rows,2,'none','wrong']),('efa',[rows,'parallel','none','pa',5]),
-               ('cfa',[rows,assignment,[[1,2]]]),('cfa',[rows,assignment,[[2,2],[2,2]]]),
+               ('cfa',[rows,assignment,[[1,2],[2,2],[3,2]]]),('cfa',[rows,assignment,[[2,2],[2,2]]]),
                ('cfa',[rows,assignment,[],'fiml',[1]*len(rows),'unknown']),
                ('cfa',[[r[:3]+['NA']*3 if i%2 else ['NA']*3+r[3:] for i,r in enumerate(rows)],assignment,[],'fiml']),
                ('manova',[rows,'repeated',4]),('manova',[[[1,1,2,3]]*10,'factorial',2,2])]

@@ -68,7 +68,7 @@ def calculate(engine,name,a):
                           'Alpha if deleted':alpha(mp.matrix([[used[i,k] for k in rest] for i in rest])) if p>2 and restvar>0 else None})
         return {'n':n,'items':p,'Cronbach α':alpha(used),'Raw α':alpha(cov),'Standardized α':alpha(corr),'Item diagnostics':items,
                 'Assumptions':'Complete rows; reverse-code items before analysis. Alpha measures internal consistency.'}
-    rotation=option(a,2,'varimax'); extraction=option(a,3,'pca')
+    rotation=option(a,2,'oblimin'); extraction=option(a,3,'pca')
     require(rotation in ('varimax','none','promax','oblimin'),'Choose varimax, promax, oblimin or none')
     require(extraction in ('pa','pca'),'Choose pa (principal axis) or pca (principal components)')
     corr,centers,scales=correlation(rows); inv=inverse(corr)

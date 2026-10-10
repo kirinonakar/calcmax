@@ -140,7 +140,9 @@ def calculate(engine,name,a):
         for pair in a[offset]:
             require(isinstance(pair,(list,tuple)) and len(pair)==2,'Use [indicator,factor] cross-loadings')
             i,j=integer(pair[0],1,p)-1,integer(pair[1],1,k)-1
-            require(i not in markers and j!=assignment[i]-1,'Cross-loadings must be additional factors on non-marker indicators'); cross.append((i,j))
+            require(j!=assignment[i]-1,'Cross-loadings must be additional factors'); cross.append((i,j))
+    from calc_advanced_sem_summary import measurement_markers
+    markers=measurement_markers(groups,cross)
     if name=='sem' and len(a)>2:
         require(isinstance(a[2],(list,tuple)),'Use [source,target] latent paths')
         for pair in a[2]:
@@ -262,7 +264,7 @@ def calculate(engine,name,a):
             'TLI':(base/basedf-statistic/df)/(base/basedf-1) if df and abs(base/basedf-1)>1e-12 else None,
             'RMSEA':math.sqrt(max(statistic-df,0)*len(labels)/(df*(n-len(labels)))) if df else None,'Iterations':iterations,
             'Fit index convention':'Scaled-shifted model and independence tests; N−G RMSEA denominator with multiplier G.',
-            'Assumptions':'Complete ordinal numeric category codes ordered numerically; underlying bivariate-normal responses. Two-stage marginal thresholds/polychoric ML; full casewise influence covariance for sandwich Wald SEs and mean/variance-adjusted T3. Theta parameterization: residual variances fixed at 1 in each configural/metric group and the reference scalar group. Scalar shares loadings/response thresholds and frees other-group latent means and response residual variances; strict fixes residual variances at 1 in all groups. Multi-group scalar/strict requires at least three identical observed categories per indicator. Marker loadings fixed at 1; acyclic latent paths and independent response errors. Adjusted χ² values cannot be subtracted for a nested-model difference test.'}
+            'Assumptions':'Complete ordinal numeric category codes ordered numerically; underlying bivariate-normal responses. Two-stage marginal thresholds/polychoric ML; full casewise influence covariance for sandwich Wald SEs and mean/variance-adjusted T3. Theta parameterization: residual variances fixed at 1 in each configural/metric group and the reference scalar group. Scalar shares loadings/response thresholds and frees other-group latent means and response residual variances; strict fixes residual variances at 1 in all groups. Multi-group scalar/strict requires at least three identical observed categories per indicator. The first pure indicator per factor is the marker with loading fixed at 1; acyclic latent paths and independent response errors. Adjusted χ² values cannot be subtracted for a nested-model difference test.'}
     locals=[]; discrepancy=0.
     for g in prepared:
         values,load,latent,path,errors,means,thresholds,sigma=model(estimates,g)

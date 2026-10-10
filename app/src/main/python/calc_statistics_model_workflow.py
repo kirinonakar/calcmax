@@ -15,8 +15,10 @@ def model_workflow(name,value,inputs,labels):
     feature_labels.update({key:label for key,label in labels.items() if key.startswith('group:')})
     if name=='efa':
         k=int(value['Factors'])
-        factors=[max(range(k),key=lambda j:abs(float(row[j])))+1 for row in value['loadings']]
-        cross=[]; missing='complete'; groups=[]; invariance='configural'; estimator='ml'
+        loadings=[[float(v) for v in row] for row in value['loadings']]
+        factors=[max(range(k),key=lambda j:abs(row[j]))+1 for row in loadings]
+        cross=[[i+1,j+1] for i,row in enumerate(loadings) for j,v in enumerate(row) if j+1!=factors[i] and abs(v)>=.3]
+        missing='complete'; groups=[]; invariance='configural'; estimator='ml'
     else:
         factors=[int(v) for v in args[1]] if len(args)>1 else [1]*p
         k=max(factors)
@@ -25,6 +27,8 @@ def model_workflow(name,value,inputs,labels):
         groups=[token(v) for v in args[4]] if len(args)>4 else []
         invariance=str(args[5]) if len(args)>5 else 'configural'
         estimator=str(args[6]) if len(args)>6 else 'ml'
-    return {'target':'cfa' if name=='efa' else 'sem','data':data,'factors':factors,'factorCount':k,
+    workflow={'target':'cfa' if name=='efa' else 'sem','data':data,'factors':factors,'factorCount':k,
             'cross':cross,'missing':missing,'groups':groups,'invariance':invariance,'estimator':estimator,
             'termLabels':feature_labels}
+    if name=='efa': workflow.update({'efaLoadings':loadings,'crossThreshold':.3})
+    return workflow

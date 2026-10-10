@@ -91,9 +91,11 @@ def calculate(engine,name,a):
         for pair in a[offset]:
             require(isinstance(pair,(list,tuple)) and len(pair)==2,'Use [indicator,factor] cross-loadings')
             i=integer(pair[0],1,p)-1; j=integer(pair[1],1,k)-1
-            require(j!=assignments[i]-1 and i not in markers,'Cross-loadings must be additional factors on non-marker indicators')
+            require(j!=assignments[i]-1,'Cross-loadings must be additional factors')
             cross.append((i,j))
     require(len(set(cross))==len(cross),'Cross-loadings must be distinct')
+    from calc_advanced_sem_summary import measurement_markers
+    markers=measurement_markers(groups,cross)
     paths=[]
     if name=='sem' and len(a)>2:
         for pair in a[2]:
@@ -255,7 +257,7 @@ def calculate(engine,name,a):
             'RMSEA':math.sqrt(max(statistic-df,0)*len(labels)/(df*(totaln-len(labels)))) if df else None,'Iterations':iterations,
             'RMSEA convention':'N−G denominator, group multiplier G; uncorrected normal-theory index',
             'Missing patterns':sum(len(g['patterns']) for g in prepared),'Dropped empty rows':len(rows)-totaln,
-            'Assumptions':'Continuous multivariate-normal indicators; at least three primary indicators per factor and first primary loading fixed at 1. Cross-loadings use selected indicator positions on non-marker indicators. Acyclic latent paths, independent indicator errors and endogenous disturbances. FIML estimates the observed-data likelihood and indicator means under MCAR/MAR. Configural groups estimate separate parameters; metric groups share raw loadings and estimate other parameters separately. Scalar groups also share raw indicator intercepts, with reference latent means fixed at zero and other-group latent means free; strict also shares raw residual variances. Observed-information Wald inference.'}
+            'Assumptions':'Continuous multivariate-normal indicators; at least three primary indicators per factor and first pure primary loading fixed at 1. Cross-loadings use selected indicator positions on non-marker indicators. Acyclic latent paths, independent indicator errors and endogenous disturbances. FIML estimates the observed-data likelihood and indicator means under MCAR/MAR. Configural groups estimate separate parameters; metric groups share raw loadings and estimate other parameters separately. Scalar groups also share raw indicator intercepts, with reference latent means fixed at zero and other-group latent means free; strict also shares raw residual variances. Observed-information Wald inference.'}
     if len(labels)==1:
         result.update(results[0])
         sample=prepared[0]['sample']
