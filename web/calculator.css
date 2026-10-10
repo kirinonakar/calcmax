@@ -160,6 +160,8 @@ input:disabled,select:disabled{opacity:.45;cursor:default}
 .graph-input-line{display:flex;align-items:center;height:24px}
 .graph-input-line>span{flex:1;padding-right:4px;text-align:right;user-select:none}
 .graph-input-line>button{flex:none;width:24px;height:24px;min-height:0;padding:0;border-radius:4px;color:var(--muted);font:inherit}
+/* Use whole-pixel line boxes and identical font metrics for source and gutter. */
+#graph-source,.graph-line-gutter,#statistics-editor .line-numbered>textarea,#statistics-editor .line-numbers{font:14px/24px Consolas,"SFMono-Regular",monospace;letter-spacing:normal}
 #answer math{max-width:none}.graph-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:8px 0}.graph-toolbar label{margin:0;min-width:100px}.graph-toolbar button{background:var(--bar)}
 .graph-toolbar .graph-curve-picker{flex-direction:row;align-items:center;gap:10px}.graph-curve-picker span{white-space:nowrap}.graph-curve-picker select{width:auto;min-width:85px}
 #graph-formulas{display:flex;flex-wrap:nowrap;align-items:baseline;gap:8px;overflow-x:auto;max-width:100%;padding:4px 2px;font-family:"SymvaCAS Math","Cambria Math",math}

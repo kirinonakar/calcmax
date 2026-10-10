@@ -20,9 +20,11 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
 import com.kirinonakar.symvacas.calculator.CalculatorModel
@@ -73,12 +75,16 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
     val fieldFocus=remember {FocusRequester()}
     var focused by remember {mutableStateOf(false)}
     val lineHeight=24.sp
+    // Keep the first/last line leading and font metrics identical in both columns.
+    val style=MaterialTheme.typography.bodyLarge.copy(fontFamily=FontFamily.Monospace,lineHeight=lineHeight,color=c.ink,
+        platformStyle=PlatformTextStyle(includeFontPadding=false),
+        lineHeightStyle=LineHeightStyle(LineHeightStyle.Alignment.Center,LineHeightStyle.Trim.None))
     val lineCount=value.count {it=='\n'}+1
     Column(Modifier.fillMaxWidth()) {
         Text(label,fontSize=11.sp,color=c.muted)
         Row(Modifier.fillMaxWidth().height(if(expanded)360.dp else 180.dp).border(1.dp,if(focused)c.accent else c.grid)) {
             Box(Modifier.width(38.dp).fillMaxHeight().background(c.scientific).verticalScroll(vertical).then(statCellTouch(fieldFocus))) {
-                Text((1..lineCount).joinToString("\n"),Modifier.fillMaxWidth().padding(horizontal=4.dp,vertical=10.dp),fontSize=12.sp,fontFamily=FontFamily.Monospace,lineHeight=lineHeight,color=c.muted,textAlign=TextAlign.End,softWrap=false)
+                Text((1..lineCount).joinToString("\n"),Modifier.fillMaxWidth().padding(horizontal=4.dp,vertical=10.dp),style=style.copy(color=c.muted),textAlign=TextAlign.End,softWrap=false)
             }
             VerticalDivider(color=c.grid,thickness=1.dp)
             BoxWithConstraints(Modifier.weight(1f).fillMaxHeight().then(statCellTouch(fieldFocus))) {
@@ -86,7 +92,7 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
                 Box(Modifier.fillMaxSize().verticalScroll(vertical)) {
                     Box(Modifier.horizontalScroll(horizontal)) {
                         BasicTextField(value,onValue,Modifier.widthIn(min=minFieldWidth).keepInputVisible().focusRequester(fieldFocus).onFocusChanged {focused=it.isFocused}.testTag("statistics-direct-input"),
-                            textStyle=MaterialTheme.typography.bodyLarge.copy(fontFamily=FontFamily.Monospace,lineHeight=lineHeight),
+                            textStyle=style,
                             cursorBrush=SolidColor(c.accent),
                             decorationBox={inner->Box(Modifier.padding(horizontal=8.dp,vertical=10.dp)){inner()}})
                     }

@@ -32,8 +32,10 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.*
 import com.kirinonakar.symvacas.calculator.CalculatorModel
@@ -675,7 +677,10 @@ import kotlin.math.*
     var focused by remember {mutableStateOf(false)}
     val lineHeight=24.sp
     val rowHeight=with(LocalDensity.current){lineHeight.toDp()}
-    val style=MaterialTheme.typography.bodyLarge.copy(fontFamily=FontFamily.Monospace,fontSize=14.sp,lineHeight=lineHeight,color=c.ink)
+    // A full line box also keeps the first editable line aligned with its gutter row.
+    val style=MaterialTheme.typography.bodyLarge.copy(fontFamily=FontFamily.Monospace,fontSize=14.sp,lineHeight=lineHeight,color=c.ink,
+        platformStyle=PlatformTextStyle(includeFontPadding=false),
+        lineHeightStyle=LineHeightStyle(LineHeightStyle.Alignment.Center,LineHeightStyle.Trim.None))
     val deleteLabel=tr("Delete line")
     val inputLabel=tr("Graph expression")
     Column(Modifier.fillMaxWidth().padding(start=10.dp,end=10.dp,top=8.dp)) {
