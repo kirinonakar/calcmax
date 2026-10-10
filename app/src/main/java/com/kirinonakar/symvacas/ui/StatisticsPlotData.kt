@@ -81,7 +81,7 @@ internal fun statisticsPlotNumber(value:String?)=value?.statisticsNumericCell()?
 
 internal fun statisticsHeatMapData(rows:List<List<String>>,kind:String,grouping:String="columns",mode:String="raw",columnNames:List<String> = statisticsColumnNames(kind)):StatisticsHeatMapData {
     val names=statisticsColumnNames(kind)
-    val groupColumn=if(names.size>1&&grouping in listOf("first","last")) {if(grouping=="first")0 else names.lastIndex} else -1
+    val groupColumn=statisticsPlotGroupingColumn(grouping,names.size)
     val indices=names.indices.filter {it!=groupColumn}
     val values=rows.map {row->indices.map {statisticsPlotNumber(row.getOrNull(it))}.toMutableList()}.toMutableList()
     when(mode) {

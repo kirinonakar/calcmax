@@ -42,14 +42,16 @@ internal fun statisticsDetectedColumns(source:String):Int {
 }
 
 /** Group labels stay categorical, including numeric and date labels. */
-internal fun statisticsPlotSeries(rows:List<List<String>>,kind:String,grouping:String="columns"):List<Pair<String,List<Double>>> {
-    val names=statisticsColumnNames(kind)
+internal fun statisticsPlotGroupingColumn(grouping:String,count:Int):Int = when(grouping){"first"->0;"last"->count-1;else->grouping.removePrefix("column:").toIntOrNull() ?: -1}.takeIf {count>1&&it in 0 until count} ?: -1
+
+internal fun statisticsPlotSeries(rows:List<List<String>>,kind:String,grouping:String="columns",columnNames:List<String> = statisticsColumnNames(kind)):List<Pair<String,List<Double>>> {
+    val names=columnNames
     fun number(value:String?)=value?.statisticsNumericCell()?.toDoubleOrNull()?.takeIf(Double::isFinite)
-    if(grouping !in listOf("first","last")||names.size<2) {
+    if(statisticsPlotGroupingColumn(grouping,names.size)<0) {
         val numeric=statisticsNumericRows(rows,if(names.size>1)statisticsDateAxis(rows) else null)
         return names.mapIndexed {index,name->(if(names.size==1)"" else name) to numeric.mapNotNull {number(it.getOrNull(index))}}
     }
-    val groupColumn=if(grouping=="first")0 else names.lastIndex
+    val groupColumn=statisticsPlotGroupingColumn(grouping,names.size)
     val groups=linkedMapOf<String,List<MutableList<Double>>>()
     rows.forEach {row->
         val group=row.getOrNull(groupColumn)?.trim().orEmpty()
@@ -64,11 +66,11 @@ internal fun statisticsPlotSeries(rows:List<List<String>>,kind:String,grouping:S
 }
 
 internal data class StatisticsPlotPanel(val label:String,val series:List<Pair<String,List<Double>>>)
-internal fun statisticsPlotPanels(rows:List<List<String>>,kind:String,grouping:String):List<StatisticsPlotPanel> {
-    val names=statisticsColumnNames(kind)
-    if(grouping !in listOf("first","last")||names.size<2)return listOf(StatisticsPlotPanel("",statisticsPlotSeries(rows,kind)))
-    val groupColumn=if(grouping=="first")0 else names.lastIndex
-    return names.indices.filter {it!=groupColumn}.map {column->
+internal fun statisticsPlotPanels(rows:List<List<String>>,kind:String,grouping:String,columnNames:List<String> = statisticsColumnNames(kind)):List<StatisticsPlotPanel> {
+    val names=columnNames
+    if(statisticsPlotGroupingColumn(grouping,names.size)<0)return listOf(StatisticsPlotPanel("",statisticsPlotSeries(rows,kind,columnNames=names)))
+    val groupColumn=statisticsPlotGroupingColumn(grouping,names.size)
+    return names.indices.filter {it!=groupColumn&&rows.any {row->statisticsPlotNumber(row.getOrNull(it))!=null}}.map {column->
         val pairs=rows.map {row->listOf(row.getOrNull(groupColumn).orEmpty(),row.getOrNull(column).orEmpty())}
         StatisticsPlotPanel(names[column],statisticsPlotSeries(pairs,"xy","first"))
     }

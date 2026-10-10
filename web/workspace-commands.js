@@ -1,5 +1,6 @@
 import {computationLimitsRemoved} from './computation-limits.js';
 import {parse,latexInput} from './parser.js';
+import {statisticsComparisonData} from './statistics-comparison-data.js';
 function csvRecordDelimiter(source,start){
   // Excel separates columns with tabs; commas inside those cells are literal.
   let quoted=false;
@@ -84,27 +85,31 @@ export function statisticsDatasetSource(source,kind){
   const rows=numericStatisticsRows(statisticsDataRows(source,kind));
   return vector(statisticsColumnCount(kind)===1?rows.map(row=>row[0]).filter(Boolean):rows.filter(row=>row.every(Boolean)).map(vector));
 }
-export function statisticsAnalysisData(source,{op='stats',column=0,grouping='columns',firstGroup='',secondGroup='',kind}={}){
+export function statisticsAnalysisData(source,{op='stats',column=0,grouping='columns',groupColumns='auto',firstGroup='',secondGroup='',groupColumn=0,valueColumn=1,matching='order',subjectColumn=0,kind}={}){
   const paired=['regression','correlation','ttestpaired','wilcoxon','chi2independence','fisherexact'].includes(op)&&!(op==='wilcoxon'&&statisticsColumnCount(kind)===1);
   const categorical=['chi2independence','fisherexact'].includes(op);
-  const grouped=grouping==='groups'&&!paired&&(!kind||kind==='xy'),raw=kind?statisticsDataRows(source,kind):csvRows(source),rows=grouped||categorical?raw:numericStatisticsRows(raw),columns=Array.from({length:rows[0].length},(_,i)=>rows.map(r=>r[i]).filter(Boolean)),groups=new Map();
-  const columnNames=statisticsColumnNames(columns.length),pairFirst=categorical&&firstGroup?columnNames.indexOf(firstGroup):0,pairSecond=categorical&&secondGroup?columnNames.indexOf(secondGroup):1;
-  const pairs=pairFirst>=0&&pairSecond>=0&&pairFirst!==pairSecond?rows.filter(r=>r[pairFirst]&&r[pairSecond]).map(r=>categorical?[r[pairFirst],r[pairSecond]]:r):[];
-  if(grouped)for(const [name,number] of pairs){if(!groups.has(name))groups.set(name,[]);groups.get(name).push(number);}
-  const names=groups.size?[...groups.keys()]:statisticsColumnNames(columns.length),values=groups.size?[...groups.values()]:columns;
-  const first=groups.size?(names.includes(firstGroup)?names.indexOf(firstGroup):0):firstGroup?names.indexOf(firstGroup):0;
-  const second=groups.size?(names.includes(secondGroup)?names.indexOf(secondGroup):names.findIndex((_,i)=>i!==first)):secondGroup?names.indexOf(secondGroup):1;
-  const selected=groups.size?first:column;
-  const samples=paired?[pairFirst,pairSecond].map((at,i)=>({label:columnNames[at],values:pairs.map(row=>row[i])})):['anova','tukey','kruskal'].includes(op)?names.map((label,i)=>({label,values:values[i]})):['ttest2','ztest2','mannwhitney'].includes(op)?[first,second].map(i=>({label:names[i],values:values[i]})):[{label:names[selected],values:values[selected]}];
-  return {rows,groups,pairs,paired,categorical,first,second,samples};
+  const grouped=grouping==='groups'&&!['regression','correlation'].includes(op),raw=kind?statisticsDataRows(source,kind):csvRows(source),rows=grouped||categorical?raw:numericStatisticsRows(raw),width=rows[0]?.length||1;
+  const columnNames=statisticsColumnNames(width);
+  const pairSelection=categorical||op==='wilcoxon'||op==='ttestpaired';
+  const pairFirst=grouped&&categorical?Number(groupColumn):pairSelection&&firstGroup?columnNames.indexOf(firstGroup):0;
+  const pairSecond=grouped&&categorical?Number(valueColumn):pairSelection&&secondGroup?columnNames.indexOf(secondGroup):1;
+  let pairs=pairFirst>=0&&pairSecond>=0&&pairFirst!==pairSecond?rows.filter(row=>row[pairFirst]&&row[pairSecond]).map(row=>[row[pairFirst],row[pairSecond]]):[];
+  if(categorical)return {rows,groups:new Map(),pairs,paired,categorical,first:pairFirst,second:pairSecond,samples:[{label:columnNames[pairFirst],values:pairs.map(row=>row[0])},{label:columnNames[pairSecond],values:pairs.map(row=>row[1])}]};
+  if(['regression','correlation'].includes(op))return {rows,groups:new Map(),pairs,paired,categorical,first:0,second:1,samples:[{label:columnNames[0],values:pairs.map(row=>row[0])},{label:columnNames[1],values:pairs.map(row=>row[1])}]};
+  const all=['anova','welchanova','tukey','gameshowell','kruskal'].includes(op),two=['ttest2','ztest2','mannwhitney'].includes(op)||paired;
+  const plan=statisticsComparisonData(rows,{grouping:grouped?'groups':'columns',columns:groupColumns,group:groupColumn,value:valueColumn,first:paired?pairFirst:columnNames.indexOf(firstGroup)>=0?columnNames.indexOf(firstGroup):0,second:paired?pairSecond:columnNames.indexOf(secondGroup)>=0?columnNames.indexOf(secondGroup):1,firstGroup,secondGroup,matching,subject:subjectColumn,...(!two&&!all?{first:column}: {})},{all,paired,single:!two&&!all});
+  const labels=grouped?plan.labels:plan.labels.map(at=>columnNames[Number(at)]);
+  if(paired)pairs=plan.matrix;
+  const groups=new Map();if(grouped)for(let i=0;i<plan.labels.length;i++)groups.set(plan.labels[i],plan.samples[i]);
+  return {rows,groups,pairs,paired,categorical,first:0,second:1,omitted:plan.omitted,samples:labels.map((label,i)=>({label,values:plan.samples[i]}))};
 }
 export function statisticsCategoryLabels(pairs,first,second,shared=false){
   const left=[...new Set(shared?pairs.flat():pairs.map(row=>row[0]))],right=shared?left:[...new Set(pairs.map(row=>row[1]))];
   return {'table:row':first,'table:column':second,...Object.fromEntries(left.map((label,i)=>[`table:row:${i+1}`,label])),...Object.fromEntries(right.map((label,i)=>[`table:column:${i+1}`,label]))};
 }
-export function statisticsCommand(source,{op='stats',column=0,extra='0',tail='two',sigma='1',sigmaY='1',yatesCorrection=true,regression='linear',firth='auto',degree='3',alpha='0.1',l1Ratio='0.5',trees='100',maxDepth='10',seed='0',priorSD='2.5',credibleLevel='0.95',varianceShape='2',varianceScale='1',bayesianMethod='analytic',nutsSamples='500',nutsWarmup='500',nutsMaxDepth='8',nutsSeed='0',nutsChains='2',responseColumn,formula='A*exp(-k*x)+C',variable='x',initials='',grouping='columns',firstGroup='',secondGroup='',kind}={}){
+export function statisticsCommand(source,{op='stats',column=0,extra='0',tail='two',sigma='1',sigmaY='1',yatesCorrection=true,regression='linear',firth='auto',degree='3',alpha='0.1',l1Ratio='0.5',trees='100',maxDepth='10',seed='0',priorSD='2.5',credibleLevel='0.95',varianceShape='2',varianceScale='1',bayesianMethod='analytic',nutsSamples='500',nutsWarmup='500',nutsMaxDepth='8',nutsSeed='0',nutsChains='2',responseColumn,formula='A*exp(-k*x)+C',variable='x',initials='',grouping='columns',groupColumns='auto',firstGroup='',secondGroup='',groupColumn=0,valueColumn=1,matching='order',subjectColumn=0,anovaMethod='welch',independentMethod='welch',kind}={}){
   if(op==='regression'&&kind&&kind!=='xy'&&!(statisticsColumnCount(kind)>1&&['multiple','logistic','ridge','lasso','elasticnet','logisticridge','logisticlasso','logisticelasticnet','randomforest','randomforestclassifier','randomforestregressor','bayeslinear','bayeslogistic'].includes(regression)))throw new Error('Regression needs x,y data');
-  const {rows,groups,pairs,categorical,first,second,samples:activeSamples}=statisticsAnalysisData(source,{op,column,grouping,firstGroup,secondGroup,kind});
+  const {rows,groups,pairs,categorical,first,second,samples:activeSamples}=statisticsAnalysisData(source,{op,column,grouping,groupColumns,firstGroup,secondGroup,groupColumn,valueColumn,matching,subjectColumn,kind});
   const samples=activeSamples.map(sample=>sample.values),data=samples[0];
   if(!categorical){for(const number of samples.flat().filter(Boolean))parse(number);}
   const tailArgument=tail==='two'?'':','+tail;
@@ -126,9 +131,9 @@ export function statisticsCommand(source,{op='stats',column=0,extra='0',tail='tw
   if(categorical){if(first===second||first<0||second<0)throw new Error('Choose two different columns');if(pairs.length<2)throw new Error('Enter at least two complete rows in the selected columns.');const left=[...new Set(pairs.map(r=>r[0]))],right=[...new Set(pairs.map(r=>r[1]))];if(op==='fisherexact'&&(left.length!==2||right.length!==2))throw new Error('Fisher exact needs exactly two categories in each selected column.');if(op==='chi2independence'&&(left.length<2||right.length<2))throw new Error('Each selected column needs at least two categories.');return `${op}(${vector(pairs.map(r=>left.indexOf(r[0])+1))},${vector(pairs.map(r=>right.indexOf(r[1])+1))}${op==='fisherexact'?tailArgument:','+(yatesCorrection?1:0)})`;}
   if(op==='wilcoxon'&&statisticsColumnCount(kind)===1){if(!data?.length)throw new Error('Select a nonempty data column');return `wilcoxon(${vector(data)}${tailArgument})`;}
   if(['correlation','ttestpaired','wilcoxon'].includes(op)){if(pairs.length<2)throw new Error('Enter at least two complete paired rows');return `${op}(${op==='ttestpaired'?extra+',':''}${vector(pairs.map(r=>r[0]))},${vector(pairs.map(r=>r[1]))}${op!=='correlation'?tailArgument:''})`;}
-  if(op==='mannwhitney'){const [a,b]=samples;if(!a?.length||!b?.length||first===second)throw new Error('Select two different nonempty samples');return `mannwhitney(${vector(a)},${vector(b)}${tailArgument})`;}
-  if(['ttest2','ztest2'].includes(op)){const [a,b]=samples;if(!a?.length||!b?.length||first===second)throw new Error('Select two different nonempty samples');return `${op}(${extra},${op==='ztest2'?sigma+','+sigmaY+',':''}${vector(a)},${vector(b)}${tailArgument})`;}
-  if(['anova','tukey','kruskal'].includes(op)){if(samples.length<2||samples.some(s=>s.length<(op==='kruskal'?1:2)))throw new Error('Enter at least two observations in each group');return `${op}(${samples.map(vector).join(',')})`;}
+  if(op==='mannwhitney'){const [a,b]=samples;if(!a?.length||!b?.length||first===second)throw new Error('Select two different nonempty samples');return `mannwhitney(${vector(a)},${vector(b)}${op==='ttest2'&&independentMethod==='student'?',student':''}${tailArgument})`;}
+  if(['ttest2','ztest2'].includes(op)){const [a,b]=samples;if(!a?.length||!b?.length||first===second)throw new Error('Select two different nonempty samples');return `${op}(${extra},${op==='ztest2'?sigma+','+sigmaY+',':''}${vector(a)},${vector(b)}${op==='ttest2'&&independentMethod==='student'?',student':''}${tailArgument})`;}
+  if(['anova','welchanova','tukey','gameshowell','kruskal'].includes(op)){if(samples.length<2||samples.some(s=>s.length<(op==='kruskal'?1:2)))throw new Error('Enter at least two observations in each group');return `${op==='anova'&&anovaMethod!=='classic'?'welchanova':op}(${samples.map(vector).join(',')})`;}
   if(!data?.length)throw new Error('Select a nonempty data column');
   if(op==='ttest')return `ttest(${extra},${vector(data)}${tailArgument})`;
   if(op==='ztest')return `ztest(${extra},${sigma},${vector(data)}${tailArgument})`;

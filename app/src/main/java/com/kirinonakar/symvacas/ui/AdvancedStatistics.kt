@@ -59,20 +59,24 @@ internal fun advancedStatisticsRows(data:String,columnLimit:Int?=null,removeComp
     return if(statisticsHasHeader(rectangular)&&rectangular.first().none {it=="NA"})rectangular.drop(1) else rectangular
 }
 
-@Composable internal fun AdvancedStatistics(m:CalculatorModel,data:String,kind:String) {
+@Composable internal fun AdvancedStatistics(m:CalculatorModel,data:String,kind:String,section:String="advanced",title:String="Advanced analysis",onDataApplied:((String)->Unit)?=null) {
     val context=LocalContext.current
     val schema=remember {context.assets.open("advanced_statistics.json").bufferedReader().use {JSONArray(it.readText())}}
-    val definitions=remember {List(schema.length()){schema.getJSONObject(it)}}
+    val definitions=remember(section) {List(schema.length()){schema.getJSONObject(it)}.filter {it.getString("section")==section}}
+    val legacy=m.advancedStatisticsDraft.takeIf {draft->definitions.any {it.getString("id")==draft.optString("kind")}}
+    val draft=m.advancedStatisticsDraft.optJSONObject("panels")?.optJSONObject(section) ?: legacy ?: JSONObject()
     val ko=isKorean()
-    var expanded by rememberSaveable {mutableStateOf(true)}
-    var selected by rememberSaveable {mutableStateOf(m.advancedStatisticsDraft.optString("kind","padjust"))}
+    var expanded by rememberSaveable {mutableStateOf(section!="preparation")}
+    var selected by rememberSaveable {mutableStateOf(draft.optString("kind",definitions.first().getString("id")))}
     val definition=definitions.firstOrNull {it.getString("id")==selected} ?: definitions.first()
-    var source by rememberSaveable {mutableStateOf(m.advancedStatisticsDraft.optString("source",definition.getString("example")))}
-    var input by rememberSaveable {mutableStateOf(m.advancedStatisticsDraft.optString("input",if(definition.has("controls")&&source==definition.getString("example"))if(data.isBlank())"example" else "current" else "expression"))}
-    var formsText by rememberSaveable {mutableStateOf(m.advancedStatisticsDraft.optJSONObject("forms")?.toString() ?: "{}")}
+    var source by rememberSaveable {mutableStateOf(draft.optString("source",definition.getString("example")))}
+    var input by rememberSaveable {mutableStateOf(draft.optString("input",if(definition.has("controls")&&source==definition.getString("example"))if(data.isBlank()||definition.getString("input")=="none")"example" else "current" else "expression"))}
+    var formsText by rememberSaveable {mutableStateOf(draft.optJSONObject("forms")?.toString() ?: "{}")}
     var message by remember {mutableStateOf("")}
     var menuOpen by remember {mutableStateOf(false)}
-    var band by rememberSaveable {mutableStateOf(m.advancedStatisticsDraft.optBoolean("band",true))}
+    var band by rememberSaveable {mutableStateOf(draft.optBoolean("band",true))}
+    var exampleExpanded by rememberSaveable {mutableStateOf(false)}
+    var expressionExpanded by rememberSaveable {mutableStateOf(false)}
     var survivalReport by remember {mutableStateOf<JSONObject?>(null)}
     var survivalCopyResult by remember {mutableStateOf<JSONObject?>(null)}
     val clipboard=LocalClipboardManager.current
@@ -80,6 +84,8 @@ internal fun advancedStatisticsRows(data:String,columnLimit:Int?=null,removeComp
     var reportPlan by remember {mutableStateOf<SurvivalPlan?>(null)}
     var previousResult by remember {mutableStateOf<JSONObject?>(null)}
     var pending by remember {mutableStateOf(false)}
+    var imputationData by remember {mutableStateOf<String?>(null)}
+    var imputationExpression by remember {mutableStateOf("")}
     val forms=JSONObject(formsText)
     val settings=forms.optJSONObject(selected) ?: JSONObject()
     val columnLimit=statisticsColumnCount(kind)
@@ -98,52 +104,77 @@ internal fun advancedStatisticsRows(data:String,columnLimit:Int?=null,removeComp
         if(key in listOf("time","event","subject","response","group","grouping","offset","adjustment")||(selected=="glmm"&&key=="family"))next.put("predictors",if(selected=="survivalanalysis")"" else "auto")
         formsText=JSONObject(formsText).put(selected,next).toString();message=""
     }
-    LaunchedEffect(selected,source,input,formsText,band) {m.updateAdvancedStatisticsDraft(JSONObject().put("kind",selected).put("source",source).put("input",input).put("forms",JSONObject(formsText)).put("band",band))}
+    LaunchedEffect(selected,source,input,formsText,band) {
+        val next=JSONObject(m.advancedStatisticsDraft.toString())
+        val panels=next.optJSONObject("panels") ?: JSONObject()
+        panels.put(section,JSONObject().put("kind",selected).put("source",source).put("input",input).put("forms",JSONObject(formsText)).put("band",band))
+        m.updateAdvancedStatisticsDraft(next.put("panels",panels))
+    }
     LaunchedEffect(selected,source,input,formsText,data) {survivalReport=null;survivalCopyResult=null;pending=false}
     LaunchedEffect(m.result,m.busy) {
         if(pending&&!m.busy&&m.result!=null&&m.result!==previousResult){survivalReport=m.result?.optJSONObject("survival");survivalCopyResult=m.result?.takeIf {survivalReport!=null};pending=false}
     }
     HorizontalDivider()
-    StatisticsSectionToggle("Advanced analysis",expanded,"statistics-advanced-toggle") {expanded=!expanded}
+    StatisticsSectionToggle(title,expanded,"statistics-$section-toggle") {expanded=!expanded}
     if(expanded) {
-        fun choose(next:JSONObject) {selected=next.getString("id");source=next.getString("example");input=if(next.has("controls"))if(data.isBlank())"example" else "current" else "expression";message="";menuOpen=false;survivalReport=null;pending=false}
+        fun choose(next:JSONObject) {selected=next.getString("id");source=next.getString("example");input=if(next.has("controls"))if(data.isBlank()||next.getString("input")=="none")"example" else "current" else "expression";message="";menuOpen=false;survivalReport=null;pending=false}
         Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
             Box {
                 OutlinedButton(onClick={menuOpen=true}){Text(definition.getString(if(ko)"ko" else "label"))}
-                DropdownMenu(expanded=menuOpen,onDismissRequest={menuOpen=false}) {definitions.forEach {item->DropdownMenuItem(text={Text(item.getString(if(ko)"ko" else "label"))},onClick={choose(item)})}}
+                DropdownMenu(expanded=menuOpen,onDismissRequest={menuOpen=false}) {
+                    definitions.groupBy {it.getString(if(ko)"groupKo" else "group")}.forEach {(group,items)->
+                        Text(group,Modifier.padding(horizontal=12.dp,vertical=6.dp),fontSize=12.sp,color=LocalInstrument.current.muted)
+                        items.forEach {item->DropdownMenuItem(text={Text(item.getString(if(ko)"ko" else "label"))},onClick={choose(item)})}
+                    }
+                }
             }
-            if(selected!="survivalanalysis")SmallAction(if(ko)"생존분석" else "Survival analysis"){choose(definitions.first {it.getString("id")=="survivalanalysis"})}
+            if(section=="advanced"&&selected!="survivalanalysis")SmallAction(if(ko)"생존분석" else "Survival analysis"){choose(definitions.first {it.getString("id")=="survivalanalysis"})}
         }
         Text(definition.getString(if(definition.has("controls")&&input!="expression")if(ko)"formHelpKo" else "formHelp" else if(ko)"helpKo" else "help"),fontSize=11.sp,color=LocalInstrument.current.muted)
         if(definition.has("controls")) {
-            val ids=listOf("current","example","expression")
-            val inputLabels=if(ko)listOf("현재 데이터","예제","분석 식") else listOf("Current data","Example","Expression")
+            val ids=if(definition.getString("input")=="none")listOf("example","expression") else listOf("current","example","expression")
+            val inputLabels=ids.map {when(it){"current"->if(ko)"현재 데이터" else "Current data";"example"->if(ko)"예제·직접 설정" else "Example / parameters";else->if(ko)"분석 식" else "Expression"}}
             Choices(inputLabels,inputLabels[ids.indexOf(input).coerceAtLeast(0)],{label->
                 val next=ids[inputLabels.indexOf(label)];if(next=="expression")command.getOrNull()?.let {source=it};input=next;message=""
             },translate=false)
             if(input!="expression") {
-                StatisticsFormFields(definition,settings,columns,::setOption)
-                Text(if(ko)"${rows.size}행 · ${columns.joinToString(", ")}" else "${rows.size} rows · ${columns.joinToString(", ")}",fontSize=11.sp,color=LocalInstrument.current.muted)
-                if(input=="example")Text(rows.joinToString("\n"){it.joinToString(", ")},fontSize=11.sp,color=LocalInstrument.current.muted)
+                StatisticsFormFields(definition,settings,columns,rows,::setOption)
+                if(definition.getString("input")!="none")Text(if(ko)"${rows.size}행 · ${columns.joinToString(", ")}" else "${rows.size} rows · ${columns.joinToString(", ")}",fontSize=11.sp,color=LocalInstrument.current.muted)
+                if(input=="example"&&rows.isNotEmpty()) {
+                    SmallAction(if(exampleExpanded)"Hide example data" else "Show example data"){exampleExpanded=!exampleExpanded}
+                    if(exampleExpanded)Text(rows.joinToString("\n"){it.joinToString(", ")},fontSize=11.sp,color=LocalInstrument.current.muted)
+                }
+                SmallAction(if(expressionExpanded)"Hide analysis expression" else "Show analysis expression"){expressionExpanded=!expressionExpanded}
+                if(expressionExpanded)Text(command.getOrDefault(""),fontSize=11.sp,color=LocalInstrument.current.muted)
                 command.exceptionOrNull()?.message?.let {Text(tr(it),fontSize=12.sp,color=MaterialTheme.colorScheme.error)}
             }
         }
-        if(input=="expression"||!definition.has("controls"))Field(source,if(ko)"분석 식" else "Analysis expression",Modifier.fillMaxWidth().testTag("statistics-advanced-source")){source=it;message=""}
+        if(input=="expression"||!definition.has("controls"))Field(source,if(ko)"분석 식" else "Analysis expression",Modifier.fillMaxWidth().testTag("statistics-$section-source")){source=it;message=""}
         Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
             if(!definition.has("controls"))SmallAction(if(ko)"예제" else "Example"){source=definition.getString("example");message=""}
             if(definition.getString("input")!="none")SmallAction(if(ko)"현재 데이터" else "Use current data"){
                 if(definition.has("controls")){input="current";message=""}
                 else runCatching {advancedStatisticsCommand(definition,advancedStatisticsRows(data,columnLimit,m.removeComputationLimit))}.onSuccess {source=it;input="current";message=""}.onFailure {message=it.message.orEmpty()}
             }
-            CalculationButton("Analyze",m.busy&&m.calculationAction=="statistics-advanced",m.inputVersion,
+            CalculationButton("Analyze",m.busy&&m.calculationAction=="statistics-$section",m.inputVersion,
                 onCancel={pending=false;m.cancel()},onClick={command.getOrNull()?.let {
+                if(selected=="impute"&&input=="current"){imputationData=data;imputationExpression=it}
                 survivalReport=null;previousResult=m.result;pending=selected=="survivalanalysis"
                 reportPlan=if(pending&&input!="expression")survivalAnalysisPlan(rows,settings,columns) else null
                 val usesCurrentData=input=="current"&&(definition.has("controls")||it==runCatching {advancedStatisticsCommand(definition,rows)}.getOrNull())
-                val termLabels=if(usesCurrentData&&statisticsHasHeader(statisticsCsvRows(data))&&statisticsCsvRows(data).first().none {cell->cell=="NA"}||selected=="bayesbootstrap"&&input!="expression")advancedStatisticsTermLabels(definition,rows,settings,columns) else emptyMap()
-                m.calculationAction="statistics-advanced";m.edit(Editor(it));m.calculate(statisticsTermLabels=termLabels)
-            }},enabled=command.isSuccess&&command.getOrDefault("").isNotBlank()&&!m.busy&&!m.regressionBusy,modifier=Modifier.testTag("statistics-advanced-run"))
+                val termLabels=if(usesCurrentData||input!="expression")advancedStatisticsTermLabels(definition,rows,settings,columns) else emptyMap()
+                m.calculationAction="statistics-$section";m.edit(Editor(it));m.calculate(statisticsTermLabels=termLabels)
+            }},enabled=command.isSuccess&&command.getOrDefault("").isNotBlank()&&!m.busy&&!m.regressionBusy,modifier=Modifier.testTag("statistics-$section-run"))
             SmallAction(if(ko)"계산기로" else "Insert expression"){command.getOrNull()?.let {m.edit(Editor(it));m.mode="Scientific/CAS"}}
+        }
+        if(selected=="impute"&&onDataApplied!=null) {
+            val values=m.result?.optJSONObject("imputation")?.optJSONArray("data")
+            val appliedMessage=tr("Missing values applied to current data")
+            val valid=input=="current"&&imputationData==data&&imputationExpression==command.getOrNull()&&m.resultSource==imputationExpression&&values!=null&&!m.busy&&!m.regressionBusy
+            OutlinedButton(enabled=valid,modifier=Modifier.testTag("statistics-imputation-apply"),onClick={
+                runCatching {statisticsImputationCSV(data,values!!,columnLimit)}.onSuccess {updated->imputationData=null;onDataApplied(updated);message=appliedMessage}.onFailure {message=it.message.orEmpty()}
+            }){Text(tr("Apply to current data"))}
+            Text(tr("Apply replaces only missing cells in the current data; observed values and headers are retained. Reanalyze after editing data."),fontSize=11.sp,color=LocalInstrument.current.muted)
         }
         if(message.isNotBlank())Text(message,color=MaterialTheme.colorScheme.error,fontSize=12.sp)
         statisticsReportFor(m.result,m.resultSource.ifBlank {m.editor.source},setOf(selected))?.let {StatisticsResultReport(m,it)}
@@ -156,18 +187,17 @@ internal fun advancedStatisticsRows(data:String,columnLimit:Int?=null,removeComp
     }
 }
 
-@Composable private fun StatisticsFormFields(definition:JSONObject,settings:JSONObject,columns:List<String>,onChange:(String,String)->Unit) {
+@Composable private fun StatisticsFormFields(definition:JSONObject,settings:JSONObject,columns:List<String>,rows:List<List<String>>,onChange:(String,String)->Unit) {
     val ko=isKorean();val fields=definition.getJSONArray("controls")
     fun option(key:String):String {val field=(0 until fields.length()).map {fields.getJSONObject(it)}.first {it.getString("key")==key};return settings.optString(key,field.get("default").toString())}
     val visibleFields=(0 until fields.length()).map {fields.getJSONObject(it)}.filter {field->
         val conditions=field.optJSONObject("when")
         conditions==null||conditions.keys().asSequence().all {name->val values=conditions.getJSONArray(name);(0 until values.length()).any {values.getString(it)==option(name)}}
     }
-    val bayesian=definition.getString("id") in listOf("bayesproportion","bayesmean","bayesrate","bayescompare")
     var index=0
     while(index<visibleFields.size) {
         val field=visibleFields[index++];val key=field.getString("key")
-        if(bayesian&&field.getString("type")=="number") {
+        if(field.getString("type")=="number") {
             val pair=mutableListOf(field)
             if(index<visibleFields.size&&visibleFields[index].getString("type")=="number")pair.add(visibleFields[index++])
             Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
@@ -189,6 +219,12 @@ internal fun advancedStatisticsRows(data:String,columnLimit:Int?=null,removeComp
                 StatisticsSelectionTitle(label,translate=false)
                 Choices(names,names.getOrElse(ids.indexOf(value)){""},{name->onChange(key,ids[names.indexOf(name)])},translate=false)
             }
+            "group"->{
+                val at=option("group").toIntOrNull() ?: 0
+                val names=rows.map {it.getOrElse(at){""}.trim()}.filter(String::isNotBlank).distinct()
+                val selected=if(value in names)value else names.getOrNull(if(key=="secondGroup"&&names.size>1)1 else 0).orEmpty()
+                StatisticsSelectionTitle(label,translate=false);Choices(names,selected,{onChange(key,it)},translate=false)
+            }
             "column"->{
                 val selected=value.toIntOrNull()?.let {if(it==-1)columns.lastIndex else it}
                 StatisticsSelectionTitle(label,translate=false)
@@ -199,12 +235,12 @@ internal fun advancedStatisticsRows(data:String,columnLimit:Int?=null,removeComp
                 val roles=when(id) {
                     "cox"->listOf("time","event")
                     "survivalanalysis"->listOf("time","event")+if(option("grouping")=="groups")listOf("group") else emptyList()
-                    "poissonreg","nbreg","glm"->listOf("response")
+                    "poissonreg","nbreg","glm","multinomial","ordinal","crossvalidate","linearmodel"->listOf("response")
                     "ancova"->listOf("group","response")
                     else->listOf("subject","response")
                 }
                 val offsetRoles=if(id in listOf("poissonreg","nbreg","glmm","glm")&&option("adjustment")!="none"&&(id!="glmm"||option("family")!="binomial"))listOf("offset") else emptyList()
-                val excluded=if(key=="predictors")roles+offsetRoles else emptyList()
+                val excluded=if(key in listOf("predictors","categorical"))roles+offsetRoles else emptyList()
                 val reserved=excluded.mapNotNull {option(it).toIntOrNull()?.let {value->if(value==-1)columns.lastIndex else value}}
                 val selected=if(value=="auto")columns.indices.filter {it !in reserved} else value.split(',').mapNotNull(String::toIntOrNull)
                 StatisticsSelectionTitle(label,translate=false)

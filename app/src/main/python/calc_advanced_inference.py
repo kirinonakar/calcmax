@@ -23,6 +23,19 @@ def oneway(g):
 
 
 def calculate(engine, name, a):
+    if name=='friedman':
+        from calc_inference import _ranks
+        rows=table(a[0],2,3);n=len(rows);k=len(rows[0]);sums=[0]*k;ties=0
+        for row in rows:
+            ranks,counts=_ranks(row)
+            sums=[total+rank for total,rank in zip(sums,ranks)]
+            ties+=sum(count**3-count for count in counts)
+        correction=1-mp.mpf(ties)/(n*k*(k*k-1))
+        require(correction>0,'Friedman requires within-subject variation')
+        statistic=(12*sum(rank**2 for rank in sums)/(n*k*(k+1))-3*n*(k+1))/correction
+        engine.note+=' Friedman ranks within each subject, with tie correction; chi-square approximation, independent subjects and complete repeated conditions. Small samples or few conditions can give inaccurate p values; no exact/permutation inference.'
+        return {'chi2':float(statistic),'df':k-1,'p':float(_chisq_sf(statistic,k-1)),'subjects':n,'conditions':k,
+                'Kendall W':float(statistic/(n*(k-1))),'mean ranks':[float(rank/n) for rank in sums],'tie correction':float(correction),'method':'Tie-corrected chi-square approximation'}
     if name == 'padjust':
         vals = vector(a[0]); method = option(a,1,'holm'); alpha = number(a[2]) if len(a)>2 else .05
         require(all(0 <= p <= 1 for p in vals) and 0<alpha<1, 'p values must lie in [0,1]; alpha in (0,1)')

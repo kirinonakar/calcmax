@@ -8,21 +8,26 @@ internal fun advancedStatisticsTermLabels(definition:JSONObject,rows:List<List<S
     val controls=definition.optJSONArray("controls")
     val opts=(0 until (controls?.length() ?: 0)).associate {index->val field=controls!!.getJSONObject(index);val key=field.getString("key");key to settings.optString(key,field.get("default").toString())}
     fun column(key:String)=opts[key]?.toIntOrNull()?.let {if(it==-1)n-1 else it} ?: -1
-    if(id=="bayesbootstrap"&&opts["layout"]!="single") {
-        val names=if(opts["layout"]=="groups") {
-            val labels=rows.map {it.getOrElse(column("group")){""}.trim()}.filter(String::isNotBlank).distinct()
-            if(opts["order"]=="reverse")labels.reversed() else labels
-        } else listOf(columnLabels.getOrElse(column("first")){"Group A"},columnLabels.getOrElse(column("second")){"Group B"})
-        return mapOf("sample:A" to names.getOrElse(0){"Group A"},"sample:B" to names.getOrElse(1){"Group B"})
+    if(id in listOf("twowayanova","linearmodel"))return statisticsFactorialData(rows,opts,columnLabels).labels
+    if(id=="kstest"&&opts["mode"]!="two")return mapOf("sample:1" to columnLabels.getOrElse(column("first")){"Sample 1"})
+    if(id in listOf("cohend","bayescompare","levene","bartlett","eta2","friedman","repeatedanova","kstest")||id=="bayesbootstrap"&&opts["layout"]!="single") {
+        val selections=opts+mapOf("grouping" to (if(id=="bayesbootstrap")opts["layout"].orEmpty() else opts["grouping"].orEmpty()))
+        val plan=statisticsComparisonData(rows,selections,all=id in listOf("levene","bartlett","eta2","friedman","repeatedanova"))
+        var names=plan.labels.map {at->if(selections["grouping"]=="groups")at else columnLabels.getOrElse(at.toInt()){"Sample ${at.toInt()+1}"}}
+        if(id=="bayesbootstrap"&&opts["order"]=="reverse"&&opts["firstGroup"].isNullOrBlank()&&opts["secondGroup"].isNullOrBlank())names=names.reversed()
+        val labels=names.mapIndexed {index,name->"sample:${index+1}" to name}.toMap().toMutableMap()
+        if(id in listOf("friedman","repeatedanova"))names.forEachIndexed {index,name->labels["feature:${index+1}"]=name}
+        if(id=="bayesbootstrap"){labels["sample:A"]=names[0];labels["sample:B"]=names[1]};return labels
     }
     if(columnLabels.isEmpty())return emptyMap()
     fun multiple(excluded:List<Int>)=if(opts["predictors"]=="auto")(0 until n).filter {it !in excluded} else opts["predictors"].orEmpty().split(',').filter(String::isNotBlank).map(String::toInt)
     val predictors=when(id) {
-        "pca"->{
+        "pca","kmeans","friedman"->{
             val columns=if(opts["columns"]=="auto")(0 until n).toList() else opts["columns"].orEmpty().split(',').filter(String::isNotBlank).map(String::toInt)
             return columns.mapIndexed {index,at->"feature:${index+1}" to columnLabels.getOrElse(at){"Feature ${index+1}"}}.toMap()
         }
         "mcnemar"->{
+            if(opts["layout"]=="groups"){val plan=statisticsComparisonData(rows,opts+mapOf("grouping" to "groups"),paired=true);return statisticsCategoryLabels(plan.matrix.map {it[0] to it[1]},plan.labels[0],plan.labels[1],shared=true)}
             val first=column("first");val second=column("second")
             val pairs=if(opts["layout"]=="pairs")statisticsCategoryPairs(rows,first,second) else emptyList()
             return statisticsCategoryLabels(pairs,columnLabels.getOrElse(first){"x"},columnLabels.getOrElse(second){"y"},shared=true)
@@ -37,7 +42,7 @@ internal fun advancedStatisticsTermLabels(definition:JSONObject,rows:List<List<S
         "mixedmodel","gee","glmm"->multiple(listOf(column("subject"),column("response"))+if(id=="glmm"&&opts["family"]!="binomial"&&opts["adjustment"]!="none")listOf(column("offset")) else emptyList())
         "cox"->multiple(listOf(column("time"),column("event"))+if(opts["truncation"]=="entry")listOf(column("entry")) else emptyList())
         "poissonreg","nbreg"->multiple(listOf(column("response"))+if(opts["adjustment"]!="none")listOf(column("offset")) else emptyList())
-        "ordinal","multinomial"->(0 until (n-1).coerceAtLeast(0)).toList()
+        "ordinal","multinomial","crossvalidate"->multiple(listOf(column("response")))
         "survivalanalysis"->{
             val plan=survivalAnalysisPlan(rows,settings,columnLabels);val labels=mutableMapOf<String,String>()
             plan.groups.drop(1).forEachIndexed {index,group->
@@ -60,8 +65,8 @@ internal fun advancedStatisticsTermLabels(definition:JSONObject,rows:List<List<S
 internal fun guidedStatisticsCommand(definition:JSONObject,rows:List<List<String>>,settings:JSONObject=JSONObject(),columnLabels:List<String> = emptyList(),removeComputationLimit:Boolean=false):String {
     if(definition.getString("id")=="survivalanalysis")return survivalAnalysisPlan(rows,settings,columnLabels).command
     if(!definition.has("controls"))return advancedStatisticsCommand(definition,rows)
-    require(rows.any {row->row.any(String::isNotBlank)}) {"Enter data first"}
-    val n=rows.maxOf {it.size};val id=definition.getString("id");val controls=definition.getJSONArray("controls")
+    require(definition.getString("input")=="none"||rows.any {row->row.any(String::isNotBlank)}) {"Enter data first"}
+    val n=rows.maxOfOrNull {it.size} ?: 0;val id=definition.getString("id");val controls=definition.getJSONArray("controls")
     val opts=(0 until controls.length()).associate {index->val field=controls.getJSONObject(index);val key=field.getString("key");key to settings.optString(key,field.get("default").toString())}
     for(i in 0 until controls.length()) {
         val field=controls.getJSONObject(i)
@@ -96,6 +101,17 @@ internal fun guidedStatisticsCommand(definition:JSONObject,rows:List<List<String
         return selected.map {row->listOf(row[0],if(row[1]==eventValue)"1" else "0")+row.drop(2)}
     }
     return when(id) {
+        "testpower","samplesize"->{
+            val keys=listOf("effect",if(id=="testpower")"n" else "power","alpha")
+            require(keys.all {opts[it].orEmpty().isNotBlank()}) {"Enter all study design parameters"}
+            "$id(${keys.joinToString(","){opts.getValue(it)}},${opts["design"]}${if(opts["tail"]=="two")"" else ","+opts["tail"]})"
+        }
+        "bootstrapci"->"bootstrapci(${vector(values(col("column")))},${opts["statistic"]},${opts["level"]},${opts["samples"]},${opts["seed"]})"
+        "cohend"->{val plan=statisticsComparisonData(rows,opts,paired=opts["design"]=="paired",strict=true);"cohend(${plan.samples.joinToString(",",transform=::vector)},${opts["design"]})"}
+        "twowayanova","linearmodel"->{val plan=statisticsFactorialData(rows,opts,columnLabels);if(id=="twowayanova")"twowayanova(${table(plan.encoded)},${opts["interaction"]})" else "linearmodel(${table(plan.encoded)},${vector(plan.categorical)},${opts["order"]},${opts["ssType"]},${opts["coding"]})"}
+        "multinomial","ordinal"->{val response=col("response");"$id(${table(complete(multiple("predictors",listOf(response))+response))})"}
+        "kmeans"->"kmeans(${table(complete(multiple("columns")))},${opts["clusters"]},${opts["seed"]})"
+        "friedman"->{val plan=statisticsComparisonData(rows,opts,all=true,paired=true,strict=true);require(plan.samples.size>=3) {"Choose at least three conditions"};"friedman(${table(plan.matrix)})"}
         "bayesbootstrap"->{
             require(listOf("level","samples","seed").all {opts[it].orEmpty().isNotBlank()}) {"Enter all interval and simulation parameters"}
             val suffix="${opts["statistic"]},${opts["level"]},${opts["samples"]},${opts["seed"]}"
@@ -103,17 +119,9 @@ internal fun guidedStatisticsCommand(definition:JSONObject,rows:List<List<String
                 val data=values(col("column"));require(data.size>=2) {"Enter at least two observations"}
                 "bayesbootstrap(${vector(data)},$suffix)"
             } else {
-                var method=opts["comparison"]
-                val samples=if(opts["layout"]=="groups") {
-                    val pairs=complete(listOf(col("group"),col("value")));var labels=pairs.map {it[0]}.distinct()
-                    require(labels.size==2) {"Choose exactly two groups"}
-                    if(opts["order"]=="reverse")labels=labels.reversed()
-                    method="independent";labels.map {label->pairs.filter {it[0]==label}.map {it[1]}}
-                } else {
-                    val first=col("first");val second=col("second");distinct(listOf(first,second))
-                    if(method=="paired") {val pairs=complete(listOf(first,second));listOf(pairs.map {it[0]},pairs.map {it[1]})}
-                    else listOf(values(first),values(second))
-                }
+                val method=opts["comparison"]
+                val plan=statisticsComparisonData(rows,opts+mapOf("grouping" to opts.getValue("layout")),paired=method=="paired",strict=true)
+                val samples=if(opts["order"]=="reverse"&&opts["firstGroup"].isNullOrBlank()&&opts["secondGroup"].isNullOrBlank())plan.samples.reversed() else plan.samples
                 require(samples.all {it.size>=2}) {"Enter at least two observations in each group"}
                 "bayesbootstrap(${samples.joinToString(",",transform=::vector)},$suffix,$method)"
             }
@@ -140,8 +148,7 @@ internal fun guidedStatisticsCommand(definition:JSONObject,rows:List<List<String
             "glm(${table(mapped)},${opts["family"]},${opts["link"]},$alpha$suffix)"
         }
         "bayescompare"->{
-            val first=col("first");val second=col("second");distinct(listOf(first,second))
-            val samples=listOf(values(first),values(second))
+            val samples=statisticsComparisonData(rows,opts).samples
             require(samples.all {it.size>=2}) {"Enter at least two observations in each group"}
             val keys=listOf("variance","mu","kappa","alpha","beta","level","samples","seed")
             require(keys.all {opts.getValue(it).isNotBlank()}) {"Enter all Bayesian prior and interval parameters"}
@@ -157,14 +164,14 @@ internal fun guidedStatisticsCommand(definition:JSONObject,rows:List<List<String
             require(keys.all {opts.getValue(it).isNotBlank()}) {"Enter all Bayesian prior and interval parameters"}
             "$id($data,${keys.joinToString(",") {opts.getValue(it).trim()}})"
         }
-        "levene","bartlett"->{
+        "levene","bartlett","eta2"->{
             val samples=if(opts["grouping"]=="groups") {val pairs=complete(listOf(col("group"),col("value")));pairs.map {it[0]}.distinct().map {label->pairs.filter {it[0]==label}.map {it[1]}}} else multiple("columns").map(::values)
             require(samples.size>=2) {"Choose at least two groups"};"$id(${samples.joinToString(",",transform=::vector)})"
         }
         "mcnemar"->{
             val first=col("first");val second=col("second");distinct(listOf(first,second))
-            val pairs=if(opts["layout"]=="pairs")statisticsCategoryPairs(rows,first,second).map {listOf(it.first,it.second)} else complete(listOf(first,second))
-            val counts=if(opts["layout"]=="pairs") {
+            val pairs=if(opts["layout"]=="groups")statisticsComparisonData(rows,opts+mapOf("grouping" to "groups"),paired=true).matrix else if(opts["layout"]=="pairs")statisticsCategoryPairs(rows,first,second).map {listOf(it.first,it.second)} else complete(listOf(first,second))
+            val counts=if(opts["layout"]!="counts") {
                 val labels=pairs.flatten().distinct();require(labels.size==2) {"Paired observations require the same two categories"}
                 val bins=Array(2){IntArray(2)};pairs.forEach {bins[labels.indexOf(it[0])][labels.indexOf(it[1])]++};bins.map {row->row.map(Int::toString)}
             } else pairs.also {require(it.size==2) {"The count table needs exactly two rows"}}
@@ -182,7 +189,7 @@ internal fun guidedStatisticsCommand(definition:JSONObject,rows:List<List<String
             val selected=eventRows(listOfNotNull(entry)+multiple("predictors",reserved))
             "cox(${table(selected)},${opts["ties"]},${if(entry==null)-1 else 2},${if(opts["ph"]=="test")1 else 0})"
         }
-        "repeatedanova"->{val indices=multiple("columns");require(indices.size>=2) {"Choose at least two conditions"};"repeatedanova(${table(complete(indices))},${opts["factor2"]})"}
+        "repeatedanova"->{val plan=statisticsComparisonData(rows,opts,all=true,paired=true,strict=true);require(plan.samples.size>=2) {"Choose at least two conditions"};"repeatedanova(${table(plan.matrix)},${opts["factor2"]})"}
         "poissonreg","nbreg"->{
             val response=col("response");val offset=if(opts["adjustment"]!="none")col("offset") else null
             val reserved=listOfNotNull(response,offset);distinct(reserved)
@@ -226,7 +233,7 @@ internal fun guidedStatisticsCommand(definition:JSONObject,rows:List<List<String
         }
         "kstest"->{
             val first=col("first")
-            if(opts["mode"]=="two") {val second=col("second");distinct(listOf(first,second));"kstest(${vector(values(first))},${vector(values(second))})"}
+            if(opts["mode"]=="two") "kstest(${statisticsComparisonData(rows,opts).samples.joinToString(",",transform=::vector)})"
             else "kstest(${vector(values(first))},${opts["mode"]},${opts["location"]},${opts["scale"]})"
         }
         "impute"->{
@@ -238,9 +245,8 @@ internal fun guidedStatisticsCommand(definition:JSONObject,rows:List<List<String
             "impute(${table(cells)},$method$neighbors)"
         }
         "crossvalidate"->{
-            val width=rows.maxOf {it.size}
-            val cells=rows.map {row->List(width){index->row.getOrElse(index){""}.trim()}}
-            require(cells.all {row->row.all(String::isNotBlank)}) {"Complete rows required"}
+            val response=col("response")
+            val cells=complete(multiple("predictors",listOf(response))+response)
             val folds=opts.getValue("folds").trim();require(folds.toIntOrNull()?.let {it>=2&&it<=rows.size}==true) {"Folds must be between 2 and the row count"}
             val seed=opts.getValue("seed").trim();require(seed.toLongOrNull()?.let {it>=0}==true) {"Seed must be a nonnegative integer"}
             val model=opts.getValue("model");val split=opts.getValue("split")

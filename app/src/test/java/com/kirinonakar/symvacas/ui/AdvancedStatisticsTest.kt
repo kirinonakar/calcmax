@@ -8,6 +8,13 @@ import org.json.JSONArray
 import com.kirinonakar.symvacas.math.Parser
 
 class AdvancedStatisticsTest {
+    @Test fun imputationApplicationPreservesHeadersAndObservedPrecision() {
+        val source="\"Height, cm\",Weight,ID\n1,,s1\n2,4.000,s2\nNA,6,s3"
+        val filled=JSONArray("[[\"1\",\"5\"],[\"2\",\"4\"],[\"1.5\",\"6\"]]")
+        assertEquals("\"Height, cm\",Weight,ID\n1,5,s1\n2,4.000,s2\n1.5,6,s3",statisticsImputationCSV(source,filled,2))
+        assertTrue(runCatching {statisticsImputationCSV(source,JSONArray("[[\"1\",\"5\"]]"),2)}.isFailure)
+        assertEquals("ttest2(0,[3,6],[4,9],student)",statisticsTestCommand("t test",listOf(listOf("1","2","3","4"),listOf("2","5","6","9")),"columns:4","x-y","Two-sided","0","2","95",firstGroup="z",secondGroup="x4",independentMethod="student"))
+    }
     private fun definition(id:String,input:String,suffix:String="")=JSONObject().put("id",id).put("input",input).put("suffix",suffix)
 
     @Test(expected=IllegalArgumentException::class) fun rejectsIncompleteModelRows() {

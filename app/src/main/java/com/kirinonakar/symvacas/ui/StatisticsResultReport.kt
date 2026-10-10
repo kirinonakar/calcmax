@@ -6,7 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -64,21 +64,48 @@ internal fun statisticsCellText(m:CalculatorModel,cell:JSONObject)=ResultDisplay
             Text(tr(report.getString("title")),Modifier.weight(1f),style=MaterialTheme.typography.titleMedium,color=c.ink)
             TextButton(onClick={m.result?.let {clipboard.setText(AnnotatedString(statisticsResultCopyText(m,it,language)))}}){Text(tr("Copy result"),fontSize=12.sp)}
         }
-        StatisticsVisualizations(report.optJSONArray("plots"))
-        for(index in 0 until sections.length()) {
+        report.optJSONArray("highlights")?.let {highlights->
+            for(start in 0 until highlights.length() step 2)Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                for(index in start until minOf(start+2,highlights.length())) {
+                    val item=highlights.getJSONObject(index)
+                    Column(Modifier.weight(1f).background(c.grid).padding(10.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
+                        Text(tr(item.getString("label")),fontSize=11.sp,color=c.muted)
+                        Text(statisticsCellText(m,item.getJSONObject("value")),fontSize=17.sp,fontWeight=FontWeight.SemiBold,color=c.ink)
+                    }
+                }
+                if(start+1==highlights.length())Spacer(Modifier.weight(1f))
+            }
+        }
+        report.optJSONArray("notes")?.let {notes->
+            if(notes.length()>0){var notesExpanded by remember(report){mutableStateOf(false)}
+                TextButton(onClick={notesExpanded=!notesExpanded}){Text((if(notesExpanded)"▾ " else "▸ ")+tr("Interpretation & assumptions"))}
+                if(notesExpanded)for(index in 0 until notes.length())Text(tr(notes.getString(index)),fontSize=12.sp,color=c.muted)
+            }
+        }
+        val primary=setOf("Summary","ANOVA","Overall model","Overall ANOVA","Overall Welch ANOVA",report.getString("title"))
+        val prominent=primary+setOf("Summary","Sample summaries","Assumption checks","Effect size","Mean confidence interval (95%, two-sided)","Overall ANOVA","Expected-count diagnostics")
+        val ordered=(0 until sections.length()).sortedBy {when(sections.getJSONObject(it).getString("title")){in primary->0;in prominent->1;else->2}}
+        var plotsShown=false
+        for(index in ordered) {
             val section=sections.getJSONObject(index)
+            if(section.getString("title") !in prominent&&!plotsShown){StatisticsVisualizations(report.optJSONArray("plots"));plotsShown=true}
             val columns=section.getJSONArray("columns")
             val rows=section.getJSONArray("rows")
-            Text(tr(section.getString("title")),fontSize=13.sp,fontWeight=FontWeight.SemiBold,color=c.ink)
+            val collapsible=section.optInt("totalRows")>12&&section.getString("title") !in prominent
+            var expanded by remember(report,index) {mutableStateOf(!collapsible)}
+            if(collapsible)TextButton(onClick={expanded=!expanded}){Text("${if(expanded)"▾" else "▸"} ${tr(section.getString("title"))} (${section.optInt("totalRows")})")}
+            else Text(tr(section.getString("title")),fontSize=13.sp,fontWeight=FontWeight.SemiBold,color=c.ink)
+            if(!expanded)continue
             StatisticsTextTable(List(columns.length()){tr(columns.getString(it))},List(rows.length()){rowIndex->
                 val row=rows.getJSONArray(rowIndex)
                 List(columns.length()){column->
                     row.optJSONObject(column)?.let {statisticsCellText(m,it)}
-                        ?: if(columns.optString(column)=="Metric")tr(row.optString(column)) else row.optString(column)
+                        ?: if(columns.optString(column) in listOf("Metric","Check","Interpretation","Sample"))tr(row.optString(column)) else row.optString(column)
                 }
             })
             if(section.optInt("totalRows")>rows.length())Text("${rows.length()} / ${section.optInt("totalRows")} · ${tr("Copy result includes all rows.")}",fontSize=11.sp,color=c.muted)
         }
+        if(!plotsShown)StatisticsVisualizations(report.optJSONArray("plots"))
         m.result?.optString("note")?.takeIf(String::isNotBlank)?.let {Text(it,fontSize=12.sp,color=c.muted)}
     }
 }

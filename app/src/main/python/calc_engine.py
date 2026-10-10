@@ -21,12 +21,14 @@ from calc_statistics import pearson_correlation
 from calc_probability import probability
 from calc_advanced_statistics import FUNCTIONS as ADVANCED_STATISTICS
 from calc_statistics_report import BASIC as BASIC_STATISTICS, statistics_report, statistics_copy_report
+from calc_statistics_diagnostics import companion_report
 
 # Symbolic calls whose cold first evaluation is heavy enough that the generic step allowance used
 # to cut off legitimate work. Nested calls count too, so 1+fourier(exp(-t^2),t,w) is heavy as well.
 HEAVY_CALLS=("solve","integrate","dsolve","desolve","laplace","ilaplace","fourier","ifourier","mellin","invmellin","ztrans","invztrans","pdsolve","domain","range","real_roots","rsolve","invt","tinterval","tukey","tvmrate","irr","regression","wilcoxon","mannwhitney")
 MAX_SHOWN_INTEGER_DIGITS=10000
 HEAVY_CALLS += tuple(ADVANCED_STATISTICS)
+HEAVY_CALLS += ('anova','welchanova','tukey','gameshowell')
 HEAVY_CALLS += ("factorint","divisors")
 HEAVY_CALLS += ("mean", "median", "variance", "stdev", "sumdata", "quartiles", "stats",
                 "covariance", "correlation", "ttest", "ttest2", "ttestpaired", "ztest", "ztest2",
@@ -134,10 +136,12 @@ def _dispatch(payload, control=None):
             if tree.get('kind')=='call' and tree.get('value') in BASIC_STATISTICS | (ADVANCED_STATISTICS-{'survivalanalysis'}):
                 result['statisticsReport']=statistics_report(tree['value'],shown_value,engine.precision,request.get('statisticsTermLabels', {}))
                 if hasattr(engine,'statistics_plots'):
-                    result['statisticsReport']['plots']=engine.statistics_plots
+                    result['statisticsReport']['plots']=engine.statistics_plots+result['statisticsReport']['plots']
+                companion_report(result['statisticsReport'],tree['value'],shown_value,getattr(engine,'statistics_inputs',None),engine.precision,request.get('statisticsTermLabels',{}),getattr(engine,'statistics_residuals',None))
             if request["tree"].get("value")=="survivalanalysis" and hasattr(engine,"survival_report"):
                 result["survival"]=engine.survival_report
                 result["statisticsCopyReport"]=statistics_copy_report('survivalanalysis',value,engine.survival_report,engine.precision)
+            if hasattr(engine,'imputation_result'): result['imputation']=engine.imputation_result
             if dms_result:
                 result["tree"]=dms_tree(display_value)
                 result["decimalTree"]=dms_tree(decimal_value)

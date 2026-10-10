@@ -559,41 +559,122 @@ Example: cauchycdf(-1,1,0,1)
 `invcauchy(q)` / `invcauchy(q,x₀,γ)` — Cauchy quantile for 0 ≤ q ≤ 1. Endpoints return −∞ and ∞; q=0.5 returns the location (median).
 Example: invcauchy(0.75,0,1)
 
-## Statistical tests
+## Stats — choosing a test
 
-`ttest(μ0,[...])` — One-sample t test of the sample mean against μ0.
+```text
+What do you want to compare?
+├─ Numeric values
+│  ├─ One sample vs a target mean → One-sample t test
+│  ├─ Two independent groups → Welch t test
+│  ├─ Before/after on the same subjects → Paired t test
+│  ├─ 3+ independent groups → Welch ANOVA → Games–Howell
+│  │  └─ Equal-variance ANOVA selected → Tukey–Kramer
+│  ├─ Same subjects in several conditions → Repeated-measures ANOVA / Friedman
+│  ├─ Two independent factors → Two-way ANOVA
+│  ├─ 3+ factors / numeric covariates → Factorial linear model
+│  └─ Groups with covariates to adjust → ANCOVA
+├─ Categories / counts
+│  ├─ Independent categories → χ² independence
+│  │  └─ Sparse 2×2 table → Fisher exact
+│  ├─ Paired binary outcomes → McNemar
+│  └─ Counts vs expected frequencies → χ² goodness of fit
+├─ Time until an event, with censoring → Survival analysis
+└─ Predict a response from variables → Regression & models
+
+Review shape, outliers and study design:
+  Mean analysis → Shapiro–Wilk + Q–Q plot
+  Equal-variance assumption → Brown–Forsythe / Levene
+  Independent rank comparisons → Mann–Whitney (2), Kruskal–Wallis (3+)
+  Symmetric paired differences → Wilcoxon signed-rank
+```
+
+### Independent and paired samples at a glance
+
+| Data structure | Parametric comparison | Nonparametric comparison | Available in this app |
+| --- | --- | --- | --- |
+| Two independent groups | Student / Welch t-test | Mann–Whitney U | All provided; Welch default |
+| Two paired groups | Paired t-test | Wilcoxon signed-rank | Both provided |
+| 3+ independent groups | ANOVA / Welch ANOVA | Kruskal–Wallis | All provided; Welch ANOVA default |
+| 3+ repeated conditions | Repeated-measures ANOVA | Friedman test | Both provided |
+
+The table compares design-matched families, not interchangeable estimands. Rank comparisons need their own shape/symmetry assumptions for location interpretations. Repeated conditions are measurements of the same subjects, not independent groups.
+
+Choose by purpose, measurement scale and study design first. Do not automatically switch tests based only on a normality p value. Welch t does not require equal variances. One-way ANOVA defaults to Welch with Games–Howell. Choosing equal-variance ANOVA automatically adds Tukey. Rank tests also have assumptions. Use z tests only for known population SDs.
+
+Raw-data t tests, t intervals, ANOVA and Tukey include sample summaries, assumption checks, Q–Q plots and distributions. t tests add effect sizes and two-sided 95% mean intervals; ANOVA adds η² and automatic post-hoc comparisons; Tukey/Games–Howell add overall ANOVA. Paired t checks differences; ANCOVA and factorial linear models check residuals. Summary-only input explicitly reports that normality cannot be checked.
+
+### Parametric methods with normal-model assumptions
+- One-sample / paired t tests and t intervals: exact small-sample inference assumes a normal population; paired tests concern the differences. Larger samples may be robust, but inspect skewness and influential outliers.
+- Welch t: normal-model mean comparison; equal variances are not required. Student's pooled-variance t additionally requires equal variances. Welch is the default; Student is selectable.
+- Welch ANOVA / Games–Howell: normal-model independent mean comparisons without equal variances; default one-way suite.
+- Two-way ANOVA / factorial linear models: normal independent errors, common residual variance, identifiable replicated design, and correctly specified interactions. Type II respects marginality; Type III uses sum contrasts for factorial effects.
+- Classic ANOVA / Tukey: independent normal errors and equal group variances. ANCOVA adds linear covariate effects and common slopes; repeated-measures ANOVA uses within-subject assumptions and sphericity corrections.
+- Gaussian mixed models: normal conditional errors and random effects, not necessarily a normal raw pooled response. Bayesian mean / two-sample comparisons assume their specified normal likelihood.
+- Bartlett: a variance test that is sensitive to non-normality; prefer median-centered Levene / Brown–Forsythe when normality is doubtful.
+
+### Parametric models do not all require normal observations
+- z tests / z intervals require known population SDs and a normal or suitably approximated sampling distribution of the mean; a sample SD alone is insufficient.
+- Binomial logistic, multinomial and ordinal models use categorical likelihoods; Poisson / negative-binomial models use count likelihoods. Check the chosen family, link, dispersion, design and model diagnostics instead of demanding normal outcomes.
+- GEE uses a mean/variance model and working correlation for clusters; it does not require normal raw outcomes. A robust covariance does not resolve very few clusters or a misspecified mean model.
+- GLMM assumptions follow its selected family and random effects. Bayesian proportion / Poisson rate models use binomial / Poisson likelihoods.
+
+### Nonparametric methods: no normality requirement
+- Mann–Whitney U: two independent distributions. Kruskal–Wallis: several independent distributions. A median/location interpretation needs comparable shapes; neither is simply a drop-in test of means.
+- Friedman: three or more repeated conditions, ranked within independent subjects; complete matched data and a chi-square approximation with tie correction.
+- Wilcoxon signed-rank: paired or one-sample differences, with symmetry for a location interpretation. Strong asymmetry is not fixed by choosing a rank test.
+- Kolmogorov–Smirnov: compare continuous distributions. A one-sample reference distribution must be fully specified independently; fitting its parameters from the same sample invalidates the usual p value (no Lilliefors correction here).
+- Kaplan–Meier / log-rank: censored event times without normality, but censoring and study-design assumptions still matter. Cox is semiparametric and requires proportional hazards, not normal outcomes.
+- Bootstrap: no normality assumption, but this app's IID resampling requires independent, representative observations; use an appropriate design for paired, clustered or time-dependent data.
+
+### Categorical tests: normality is not the decision criterion
+- χ² independence / goodness of fit: independent counts and adequate expected frequencies. Fisher exact: sparse independent 2×2 tables. McNemar: paired binary outcomes. Choose by design and counts, not Shapiro p values.
+
+### How to choose
+- Start with the question: mean difference, distribution difference, association, prediction or survival. Then identify independent groups, paired observations or clusters.
+- For mean questions, use the t/ANOVA family when its error model and design are reasonable. Inspect Q–Q plots, sample sizes, skewness and outliers together. Use Welch for independent two-group means with unequal variances.
+- For ordinal/rank or distribution questions, consider Mann–Whitney or Kruskal–Wallis; for paired symmetric location differences, consider Wilcoxon. State the changed estimand rather than calling every rank result a mean or median difference.
+- For severely non-normal, asymmetric or dependent data, review transformations, an appropriate distribution/cluster model or design-aware inference; a nonparametric label alone is not a remedy.
+- Shapiro p ≥ 0.05 does not prove normality; p < 0.05 does not automatically invalidate every mean analysis. Do not let a preliminary significance test silently choose the main method.
+
+`ttest(μ0,[...])` — Compare one sample mean with a target, such as average score against 70. One-sample t test of the sample mean against μ0.
 Example: ttest(0,[1,2,3,4])
-`ttest(μ0,x̄,s,n)` — The same test from the summary statistics.
+`ttest(μ0,x̄,s,n)` — Compare one sample mean with a target, such as average score against 70. The same test from the summary statistics.
 Example: ttest(0,2.5,1.291,4)
-`ztest(μ0,σ,[...])` — One-sample z test with the known standard deviation σ.
+`ztest(μ0,σ,[...])` — Compare a mean with a target only when population SD is known. One-sample z test with the known standard deviation σ.
 Example: ztest(0,2,[1,2,3,4])
-`ztest(μ0,σ,x̄,n)` — The same test from the summary statistics.
+`ztest(μ0,σ,x̄,n)` — Compare a mean with a target only when population SD is known. The same test from the summary statistics.
 Example: ztest(0,2,2.5,4)
-`chi2test(observed,expected)` — χ² goodness-of-fit test of observed counts against expected counts.
+`chi2test(observed,expected)` — Compare observed category frequencies with specified expected frequencies. χ² goodness-of-fit test of observed counts against expected counts.
 Example: chi2test([10,20,30],[15,20,25])
-`anova([...],[...],...)` — One-way analysis of variance over two or more data lists.
+`anova([...],[...],...)` — Compare means across independent groups; review normal errors and equal variances. One-way analysis of variance over two or more data lists.
 Example: anova([1,2,3],[4,5,6])
-`tukey([...],[...],...)` — Tukey–Kramer pairwise mean comparisons with adjusted p values; supports unequal group sizes.
+`ttest2(delta, A, B, student)` — Compare means of two unrelated groups; Welch allows unequal variances. Pooled Student t; the three-argument default remains Welch.
+
+`welchanova(A, B, ...)` — Compare independent group means with unequal variances; automatically includes Games–Howell comparisons. Unequal-variance one-way ANOVA with automatic Games–Howell.
+
+`gameshowell(A, B, ...)` — Compare each pair of independent group means without equal variances, with adjusted p values and simultaneous intervals. Pairwise unequal-variance comparisons and simultaneous 95% intervals.
+
+`tukey([...],[...],...)` — Identify which group means differ after ANOVA, with familywise multiplicity correction. Tukey–Kramer pairwise mean comparisons with adjusted p values; supports unequal group sizes.
 Example: tukey([1,2,3],[4,5,6],[7,8,9])
-`ttest2(Δ0,x,y)` — Two-sample t test of two independent samples (Welch).
+`ttest2(Δ0,x,y)` — Compare means of two unrelated groups; Welch allows unequal variances. Two-sample t test of two independent samples (Welch).
 Example: ttest2(0,[1,2,3],[2,4,5])
-`ttestpaired(Δ0,x,y)` — Paired t test on matched rows.
+`ttestpaired(Δ0,x,y)` — Compare before/after measurements or matched pairs; analyze A−B differences. Paired t test on matched rows.
 Example: ttestpaired(0,[1,2,3],[2,3,5])
-`ztest2(Δ0,σx,σy,x,y)` — Two-sample z test with the known standard deviations.
+`ztest2(Δ0,σx,σy,x,y)` — Compare two independent means when both population SDs are known. Two-sample z test with the known standard deviations.
 Example: ztest2(0,1,1,[1,2,3],[2,4,5])
-`chi2independence(x,y[,correction])` — χ² test of independence for two category columns. Yates continuity correction defaults to 1 (on) for 2×2 tables; use 0 for uncorrected Pearson χ². Other table sizes are always uncorrected. The result reports whether correction was applied.
+`chi2independence(x,y[,correction])` — Test association between two independent categorical variables. χ² test of independence for two category columns. Yates continuity correction defaults to 1 (on) for 2×2 tables; use 0 for uncorrected Pearson χ². Other table sizes are always uncorrected. The result reports whether correction was applied.
 Example: chi2independence([1,1,2,2],[1,2,1,2])
-`fisherexact(x,y)` — Fisher exact test for two categories in each column.
+`fisherexact(x,y)` — Test association in a 2×2 table, especially with small expected counts. Fisher exact test for two categories in each column.
 Example: fisherexact([1,1,1,1,1,1,2,2],[1,1,1,2,2,2,1,2])
-`shapiro(list)` — Shapiro-Wilk normality test (3 to 5000 values).
+`shapiro(list)` — Check evidence against normality; interpret with Q–Q plots, not as a pass/fail gate. Shapiro-Wilk normality test (3 to 5000 values).
 Example: shapiro([1,2,3,4,5])
-`tinterval(level,[...])` — t confidence interval for the mean; the level is a fraction (0.95) or a percentage (95).
+`tinterval(level,[...])` — Estimate a mean with uncertainty when population SD is unknown. t confidence interval for the mean; the level is a fraction (0.95) or a percentage (95).
 Example: tinterval(0.95,[1,2,3,4])
-`tinterval(level,x̄,s,n)` — The same interval from the summary statistics.
+`tinterval(level,x̄,s,n)` — Estimate a mean with uncertainty when population SD is unknown. The same interval from the summary statistics.
 Example: tinterval(95,2.5,1.291,4)
-`zinterval(level,σ,[...])` — z confidence interval with the known standard deviation σ.
+`zinterval(level,σ,[...])` — Estimate a mean interval when population SD is known. z confidence interval with the known standard deviation σ.
 Example: zinterval(0.95,2,[1,2,3,4])
-`zinterval(level,σ,x̄,n)` — The same interval from the summary statistics.
+`zinterval(level,σ,x̄,n)` — Estimate a mean interval when population SD is known. The same interval from the summary statistics.
 Example: zinterval(95,2,2.5,4)
 - One-sample tests return two-tailed p values by default; append left or right for a one-sided test.
 
@@ -639,11 +720,11 @@ Example: regression([[0,1],[1,3],[2,9],[3,25],[4,57]],polynomial,3)
 Example: regression([[0,0,1],[1,0,3],[0,1,4],[1,1,7],[2,1,8]],multiple)
 `regression(data,logistic)` — Binomial logistic regression with an intercept and binary 0/1 response in the last column. Reports probability, coefficient/odds-ratio intervals, McFadden R², deviance, AIC and likelihood-ratio p. Complete separation automatically triggers Firth bias reduction; `regression(data,logistic,firth)` always applies Firth with profile penalized-likelihood intervals. Singular designs are rejected.
 Example: regression([[-3,0],[-2,0],[-1,1],[0,0],[0,1],[1,0],[2,1],[3,1]],logistic)
-`wilcoxon(differences)` — Signed-rank test against zero; zeros omitted. Also accepts paired x,y lists. Exact conditional sign permutation through 50 nonzero differences (including ties), otherwise tie-corrected normal approximation with continuity correction.
+`wilcoxon(differences)` — Compare paired differences using ranks when a symmetric location-shift model is appropriate. Signed-rank test against zero; zeros omitted. Also accepts paired x,y lists. Exact conditional sign permutation through 50 nonzero differences (including ties), otherwise tie-corrected normal approximation with continuity correction.
 Example: wilcoxon([1,2,3,4,5])
-`mannwhitney(x,y)` — Independent rank test. Exact distribution for untied samples with min(nx,ny)≤8 and total n≤100; otherwise tie-corrected normal approximation with continuity correction. Tests distributions; a location interpretation requires comparable distribution shapes.
+`mannwhitney(x,y)` — Compare distributions of two independent groups using ranks; a median interpretation needs similar shapes. Independent rank test. Exact distribution for untied samples with min(nx,ny)≤8 and total n≤100; otherwise tie-corrected normal approximation with continuity correction. Tests distributions; a location interpretation requires comparable distribution shapes.
 Example: mannwhitney([1,2,3],[4,5,6])
-`kruskal(group1,group2,...)` — Tie-corrected Kruskal–Wallis H and chi-square p. The approximation is more reliable with at least five observations per group.
+`kruskal(group1,group2,...)` — Compare distributions of independent groups using ranks; normality is not required. Tie-corrected Kruskal–Wallis H and chi-square p. The approximation is more reliable with at least five observations per group.
 Example: kruskal([1,2,3,4,5],[4,5,6,7,8],[7,8,9,10,11])
 
 Wilcoxon and Mann–Whitney accept `left` or `right`; default is two-sided. Wilcoxon tests symmetric differences about zero; Mann–Whitney compares the first sample against the second.
@@ -687,106 +768,139 @@ References: [Firth logistic regression](https://search.r-project.org/CRAN/refman
 
 ## Advanced statistics
 
-In Statistics, Advanced analysis provides controls for correction methods, column roles, groups, predictors and test options. Switch between current data, examples and an editable expression. Table analyses reject blank selected cells; impute converts them to NA. All advanced analyses use binary64 numerics.
+In Statistics, missing-value imputation belongs to Data preparation; distribution/variance tests, group comparisons, effect sizes and multiple testing belong to General analysis; factorial linear, generalized/mixed regression and cross-validation belong to Regression. Advanced analysis is ordered as Bayesian inference, Resampling, Multivariate analysis, Survival analysis, then Power & sample size. Switch between current data, examples and an editable expression. Paired comparisons use complete pairs and support subject-ID matching. Wide repeated-measures inputs reject incomplete rows; impute converts them to NA. These analyses use binary64 numerics.
 
-`ancova` — Rows: numeric group ID, one or more covariates, response; confidence level (default .95); slope homogeneity check 0/1 (default 1). One factor, common slopes, Type II F tests and adjusted means at pooled covariate means.
-Example: ancova([[1,1,3],[1,2,5],[1,3,4],[1,4,8],[2,2,6],[2,3,7],[2,4,9],[2,5,8],[3,1,5],[3,3,8],[3,4,10],[3,6,11]],0.95,1)
+### Data preparation
 
-`glm` — Rows: predictors, response; family gaussian / binomial (0/1) / poisson / gamma / inversegaussian / nbinom; link auto or a supported link; NB2 alpha: positive fixed value (default 1) or estimate for joint ML; optional offset/exposure vector and mode. Default links: identity, logit, log, log, log, log. Model-based Wald z 95% intervals; Pearson dispersion for Gaussian/Gamma/inverse Gaussian. Use estimate as the fourth argument to estimate NB2 alpha jointly with coefficients; its uncertainty enters the observed-information covariance. Numeric alpha retains the fixed-alpha model.
-Example: glm([[0,2],[1,4],[2,4],[3,7],[4,8],[5,9]],gaussian,auto,1)
+`impute` — Prepare incomplete data by single imputation; subsequent inference omits imputation uncertainty. NA for missing cells; mean / median / mode / regression / knn with neighbours (default 5). Single imputation.
+Example: impute([[1,NA],[2,4],[NA,6],[4,8]],mean)
 
-`padjust` — p values; method bonferroni / holm / fdr (BH) / by; alpha.
-Example: padjust([0.01,0.04,0.03,0.2],holm,0.05)
+### Distribution & variance
 
-`cohend` — Two samples; independent (pooled d) or paired (dz).
-Example: cohend([1,2,4,5],[2,3,5,8],independent)
-
-`eta2` — Independent groups as separate lists.
-Example: eta2([1,2,4,5],[2,3,5,8])
-
-`levene` — Separate group lists; median-centered equal-variance test.
-Example: levene([1,2,4,5],[2,3,5,8])
-
-`bartlett` — Separate group lists; normality assumption.
-Example: bartlett([1,2,4,5],[2,3,5,8])
-
-`mcnemar` — Paired 2×2 count table; exact / corrected / asymptotic.
-Example: mcnemar([[20,8],[2,15]],exact)
-
-`bayesproportion` — Binary 0/1 list or [[successes,trials],...]; Beta prior alpha, beta (default 1,1); credible level; threshold p0 in (0,1). Returns equal-tailed interval, P(p>p0), next-success probability and BF10 (Beta alternative / point null p=p0).
-Example: bayesproportion([1,1,0,1,0,1,1,1,0,1],1,1,0.95,0.5)
-
-`bayesmean` — Normal sample, unknown variance; prior mu0,kappa0,alpha0,beta0; credible level; threshold. Variance ~ InvGamma(alpha0,beta0), mean | variance ~ Normal(mu0,variance/kappa0). Defaults 0,1,2,1 are proper, scale-dependent priors. Returns Student-t mean interval and next-observation predictive interval.
-Example: bayesmean([1,2,3,4,5],0,1,2,1,0.95,0)
-
-`bayescompare` — Two independent normal samples (at least 2 each); variance equal / unequal; mu0,kappa0,alpha0,beta0; credible level; IID posterior draws (2000-100000), seed. H1: independent Normal(mu0,variance/kappa0) means with shared (equal) or independent (unequal) InvGamma(alpha0,beta0) variances. H0: B-A=0 with nuisance prior conditioned from H1. BF10/BF01 use Savage-Dickey, not a JZS/Cauchy prior. Reports B-A mean, equal-tailed credible interval, P(muB>muA), and posterior effect (B-A)/sqrt((varianceA+varianceB)/2). Equal-mode difference summaries and BF are analytic; unequal BF uses numerical t convolution, unequal intervals/probability and effect intervals use simulation. MCSE, draws and seed are reported. Defaults are proper but unit-dependent; choose priors before inspecting outcomes.
-Example: bayescompare([10,11,9,10,12],[13,14,12,15,13],equal,0,0.01,2,1,0.95,20000,0)
-
-`bayesrate` — Count list (one exposure unit each) or [[count,exposure],...]; Gamma prior shape, rate (inverse scale, default 1,1); credible level; nonnegative threshold. Equal-tailed rate interval and predictive count mean/SD for one exposure unit.
-Example: bayesrate([0,2,1,3,2],1,1,0.95,1)
-
-`kaplanmeier` — Rows: time, event (1=event, 0=censored); confidence level.
-Example: kaplanmeier([[1,1],[2,0],[3,1],[4,1],[5,0],[6,1]],0.95)
-
-`logrank` — Two time/event tables. Current data: time, event, group (exactly two groups).
-Example: logrank([[1,1],[3,1],[4,0],[6,1]],[[2,0],[4,1],[5,1],[7,0]])
-
-`survivalanalysis` — Rows: time, event (0/1), group ID, optional Cox predictors; Cox 0=off, 1=on; then ties and the PH check.
-Example: survivalanalysis([[1,1,1],[2,1,2],[3,0,1],[4,1,2],[5,1,1],[6,0,2],[7,1,2],[8,1,1]],0,efron,-1,1)
-
-`cox` — Rows: time, event 0/1, predictors. Ties efron (default) or breslow; entry column for left truncation (-1 none); PH check 0/1.
-Example: cox([[1,1,0],[2,1,1],[3,0,0],[4,1,1],[5,1,0],[6,0,1],[7,1,1],[8,1,0]],efron,-1,1)
-
-`repeatedanova` — Rows=subjects, columns=conditions. Second-factor levels: 1 = one-way, 2+ = two-way (first factor slowest); GG corrections.
-Example: repeatedanova([[2,4,5],[3,4,7],[4,7,8],[2,3,6],[5,6,7]],1)
-
-`mixedmodel` — Rows: subject ID, predictors, response. Gaussian random intercept with up to three random slopes (0 none, a predictor position, or [1,2]); third argument reml (default) or ml; up to 5000 rows. Includes subject BLUPs, slope correlations and singular-fit diagnostics; random-slope ICC is at x=0; asymptotic Wald z inference. Optional fourth argument: profile (ML fixed-effect profile CI) or [bootstrap,200,0] (parametric fixed-effect percentile CI); alternative CI omit Wald p-values. Reports logLik/AIC/BIC; compare REML criteria only with identical fixed effects and data. Nonconverged fits withhold Wald inference.
-Example: mixedmodel([[1,0,2],[1,1,4],[1,2,4],[2,0,3],[2,1,4],[2,2,6],[3,0,1],[3,1,3],[3,2,4],[4,0,4],[4,1,5],[4,2,8]],0,reml)
-
-`glmm` — Rows: subject ID, predictors, response. Random intercept, optionally one correlated random slope (seventh argument: selected predictor position, 0 = none). Slopes use two-dimensional Laplace (third argument 1), without quadrature refit; use [],offset,likelihood before the slope position. Covariance and conditional modes are reported in original units. Random intercept: binomial (0/1, logit), poisson or nbinom (NB2, log). ML adaptive Gauss-Hermite quadrature: 15 points default, 1 = Laplace, otherwise 7-31. Optional fourth argument offset vector, fifth offset / exposure. Limit 1500 rows, 8 fixed coefficients. Subject-specific effects; joint marginal observed information by central differences; asymptotic Wald inference. Few-subject Wald inference may be unreliable. Integration checks compare likelihood at another point count, including Laplace/31 points; optional sixth argument refit compares coefficients and suppresses CI/p if shifts exceed 0.1 SE. To omit offsets use [],offset before refit.
-Example: glmm([[1,0,0],[1,1,0],[1,2,1],[2,0,0],[2,1,1],[2,2,1],[3,0,0],[3,1,0],[3,2,0],[4,0,1],[4,1,1],[4,2,1],[5,0,1],[5,1,0],[5,2,1],[6,0,0],[6,1,1],[6,2,0]],binomial,15)
-
-`gee` — Rows: cluster ID, predictors, response. gaussian / binomial / poisson; working correlation independence / exchangeable / ar1; fourth argument [i,j] interaction pairs; sandwich SE. Pearson dispersion-adjusted correlation; AR(1) uses row order and equal spacing. Few-cluster Wald inference may be unreliable. Optional fifth argument small adds Mancl-DeRouen covariance and t inference with clusters minus coefficient count df; use [] as the fourth argument when there are no interactions. This does not guarantee reliable inference with very few clusters.
-Example: gee([[1,0,2],[1,1,4],[1,2,4],[2,0,3],[2,1,4],[2,2,6],[3,0,1],[3,1,3],[3,2,4],[4,0,4],[4,1,5],[4,2,8]],gaussian,independence)
-
-`multinomial` — Rows: predictors, numeric category response. Smallest category is reference.
-Example: multinomial([[-2,0],[-2,1],[-1,0],[-1,2],[0,0],[0,1],[0,2],[1,1],[1,2],[2,1],[2,2],[2,0]])
-
-`ordinal` — Rows: predictors, ordered numeric response. Proportional-odds cumulative logit.
-Example: ordinal([[-2,0],[-2,1],[-1,0],[-1,2],[0,0],[0,1],[0,2],[1,1],[1,2],[2,1],[2,2],[2,0]])
-
-`poissonreg` — Rows: predictors, integer count response. Log link. Optional second argument row-aligned offset/exposure list; third argument offset (default) or exposure (positive, log transformed).
-Example: poissonreg([[0,1],[0,0],[1,3],[1,1],[2,2],[2,5],[3,4],[3,8],[4,6],[4,10]])
-
-`nbreg` — Rows: predictors, integer count response. NB2 with estimated dispersion. Optional offset/exposure list and offset (default) / exposure mode.
-Example: nbreg([[0,0],[0,0],[0,1],[0,8],[1,0],[1,1],[1,3],[1,15],[2,0],[2,2],[2,5],[2,23],[3,1],[3,3],[3,10],[3,35]])
-
-`bootstrapci` — Statistic mean / median / stdev, confidence level, resamples, seed. Percentile IID bootstrap.
-Example: bootstrapci([1,2,3,4,5,8],mean,0.95,2000,0)
-
-`bayesbootstrap` — Dirichlet(1,…,1) weights on IID observed values; mean / median / variance / stdev, credible level, draws, seed. Median estimate uses the ordinary sample median (average the two middle values for even n); posterior draws use the Lower weighted quantile (smallest value with weighted CDF >= 0.5); variance/SD use population weights. Equal-tailed simulated posterior interval and histogram. Two samples: bayesbootstrap(A,B,mean,0.95,10000,0,independent); paired uses shared row weights. Comparison is statistic(B) - statistic(A).
-Example: bayesbootstrap([1,2,3,4,5,8],mean,0.95,10000,0)
-
-`testpower` — Cohen d, n per group/pairs, alpha, independent / paired / onesample, alternative two (default) / greater / less. Exact noncentral-t power.
-Example: testpower(0.5,64,0.05,independent)
-
-`samplesize` — Cohen d, target power, alpha, design, alternative. Exact noncentral-t power.
-Example: samplesize(0.5,0.8,0.05,independent)
-
-`kstest` — Two sample lists, or kstest(data,normal,mu,sigma) / kstest(data,uniform,lower,width). Continuous null; one-sample p is asymptotic.
+`kstest` — Compare continuous distributions or a sample with a fully specified distribution. Two sample lists, or kstest(data,normal,mu,sigma) / kstest(data,uniform,lower,width). Continuous null; one-sample p is asymptotic.
 Example: kstest([1,2,4,5],[2,3,5,8])
 
-`crossvalidate` — Rows: predictors, response; folds, seed; split random (default) / blocked / stratified; model linear (default) / ridge / lasso / elasticnet / logistic; penalty alpha or [alpha,l1 ratio].
+`levene` — Check equality of group variances; median-centered Brown–Forsythe is less sensitive to non-normality. Separate group lists; median-centered equal-variance test.
+Example: levene([1,2,4,5],[2,3,5,8])
+
+`bartlett` — Check equal variances when group distributions are reasonably normal. Separate group lists; normality assumption.
+Example: bartlett([1,2,4,5],[2,3,5,8])
+
+### Group comparisons
+
+`mcnemar` — Compare paired binary outcomes, such as yes/no before and after. Paired 2×2 count table; exact / corrected / asymptotic.
+Example: mcnemar([[20,8],[2,15]],exact)
+
+`twowayanova` — Compare independent observations across two factors, testing both main effects and their interaction. Independent observations, two categorical factors and a numeric response. Type III F tests with sum contrasts; interaction 1 (default) or additive 0. Normal errors and common residual variance; replication and a full-rank design are required.
+Example: twowayanova([[1,1,2],[1,1,4],[1,2,5],[1,2,6],[2,1,4],[2,1,5],[2,2,8],[2,2,10]],1)
+
+`ancova` — Compare group means while adjusting for numeric covariates. Rows: numeric group ID, one or more covariates, response; confidence level (default .95); slope homogeneity check 0/1 (default 1). One factor, common slopes, Type II F tests and adjusted means at pooled covariate means.
+Example: ancova([[1,1,3],[1,2,5],[1,3,4],[1,4,8],[2,2,6],[2,3,7],[2,4,9],[2,5,8],[3,1,5],[3,3,8],[3,4,10],[3,6,11]],0.95,1)
+
+`repeatedanova` — Compare repeated conditions within the same subjects in a balanced design. Rows=subjects, columns=conditions. Second-factor levels: 1 = one-way, 2+ = two-way (first factor slowest); GG corrections.
+Example: repeatedanova([[2,4,5],[3,4,7],[4,7,8],[2,3,6],[5,6,7]],1)
+
+`friedman` — Compare three or more matched conditions by within-subject ranks; chi-square approximation with tie correction. Rows are independent subjects; columns are at least three repeated conditions. Complete matched rows, midranks and tie correction. Chi-square approximation; small samples or few conditions can give inaccurate p values. Reports Kendall W.
+Example: friedman([[2,4,5],[3,4,7],[4,7,8],[2,3,6],[5,6,7]])
+
+### Effect sizes & multiple testing
+
+`cohend` — Describe the standardized mean difference between two independent or paired samples. Two samples; independent (pooled d) or paired (dz).
+Example: cohend([1,2,4,5],[2,3,5,8],independent)
+
+`eta2` — Describe the proportion of total variation associated with group differences. Independent groups as separate lists.
+Example: eta2([1,2,4,5],[2,3,5,8])
+
+`padjust` — Correct a family of p values when several hypotheses are tested together. p values; method bonferroni / holm / fdr (BH) / by; alpha.
+Example: padjust([0.01,0.04,0.03,0.2],holm,0.05)
+
+### Generalized regression
+
+`linearmodel` — Fit numeric and categorical predictors with automatic interactions and Type II/III joint term F tests; supports one, two, three or more factors. General OLS with numeric and categorical predictors. Categorical positions are one-based; interaction order, Type II/III, sum/treatment coding. Uses joint partial F tests for each term. Three-way and higher interactions require enough replicated observations and identifiable columns.
+Example: linearmodel([[1,1,2],[1,1,4],[1,2,5],[1,2,6],[2,1,4],[2,1,5],[2,2,8],[2,2,10]],[1,2],2,3,sum)
+
+`glm` — Model a response using a family and link suited to its distribution. Rows: predictors, response; family gaussian / binomial (0/1) / poisson / gamma / inversegaussian / nbinom; link auto or a supported link; NB2 alpha: positive fixed value (default 1) or estimate for joint ML; optional offset/exposure vector and mode. Default links: identity, logit, log, log, log, log. Model-based Wald z 95% intervals; Pearson dispersion for Gaussian/Gamma/inverse Gaussian. Use estimate as the fourth argument to estimate NB2 alpha jointly with coefficients; its uncertainty enters the observed-information covariance. Numeric alpha retains the fixed-alpha model.
+Example: glm([[0,2],[1,4],[2,4],[3,7],[4,8],[5,9]],gaussian,auto,1)
+
+`poissonreg` — Model event counts, optionally accounting for exposure. Rows: predictors, integer count response. Log link. Optional second argument row-aligned offset/exposure list; third argument offset (default) or exposure (positive, log transformed).
+Example: poissonreg([[0,1],[0,0],[1,3],[1,1],[2,2],[2,5],[3,4],[3,8],[4,6],[4,10]])
+
+`nbreg` — Model counts with extra variation beyond a Poisson model. Rows: predictors, integer count response. NB2 with estimated dispersion. Optional offset/exposure list and offset (default) / exposure mode.
+Example: nbreg([[0,0],[0,0],[0,1],[0,8],[1,0],[1,1],[1,3],[1,15],[2,0],[2,2],[2,5],[2,23],[3,1],[3,3],[3,10],[3,35]])
+
+`multinomial` — Predict unordered numeric categories from predictors. Rows: predictors, numeric category response. Smallest category is reference.
+Example: multinomial([[-2,0],[-2,1],[-1,0],[-1,2],[0,0],[0,1],[0,2],[1,1],[1,2],[2,1],[2,2],[2,0]])
+
+`ordinal` — Predict ordered categories under a proportional-odds model. Rows: predictors, ordered numeric response. Proportional-odds cumulative logit.
+Example: ordinal([[-2,0],[-2,1],[-1,0],[-1,2],[0,0],[0,1],[0,2],[1,1],[1,2],[2,1],[2,2],[2,0]])
+
+### Repeated & clustered data
+
+`mixedmodel` — Model continuous responses with repeated subjects or clusters and random effects. Rows: subject ID, predictors, response. Gaussian random intercept with up to three random slopes (0 none, a predictor position, or [1,2]); third argument reml (default) or ml; up to 5000 rows. Includes subject BLUPs, slope correlations and singular-fit diagnostics; random-slope ICC is at x=0; asymptotic Wald z inference. Optional fourth argument: profile (ML fixed-effect profile CI) or [bootstrap,200,0] (parametric fixed-effect percentile CI); alternative CI omit Wald p-values. Reports logLik/AIC/BIC; compare REML criteria only with identical fixed effects and data. Nonconverged fits withhold Wald inference.
+Example: mixedmodel([[1,0,2],[1,1,4],[1,2,4],[2,0,3],[2,1,4],[2,2,6],[3,0,1],[3,1,3],[3,2,4],[4,0,4],[4,1,5],[4,2,8]],0,reml)
+
+`glmm` — Model clustered binary or count outcomes with subject-specific random effects. Rows: subject ID, predictors, response. Random intercept, optionally one correlated random slope (seventh argument: selected predictor position, 0 = none). Slopes use two-dimensional Laplace (third argument 1), without quadrature refit; use [],offset,likelihood before the slope position. Covariance and conditional modes are reported in original units. Random intercept: binomial (0/1, logit), poisson or nbinom (NB2, log). ML adaptive Gauss-Hermite quadrature: 15 points default, 1 = Laplace, otherwise 7-31. Optional fourth argument offset vector, fifth offset / exposure. Limit 1500 rows, 8 fixed coefficients. Subject-specific effects; joint marginal observed information by central differences; asymptotic Wald inference. Few-subject Wald inference may be unreliable. Integration checks compare likelihood at another point count, including Laplace/31 points; optional sixth argument refit compares coefficients and suppresses CI/p if shifts exceed 0.1 SE. To omit offsets use [],offset before refit.
+Example: glmm([[1,0,0],[1,1,0],[1,2,1],[2,0,0],[2,1,1],[2,2,1],[3,0,0],[3,1,0],[3,2,0],[4,0,1],[4,1,1],[4,2,1],[5,0,1],[5,1,0],[5,2,1],[6,0,0],[6,1,1],[6,2,0]],binomial,15)
+
+`gee` — Estimate population-average effects for repeated or clustered outcomes. Rows: cluster ID, predictors, response. gaussian / binomial / poisson; working correlation independence / exchangeable / ar1; fourth argument [i,j] interaction pairs; sandwich SE. Pearson dispersion-adjusted correlation; AR(1) uses row order and equal spacing. Few-cluster Wald inference may be unreliable. Optional fifth argument small adds Mancl-DeRouen covariance and t inference with clusters minus coefficient count df; use [] as the fourth argument when there are no interactions. This does not guarantee reliable inference with very few clusters.
+Example: gee([[1,0,2],[1,1,4],[1,2,4],[2,0,3],[2,1,4],[2,2,6],[3,0,1],[3,1,3],[3,2,4],[4,0,4],[4,1,5],[4,2,8]],gaussian,independence)
+
+### Model validation
+
+`crossvalidate` — Assess held-out predictive performance rather than training fit. Rows: predictors, response; folds, seed; split random (default) / blocked / stratified; model linear (default) / ridge / lasso / elasticnet / logistic; penalty alpha or [alpha,l1 ratio].
 Example: crossvalidate([[0,1],[1,3],[2,4],[3,7],[4,8],[5,11],[6,12],[7,15],[8,16]],3,0)
 
-`pca` — Rows=observations, columns=features; components, standardize 1/0.
+### Bayesian inference
+
+`bayesmean` — Estimate a normal mean with a chosen prior and predictive interval. Normal sample, unknown variance; prior mu0,kappa0,alpha0,beta0; credible level; threshold. Variance ~ InvGamma(alpha0,beta0), mean | variance ~ Normal(mu0,variance/kappa0). Defaults 0,1,2,1 are proper, scale-dependent priors. Returns Student-t mean interval and next-observation predictive interval.
+Example: bayesmean([1,2,3,4,5],0,1,2,1,0.95,0)
+
+`bayescompare` — Compare two independent normal means with posterior differences and Bayes factors. Two independent normal samples (at least 2 each); variance equal / unequal; mu0,kappa0,alpha0,beta0; credible level; IID posterior draws (2000-100000), seed. H1: independent Normal(mu0,variance/kappa0) means with shared (equal) or independent (unequal) InvGamma(alpha0,beta0) variances. H0: B-A=0 with nuisance prior conditioned from H1. BF10/BF01 use Savage-Dickey, not a JZS/Cauchy prior. Reports B-A mean, equal-tailed credible interval, P(muB>muA), and posterior effect (B-A)/sqrt((varianceA+varianceB)/2). Equal-mode difference summaries and BF are analytic; unequal BF uses numerical t convolution, unequal intervals/probability and effect intervals use simulation. MCSE, draws and seed are reported. Defaults are proper but unit-dependent; choose priors before inspecting outcomes.
+Example: bayescompare([10,11,9,10,12],[13,14,12,15,13],equal,0,0.01,2,1,0.95,20000,0)
+
+`bayesproportion` — Estimate a binary success proportion using a Beta prior. Binary 0/1 list or [[successes,trials],...]; Beta prior alpha, beta (default 1,1); credible level; threshold p0 in (0,1). Returns equal-tailed interval, P(p>p0), next-success probability and BF10 (Beta alternative / point null p=p0).
+Example: bayesproportion([1,1,0,1,0,1,1,1,0,1],1,1,0.95,0.5)
+
+`bayesrate` — Estimate a Poisson event rate using counts and exposure. Count list (one exposure unit each) or [[count,exposure],...]; Gamma prior shape, rate (inverse scale, default 1,1); credible level; nonnegative threshold. Equal-tailed rate interval and predictive count mean/SD for one exposure unit.
+Example: bayesrate([0,2,1,3,2],1,1,0.95,1)
+
+### Resampling
+
+`bootstrapci` — Estimate an IID statistic interval by resampling observed values. Statistic mean / median / stdev, confidence level, resamples, seed. Percentile IID bootstrap.
+Example: bootstrapci([1,2,3,4,5,8],mean,0.95,2000,0)
+
+`bayesbootstrap` — Quantify posterior uncertainty in statistics using random weights on observations. Dirichlet(1,…,1) weights on IID observed values; mean / median / variance / stdev, credible level, draws, seed. Median estimate uses the ordinary sample median (average the two middle values for even n); posterior draws use the Lower weighted quantile (smallest value with weighted CDF >= 0.5); variance/SD use population weights. Equal-tailed simulated posterior interval and histogram. Two samples: bayesbootstrap(A,B,mean,0.95,10000,0,independent); paired uses shared row weights. Comparison is statistic(B) - statistic(A).
+Example: bayesbootstrap([1,2,3,4,5,8],mean,0.95,10000,0)
+
+### Multivariate analysis
+
+`pca` — Summarize correlated numeric features using fewer components. Rows=observations, columns=features; components, standardize 1/0.
 Example: pca([[1,2],[2,1],[3,4],[4,3],[5,7]],2,1)
 
-`kmeans` — Numeric feature rows; k, seed. Euclidean distance, 10 restarts, raw feature scale.
+`kmeans` — Group observations by numeric-feature similarity; check feature scales first. Numeric feature rows; k, seed. Euclidean distance, 10 restarts, raw feature scale.
 Example: kmeans([[1,1],[1,2],[2,1],[8,8],[8,9],[9,8]],2,0)
 
-`impute` — NA for missing cells; mean / median / mode / regression / knn with neighbours (default 5). Single imputation.
-Example: impute([[1,NA],[2,4],[NA,6],[4,8]],mean)
+### Survival analysis
+
+`survivalanalysis` — Analyze censored time-to-event data as a Kaplan–Meier, log-rank and optional Cox set. Rows: time, event (0/1), group ID, optional Cox predictors; Cox 0=off, 1=on; then ties and the PH check.
+Example: survivalanalysis([[1,1,1],[2,1,2],[3,0,1],[4,1,2],[5,1,1],[6,0,2],[7,1,2],[8,1,1]],0,efron,-1,1)
+
+`kaplanmeier` — Estimate survival over time while accounting for censoring. Rows: time, event (1=event, 0=censored); confidence level.
+Example: kaplanmeier([[1,1],[2,0],[3,1],[4,1],[5,0],[6,1]],0.95)
+
+`logrank` — Compare survival between two groups without adjusting for predictors. Two time/event tables. Current data: time, event, group (exactly two groups).
+Example: logrank([[1,1],[3,1],[4,0],[6,1]],[[2,0],[4,1],[5,1],[7,0]])
+
+`cox` — Relate predictors to event hazard; review proportional hazards. Rows: time, event 0/1, predictors. Ties efron (default) or breslow; entry column for left truncation (-1 none); PH check 0/1.
+Example: cox([[1,1,0],[2,1,1],[3,0,0],[4,1,1],[5,1,0],[6,0,1],[7,1,1],[8,1,0]],efron,-1,1)
+
+### Power & sample size
+
+`testpower` — Evaluate power for a planned t-test design and effect size. Cohen d, n per group/pairs, alpha, independent / paired / onesample, alternative two (default) / greater / less. Exact noncentral-t power.
+Example: testpower(0.5,64,0.05,independent)
+
+`samplesize` — Plan the sample size needed for a target t-test power. Cohen d, target power, alpha, design, alternative. Exact noncentral-t power.
+Example: samplesize(0.5,0.8,0.05,independent)
 
 Bayesian analyses assume independent observations and the stated likelihood with proper conjugate priors; intervals are equal-tailed posterior credible intervals. A Bayes factor is not a posterior hypothesis probability and depends on the prior. References: [Stanford conjugate priors](https://web.stanford.edu/class/stats200/Lecture21.pdf), [normal-inverse-gamma analysis](https://treese41528.github.io/ComputationalDataScience/Website/part3_bayesian/chapter5/ch5_2-prior-distributions.html).
 
@@ -801,3 +915,9 @@ Mixed-model profile/bootstrap: [lme4 confidence intervals](https://lme4.github.i
 GLMM: [lme4 adaptive quadrature reference](https://lme4.github.io/lme4/reference/glmer.html).
 
 Bayesian Two-Sample Comparison: [Savage-Dickey density ratio and compatible null priors](https://statproofbook.github.io/P/bf-sddr.html).
+
+Factorial linear models: [Type II/III ANOVA and sum contrasts](https://www.statsmodels.org/stable/examples/notebooks/generated/interactions_anova.html). Welch / Games–Howell: [SciPy unequal-variance ANOVA](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.f_oneway.html), [studentized range](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.studentized_range.html). Friedman: [tie-corrected repeated rank test](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.friedmanchisquare.html).
+
+Post-hoc suites: Kruskal–Wallis includes pairwise Mann–Whitney + Holm (separately ranked pairs, not Dunn); Friedman includes paired Wilcoxon + Holm; repeated-measures ANOVA includes paired t + Holm and normality/Q–Q checks on within-subject contrasts. Global and pairwise tests answer different questions.
+
+Test selection and diagnostics: [NIST t tests](https://www.itl.nist.gov/div898/handbook/eda/section3/eda353.htm), [Levene/Brown–Forsythe](https://www.itl.nist.gov/div898/handbook/eda/section3/eda35a.htm), [normal probability plots](https://www.itl.nist.gov/div898/handbook/eda/section3/normprpl.htm), [Wilcoxon assumptions](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.wilcoxon.html).

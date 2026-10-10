@@ -50,12 +50,13 @@ export function statisticsResultMarkdown(result,options={}){
       if(equation&&section.columns[0]==='Metric'&&row[0]==='Fitted expression')continue;
       table.push(line(section.columns.map((column,index)=>{
       const value=row[index];
-      const text=value&&typeof value==='object'?statisticsFormattedCopyCell(value,settings):column==='Metric'?t(String(value??'')):
+      const text=value&&typeof value==='object'?statisticsFormattedCopyCell(value,settings):['Metric','Check','Interpretation','Sample'].includes(column)?t(String(value??'')):
         dedicated&&/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(String(value))?roundNumber(String(value),options.digits??10):String(value??'');
       return markdownCell(text);
     })));}
     if(table.length>2)blocks.push('### '+markdownCell(t(section.title))+'\n\n'+table.join('\n'));
   }
+  for(const note of report.notes||[])blocks.push(markdownCell(t(note)));
   if(result.note)blocks.push(markdownCell(result.note));
   if(result.conditions?.length)blocks.push('### '+t('Conditions')+'\n\n'+result.conditions.map(condition=>'- '+markdownCell(condition)).join('\n'));
   return blocks.join('\n\n');

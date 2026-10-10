@@ -15,6 +15,30 @@ import {graphInputTree} from '../graph-workspace.js';
 // scenario below explicitly loads its own interpreter to keep startup coverage.
 let sharedRuntime;
 
+test('comparison suites and categorical factorial models run in real WASM',async()=>{
+  const py=await runtime();
+  const run=source=>{
+    py.globals.set('payload',JSON.stringify({tree:parse(source),precision:15,budget:60}));
+    const result=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));
+    assert.equal(result.ok,true,result.error);return result;
+  };
+  const welch=run('welchanova([1,4],[3,9],[2,5,13])');
+  assert.ok(welch.statisticsReport.sections.some(section=>section.title==='Games–Howell post-hoc'));
+  assert.ok(welch.statisticsReport.sections.some(section=>section.title==='Assumption checks'));
+  assert.ok(run('anova([1,4],[3,9],[2,5,13])').statisticsReport.sections.some(section=>section.title==='Tukey–Kramer post-hoc'));
+  assert.equal(run('ttest2(0,[1,4],[3,9],student)').statisticsReport.title,'Student t test');
+  assert.equal(run('friedman([[2,4,5],[3,3,7],[4,7,7],[2,3,6],[5,6,7]])').statisticsReport.plots[0].kind,'bars');
+  const rows=[['Control','Early','2'],['Control','Early','4'],['Control','Late','5'],['Control','Late','6'],['Drug','Early','4'],['Drug','Early','5'],['Drug','Late','8'],['Drug','Late','10']];
+  const definition=advancedStatisticsSchema.find(item=>item.id==='twowayanova');
+  const expression=guidedStatisticsCommand(definition,rows,{},['Treatment','Time','Response']);
+  const two=run(expression);
+  assert.equal(two.statisticsReport.plots[0].kind,'interaction');
+  assert.ok(two.statisticsReport.plots.some(plot=>plot.kind==='intervals'));
+  const model=run('linearmodel([[1,1,2],[1,1,4],[1,2,5],[1,2,6],[2,1,4],[2,1,5],[2,2,8],[2,2,10]],[1,2],2,2,sum)');
+  assert.ok(model.statisticsReport.sections.some(section=>section.title==='ANOVA'));
+  assert.ok(model.statisticsReport.sections.some(section=>section.title==='Coefficients'));
+});
+
 test('implicit 3D surfaces and named scaled space curves run through real WASM and LaTeX input',async()=>{
   const py=await runtime();
   const run=(source,graphKind,options={})=>{

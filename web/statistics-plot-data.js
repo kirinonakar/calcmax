@@ -1,5 +1,7 @@
 import {statisticsColumnNames} from './workspace-commands.js';
 
+export function statisticsPlotGroupingColumn(grouping,count){const at=grouping==='first'?0:grouping==='last'?count-1:/^(?:column:)?\d+$/.test(grouping)?Number(grouping.replace('column:','')):-1;return count>1&&at>=0&&at<count?at:-1;}
+
 export function statisticsPlotNumber(cell){
   const text=String(cell??'').trim();if(!text)return null;
   const normalized=/^[+-]?\d{1,3}(?:,\d{3})+(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(text)?text.replace(/,/g,''):text;
@@ -70,7 +72,7 @@ export function beeswarmLayout(axisPositions,preferredRadius,halfWidth){
 }
 
 export function statisticsHeatMapData(rows,{grouping='columns',columnCount=rows[0]?.length||1,mode='raw',columnNames=statisticsColumnNames(columnCount)}={}){
-  const groupColumn=columnCount>1&&['first','last'].includes(grouping)?(grouping==='first'?0:columnCount-1):-1;
+  const groupColumn=statisticsPlotGroupingColumn(grouping,columnCount);
   const indices=Array.from({length:columnCount},(_,i)=>i).filter(i=>i!==groupColumn),columns=indices.map(i=>columnNames[i]||statisticsColumnNames(columnCount)[i]);
   const values=rows.map(row=>indices.map(column=>statisticsPlotNumber(row[column])));
   if(mode==='zrow')for(const row of values)standardizeHeatMapValues(row);

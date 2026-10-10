@@ -24,10 +24,12 @@ internal val Catalog=linkedMapOf(
     "ODE & transforms" to listOf("dsolve(,,)","laplace(,t,s)","ilaplace(,s,t)","fourier(,t,w)","ifourier(,w,t)","ztrans(,n,z)","invztrans(,z,n)","mellin(,x,s)","invmellin(,s,x)","pdsolve(,u(x,y))","fft([])","ifft([])"),
     "Vector calculus" to listOf("gradient(,[x,y])","divergence(,[x,y])","curl(,[x,y])","hessian(,[x,y])","jacobian(,[x,y])","laplacian(,[x,y])"),
     "Matrix & vector" to listOf("det()","inverse()","transpose()","rank()","trace()","ref()","rref()","lu()","linsolve(,)","eigenvalues()","eigenvectors()","dot(,)","cross(,)","norm()","normalize()","angle(,)","projection(,)","charpoly(,x)","identity(2)","diag([])","qr()","cholesky()","nullspace()","cofactor()","adjugate()","rowspace()","singularvalues()","frob()","jordan()","dim()","pinv()","ctranspose()","svd()"),
-    "Data & units" to listOf("stats([])","mean([])","median([])","variance([])","variance([],0)","stdev([])","stdev([],0)","quartiles([])","sumdata([])","regression([],linear)","regression([],quadratic)","regression([],polynomial,3)","regression([],multiple)","regression([],bayeslinear,[2.5,0.95,2,1])","regression([],bayeslogistic,[2.5,0.95])","regression([],bayeslinear,[2.5,0.95,2,1,[nuts,500,500,8,0,2]])","regression([],bayeslogistic,[2.5,0.95,[nuts,500,500,8,0,2]])","regression([],ridge,0.1)","regression([],lasso,0.1)","regression([],elasticnet,[0.1,0.5])","regression([],logisticridge,0.1)","regression([],logisticlasso,0.1)","regression([],logisticelasticnet,[0.1,0.5])","regression([],randomforest,[100,10,0])","regression([],randomforestclassifier,[100,10,0])","regression([],randomforestregressor,[100,10,0])","regression([],logistic)","regression([],logarithmic)","regression([],exponential)","regression([],power)","regression([],custom,exp(-x*a),x)","covariance([],[])","covariance([],[],0)","correlation([],[])","qty(,m)","convert(,m,cm)"),
+    "Data & units" to listOf("stats([])","mean([])","median([])","variance([])","variance([],0)","stdev([])","stdev([],0)","quartiles([])","sumdata([])","covariance([],[])","covariance([],[],0)","correlation([],[])","qty(,m)","convert(,m,cm)"),
+    "Data preparation" to listOf("impute([],mean)"),
+    "Regression & models" to listOf("regression([],linear)","regression([],quadratic)","regression([],polynomial,3)","regression([],multiple)","linearmodel([],[1,2],2,3,sum)","regression([],bayeslinear,[2.5,0.95,2,1])","regression([],bayeslogistic,[2.5,0.95])","regression([],bayeslinear,[2.5,0.95,2,1,[nuts,500,500,8,0,2]])","regression([],bayeslogistic,[2.5,0.95,[nuts,500,500,8,0,2]])","regression([],ridge,0.1)","regression([],lasso,0.1)","regression([],elasticnet,[0.1,0.5])","regression([],logisticridge,0.1)","regression([],logisticlasso,0.1)","regression([],logisticelasticnet,[0.1,0.5])","regression([],randomforest,[100,10,0])","regression([],randomforestclassifier,[100,10,0])","regression([],randomforestregressor,[100,10,0])","regression([],logistic)","regression([],logarithmic)","regression([],exponential)","regression([],power)","regression([],custom,exp(-x*a),x)","glm([],gaussian)","glm([],binomial)","glm([],poisson)","glm([],gamma)","glm([],inversegaussian)","glm([],nbinom,log,1)","poissonreg([])","nbreg([])","multinomial([])","ordinal([])","mixedmodel([])","glmm([],binomial,15)","glmm([],poisson,15)","glmm([],nbinom,15)","gee([],gaussian)","gee([],binomial)","gee([],poisson)","crossvalidate([],5,0)"),
     "Distributions" to listOf("normpdf(,0,1)","normcdf()","normcdf(,)","normcdf(,,0,1)","invnorm(,0,1)","tpdf(,10)","tcdf(,10)","tcdf(,,10)","invt(,10)","chi2pdf(,5)","chi2cdf(,5)","chi2cdf(,,5)","fpdf(,5,10)","fcdf(,5,10)","fcdf(,,5,10)","binompdf(,0.5,)","binomcdf(,0.5,)","poissonpdf(,)","poissoncdf(,)","geometpdf(,)","geometcdf(,)","exppdf(,)","expcdf(,)","unifpdf(,,)","unifcdf(,,)","gammapdf(,,)","gammacdf(,,)","betapdf(,,)","betacdf(,,)","lognormpdf(,,)","lognormcdf(,,)","hgeompdf(50,10,5,)","hgeomcdf(50,10,5,)","nbinompdf(3,0.25,)","nbinomcdf(3,0.25,)","weibullpdf(,2,1)","weibullcdf(,2,1)","cauchypdf(,0,1)","cauchycdf()","cauchycdf(,)","cauchycdf(,0,1)","cauchycdf(,,0,1)","invcauchy(,0,1)"),
-    "Tests & intervals" to listOf("ttest(,[])","ttest(,,,)","ttest2(,[],[])","ttestpaired(,[],[])","ztest(,,[])","ztest(,,,)","ztest2(,,,[],[])","chi2test([],[])","chi2independence([],[])","fisherexact([],[])","anova([],[])","anova([],[],[])","tukey([],[],[])","shapiro([])","wilcoxon([])","wilcoxon([],[])","mannwhitney([],[])","kruskal([],[],[])","tinterval(,[])","tinterval(,,,)","zinterval(,,[])","zinterval(,,,)"),
-    "Advanced statistics" to listOf("ancova([],0.95,1)","glm([],gaussian)","glm([],binomial)","glm([],poisson)","glm([],gamma)","glm([],inversegaussian)","glm([],nbinom,log,1)","bayesproportion([],1,1,0.95,0.5)","bayesmean([],0,1,2,1,0.95,0)","bayescompare([],[],equal,0,0.01,2,1,0.95,20000,0)","bayesrate([],1,1,0.95,1)","padjust([],holm,0.05)","padjust([],bonferroni)","padjust([],fdr)","cohend([],[],independent)","cohend([],[],paired)","eta2([],[])","levene([],[])","bartlett([],[])","mcnemar([],exact)","survivalanalysis([],0)","kaplanmeier([],0.95)","logrank([],[])","cox([])","repeatedanova([])","mixedmodel([])","glmm([],binomial,15)","glmm([],poisson,15)","glmm([],nbinom,15)","gee([],gaussian)","gee([],binomial)","gee([],poisson)","multinomial([])","ordinal([])","poissonreg([])","nbreg([])","bootstrapci([],mean,0.95,2000,0)","bayesbootstrap([],mean,0.95,10000,0)","bayesbootstrap([],[],mean,0.95,10000,0,independent)","testpower(0.5,64,0.05,independent)","samplesize(0.5,0.8,0.05,independent)","kstest([],[])","kstest([],normal,0,1)","crossvalidate([],5,0)","pca([],2,1)","kmeans([],2,0)","impute([],mean)"),
+    "Tests & intervals" to listOf("ttest(,[])","ttest(,,,)","ttest2(,[],[])","ttest2(,[],[],student)","ttestpaired(,[],[])","tinterval(,[])","tinterval(,,,)","ztest(,,[])","ztest(,,,)","ztest2(,,,[],[])","zinterval(,,[])","zinterval(,,,)","welchanova([],[])","welchanova([],[],[])","gameshowell([],[],[])","anova([],[])","anova([],[],[])","tukey([],[],[])","wilcoxon([])","wilcoxon([],[])","mannwhitney([],[])","kruskal([],[],[])","shapiro([])","chi2test([],[])","chi2independence([],[])","fisherexact([],[])","kstest([],[])","kstest([],normal,0,1)","levene([],[])","bartlett([],[])","mcnemar([],exact)","twowayanova([],1)","ancova([],0.95,1)","repeatedanova([])","friedman([])","cohend([],[],independent)","cohend([],[],paired)","eta2([],[])","padjust([],holm,0.05)","padjust([],bonferroni)","padjust([],fdr)"),
+    "Advanced statistics" to listOf("bayesmean([],0,1,2,1,0.95,0)","bayescompare([],[],equal,0,0.01,2,1,0.95,20000,0)","bayesproportion([],1,1,0.95,0.5)","bayesrate([],1,1,0.95,1)","bootstrapci([],mean,0.95,2000,0)","bayesbootstrap([],mean,0.95,10000,0)","bayesbootstrap([],[],mean,0.95,10000,0,independent)","pca([],2,1)","kmeans([],2,0)","survivalanalysis([],0)","kaplanmeier([],0.95)","logrank([],[])","cox([])","testpower(0.5,64,0.05,independent)","samplesize(0.5,0.8,0.05,independent)"),
     "Finance" to listOf("tvmfv(,,,)","tvmpv(,,,)","tvmpmt(,,,)","tvmn(,,,)","tvmrate(,,,)","npv(,[])","npv(,,[])","irr([])","irr(,[])","amort(,,)","amort(,,,)","cagr(,,)")
 )
 internal fun catalogCategories(m:CalculatorModel):Map<String,List<String>> {
@@ -64,7 +66,7 @@ internal fun catalogCategories(m:CalculatorModel):Map<String,List<String>> {
                 "Matrix & vector" -> "Matrix commands accept a matrix literal such as [[1,2],[3,4]]."
                 "Scientific" -> "Numeric trig follows the selected angle unit; explicit π and ° override it."
                 "Distributions" -> "normcdf takes one bound, two bounds, or two bounds with μ and σ; the t, χ² and F entries take a bound and their degrees of freedom."
-                "Tests & intervals" -> "Use ttest2 for independent columns, ttestpaired for matched rows, chi2independence or fisherexact for paired categories, and shapiro for normality. Append left or right for one-sided t, z, or Fisher p values."
+                "Tests & intervals" -> "Use ttest2 for independent columns, ttestpaired for matched rows, chi2independence or fisherexact for independent categorical observations, and shapiro for normality. Append left or right for one-sided t, z, or Fisher p values."
                 "Finance" -> "Rates are per payment period (0.05/12 for 5% a year); add begin for payments at the start of each period."
                 else -> "Tap a template, then tap its empty slots to fill them. ↑ selects the enclosing expression; ↓ selects a child."
             }
@@ -74,7 +76,7 @@ internal fun catalogCategories(m:CalculatorModel):Map<String,List<String>> {
                 "Matrix & vector" -> "행렬 명령에는 [[1,2],[3,4]]처럼 행렬을 직접 입력할 수 있습니다."
                 "Scientific" -> "수치 삼각함수는 선택한 각도 단위를 따릅니다. π 또는 °를 명시하면 해당 단위를 우선합니다."
                 "Distributions" -> "normcdf에는 경계 1개 또는 2개를 넣고 μ, σ를 추가할 수 있습니다. t, χ², F 함수에는 자유도를 넣습니다."
-                "Tests & intervals" -> "ttest2는 독립 표본, ttestpaired는 대응 표본, chi2independence와 fisherexact는 짝지은 범주, shapiro는 정규성 검정에 사용합니다. 단측 p값은 left 또는 right를 추가합니다."
+                "Tests & intervals" -> "ttest2는 독립 표본, ttestpaired는 대응 표본, chi2independence와 fisherexact는 독립 관측의 범주, shapiro는 정규성 검정에 사용합니다. 단측 p값은 left 또는 right를 추가합니다."
                 "Finance" -> "이율은 지급 주기당 값입니다(연 5%의 월 이율은 0.05/12). 기초 지급에는 begin을 추가합니다."
                 else -> "템플릿을 누른 뒤 빈칸을 눌러 값을 입력하세요. ↑는 바깥 수식, ↓는 하위 수식을 선택합니다."
             } else hint,fontSize=11.sp)
@@ -94,6 +96,8 @@ private sealed interface HelpBlock {
     data class Entry(val signature:String,val description:String,val example:String?=null):HelpBlock
     data class Bullet(val text:String):HelpBlock
     data class Body(val text:String):HelpBlock
+    data class Diagram(val text:String):HelpBlock
+    data class Table(val columns:List<String>,val rows:List<List<String>>):HelpBlock
 }
 
 @Composable fun CatalogHelpDialog(close:()->Unit,onExample:(String)->Unit) {
@@ -131,6 +135,8 @@ private sealed interface HelpBlock {
             }
             is HelpBlock.Bullet -> Text("- "+plainHelp(block.text),fontSize=12.sp,color=c.ink,modifier=Modifier.padding(vertical=1.dp))
             is HelpBlock.Body -> Text(plainHelp(block.text),fontSize=12.sp,color=c.ink,modifier=Modifier.padding(vertical=2.dp))
+            is HelpBlock.Diagram -> Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(vertical=8.dp)) {Text(block.text,fontFamily=FontFamily.Monospace,fontSize=12.sp,color=c.ink,softWrap=false)}
+            is HelpBlock.Table -> StatisticsTextTable(block.columns,block.rows,headerSize=12,cellSize=12)
         }
     }
 }
@@ -168,16 +174,32 @@ private fun HelpBlock.searchText():String=when(this) {
     is HelpBlock.Entry -> "$signature $description ${example.orEmpty()}"
     is HelpBlock.Bullet -> text
     is HelpBlock.Body -> text
+    is HelpBlock.Diagram -> text
+    is HelpBlock.Table -> (columns+rows.flatten()).joinToString(" ")
     else -> ""
 }.lowercase()
 
 private fun parseHelpEntries(markdown:String):List<HelpBlock> {
     val result=mutableListOf<HelpBlock>()
     var lastEntry=-1
+    var diagram:MutableList<String>?=null
+    val table=mutableListOf<String>()
+    fun flushTable() {
+        if(table.isEmpty())return
+        val rows=table.map {it.trim().trim('|').split('|').map {cell->plainHelp(cell.trim())}}
+        if(rows.size>1&&rows[1].all {it.matches(Regex(":?-{3,}:?"))})result+=HelpBlock.Table(rows[0],rows.drop(2))
+        else table.forEach {result+=HelpBlock.Body(it)}
+        table.clear()
+    }
     markdown.lineSequence().forEach {raw->
         val line=raw.trimEnd()
+        if(diagram==null&&!line.trimStart().startsWith("|"))flushTable()
         when {
+            line.startsWith("```") -> {val current=diagram;if(current==null)diagram=mutableListOf() else {result+=HelpBlock.Diagram(current.joinToString("\n"));diagram=null};lastEntry=-1}
+            diagram!=null -> {diagram?.add(line)}
+            line.trimStart().startsWith("|") -> {table.add(line);lastEntry=-1}
             line.isBlank() -> {}
+            line.startsWith("### ") -> {result+=HelpBlock.Category(line.removePrefix("### ").trim());lastEntry=-1}
             line.startsWith("## ") -> {result+=HelpBlock.Category(line.removePrefix("## ").trim());lastEntry=-1}
             line.startsWith("# ") -> {result+=HelpBlock.Section(line.removePrefix("# ").trim());lastEntry=-1}
             line.startsWith("Example:") -> if(lastEntry>=0) {
@@ -195,5 +217,6 @@ private fun parseHelpEntries(markdown:String):List<HelpBlock> {
             else -> {result+=HelpBlock.Body(line);lastEntry=-1}
         }
     }
+    flushTable()
     return result
 }

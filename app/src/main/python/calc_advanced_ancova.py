@@ -1,6 +1,7 @@
 """One-factor ANCOVA with multiple covariates and partial (Type II) tests."""
 import math
 import mpmath as mp
+import sympy as s
 from calc_shared import MathError, require
 from calc_statistics import _f_sf, _quantile, _t_cdf, _t_sf
 from calc_advanced_common import dot, integer, mean, number, table
@@ -75,5 +76,9 @@ def calculate(engine, name, a):
         except MathError as error:
             result['Slope homogeneity'] = {'status':'unavailable', 'reason':str(error)}
         engine.note += ' Slope homogeneity compares the additive model with all group × covariate interactions.'
+    residual=[actual-dot(row,beta) for actual,row in zip(y,design)]
+    labels=engine.request.get('statisticsTermLabels',{})
+    engine.statistics_residuals={'groups':[[s.Float(str(residual[i])) for i,row in enumerate(rows) if row[0]==group] for group in groups],
+                                'labels':[labels.get('group:'+format(group,'.15g'),'Group '+format(group,'.15g'))+' residuals' for group in groups]}
     engine.note += ' One categorical factor; common covariate slopes. Type II partial F tests; adjusted means at pooled covariate means. Independent observations and normal, equal-variance errors are assumed.'
     return result

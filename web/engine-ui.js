@@ -4,17 +4,19 @@ import {setText} from './i18n.js';
 export function createEngineUI({engine,onChange,onReady,cancelPreview}) {
   let busy=false,stopTimer=null,stopVisible=false;
   setText($('stop'),'Cancel');
-  const actions=new Map(['equation','statistics','statistics-advanced','regression'].map(context=>
+  const actions=new Map(['equation','statistics-summary','statistics','statistics-advanced','statistics-preparation','statistics-tests','statistics-models','regression'].map(context=>
     [context,document.querySelector(`[data-run="${context}"]`)]));
-  const labels=new Map([...actions].map(([context])=>[context,context==='equation'?'Solve':'Analyze']));
+  const labels=new Map([...actions].map(([context])=>[context,context==='equation'?'Solve':context==='statistics-summary'?'Summarize':'Analyze']));
   function updateStopButton(){
     const active=engine.pending?.context,visible=stopVisible&&!!engine.pending;
     for(const [context,button] of actions){
       const cancel=visible&&active===context;
       button.dataset.cancelCalculation=String(cancel);
       setText(button,cancel?'Cancel':labels.get(context));
-      button.disabled=cancel?false:!engine.ready||busy;
+      button.disabled=cancel?false:!engine.ready||busy||button.dataset.invalidAnalysis==='true';
     }
+    for(const button of document.querySelectorAll('[data-imputation-apply]'))button.disabled=!engine.ready||busy||button.dataset.invalidAnalysis==='true';
+    for(const button of document.querySelectorAll('[data-quick-summary]'))button.disabled=!engine.ready||busy;
     const fallback=visible&&$('mode').value==='scientific';
     $('stop').disabled=!fallback;$('stop').hidden=false;$('stop').style.visibility=fallback?'':'hidden';
   }

@@ -107,7 +107,11 @@ export function createAppDialogs({state,ui,persist,calculator,changeMode,pressKe
           if(block.kind==='entry'){
             row.append(element('code',block.signature),element('p',block.text,'hint'));
             if(block.example)row.append(control(`${t('Example:')} ${block.example}`,()=>{changeMode('scientific');$('clear').click();calculator.insert(helpExampleInput(block.example));$('dialog').close();},'catalog-example'));
-          }else row.append(element(block.kind==='heading'?'h2':block.kind==='category'?'h3':'p',block.text));
+          }else if(block.kind==='table'){
+            const scroll=element('div','','statistics-result-scroll'),table=element('table'),head=element('thead'),header=element('tr'),body=element('tbody');scroll.tabIndex=0;
+            for(const label of block.columns){const cell=element('th',label);cell.scope='col';header.append(cell);}head.append(header);table.append(head);
+            for(const values of block.rows){const cells=element('tr');for(const value of values)cells.append(element('td',value));body.append(cells);}table.append(body);scroll.append(table);row.append(scroll);
+          }else row.append(element(block.kind==='diagram'?'pre':block.kind==='heading'?'h2':block.kind==='category'?'h3':block.kind==='subheading'?'h4':'p',block.text));
           list.append(row);
         }
         if(!list.childElementCount)list.append(element('p','No matching entries','hint'));

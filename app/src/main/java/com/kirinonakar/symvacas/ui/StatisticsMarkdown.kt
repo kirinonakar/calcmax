@@ -71,7 +71,7 @@ internal fun statisticsResultMarkdown(result:JSONObject,formatCell:(JSONObject)-
             if(regressionEquation!=null&&columns.optString(0)=="Metric"&&row.optString(0)=="Fitted expression")continue
             table.add(line(List(columns.length()){column->
                 val text=row.optJSONObject(column)?.let(formatCell) ?: row.optString(column).let {
-                    if(columns.optString(column)=="Metric")translate(it)
+                    if(columns.optString(column) in listOf("Metric","Check","Interpretation","Sample"))translate(it)
                     else if(report===result.optJSONObject("statisticsCopyReport")&&it.toBigDecimalOrNull()!=null)formatCell(JSONObject().put("decimal",it).put("exact",it)) else it
                 }
                 markdownCell(text)
@@ -79,6 +79,7 @@ internal fun statisticsResultMarkdown(result:JSONObject,formatCell:(JSONObject)-
         }
         if(table.size>2)blocks.add("### "+markdownCell(translate(section.optString("title")))+"\n\n"+table.joinToString("\n"))
     }
+    report.optJSONArray("notes")?.let {notes->for(index in 0 until notes.length())blocks.add(markdownCell(translate(notes.getString(index))))}
     result.optString("note").takeIf {it.isNotBlank()}?.let {blocks.add(markdownCell(it))}
     result.optJSONArray("conditions")?.takeIf {it.length()>0}?.let {conditions->
         blocks.add("### "+translate("Conditions")+"\n\n"+(0 until conditions.length()).joinToString("\n"){"- "+markdownCell(conditions.getString(it))})

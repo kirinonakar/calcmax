@@ -1,6 +1,9 @@
+import {statisticsImputationCSV} from './statistics-imputation.js';
+import {statisticsComparisonData} from './statistics-comparison-data.js';
+import {statisticsFactorialData} from './statistics-factorial-data.js';
 import {computationLimitsRemoved} from './computation-limits.js';
 import {advancedStatisticsSchema} from './advanced-statistics-schema.js';
-import {csvRows,statisticsCsvHasHeader,statisticsColumnLabels,statisticsCategoryLabels} from './workspace-commands.js';
+import {csvRows,statisticsCsvHasHeader,statisticsColumnLabels,statisticsColumnNames,statisticsCategoryLabels} from './workspace-commands.js';
 import {$,element} from './app-ui.js';
 import {getLanguage,t} from './i18n.js';
 import {renderSurvivalReport} from './survival-report.js';
@@ -97,8 +100,8 @@ export function survivalAnalysisPlan(rows,settings={},columnLabels=[]) {
 export function guidedStatisticsCommand(definition,rows,settings={},columnLabels=[]) {
   if(definition.id==='survivalanalysis')return survivalAnalysisPlan(rows,settings).expression;
   if(!definition.controls)return advancedStatisticsCommand(definition,rows);
-  if(!rows.some(row=>row.some(cell=>cell.trim())))throw new Error('Enter data first');
-  const n=Math.max(...rows.map(row=>row.length)),id=definition.id;
+  if(definition.input!=='none'&&!rows.some(row=>row.some(cell=>cell.trim())))throw new Error('Enter data first');
+  const n=Math.max(0,...rows.map(row=>row.length)),id=definition.id;
   const opts=Object.fromEntries(definition.controls.map(field=>[field.key,settings[field.key]??field.default]));
   for(const field of definition.controls)if(field.type==='choice'&&!field.choices.some(choice=>choice.id===opts[field.key]&&(!choice.when||Object.entries(choice.when).every(([key,values])=>values.includes(opts[key])))))throw new Error('Invalid analysis option');
   const column=key=>{let i=Number(opts[key]);if(i===-1)i=n-1;if(!Number.isInteger(i)||i<0||i>=n)throw new Error('Choose valid data columns');return i;};
@@ -111,6 +114,19 @@ export function guidedStatisticsCommand(definition,rows,settings={},columnLabels
   };
   const distinct=indices=>{if(new Set(indices).size!==indices.length)throw new Error('Roles must use different columns');};
   const complete=indices=>{distinct(indices);const selected=rows.map(row=>indices.map(i=>(row[i]||'').trim()));if(selected.some(row=>row.some(cell=>!cell)))throw new Error('Complete selected rows required');return selected;};
+  if(['testpower','samplesize'].includes(id)){
+    const keys=['effect',id==='testpower'?'n':'power','alpha'];
+    if(keys.some(key=>!String(opts[key]).trim()))throw new Error('Enter all study design parameters');
+    return `${id}(${keys.map(key=>opts[key]).join(',')},${opts.design}${opts.tail==='two'?'':','+opts.tail})`;
+  }
+  if(id==='bootstrapci')return `bootstrapci(${list(values(column('column')))},${opts.statistic},${opts.level},${opts.samples},${opts.seed})`;
+  if(id==='cohend')return `cohend(${statisticsComparisonData(rows,opts,{paired:opts.design==='paired',strict:true}).samples.map(list).join(',')},${opts.design})`;
+  if(['twowayanova','linearmodel'].includes(id)){const plan=statisticsFactorialData(rows,opts,columnLabels);return id==='twowayanova'?`twowayanova(${table(plan.encoded)},${opts.interaction})`:`linearmodel(${table(plan.encoded)},${list(plan.categorical)},${opts.order},${opts.ssType},${opts.coding})`;}
+  if(['multinomial','ordinal'].includes(id)){
+    const response=column('response');return `${id}(${table(complete([...multiple('predictors',[response]),response]))})`;
+  }
+  if(id==='kmeans')return `kmeans(${table(complete(multiple('columns')))},${opts.clusters},${opts.seed})`;
+  if(id==='friedman'){const plan=statisticsComparisonData(rows,opts,{all:true,paired:true,strict:true});if(plan.samples.length<3)throw new Error('Choose at least three conditions');return `friedman(${table(plan.matrix)})`;}
   const eventRows=indices=>{
     const event=column('event'),time=column('time');const selected=complete([time,event,...indices]);
     if(!opts.eventValue.trim())throw new Error('Enter the event value');
@@ -126,16 +142,7 @@ export function guidedStatisticsCommand(definition,rows,settings={},columnLabels
       const data=values(column('column'));if(data.length<2)throw new Error('Enter at least two observations');
       return `bayesbootstrap(${list(data)},${suffix})`;
     }
-    let samples,method=opts.comparison;
-    if(opts.layout==='groups'){
-      const pairs=complete([column('group'),column('value')]),groups=[...new Set(pairs.map(row=>row[0]))];
-      if(groups.length!==2)throw new Error('Choose exactly two groups');
-      if(opts.order==='reverse')groups.reverse();
-      samples=groups.map(group=>pairs.filter(row=>row[0]===group).map(row=>row[1]));method='independent';
-    }else{
-      const first=column('first'),second=column('second');distinct([first,second]);
-      samples=method==='paired'?(()=>{const pairs=complete([first,second]);return [pairs.map(row=>row[0]),pairs.map(row=>row[1])];})():[values(first),values(second)];
-    }
+    const plan=statisticsComparisonData(rows,{...opts,grouping:opts.layout},{paired:opts.comparison==='paired',strict:true});let samples=plan.samples,method=opts.comparison;if(opts.order==='reverse'&&!opts.firstGroup&&!opts.secondGroup)samples=[...samples].reverse();
     if(samples.some(sample=>sample.length<2))throw new Error('Enter at least two observations in each group');
     return `bayesbootstrap(${samples.map(list).join(',')},${suffix},${method})`;
   }
@@ -159,8 +166,7 @@ export function guidedStatisticsCommand(definition,rows,settings={},columnLabels
     return `glm(${table(mapped)},${opts.family},${opts.link},${opts.family==='nbinom'?(opts.dispersionMode==='estimate'?'estimate':opts.alpha):1}${suffix})`;
   }
   if(id==='bayescompare'){
-    const first=column('first'),second=column('second');distinct([first,second]);
-    const samples=[values(first),values(second)];
+    const samples=statisticsComparisonData(rows,opts).samples;
     if(samples.some(sample=>sample.length<2))throw new Error('Enter at least two observations in each group');
     const keys=['variance','mu','kappa','alpha','beta','level','samples','seed'];
     if(keys.some(key=>!String(opts[key]).trim()))throw new Error('Enter all Bayesian prior and interval parameters');
@@ -175,7 +181,7 @@ export function guidedStatisticsCommand(definition,rows,settings={},columnLabels
     if(keys.some(key=>!String(opts[key]).trim()))throw new Error('Enter all Bayesian prior and interval parameters');
     return `${id}(${data},${keys.map(key=>String(opts[key]).trim()).join(',')})`;
   }
-  if(['levene','bartlett'].includes(id)){
+  if(['levene','bartlett','eta2'].includes(id)){
     let samples;
     if(opts.grouping==='groups'){
       const pairs=complete([column('group'),column('value')]),labels=[...new Set(pairs.map(row=>row[0]))];samples=labels.map(label=>pairs.filter(row=>row[0]===label).map(row=>row[1]));
@@ -185,8 +191,8 @@ export function guidedStatisticsCommand(definition,rows,settings={},columnLabels
   }
   if(id==='mcnemar'){
     const first=column('first'),second=column('second');distinct([first,second]);
-    const pairs=opts.layout==='pairs'?rows.map(row=>[String(row[first]??'').trim(),String(row[second]??'').trim()]).filter(row=>row.every(Boolean)):complete([first,second]);let counts=pairs;
-    if(opts.layout==='pairs'){
+    const pairs=opts.layout==='groups'?statisticsComparisonData(rows,{...opts,grouping:'groups'},{paired:true}).matrix:opts.layout==='pairs'?rows.map(row=>[String(row[first]??'').trim(),String(row[second]??'').trim()]).filter(row=>row.every(Boolean)):complete([first,second]);let counts=pairs;
+    if(opts.layout!=='counts'){
       const labels=[...new Set(pairs.flat())];if(labels.length!==2)throw new Error('Paired observations require the same two categories');
       counts=[[0,0],[0,0]];for(const pair of pairs)counts[labels.indexOf(pair[0])][labels.indexOf(pair[1])]++;
     }else if(pairs.length!==2)throw new Error('The count table needs exactly two rows');
@@ -205,7 +211,7 @@ export function guidedStatisticsCommand(definition,rows,settings={},columnLabels
     return `cox(${table(selected)},${opts.ties},${entry===null?-1:2},${opts.ph==='test'?1:0})`;
   }
   if(id==='repeatedanova'){
-    const cols=multiple('columns');if(cols.length<2)throw new Error('Choose at least two conditions');return `repeatedanova(${table(complete(cols))},${opts.factor2})`;
+    const plan=statisticsComparisonData(rows,opts,{all:true,paired:true,strict:true});if(plan.samples.length<2)throw new Error('Choose at least two conditions');return `repeatedanova(${table(plan.matrix)},${opts.factor2})`;
   }
   if(['poissonreg','nbreg'].includes(id)){
     const response=column('response'),offset=opts.adjustment!=='none'?column('offset'):null;
@@ -254,9 +260,8 @@ export function guidedStatisticsCommand(definition,rows,settings={},columnLabels
     return `impute(${table(cells)},${method}${neighbors})`;
   }
   if(id==='crossvalidate'){
-    const width=Math.max(...rows.map(row=>row.length));
-    const cells=rows.map(row=>Array.from({length:width},(_,index)=>String(row[index]??'').trim()));
-    if(cells.some(row=>row.some(cell=>!cell)))throw new Error('Complete rows required');
+    const response=column('response');
+    const cells=complete([...multiple('predictors',[response]),response]);
     const folds=Number(opts.folds),seed=Number(opts.seed);
     if(!Number.isInteger(folds)||folds<2||folds>cells.length)throw new Error('Folds must be between 2 and the row count');
     if(!Number.isInteger(seed)||seed<0)throw new Error('Seed must be a nonnegative integer');
@@ -266,7 +271,7 @@ export function guidedStatisticsCommand(definition,rows,settings={},columnLabels
   }
   if(id==='kstest'){
     const first=column('first');
-    if(opts.mode==='two'){const second=column('second');distinct([first,second]);return `kstest(${list(values(first))},${list(values(second))})`;}
+    if(opts.mode==='two')return `kstest(${statisticsComparisonData(rows,opts).samples.map(list).join(',')})`;
     return `kstest(${list(values(first))},${opts.mode},${opts.location},${opts.scale})`;
   }
   throw new Error('Unknown analysis form');
@@ -277,22 +282,26 @@ export function advancedStatisticsTermLabels(definition,rows,settings={},columnL
   const n=Math.max(0,...rows.map(row=>row.length)),id=definition.id;
   const opts=Object.fromEntries((definition.controls||[]).map(field=>[field.key,settings[field.key]??field.default]));
   const column=key=>Number(opts[key])===-1?n-1:Number(opts[key]);
-  if(id==='bayesbootstrap'&&opts.layout!=='single'){
-    let names;
-    if(opts.layout==='groups'){
-      names=[...new Set(rows.map(row=>String(row[column('group')]??'').trim()).filter(Boolean))];
-      if(opts.order==='reverse')names.reverse();
-    }else names=[columnLabels[column('first')]||'Group A',columnLabels[column('second')]||'Group B'];
-    return {'sample:A':names[0]||'Group A','sample:B':names[1]||'Group B'};
+  if(['twowayanova','linearmodel'].includes(id))return statisticsFactorialData(rows,opts,columnLabels).labels;
+  if(id==='kstest'&&opts.mode!=='two')return {'sample:1':columnLabels[column('first')]||'Sample 1'};
+  if(['cohend','bayescompare','levene','bartlett','eta2','friedman','repeatedanova','kstest'].includes(id)||id==='bayesbootstrap'&&opts.layout!=='single'){
+    const settings={...opts,grouping:id==='bayesbootstrap'?opts.layout:opts.grouping};
+    const plan=statisticsComparisonData(rows,settings,{all:['levene','bartlett','eta2','friedman','repeatedanova'].includes(id)});
+    let names=plan.labels.map(at=>settings.grouping==='groups'?at:columnLabels[Number(at)]||`Sample ${Number(at)+1}`);
+    if(id==='bayesbootstrap'&&opts.order==='reverse'&&!opts.firstGroup&&!opts.secondGroup)names.reverse();
+    const labels=Object.fromEntries(names.map((name,i)=>['sample:'+String(i+1),name]));
+    if(['friedman','repeatedanova'].includes(id))names.forEach((name,i)=>labels['feature:'+String(i+1)]=name);
+    if(id==='bayesbootstrap')Object.assign(labels,{'sample:A':names[0],'sample:B':names[1]});return labels;
   }
   if(!columnLabels.length)return {};
   const multiple=excluded=>opts.predictors==='auto'?Array.from({length:n},(_,i)=>i).filter(i=>!excluded.includes(i)):String(opts.predictors??'').split(',').filter(Boolean).map(Number);
   let predictors=[];
-  if(id==='pca'){
+  if(['pca','kmeans','friedman'].includes(id)){
     const columns=opts.columns==='auto'?Array.from({length:n},(_,i)=>i):String(opts.columns).split(',').filter(Boolean).map(Number);
     return Object.fromEntries(columns.map((at,i)=>['feature:'+String(i+1),columnLabels[at]||`Feature ${i+1}`]));
   }
   if(id==='mcnemar'){
+    if(opts.layout==='groups'){const plan=statisticsComparisonData(rows,{...opts,grouping:'groups'},{paired:true});return statisticsCategoryLabels(plan.matrix,...plan.labels,true);}
     const first=column('first'),second=column('second'),pairs=opts.layout==='pairs'?rows.filter(row=>row[first]&&row[second]).map(row=>[row[first],row[second]]):[];
     return statisticsCategoryLabels(pairs,columnLabels[first],columnLabels[second],true);
   }
@@ -306,7 +315,7 @@ export function advancedStatisticsTermLabels(definition,rows,settings={},columnL
   if(['mixedmodel','gee','glmm'].includes(id))predictors=multiple([column('subject'),column('response'),...(id==='glmm'&&opts.family!=='binomial'&&opts.adjustment!=='none'?[column('offset')]:[])]);
   else if(id==='cox')predictors=multiple([column('time'),column('event'),...(opts.truncation==='entry'?[column('entry')]:[])]);
   else if(['poissonreg','nbreg'].includes(id))predictors=multiple([column('response'),...(opts.adjustment!=='none'?[column('offset')]:[])]);
-  else if(['ordinal','multinomial'].includes(id))predictors=Array.from({length:Math.max(0,n-1)},(_,i)=>i);
+  else if(['ordinal','multinomial','crossvalidate'].includes(id))predictors=multiple([column('response')]);
   else if(id==='survivalanalysis'){
     const plan=survivalAnalysisPlan(rows,settings,columnLabels),labels={};
     plan.groups.slice(1).forEach((group,i)=>{labels[`group:${i+1}`]=`${columnLabels[column('group')]}: ${group} / ${plan.groups[0]}`;labels[`x${i+1}`]=labels[`group:${i+1}`];});
@@ -357,31 +366,49 @@ export function advancedStatisticsRows(source,columnLimit){
   return selected;
 }
 
-export function createAdvancedStatistics({state,persist,data,columnLimit,copy}) {
-  const select=$('statistics-advanced-kind'),source=$('statistics-advanced-source'),help=$('statistics-advanced-help'),input=$('statistics-advanced-input'),form=$('statistics-advanced-controls'),status=$('statistics-advanced-status');
-  const selected=()=>advancedStatisticsSchema.find(item=>item.id===select.value)||advancedStatisticsSchema[0];
-  const previous=state.fields['statistics-advanced-kind']||select.value;
-  select.replaceChildren(...advancedStatisticsSchema.map(item=>{const option=element('option',item.label);option.value=item.id;return option;}));
-  select.value=previous||advancedStatisticsSchema[0].id;
-  if(!select.value)select.value=advancedStatisticsSchema[0].id;
+export function createAdvancedStatistics({state,persist,data,columnLimit,copy,applyData,section='advanced'}) {
+  const panelId=`statistics-${section}`;
+  const panel=key=>$(`${panelId}-${key}`);
+  const schema=advancedStatisticsSchema.filter(item=>item.section===section);
+  // Move the saved expression and input source together with the old selection.
+  const legacy=state.fields['statistics-advanced-kind'];
+  if(section!=='advanced'&&schema.some(item=>item.id===legacy)&&!state.fields[`${panelId}-kind`]){
+    for(const key of ['kind','source','input'])state.fields[`${panelId}-${key}`]=state.fields[`statistics-advanced-${key}`];
+  }
+  const select=panel('kind'),source=panel('source'),help=panel('help'),input=panel('input'),form=panel('controls'),status=panel('status');
+  const selected=()=>schema.find(item=>item.id===select.value)||schema[0];
+  const previous=state.fields[select.id]||select.value;
+  const groups=[...new Set(schema.map(item=>item.group))];
+  select.replaceChildren(...groups.map(group=>{const block=element('optgroup');block.dataset.group=group;block.label=group;for(const item of schema.filter(item=>item.group===group)){const option=element('option',item.label);option.value=item.id;block.append(option);}return block;}));
+  select.value=previous||schema[0].id;
+  if(!select.value)select.value=schema[0].id;
+  source.value=state.fields[source.id]||source.value;
+  if(section==='advanced'&&previous!==select.value)source.value='';
   if(!source.value)source.value=selected().example;
-  input.value=state.fields[input.id]||((state.fields[source.id]&&source.value!==selected().example)||!selected().controls?'expression':data().trim()?'current':'example');
+  input.value=(previous===select.value?state.fields[input.id]:null)||((state.fields[source.id]&&source.value!==selected().example)||!selected().controls?'expression':data().trim()&&selected().input!=='none'?'current':'example');
+  if(selected().input==='none'&&input.value==='current')input.value='example';
   let signature='';
   const report=$('statistics-survival-result');
-  let displayed=null,reportKey='';
+  let displayed=null,reportKey='',imputation=null;
+  const apply=section==='preparation'?panel('apply'):null;
   const fieldId=key=>`statistics-form-${selected().id}-${key}`;
-  const settings=()=>Object.fromEntries((selected().controls||[]).map(field=>[field.key,state.fields[fieldId(field.key)]??field.default]));
+  const settings=()=>Object.fromEntries((selected().controls||[]).map(field=>{
+    const id=fieldId(field.key),auto=id+'-auto';
+    if(field.type==='column'&&Number(field.default)===-1){if(state.fields[auto]===undefined)state.fields[auto]=!Object.hasOwn(state.fields,id);if(state.fields[auto])return [field.key,-1];}
+    return [field.key,state.fields[id]??field.default];
+  }));
   const limit=()=>{const value=Number(columnLimit?.());return Number.isInteger(value)&&value>0?value:null;};
   const currentRows=()=>input.value==='example'?selected().exampleRows:advancedStatisticsRows(data(),limit());
   const context=()=>{
-    const plan=selected().id==='survivalanalysis'&&input.value!=='expression'?survivalAnalysisPlan(currentRows(),settings(),columnNames()):{expression:expression(),groups:[],predictors:[]};
+    const plan=selected().id==='survivalanalysis'&&input.value!=='expression'?survivalAnalysisPlan(currentRows(),settings(),resolvedColumnNames()):{expression:expression(),groups:[],predictors:[]};
     let usesCurrentData=input.value==='current'&&!!selected().controls;
     if(input.value==='current'&&!selected().controls)try{usesCurrentData=source.value.trim()===advancedStatisticsCommand(selected(),currentRows());}catch{}
-    if(usesCurrentData||selected().id==='bayesbootstrap'&&input.value!=='expression')plan.termLabels=advancedStatisticsTermLabels(selected(),currentRows(),settings(),columnNames());
+    if(usesCurrentData||input.value!=='expression')plan.termLabels=advancedStatisticsTermLabels(selected(),currentRows(),settings(),resolvedColumnNames());
+    if(selected().id==='impute'&&input.value==='current')Object.assign(plan,{dataSnapshot:data(),columnCount:limit()});
     return plan;
   };
-  function columnNames(){if(input.value!=='current'||!data().trim())return [];const rows=csvRows(data(),{skipHeader:false});const count=Math.min(limit()??Infinity,Math.max(0,...rows.map(row=>row.length)));return statisticsCsvHasHeader(rows)&&!rows[0].some(cell=>cell==='NA')?statisticsColumnLabels(data(),`columns:${count}`):[];}
-  const expression=()=>selected().controls&&input.value!=='expression'?guidedStatisticsCommand(selected(),currentRows(),settings(),columnNames()):source.value.trim();
+  function resolvedColumnNames(){if(input.value==='example')return statisticsColumnNames(Math.max(1,...(selected().exampleRows||[]).map(row=>row.length)));if(input.value!=='current'||!data().trim())return [];const rows=csvRows(data(),{skipHeader:false});const count=Math.min(limit()??Infinity,Math.max(0,...rows.map(row=>row.length)));return statisticsCsvHasHeader(rows)&&!rows[0].some(cell=>cell==='NA')?statisticsColumnLabels(data(),`columns:${count}`):[];}
+  const expression=()=>selected().controls&&input.value!=='expression'?guidedStatisticsCommand(selected(),currentRows(),settings(),resolvedColumnNames()):source.value.trim();
   const preview=()=>{
     if(selected().controls&&input.value!=='expression'){
       try{source.value=expression();status.textContent=`${currentRows().length} ${getLanguage()==='ko'?'행':'rows'}`;}
@@ -390,19 +417,23 @@ export function createAdvancedStatistics({state,persist,data,columnLimit,copy}) 
   };
   const update=()=>{
     const definition=selected();
+    if(apply){let valid=false;try{valid=!!imputation&&JSON.stringify(context())===JSON.stringify(imputation.context);}catch{}apply.hidden=definition.id!=='impute'||!imputation;apply.disabled=!valid||document.documentElement.dataset.busy==='true';apply.dataset.invalidAnalysis=String(!valid);}
     const korean=getLanguage()==='ko';
     const suite=definition.id==='survivalanalysis';
-    $('statistics-survival-tools').hidden=!suite;
+    if(section==='advanced')$('statistics-survival-tools').hidden=!suite;
     if(displayed){let key='';try{key=JSON.stringify(context());}catch{}if(key!==reportKey){displayed=null;report.replaceChildren();report.hidden=true;}else renderSurvivalResult();}
     help.textContent=definition.controls&&input.value!=='expression'?(korean?definition.formHelpKo:definition.formHelp):(korean?definition.helpKo:definition.help);
-    for(const option of select.options){const item=advancedStatisticsSchema.find(item=>item.id===option.value);option.textContent=korean?item.ko:item.label;}
-    $('statistics-advanced-data').disabled=definition.input==='none';
+    for(const option of select.options){const item=schema.find(item=>item.id===option.value);option.textContent=korean?item.ko:item.label;}
+    for(const group of select.querySelectorAll('optgroup')){const item=schema.find(item=>item.group===group.dataset.group);group.label=korean?item.groupKo:item.group;}
+    panel('data').disabled=definition.input==='none';
+    input.querySelector('option[value="current"]').disabled=definition.input==='none';
     input.closest('label').hidden=!definition.controls;
     const guided=definition.controls&&input.value!=='expression';
     source.readOnly=!!guided;
-    $('statistics-advanced-expression').hidden=!!guided;
+    panel('expression').hidden=!!guided;
     form.hidden=!guided;
-    $('statistics-advanced-example-data').hidden=!guided||input.value!=='example';
+    panel('example-preview').hidden=!guided||input.value!=='example'||definition.input==='none';
+    panel('preview').hidden=!guided;
     if(guided){
       let rows=[];try{rows=currentRows();}catch{}
       const count=Math.max(1,...rows.map(row=>row.length)),opts=settings();
@@ -415,6 +446,7 @@ export function createAdvancedStatistics({state,persist,data,columnLimit,copy}) 
           if(field.when&&!Object.entries(field.when).every(([key,values])=>values.includes(opts[key])))continue;
           const caption=korean?field.ko:field.label,id=fieldId(field.key),value=opts[field.key];
           const changed=newValue=>{
+            if(field.type==='column'&&Number(field.default)===-1)state.fields[id+'-auto']=false;
             state.fields[id]=newValue;
             if(definition.id==='glm'&&field.key==='family')state.fields[fieldId('link')]='auto';
             if(['time','event','subject','response','group','grouping','offset','adjustment'].includes(field.key)||(definition.id==='glmm'&&field.key==='family'))state.fields[fieldId('predictors')]=definition.id==='survivalanalysis'?'':'auto';
@@ -423,9 +455,9 @@ export function createAdvancedStatistics({state,persist,data,columnLimit,copy}) 
           };
           if(field.type==='columns'){
             const group=element('fieldset'),legend=element('legend',caption);group.append(legend);group.className='form-row statistics-form-columns';
-            const roles=definition.id==='ancova'?['group','response']:definition.id==='survivalanalysis'?['time','event',...(opts.grouping==='groups'?['group']:[])]:definition.id==='cox'?['time','event']:['poissonreg','nbreg','glm'].includes(definition.id)?['response']:['subject','response'];
+            const roles=definition.id==='ancova'?['group','response']:definition.id==='survivalanalysis'?['time','event',...(opts.grouping==='groups'?['group']:[])]:definition.id==='cox'?['time','event']:['poissonreg','nbreg','glm','ordinal','multinomial','crossvalidate','linearmodel'].includes(definition.id)?['response']:['subject','response'];
             if(['poissonreg','nbreg','glmm','glm'].includes(definition.id)&&opts.adjustment!=='none'&&(definition.id!=='glmm'||opts.family!=='binomial'))roles.push('offset');
-            const reserved=field.key==='predictors'?roles.map(key=>Number(opts[key])===-1?count-1:Number(opts[key])):[];
+            const reserved=['predictors','categorical'].includes(field.key)?roles.map(key=>Number(opts[key])===-1?count-1:Number(opts[key])):[];
             const columns=value==='auto'?Array.from({length:count},(_,i)=>i).filter(i=>!reserved.includes(i)):String(value).split(',').filter(Boolean).map(Number);
             const store=element('input');store.type='hidden';store.id=id;store.value=String(value);group.append(store);
             for(let i=0;i<count;i++)if(!reserved.includes(i)){
@@ -437,9 +469,9 @@ export function createAdvancedStatistics({state,persist,data,columnLimit,copy}) 
             const label=element('label',caption),control=element(field.type==='number'?'input':'select');control.id=id;
             if(field.type==='number'){control.value=value;control.oninput=()=>changed(control.value);}
             else{
-              const choices=field.type==='column'?labels.map((name,i)=>({id:String(i),label:name,ko:name})):field.choices.filter(choice=>!choice.when||Object.entries(choice.when).every(([key,values])=>values.includes(opts[key])));
+              const choices=field.type==='column'?labels.map((name,i)=>({id:String(i),label:name,ko:name})):field.type==='group'?[...new Set(currentRows().map(row=>String(row[Number(opts.group)]??'').trim()).filter(Boolean))].map(name=>({id:name,label:name,ko:name})):field.choices.filter(choice=>!choice.when||Object.entries(choice.when).every(([key,values])=>values.includes(opts[key])));
               control.replaceChildren(...choices.map(choice=>{const item=element('option',korean?choice.ko:choice.label);item.value=String(choice.id);return item;}));
-              const wanted=field.type==='column'&&Number(value)===-1?String(count-1):String(value);control.value=wanted;
+              const wanted=field.type==='column'&&Number(value)===-1?String(count-1):String(value);control.value=wanted;if(field.type==='group'&&!choices.some(choice=>choice.id===wanted))control.selectedIndex=field.key==='secondGroup'&&choices.length>1?1:0;
               // Keep an unavailable role invalid until the user picks a column.
               if(!control.value){const missing=element('option',korean?'열 선택':'Choose column');missing.value=String(value);control.prepend(missing);control.value=String(value);}
               control.onchange=()=>changed(control.value);
@@ -448,21 +480,28 @@ export function createAdvancedStatistics({state,persist,data,columnLimit,copy}) 
           }
         }
       }
-      $('statistics-advanced-example-data').textContent=rows.map(row=>row.join(', ')).join('\n');
+      panel('example-data').textContent=rows.map(row=>row.join(', ')).join('\n');
     }
     preview();
+    panel('preview-source').textContent=source.value;
+    const button=document.querySelector(`[data-run="${panelId}"]`);button.dataset.invalidAnalysis=String(!source.value.trim());
+    button.disabled=!source.value.trim()||document.documentElement.dataset.busy==='true'||document.documentElement.dataset.engine!=='ready';
   };
-  select.onchange=()=>{source.value=selected().example;input.value=selected().controls?(data().trim()?'current':'example'):'expression';signature='';update();persist();};
+  select.onchange=()=>{source.value=selected().example;input.value=selected().controls?(data().trim()&&selected().input!=='none'?'current':'example'):'expression';signature='';update();persist();};
   input.onchange=()=>{if(input.value==='expression'&&!source.value)source.value=selected().example;signature='';update();persist();};
-  $('statistics-advanced-example').onclick=()=>{source.value=selected().example;if(selected().controls)input.value='example';signature='';update();persist();};
-  $('statistics-advanced-data').onclick=()=>{
+  panel('example').onclick=()=>{source.value=selected().example;if(selected().controls)input.value='example';signature='';update();persist();};
+  panel('data').onclick=()=>{
     try{if(selected().controls){input.value='current';signature='';update();}else {source.value=advancedStatisticsCommand(selected(),advancedStatisticsRows(data(),limit()));input.value='current';}persist();}
     catch(exc){help.textContent=exc.message;}
   };
   $('statistics-data').addEventListener('input',update);
+  source.addEventListener('input',update);
   globalThis.addEventListener?.('resize',()=>{if(displayed)update();});
-  $('statistics-survival-band').checked=state.fields['statistics-survival-band']!==false;
-  $('statistics-survival-band').onchange=()=>{state.fields['statistics-survival-band']=$('statistics-survival-band').checked;update();persist();};
+  if(section==='advanced'){
+    $('statistics-survival-band').checked=state.fields['statistics-survival-band']!==false;
+    $('statistics-survival-band').onchange=()=>{state.fields['statistics-survival-band']=$('statistics-survival-band').checked;update();persist();};
+  }
+  if(apply)apply.onclick=()=>{if(apply.disabled||document.documentElement.dataset.busy==='true')return;try{if(JSON.stringify(context())!==JSON.stringify(imputation.context))return;const updated=statisticsImputationCSV(data(),imputation.result.data,imputation.context.columnCount);imputation=null;applyData?.(updated);update();}catch(error){status.textContent=t(error.message);}};
   update();
   function renderSurvivalResult(){
     const snapshot=displayed.copyResult;
@@ -470,6 +509,7 @@ export function createAdvancedStatistics({state,persist,data,columnLimit,copy}) 
       onCopy:copy&&snapshot?()=>copy(statisticsResultMarkdown(snapshot,{digits:state.digits,notation:state.resultDisplayMode})):null});
   }
   return {expression,context,render:update,showResult:(result,runContext)=>{
+    if(result.ok&&result.imputation&&runContext.dataSnapshot!==undefined){try{if(JSON.stringify(context())===JSON.stringify(runContext)){imputation={result:result.imputation,context:runContext};update();}}catch{}}
     if(!result.ok||!result.survival)return;
     try{if(JSON.stringify(context())!==JSON.stringify(runContext))return;}catch{return;}
     displayed={result:result.survival,copyResult:result,context:runContext};reportKey=JSON.stringify(runContext);

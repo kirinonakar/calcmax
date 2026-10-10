@@ -1,6 +1,7 @@
 """Probability distributions, statistical tests, and regression."""
 from calc_limits import within_limit
 import math
+from functools import lru_cache
 from statistics import NormalDist
 import mpmath as mp
 import sympy as s
@@ -59,9 +60,8 @@ def _f_sf(x, d1, d2):
     if x <= 0: return mp.mpf(1)
     return mp.betainc(d2/2, d1/2, 0, d2/(d2 + d1*x), regularized=True)
 
-def _studentized_range_sf(q, groups, df):
-    """Studentized-range survival probability by deterministic normal/chi-square quadrature."""
-    if q <= 0: return 1.0
+@lru_cache(maxsize=128)
+def _studentized_range_grid(df):
     normal_steps = 120
     normal_step = 16.0/normal_steps
     normal_grid = []
@@ -71,22 +71,50 @@ def _studentized_range_sf(q, groups, df):
         normal_grid.append((z, weight*math.exp(-z*z/2)/math.sqrt(2*math.pi), (1+math.erf(z/math.sqrt(2)))/2))
     spread = math.sqrt(2.0/df)
     low, high = max(0.0, 1.0-9*spread), 1.0+9*spread
+    # A fourth-power change of variable regularizes fractional density near
+    # zero, which matters for Games–Howell pairs with very small Welch df.
+    power=4.0 if df<4 else 1.0
+    low,high=low**(1/power),high**(1/power)
     variance_steps = 256
     variance_step = (high-low)/variance_steps
     log_scale = math.log(2) + df/2*math.log(df/2) - math.lgamma(df/2)
-    total = normalization = 0.0
+    variance_grid=[];normalization=0.0
     for index in range(variance_steps + 1):
-        scale = low + index*variance_step
-        if scale == 0: continue
+        position=low+index*variance_step;scale=position**power
+        if position == 0: continue
         weight = (1 if index in (0, variance_steps) else 4 if index % 2 else 2)*variance_step/3
-        density = math.exp(log_scale + (df-1)*math.log(scale) - df*scale*scale/2)
+        density = math.exp(log_scale+(df-1)*math.log(scale)-df*scale*scale/2+math.log(power)+(power-1)*math.log(position))
         if density == 0: continue
-        interval = q*scale
-        cdf = groups*sum(normal_weight*max(0.0, (1+math.erf((z+interval)/math.sqrt(2)))/2 - normal_cdf)**(groups-1)
-                         for z, normal_weight, normal_cdf in normal_grid)
-        total += weight*density*max(0.0, 1.0-cdf)
+        variance_grid.append((scale,weight*density))
         normalization += weight*density
+    return normal_grid,variance_grid,normalization
+
+
+def _studentized_range_sf(q, groups, df):
+    """Studentized-range survival probability by deterministic normal/chi-square quadrature."""
+    if q <= 0: return 1.0
+    if groups==2:return float(2*_t_sf(mp.mpf(q)/mp.sqrt(2),mp.mpf(df)))
+    normal_grid,variance_grid,normalization=_studentized_range_grid(float(df))
+    total=0.0;root2=math.sqrt(2)
+    for scale,weight in variance_grid:
+        interval=q*scale
+        cdf=groups*sum(normal_weight*max(0.0,(1+math.erf((z+interval)/root2))/2-normal_cdf)**(groups-1) for z,normal_weight,normal_cdf in normal_grid)
+        total+=weight*max(0.0,1.0-cdf)
     return min(1.0, max(0.0, total/normalization))
+
+
+@lru_cache(maxsize=128)
+def _studentized_range_critical(groups, df, level=.95):
+    """Invert the shared numerical studentized-range distribution."""
+    low,high=0.0,4.0
+    while _studentized_range_sf(high,groups,df)>1-level:
+        high*=2
+        require(math.isfinite(high),'Studentized-range quantile did not converge')
+    for _ in range(26):
+        middle=(low+high)/2
+        if _studentized_range_sf(middle,groups,df)>1-level:low=middle
+        else:high=middle
+    return (low+high)/2
 
 def _bound_survival(sf, bound, digits):
     if bound == s.oo: return mp.mpf(0)
@@ -541,7 +569,9 @@ def statistical_test(engine, name, a, nodes):
             return {"t": _mp_result(statistic, engine), "df": s.Integer(n - 1), "p value": _mp_result(probability, engine),
                     "sample mean": mean, "sample SD": sd, "n": s.Integer(n)}
     if name in ("ttest2", "ttestpaired"):
-        require(len(args) == 3, name + " takes Δ0, x and y data lists")
+        require(len(args)==3 or name=='ttest2' and len(args)==4, name + " takes Δ0, x and y data lists, optionally student / welch for independent samples")
+        method=str(args[3]) if len(args)==4 else 'welch'
+        require(method in ('welch','student'),'Choose welch or student for the independent t test')
         delta = _real_value(args[0], "The hypothesized difference must be real")
         require(isinstance(args[1], (list, tuple)) and isinstance(args[2], (list, tuple)), "x and y must be data lists")
         if name == "ttestpaired":
@@ -554,10 +584,11 @@ def statistical_test(engine, name, a, nodes):
             mean_x, variance_x, nx = _sample_mean_variance(args[1])
             mean_y, variance_y, ny = _sample_mean_variance(args[2])
             mean = mean_x - mean_y
-            standard_error_squared = variance_x/nx + variance_y/ny
+            standard_error_squared = ((nx-1)*variance_x+(ny-1)*variance_y)/(nx+ny-2)*(1/nx+1/ny) if method=='student' else variance_x/nx+variance_y/ny
             require(standard_error_squared > 0, "The samples need some variation")
             standard_error = s.sqrt(standard_error_squared)
-            df = standard_error_squared**2/((variance_x/nx)**2/(nx - 1) + (variance_y/ny)**2/(ny - 1))
+            df = nx+ny-2 if method=='student' else standard_error_squared**2/((variance_x/nx)**2/(nx - 1) + (variance_y/ny)**2/(ny - 1))
+            if method=='student':engine.note+=' Student pooled-variance t test assumes equal population variances, independent groups and approximately normal errors.'
         with mp.workdps(digits + 10):
             statistic = (_mpf(mean, digits) - _mpf(delta, digits))/_mpf(standard_error, digits)
             probability = _tail_probability(lambda t: _t_sf(t, _mpf(df, digits)), statistic, tail)
@@ -664,7 +695,7 @@ def statistical_test(engine, name, a, nodes):
         p = sum((probability(value) for value in selected), s.Integer(0))
         odds = s.oo if b*c == 0 else s.Rational(a*d, b*c)
         return {"odds ratio": odds, "p value": p, "observed": [[a, b], [c, d]], "n": s.Integer(total)}
-    if name in ("anova", "tukey"):
+    if name in ("anova", "welchanova", "tukey", "gameshowell"):
         require(len(args) >= 2, name + " takes two or more data lists")
         groups = []
         for group in args:
@@ -680,6 +711,22 @@ def statistical_test(engine, name, a, nodes):
         within = s.Add(*[s.Add(*[(value - mean)**2 for value in group]) for group, mean in zip(groups, means)])
         require(within != 0, name + " needs variation inside the groups")
         count = len(groups)
+        if name=='welchanova':
+            with mp.workdps(digits+10):
+                moments=[_sample_mean_variance(group) for group in groups]
+                require(all(variance>0 for _,variance,_ in moments),'Welch ANOVA requires positive variance in every group')
+                weights=[s.Integer(n)/variance for _,variance,n in moments]
+                weight=s.Add(*weights);center=s.Add(*[w*mean for w,(mean,_,_) in zip(weights,moments)])/weight
+                adjustment=s.Add(*[(1-w/weight)**2/(n-1) for w,(_,_,n) in zip(weights,moments)])
+                numerator=s.Add(*[w*(mean-center)**2 for w,(mean,_,_) in zip(weights,moments)])/(count-1)
+                statistic=numerator/(1+s.Rational(2*(count-2),count**2-1)*adjustment)
+                df2=s.Rational(count**2-1,3)/adjustment
+                engine.note='Welch ANOVA; unequal variances, independent groups and approximately normal errors. Welch–Satterthwaite denominator degrees of freedom.'
+                return {'F':statistic,'df numerator':s.Integer(count-1),'df denominator':df2,'p value':_mp_result(_f_sf(_mpf(statistic,digits),mp.mpf(count-1),_mpf(df2,digits)),engine),'method':'Welch ANOVA'}
+        if name=='gameshowell':
+            from calc_posthoc import posthoc_comparisons
+            engine.note='Games–Howell pairwise comparisons; unequal variances, pair-specific Welch degrees of freedom, numerical studentized-range adjusted p values and 95% simultaneous intervals. Small groups can yield inaccurate approximations.'
+            return posthoc_comparisons(groups,'gameshowell',engine)
         if name == "tukey":
             degrees = total-count
             mse = within/degrees

@@ -559,41 +559,122 @@ Example: cauchycdf(-1,1,0,1)
 `invcauchy(q)` / `invcauchy(q,x₀,γ)` — 0 ≤ q ≤ 1에 대한 코시 분포의 분위수. q=0과 1에서는 −∞와 ∞, q=0.5에서는 위치(중앙값)를 반환합니다.
 Example: invcauchy(0.75,0,1)
 
-## Statistical tests
+## 통계 — 검정 선택
 
-`ttest(μ0,[...])` — 표본평균을 μ0와 비교하는 단일 표본 t 검정.
+```text
+무엇을 비교하나요?
+├─ 숫자 자료
+│  ├─ 한 표본 평균 vs 기준값 → 단일 표본 t 검정
+│  ├─ 독립된 두 그룹 → Welch t 검정
+│  ├─ 같은 대상의 전·후 → 대응 t 검정
+│  ├─ 독립된 3개 이상 그룹 → Welch ANOVA → Games–Howell
+│  │  └─ 등분산 ANOVA 선택 → Tukey–Kramer
+│  ├─ 같은 대상의 여러 조건 → 반복측정 ANOVA / Friedman
+│  ├─ 독립 관측의 두 요인 → 이요인 ANOVA
+│  ├─ 3개 이상 요인·숫자 공변량 → 요인 선형회귀
+│  └─ 공변량을 보정한 그룹 비교 → ANCOVA
+├─ 범주·빈도 자료
+│  ├─ 독립된 범주 간 관계 → χ² 독립성 검정
+│  │  └─ 기대빈도가 작은 2×2 표 → Fisher 정확 검정
+│  ├─ 대응된 이항 결과 → McNemar
+│  └─ 빈도 vs 기대빈도 → χ² 적합도 검정
+├─ 중도절단이 있는 사건 발생 시간 → 생존분석
+└─ 변수로 반응값을 예측 → 회귀·모형
+
+분포·이상값·연구 설계도 확인하세요:
+  평균 분석 → Shapiro–Wilk + Q–Q plot
+  등분산 가정 → Brown–Forsythe / Levene
+  독립 표본의 순위 비교 → Mann–Whitney (2개), Kruskal–Wallis (3개 이상)
+  대칭적인 대응 차이값 → Wilcoxon 부호순위
+```
+
+### 독립표본·대응표본에 따른 검정 비교
+
+| 데이터 구조 | 모수 검정 | 비모수 검정 | 이 앱의 지원 범위 |
+| --- | --- | --- | --- |
+| 독립된 두 집단 | Student / Welch t-test | Mann–Whitney U | 모두 지원; Welch 기본 |
+| 대응된 두 집단 | Paired t-test | Wilcoxon signed-rank | 모두 지원 |
+| 독립된 3집단 이상 | ANOVA / Welch ANOVA | Kruskal–Wallis | 모두 지원; Welch ANOVA 기본 |
+| 반복측정 3조건 이상 | Repeated-measures ANOVA | Friedman test | 모두 지원 |
+
+이 표는 같은 자료 설계에 맞는 방법군을 비교하며 분석 목적까지 서로 같다는 뜻은 아닙니다. 순위 검정을 위치 차이로 해석하려면 형태·대칭성 가정을 별도로 확인하세요. 반복 조건은 같은 대상의 측정이며 독립 그룹이 아닙니다.
+
+목적·측정척도·연구 설계로 먼저 선택하고, 정규성 p값만으로 검정 방법을 자동 전환하지 마세요. Welch t는 등분산이 필수는 아닙니다. One-way ANOVA의 기본값은 Welch이며 Games–Howell을 함께 실행합니다. 등분산 ANOVA를 선택하면 Tukey를 함께 실행합니다. 순위 검정도 모든 가정에서 자유로운 검정은 아닙니다. 알려진 모집단 SD일 때만 z 검정을 선택하세요.
+
+원자료 t 검정·t 구간·ANOVA·Tukey는 표본 요약, 가정 점검, Q–Q plot·분포를 함께 제공합니다. t 검정은 효과크기·95% 양측 평균 구간을, ANOVA는 η²·자동 사후비교를, Tukey/Games–Howell은 전체 ANOVA를 함께 표시합니다. 대응 t는 차이값의 정규성을, ANCOVA·요인 ANOVA·요인 선형회귀는 잔차를 점검합니다. 요약 통계만 입력한 경우 정규성은 확인할 수 없다고 표시합니다.
+
+### 정규 모형 가정이 필요한 모수 방법 (parametric)
+- 단일·대응 t 검정, t 신뢰구간: 정확한 소표본 추론은 모집단의 정규성을 가정합니다. 대응 검정에서는 원자료가 아닌 차이값의 정규성입니다. 큰 표본에서는 어느 정도 강건할 수 있지만 왜도·영향이 큰 이상값을 함께 확인하세요.
+- Welch t: 정규 모형에 근거한 평균 비교이며 등분산은 필요하지 않습니다. Student 합동분산 t는 등분산도 필요합니다. 기본값은 Welch이며 Student도 선택할 수 있습니다.
+- Welch ANOVA·Games–Howell: 정규 모형의 독립 평균 비교이며 등분산은 필요하지 않습니다. 일요인 분석의 기본 세트입니다.
+- 이요인 ANOVA·요인 선형회귀: 정규·독립 오차, 잔차 등분산, 식별 가능한 반복 관측 설계와 적절한 상호작용이 필요합니다. Type II는 주변성 원리를, Type III 요인 효과는 합 대비를 사용합니다.
+- 일반 ANOVA·Tukey: 독립된 정규 오차와 그룹 간 등분산을 가정합니다. ANCOVA는 공변량 효과의 선형성·공통 기울기, 반복측정 ANOVA는 대상 내 구조·구형성 및 보정을 함께 확인합니다.
+- Gaussian 혼합모형: 조건부 오차·랜덤효과의 정규성을 가정하며 전체 원자료가 정규여야 한다는 뜻은 아닙니다. 베이지안 평균·두 표본 비교도 지정한 정규 우도를 가정합니다.
+- Bartlett: 비정규성에 민감한 분산 검정입니다. 정규성이 의심되면 중앙값 기준 Levene·Brown–Forsythe를 우선 검토하세요.
+
+### 모수 방법이라고 모두 원자료의 정규성이 필요한 것은 아닙니다
+- z 검정·z 구간: 알려진 모집단 표준편차와 평균의 정규 또는 적절히 근사된 표집분포가 필요합니다. 표본 표준편차만으로는 조건을 충족하지 못합니다.
+- 이항 로지스틱·다항·순서형 모형은 범주 우도, 포아송·음이항 모형은 빈도 우도를 사용합니다. 반응값의 정규성 대신 분포족·연결함수·과산포·연구 설계·모형 진단을 확인하세요.
+- GEE는 군집의 평균·분산 모형과 작업상관을 사용하며 원자료의 정규성이 필수는 아닙니다. 강건 공분산도 극소수 군집이나 잘못된 평균 모형을 해결하지 못합니다.
+- GLMM은 선택한 분포족·랜덤효과의 가정을 확인합니다. 베이지안 비율·발생률은 각각 이항·포아송 우도를 사용합니다.
+
+### 정규성 가정이 필요 없는 비모수 방법 (nonparametric)
+- Mann–Whitney U: 독립된 두 분포. Kruskal–Wallis: 여러 독립 분포. 중앙값·위치 차이 해석에는 비슷한 분포 형태가 필요하며 단순히 평균 검정을 대체하는 방법은 아닙니다.
+- Friedman: 독립 대상의 3개 이상 반복 조건을 대상 안에서 순위로 비교합니다. 완전 대응 자료·동점 보정 χ² 근사를 사용합니다.
+- Wilcoxon 부호순위: 대응 또는 일표본 차이값을 분석합니다. 위치 차이 해석에는 대칭성이 필요합니다. 차이값의 심한 비대칭은 순위 검정을 선택한다고 해결되지 않습니다.
+- Kolmogorov–Smirnov: 연속분포를 비교합니다. 일표본 기준분포는 독립적으로 모수가 지정되어야 합니다. 같은 표본에서 모수를 추정하면 통상 p값이 맞지 않으며 이 앱은 Lilliefors 보정을 제공하지 않습니다.
+- Kaplan–Meier·로그순위: 정규성 없이 중도절단 사건 시간을 다루지만 중도절단·연구 설계 가정은 여전히 중요합니다. Cox는 반모수 방법이며 정규성 대신 비례위험을 가정합니다.
+- 부트스트랩: 정규성은 필요하지 않지만 이 앱의 IID 재표집에는 독립적이고 대표성 있는 관측이 필요합니다. 대응·군집·시계열에는 자료 구조에 맞는 추론이 필요합니다.
+
+### 범주형 검정: 정규성으로 선택하지 않습니다
+- χ² 독립성·적합도: 독립된 빈도와 충분한 기대빈도. Fisher 정확: 희소한 독립 2×2 표. McNemar: 대응 이항 결과. Shapiro p값 대신 연구 설계·빈도를 보고 선택하세요.
+
+### 어느 것을 선택하나요?
+- 먼저 질문을 정하세요: 평균 차이, 분포 차이, 연관성, 예측, 생존 중 무엇인가요? 이어서 독립 그룹·대응 관측·군집을 구분하세요.
+- 평균이 목적이면 오차 모형·설계가 적절한 t·ANOVA 계열을 사용합니다. Q–Q plot·표본수·왜도·이상값을 함께 확인하고, 독립 두 그룹이 이분산이면 Welch를 사용하세요.
+- 순서·순위나 분포 비교가 목적이면 Mann–Whitney·Kruskal–Wallis를, 대칭적인 대응 위치 차이면 Wilcoxon을 검토하세요. 평균에서 분포·위치로 분석 목적이 바뀌었음을 명시하세요.
+- 심한 비정규성·비대칭·의존성이 있으면 변환, 적절한 분포·군집 모형, 설계를 반영하는 추론을 검토하세요. 비모수라는 이름만으로 문제가 해결되지는 않습니다.
+- Shapiro p ≥ 0.05는 정규성의 증명이 아니며 p < 0.05도 모든 평균 분석의 자동 탈락 기준은 아닙니다. 예비 검정의 유의 여부만으로 주 검정을 몰래 바꾸지 마세요.
+
+`ttest(μ0,[...])` — 한 표본 평균을 기준값과 비교할 때 사용합니다. 예: 평균 점수가 70인지 비교. 표본평균을 μ0와 비교하는 단일 표본 t 검정.
 Example: ttest(0,[1,2,3,4])
-`ttest(μ0,x̄,s,n)` — 요약 통계량으로 수행하는 같은 검정.
+`ttest(μ0,x̄,s,n)` — 한 표본 평균을 기준값과 비교할 때 사용합니다. 예: 평균 점수가 70인지 비교. 요약 통계량으로 수행하는 같은 검정.
 Example: ttest(0,2.5,1.291,4)
-`ztest(μ0,σ,[...])` — 알려진 표준편차 σ를 사용하는 단일 표본 z 검정.
+`ztest(μ0,σ,[...])` — 모집단 표준편차를 알고 있을 때 평균을 기준값과 비교합니다. 알려진 표준편차 σ를 사용하는 단일 표본 z 검정.
 Example: ztest(0,2,[1,2,3,4])
-`ztest(μ0,σ,x̄,n)` — 요약 통계량으로 수행하는 같은 검정.
+`ztest(μ0,σ,x̄,n)` — 모집단 표준편차를 알고 있을 때 평균을 기준값과 비교합니다. 요약 통계량으로 수행하는 같은 검정.
 Example: ztest(0,2,2.5,4)
-`chi2test(observed,expected)` — 관측도수와 기대도수를 비교하는 χ² 적합도 검정.
+`chi2test(observed,expected)` — 관측 범주 빈도가 지정한 기대빈도와 맞는지 비교합니다. 관측도수와 기대도수를 비교하는 χ² 적합도 검정.
 Example: chi2test([10,20,30],[15,20,25])
-`anova([...],[...],...)` — 둘 이상의 데이터 목록에 대한 일원분산분석.
+`anova([...],[...],...)` — 독립 그룹들의 평균을 비교합니다. 오차의 정규성·등분산을 확인합니다. 둘 이상의 데이터 목록에 대한 일원분산분석.
 Example: anova([1,2,3],[4,5,6])
-`tukey([...],[...],...)` — Tukey–Kramer 사후검정. 그룹별 평균 차이와 다중 비교 보정 p값을 구하며 그룹 크기가 달라도 사용할 수 있습니다.
+`ttest2(delta, A, B, student)` — 서로 다른 두 그룹의 평균을 비교합니다. Welch 방식은 이분산도 허용합니다. 독립 두 그룹의 합동분산 Student t. 기본 3인수는 Welch입니다.
+
+`welchanova(A, B, ...)` — 이분산 독립 그룹 평균을 비교하며 Games–Howell 사후비교를 자동 제공합니다. 이분산 일요인 ANOVA + Games–Howell 자동 세트.
+
+`gameshowell(A, B, ...)` — 등분산을 가정하지 않고 독립 그룹의 모든 쌍을 보정 p값·동시 구간으로 비교합니다. 이분산 쌍별 사후비교·95% 동시 구간.
+
+`tukey([...],[...],...)` — ANOVA 이후 어느 그룹 평균이 다른지 다중비교 보정과 함께 확인합니다. Tukey–Kramer 사후검정. 그룹별 평균 차이와 다중 비교 보정 p값을 구하며 그룹 크기가 달라도 사용할 수 있습니다.
 Example: tukey([1,2,3],[4,5,6],[7,8,9])
-`ttest2(Δ0,x,y)` — 두 독립 표본의 t 검정(Welch).
+`ttest2(Δ0,x,y)` — 서로 다른 두 그룹의 평균을 비교합니다. Welch 방식은 이분산도 허용합니다. 두 독립 표본의 t 검정(Welch).
 Example: ttest2(0,[1,2,3],[2,4,5])
-`ttestpaired(Δ0,x,y)` — 대응 표본 t 검정.
+`ttestpaired(Δ0,x,y)` — 같은 대상의 전·후 또는 짝지은 표본을 비교하며 A−B 차이값을 분석합니다. 대응 표본 t 검정.
 Example: ttestpaired(0,[1,2,3],[2,3,5])
-`ztest2(Δ0,σx,σy,x,y)` — 표준편차를 아는 두 표본의 z 검정.
+`ztest2(Δ0,σx,σy,x,y)` — 두 모집단 표준편차가 알려진 독립 두 그룹의 평균을 비교합니다. 표준편차를 아는 두 표본의 z 검정.
 Example: ztest2(0,1,1,[1,2,3],[2,4,5])
-`chi2independence(x,y[,correction])` — 두 범주 열의 χ² 독립성 검정. 2×2 표의 Yates 연속성 보정은 기본값 1(켬)이며, 0을 넣으면 보정 없는 Pearson χ²를 계산합니다. 다른 크기의 표에는 보정하지 않습니다. 결과에 보정 적용 여부가 표시됩니다.
+`chi2independence(x,y[,correction])` — 독립된 관측에서 두 범주형 변수의 연관성을 검정합니다. 두 범주 열의 χ² 독립성 검정. 2×2 표의 Yates 연속성 보정은 기본값 1(켬)이며, 0을 넣으면 보정 없는 Pearson χ²를 계산합니다. 다른 크기의 표에는 보정하지 않습니다. 결과에 보정 적용 여부가 표시됩니다.
 Example: chi2independence([1,1,2,2],[1,2,1,2])
-`fisherexact(x,y)` — 각 열이 두 범주일 때의 피셔 정확 검정.
+`fisherexact(x,y)` — 2×2 표의 연관성을 검정하며 기대빈도가 작을 때 특히 적절합니다. 각 열이 두 범주일 때의 피셔 정확 검정.
 Example: fisherexact([1,1,1,1,1,1,2,2],[1,1,1,2,2,2,1,2])
-`shapiro(list)` — 섀피로-윌크 정규성 검정(값 3~5000개).
+`shapiro(list)` — 정규성에 반하는 근거를 점검합니다. 통과·실패 판정이 아니라 Q–Q plot과 함께 해석합니다. 섀피로-윌크 정규성 검정(값 3~5000개).
 Example: shapiro([1,2,3,4,5])
-`tinterval(level,[...])` — 평균의 t 신뢰구간. level은 소수(0.95) 또는 백분율(95)입니다.
+`tinterval(level,[...])` — 모집단 표준편차가 미지일 때 평균과 불확실성을 추정합니다. 평균의 t 신뢰구간. level은 소수(0.95) 또는 백분율(95)입니다.
 Example: tinterval(0.95,[1,2,3,4])
-`tinterval(level,x̄,s,n)` — 요약 통계량으로 구하는 같은 구간.
+`tinterval(level,x̄,s,n)` — 모집단 표준편차가 미지일 때 평균과 불확실성을 추정합니다. 요약 통계량으로 구하는 같은 구간.
 Example: tinterval(95,2.5,1.291,4)
-`zinterval(level,σ,[...])` — 표준편차 σ를 알고 있을 때의 z 신뢰구간.
+`zinterval(level,σ,[...])` — 모집단 표준편차가 알려진 평균의 구간을 추정합니다. 표준편차 σ를 알고 있을 때의 z 신뢰구간.
 Example: zinterval(0.95,2,[1,2,3,4])
-`zinterval(level,σ,x̄,n)` — 요약 통계량으로 구하는 같은 구간.
+`zinterval(level,σ,x̄,n)` — 모집단 표준편차가 알려진 평균의 구간을 추정합니다. 요약 통계량으로 구하는 같은 구간.
 Example: zinterval(95,2,2.5,4)
 - 단일 표본 검정은 기본적으로 양측 p값을 반환합니다. 단측 검정에는 left 또는 right를 추가하세요.
 
@@ -639,11 +720,11 @@ Example: regression([[0,1],[1,3],[2,9],[3,25],[4,57]],polynomial,3)
 Example: regression([[0,0,1],[1,0,3],[0,1,4],[1,1,7],[2,1,8]],multiple)
 `regression(data,logistic)` — 마지막 열이 0/1인 이항 로지스틱 회귀. 확률식, 계수·Odds ratio 신뢰구간, McFadden R², 이탈도, AIC, 우도비 p값을 제공합니다. 완전 분리가 확인되면 Firth 편향 감소를 자동 적용하며, `regression(data,logistic,firth)`는 항상 Firth와 프로파일 페널티 우도 신뢰구간을 사용합니다. 계수 식별이 불가능한 데이터는 거부합니다.
 Example: regression([[-3,0],[-2,0],[-1,1],[0,0],[0,1],[1,0],[2,1],[3,1]],logistic)
-`wilcoxon(differences)` — 0에 대한 부호순위 검정. 대응 x,y 목록도 받으며 0 차이는 제외합니다. 0이 아닌 차이 50개까지 동률을 포함한 정확 조건부 부호순열, 이후 동률·연속성 보정 정규근사를 사용합니다.
+`wilcoxon(differences)` — 대응 차이값의 대칭적인 위치 차이 모형이 적절할 때 순위로 비교합니다. 0에 대한 부호순위 검정. 대응 x,y 목록도 받으며 0 차이는 제외합니다. 0이 아닌 차이 50개까지 동률을 포함한 정확 조건부 부호순열, 이후 동률·연속성 보정 정규근사를 사용합니다.
 Example: wilcoxon([1,2,3,4,5])
-`mannwhitney(x,y)` — 독립 표본 순위 검정. 동률이 없고 작은 표본이 8개 이하, 전체 100개 이하이면 정확 분포를, 나머지는 동률·연속성 보정 정규근사를 사용합니다. 분포 비교 검정이며 위치 차이 해석에는 비슷한 분포 모양이 필요합니다.
+`mannwhitney(x,y)` — 독립 두 그룹의 분포를 순위로 비교합니다. 중앙값 차이 해석에는 비슷한 분포 형태가 필요합니다. 독립 표본 순위 검정. 동률이 없고 작은 표본이 8개 이하, 전체 100개 이하이면 정확 분포를, 나머지는 동률·연속성 보정 정규근사를 사용합니다. 분포 비교 검정이며 위치 차이 해석에는 비슷한 분포 모양이 필요합니다.
 Example: mannwhitney([1,2,3],[4,5,6])
-`kruskal(group1,group2,...)` — 동률 보정 Kruskal–Wallis H와 카이제곱 근사 p값. 그룹마다 5개 이상의 관측값을 권장합니다.
+`kruskal(group1,group2,...)` — 독립 그룹의 분포를 순위로 비교하며 정규성은 필요하지 않습니다. 동률 보정 Kruskal–Wallis H와 카이제곱 근사 p값. 그룹마다 5개 이상의 관측값을 권장합니다.
 Example: kruskal([1,2,3,4,5],[4,5,6,7,8],[7,8,9,10,11])
 
 Wilcoxon과 Mann–Whitney는 마지막에 left/right를 추가해 단측 검정을 할 수 있습니다. 기본값은 양측입니다. Wilcoxon은 차이의 대칭성을 가정하며, Mann–Whitney는 첫 표본을 둘째 표본과 비교합니다.
@@ -686,106 +767,139 @@ Example: regression([[-3,0],[-2,0],[-1,0],[1,1],[2,1],[3,1]],randomforestclassif
 
 ## 고급 통계
 
-통계 화면의 고급 분석에서 보정 방법, 자료 열, 그룹, 설명변수, 검정 옵션을 직접 선택합니다. 현재 데이터·예제·분석 식을 전환할 수 있습니다. 표 분석은 선택한 열의 빈 셀을 자동 삭제하지 않습니다. impute는 빈 셀을 NA로 변환합니다. 모든 고급 분석은 64비트 수치 계산입니다.
+통계 화면에서 결측치 대체는 데이터 준비, 분포·분산 검정과 그룹 비교·효과크기·다중검정은 일반 분석, 요인 선형회귀·일반화·혼합 회귀와 교차검증은 회귀 메뉴에 있습니다. 고급 분석은 베이지안 추론 → 재표집 → 다변량 분석 → 생존분석 → 검정력·표본수 순서입니다. 현재 데이터·예제·분석 식을 전환할 수 있습니다. 대응 분석은 완전한 쌍을 사용하며 대상 ID로 연결할 수 있습니다. 반복측정의 열별 입력은 불완전한 행을 거부합니다. impute는 빈 셀을 NA로 변환합니다. 이 분석들은 64비트 수치 계산입니다.
 
-`ancova` — 열: 숫자 그룹 ID, 하나 이상의 공변량, 종속변수; 신뢰수준(기본 .95), 기울기 동질성 검정 0/1(기본 1). 일요인·공통 기울기, Type II F 검정, 전체 공변량 평균에서의 조정 평균.
-Example: ancova([[1,1,3],[1,2,5],[1,3,4],[1,4,8],[2,2,6],[2,3,7],[2,4,9],[2,5,8],[3,1,5],[3,3,8],[3,4,10],[3,6,11]],0.95,1)
+### 데이터 준비
 
-`glm` — 열: 설명변수, 반응변수; 분포 gaussian·binomial(0/1)·poisson·gamma·inversegaussian·nbinom; 연결함수 auto 또는 지원 함수; NB2 alpha: 양수 고정값(기본 1) 또는 estimate(공동 ML 추정); 선택적 오프셋·노출량 목록과 유형. 기본 연결함수는 identity·logit·log·log·log·log. 모형 기반 Wald z 95% 구간; 정규·Gamma·역가우스는 Pearson 분산 추정. 넷째 인수를 estimate로 지정하면 NB2 alpha와 계수를 공동 ML 추정하며 관측 정보행렬에 alpha의 불확실성을 반영합니다. 숫자를 입력하면 alpha를 고정합니다.
-Example: glm([[0,2],[1,4],[2,4],[3,7],[4,8],[5,9]],gaussian,auto,1)
+`impute` — 단일 대체로 불완전한 자료를 준비합니다. 이후 추론은 대체 불확실성을 반영하지 않습니다. 결측값은 NA; mean / median / mode / regression / knn(이웃 수 기본 5). 단일 대체.
+Example: impute([[1,NA],[2,4],[NA,6],[4,8]],mean)
 
-`padjust` — p값 목록; 방법 bonferroni / holm / fdr (BH) / by; 유의수준.
-Example: padjust([0.01,0.04,0.03,0.2],holm,0.05)
+### 분포·분산 검정
 
-`cohend` — 두 표본; independent(합동 SD) 또는 paired(차이의 SD).
-Example: cohend([1,2,4,5],[2,3,5,8],independent)
-
-`eta2` — 독립 그룹별 목록.
-Example: eta2([1,2,4,5],[2,3,5,8])
-
-`levene` — 그룹별 목록; 중앙값 기준 등분산 검정.
-Example: levene([1,2,4,5],[2,3,5,8])
-
-`bartlett` — 그룹별 목록; 정규성 가정.
-Example: bartlett([1,2,4,5],[2,3,5,8])
-
-`mcnemar` — 대응 2×2 빈도표; exact / corrected / asymptotic.
-Example: mcnemar([[20,8],[2,15]],exact)
-
-`bayesproportion` — 0/1 목록 또는 [[성공 수,시행 수],...]; Beta 사전 alpha,beta(기본 1,1), 구간 수준, 기준 p0(0~1 사이). 등꼬리 구간·P(p>p0)·다음 성공 확률·BF10(Beta 대립 / p=p0 점귀무).
-Example: bayesproportion([1,1,0,1,0,1,1,1,0,1],1,1,0.95,0.5)
-
-`bayesmean` — 분산 미지의 정규 표본; 사전 mu0,kappa0,alpha0,beta0, 구간 수준, 기준값. 분산 ~ InvGamma(alpha0,beta0), 평균|분산 ~ Normal(mu0,분산/kappa0). 기본 0,1,2,1은 자료 척도에 맞춰 조절할 적정 사전분포. 평균의 t 구간과 다음 관측 예측구간.
-Example: bayesmean([1,2,3,4,5],0,1,2,1,0.95,0)
-
-`bayescompare` — 독립 정규 표본 두 개(각 2개 이상); 분산 equal·unequal; mu0,kappa0,alpha0,beta0; 구간 수준; IID 사후 추출 수(2000~100000), 시드. H1: 평균|분산은 독립 Normal(mu0,분산/kappa0), 분산은 공통(등분산) 또는 독립(이분산) InvGamma(alpha0,beta0). H0: B-A=0이며 H1을 이 조건으로 제한한 방해모수 사전분포를 사용합니다. BF10/BF01은 Savage-Dickey 방식이며 JZS/Cauchy 검정이 아닙니다. B-A 평균·등꼬리 신용구간·P(muB>muA)·사후 효과크기 (B-A)/sqrt((분산A+분산B)/2)를 출력합니다. 등분산 차이 요약·BF는 해석적, 이분산 BF는 t 합성곱 수치 적분, 이분산 구간·확률 및 효과크기 구간은 시뮬레이션입니다. MCSE·추출 수·시드 포함. 기본 사전분포는 적정하지만 단위에 의존하므로 결과를 보기 전에 척도에 맞게 지정하세요.
-Example: bayescompare([10,11,9,10,12],[13,14,12,15,13],equal,0,0.01,2,1,0.95,20000,0)
-
-`bayesrate` — 횟수 목록(관측당 노출 1) 또는 [[횟수,노출량],...]; Gamma 사전 shape,rate(척도의 역수, 기본 1,1), 구간 수준, 0 이상 기준값. 발생률 등꼬리 구간과 노출 1단위의 예측 횟수 평균·SD.
-Example: bayesrate([0,2,1,3,2],1,1,0.95,1)
-
-`kaplanmeier` — 열: 시간, 사건(1=발생, 0=중도절단); 신뢰수준.
-Example: kaplanmeier([[1,1],[2,0],[3,1],[4,1],[5,0],[6,1]],0.95)
-
-`logrank` — 두 시간/사건 표. 현재 데이터 열: 시간, 사건, 그룹(2개).
-Example: logrank([[1,1],[3,1],[4,0],[6,1]],[[2,0],[4,1],[5,1],[7,0]])
-
-`survivalanalysis` — 열: 시간, 사건(0/1), 그룹 ID, 선택적 Cox 설명변수. Cox 0=끔, 1=켬; 이어서 동률 처리와 PH 검정.
-Example: survivalanalysis([[1,1,1],[2,1,2],[3,0,1],[4,1,2],[5,1,1],[6,0,2],[7,1,2],[8,1,1]],0,efron,-1,1)
-
-`cox` — 열: 시간, 사건 0/1, 설명변수. 동률 efron(기본)/breslow, 좌측 절단 진입시간 열(-1 없음), PH 검정 0/1.
-Example: cox([[1,1,0],[2,1,1],[3,0,0],[4,1,1],[5,1,0],[6,0,1],[7,1,1],[8,1,0]],efron,-1,1)
-
-`repeatedanova` — 행=대상, 열=조건. 둘째 요인 수준: 1=일요인, 2 이상=이요인(첫 요인 최외곽); GG 보정.
-Example: repeatedanova([[2,4,5],[3,4,7],[4,7,8],[2,3,6],[5,6,7]],1)
-
-`mixedmodel` — 열: 대상 ID, 설명변수, 반응. Gaussian 랜덤 절편 + 최대 3개 랜덤 기울기(0 없음, 변수 위치, 또는 [1,2]); 셋째 인수 reml(기본)·ml; 최대 5000행. 대상별 BLUP·기울기 상관·singular 진단 포함; 기울기 ICC는 x=0 기준; 점근 Wald z 추론. 선택적 넷째 인수: profile(ML 고정효과 프로파일 구간), [bootstrap,200,0](모수적 고정효과 백분위 구간); 대안 구간은 Wald p값을 생략합니다. logLik/AIC/BIC 제공; REML 비교는 같은 고정효과·자료에서만 가능합니다. 미수렴 적합의 Wald 추론은 표시하지 않습니다.
-Example: mixedmodel([[1,0,2],[1,1,4],[1,2,4],[2,0,3],[2,1,4],[2,2,6],[3,0,1],[3,1,3],[3,2,4],[4,0,4],[4,1,5],[4,2,8]],0,reml)
-
-`glmm` — 열: 대상 ID, 설명변수, 반응. 랜덤 절편 + 선택적 상관 랜덤 기울기 1개(일곱째 인수: 선택한 설명변수 번호, 0 없음). 기울기는 2차원 Laplace(셋째 인수 1), 적분점 재적합 미지원; 번호 앞에 [],offset,likelihood를 지정합니다. 공분산·조건부 최빈값은 원래 단위로 표시합니다. 랜덤 절편: binomial(0/1, 로짓), poisson·nbinom(NB2, 로그). ML 적응형 Gauss-Hermite 적분: 기본 15점, 1=Laplace, 그 외 7~31점. 선택적 넷째 인수 오프셋 목록, 다섯째 offset·exposure. 최대 1500행·고정계수 8개. 대상별 조건부 효과, 중앙차분 관측 정보행렬·점근 Wald 추론. 소수 대상의 Wald 추론은 부정확할 수 있습니다. Laplace·31점도 다른 적분점의 우도를 비교합니다. 선택적 여섯째 인수 refit은 재적합 계수를 비교하고 0.1 SE 초과 변동이면 CI·p값을 생략합니다. 오프셋이 없으면 refit 앞에 [],offset을 사용합니다.
-Example: glmm([[1,0,0],[1,1,0],[1,2,1],[2,0,0],[2,1,1],[2,2,1],[3,0,0],[3,1,0],[3,2,0],[4,0,1],[4,1,1],[4,2,1],[5,0,1],[5,1,0],[5,2,1],[6,0,0],[6,1,1],[6,2,0]],binomial,15)
-
-`gee` — 열: 군집 ID, 설명변수, 반응. gaussian / binomial / poisson; 작업상관 independence / exchangeable / ar1; 넷째 인수 [i,j] 상호작용 쌍; 강건 SE. Pearson 분산 보정 상관; AR(1)은 행 순서·등간격 사용. 소수 군집의 Wald 추론은 부정확할 수 있습니다. 선택적 다섯째 인수 small은 Mancl-DeRouen 공분산·군집 수-계수 수 자유도의 t 추론을 적용합니다. 상호작용이 없으면 넷째 인수는 []입니다. 극소수 군집에서의 신뢰성을 보장하지는 않습니다.
-Example: gee([[1,0,2],[1,1,4],[1,2,4],[2,0,3],[2,1,4],[2,2,6],[3,0,1],[3,1,3],[3,2,4],[4,0,4],[4,1,5],[4,2,8]],gaussian,independence)
-
-`multinomial` — 열: 설명변수, 숫자 범주 반응. 가장 작은 범주가 기준.
-Example: multinomial([[-2,0],[-2,1],[-1,0],[-1,2],[0,0],[0,1],[0,2],[1,1],[1,2],[2,1],[2,2],[2,0]])
-
-`ordinal` — 열: 설명변수, 순서가 있는 숫자 반응. 비례오즈 누적 로짓.
-Example: ordinal([[-2,0],[-2,1],[-1,0],[-1,2],[0,0],[0,1],[0,2],[1,1],[1,2],[2,1],[2,2],[2,0]])
-
-`poissonreg` — 열: 설명변수, 정수 빈도 반응. 로그 연결함수. 선택적 둘째 인수 행별 오프셋·노출량 목록; 셋째 인수 offset(기본)·exposure(양수, 로그 변환).
-Example: poissonreg([[0,1],[0,0],[1,3],[1,1],[2,2],[2,5],[3,4],[3,8],[4,6],[4,10]])
-
-`nbreg` — 열: 설명변수, 정수 빈도 반응. NB2 과산포 모수 추정. 선택적 오프셋·노출량 목록과 offset(기본)·exposure 모드.
-Example: nbreg([[0,0],[0,0],[0,1],[0,8],[1,0],[1,1],[1,3],[1,15],[2,0],[2,2],[2,5],[2,23],[3,1],[3,3],[3,10],[3,35]])
-
-`bootstrapci` — 통계량 mean / median / stdev, 신뢰수준, 재추출 수, 시드. IID 백분위 방식.
-Example: bootstrapci([1,2,3,4,5,8],mean,0.95,2000,0)
-
-`bayesbootstrap` — 독립 관측값의 Dirichlet(1,…,1) 가중치; mean / median / variance / stdev, 베이지안 구간 수준·추출 수·시드. 중앙값 estimate는 일반 표본 중앙값(짝수 표본은 가운데 두 값의 평균)이고 사후추출은 Lower weighted quantile(가중 누적확률이 0.5 이상인 최소값), 분산·SD는 모집단 가중치 기준. 등꼬리 사후 구간·히스토그램. 두 표본: bayesbootstrap(A,B,mean,0.95,10000,0,independent); paired는 같은 행의 가중치를 공유합니다. 차이는 통계량(B) - 통계량(A)입니다.
-Example: bayesbootstrap([1,2,3,4,5,8],mean,0.95,10000,0)
-
-`testpower` — Cohen d, 그룹별 n/쌍 수, 유의수준, independent / paired / onesample, 대립가설 two(기본) / greater / less. 정확 noncentral-t 검정력.
-Example: testpower(0.5,64,0.05,independent)
-
-`samplesize` — Cohen d, 목표 검정력, 유의수준, 설계, 대립가설. 정확 noncentral-t 검정력.
-Example: samplesize(0.5,0.8,0.05,independent)
-
-`kstest` — 두 표본 목록 또는 kstest(data,normal,평균,SD) / kstest(data,uniform,하한,폭). 연속분포 가정; 일표본 p는 근사.
+`kstest` — 연속분포끼리 또는 표본과 모수가 지정된 연속분포를 비교합니다. 두 표본 목록 또는 kstest(data,normal,평균,SD) / kstest(data,uniform,하한,폭). 연속분포 가정; 일표본 p는 근사.
 Example: kstest([1,2,4,5],[2,3,5,8])
 
-`crossvalidate` — 열: 설명변수, 반응; 폴드 수, 시드; 분할 random(기본) / blocked / stratified; 모형 linear(기본) / ridge / lasso / elasticnet / logistic; 벌점 alpha 또는 [alpha,l1 비율].
+`levene` — 그룹의 등분산을 점검합니다. 중앙값 기준 Brown–Forsythe는 비정규성에 덜 민감합니다. 그룹별 목록; 중앙값 기준 등분산 검정.
+Example: levene([1,2,4,5],[2,3,5,8])
+
+`bartlett` — 그룹 분포가 대체로 정규일 때 등분산을 점검합니다. 그룹별 목록; 정규성 가정.
+Example: bartlett([1,2,4,5],[2,3,5,8])
+
+### 그룹 비교
+
+`mcnemar` — 동일 대상의 전·후 예/아니오 같은 대응 이항 결과를 비교합니다. 대응 2×2 빈도표; exact / corrected / asymptotic.
+Example: mcnemar([[20,8],[2,15]],exact)
+
+`twowayanova` — 독립 관측에서 두 요인의 주효과와 상호작용을 함께 비교합니다. 독립 관측·두 범주 요인·숫자 반응. 합이 0인 대비의 Type III F 검정. 상호작용 1(기본) 또는 가법 0. 정규 오차·공통 잔차분산을 가정하며 반복 관측과 식별 가능한 설계가 필요합니다.
+Example: twowayanova([[1,1,2],[1,1,4],[1,2,5],[1,2,6],[2,1,4],[2,1,5],[2,2,8],[2,2,10]],1)
+
+`ancova` — 숫자 공변량을 보정하면서 그룹 평균을 비교합니다. 열: 숫자 그룹 ID, 하나 이상의 공변량, 종속변수; 신뢰수준(기본 .95), 기울기 동질성 검정 0/1(기본 1). 일요인·공통 기울기, Type II F 검정, 전체 공변량 평균에서의 조정 평균.
+Example: ancova([[1,1,3],[1,2,5],[1,3,4],[1,4,8],[2,2,6],[2,3,7],[2,4,9],[2,5,8],[3,1,5],[3,3,8],[3,4,10],[3,6,11]],0.95,1)
+
+`repeatedanova` — 균형 설계에서 같은 대상의 반복 조건을 비교합니다. 행=대상, 열=조건. 둘째 요인 수준: 1=일요인, 2 이상=이요인(첫 요인 최외곽); GG 보정.
+Example: repeatedanova([[2,4,5],[3,4,7],[4,7,8],[2,3,6],[5,6,7]],1)
+
+`friedman` — 대상 안의 순위로 3개 이상 대응 조건을 비교하며 동점 보정 χ² 근사를 사용합니다. 행은 독립 대상, 열은 3개 이상 반복 조건입니다. 완전한 대응 행·평균순위·동점 보정. χ² 근사이므로 소표본·소수 조건에서 p값이 부정확할 수 있습니다. Kendall W를 제공합니다.
+Example: friedman([[2,4,5],[3,4,7],[4,7,8],[2,3,6],[5,6,7]])
+
+### 효과크기·다중검정
+
+`cohend` — 독립·대응 두 표본 평균 차이의 표준화된 크기를 설명합니다. 두 표본; independent(합동 SD) 또는 paired(차이의 SD).
+Example: cohend([1,2,4,5],[2,3,5,8],independent)
+
+`eta2` — 전체 변동 중 그룹 차이와 연관된 비율을 설명합니다. 독립 그룹별 목록.
+Example: eta2([1,2,4,5],[2,3,5,8])
+
+`padjust` — 여러 가설을 함께 검정할 때 한 묶음의 p값을 보정합니다. p값 목록; 방법 bonferroni / holm / fdr (BH) / by; 유의수준.
+Example: padjust([0.01,0.04,0.03,0.2],holm,0.05)
+
+### 일반화 회귀
+
+`linearmodel` — 숫자·범주 설명변수·자동 상호작용을 적합하고 Type II/III 항별 부분 F 검정을 제공합니다. 1·2·3개 이상 요인을 지원합니다. 숫자·범주 설명변수를 포함한 일반 OLS. 범주 변수 번호는 1부터 시작하며 상호작용 차수·Type II/III·sum/treatment 코딩을 지정합니다. 항마다 여러 계수를 부분 F로 함께 검정합니다. 3요인 이상 상호작용에도 충분한 반복 관측·식별 가능한 열이 필요합니다.
+Example: linearmodel([[1,1,2],[1,1,4],[1,2,5],[1,2,6],[2,1,4],[2,1,5],[2,2,8],[2,2,10]],[1,2],2,3,sum)
+
+`glm` — 반응변수 분포에 맞는 분포족·연결함수로 모형을 적합합니다. 열: 설명변수, 반응변수; 분포 gaussian·binomial(0/1)·poisson·gamma·inversegaussian·nbinom; 연결함수 auto 또는 지원 함수; NB2 alpha: 양수 고정값(기본 1) 또는 estimate(공동 ML 추정); 선택적 오프셋·노출량 목록과 유형. 기본 연결함수는 identity·logit·log·log·log·log. 모형 기반 Wald z 95% 구간; 정규·Gamma·역가우스는 Pearson 분산 추정. 넷째 인수를 estimate로 지정하면 NB2 alpha와 계수를 공동 ML 추정하며 관측 정보행렬에 alpha의 불확실성을 반영합니다. 숫자를 입력하면 alpha를 고정합니다.
+Example: glm([[0,2],[1,4],[2,4],[3,7],[4,8],[5,9]],gaussian,auto,1)
+
+`poissonreg` — 필요하면 노출량을 보정하여 사건 횟수를 모형화합니다. 열: 설명변수, 정수 빈도 반응. 로그 연결함수. 선택적 둘째 인수 행별 오프셋·노출량 목록; 셋째 인수 offset(기본)·exposure(양수, 로그 변환).
+Example: poissonreg([[0,1],[0,0],[1,3],[1,1],[2,2],[2,5],[3,4],[3,8],[4,6],[4,10]])
+
+`nbreg` — 포아송보다 변동이 큰 과산포 빈도를 모형화합니다. 열: 설명변수, 정수 빈도 반응. NB2 과산포 모수 추정. 선택적 오프셋·노출량 목록과 offset(기본)·exposure 모드.
+Example: nbreg([[0,0],[0,0],[0,1],[0,8],[1,0],[1,1],[1,3],[1,15],[2,0],[2,2],[2,5],[2,23],[3,1],[3,3],[3,10],[3,35]])
+
+`multinomial` — 설명변수로 순서 없는 숫자 범주를 예측합니다. 열: 설명변수, 숫자 범주 반응. 가장 작은 범주가 기준.
+Example: multinomial([[-2,0],[-2,1],[-1,0],[-1,2],[0,0],[0,1],[0,2],[1,1],[1,2],[2,1],[2,2],[2,0]])
+
+`ordinal` — 비례오즈 모형으로 순서가 있는 범주를 예측합니다. 열: 설명변수, 순서가 있는 숫자 반응. 비례오즈 누적 로짓.
+Example: ordinal([[-2,0],[-2,1],[-1,0],[-1,2],[0,0],[0,1],[0,2],[1,1],[1,2],[2,1],[2,2],[2,0]])
+
+### 반복·군집 자료
+
+`mixedmodel` — 반복 대상·군집과 랜덤효과를 포함해 연속 반응을 모형화합니다. 열: 대상 ID, 설명변수, 반응. Gaussian 랜덤 절편 + 최대 3개 랜덤 기울기(0 없음, 변수 위치, 또는 [1,2]); 셋째 인수 reml(기본)·ml; 최대 5000행. 대상별 BLUP·기울기 상관·singular 진단 포함; 기울기 ICC는 x=0 기준; 점근 Wald z 추론. 선택적 넷째 인수: profile(ML 고정효과 프로파일 구간), [bootstrap,200,0](모수적 고정효과 백분위 구간); 대안 구간은 Wald p값을 생략합니다. logLik/AIC/BIC 제공; REML 비교는 같은 고정효과·자료에서만 가능합니다. 미수렴 적합의 Wald 추론은 표시하지 않습니다.
+Example: mixedmodel([[1,0,2],[1,1,4],[1,2,4],[2,0,3],[2,1,4],[2,2,6],[3,0,1],[3,1,3],[3,2,4],[4,0,4],[4,1,5],[4,2,8]],0,reml)
+
+`glmm` — 대상별 랜덤효과를 포함해 군집 이항·빈도 반응을 모형화합니다. 열: 대상 ID, 설명변수, 반응. 랜덤 절편 + 선택적 상관 랜덤 기울기 1개(일곱째 인수: 선택한 설명변수 번호, 0 없음). 기울기는 2차원 Laplace(셋째 인수 1), 적분점 재적합 미지원; 번호 앞에 [],offset,likelihood를 지정합니다. 공분산·조건부 최빈값은 원래 단위로 표시합니다. 랜덤 절편: binomial(0/1, 로짓), poisson·nbinom(NB2, 로그). ML 적응형 Gauss-Hermite 적분: 기본 15점, 1=Laplace, 그 외 7~31점. 선택적 넷째 인수 오프셋 목록, 다섯째 offset·exposure. 최대 1500행·고정계수 8개. 대상별 조건부 효과, 중앙차분 관측 정보행렬·점근 Wald 추론. 소수 대상의 Wald 추론은 부정확할 수 있습니다. Laplace·31점도 다른 적분점의 우도를 비교합니다. 선택적 여섯째 인수 refit은 재적합 계수를 비교하고 0.1 SE 초과 변동이면 CI·p값을 생략합니다. 오프셋이 없으면 refit 앞에 [],offset을 사용합니다.
+Example: glmm([[1,0,0],[1,1,0],[1,2,1],[2,0,0],[2,1,1],[2,2,1],[3,0,0],[3,1,0],[3,2,0],[4,0,1],[4,1,1],[4,2,1],[5,0,1],[5,1,0],[5,2,1],[6,0,0],[6,1,1],[6,2,0]],binomial,15)
+
+`gee` — 반복·군집 반응의 모집단 평균 효과를 추정합니다. 열: 군집 ID, 설명변수, 반응. gaussian / binomial / poisson; 작업상관 independence / exchangeable / ar1; 넷째 인수 [i,j] 상호작용 쌍; 강건 SE. Pearson 분산 보정 상관; AR(1)은 행 순서·등간격 사용. 소수 군집의 Wald 추론은 부정확할 수 있습니다. 선택적 다섯째 인수 small은 Mancl-DeRouen 공분산·군집 수-계수 수 자유도의 t 추론을 적용합니다. 상호작용이 없으면 넷째 인수는 []입니다. 극소수 군집에서의 신뢰성을 보장하지는 않습니다.
+Example: gee([[1,0,2],[1,1,4],[1,2,4],[2,0,3],[2,1,4],[2,2,6],[3,0,1],[3,1,3],[3,2,4],[4,0,4],[4,1,5],[4,2,8]],gaussian,independence)
+
+### 모형 검증
+
+`crossvalidate` — 훈련 적합도가 아닌 홀드아웃 예측 성능을 평가합니다. 열: 설명변수, 반응; 폴드 수, 시드; 분할 random(기본) / blocked / stratified; 모형 linear(기본) / ridge / lasso / elasticnet / logistic; 벌점 alpha 또는 [alpha,l1 비율].
 Example: crossvalidate([[0,1],[1,3],[2,4],[3,7],[4,8],[5,11],[6,12],[7,15],[8,16]],3,0)
 
-`pca` — 행=관측, 열=변수; 주성분 수, 표준화 1/0.
+### 베이지안 추론
+
+`bayesmean` — 지정한 사전분포로 정규 평균과 예측구간을 추정합니다. 분산 미지의 정규 표본; 사전 mu0,kappa0,alpha0,beta0, 구간 수준, 기준값. 분산 ~ InvGamma(alpha0,beta0), 평균|분산 ~ Normal(mu0,분산/kappa0). 기본 0,1,2,1은 자료 척도에 맞춰 조절할 적정 사전분포. 평균의 t 구간과 다음 관측 예측구간.
+Example: bayesmean([1,2,3,4,5],0,1,2,1,0.95,0)
+
+`bayescompare` — 사후 차이·Bayes factor로 독립 정규 두 표본 평균을 비교합니다. 독립 정규 표본 두 개(각 2개 이상); 분산 equal·unequal; mu0,kappa0,alpha0,beta0; 구간 수준; IID 사후 추출 수(2000~100000), 시드. H1: 평균|분산은 독립 Normal(mu0,분산/kappa0), 분산은 공통(등분산) 또는 독립(이분산) InvGamma(alpha0,beta0). H0: B-A=0이며 H1을 이 조건으로 제한한 방해모수 사전분포를 사용합니다. BF10/BF01은 Savage-Dickey 방식이며 JZS/Cauchy 검정이 아닙니다. B-A 평균·등꼬리 신용구간·P(muB>muA)·사후 효과크기 (B-A)/sqrt((분산A+분산B)/2)를 출력합니다. 등분산 차이 요약·BF는 해석적, 이분산 BF는 t 합성곱 수치 적분, 이분산 구간·확률 및 효과크기 구간은 시뮬레이션입니다. MCSE·추출 수·시드 포함. 기본 사전분포는 적정하지만 단위에 의존하므로 결과를 보기 전에 척도에 맞게 지정하세요.
+Example: bayescompare([10,11,9,10,12],[13,14,12,15,13],equal,0,0.01,2,1,0.95,20000,0)
+
+`bayesproportion` — Beta 사전분포로 이항 성공 비율을 추정합니다. 0/1 목록 또는 [[성공 수,시행 수],...]; Beta 사전 alpha,beta(기본 1,1), 구간 수준, 기준 p0(0~1 사이). 등꼬리 구간·P(p>p0)·다음 성공 확률·BF10(Beta 대립 / p=p0 점귀무).
+Example: bayesproportion([1,1,0,1,0,1,1,1,0,1],1,1,0.95,0.5)
+
+`bayesrate` — 빈도·노출량으로 포아송 사건 발생률을 추정합니다. 횟수 목록(관측당 노출 1) 또는 [[횟수,노출량],...]; Gamma 사전 shape,rate(척도의 역수, 기본 1,1), 구간 수준, 0 이상 기준값. 발생률 등꼬리 구간과 노출 1단위의 예측 횟수 평균·SD.
+Example: bayesrate([0,2,1,3,2],1,1,0.95,1)
+
+### 재표집
+
+`bootstrapci` — 관측값의 IID 재표집으로 통계량의 구간을 추정합니다. 통계량 mean / median / stdev, 신뢰수준, 재추출 수, 시드. IID 백분위 방식.
+Example: bootstrapci([1,2,3,4,5,8],mean,0.95,2000,0)
+
+`bayesbootstrap` — 관측값의 무작위 가중치로 통계량의 사후 불확실성을 추정합니다. 독립 관측값의 Dirichlet(1,…,1) 가중치; mean / median / variance / stdev, 베이지안 구간 수준·추출 수·시드. 중앙값 estimate는 일반 표본 중앙값(짝수 표본은 가운데 두 값의 평균)이고 사후추출은 Lower weighted quantile(가중 누적확률이 0.5 이상인 최소값), 분산·SD는 모집단 가중치 기준. 등꼬리 사후 구간·히스토그램. 두 표본: bayesbootstrap(A,B,mean,0.95,10000,0,independent); paired는 같은 행의 가중치를 공유합니다. 차이는 통계량(B) - 통계량(A)입니다.
+Example: bayesbootstrap([1,2,3,4,5,8],mean,0.95,10000,0)
+
+### 다변량 분석
+
+`pca` — 상관된 숫자 변수들을 더 적은 주성분으로 요약합니다. 행=관측, 열=변수; 주성분 수, 표준화 1/0.
 Example: pca([[1,2],[2,1],[3,4],[4,3],[5,7]],2,1)
 
-`kmeans` — 숫자 변수 행; k, 시드. 유클리드 거리, 10회 초기화, 원래 변수 척도.
+`kmeans` — 숫자 변수의 유사성으로 관측을 군집화하며 먼저 변수 척도를 확인합니다. 숫자 변수 행; k, 시드. 유클리드 거리, 10회 초기화, 원래 변수 척도.
 Example: kmeans([[1,1],[1,2],[2,1],[8,8],[8,9],[9,8]],2,0)
 
-`impute` — 결측값은 NA; mean / median / mode / regression / knn(이웃 수 기본 5). 단일 대체.
-Example: impute([[1,NA],[2,4],[NA,6],[4,8]],mean)
+### 생존분석
+
+`survivalanalysis` — 중도절단이 있는 사건 시간을 Kaplan–Meier·로그순위·선택적 Cox 세트로 분석합니다. 열: 시간, 사건(0/1), 그룹 ID, 선택적 Cox 설명변수. Cox 0=끔, 1=켬; 이어서 동률 처리와 PH 검정.
+Example: survivalanalysis([[1,1,1],[2,1,2],[3,0,1],[4,1,2],[5,1,1],[6,0,2],[7,1,2],[8,1,1]],0,efron,-1,1)
+
+`kaplanmeier` — 중도절단을 반영하여 시간에 따른 생존확률을 추정합니다. 열: 시간, 사건(1=발생, 0=중도절단); 신뢰수준.
+Example: kaplanmeier([[1,1],[2,0],[3,1],[4,1],[5,0],[6,1]],0.95)
+
+`logrank` — 설명변수 보정 없이 두 그룹의 생존을 비교합니다. 두 시간/사건 표. 현재 데이터 열: 시간, 사건, 그룹(2개).
+Example: logrank([[1,1],[3,1],[4,0],[6,1]],[[2,0],[4,1],[5,1],[7,0]])
+
+`cox` — 설명변수와 사건 위험의 관계를 분석하며 비례위험을 점검합니다. 열: 시간, 사건 0/1, 설명변수. 동률 efron(기본)/breslow, 좌측 절단 진입시간 열(-1 없음), PH 검정 0/1.
+Example: cox([[1,1,0],[2,1,1],[3,0,0],[4,1,1],[5,1,0],[6,0,1],[7,1,1],[8,1,0]],efron,-1,1)
+
+### 검정력·표본수
+
+`testpower` — 계획한 t 검정 설계·효과크기의 검정력을 평가합니다. Cohen d, 그룹별 n/쌍 수, 유의수준, independent / paired / onesample, 대립가설 two(기본) / greater / less. 정확 noncentral-t 검정력.
+Example: testpower(0.5,64,0.05,independent)
+
+`samplesize` — 목표 t 검정력을 위한 표본수를 계획합니다. Cohen d, 목표 검정력, 유의수준, 설계, 대립가설. 정확 noncentral-t 검정력.
+Example: samplesize(0.5,0.8,0.05,independent)
 
 베이지안 분석은 독립 관측과 지정한 우도·적정 공액 사전분포를 사용하며 구간은 등꼬리 사후확률 구간입니다. Bayes factor는 가설의 사후확률이 아니며 사전분포에 영향을 받습니다. 계산 근거: [Stanford conjugate priors](https://web.stanford.edu/class/stats200/Lecture21.pdf), [normal-inverse-gamma analysis](https://treese41528.github.io/ComputationalDataScience/Website/part3_bayesian/chapter5/ch5_2-prior-distributions.html).
 
@@ -800,3 +914,9 @@ Mixed-model profile/bootstrap: [lme4 confidence intervals](https://lme4.github.i
 GLMM: [lme4 adaptive quadrature reference](https://lme4.github.io/lme4/reference/glmer.html).
 
 Bayesian Two-Sample Comparison: [Savage-Dickey density ratio and compatible null priors](https://statproofbook.github.io/P/bf-sddr.html).
+
+Factorial linear models: [Type II/III ANOVA and sum contrasts](https://www.statsmodels.org/stable/examples/notebooks/generated/interactions_anova.html). Welch / Games–Howell: [SciPy unequal-variance ANOVA](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.f_oneway.html), [studentized range](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.studentized_range.html). Friedman: [tie-corrected repeated rank test](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.friedmanchisquare.html).
+
+세트 사후비교: Kruskal–Wallis는 Mann–Whitney 쌍별 검정 + Holm(별도 쌍 순위이며 Dunn 검정이 아님), Friedman은 대응 Wilcoxon + Holm, 반복측정 ANOVA는 대응 t + Holm을 자동 제공합니다. 반복측정은 대상별 대비의 정규성·Q–Q plot도 점검합니다. 주 검정과 사후비교는 서로 다른 질문에 답합니다.
+
+Test selection and diagnostics: [NIST t tests](https://www.itl.nist.gov/div898/handbook/eda/section3/eda353.htm), [Levene/Brown–Forsythe](https://www.itl.nist.gov/div898/handbook/eda/section3/eda35a.htm), [normal probability plots](https://www.itl.nist.gov/div898/handbook/eda/section3/normprpl.htm), [Wilcoxon assumptions](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.wilcoxon.html).

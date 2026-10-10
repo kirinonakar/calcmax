@@ -114,7 +114,9 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
     val clipboard=LocalClipboardManager.current
     val scope=rememberCoroutineScope()
     val panelScroll=rememberScrollState()
+    var summaryExpanded by rememberSaveable {mutableStateOf(true)}
     var visualizeExpanded by rememberSaveable {mutableStateOf(true)}
+    var regressionExpanded by rememberSaveable {mutableStateOf(true)}
     val names=remember(m.dataSets) {m.dataSets.keys().asSequence().toList().sorted()}
     var selected by rememberSaveable {mutableStateOf(m.statisticsSelected)}
     var isNew by rememberSaveable {mutableStateOf(m.statisticsIsNew)}
@@ -125,7 +127,7 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
     var columnCount by rememberSaveable {mutableStateOf(if(selectedDataKind.startsWith("columns:"))statisticsColumnCount(selectedDataKind).toString() else "4")}
     var autoColumns by rememberSaveable {mutableStateOf(m.statisticsAutoColumns)}
     val detectedColumns=remember(data) {runCatching {statisticsDetectedColumns(data)}}
-    val dataKind=statisticsEffectiveKind(selectedDataKind,if(autoColumns)detectedColumns.getOrDefault(statisticsColumnCount(selectedDataKind)) else statisticsColumnCount(selectedDataKind))
+    val dataKind=statisticsEffectiveKind(selectedDataKind,if(autoColumns&&data.isNotBlank())detectedColumns.getOrDefault(statisticsColumnCount(selectedDataKind)) else statisticsColumnCount(selectedDataKind))
     val dataColumns=statisticsColumnNames(dataKind)
     var regression by rememberSaveable {mutableStateOf(m.statisticsRegression)}
     var regularization by rememberSaveable {mutableStateOf(m.statisticsRegularization)}
@@ -153,7 +155,7 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
     val regularized=regression in listOf("linear","multiple","logistic")&&regularization!="none"
     val fitMode=if(regularized)(if(regression=="logistic")"logistic" else "")+regularization else if(regression=="randomforest")when(forestTask){"classification"->"randomforestclassifier";"regression"->"randomforestregressor";else->"randomforest"} else regression
     val regressionColumns=statisticsRegressionColumns(dataKind)
-    val responseColumn=if(regression in listOf("polynomial","logistic")) {if(logisticResponse=="0")0 else regressionColumns.lastIndex} else logisticResponse.toIntOrNull()?.takeIf {it in regressionColumns.indices} ?: regressionColumns.lastIndex
+    val responseColumn=logisticResponse.toIntOrNull()?.takeIf {it in regressionColumns.indices} ?: regressionColumns.lastIndex
     LaunchedEffect(dataKind) {if(regressionColumns.isNotEmpty()&&logisticResponse.isNotBlank()&&logisticResponse.toIntOrNull() !in regressionColumns.indices)logisticResponse=regressionColumns.lastIndex.toString()}
     var customFormula by rememberSaveable {mutableStateOf(m.statisticsCustomFormula)}
     var customVariable by rememberSaveable {mutableStateOf(m.statisticsCustomVariable)}
@@ -210,7 +212,8 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
     fun rows():List<List<String>> = statisticsRows(data)
     fun startNew() {
         var index=1;val existing=names.toSet();while("D$index" in existing)index++
-        datasetName="D$index";data=",".repeat(dataColumns.size-1);isNew=true;selected=""
+        m.clearRegression();selectedDataKind=dataKind;columnCount=dataColumns.size.toString()
+        datasetName="D$index";data="";isNew=true;selected=""
     }
     val parsedRows=rows()
     val heatMapColumnNames=remember(data,dataKind) {statisticsHeatMapColumnNames(data,dataKind)}
@@ -316,20 +319,104 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
                 }
             }
         }
-        if(dataKind!="list")Text(if(isKorean())"x 날짜 형식: YYYY-MM-DD, YYYY/MM/DD, YYYY.MM.DD" else "x date formats: YYYY-MM-DD, YYYY/MM/DD, YYYY.MM.DD",fontSize=11.sp,color=LocalInstrument.current.muted)
-        Column(verticalArrangement=Arrangement.spacedBy(2.dp)) {
-            Text(tr("Quick summaries"),style=MaterialTheme.typography.titleMedium)
+        StatisticsSectionToggle("Quick summaries",summaryExpanded,"statistics-summary-toggle") {summaryExpanded=!summaryExpanded}
+        if(summaryExpanded)Column(verticalArrangement=Arrangement.spacedBy(2.dp)) {
             Row(Modifier.horizontalScroll(rememberScrollState())) {
-                fun summarize(command:String) {m.edit(Editor(command));m.calculate()}
-                SmallAction(if(dataKind=="list")"List" else "x",translate=false){val values=vector(0);if(values!="[]")summarize("stats($values)")}
-                dataColumns.drop(1).forEachIndexed {index,name->SmallAction(name,translate=false){val values=vector(index+1);if(values!="[]")summarize("stats($values)")}}
+                fun summarize(command:String,columnIndex:Int=0) {m.calculationAction="statistics-summary";m.edit(Editor(command));m.calculate(statisticsTermLabels=mapOf("sample:1" to statisticsColumnLabels(data,dataKind)[columnIndex]))}
+                SmallAction(statisticsColumnLabels(data,dataKind)[0],translate=false){val values=vector(0);if(values!="[]")summarize("stats($values)")}
+                dataColumns.drop(1).forEachIndexed {index,name->SmallAction(statisticsColumnLabels(data,dataKind)[index+1],translate=false){val values=vector(index+1);if(values!="[]")summarize("stats($values)",index+1)}}
                 val correlationCommand=statisticsCorrelationCommand(numericRows,dataKind)
                 if(dataKind=="xy")SmallAction("correlation",active=if(correlationCommand==null)false else null,translate=false,modifier=Modifier.testTag("statistics-correlation")){correlationCommand?.let {summarize(it)}}
             }
             statisticsReportFor(m.result,m.resultSource,setOf("stats","mean","median","variance","stdev","sumdata","quartiles","correlation","covariance"))?.let {StatisticsResultReport(m,it)}
         }
-        StatisticsSectionToggle("Visualize & regression",visualizeExpanded,"statistics-visualize-toggle") {visualizeExpanded=!visualizeExpanded}
+        AdvancedStatistics(m,data,dataKind,"preparation","Data preparation",onDataApplied={updated->
+            m.clearRegression();data=updated
+            if(activeName.isNotBlank()&&datasetName==activeName)m.saveDataSet(activeName,updated,dataKind)
+        })
+            val fittedResponse=if(m.regressionMode in listOf("multiple","logistic","polynomial","ridge","lasso","elasticnet","logisticridge","logisticlasso","logisticelasticnet","randomforest","randomforestclassifier","randomforestregressor","bayeslinear","bayeslogistic"))m.regressionResponseColumn?.takeIf {it in regressionColumns.indices} ?: regressionColumns.lastIndex else regressionColumns.lastIndex
+            val fittedVariables=statisticsRegressionVariables(dataKind,fittedResponse)
+            val parameterLabels=statisticsRegressionParameterLabels(dataKind,m.regressionMode,fittedResponse,data)
+            val fittedResponseName=regressionColumns.getOrNull(fittedResponse).orEmpty()
+        StatisticsSectionToggle("Visualize",visualizeExpanded,"statistics-visualize-toggle") {visualizeExpanded=!visualizeExpanded}
         if(visualizeExpanded) {
+        if(dataKind!="list")Text(if(isKorean())"x 날짜 형식: YYYY-MM-DD, YYYY/MM/DD, YYYY.MM.DD" else "x date formats: YYYY-MM-DD, YYYY/MM/DD, YYYY.MM.DD",fontSize=11.sp,color=LocalInstrument.current.muted)
+            Column(verticalArrangement=Arrangement.spacedBy(2.dp)) {
+                Choices(if(dataKind=="xy")listOf("Scatter","Histogram","Box plot","Violin + points","Heat map") else listOf("Histogram","Box plot","Violin + points","Heat map"),plotType,{plotType=it})
+                if(plotType in listOf("Box plot","Violin + points")) {
+                    StatisticsSelectionTitle("Orientation")
+                    Choices(listOf("Horizontal","Vertical"),if(plotOrientation=="vertical")"Vertical" else "Horizontal",{plotOrientation=if(it=="Vertical")"vertical" else "horizontal"})
+                }
+                if(plotType=="Heat map") {
+                    StatisticsSelectionTitle("Heat map data")
+                    Choices(listOf("Raw values","Z-score by row","Z-score by column","Correlation"),when(heatMapMode){"zrow"->"Z-score by row";"zcolumn"->"Z-score by column";"correlation"->"Correlation";else->"Raw values"},{heatMapMode=when(it){"Z-score by row"->"zrow";"Z-score by column"->"zcolumn";"Correlation"->"correlation";else->"raw"}})
+                    Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(4.dp)) {
+                        Checkbox(heatMapClustering,{heatMapClustering=it},Modifier.size(38.dp))
+                        Text(tr("Hierarchical clustering"),fontSize=12.sp,color=LocalInstrument.current.ink)
+                    }
+                    if(heatMapClustering) {
+                        StatisticsSelectionTitle("Cluster linkage")
+                        Choices(listOf("Single","Average","Complete","Ward"),when(heatMapLinkage){"single"->"Single";"complete"->"Complete";"ward"->"Ward";else->"Average"},{heatMapLinkage=when(it){"Single"->"single";"Complete"->"complete";"Ward"->"ward";else->"average"};if(heatMapLinkage=="ward")heatMapMetric="euclidean"})
+                        StatisticsSelectionTitle("Distance metric")
+                        Choices(listOf("Euclidean","Manhattan","Correlation (1 − r)"),when(heatMapMetric){"manhattan"->"Manhattan";"correlation"->"Correlation (1 − r)";else->"Euclidean"},{heatMapMetric=when(it){"Manhattan"->"manhattan";"Correlation (1 − r)"->"correlation";else->"euclidean"}},enabled=heatMapLinkage!="ward")
+                    }
+                    Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(4.dp)) {
+                        Checkbox(heatMapFit,{heatMapFit=it},Modifier.size(38.dp))
+                        Text(tr("Fit to screen"),fontSize=12.sp,color=LocalInstrument.current.ink)
+                    }
+                    if(heatMapMode=="correlation") {
+                        StatisticsSelectionTitle("Correlation method")
+                        Choices(listOf("Pearson (p)","Spearman (s)","Kendall (k)"),when(heatMapCorrelation){"spearman"->"Spearman (s)";"kendall"->"Kendall (k)";else->"Pearson (p)"},{heatMapCorrelation=when(it){"Spearman (s)"->"spearman";"Kendall (k)"->"kendall";else->"pearson"}})
+                        if(heatMapAxisIndices.isEmpty())Text(tr("No numeric columns"),fontSize=11.sp,color=LocalInstrument.current.muted)
+                        HeatMapAxisPicker("X axis variables",heatMapAxisIndices.map {it to heatMapColumnNames[it]},heatMapXSelection) {index->
+                            val adding=index !in heatMapXSelection
+                            val next=if(adding)heatMapXSelection+index else heatMapXSelection-index
+                            heatMapXColumns=encodeHeatMapSelection(next)
+                            heatMapYColumns=encodeHeatMapSelection(heatMapYSelection-index)
+                        }
+                        HeatMapAxisPicker("Y axis variables",heatMapAxisIndices.map {it to heatMapColumnNames[it]},heatMapYSelection) {index->
+                            val adding=index !in heatMapYSelection
+                            val next=if(adding)heatMapYSelection+index else heatMapYSelection-index
+                            heatMapYColumns=encodeHeatMapSelection(next)
+                            heatMapXColumns=encodeHeatMapSelection(heatMapXSelection-index)
+                        }
+                    }
+                }
+                if(plotType!="Scatter"&&!(plotType=="Heat map"&&heatMapMode=="correlation")&&dataColumns.size>1) {
+                    StatisticsSelectionTitle("Plot grouping")
+                    val groupingIds=listOf("columns")+dataColumns.indices.map {"column:$it"}
+                    val groupingLabels=listOf(tr("Columns"))+statisticsColumnLabels(data,dataKind)
+                    val selectedGrouping=statisticsPlotGroupingColumn(plotGrouping,dataColumns.size).takeIf {it>=0}?.let {"column:$it"} ?: "columns"
+                    Choices(groupingLabels,groupingLabels[groupingIds.indexOf(selectedGrouping)],{plotGrouping=groupingIds[groupingLabels.indexOf(it)]},translate=false)
+                }
+            }
+            val fitVisible=dataKind=="xy"&&plotType=="Scatter"&&m.regressionData==data&&m.regressionFit.isNotBlank()
+            val plotPairs=if(fitVisible&&m.regressionMode in listOf("logistic","polynomial","ridge","lasso","elasticnet","logisticridge","logisticlasso","logisticelasticnet","randomforest","randomforestclassifier","randomforestregressor","bayeslinear","bayeslogistic")&&fittedResponse==0)paired.map {(x,y)->y to x} else paired
+            val heatMapInput=remember(parsedRows,dataKind,data,plotGrouping,plotType,heatMapMode,heatMapCorrelation,heatMapXColumns,heatMapYColumns) {
+                if(plotType!="Heat map")null else {
+                    if(heatMapMode=="correlation")statisticsCorrelationHeatMap(parsedRows,dataKind,heatMapCorrelation,heatMapXSelection.toList().sorted(),heatMapYSelection.toList().sorted(),heatMapColumnNames)
+                    else statisticsHeatMapData(parsedRows,dataKind,plotGrouping,heatMapMode,heatMapColumnNames)
+                }
+            }
+            val clusterRequest=heatMapInput?.takeIf {heatMapClustering}
+            val clustered by produceState<Pair<StatisticsHeatMapData,StatisticsHeatMapData>?>(null,clusterRequest,heatMapLinkage,heatMapMetric) {
+                value=null
+                clusterRequest?.let {request->value=request to withContext(Dispatchers.Default){clusteredHeatMap(request,heatMapLinkage,heatMapMetric)}}
+            }
+            val heatMap=if(heatMapClustering)clustered?.takeIf {it.first==clusterRequest}?.second else heatMapInput
+            if(plotType=="Heat map"&&heatMapClustering&&heatMap==null)Text(tr("Clustering…"),fontSize=12.sp,color=LocalInstrument.current.muted)
+            heatMap?.let {StatisticsHeatMap(it,m.displayDigits,heatMapFit)}
+            val plotPanels=if(plotType=="Heat map")emptyList() else if(plotType=="Scatter")listOf(StatisticsPlotPanel("",emptyList())) else statisticsPlotPanels(parsedRows,dataKind,plotGrouping,statisticsColumnLabels(data,dataKind))
+            plotPanels.forEach {panel->
+                if(panel.label.isNotBlank())Text(panel.label,style=MaterialTheme.typography.titleSmall)
+                StatisticsPlot(plotType,if(plotType=="Scatter")plotPairs else xValues.mapIndexed {i,v->i.toDouble() to v},xValues,yValues,if(fitVisible)m.regressionCurve.orEmpty() else emptyList(),if(fitVisible&&!m.regressionMode.startsWith("randomforest"))m.regressionFit else "",m.displayDigits,fitVisible&&m.regressionMode=="linear",m.regressionCorrelation,tertiary=zValues,allColumns=panel.series,xDateOrigin=if(fitVisible&&fittedResponse==0)null else dateAxis?.origin,
+                    xAxisLabel=if(fitVisible)fittedVariables["x"] ?: "x" else "x",yAxisLabel=if(fitVisible)fittedResponseName else "y",
+                    fitPrefix=if(fitVisible&&(m.regressionMode.startsWith("logistic")||m.regressionMode=="bayeslogistic"))"P($fittedResponseName = 1) = " else if(fitVisible)"$fittedResponseName ≈ " else "y ≈ ",fitVariables=if(fitVisible&&m.regressionMode in listOf("logistic","polynomial","ridge","lasso","elasticnet","logisticridge","logisticlasso","logisticelasticnet","randomforest","randomforestclassifier","randomforestregressor","bayeslinear","bayeslogistic"))fittedVariables else emptyMap(),orientation=plotOrientation)
+            }
+            if(dateAxis!=null&&plotType=="Scatter")Text((if(isKorean())"회귀식의 x: ${dateAxis.origin.plusDays(1)} = 1일째" else "Regression x: ${dateAxis.origin.plusDays(1)} = day 1"),fontSize=11.sp,color=LocalInstrument.current.muted)
+        }
+        StatisticsSectionToggle("Regression & models",regressionExpanded,"statistics-regression-toggle") {regressionExpanded=!regressionExpanded}
+        if(regressionExpanded) {
             Column(verticalArrangement=Arrangement.spacedBy(2.dp)) {
                 Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
                     if(dataKind!="list")SmallAction("Clear regression"){m.clearRegression()}
@@ -337,8 +424,7 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
                 val activeRegression=if(m.regressionFit.isNotBlank()&&m.regressionData==data)when {m.regressionMode.startsWith("randomforest")->"randomforest";m.regressionMode.startsWith("logistic")->"logistic";m.regressionMode in listOf("ridge","lasso","elasticnet")->if(dataColumns.size>2)"multiple" else "linear";else->m.regressionMode} else ""
                 if(dataColumns.size>1)Choices(if(dataKind=="xyz"||dataKind.startsWith("columns:"))listOf("multiple","logistic","randomforest","bayeslinear","bayeslogistic") else listOf("linear","quadratic","polynomial","logarithmic","exponential","power","logistic","randomforest","bayeslinear","bayeslogistic","custom"),if(regularized||regression in listOf("custom","polynomial","randomforest","bayeslinear","bayeslogistic"))regression else activeRegression,{selectedMode->
                     regression=selectedMode;plotType=if(dataKind=="xy")"Scatter" else "Histogram"
-                    val selectedResponse=if(selectedMode in listOf("polynomial","logistic")) {if(logisticResponse=="0")0 else regressionColumns.lastIndex} else responseColumn
-                    if(selectedMode in listOf("polynomial","logistic")&&logisticResponse!="0")logisticResponse=""
+                    val selectedResponse=responseColumn
                     if(selectedMode in listOf("custom","polynomial","randomforest","bayeslinear","bayeslogistic")||regularization!="none")m.clearRegression()
                     if(selectedMode !in listOf("custom","polynomial","randomforest","bayeslinear","bayeslogistic")&&(selectedMode !in listOf("linear","multiple","logistic")||regularization=="none")) {
                         val table=statisticsRegressionTable(numericRows,dataKind,selectedMode,selectedResponse)
@@ -403,8 +489,8 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
                 if(dataKind!="list"&&regression in listOf("multiple","logistic","bayeslinear","bayeslogistic"))Text(tr(if(regression in listOf("logistic","bayeslogistic"))"Selected column is response; others are predictors. Logistic response: 0 or 1." else "Selected column is response; others are predictors."),fontSize=11.sp,color=LocalInstrument.current.muted)
                 if(dataColumns.size>1&&(regularized||regression in listOf("multiple","logistic","polynomial","randomforest","bayeslinear","bayeslogistic"))) {
                     StatisticsSelectionTitle("Dependent variable")
-                    if(regression in listOf("polynomial","logistic"))Choices(listOf("first","last"),if(responseColumn==0)"first" else "last",{position->m.clearRegression();logisticResponse=if(position=="first")"0" else ""})
-                    else Choices(regressionColumns,regressionColumns.getOrNull(responseColumn).orEmpty(),{name->m.clearRegression();logisticResponse=regressionColumns.indexOf(name).toString()},translate=false)
+                    val responseLabels=statisticsColumnLabels(data,dataKind)
+                    Choices(responseLabels,responseLabels.getOrNull(responseColumn).orEmpty(),{name->m.clearRegression();logisticResponse=responseLabels.indexOf(name).toString()},translate=false)
                     if(regression=="logistic"&&regularization=="none") {
                         StatisticsSelectionTitle("Firth correction")
                         Choices(listOf("Auto","Always"),if(firthMode=="firth")"Always" else "Auto",{m.clearRegression();firthMode=if(it=="Always")"firth" else "auto"})
@@ -458,79 +544,8 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
                         m.fitRegression("regression($table,custom,$customFormula,$customVariable$guesses)",data)
                     },enabled=customFormula.isNotBlank()&&customVariable.matches(Regex("[A-Za-z][A-Za-z0-9_]*"))&&paired.size>=2&&!m.busy)
                 }
-                Choices(if(dataKind=="xy")listOf("Scatter","Histogram","Box plot","Violin + points","Heat map") else listOf("Histogram","Box plot","Violin + points","Heat map"),plotType,{plotType=it})
-                if(plotType in listOf("Box plot","Violin + points")) {
-                    StatisticsSelectionTitle("Orientation")
-                    Choices(listOf("Horizontal","Vertical"),if(plotOrientation=="vertical")"Vertical" else "Horizontal",{plotOrientation=if(it=="Vertical")"vertical" else "horizontal"})
-                }
-                if(plotType=="Heat map") {
-                    StatisticsSelectionTitle("Heat map data")
-                    Choices(listOf("Raw values","Z-score by row","Z-score by column","Correlation"),when(heatMapMode){"zrow"->"Z-score by row";"zcolumn"->"Z-score by column";"correlation"->"Correlation";else->"Raw values"},{heatMapMode=when(it){"Z-score by row"->"zrow";"Z-score by column"->"zcolumn";"Correlation"->"correlation";else->"raw"}})
-                    Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(4.dp)) {
-                        Checkbox(heatMapClustering,{heatMapClustering=it},Modifier.size(38.dp))
-                        Text(tr("Hierarchical clustering"),fontSize=12.sp,color=LocalInstrument.current.ink)
-                    }
-                    if(heatMapClustering) {
-                        StatisticsSelectionTitle("Cluster linkage")
-                        Choices(listOf("Single","Average","Complete","Ward"),when(heatMapLinkage){"single"->"Single";"complete"->"Complete";"ward"->"Ward";else->"Average"},{heatMapLinkage=when(it){"Single"->"single";"Complete"->"complete";"Ward"->"ward";else->"average"};if(heatMapLinkage=="ward")heatMapMetric="euclidean"})
-                        StatisticsSelectionTitle("Distance metric")
-                        Choices(listOf("Euclidean","Manhattan","Correlation (1 − r)"),when(heatMapMetric){"manhattan"->"Manhattan";"correlation"->"Correlation (1 − r)";else->"Euclidean"},{heatMapMetric=when(it){"Manhattan"->"manhattan";"Correlation (1 − r)"->"correlation";else->"euclidean"}},enabled=heatMapLinkage!="ward")
-                    }
-                    Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(4.dp)) {
-                        Checkbox(heatMapFit,{heatMapFit=it},Modifier.size(38.dp))
-                        Text(tr("Fit to screen"),fontSize=12.sp,color=LocalInstrument.current.ink)
-                    }
-                    if(heatMapMode=="correlation") {
-                        StatisticsSelectionTitle("Correlation method")
-                        Choices(listOf("Pearson (p)","Spearman (s)","Kendall (k)"),when(heatMapCorrelation){"spearman"->"Spearman (s)";"kendall"->"Kendall (k)";else->"Pearson (p)"},{heatMapCorrelation=when(it){"Spearman (s)"->"spearman";"Kendall (k)"->"kendall";else->"pearson"}})
-                        if(heatMapAxisIndices.isEmpty())Text(tr("No numeric columns"),fontSize=11.sp,color=LocalInstrument.current.muted)
-                        HeatMapAxisPicker("X axis variables",heatMapAxisIndices.map {it to heatMapColumnNames[it]},heatMapXSelection) {index->
-                            val adding=index !in heatMapXSelection
-                            val next=if(adding)heatMapXSelection+index else heatMapXSelection-index
-                            heatMapXColumns=encodeHeatMapSelection(next)
-                            heatMapYColumns=encodeHeatMapSelection(heatMapYSelection-index)
-                        }
-                        HeatMapAxisPicker("Y axis variables",heatMapAxisIndices.map {it to heatMapColumnNames[it]},heatMapYSelection) {index->
-                            val adding=index !in heatMapYSelection
-                            val next=if(adding)heatMapYSelection+index else heatMapYSelection-index
-                            heatMapYColumns=encodeHeatMapSelection(next)
-                            heatMapXColumns=encodeHeatMapSelection(heatMapXSelection-index)
-                        }
-                    }
-                }
-                if(plotType!="Scatter"&&!(plotType=="Heat map"&&heatMapMode=="correlation")&&dataColumns.size>1) {
-                    StatisticsSelectionTitle("Plot grouping")
-                    Choices(listOf("Columns","first","last"),if(plotGrouping=="columns")"Columns" else plotGrouping,{plotGrouping=if(it=="Columns")"columns" else it})
-                }
+                AdvancedStatistics(m,data,dataKind,"models","Regression & models")
             }
-            val fittedResponse=if(m.regressionMode in listOf("multiple","logistic","polynomial","ridge","lasso","elasticnet","logisticridge","logisticlasso","logisticelasticnet","randomforest","randomforestclassifier","randomforestregressor","bayeslinear","bayeslogistic"))m.regressionResponseColumn?.takeIf {it in regressionColumns.indices} ?: regressionColumns.lastIndex else regressionColumns.lastIndex
-            val fittedVariables=statisticsRegressionVariables(dataKind,fittedResponse)
-            val parameterLabels=statisticsRegressionParameterLabels(dataKind,m.regressionMode,fittedResponse,data)
-            val fittedResponseName=regressionColumns.getOrNull(fittedResponse).orEmpty()
-            val fitVisible=dataKind=="xy"&&plotType=="Scatter"&&m.regressionData==data&&m.regressionFit.isNotBlank()
-            val plotPairs=if(fitVisible&&m.regressionMode in listOf("logistic","polynomial","ridge","lasso","elasticnet","logisticridge","logisticlasso","logisticelasticnet","randomforest","randomforestclassifier","randomforestregressor","bayeslinear","bayeslogistic")&&fittedResponse==0)paired.map {(x,y)->y to x} else paired
-            val heatMapInput=remember(parsedRows,dataKind,data,plotGrouping,plotType,heatMapMode,heatMapCorrelation,heatMapXColumns,heatMapYColumns) {
-                if(plotType!="Heat map")null else {
-                    if(heatMapMode=="correlation")statisticsCorrelationHeatMap(parsedRows,dataKind,heatMapCorrelation,heatMapXSelection.toList().sorted(),heatMapYSelection.toList().sorted(),heatMapColumnNames)
-                    else statisticsHeatMapData(parsedRows,dataKind,plotGrouping,heatMapMode,heatMapColumnNames)
-                }
-            }
-            val clusterRequest=heatMapInput?.takeIf {heatMapClustering}
-            val clustered by produceState<Pair<StatisticsHeatMapData,StatisticsHeatMapData>?>(null,clusterRequest,heatMapLinkage,heatMapMetric) {
-                value=null
-                clusterRequest?.let {request->value=request to withContext(Dispatchers.Default){clusteredHeatMap(request,heatMapLinkage,heatMapMetric)}}
-            }
-            val heatMap=if(heatMapClustering)clustered?.takeIf {it.first==clusterRequest}?.second else heatMapInput
-            if(plotType=="Heat map"&&heatMapClustering&&heatMap==null)Text(tr("Clustering…"),fontSize=12.sp,color=LocalInstrument.current.muted)
-            heatMap?.let {StatisticsHeatMap(it,m.displayDigits,heatMapFit)}
-            val plotPanels=if(plotType=="Heat map")emptyList() else if(plotType=="Scatter")listOf(StatisticsPlotPanel("",emptyList())) else statisticsPlotPanels(parsedRows,dataKind,plotGrouping)
-            plotPanels.forEach {panel->
-                if(panel.label.isNotBlank())Text(panel.label,style=MaterialTheme.typography.titleSmall)
-                StatisticsPlot(plotType,if(plotType=="Scatter")plotPairs else xValues.mapIndexed {i,v->i.toDouble() to v},xValues,yValues,if(fitVisible)m.regressionCurve.orEmpty() else emptyList(),if(fitVisible&&!m.regressionMode.startsWith("randomforest"))m.regressionFit else "",m.displayDigits,fitVisible&&m.regressionMode=="linear",m.regressionCorrelation,tertiary=zValues,allColumns=panel.series,xDateOrigin=if(fitVisible&&fittedResponse==0)null else dateAxis?.origin,
-                    xAxisLabel=if(fitVisible)fittedVariables["x"] ?: "x" else "x",yAxisLabel=if(fitVisible)fittedResponseName else "y",
-                    fitPrefix=if(fitVisible&&(m.regressionMode.startsWith("logistic")||m.regressionMode=="bayeslogistic"))"P($fittedResponseName = 1) = " else if(fitVisible)"$fittedResponseName ≈ " else "y ≈ ",fitVariables=if(fitVisible&&m.regressionMode in listOf("logistic","polynomial","ridge","lasso","elasticnet","logisticridge","logisticlasso","logisticelasticnet","randomforest","randomforestclassifier","randomforestregressor","bayeslinear","bayeslogistic"))fittedVariables else emptyMap(),orientation=plotOrientation)
-            }
-            if(dateAxis!=null&&plotType=="Scatter")Text((if(isKorean())"회귀식의 x: ${dateAxis.origin.plusDays(1)} = 1일째" else "Regression x: ${dateAxis.origin.plusDays(1)} = day 1"),fontSize=11.sp,color=LocalInstrument.current.muted)
             if(dataKind!="list"&&m.regressionData==data&&m.regressionFit.isNotBlank()) {
                 Column(verticalArrangement=Arrangement.spacedBy(0.dp)) {
                     if(!m.regressionMode.startsWith("randomforest")&&(dataKind=="xyz"||dataKind.startsWith("columns:"))) {

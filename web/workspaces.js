@@ -17,7 +17,7 @@ import {createEquationSteps} from './equation-steps.js';
 export function createWorkspaces({state,engine,ui,persist,restoreSelect,requestOptions,isBusy,error,changeMode,replaceInput,insert,evaluate,showResult,graphs}) {
   const {toast}=ui;
   const matrix=createMatrixWorkspace({state,persist,restoreSelect,refreshWorkspaceMath,storeExpression:storeWorkspaceExpression,error,changeMode,replaceInput});
-  const statistics=createStatisticsWorkspace({state,engine,ui,persist,refreshWorkspaceMath,storeExpression:storeWorkspaceExpression,error,changeMode,replaceInput,graphs});
+  const statistics=createStatisticsWorkspace({state,engine,ui,persist,refreshWorkspaceMath,storeExpression:storeWorkspaceExpression,error,changeMode,replaceInput,graphs,onSummary:()=>run("statistics-summary")});
   const functions=createFunctionsWorkspace({state,ui,persist,refreshWorkspaceMath,changeMode,insert});
   const python=createPythonWorkspace({engine,ui,persist,requestOptions,error,run});
   const probability=createProbabilityWorkspace({state,engine,persist,requestOptions});
@@ -71,15 +71,16 @@ export function createWorkspaces({state,engine,ui,persist,restoreSelect,requestO
       if(workspace==='scientific'){await evaluate();return;}
       if(workspace==='equation'){source=equationCommand({kind:value('equation-kind'),source:equationSource(),variable:value('equation-variable').trim(),extra:value('equation-extra'),initial:value('equation-initial'),hint:value('equation-hint')});
       }else if(workspace==='matrix'){source=matrix.command();
-      }else if(workspace==='statistics'){source=statistics.expression();statisticsContext=statistics.analysisSummary();advancedContext={termLabels:statistics.analysisTermLabels()};}
-      else if(workspace==='statistics-advanced'){source=statistics.advancedExpression();advancedContext=statistics.advancedContext();}
+      }else if(workspace==='statistics-summary'){source=statistics.summaryExpression();advancedContext={termLabels:statistics.summaryTermLabels()};}
+      else if(workspace==='statistics'){source=statistics.expression();statisticsContext=statistics.analysisSummary();advancedContext={termLabels:statistics.analysisTermLabels()};}
+      else if(['statistics-advanced','statistics-preparation','statistics-tests','statistics-models'].includes(workspace)){source=statistics.advancedExpression(workspace);advancedContext=statistics.advancedContext(workspace);}
       else if(workspace==='units')source=`convert(${value('unit-value')},${value('unit-from')},${value('unit-to')})`;
       else if(workspace==='tip')source=tipExpression();
       else if(workspace==='currency'){source=`(${value('currency-amount')})*(${value('currency-rate')})`;}
       const expressionRequest=workspace.startsWith('statistics')?statisticsRequest(latexInput(source)):{tree:parse(latexInput(source))};
-      let result=await engine.execute({...requestOptions(),...expressionRequest,...(workspace==='equation'?{equationSteps:true,solutionSteps:true}:{}),...(advancedContext?.termLabels?{statisticsTermLabels:advancedContext.termLabels}:{})},{context:workspace});if(workspace==='tip'&&result.ok)result=moneyResult(result,Number(value('tip-people')));if(statisticsContext&&result.ok)result={...result,note:[statisticsContext,result.note].filter(Boolean).join('\n')};showResult(result,source,workspace==='equation'?equationSource():source,{decimalDisplay:workspace==='regression',statisticsTarget:workspace==='statistics-advanced'?'statistics-advanced-result':workspace==='statistics'?'statistics-analysis-result':''});
+      let result=await engine.execute({...requestOptions(),...expressionRequest,...(workspace==='equation'?{equationSteps:true,solutionSteps:true}:{}),...(advancedContext?.termLabels?{statisticsTermLabels:advancedContext.termLabels}:{})},{context:workspace});if(workspace==='tip'&&result.ok)result=moneyResult(result,Number(value('tip-people')));if(statisticsContext&&result.ok)result={...result,note:[statisticsContext,result.note].filter(Boolean).join('\n')};showResult(result,source,workspace==='equation'?equationSource():source,{decimalDisplay:workspace==='regression',statisticsTarget:workspace==='statistics'?'statistics-analysis-result':workspace.startsWith('statistics-')?workspace+'-result':''});
       if(workspace==='equation')equationSteps.show(result);
-      if(advancedContext)statistics.showAdvancedResult(result,advancedContext);
+      if(advancedContext&&workspace!=='statistics-summary')statistics.showAdvancedResult(result,advancedContext,workspace);
     }catch(exc){error(exc.message);}
   }
   document.querySelectorAll('[data-run]').forEach(button=>button.onclick=()=>run(button.dataset.run));

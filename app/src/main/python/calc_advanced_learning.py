@@ -143,20 +143,23 @@ def calculate(engine,name,a):
         values=[[None if missing(v) else number(v) for v in row] for row in rows]
         for column in zip(*values): require(any(v is not None for v in column),'Cannot impute a completely missing column')
         count=sum(v is None for row in values for v in row)
+        def publish(result):
+            engine.imputation_result={'data':[[format(value,'.17g') for value in row] for row in result['data']],'imputedCells':count}
+            return result
         if method in ('mean','median','mode'):
             fills=[]
             for column in zip(*values):
                 observed=[v for v in column if v is not None]
                 fills.append(mean(observed) if method=='mean' else statistics.median(observed) if method=='median' else statistics.multimode(observed)[0])
             engine.note += ' Single columnwise imputation; does not account for imputation uncertainty. NA denotes missing. Mode ties use first appearance.'
-            return {'data':[[fills[i] if v is None else v for i,v in enumerate(row)] for row in values],'fill values':fills,'imputed cells':count,'method':method}
+            return publish({'data':[[fills[i] if v is None else v for i,v in enumerate(row)] for row in values],'fill values':fills,'imputed cells':count,'method':method})
         if method=='regression':
             filled,sweeps=regression_imputation(values)
             engine.note += ' Single regression imputation with iterated conditional means (chained equations); does not account for imputation uncertainty.'
-            return {'data':filled,'imputed cells':count,'sweeps':sweeps,'method':method}
+            return publish({'data':filled,'imputed cells':count,'sweeps':sweeps,'method':method})
         filled,neighbors=neighbor_imputation(values,neighbors)
         engine.note += ' Single k-nearest-neighbour imputation on standardized observed coordinates; does not account for imputation uncertainty.'
-        return {'data':filled,'imputed cells':count,'neighbors':neighbors,'method':method}
+        return publish({'data':filled,'imputed cells':count,'neighbors':neighbors,'method':method})
     rows=table(a[0]); n=len(rows); p=len(rows[0])
     if name=='crossvalidate':
         require(p>=2,'Rows: predictors then response')
@@ -257,5 +260,8 @@ def calculate(engine,name,a):
         if len(set(labels))<k: continue
         if best is None or inertia<best['inertia']: best={'labels (1-based)':[l+1 for l in labels],'centroids':centroids,'inertia':inertia,'iterations':iteration+1,'seed':seed}
     require(best is not None,'K-means did not converge')
+    labels=engine.request.get('statisticsTermLabels',{})
+    features=[labels.get('feature:'+str(i+1),'Feature '+str(i+1)) for i in range(p)]
+    engine.statistics_plots=[{'kind':'clusters','title':'Cluster assignments','points':rows,'assignments':best['labels (1-based)'],'centroids':best['centroids'],'features':features}]
     engine.note += ' K-means++ initialization, 10 restarts, Euclidean distance on raw columns; scale features before clustering if needed.'
     return best

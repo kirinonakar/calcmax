@@ -2,6 +2,7 @@
 import json
 import ast
 from pathlib import Path
+from statistics_help import USES, enrich_help
 
 ROOT = Path(__file__).resolve().parents[1]
 GROUPS = '[1,2,4,5],[2,3,5,8]'
@@ -11,6 +12,9 @@ CLUSTERS = '[[1,0,2],[1,1,4],[1,2,4],[2,0,3],[2,1,4],[2,2,6],[3,0,1],[3,1,3],[3,
 GLMM = '[[1,0,0],[1,1,0],[1,2,1],[2,0,0],[2,1,1],[2,2,1],[3,0,0],[3,1,0],[3,2,0],[4,0,1],[4,1,1],[4,2,1],[5,0,1],[5,1,0],[5,2,1],[6,0,0],[6,1,1],[6,2,0]]'
 SURVIVAL = '[[1,1],[2,0],[3,1],[4,1],[5,0],[6,1]]'
 specs = [
+    ('linearmodel','Factorial linear model / ANOVA','요인 선형회귀 / ANOVA','table',',[1,2],2,3,sum','[[1,1,2],[1,1,4],[1,2,5],[1,2,6],[2,1,4],[2,1,5],[2,2,8],[2,2,10]]','General OLS with numeric and categorical predictors. Categorical positions are one-based; interaction order, Type II/III, sum/treatment coding. Uses joint partial F tests for each term. Three-way and higher interactions require enough replicated observations and identifiable columns.','숫자·범주 설명변수를 포함한 일반 OLS. 범주 변수 번호는 1부터 시작하며 상호작용 차수·Type II/III·sum/treatment 코딩을 지정합니다. 항마다 여러 계수를 부분 F로 함께 검정합니다. 3요인 이상 상호작용에도 충분한 반복 관측·식별 가능한 열이 필요합니다.'),
+    ('twowayanova','Two-way ANOVA','이요인 ANOVA','table',',1','[[1,1,2],[1,1,4],[1,2,5],[1,2,6],[2,1,4],[2,1,5],[2,2,8],[2,2,10]]','Independent observations, two categorical factors and a numeric response. Type III F tests with sum contrasts; interaction 1 (default) or additive 0. Normal errors and common residual variance; replication and a full-rank design are required.','독립 관측·두 범주 요인·숫자 반응. 합이 0인 대비의 Type III F 검정. 상호작용 1(기본) 또는 가법 0. 정규 오차·공통 잔차분산을 가정하며 반복 관측과 식별 가능한 설계가 필요합니다.'),
+    ('friedman','Friedman test','Friedman 검정','table','','[[2,4,5],[3,4,7],[4,7,8],[2,3,6],[5,6,7]]','Rows are independent subjects; columns are at least three repeated conditions. Complete matched rows, midranks and tie correction. Chi-square approximation; small samples or few conditions can give inaccurate p values. Reports Kendall W.','행은 독립 대상, 열은 3개 이상 반복 조건입니다. 완전한 대응 행·평균순위·동점 보정. χ² 근사이므로 소표본·소수 조건에서 p값이 부정확할 수 있습니다. Kendall W를 제공합니다.'),
     ('ancova','ANCOVA','ANCOVA (공분산분석)','table',',0.95,1','[[1,1,3],[1,2,5],[1,3,4],[1,4,8],[2,2,6],[2,3,7],[2,4,9],[2,5,8],[3,1,5],[3,3,8],[3,4,10],[3,6,11]]','Rows: numeric group ID, one or more covariates, response; confidence level (default .95); slope homogeneity check 0/1 (default 1). One factor, common slopes, Type II F tests and adjusted means at pooled covariate means.','열: 숫자 그룹 ID, 하나 이상의 공변량, 종속변수; 신뢰수준(기본 .95), 기울기 동질성 검정 0/1(기본 1). 일요인·공통 기울기, Type II F 검정, 전체 공변량 평균에서의 조정 평균.'),
     ('glm','Generalized linear model (GLM)','GLM (일반화 선형모형)','table',',gaussian,auto,1','[[0,2],[1,4],[2,4],[3,7],[4,8],[5,9]]','Rows: predictors, response; family gaussian / binomial (0/1) / poisson / gamma / inversegaussian / nbinom; link auto or a supported link; NB2 alpha: positive fixed value (default 1) or estimate for joint ML; optional offset/exposure vector and mode. Default links: identity, logit, log, log, log, log. Model-based Wald z 95% intervals; Pearson dispersion for Gaussian/Gamma/inverse Gaussian. Use estimate as the fourth argument to estimate NB2 alpha jointly with coefficients; its uncertainty enters the observed-information covariance. Numeric alpha retains the fixed-alpha model.','열: 설명변수, 반응변수; 분포 gaussian·binomial(0/1)·poisson·gamma·inversegaussian·nbinom; 연결함수 auto 또는 지원 함수; NB2 alpha: 양수 고정값(기본 1) 또는 estimate(공동 ML 추정); 선택적 오프셋·노출량 목록과 유형. 기본 연결함수는 identity·logit·log·log·log·log. 모형 기반 Wald z 95% 구간; 정규·Gamma·역가우스는 Pearson 분산 추정. 넷째 인수를 estimate로 지정하면 NB2 alpha와 계수를 공동 ML 추정하며 관측 정보행렬에 alpha의 불확실성을 반영합니다. 숫자를 입력하면 alpha를 고정합니다.'),
     ('padjust','Multiple testing','다중검정 보정','list',',holm,0.05','[0.01,0.04,0.03,0.2]', 'p values; method bonferroni / holm / fdr (BH) / by; alpha.', 'p값 목록; 방법 bonferroni / holm / fdr (BH) / by; 유의수준.'),
@@ -48,6 +52,27 @@ specs = [
     ('impute','Missing-value imputation','결측치 대체','table',',mean','[[1,NA],[2,4],[NA,6],[4,8]]','NA for missing cells; mean / median / mode / regression / knn with neighbours (default 5). Single imputation.','결측값은 NA; mean / median / mode / regression / knn(이웃 수 기본 5). 단일 대체.'),
 ]
 schema = [{'id':id_,'label':label,'ko':ko,'input':layout,'suffix':suffix,'example':f'{id_}({data}{suffix})','help':help_,'helpKo':helpko} for id_,label,ko,layout,suffix,data,help_,helpko in specs]
+# Menu placement and order are shared by Android and Web; function IDs stay stable.
+menus = [
+    ('preparation', 'Data preparation', '데이터 준비', ['impute']),
+    ('tests', 'Distribution & variance', '분포·분산 검정', ['kstest','levene','bartlett']),
+    ('tests', 'Group comparisons', '그룹 비교', ['mcnemar','twowayanova','ancova','repeatedanova','friedman']),
+    ('tests', 'Effect sizes & multiple testing', '효과크기·다중검정', ['cohend','eta2','padjust']),
+    ('models', 'Generalized regression', '일반화 회귀', ['linearmodel','glm','poissonreg','nbreg','multinomial','ordinal']),
+    ('models', 'Repeated & clustered data', '반복·군집 자료', ['mixedmodel','glmm','gee']),
+    ('models', 'Model validation', '모형 검증', ['crossvalidate']),
+    ('advanced', 'Bayesian inference', '베이지안 추론', ['bayesmean','bayescompare','bayesproportion','bayesrate']),
+    ('advanced', 'Resampling', '재표집', ['bootstrapci','bayesbootstrap']),
+    ('advanced', 'Multivariate analysis', '다변량 분석', ['pca','kmeans']),
+    ('advanced', 'Survival analysis', '생존분석', ['survivalanalysis','kaplanmeier','logrank','cox']),
+    ('advanced', 'Power & sample size', '검정력·표본수', ['testpower','samplesize']),
+]
+definitions = {item['id']: item for item in schema}
+schema = []
+for section, group, group_ko, ids in menus:
+    for id_ in ids:
+        schema.append(dict(definitions[id_], section=section, group=group, groupKo=group_ko))
+assert len(schema) == len(definitions) and len({item['id'] for item in schema}) == len(definitions)
 def field(key,label,ko,type_,default,choices=None,when=None):
     result=dict(key=key,label=label,ko=ko,type=type_,default=default)
     if choices: result['choices']=[dict(id=id_,label=en,ko=ko_) for id_,en,ko_ in choices]
@@ -118,7 +143,45 @@ forms={
         dict(field('alpha','Penalty α','벌점 α','number','0.1'),when={'model':['ridge','lasso','elasticnet','logistic']}),
         dict(field('ratio','L1 ratio','L1 비율','number','0.5'),when={'model':['elasticnet']})]
 }
+design_field=field('design','Study design','연구 설계','choice','independent',[('independent','Independent groups','독립 두 그룹'),('paired','Paired observations','대응 표본'),('onesample','One sample','단일 표본')])
+tail_field=field('tail','Alternative hypothesis','대립가설','choice','two',[('two','Two-sided','양측'),('greater','Greater','우측'),('less','Less','좌측')])
+forms.update({
+    'twowayanova':[field('layout','Data layout','자료 구조','choice','groups',[('groups','Factor columns + response','요인 열 + 반응 열'),('columns','One column per factor cell','요인 조합별 열')]),dict(col('factorA','Factor A','요인 A 열',0),when={'layout':['groups']}),dict(col('factorB','Factor B','요인 B 열',1),when={'layout':['groups']}),dict(col('response','Response','반응 열',2),when={'layout':['groups']}),dict(multi('columns','Cell columns (A slowest)','조합별 열 (A 최외곽)'),when={'layout':['columns']}),dict(field('levelsB','Factor B levels','요인 B 수준 수','number','2'),when={'layout':['columns']}),field('interaction','Model','모형','choice','1',[('1','Main effects + interaction','주효과 + 상호작용'),('0','Additive main effects','가법 주효과')])],
+    'friedman':[multi('columns','Condition columns','반복 조건 열')],
+    'cohend':[col('first','Group A','그룹 A 열',0),col('second','Group B','그룹 B 열',1),field('design','Comparison','비교 방식','choice','independent',[('independent','Independent groups','독립 표본'),('paired','Paired observations','대응 표본')])],
+    'eta2':group_fields,
+    'bootstrapci':[col('column','Data column','자료 열',0),field('statistic','Statistic','통계량','choice','mean',[(v,en,ko) for v,en,ko in [('mean','Mean','평균'),('median','Median','중앙값'),('stdev','Standard deviation','표준편차')]]),field('level','Confidence level','신뢰수준','number','0.95'),field('samples','Resamples','재표집 수','number','2000'),field('seed','Seed','시드','number','0')],
+    'kmeans':[multi('columns','Feature columns','변수 열'),field('clusters','Clusters','군집 수','number','2'),field('seed','Seed','시드','number','0')],
+    'multinomial':[col('response','Category response','범주 반응 열',-1),multi('predictors','Predictors','설명변수 열')],
+    'ordinal':[col('response','Ordered category response','순서형 반응 열',-1),multi('predictors','Predictors','설명변수 열')],
+    'testpower':[design_field,field('effect','Cohen’s d','Cohen의 d','number','0.5'),field('n','Sample size per group / pairs','그룹별 표본수·쌍 수','number','64'),field('alpha','Significance level α','유의수준 α','number','0.05'),tail_field],
+    'samplesize':[design_field,field('effect','Cohen’s d','Cohen의 d','number','0.5'),field('power','Target power','목표 검정력','number','0.8'),field('alpha','Significance level α','유의수준 α','number','0.05'),tail_field],
+})
+forms['linearmodel']=[col('response','Response','반응 열',-1),multi('predictors','Predictors','설명변수 열'),multi('categorical','Categorical predictors','범주 설명변수 열'),field('order','Interaction order (1 = additive)','상호작용 차수 (1 = 가법)','number','2'),field('ssType','Sums of squares','제곱합','choice','3',[('3','Type III','Type III'),('2','Type II','Type II')]),field('coding','Categorical coding','범주 코딩','choice','sum',[('sum','Sum-to-zero contrasts','합이 0인 대비'),('treatment','Treatment / dummy coding','처리 / 더미 코딩')])]
+forms['crossvalidate']=[col('response','Response','반응 열',-1),multi('predictors','Predictors','설명변수 열')]+forms['crossvalidate']
+two_fields=[grouping,dict(col('first','Group A column','A 그룹 열',0),when={'grouping':['columns']}),dict(col('second','Group B column','B 그룹 열',1),when={'grouping':['columns']}),dict(col('group','Group column','그룹 열',0),when={'grouping':['groups']}),dict(col('value','Value column','값 열',1),when={'grouping':['groups']}),field('firstGroup','Group A value','A 그룹 값','group','',when={'grouping':['groups']}),field('secondGroup','Group B value','B 그룹 값','group','',when={'grouping':['groups']})]
+matching_fields=[field('matching','Pair matching','대응 연결','choice','order',[('order','Within-group row order','그룹 안의 행 순서'),('subject','Subject ID','대상 ID')],when={'grouping':['groups']}),dict(col('subject','Subject ID','대상 ID 열',0),when={'grouping':['groups'],'matching':['subject']})]
+forms['cohend']=two_fields+forms['cohend'][2:]+matching_fields
+forms['bayescompare']=two_fields+forms['bayescompare'][2:]
+for id_ in ('friedman','repeatedanova'): forms[id_]=group_fields+matching_fields+forms[id_][1:]
+# KS one-sample keeps its own data column; two-sample enables arbitrary long roles.
+forms['kstest']+= [dict(f,when={**f.get('when',{}),'mode':['two']}) for f in two_fields if f['key'] not in ('first','second')]
+forms['bayesbootstrap']=[dict(f,when={'layout':['columns','groups']}) if f['key']=='comparison' else f for f in forms['bayesbootstrap']]
+forms['bayesbootstrap'] += [dict(f,when={**{k:v for k,v in f.get('when',{}).items() if k!='grouping'},'layout':['groups']}) for f in two_fields+matching_fields if f['key'] in ('firstGroup','secondGroup','matching','subject')]
+next(f for f in forms['mcnemar'] if f['key']=='layout')['choices'].append(dict(id='groups',label='Group / value columns',ko='그룹·값 열'))
+forms['mcnemar'] += [dict(f,when={**{k:v for k,v in f.get('when',{}).items() if k!='grouping'},'layout':['groups']}) for f in two_fields+matching_fields if f['key'] in ('group','value','firstGroup','secondGroup','matching','subject')]
 form_help={
+ 'linearmodel':('Choose response and predictors; mark only the categorical predictors. Numeric predictors retain their units. Interaction order 1 is additive, 2 includes all pairs, 3 all triples, etc. Choose Type II or III and sum or dummy coding; Type III factorial interactions require sum contrasts. Coefficient intervals and joint term F tests share the same OLS fit. Numeric main effects with interactions refer to zero: center covariates when appropriate.','반응·설명변수를 선택하고 그중 범주 변수만 표시합니다. 숫자 변수는 원래 단위를 사용합니다. 차수 1은 가법, 2는 모든 쌍, 3은 모든 삼중 상호작용 등을 포함합니다. Type II/III·합 대비/더미 코딩을 선택하며 Type III 요인 상호작용에는 합 대비가 필요합니다. 계수 구간·항별 부분 F 검정은 같은 OLS 적합을 사용합니다. 숫자 상호작용의 주효과는 0 기준이므로 필요하면 공변량을 중심화하세요.'),
+ 'twowayanova':('Select two categorical factor columns and the numeric response, or columns for every factor cell ordered with A slowest. Observations must be independent; repeated measures belong in Repeated-measures ANOVA. Type III sum contrasts handle unequal cell sizes. Replication and identifiable cells are required for the interaction model. Results include residual diagnostics and cell mean intervals.','두 범주 요인 열·숫자 반응 열 또는 A를 최외곽으로 정렬한 요인 조합별 열을 선택합니다. 관측은 독립이어야 하며 반복측정은 반복측정 ANOVA를 사용하세요. 합이 0인 대비의 Type III 검정으로 불균형 셀 크기를 처리합니다. 상호작용 모형에는 반복 관측·식별 가능한 셀이 필요합니다. 잔차 진단과 셀 평균 구간을 함께 제공합니다.'),
+ 'friedman':('Choose at least three numeric condition columns. Each row must be the same subject across conditions; incomplete selected rows are rejected. Tie-corrected chi-square approximation; small-sample p values can be inaccurate.','숫자 반복 조건 열을 3개 이상 선택합니다. 각 행은 모든 조건에서 같은 대상이어야 하며 선택 열의 불완전한 행은 거부합니다. 동점 보정 χ² 근사이며 소표본 p값은 부정확할 수 있습니다.'),
+ 'cohend':('Select two columns and independent or paired comparison. Paired analysis uses complete rows; independent samples omit blank cells separately.','두 열과 독립·대응 비교를 선택합니다. 대응 분석은 완전한 행을, 독립 분석은 각 열의 빈 셀을 별도로 제외합니다.'),
+ 'eta2':('Compare two or more groups. Choose group columns or a group/value layout.','두 개 이상 그룹을 비교합니다. 열별 그룹 또는 그룹·값 열을 선택하세요.'),
+ 'bootstrapci':('Choose a column and statistic, confidence level, resamples and seed. IID percentile bootstrap; not BCa.','자료 열·통계량·신뢰수준·재표집 수·시드를 선택합니다. IID 백분위 부트스트랩이며 BCa는 아닙니다.'),
+ 'kmeans':('Select numeric feature columns, cluster count and seed. Uses raw feature scales, Euclidean distance and ten restarts; scale features appropriately. Plot axes show selected original features.','숫자 변수 열·군집 수·시드를 선택합니다. 원래 척도의 유클리드 거리와 10회 초기화를 사용하므로 변수 척도를 확인하세요. 그래프 축은 선택한 원래 변수입니다.'),
+ 'multinomial':('Choose numeric category response and predictors. Smallest category is the reference.','숫자 범주 반응 열과 설명변수를 선택합니다. 가장 작은 범주가 기준입니다.'),
+ 'ordinal':('Choose ordered numeric category response and predictors. Category order follows numeric order; proportional odds are assumed.','순서가 있는 숫자 범주 반응 열과 설명변수를 선택합니다. 숫자 순서를 사용하며 비례오즈를 가정합니다.'),
+ 'testpower':('Set effect size, sample size, design, significance level and alternative. n is per group for independent samples, number of pairs for paired data.','효과크기·표본수·연구 설계·유의수준·대립가설을 설정합니다. n은 독립 표본의 그룹별 수 또는 대응 표본의 쌍 수입니다.'),
+ 'samplesize':('Set effect size and target power before collecting data. Returned n is per group or the number of pairs, according to the selected design.','자료 수집 전에 효과크기·목표 검정력을 설정합니다. 산출된 n은 설계에 따라 그룹별 수 또는 대응 쌍 수입니다.'),
  'pca':('Choose numeric feature columns, components and sample-SD standardization or centering only. Selected rows must be complete. Scree plot includes all components; score and loading plots use the retained components. Loading arrows show eigenvector coefficients, on separate axes from scores.','숫자 변수 열·주성분 수·표본 표준편차 표준화 또는 중심화를 선택합니다. 선택한 열의 모든 행이 완전해야 합니다. 설명분산 그래프는 모든 주성분을, 점수·로딩 그래프는 유지한 주성분을 표시합니다. 로딩 화살표는 고유벡터 계수이며 점수와 별도 좌표를 사용합니다.'),
  'bayesbootstrap':('Single sample or statistic(B) − statistic(A). Independent columns omit blanks separately; paired columns require complete matching rows and share Dirichlet weights (difference of marginal statistics, not the statistic of row differences). Group/value columns require exactly two labels and complete selected rows; choose which observed group is A. Dirichlet(1,…,1) weights; equal-tailed posterior credible interval, P(difference > 0), P(difference < 0), P(difference = 0) and histogram. Median estimate is the ordinary sample median (average the two middle values for even n); posterior draws use the Lower weighted quantile (smallest value with weighted CDF >= 0.5); variance/SD use population weights. Seed makes draws reproducible.','단일 표본 또는 통계량(B) − 통계량(A)을 분석합니다. 독립 컬럼은 빈 셀을 각각 제외하며, 대응 컬럼은 완전한 같은 행에 공통 Dirichlet 가중치를 적용합니다(각 컬럼 통계량의 차이이며, 행별 차이의 통계량과 다릅니다). 그룹·값 컬럼은 두 그룹과 완전한 선택 행이 필요하며 먼저·둘째로 나온 그룹 중 A를 선택합니다. Dirichlet(1,…,1) 가중치·등꼬리 사후 구간·P(차이 > 0)·P(차이 < 0)·P(차이 = 0)·히스토그램. 중앙값 estimate는 일반 표본 중앙값(짝수 표본은 가운데 두 값의 평균)이고 사후추출은 Lower weighted quantile(가중 누적확률이 0.5 이상인 최소값), 분산·SD는 모집단 가중치 기준이며 시드로 재현합니다.'),
  'bayescompare':('Independent groups; B - A. Blank cells are omitted separately in each selected column, so sample sizes may differ. Choose proper NIG priors in your measurement units. BF uses the H1-conditioned point null, not the default Cauchy t-test. Simulation intervals and MCSE are labeled.','독립 두 집단; 차이는 B - A. 선택한 각 열의 빈 셀은 독립적으로 제외하므로 표본수가 달라도 됩니다. 측정 단위에 맞게 NIG 사전분포를 지정하세요. BF는 H1을 조건부 제한한 점귀무 모형 기준이며 기본 Cauchy t 검정과 다릅니다. 시뮬레이션 구간·MCSE를 표시합니다.'),
@@ -167,9 +230,10 @@ for item in schema:
         item['helpKo'] += ' ' + extra_ko
     arguments=ast.parse(item['example'],mode='eval').body.args
     first=literal(arguments[0])
-    if item['id'] in ('padjust','bayesproportion','bayesmean','bayesrate','bayesbootstrap'): rows=[[v] for v in first]
-    elif item['id'] in ('levene','bartlett','kstest','bayescompare'):
-        samples=[literal(arg) for arg in (arguments[:2] if item['id']=='bayescompare' else arguments)]; rows=[[sample[i] if i<len(sample) else '' for sample in samples] for i in range(max(map(len,samples)))]
+    if item['input']=='none': rows=[]
+    elif item['id'] in ('padjust','bayesproportion','bayesmean','bayesrate','bayesbootstrap','bootstrapci'): rows=[[v] for v in first]
+    elif item['id'] in ('levene','bartlett','kstest','bayescompare','cohend','eta2'):
+        samples=[literal(arg) for arg in (arguments[:2] if item['id'] in ('bayescompare','cohend') else arguments)]; rows=[[sample[i] if i<len(sample) else '' for sample in samples] for i in range(max(map(len,samples)))]
     elif item['id']=='logrank': rows=[r+[i+1] for i,arg in enumerate(arguments) for r in literal(arg)]
     else: rows=first
     item['exampleRows']=[[str(v) for v in row] for row in rows]
@@ -179,6 +243,25 @@ for item in schema:
             if choice['id']!='auto': choice['when']={'family':links[choice['id']]}
 (ROOT/'tests/fixtures').mkdir(exist_ok=True)
 cases=[
+ dict(id='cohend',rows=[['s1','Pre','10','unused'],['s2','Pre','20',''],['s2','Post','24',''],['s1','Post','13','']],settings=dict(grouping='groups',group='1',value='2',firstGroup='Pre',secondGroup='Post',design='paired',matching='subject',subject='0'),expected='cohend([10,20],[13,24],paired)'),
+ dict(id='bayescompare',rows=[['unused','B','4'],['x','A','2'],['y','B','6'],['z','A','3']],settings=dict(grouping='groups',group='1',value='2',firstGroup='A',secondGroup='B'),expected='bayescompare([2,3],[4,6],equal,0,0.01,2,1,0.95,20000,0)'),
+ dict(id='kstest',rows=[['unused','B','4'],['x','A','2'],['y','B','6'],['z','A','3']],settings=dict(grouping='groups',group='1',value='2',firstGroup='A',secondGroup='B'),expected='kstest([2,3],[4,6])'),
+ dict(id='friedman',rows=[['s1','A','1'],['s2','B','5'],['s1','C','3'],['s2','A','4'],['s1','B','2'],['s2','C','6']],settings=dict(grouping='groups',group='1',value='2',matching='subject',subject='0'),expected='friedman([[1,2,3],[4,5,6]])'),
+ dict(id='repeatedanova',rows=[['s1','A','1'],['s2','B','5'],['s1','C','3'],['s2','A','4'],['s1','B','2'],['s2','C','6']],settings=dict(grouping='groups',group='1',value='2',matching='subject',subject='0'),expected='repeatedanova([[1,2,3],[4,5,6]],1)'),
+ dict(id='bayesbootstrap',rows=[['s1','Pre','10'],['s2','Pre','20'],['s2','Post','24'],['s1','Post','13']],settings=dict(layout='groups',group='1',value='2',firstGroup='Pre',secondGroup='Post',comparison='paired',matching='subject',subject='0'),expected='bayesbootstrap([10,20],[13,24],mean,0.95,10000,0,paired)'),
+ dict(id='mcnemar',rows=[['s1','Pre','yes'],['s2','Pre','no'],['s2','Post','yes'],['s1','Post','yes']],settings=dict(layout='groups',group='1',value='2',firstGroup='Pre',secondGroup='Post',matching='subject',subject='0'),expected='mcnemar([[1,0],[1,0]],exact)'),
+ dict(id='twowayanova',rows=[['2','Control','Early','unused'],['4','Control','Late',''],['5','Drug','Early',''],['8','Drug','Late','']],settings=dict(factorA='1',factorB='2',response='0'),expected='twowayanova([[1,1,2],[1,2,4],[2,1,5],[2,2,8]],1)'),
+ dict(id='twowayanova',rows=[['2','4','5','8'],['3','6','7','9']],settings=dict(layout='columns'),expected='twowayanova([[1,1,2],[1,1,3],[1,2,4],[1,2,6],[2,1,5],[2,1,7],[2,2,8],[2,2,9]],1)'),
+ dict(id='linearmodel',rows=[['2','Control','20','unused'],['4','Drug','30','x']],settings=dict(response='0',predictors='1,2',categorical='1',order='1',ssType='2',coding='treatment'),expected='linearmodel([[1,20,2],[2,30,4]],[1],1,2,treatment)'),
+ dict(id='testpower',rows=[],settings=dict(design='paired',effect='0.8',n='24',tail='greater'),expected='testpower(0.8,24,0.05,paired,greater)'),
+ dict(id='samplesize',rows=[],settings=dict(design='onesample',power='0.9',tail='less'),expected='samplesize(0.5,0.9,0.05,onesample,less)'),
+ dict(id='bootstrapci',rows=[['A','1'],['B','3'],['C','5']],settings=dict(column='1',statistic='median',level='0.9',samples='500',seed='7'),expected='bootstrapci([1,3,5],median,0.9,500,7)'),
+ dict(id='cohend',rows=[['A','4','1'],['B','7','2']],settings=dict(first='2',second='1',design='paired'),expected='cohend([1,2],[4,7],paired)'),
+ dict(id='eta2',rows=[['B','4'],['A','1'],['B','8'],['A','2']],settings=dict(grouping='groups',group='0',value='1'),expected='eta2([4,8],[1,2])'),
+ dict(id='kmeans',rows=[['A','1','9'],['B','2','8']],settings=dict(columns='2,1',clusters='2',seed='7'),expected='kmeans([[9,1],[8,2]],2,7)'),
+ dict(id='ordinal',rows=[['2','A','7'],['1','B','4']],settings=dict(response='0',predictors='2'),expected='ordinal([[7,2],[4,1]])'),
+ dict(id='multinomial',rows=[['2','A','7'],['1','B','4']],settings=dict(response='0',predictors='2'),expected='multinomial([[7,2],[4,1]])'),
+ dict(id='crossvalidate',rows=[['2','A','7'],['1','B','4'],['4','C','8']],settings=dict(response='0',predictors='2',folds='2'),expected='crossvalidate([[7,2],[4,1],[8,4]],2,0)'),
  dict(id='bayesbootstrap',rows=[['1','4'],['2','5'],['','6']],settings=dict(layout='columns',first='0',second='1'),expected='bayesbootstrap([1,2],[4,5,6],mean,0.95,10000,0,independent)'),
  dict(id='bayesbootstrap',rows=[['1','4'],['2','5']],settings=dict(layout='columns',comparison='paired',statistic='median'),expected='bayesbootstrap([1,2],[4,5],median,0.95,10000,0,paired)'),
  dict(id='bayesbootstrap',rows=[['B','4'],['A','1'],['B','5'],['A','2']],settings=dict(layout='groups',order='reverse'),expected='bayesbootstrap([1,2],[4,5],mean,0.95,10000,0,independent)'),
@@ -251,10 +334,15 @@ for language in ('','_ko'):
     path=ROOT/f'app/src/main/assets/catalog_help{language}.md'
     text=path.read_text(encoding='utf-8').split('\n## Advanced statistics')[0].split('\n## 고급 통계')[0]
     heading='고급 통계' if language else 'Advanced statistics'
-    intro=('통계 화면의 고급 분석에서 보정 방법, 자료 열, 그룹, 설명변수, 검정 옵션을 직접 선택합니다. 현재 데이터·예제·분석 식을 전환할 수 있습니다. 표 분석은 선택한 열의 빈 셀을 자동 삭제하지 않습니다. impute는 빈 셀을 NA로 변환합니다. 모든 고급 분석은 64비트 수치 계산입니다.' if language else 'In Statistics, Advanced analysis provides controls for correction methods, column roles, groups, predictors and test options. Switch between current data, examples and an editable expression. Table analyses reject blank selected cells; impute converts them to NA. All advanced analyses use binary64 numerics.')
+    intro=('통계 화면에서 결측치 대체는 데이터 준비, 분포·분산 검정과 그룹 비교·효과크기·다중검정은 일반 분석, 요인 선형회귀·일반화·혼합 회귀와 교차검증은 회귀 메뉴에 있습니다. 고급 분석은 베이지안 추론 → 재표집 → 다변량 분석 → 생존분석 → 검정력·표본수 순서입니다. 현재 데이터·예제·분석 식을 전환할 수 있습니다. 대응 분석은 완전한 쌍을 사용하며 대상 ID로 연결할 수 있습니다. 반복측정의 열별 입력은 불완전한 행을 거부합니다. impute는 빈 셀을 NA로 변환합니다. 이 분석들은 64비트 수치 계산입니다.' if language else 'In Statistics, missing-value imputation belongs to Data preparation; distribution/variance tests, group comparisons, effect sizes and multiple testing belong to General analysis; factorial linear, generalized/mixed regression and cross-validation belong to Regression. Advanced analysis is ordered as Bayesian inference, Resampling, Multivariate analysis, Survival analysis, then Power & sample size. Switch between current data, examples and an editable expression. Paired comparisons use complete pairs and support subject-ID matching. Wide repeated-measures inputs reject incomplete rows; impute converts them to NA. These analyses use binary64 numerics.')
     text+='\n## '+heading+'\n\n'+intro+'\n\n'
+    previous_group = None
     for item in schema:
-        text+=f"`{item['id']}` — {item['helpKo'] if language else item['help']}\nExample: {item['example']}\n\n"
+        group = (item['section'], item['group'])
+        if group != previous_group:
+            text += '### ' + (item['groupKo'] if language else item['group']) + '\n\n'
+            previous_group = group
+        text+=f"`{item['id']}` — {USES[item['id']][int(bool(language))]} {item['helpKo'] if language else item['help']}\nExample: {item['example']}\n\n"
     text+=('베이지안 분석은 독립 관측과 지정한 우도·적정 공액 사전분포를 사용하며 구간은 등꼬리 사후확률 구간입니다. Bayes factor는 가설의 사후확률이 아니며 사전분포에 영향을 받습니다. 계산 근거: ' if language else 'Bayesian analyses assume independent observations and the stated likelihood with proper conjugate priors; intervals are equal-tailed posterior credible intervals. A Bayes factor is not a posterior hypothesis probability and depends on the prior. References: ')
     text+='[Stanford conjugate priors](https://web.stanford.edu/class/stats200/Lecture21.pdf), [normal-inverse-gamma analysis](https://treese41528.github.io/ComputationalDataScience/Website/part3_bayesian/chapter5/ch5_2-prior-distributions.html).\n\n'
     text+=('베이지안 부트스트랩은 관측값 위의 Dirichlet(1,…,1) 가중치와 등꼬리 사후 구간을 사용하며 공액 모수 모형의 사전을 사용하지 않습니다. 계산 근거: ' if language else 'The Bayesian bootstrap uses Dirichlet(1,…,1) weights on observed values and equal-tailed posterior intervals, rather than a conjugate parametric prior. Reference: ')
@@ -264,4 +352,8 @@ for language in ('','_ko'):
     text+='\nMixed-model profile/bootstrap: [lme4 confidence intervals](https://lme4.github.io/lme4/reference/confint.merMod.html). GEE covariance: [statsmodels covariance options](https://www.statsmodels.org/stable/generated/statsmodels.genmod.generalized_estimating_equations.GEE.fit.html).\n'
     text+='\nGLMM: [lme4 adaptive quadrature reference](https://lme4.github.io/lme4/reference/glmer.html).\n'
     text+='\nBayesian Two-Sample Comparison: [Savage-Dickey density ratio and compatible null priors](https://statproofbook.github.io/P/bf-sddr.html).\n'
+    text+='\nFactorial linear models: [Type II/III ANOVA and sum contrasts](https://www.statsmodels.org/stable/examples/notebooks/generated/interactions_anova.html). Welch / Games–Howell: [SciPy unequal-variance ANOVA](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.f_oneway.html), [studentized range](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.studentized_range.html). Friedman: [tie-corrected repeated rank test](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.friedmanchisquare.html).\n'
+    text+=('\n세트 사후비교: Kruskal–Wallis는 Mann–Whitney 쌍별 검정 + Holm(별도 쌍 순위이며 Dunn 검정이 아님), Friedman은 대응 Wilcoxon + Holm, 반복측정 ANOVA는 대응 t + Holm을 자동 제공합니다. 반복측정은 대상별 대비의 정규성·Q–Q plot도 점검합니다. 주 검정과 사후비교는 서로 다른 질문에 답합니다.\n' if language else '\nPost-hoc suites: Kruskal–Wallis includes pairwise Mann–Whitney + Holm (separately ranked pairs, not Dunn); Friedman includes paired Wilcoxon + Holm; repeated-measures ANOVA includes paired t + Holm and normality/Q–Q checks on within-subject contrasts. Global and pairwise tests answer different questions.\n')
+    text=enrich_help(text,bool(language))
+    text+='\nTest selection and diagnostics: [NIST t tests](https://www.itl.nist.gov/div898/handbook/eda/section3/eda353.htm), [Levene/Brown–Forsythe](https://www.itl.nist.gov/div898/handbook/eda/section3/eda35a.htm), [normal probability plots](https://www.itl.nist.gov/div898/handbook/eda/section3/normprpl.htm), [Wilcoxon assumptions](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.wilcoxon.html).\n'
     path.write_text(text,encoding='utf-8')

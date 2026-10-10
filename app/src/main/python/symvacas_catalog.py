@@ -6,6 +6,7 @@ x, y, z, t, u, v, w, s = sp.symbols("x y z t u v w s")
 pi = sp.pi
 true, false = sp.true, sp.false
 left, right, both, linear = "left", "right", "both", "linear"
+student, welch = "student", "welch"
 real, complex, integer = "real", "complex", "integer"
 begin, end = "begin", "end"
 NA = sp.Symbol("NA")
@@ -31,7 +32,7 @@ stats mean median variance stdev quartiles regression covariance correlation qty
 normpdf normalcdf normcdf normalpdf invnorm tpdf tcdf invt chi2pdf chi2cdf fpdf fcdf binompdf binomcdf poissonpdf poissoncdf geometpdf geometcdf
 exppdf expcdf unifpdf unifcdf gammapdf gammacdf betapdf betacdf lognormpdf lognormcdf
 hgeompdf hgeomcdf nbinompdf nbinomcdf weibullpdf weibullcdf cauchypdf cauchycdf invcauchy
-ttest ttest2 ttestpaired ztest ztest2 chi2test chi2independence fisherexact anova tukey shapiro wilcoxon mannwhitney kruskal tinterval zinterval
+ttest ttest2 ttestpaired ztest ztest2 chi2test chi2independence fisherexact anova welchanova tukey gameshowell shapiro wilcoxon mannwhitney kruskal tinterval zinterval
 tvmfv tvmpv tvmpmt tvmn tvmrate npv irr amort cagr
 """.split())
 _functions = {}

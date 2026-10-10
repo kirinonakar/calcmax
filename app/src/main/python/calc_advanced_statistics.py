@@ -18,6 +18,7 @@ from calc_advanced_learning import calculate as learning
 from calc_advanced_bayesian import calculate as bayesian
 from calc_advanced_two_sample import calculate as two_sample
 from calc_advanced_ancova import calculate as ancova
+from calc_advanced_factorial import calculate as factorial
 from calc_advanced_glm import calculate as glm
 
 
@@ -40,6 +41,9 @@ _ANALYSES = {
     'cox': (1, 4, survival),
     'survivalanalysis': (1, 5, survival),
     'repeatedanova': (1, 2, longitudinal),
+    'friedman': (1, 1, inference),
+    'twowayanova': (1, 2, factorial),
+    'linearmodel': (1, 5, factorial),
     'mixedmodel': (1, 4, longitudinal),
     'glmm': (1, 7, glmm),
     'gee': (1, 5, longitudinal),

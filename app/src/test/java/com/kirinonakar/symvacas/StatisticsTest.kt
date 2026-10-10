@@ -136,7 +136,7 @@ class StatisticsTestCommandsTest {
             assertEquals("ttestpaired(0,[10,20,30],[15,20,25])", command("t test", rows, "xy", "paired"))
             assertEquals("ztest2(0,2,3,[10,20,30],[15,20,25])", statisticsTestCommand("z test",rows,"xy","x-y","Two-sided","0","2","95","3"))
             assertEquals("chi2independence([10,20,30],[15,20,25],1)", command("χ² test", rows, "xy"))
-            assertEquals("anova([10,20,30],[15,20,25])", command("ANOVA", rows, "xy"))
+            assertEquals("welchanova([10,20,30],[15,20,25])", command("ANOVA", rows, "xy"))
         }
         run { // insufficientOrInvalidDataCannotRun
             assertNull(command("t test", listOf(listOf("1"))))
@@ -153,7 +153,7 @@ class StatisticsTestCommandsTest {
             assertEquals(listOf("control" to listOf("1","2","3"),"treated" to listOf("4","5","6")),statisticsGroupedValues(rows))
             fun grouped(test:String,first:String="control",second:String="treated")=
                 statisticsTestCommand(test,rows,"xy","x","Two-sided","0","2","95","3","group-value",first,second)
-            assertEquals("anova([1,2,3],[4,5,6])",grouped("ANOVA"))
+            assertEquals("welchanova([1,2,3],[4,5,6])",grouped("ANOVA"))
             assertEquals("tukey([1,2,3],[4,5,6])",grouped("Tukey HSD"))
             assertEquals("ttest2(0,[1,2,3],[4,5,6])",grouped("t test"))
             assertEquals("ztest2(0,2,3,[1,2,3],[4,5,6])",grouped("z test"))

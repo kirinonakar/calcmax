@@ -24,32 +24,42 @@ import com.kirinonakar.symvacas.ui.theme.LocalInstrument
     var sigmaY by rememberSaveable {mutableStateOf("2")}
     var level by rememberSaveable {mutableStateOf("95")}
     var grouping by rememberSaveable {mutableStateOf("Columns")}
+    var groupColumns by rememberSaveable {mutableStateOf("auto")}
     var firstGroup by rememberSaveable {mutableStateOf("")}
     var secondGroup by rememberSaveable {mutableStateOf("")}
     var firstColumn by rememberSaveable {mutableStateOf("x")}
     var secondColumn by rememberSaveable {mutableStateOf("y")}
     var yatesCorrection by rememberSaveable {mutableStateOf(true)}
+    var anovaMethod by rememberSaveable {mutableStateOf("Welch (unequal variances)")}
+    var groupColumn by rememberSaveable {mutableStateOf("x")}
+    var valueColumn by rememberSaveable {mutableStateOf("y")}
+    var subjectColumn by rememberSaveable {mutableStateOf("x")}
+    var matching by rememberSaveable {mutableStateOf("Row order within each group")}
+    var pairedComparison by rememberSaveable {mutableStateOf(false)}
+    var independentMethod by rememberSaveable {mutableStateOf("Welch (unequal variances)")}
     val dataColumns=statisticsColumnNames(kind)
     val columnLabels=statisticsColumnLabels(data,kind)
+    val groupedMode=dataColumns.size>1&&grouping in listOf("Group / value columns","x=group, y=value")
+    val groupIndex=dataColumns.indexOf(groupColumn).coerceAtLeast(0)
+    val valueIndex=dataColumns.indexOf(valueColumn).takeIf {it>=0} ?: minOf(1,dataColumns.lastIndex)
+    val subjectIndex=dataColumns.indexOf(subjectColumn).coerceAtLeast(0)
     val categorySelection=test in listOf("χ² test","Fisher exact")&&dataColumns.size>1
     val categoryFirst=firstColumn.takeIf {it in dataColumns} ?: dataColumns.first()
     val categorySecond=secondColumn.takeIf {it in dataColumns&&it!=categoryFirst} ?: dataColumns.firstOrNull {it!=categoryFirst}.orEmpty()
-    val firstIndex=dataColumns.indexOf(categoryFirst)
-    val secondIndex=dataColumns.indexOf(categorySecond)
+    val firstIndex=if(groupedMode)groupIndex else dataColumns.indexOf(categoryFirst)
+    val secondIndex=if(groupedMode)valueIndex else dataColumns.indexOf(categorySecond)
     val columnOptions=when {
         kind=="list"->listOf("x")
-        kind!="xy"->dataColumns
-        test=="t test"->listOf("x","y","x-y","paired")
-        test=="z test"->listOf("x","y","x-y")
-        else->listOf("x","y")
+        test=="t test"->dataColumns+listOf("x-y","paired")
+        test=="z test"->dataColumns+"x-y"
+        else->dataColumns
     }
     val activeColumn=column.takeIf {it in columnOptions} ?: "x"
     fun values(index:Int)=rows.mapNotNull {it.getOrNull(index)?.trim()?.takeIf(String::isNotBlank)}
     val x=values(0)
     val y=if(kind!="list")values(1) else null
     val z=if(kind=="xyz")values(2) else null
-    val groupedMode=kind=="xy"&&grouping=="x=group, y=value"&&test!="Wilcoxon"&&!categorySelection
-    val groupedValues=if(groupedMode)statisticsGroupedValues(rows) else emptyList()
+    val groupedValues=if(groupedMode&&!categorySelection)statisticsGroupedValues(rawRows,groupIndex,valueIndex) else emptyList()
     val categoricalPairs=if(categorySelection)statisticsCategoryPairs(rawRows,firstIndex,secondIndex) else emptyList()
     val numericCategories=categoricalPairs.all {it.first.toBigDecimalOrNull()!=null&&it.second.toBigDecimalOrNull()!=null}
     val xCategories=statisticsCategories(categoricalPairs.map {it.first},numericCategories)
@@ -61,34 +71,76 @@ import com.kirinonakar.symvacas.ui.theme.LocalInstrument
     val rankFirst=firstGroup.takeIf {it in rankColumns} ?: "x"
     val rankSecond=secondGroup.takeIf {it in rankColumns&&it!=rankFirst} ?: rankColumns.first {it!=rankFirst}
     val sample=if(groupedMode)groupedValues.firstOrNull {it.first==activeFirst}?.second else values(dataColumns.indexOf(activeColumn).coerceAtLeast(0))
-    val pairCount=if(categorySelection)categoricalPairs.size else if(kind!="list")rows.count {it.getOrNull(0)?.isNotBlank()==true&&it.getOrNull(1)?.isNotBlank()==true} else 0
-    val multiColumnTest=test in listOf("χ² test","Fisher exact","ANOVA","Tukey HSD","Mann–Whitney","Kruskal–Wallis")||test=="Wilcoxon"&&kind!="list"
-    val groupComparison=test in listOf("ANOVA","Tukey HSD","Kruskal–Wallis")
+    val pairedPlan=runCatching {statisticsComparisonData(rawRows,mapOf("grouping" to "groups","group" to groupIndex.toString(),"value" to valueIndex.toString(),"firstGroup" to activeFirst,"secondGroup" to activeSecond,"matching" to if(matching=="Subject ID")"subject" else "order","subject" to subjectIndex.toString()),paired=true)}
+    val pairCount=if(categorySelection)categoricalPairs.size else if(groupedMode)pairedPlan.getOrNull()?.matrix?.size ?: 0 else if(test=="Wilcoxon"||test=="t test"&&activeColumn=="paired")statisticsCategoryPairs(rows,dataColumns.indexOf(rankFirst),dataColumns.indexOf(rankSecond)).size else if(kind!="list")rows.count {it.getOrNull(0)?.isNotBlank()==true&&it.getOrNull(1)?.isNotBlank()==true} else 0
+    val multiColumnTest=test in listOf("χ² test","Fisher exact","ANOVA","Tukey HSD","Games–Howell","Mann–Whitney","Kruskal–Wallis")||test=="Wilcoxon"&&kind!="list"
+    val selectedGroupColumns=if(groupColumns=="auto")dataColumns.indices.toList() else groupColumns.split(',').mapNotNull(String::toIntOrNull).filter {it in dataColumns.indices}
+    val groupComparison=test in listOf("ANOVA","Tukey HSD","Games–Howell","Kruskal–Wallis")
     val groupedComparison=groupedMode&&groupComparison
     val groupedTwoSample=groupedMode&&test in listOf("t test","z test","Mann–Whitney")
-    val twoSample=groupedTwoSample||!groupedMode&&kind=="xy"&&activeColumn=="x-y"&&test in listOf("t test","z test")
-    val pairedTest=kind!="list"&&(test=="Wilcoxon"||kind=="xy"&&!groupedMode&&activeColumn=="paired"&&test=="t test")
-    val rankSelection=test=="Mann–Whitney"&&!groupedMode&&kind!="list"
-    val command=statisticsTestCommand(test,if(categorySelection)rawRows else rows,kind,activeColumn,tail,mu0,sigma,level,sigmaY,if(groupedMode)"group-value" else "columns",if(categorySelection)categoryFirst else if(rankSelection)rankFirst else activeFirst,if(categorySelection)categorySecond else if(rankSelection)rankSecond else activeSecond,yatesCorrection)
+    val twoSample=groupedTwoSample||!groupedMode&&dataColumns.size>1&&activeColumn=="x-y"&&test in listOf("t test","z test")
+    val pairedTest=kind!="list"&&(test=="Wilcoxon"||groupedMode&&pairedComparison&&test=="t test"||dataColumns.size>1&&!groupedMode&&activeColumn=="paired"&&test=="t test")
+    val rankSelection=!groupedMode&&kind!="list"&&(test in listOf("Mann–Whitney","Wilcoxon")||test in listOf("t test","z test")&&activeColumn in listOf("x-y","paired"))
+    val command=statisticsTestCommand(test,if(categorySelection||groupedMode)rawRows else rows,kind,activeColumn,tail,mu0,sigma,level,sigmaY,if(groupedMode)"group-value" else "columns",if(categorySelection)categoryFirst else if(rankSelection)rankFirst else activeFirst,if(categorySelection)categorySecond else if(rankSelection)rankSecond else activeSecond,yatesCorrection,if(anovaMethod.startsWith("Welch"))"welch" else "classic",groupIndex,valueIndex,if(matching=="Subject ID")"subject" else "order",subjectIndex,pairedComparison,if(independentMethod.startsWith("Welch"))"welch" else "student",groupColumns)
     val categoryLabels=if(categorySelection)statisticsCategoryLabels(categoricalPairs,columnLabels[firstIndex],columnLabels[secondIndex]) else emptyMap()
+    val sampleNames=when {
+        groupedComparison->groupNames
+        groupedTwoSample||groupedMode&&test=="Wilcoxon"->listOf(activeFirst,activeSecond)
+        groupedMode->listOf(activeFirst)
+        rankSelection->listOf(rankFirst,rankSecond).map {columnLabels[dataColumns.indexOf(it)]}
+        groupComparison->selectedGroupColumns.map {columnLabels[it]}
+        twoSample||pairedTest->columnLabels.take(2)
+        else->listOf(columnLabels[dataColumns.indexOf(activeColumn).coerceAtLeast(0)])
+    }
+    val termLabels=categoryLabels+sampleNames.mapIndexed {i,label->"sample:${i+1}" to label}.toMap()
     HorizontalDivider()
-    StatisticsSectionToggle("Analyze current data",expanded,"statistics-analysis-toggle") {expanded=!expanded}
+    StatisticsSectionToggle("General analysis",expanded,"statistics-analysis-toggle") {expanded=!expanded}
     if(!expanded)return
     Text(if(kind.startsWith("columns:"))tr("Blank cells are omitted. Group comparisons use all columns.") else when(kind){"xy"->"Blank cells are omitted. Paired, χ², and Fisher tests use rows with both values; independent tests use each column separately. Fisher requires exactly two categories per column.";"xyz"->"Blank cells are omitted. ANOVA and Tukey HSD use x, y, and z as three independent groups.";else->"Blank cells are omitted from tests. Choose x,y or x,y,z data for group comparisons."},fontSize=12.sp,color=c.muted)
     Column(verticalArrangement=Arrangement.spacedBy(2.dp)) {
-        Choices(listOf("t test","z test","χ² test","Fisher exact","ANOVA","Tukey HSD","Wilcoxon","Mann–Whitney","Kruskal–Wallis","Shapiro–Wilk","t interval","z interval"),test,{test=it})
-        if(kind=="xy"&&test!="Wilcoxon"&&!categorySelection)Choices(listOf("Columns","x=group, y=value"),grouping,{grouping=it})
-        if(categorySelection) {
+        Choices(listOf("t test","z test","χ² test","Fisher exact","ANOVA","Tukey HSD","Games–Howell","Wilcoxon","Mann–Whitney","Kruskal–Wallis","Shapiro–Wilk","t interval","z interval"),test,{test=it})
+        if(test=="ANOVA") {
+            StatisticsSelectionTitle("ANOVA method")
+            Choices(listOf("Welch (unequal variances)","Classic (equal variances)"),anovaMethod,{anovaMethod=it})
+            Text(tr(if(anovaMethod.startsWith("Welch"))"Set analysis: Welch ANOVA + Games–Howell + assumptions" else "Set analysis: ANOVA + Tukey–Kramer + assumptions"),fontSize=11.sp,color=c.muted)
+        }
+        if(test=="t test"&&(groupedMode&&!pairedComparison||!groupedMode&&activeColumn=="x-y")) {
+            StatisticsSelectionTitle("Independent t method")
+            Choices(listOf("Welch (unequal variances)","Student (equal variances)"),independentMethod,{independentMethod=it})
+        }
+        if(dataColumns.size>1)Choices(listOf("Columns","Group / value columns"),if(groupedMode)"Group / value columns" else "Columns",{grouping=it})
+        if(groupComparison&&!groupedMode) {
+            StatisticsSelectionTitle("Group columns")
+            Row(Modifier.horizontalScroll(rememberScrollState())){columnLabels.forEachIndexed {index,label->Row(verticalAlignment=Alignment.CenterVertically){
+                Checkbox(index in selectedGroupColumns,{checked->groupColumns=(if(checked)selectedGroupColumns+index else selectedGroupColumns-index).sorted().joinToString(",")});Text(label,fontSize=12.sp)
+            }}}
+        }
+        if(groupedMode) {
+            StatisticsSelectionTitle("Group column");Choices(columnLabels,columnLabels[groupIndex],{groupColumn=dataColumns[columnLabels.indexOf(it)]},translate=false)
+            StatisticsSelectionTitle("Value column");Choices(columnLabels,columnLabels[valueIndex],{valueColumn=dataColumns[columnLabels.indexOf(it)]},translate=false)
+            if(test=="t test")Choices(listOf("Independent samples","Paired samples"),if(pairedComparison)"Paired samples" else "Independent samples",{pairedComparison=it=="Paired samples"})
+            if(test=="Wilcoxon"||test=="t test"&&pairedComparison) {
+                StatisticsSelectionTitle("Pair matching");Choices(listOf("Row order within each group","Subject ID"),matching,{matching=it})
+                if(matching=="Subject ID"){StatisticsSelectionTitle("Subject column");Choices(columnLabels,columnLabels[subjectIndex],{subjectColumn=dataColumns[columnLabels.indexOf(it)]},translate=false)}
+                else Text(tr("Row order pairing requires the same subject order in each group. Missing values require subject-ID matching."),fontSize=11.sp,color=c.muted)
+                pairedPlan.exceptionOrNull()?.message?.let {Text(tr(it),fontSize=11.sp,color=MaterialTheme.colorScheme.error)}
+            }
+        }
+        if(!groupedMode&&test in listOf("t test","z test")&&dataColumns.size>1){
+            val options=columnOptions.map {name->dataColumns.indexOf(name).takeIf {it>=0}?.let {columnLabels[it]} ?: tr(name)}
+            StatisticsSelectionTitle("Comparison / sample");Choices(options,options[columnOptions.indexOf(activeColumn).coerceAtLeast(0)],{column=columnOptions[options.indexOf(it)]},translate=false)
+        }
+        if(categorySelection&&!groupedMode) {
             StatisticsSelectionTitle("First column")
             Choices(columnLabels,columnLabels[firstIndex],{firstColumn=dataColumns[columnLabels.indexOf(it)]},translate=false)
             StatisticsSelectionTitle("Second column")
             Choices(columnLabels.filterIndexed {index,_->index!=firstIndex},columnLabels[secondIndex],{secondColumn=dataColumns[columnLabels.indexOf(it)]},translate=false)
         } else if(rankSelection) {
             StatisticsSelectionTitle("First group")
-            Choices(rankColumns,rankFirst,{firstGroup=it},translate=false)
+            Choices(rankColumns.map {columnLabels[dataColumns.indexOf(it)]},columnLabels[dataColumns.indexOf(rankFirst)],{firstGroup=dataColumns[columnLabels.indexOf(it)]},translate=false)
             StatisticsSelectionTitle("Second group")
-            Choices(rankColumns.filter {it!=rankFirst},rankSecond,{secondGroup=it},translate=false)
-        } else if(groupedMode&&groupedTwoSample) {
+            Choices(rankColumns.filter {it!=rankFirst}.map {columnLabels[dataColumns.indexOf(it)]},columnLabels[dataColumns.indexOf(rankSecond)],{secondGroup=dataColumns[columnLabels.indexOf(it)]},translate=false)
+        } else if(groupedMode&&(groupedTwoSample||test=="Wilcoxon")) {
             StatisticsSelectionTitle("First group")
             Choices(groupNames,activeFirst,{firstGroup=it},translate=false)
             StatisticsSelectionTitle("Second group")
@@ -96,11 +148,14 @@ import com.kirinonakar.symvacas.ui.theme.LocalInstrument
         } else if(groupedMode&&!multiColumnTest) {
             StatisticsSelectionTitle("Group")
             Choices(groupNames,activeFirst,{firstGroup=it},translate=false)
-        } else if(!groupedMode&&kind!="list"&&!multiColumnTest)Choices(columnOptions,activeColumn,{column=it})
+        } else if(!groupedMode&&kind!="list"&&!multiColumnTest) {
+            val names=columnOptions.map {name->dataColumns.indexOf(name).takeIf {it>=0}?.let {columnLabels[it]} ?: tr(name)}
+            Choices(names,names[columnOptions.indexOf(activeColumn).coerceAtLeast(0)],{column=columnOptions[names.indexOf(it)]},translate=false)
+        }
         if(categorySelection)Text(tr("Only complete rows in the two selected columns are analyzed."),fontSize=11.sp,color=c.muted)
-        else if(groupedMode)Text("For t/z tests, compare two groups of y values. χ² and Fisher use each row's x/y categories; ANOVA and Tukey use all groups.",fontSize=11.sp,color=c.muted)
-        else if(test=="Wilcoxon"&&pairedTest)Text(tr("Wilcoxon uses x−y for complete pairs."),fontSize=11.sp,color=c.muted)
-        else if(twoSample||pairedTest)Text(if(pairedTest)"Paired t test uses x−y for rows with both values." else "Independent samples compare the means of x and y.",fontSize=11.sp,color=c.muted)
+        else if(groupedMode)Text(tr("Select group and value columns. Paired analyses use the selected matching rule; ANOVA compares all groups."),fontSize=11.sp,color=c.muted)
+        else if(test=="Wilcoxon"&&pairedTest)Text(sampleNames.joinToString(" − ")+" · "+tr("Complete pairs"),fontSize=11.sp,color=c.muted)
+        else if(twoSample||pairedTest)Text(sampleNames.joinToString(" − ")+" · "+tr(if(pairedTest)"Complete pairs" else "Independent samples"),fontSize=11.sp,color=c.muted)
     }
     if(!multiColumnTest&&test !in listOf("Shapiro–Wilk","Wilcoxon")) {
             Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
@@ -150,16 +205,24 @@ import com.kirinonakar.symvacas.ui.theme.LocalInstrument
         else->"Check the required values and sample size."
     }
     if(command==null)Text(dataStatus,fontSize=12.sp,color=c.muted)
-    else Text("${if(rankSelection)"$rankFirst (${values(rankColumns.indexOf(rankFirst)).size}), $rankSecond (${values(rankColumns.indexOf(rankSecond)).size})" else if(groupedComparison)"${groupedValues.size} groups" else if(groupedTwoSample)"$activeFirst (${sample?.size ?: 0}), $activeSecond (${groupedValues.firstOrNull {it.first==activeSecond}?.second?.size ?: 0})" else if(pairedTest||test=="χ² test"||test=="Fisher exact")"$pairCount pairs" else if(groupComparison) dataColumns.mapIndexed {index,name->"${values(index).size} $name"}.joinToString(", ") else if(multiColumnTest||twoSample)"${x.size} x, ${y?.size ?: 0} y" else "${sample?.size ?: 0} values"} ready",fontSize=12.sp,color=c.muted)
+    else {
+        val counts=if(pairedTest)tr("Complete pairs")+": $pairCount" else sampleNames.mapIndexed {index,name->
+            val count=if(groupedMode)groupedValues.firstOrNull {it.first==name}?.second?.size ?: 0 else if(rankSelection)values(dataColumns.indexOf(if(index==0)rankFirst else rankSecond)).size else if(groupComparison)values(selectedGroupColumns[index]).size else sample?.size ?: 0
+            "$name (n=$count)"
+        }.joinToString(" · ")
+        Text(counts,fontSize=12.sp,color=c.muted)
+        if(groupedMode&&pairedTest&&(pairedPlan.getOrNull()?.omitted ?: 0)>0)Text(tr("Incomplete pairs omitted")+": ${pairedPlan.getOrNull()?.omitted}",fontSize=11.sp,color=c.muted)
+    }
     if(groupedComparison&&test=="Tukey HSD")Text(groupedValues.mapIndexed {index,(name,_)->"${listOf("x","y","z").getOrNull(index) ?: "group ${index+1}"} = $name"}.joinToString(" · "),fontSize=11.sp,color=c.muted)
     if(categorySelection)Text("${columnLabels[firstIndex]}: ${xCategories.joinToString(", ")} · ${columnLabels[secondIndex]}: ${yCategories.joinToString(", ")}",fontSize=11.sp,color=c.muted)
     Row(Modifier.horizontalScroll(rememberScrollState()),verticalAlignment=Alignment.CenterVertically) {
         CalculationButton(if(test.endsWith("interval"))"Compute interval" else "Run test",
             m.busy&&m.calculationAction=="statistics-analysis",m.inputVersion,
             enabled=command!=null&&!m.busy&&!m.regressionBusy,modifier=Modifier.testTag("statistics-run-test"),
-            onCancel={m.cancel()},onClick={command?.let {m.calculationAction="statistics-analysis";m.edit(Editor(it));m.calculate(statisticsTermLabels=categoryLabels)}})
+            onCancel={m.cancel()},onClick={command?.let {m.calculationAction="statistics-analysis";m.edit(Editor(it));m.calculate(statisticsTermLabels=termLabels)}})
         SmallAction("Insert expression"){command?.let {m.edit(Editor(it));m.mode="Scientific/CAS"}}
     }
     statisticsReportFor(m.result,m.resultSource.ifBlank {m.editor.source},statisticsTestAnalyses(test))?.let {StatisticsResultReport(m,it)}
     Text(if(isKorean())"검정의 기본 대립가설은 양측입니다. 신뢰수준은 0.95 또는 95로 입력할 수 있습니다." else "Tests use a two-sided alternative by default. Confidence levels accept 0.95 or 95.",fontSize=11.sp,color=c.muted)
+    AdvancedStatistics(m,data,kind,"tests","More tests & effect sizes")
 }

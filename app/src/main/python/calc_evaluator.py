@@ -840,9 +840,13 @@ class Engine:
                     "lognormpdf", "lognormcdf", "hgeompdf", "hgeomcdf", "nbinompdf", "nbinomcdf", "weibullpdf", "weibullcdf", "cauchypdf", "cauchycdf", "invcauchy"):
             return distribution_value(self, name, a)
         if name in ADVANCED_STATISTICS:
-            return advanced(self, name, a)
-        if name in ("ttest", "ttest2", "ttestpaired", "ztest", "ztest2", "chi2test", "chi2independence", "fisherexact", "anova", "tukey", "shapiro", "wilcoxon", "mannwhitney", "kruskal", "tinterval", "zinterval"):
-            return statistical_test(self, name, a, nodes)
+            result=advanced(self, name, a)
+            self.statistics_inputs=(name,a,nodes)
+            return result
+        if name in ("ttest", "ttest2", "ttestpaired", "ztest", "ztest2", "chi2test", "chi2independence", "fisherexact", "anova", "welchanova", "tukey", "gameshowell", "shapiro", "wilcoxon", "mannwhitney", "kruskal", "tinterval", "zinterval"):
+            result=statistical_test(self, name, a, nodes)
+            self.statistics_inputs=(name,a,nodes)
+            return result
         if name in ("tvmfv", "tvmpv", "tvmpmt", "tvmn", "tvmrate", "npv", "irr", "amort", "cagr"):
             return finance_value(self, name, a, nodes)
         if name in self.functions:

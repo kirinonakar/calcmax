@@ -2,17 +2,17 @@ import {plot,dataBounds} from './plot.js';
 import {numericStatisticsRows,statisticsColumnNames} from './workspace-commands.js';
 import {displayNumber} from './display-format.js';
 import {t} from './i18n.js';
-import {statisticsPlotNumber,violinDensity,beeswarmLayout,statisticsHeatMapData,statisticsCorrelationHeatMap,heatMapColor} from './statistics-plot-data.js';
+import {statisticsPlotGroupingColumn,statisticsPlotNumber,violinDensity,beeswarmLayout,statisticsHeatMapData,statisticsCorrelationHeatMap,heatMapColor} from './statistics-plot-data.js';
 import {clusteredHeatMap} from './statistics-cluster.js';
 import {appendPlotExportButtons} from './svg-export.js';
-export function statisticsPlotSeries(rows,{grouping='columns',columnCount=rows[0]?.length||1}={}){
-  const names=statisticsColumnNames(columnCount);
+export function statisticsPlotSeries(rows,{grouping='columns',columnCount=rows[0]?.length||1,columnNames=statisticsColumnNames(columnCount)}={}){
+  const names=columnNames;
   const number=statisticsPlotNumber;
-  if(!['first','last'].includes(grouping)||columnCount<2){
+  if(statisticsPlotGroupingColumn(grouping,columnCount)<0){
     const numeric=numericStatisticsRows(rows);
     return names.map((label,i)=>({label,values:numeric.map(row=>number(row[i])).filter(n=>n!==null)}));
   }
-  const groupColumn=grouping==='first'?0:columnCount-1,groups=new Map();
+  const groupColumn=statisticsPlotGroupingColumn(grouping,columnCount),groups=new Map();
   for(const row of rows){
     const group=String(row[groupColumn]??'').trim();if(!group)continue;
     if(!groups.has(group))groups.set(group,names.map(()=>[]));
@@ -21,10 +21,10 @@ export function statisticsPlotSeries(rows,{grouping='columns',columnCount=rows[0
   return [...groups].flatMap(([group,samples])=>names.flatMap((name,i)=>i===groupColumn?[]:[{label:columnCount===2?group:`${group} · ${name}`,values:samples[i]}]));
 }
 
-export function statisticsPlotPanels(rows,{grouping='columns',columnCount=rows[0]?.length||1}={}){
-  if(!['first','last'].includes(grouping)||columnCount<2)return [{label:'',series:statisticsPlotSeries(rows,{columnCount})}];
-  const groupColumn=grouping==='first'?0:columnCount-1;
-  return statisticsColumnNames(columnCount).flatMap((label,column)=>column===groupColumn?[]:[{
+export function statisticsPlotPanels(rows,{grouping='columns',columnCount=rows[0]?.length||1,columnNames=statisticsColumnNames(columnCount)}={}){
+  if(statisticsPlotGroupingColumn(grouping,columnCount)<0)return [{label:'',series:statisticsPlotSeries(rows,{columnCount,columnNames})}];
+  const groupColumn=statisticsPlotGroupingColumn(grouping,columnCount);
+  return columnNames.flatMap((label,column)=>column===groupColumn||!rows.some(row=>statisticsPlotNumber(row[column])!==null)?[]:[{
     label,series:statisticsPlotSeries(rows.map(row=>[row[groupColumn]||'',row[column]||'']),{grouping:'first',columnCount:2})
   }]);
 }

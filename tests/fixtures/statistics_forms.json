@@ -1,5 +1,531 @@
 [
   {
+    "id": "cohend",
+    "rows": [
+      [
+        "s1",
+        "Pre",
+        "10",
+        "unused"
+      ],
+      [
+        "s2",
+        "Pre",
+        "20",
+        ""
+      ],
+      [
+        "s2",
+        "Post",
+        "24",
+        ""
+      ],
+      [
+        "s1",
+        "Post",
+        "13",
+        ""
+      ]
+    ],
+    "settings": {
+      "grouping": "groups",
+      "group": "1",
+      "value": "2",
+      "firstGroup": "Pre",
+      "secondGroup": "Post",
+      "design": "paired",
+      "matching": "subject",
+      "subject": "0"
+    },
+    "expected": "cohend([10,20],[13,24],paired)"
+  },
+  {
+    "id": "bayescompare",
+    "rows": [
+      [
+        "unused",
+        "B",
+        "4"
+      ],
+      [
+        "x",
+        "A",
+        "2"
+      ],
+      [
+        "y",
+        "B",
+        "6"
+      ],
+      [
+        "z",
+        "A",
+        "3"
+      ]
+    ],
+    "settings": {
+      "grouping": "groups",
+      "group": "1",
+      "value": "2",
+      "firstGroup": "A",
+      "secondGroup": "B"
+    },
+    "expected": "bayescompare([2,3],[4,6],equal,0,0.01,2,1,0.95,20000,0)"
+  },
+  {
+    "id": "kstest",
+    "rows": [
+      [
+        "unused",
+        "B",
+        "4"
+      ],
+      [
+        "x",
+        "A",
+        "2"
+      ],
+      [
+        "y",
+        "B",
+        "6"
+      ],
+      [
+        "z",
+        "A",
+        "3"
+      ]
+    ],
+    "settings": {
+      "grouping": "groups",
+      "group": "1",
+      "value": "2",
+      "firstGroup": "A",
+      "secondGroup": "B"
+    },
+    "expected": "kstest([2,3],[4,6])"
+  },
+  {
+    "id": "friedman",
+    "rows": [
+      [
+        "s1",
+        "A",
+        "1"
+      ],
+      [
+        "s2",
+        "B",
+        "5"
+      ],
+      [
+        "s1",
+        "C",
+        "3"
+      ],
+      [
+        "s2",
+        "A",
+        "4"
+      ],
+      [
+        "s1",
+        "B",
+        "2"
+      ],
+      [
+        "s2",
+        "C",
+        "6"
+      ]
+    ],
+    "settings": {
+      "grouping": "groups",
+      "group": "1",
+      "value": "2",
+      "matching": "subject",
+      "subject": "0"
+    },
+    "expected": "friedman([[1,2,3],[4,5,6]])"
+  },
+  {
+    "id": "repeatedanova",
+    "rows": [
+      [
+        "s1",
+        "A",
+        "1"
+      ],
+      [
+        "s2",
+        "B",
+        "5"
+      ],
+      [
+        "s1",
+        "C",
+        "3"
+      ],
+      [
+        "s2",
+        "A",
+        "4"
+      ],
+      [
+        "s1",
+        "B",
+        "2"
+      ],
+      [
+        "s2",
+        "C",
+        "6"
+      ]
+    ],
+    "settings": {
+      "grouping": "groups",
+      "group": "1",
+      "value": "2",
+      "matching": "subject",
+      "subject": "0"
+    },
+    "expected": "repeatedanova([[1,2,3],[4,5,6]],1)"
+  },
+  {
+    "id": "bayesbootstrap",
+    "rows": [
+      [
+        "s1",
+        "Pre",
+        "10"
+      ],
+      [
+        "s2",
+        "Pre",
+        "20"
+      ],
+      [
+        "s2",
+        "Post",
+        "24"
+      ],
+      [
+        "s1",
+        "Post",
+        "13"
+      ]
+    ],
+    "settings": {
+      "layout": "groups",
+      "group": "1",
+      "value": "2",
+      "firstGroup": "Pre",
+      "secondGroup": "Post",
+      "comparison": "paired",
+      "matching": "subject",
+      "subject": "0"
+    },
+    "expected": "bayesbootstrap([10,20],[13,24],mean,0.95,10000,0,paired)"
+  },
+  {
+    "id": "mcnemar",
+    "rows": [
+      [
+        "s1",
+        "Pre",
+        "yes"
+      ],
+      [
+        "s2",
+        "Pre",
+        "no"
+      ],
+      [
+        "s2",
+        "Post",
+        "yes"
+      ],
+      [
+        "s1",
+        "Post",
+        "yes"
+      ]
+    ],
+    "settings": {
+      "layout": "groups",
+      "group": "1",
+      "value": "2",
+      "firstGroup": "Pre",
+      "secondGroup": "Post",
+      "matching": "subject",
+      "subject": "0"
+    },
+    "expected": "mcnemar([[1,0],[1,0]],exact)"
+  },
+  {
+    "id": "twowayanova",
+    "rows": [
+      [
+        "2",
+        "Control",
+        "Early",
+        "unused"
+      ],
+      [
+        "4",
+        "Control",
+        "Late",
+        ""
+      ],
+      [
+        "5",
+        "Drug",
+        "Early",
+        ""
+      ],
+      [
+        "8",
+        "Drug",
+        "Late",
+        ""
+      ]
+    ],
+    "settings": {
+      "factorA": "1",
+      "factorB": "2",
+      "response": "0"
+    },
+    "expected": "twowayanova([[1,1,2],[1,2,4],[2,1,5],[2,2,8]],1)"
+  },
+  {
+    "id": "twowayanova",
+    "rows": [
+      [
+        "2",
+        "4",
+        "5",
+        "8"
+      ],
+      [
+        "3",
+        "6",
+        "7",
+        "9"
+      ]
+    ],
+    "settings": {
+      "layout": "columns"
+    },
+    "expected": "twowayanova([[1,1,2],[1,1,3],[1,2,4],[1,2,6],[2,1,5],[2,1,7],[2,2,8],[2,2,9]],1)"
+  },
+  {
+    "id": "linearmodel",
+    "rows": [
+      [
+        "2",
+        "Control",
+        "20",
+        "unused"
+      ],
+      [
+        "4",
+        "Drug",
+        "30",
+        "x"
+      ]
+    ],
+    "settings": {
+      "response": "0",
+      "predictors": "1,2",
+      "categorical": "1",
+      "order": "1",
+      "ssType": "2",
+      "coding": "treatment"
+    },
+    "expected": "linearmodel([[1,20,2],[2,30,4]],[1],1,2,treatment)"
+  },
+  {
+    "id": "testpower",
+    "rows": [],
+    "settings": {
+      "design": "paired",
+      "effect": "0.8",
+      "n": "24",
+      "tail": "greater"
+    },
+    "expected": "testpower(0.8,24,0.05,paired,greater)"
+  },
+  {
+    "id": "samplesize",
+    "rows": [],
+    "settings": {
+      "design": "onesample",
+      "power": "0.9",
+      "tail": "less"
+    },
+    "expected": "samplesize(0.5,0.9,0.05,onesample,less)"
+  },
+  {
+    "id": "bootstrapci",
+    "rows": [
+      [
+        "A",
+        "1"
+      ],
+      [
+        "B",
+        "3"
+      ],
+      [
+        "C",
+        "5"
+      ]
+    ],
+    "settings": {
+      "column": "1",
+      "statistic": "median",
+      "level": "0.9",
+      "samples": "500",
+      "seed": "7"
+    },
+    "expected": "bootstrapci([1,3,5],median,0.9,500,7)"
+  },
+  {
+    "id": "cohend",
+    "rows": [
+      [
+        "A",
+        "4",
+        "1"
+      ],
+      [
+        "B",
+        "7",
+        "2"
+      ]
+    ],
+    "settings": {
+      "first": "2",
+      "second": "1",
+      "design": "paired"
+    },
+    "expected": "cohend([1,2],[4,7],paired)"
+  },
+  {
+    "id": "eta2",
+    "rows": [
+      [
+        "B",
+        "4"
+      ],
+      [
+        "A",
+        "1"
+      ],
+      [
+        "B",
+        "8"
+      ],
+      [
+        "A",
+        "2"
+      ]
+    ],
+    "settings": {
+      "grouping": "groups",
+      "group": "0",
+      "value": "1"
+    },
+    "expected": "eta2([4,8],[1,2])"
+  },
+  {
+    "id": "kmeans",
+    "rows": [
+      [
+        "A",
+        "1",
+        "9"
+      ],
+      [
+        "B",
+        "2",
+        "8"
+      ]
+    ],
+    "settings": {
+      "columns": "2,1",
+      "clusters": "2",
+      "seed": "7"
+    },
+    "expected": "kmeans([[9,1],[8,2]],2,7)"
+  },
+  {
+    "id": "ordinal",
+    "rows": [
+      [
+        "2",
+        "A",
+        "7"
+      ],
+      [
+        "1",
+        "B",
+        "4"
+      ]
+    ],
+    "settings": {
+      "response": "0",
+      "predictors": "2"
+    },
+    "expected": "ordinal([[7,2],[4,1]])"
+  },
+  {
+    "id": "multinomial",
+    "rows": [
+      [
+        "2",
+        "A",
+        "7"
+      ],
+      [
+        "1",
+        "B",
+        "4"
+      ]
+    ],
+    "settings": {
+      "response": "0",
+      "predictors": "2"
+    },
+    "expected": "multinomial([[7,2],[4,1]])"
+  },
+  {
+    "id": "crossvalidate",
+    "rows": [
+      [
+        "2",
+        "A",
+        "7"
+      ],
+      [
+        "1",
+        "B",
+        "4"
+      ],
+      [
+        "4",
+        "C",
+        "8"
+      ]
+    ],
+    "settings": {
+      "response": "0",
+      "predictors": "2",
+      "folds": "2"
+    },
+    "expected": "crossvalidate([[7,2],[4,1],[8,4]],2,0)"
+  },
+  {
     "id": "bayesbootstrap",
     "rows": [
       [

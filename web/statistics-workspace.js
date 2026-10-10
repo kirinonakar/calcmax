@@ -21,10 +21,15 @@ export function regressionGraphSource(source,digits=10,variable='x') {
   return astSource(rounded(parse(latexInput(source))));
 }
 
-export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorkspaceMath,storeExpression,error,changeMode,replaceInput,graphs}) {
+export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorkspaceMath,storeExpression,error,changeMode,replaceInput,graphs,onSummary}) {
   const {toast,pickFile,openDialog}=ui;
   let statisticsGraph=null;
-  let advanced=null;
+  let advanced=null,summaryOp="stats";
+  document.querySelector('[data-run="statistics-summary"]').addEventListener("click",()=>{summaryOp="stats";},true);
+  $("statistics-summary-correlation").onclick=()=>{summaryOp="correlation";onSummary?.();};
+  const summaryExpression=()=>statisticsCommand(value("statistics-data"),{op:summaryOp,column:Number(value("statistics-summary-column")),kind:dataKind()});
+  const summaryTermLabels=()=>{const labels=statisticsColumnLabels(value("statistics-data"),dataKind());return summaryOp==="correlation"?{'sample:1':labels[0],'sample:2':labels[1]}:{'sample:1':labels[Number(value("statistics-summary-column"))]};};
+  const analysisPanels={};
   let regressionRun=null;
   let detectedColumnSource=null,detectedColumnCount=null;
   let clusterRun=null;
@@ -117,17 +122,17 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
   });
   $('csv-save').onclick=()=>downloadFile(`${value('dataset-name')||'symvacas-data'}.csv`,value('statistics-data'),'text/csv');
   function dataRows(){return statisticsDataRows(value('statistics-data'),dataKind());}
-  function statisticsExpression(op=value('statistics-op')){return statisticsCommand(value('statistics-data'),{op,kind:dataKind(),column:Number(value('statistics-column')),extra:value('statistics-extra')||'0',tail:value('statistics-tail'),sigma:value('statistics-sigma'),sigmaY:value('statistics-sigma-y'),yatesCorrection:$('statistics-yates').checked,regression:regressionMode(),degree:value('regression-degree'),alpha:$('regression-alpha-cv').checked?'cv':value('regression-alpha'),l1Ratio:value('regression-ratio'),trees:value('regression-trees'),maxDepth:value('regression-depth'),seed:value('regression-seed'),responseColumn:Number(value('regression-response')),formula:value('regression-formula'),variable:value('regression-variable'),initials:value('regression-initials'),grouping:value('statistics-grouping'),firstGroup:value('statistics-first-group'),secondGroup:value('statistics-second-group'),firth:value('regression-firth'),priorSD:value('regression-prior-sd'),credibleLevel:value('regression-credible-level'),varianceShape:value('regression-variance-shape'),varianceScale:value('regression-variance-scale'),bayesianMethod:value('regression-bayesian-method'),nutsSamples:value('regression-nuts-samples'),nutsWarmup:value('regression-nuts-warmup'),nutsMaxDepth:value('regression-nuts-max-depth'),nutsSeed:value('regression-nuts-seed'),nutsChains:value('regression-nuts-chains')});}
+  function statisticsExpression(op=value('statistics-op')){return statisticsCommand(value('statistics-data'),{op,kind:dataKind(),column:Number(value('statistics-column')),extra:value('statistics-extra')||'0',tail:value('statistics-tail'),sigma:value('statistics-sigma'),sigmaY:value('statistics-sigma-y'),yatesCorrection:$('statistics-yates').checked,regression:regressionMode(),degree:value('regression-degree'),alpha:$('regression-alpha-cv').checked?'cv':value('regression-alpha'),l1Ratio:value('regression-ratio'),trees:value('regression-trees'),maxDepth:value('regression-depth'),seed:value('regression-seed'),responseColumn:Number(value('regression-response')),formula:value('regression-formula'),variable:value('regression-variable'),initials:value('regression-initials'),grouping:value('statistics-grouping'),groupColumns:value('statistics-group-columns-choice'),firstGroup:value('statistics-first-group'),secondGroup:value('statistics-second-group'),groupColumn:Number(value('statistics-group-column')),valueColumn:Number(value('statistics-value-column')),matching:value('statistics-pair-matching'),subjectColumn:Number(value('statistics-subject-column')),anovaMethod:value('statistics-anova-method'),independentMethod:value('statistics-t-method'),firth:value('regression-firth'),priorSD:value('regression-prior-sd'),credibleLevel:value('regression-credible-level'),varianceShape:value('regression-variance-shape'),varianceScale:value('regression-variance-scale'),bayesianMethod:value('regression-bayesian-method'),nutsSamples:value('regression-nuts-samples'),nutsWarmup:value('regression-nuts-warmup'),nutsMaxDepth:value('regression-nuts-max-depth'),nutsSeed:value('regression-nuts-seed'),nutsChains:value('regression-nuts-chains')});}
   function analysisSummary(){
-    const plan=statisticsAnalysisData(value('statistics-data'),{op:value('statistics-op'),kind:dataKind(),column:Number(value('statistics-column')),grouping:value('statistics-grouping'),firstGroup:value('statistics-first-group'),secondGroup:value('statistics-second-group')});
-    if(plan.paired){const names=statisticsColumnNames(dataColumns()),labels=statisticsColumnLabels(value('statistics-data'),dataKind());return `${t('Compared columns')}: ${plan.samples.map(sample=>labels[names.indexOf(sample.label)]||sample.label).join(' ↔ ')} · ${t('Complete pairs')}: ${plan.pairs.length}`;}
-    return `${t('Analyzed groups')} (${plan.samples.length}): ${plan.samples.map(sample=>`${sample.label} (n=${sample.values?.length||0})`).join(' · ')}`;
+    const plan=statisticsAnalysisData(value('statistics-data'),{op:value('statistics-op'),kind:dataKind(),column:Number(value('statistics-column')),grouping:value('statistics-grouping'),groupColumns:value('statistics-group-columns-choice'),firstGroup:value('statistics-first-group'),secondGroup:value('statistics-second-group'),groupColumn:Number(value('statistics-group-column')),valueColumn:Number(value('statistics-value-column')),matching:value('statistics-pair-matching'),subjectColumn:Number(value('statistics-subject-column')),anovaMethod:value('statistics-anova-method'),independentMethod:value('statistics-t-method')});
+    if(plan.paired){const names=statisticsColumnNames(dataColumns()),labels=statisticsColumnLabels(value('statistics-data'),dataKind());return `${t('Compared columns')}: ${plan.samples.map(sample=>value('statistics-grouping')==='groups'&&!plan.categorical?sample.label:labels[names.indexOf(sample.label)]||sample.label).join(' ↔ ')} · ${t('Complete pairs')}: ${plan.pairs.length}${plan.omitted?` · ${t('Incomplete pairs omitted')}: ${plan.omitted}`:''}`;}
+    return `${t('Analyzed groups')} (${plan.samples.length}): ${plan.samples.map(sample=>`${value('statistics-grouping')==='groups'?sample.label:statisticsColumnLabels(value('statistics-data'),dataKind())[statisticsColumnNames(dataColumns()).indexOf(sample.label)]||sample.label} (n=${sample.values?.length||0})`).join(' · ')}`;
   }
   function analysisTermLabels(){
-    const plan=statisticsAnalysisData(value('statistics-data'),{op:value('statistics-op'),kind:dataKind(),firstGroup:value('statistics-first-group'),secondGroup:value('statistics-second-group')});
-    if(!plan.categorical)return {};
+    const plan=statisticsAnalysisData(value('statistics-data'),{op:value('statistics-op'),kind:dataKind(),column:Number(value('statistics-column')),grouping:value('statistics-grouping'),groupColumns:value('statistics-group-columns-choice'),firstGroup:value('statistics-first-group'),secondGroup:value('statistics-second-group'),groupColumn:Number(value('statistics-group-column')),valueColumn:Number(value('statistics-value-column')),matching:value('statistics-pair-matching'),subjectColumn:Number(value('statistics-subject-column')),anovaMethod:value('statistics-anova-method'),independentMethod:value('statistics-t-method')});
     const names=statisticsColumnNames(dataColumns()),labels=statisticsColumnLabels(value('statistics-data'),dataKind());
-    return statisticsCategoryLabels(plan.pairs,...plan.samples.map(sample=>labels[names.indexOf(sample.label)]||sample.label));
+    const selected=plan.samples.map(sample=>value('statistics-grouping')==='groups'&&!plan.categorical?sample.label:labels[names.indexOf(sample.label)]||sample.label);
+    return plan.categorical?statisticsCategoryLabels(plan.pairs,...selected):Object.fromEntries(selected.map((label,i)=>[`sample:${i+1}`,label]));
   }
   $('regression-kind').onchange=()=>{invalidateRegression();statisticsControls();$('regression-custom').hidden=regressionMode()!=='custom';$('regression-penalty-label').hidden=!['linear','multiple','logistic'].includes(value('regression-kind'));$('regression-lasso').hidden=!['ridge','lasso','elasticnet','logisticridge','logisticlasso','logisticelasticnet'].includes(regressionMode());$('regression-ratio-label').hidden=!regressionMode().endsWith('elasticnet');$('regression-nuts').hidden=!regressionMode().startsWith('bayes')||value('regression-bayesian-method')!=='nuts';setText($('regression-bayesian-method').options[0],regressionMode()==='bayeslinear'?'Conjugate (exact)':'Laplace approximation');$('regression-bayesian').hidden=!regressionMode().startsWith('bayes');$('regression-variance-shape').closest('label').hidden=regressionMode()!=='bayeslinear';$('regression-variance-scale').closest('label').hidden=regressionMode()!=='bayeslinear';$('regression-forest').hidden=!regressionMode().startsWith('randomforest');$('regression-degree').closest('label').hidden=regressionMode()!=='polynomial';$('regression-data-help').hidden=!['multiple','logistic','polynomial','ridge','lasso','elasticnet','logisticridge','logisticlasso','logisticelasticnet','randomforest','randomforestclassifier','randomforestregressor','bayeslinear','bayeslogistic'].includes(regressionMode());$('regression-response').closest('label').hidden=!['multiple','logistic','polynomial','ridge','lasso','elasticnet','logisticridge','logisticlasso','logisticelasticnet','randomforest','randomforestclassifier','randomforestregressor','bayeslinear','bayeslogistic'].includes(regressionMode());setText($('regression-data-help'),(regressionMode().startsWith('logistic')||regressionMode()==='bayeslogistic')?'Selected column is response; others are predictors. Logistic response: 0 or 1.':'Selected column is response; others are predictors.');refreshWorkspaceMath();};
   $('regression-kind').onchange();
@@ -140,28 +145,44 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
   $('regression-clear').onclick=()=>{cancelRegression();statisticsGraph=null;$('regression-caption').replaceChildren();$('regression-inference').replaceChildren();$('regression-export').hidden=true;$('regression-transfer').hidden=true;if(!$('statistics-plot').hidden)$('statistics-plot-run').click();};
   $('regression-export').onclick=()=>downloadFile('regression-residuals.csv',regressionResidualCSV(statisticsGraph?.report),'text/csv');
   function statisticsControls(){
-    const columns=dataColumns(),kind=dataKind(),columnsMode=value('statistics-kind')==='columns',pairOps=['correlation','ttestpaired','wilcoxon','chi2independence','fisherexact'],multiOps=['ttest2','ztest2','mannwhitney','anova','tukey','kruskal'];
+    const columns=dataColumns(),kind=dataKind(),columnsMode=value('statistics-kind')==='columns',pairOps=['correlation','ttestpaired','wilcoxon','chi2independence','fisherexact'],multiOps=['ttest2','ztest2','mannwhitney','anova','welchanova','tukey','gameshowell','kruskal'];
     filterMenu('statistics-op',op=>columns!==1||op==='wilcoxon'||![...pairOps,...multiOps].includes(op),'stats');
-    const op=value('statistics-op'),paired=pairOps.includes(op)&&!(op==='wilcoxon'&&columns===1),categorical=['chi2independence','fisherexact'].includes(op),multi=['ttest2','ztest2','mannwhitney'].includes(op),all=['anova','tukey','kruskal'].includes(op);
-    filterMenu('statistics-grouping',grouping=>grouping==='columns'||!paired&&kind==='xy','columns');
-    const grouped=!paired&&kind==='xy'&&value('statistics-grouping')==='groups';
+    const op=value('statistics-op'),paired=pairOps.includes(op)&&!(op==='wilcoxon'&&columns===1),categorical=['chi2independence','fisherexact'].includes(op),selectablePairs=categorical||['wilcoxon','ttestpaired'].includes(op),multi=['ttest2','ztest2','mannwhitney'].includes(op),all=['anova','welchanova','tukey','gameshowell','kruskal'].includes(op);
+    filterMenu('statistics-grouping',grouping=>grouping==='columns'||columns>1,'columns');
+    const grouped=columns>1&&value('statistics-grouping')==='groups';
     let rows=[];try{rows=dataRows();}catch{}
-    const names=paired&&!categorical?['x','y']:grouped?[...new Set(rows.filter(row=>row[0]&&row[1]).map(row=>row[0]))]:statisticsColumnNames(columns);
     const columnLabels=statisticsColumnLabels(value('statistics-data'),kind);
-    const selectedColumn=value('statistics-column');$('statistics-column').replaceChildren(...statisticsColumnNames(columns).map((name,i)=>{const option=element('option',name);option.value=String(i);return option;}));$('statistics-column').value=Number(selectedColumn)<columns?selectedColumn:'0';
+    for(const [id,fallback]of [['statistics-group-column',0],['statistics-value-column',1],['statistics-subject-column',0]]){const select=$(id),previous=select.value;select.replaceChildren(...columnLabels.map((label,i)=>{const option=element('option',label);option.value=String(i);return option;}));select.value=previous&&Number(previous)<columns?previous:String(Math.min(fallback,columns-1));}
+    const summaryAt=Number(value('statistics-summary-column'));$('statistics-summary-column').replaceChildren(...columnLabels.map((label,i)=>{const option=element('option',label);option.value=String(i);return option;}));$('statistics-summary-column').value=String(Math.min(summaryAt,columns-1));$('statistics-summary-correlation').hidden=columns!==2;
+    const groupColumns=$('statistics-group-columns'),selection=value('statistics-group-columns-choice');groupColumns.hidden=!all||grouped;
+    const chosen=selection==='auto'?columnLabels.map((_,i)=>i):selection.split(',').filter(Boolean).map(Number);groupColumns.replaceChildren();
+    for(let i=0;i<columns;i++){const label=element('label',columnLabels[i],'check'),check=element('input');check.type='checkbox';check.checked=chosen.includes(i);check.value=String(i);check.onchange=()=>{$('statistics-group-columns-choice').value=[...groupColumns.querySelectorAll('input:checked')].map(input=>input.value).join(',');statisticsControls();persist();};label.append(check);groupColumns.append(label);}
+    const plotGroup=$('statistics-plot-grouping'),previousPlotGroup=plotGroup.value;
+    const plotGroupIndex=previousPlotGroup==='first'?0:previousPlotGroup==='last'?columns-1:Number(previousPlotGroup.replace('column:',''));
+    const plotGroupChoices=[{id:'columns',label:t('Columns')},...columnLabels.map((label,i)=>({id:`column:${i}`,label}))];
+    plotGroup.replaceChildren(...plotGroupChoices.map(choice=>{const option=element('option',choice.label);option.value=choice.id;return option;}));plotGroup.value=previousPlotGroup!=='columns'&&plotGroupIndex>=0&&plotGroupIndex<columns?`column:${plotGroupIndex}`:'columns';
+    const groupAt=Number(value('statistics-group-column'));
+    const names=grouped&&!categorical?[...new Set(rows.map(row=>row[groupAt]).filter(Boolean))]:paired&&!selectablePairs?['x','y']:statisticsColumnNames(columns);
+    const selectedColumn=value('statistics-column');$('statistics-column').replaceChildren(...columnLabels.map((name,i)=>{const option=element('option',name);option.value=String(i);return option;}));$('statistics-column').value=Number(selectedColumn)<columns?selectedColumn:'0';
     for(const [id,fallback] of [['statistics-first-group',0],['statistics-second-group',1]]){
-      const select=$(id),previous=select.value,choices=(multi||categorical)&&id==='statistics-second-group'?names.filter(name=>name!==value('statistics-first-group')):names;
-      select.replaceChildren(...choices.map(name=>{const option=element('option',categorical?columnLabels[names.indexOf(name)]:name);option.value=name;return option;}));
-      select.value=paired&&!categorical?names[fallback]:choices.includes(previous)?previous:choices.includes(names[fallback])?names[fallback]:choices[0]||'';
+      const select=$(id),previous=select.value,choices=(multi||selectablePairs)&&id==='statistics-second-group'?names.filter(name=>name!==value('statistics-first-group')):names;
+      select.replaceChildren(...choices.map(name=>{const option=element('option',grouped&&!categorical?name:columnLabels[statisticsColumnNames(columns).indexOf(name)]||name);option.value=name;return option;}));
+      select.value=paired&&!selectablePairs&&!grouped?names[fallback]:choices.includes(previous)?previous:choices.includes(names[fallback])?names[fallback]:choices[0]||'';
       const label=select.closest('label');if(label.firstChild.nodeType===3)label.replaceChild(element('span'),label.firstChild);
       setText(label.firstChild,categorical?(fallback===0?'First column':'Second column'):(fallback===0?'First group':'Second group'));
     }
-    $('statistics-first-group').closest('label').hidden=all||!paired&&!multi&&!grouped;
-    $('statistics-second-group').closest('label').hidden=all||!paired&&!multi;
-    $('statistics-grouping').disabled=paired||kind!=='xy';
+    $('statistics-first-group').closest('label').hidden=all||grouped&&categorical||!paired&&!multi&&!grouped;
+    $('statistics-second-group').closest('label').hidden=all||grouped&&categorical||!paired&&!multi;
+    $('statistics-grouping').disabled=columns<2;
     $('statistics-column').disabled=paired||multi||all||grouped||columns===1;
-    $('statistics-first-group').disabled=paired&&!categorical||all||!multi&&!grouped&&!categorical||columns===1;
-    $('statistics-second-group').disabled=!multi&&!categorical||columns===1;
+    $('statistics-first-group').disabled=paired&&!selectablePairs&&!grouped||all||!multi&&!grouped&&!selectablePairs||columns===1;
+    $('statistics-second-group').disabled=!multi&&!selectablePairs&&!grouped||all||columns===1;
+    $('statistics-group-role-options').hidden=!grouped;
+    $('statistics-pair-matching-label').hidden=!grouped||!paired||categorical;
+    $('statistics-subject-column-label').hidden=!grouped||!paired||categorical||value('statistics-pair-matching')!=='subject';
+    $('statistics-pair-order-help').hidden=!grouped||!paired||categorical||value('statistics-pair-matching')==='subject';
+    $('statistics-t-method-label').hidden=op!=='ttest2';$('statistics-anova-method-label').hidden=op!=='anova';$('statistics-posthoc-help').hidden=op!=='anova';
+    setText($('statistics-posthoc-help'),value('statistics-anova-method')==='classic'?'Set analysis: ANOVA + Tukey–Kramer + assumptions':'Set analysis: Welch ANOVA + Games–Howell + assumptions');
     $('statistics-extra').disabled=!['ttest','ttest2','ttestpaired','ztest','ztest2','tinterval','zinterval'].includes(op);
     $('statistics-tail').disabled=!['ttest','ttest2','ttestpaired','wilcoxon','mannwhitney','ztest','ztest2','fisherexact'].includes(op);
     $('statistics-sigma').disabled=!['ztest','ztest2','zinterval'].includes(op);
@@ -172,11 +193,11 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
     $('statistics-columns').disabled=$('statistics-columns-auto').checked;
     $('regression-section').hidden=columns<2;
     $('regression-response').value=automaticResponse()?String(columns-1):String(state.fields['regression-response-choice']);
-    const positionResponse=['polynomial','logistic','logisticridge','logisticlasso','logisticelasticnet'].includes(regressionMode());
+    const positionResponse=false;
     if(positionResponse&&state.fields['regression-response-position']==='last')$('regression-response').value=String(columns-1);
     const responseOptions=statisticsColumnNames(columns).flatMap((name,i)=>{
       if(positionResponse&&i!==0&&i!==columns-1)return [];
-      const label=positionResponse?(i===0?'first':'last'):name,option=element('option',label);option.value=String(i);return [{option,label}];
+      const label=columnLabels[i]||name,option=element('option',label);option.value=String(i);return [{option,label}];
     });
     menus['regression-response']=responseOptions;
     filterMenu('regression-response',column=>Number(column)<columns,String(columns-1));
@@ -220,7 +241,7 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
     const dataLabels=statisticsColumnLabels(value('statistics-data'),kind).join(', ');
     setText($('statistics-data-label'),kind==='list'?'One value per line':kind==='xy'?t('x, y values').replace('x, y',dataLabels):kind==='xyz'?t('x, y, z values').replace('x, y, z',dataLabels):dataLabels);
     try{$('statistics-samples').textContent=analysisSummary();}catch{setText($('statistics-samples'),'Enter data to see analyzed groups');}
-    advanced?.render();
+    for(const panel of Object.values(analysisPanels))panel.render();
     updateLineNumbers();
   }
   function updateHeatMapAxis(id,names,rows,excluded=new Set()){
@@ -261,7 +282,7 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
   $('statistics-columns-auto').onchange=()=>{invalidateRegression();render();refreshWorkspaceMath();persist();};
   $('statistics-op').onchange=()=>{if(['tinterval','zinterval'].includes(value('statistics-op'))&&value('statistics-extra')==='0')$('statistics-extra').value='95';statisticsControls();refreshWorkspaceMath();};
   $('statistics-grouping').onchange=()=>{statisticsControls();refreshWorkspaceMath();};
-  for(const id of ['statistics-column','statistics-first-group','statistics-second-group'])$(id).onchange=()=>{statisticsControls();refreshWorkspaceMath();};
+  for(const id of ['statistics-column','statistics-first-group','statistics-second-group','statistics-group-column','statistics-value-column','statistics-subject-column','statistics-pair-matching','statistics-anova-method','statistics-t-method'])$(id).onchange=()=>{statisticsControls();refreshWorkspaceMath();persist();};
   $('statistics-yates').onchange=()=>{refreshWorkspaceMath();persist();};
   function editorRows(){return value('statistics-data').trim()?csvRows(value('statistics-data'),{preserveEmptyRows:true}):[];}
   // Number every logical line; the gutter shares the textarea line height and mirrors its vertical scroll.
@@ -367,7 +388,7 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
       worker.onerror=event=>{if(clusterRun!==run)return;cancelClustering();container.replaceChildren();error(event.message||'Clustering failed');};
       worker.postMessage({data,options:clusterOptions});return;
     }
-    const panels=statisticsPlotPanels(dataRows(),{grouping:value('statistics-plot-grouping'),columnCount:dataColumns()});
+    const panels=statisticsPlotPanels(dataRows(),{grouping:value('statistics-plot-grouping'),columnCount:dataColumns(),columnNames:statisticsColumnLabels(value('statistics-data'),dataKind())});
     if(panels.length===1&&!panels[0].label){statisticsPlot(container,statisticsGraph.rows,{...options,series:panels[0].series});return;}
     container.replaceChildren(...panels.map(panel=>{
       const section=element('section','','statistics-plot-panel'),chart=element('div');
@@ -413,7 +434,12 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
     }catch(exc){if(regressionRun===run)error(exc.message);}
     finally{if(regressionRun===run){regressionRun=null;regressionBusy(false);}}
   }
-  advanced=createAdvancedStatistics({state,persist,data:()=>value('statistics-data'),columnLimit:()=>dataColumns(),copy:ui.clipboard});
+  for(const section of ['preparation','tests','models','advanced'])analysisPanels[`statistics-${section}`]=createAdvancedStatistics({state,persist,data:()=>value('statistics-data'),columnLimit:()=>dataColumns(),copy:ui.clipboard,section,applyData:updated=>{
+    $('statistics-data').value=updated;const selected=value('dataset-list');
+    if(selected&&selected===value('dataset-name')&&Object.hasOwn(state.datasets,selected))state.datasets[selected]=updated;
+    dataKindChange();persist();toast(t('Missing values applied to current data'));
+  }});
+  advanced=analysisPanels['statistics-advanced'];
   statisticsControls();
-  return {datasetsList,expression:statisticsExpression,analysisTermLabels,advancedExpression:advanced.expression,advancedContext:advanced.context,showAdvancedResult:advanced.showResult,analysisSummary,render:()=>{render();advanced.render();},showRegression,runRegression};
+  return {datasetsList,summaryExpression,summaryTermLabels,expression:statisticsExpression,analysisTermLabels,advancedExpression:(panel='statistics-advanced')=>analysisPanels[panel].expression(),advancedContext:(panel='statistics-advanced')=>analysisPanels[panel].context(),showAdvancedResult:(result,context,panel='statistics-advanced')=>analysisPanels[panel]?.showResult(result,context),analysisSummary,render,showRegression,runRegression};
 }
