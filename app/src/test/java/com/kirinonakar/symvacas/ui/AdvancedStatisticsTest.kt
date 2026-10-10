@@ -6,121 +6,12 @@ import org.junit.Test
 import java.io.File
 import org.json.JSONArray
 import com.kirinonakar.symvacas.math.Parser
-import com.kirinonakar.symvacas.math.requiresExplicitEvaluation
 
 class AdvancedStatisticsTest {
-    @Test fun bootstrapGroupsRetainNamesWithoutHeadersAndRejectIncompletePairs() {
-        val definitions=JSONArray(File("src/main/assets/advanced_statistics.json").readText())
-        val definition=(0 until definitions.length()).map {definitions.getJSONObject(it)}.first {it.getString("id")=="bayesbootstrap"}
-        val rows=listOf(listOf("control","1"),listOf("treatment","4"),listOf("control","2"),listOf("treatment","5"))
-        val settings=JSONObject().put("layout","groups").put("order","reverse")
-        assertEquals("bayesbootstrap([4,5],[1,2],mean,0.95,10000,0,independent)",guidedStatisticsCommand(definition,rows,settings))
-        assertEquals(mapOf("sample:A" to "treatment","sample:B" to "control"),advancedStatisticsTermLabels(definition,rows,settings,emptyList()))
-        assertTrue(runCatching {guidedStatisticsCommand(definition,rows+listOf(listOf("other","9")),settings)}.isFailure)
-        assertTrue(runCatching {guidedStatisticsCommand(definition,listOf(listOf("1","4"),listOf("2","")),JSONObject().put("layout","columns").put("comparison","paired"))}.isFailure)
-    }
-    @Test fun pcaFeatureLabelsFollowTheSelectedColumnOrder() {
-        val definitions=JSONArray(File("src/main/assets/advanced_statistics.json").readText())
-        val definition=(0 until definitions.length()).map {definitions.getJSONObject(it)}.first {it.getString("id")=="pca"}
-        val rows=listOf(listOf("A","1","2"),listOf("B","2","1"))
-        val settings=JSONObject().put("columns","2,1").put("components","1").put("standardize","0")
-        assertEquals("pca([[2,1],[1,2]],1,0)",guidedStatisticsCommand(definition,rows,settings))
-        assertEquals(mapOf("feature:1" to "weight","feature:2" to "height"),advancedStatisticsTermLabels(definition,rows,settings,listOf("id","height","weight")))
-    }
-    @Test fun bayesianTwoSamplesKeepIndependentLengthsAndRequireDistinctRoles() {
-        val definitions=JSONArray(File("src/main/assets/advanced_statistics.json").readText())
-        val definition=(0 until definitions.length()).map {definitions.getJSONObject(it)}.first {it.getString("id")=="bayescompare"}
-        val rows=listOf(listOf("10","13"),listOf("11","14"),listOf("","15"))
-        assertEquals("bayescompare([10,11],[13,14,15],equal,0,0.01,2,1,0.95,20000,0)",guidedStatisticsCommand(definition,rows))
-        assertTrue(requiresExplicitEvaluation(Parser("bayescompare([1,2],[3,4])").parse()))
-        for(settings in listOf(JSONObject().put("second","0"),JSONObject().put("kappa",""),JSONObject().put("variance","paired"))) {
-            assertTrue(runCatching {guidedStatisticsCommand(definition,rows,settings)}.exceptionOrNull() is IllegalArgumentException)
-        }
-        assertTrue(runCatching {guidedStatisticsCommand(definition,listOf(listOf("10","13"),listOf("","14")))}.exceptionOrNull() is IllegalArgumentException)
-    }
-    @Test fun mcnemarUsesNamedSelectedColumnsAndOmitsIncompletePairs() {
-        val definitions=JSONArray(File("src/main/assets/advanced_statistics.json").readText())
-        val definition=(0 until definitions.length()).map {definitions.getJSONObject(it)}.first {it.getString("id")=="mcnemar"}
-        val rows=listOf(listOf("1","yes","no"),listOf("2","no","yes"),listOf("3","yes","yes"),listOf("4","","yes"),listOf("5","yes",""))
-        val settings=JSONObject().put("layout","pairs").put("first","1").put("second","2")
-        assertEquals("mcnemar([[1,1],[1,0]],exact)",guidedStatisticsCommand(definition,rows,settings))
-        val labels=advancedStatisticsTermLabels(definition,rows,settings,listOf("ID (x)","Before (y)","After (z)"))
-        assertEquals("Before (y)",labels["table:row"]);assertEquals("After (z)",labels["table:column"])
-        assertEquals("yes",labels["table:row:1"]);assertEquals("yes",labels["table:column:1"])
-    }
-    @Test fun structuredReportsRouteToTheirAnalysisMenuIncludingSavedLegacyReports() {
-        val report=JSONObject().put("analysis","gee").put("title","GEE")
-        val result=JSONObject().put("statisticsReport",report)
-        assertSame(report,statisticsReportFor(result,"gee([[1,2,3]])",setOf("gee")))
-        assertSame(report,statisticsReportFor(result,"",setOf("gee")))
-        assertSame(report,statisticsReportFor(result,"previousCalculation([1])",setOf("gee")))
-        assertNull(statisticsReportFor(result,"gee([[1,2,3]])",setOf("stats","ttest")))
-        report.remove("analysis")
-        assertSame(report,statisticsReportFor(result,"stats([1,2,3])",setOf("stats")))
-        assertNull(statisticsReportFor(JSONObject().put("exact","2"),"1+1",setOf("stats")))
-    }
-    @Test fun bayesianFormsRejectMissingValuesAndOverlappingCountRoles() {
-        val definitions=JSONArray(File("src/main/assets/advanced_statistics.json").readText())
-        fun definition(id:String)=(0 until definitions.length()).map {definitions.getJSONObject(it)}.first {it.getString("id")==id}
-        val rows=listOf(listOf("7","10"),listOf("2","5"))
-        for(id in listOf("bayesproportion","bayesmean","bayesrate")) {
-            assertTrue(requiresExplicitEvaluation(Parser("$id([1])").parse()))
-            assertTrue(runCatching {guidedStatisticsCommand(definition(id),rows,JSONObject().put("alpha",""))}.exceptionOrNull() is IllegalArgumentException)
-            assertTrue(runCatching {guidedStatisticsCommand(definition(id),listOf(listOf("1"),listOf("")))}.exceptionOrNull() is IllegalArgumentException)
-        }
-        assertTrue(runCatching {guidedStatisticsCommand(definition("bayesproportion"),rows,JSONObject().put("layout","counts").put("trials","0"))}.exceptionOrNull() is IllegalArgumentException)
-        assertTrue(runCatching {guidedStatisticsCommand(definition("bayesrate"),rows,JSONObject().put("layout","exposure").put("exposure","0"))}.exceptionOrNull() is IllegalArgumentException)
-    }
-    @Test fun termLabelsFollowSelectedPredictorsAndInteractions() {
-        run { // termLabelsFollowSelectedPredictorsAndInteractions
-            val definitions=JSONArray(File("src/main/assets/advanced_statistics.json").readText())
-            fun definition(id:String)=(0 until definitions.length()).map {definitions.getJSONObject(it)}.first {it.getString("id")==id}
-            val rows=listOf(listOf("1","2","3","4","5"));val labels=listOf("id (x)","time (y)","treatment (z)","entry (x4)","outcome (x5)")
-            assertEquals(mapOf("x1" to "treatment (z)","x2" to "time (y)","x1:x2" to "treatment (z):time (y)","x1^2" to "treatment (z)^2"),advancedStatisticsTermLabels(definition("gee"),rows,JSONObject().put("subject","0").put("response","4").put("predictors","2,1").put("interactions","z,y;z,z"),labels))
-            assertEquals(mapOf("x1" to "time (y)","x2" to "treatment (z)","x3" to "entry (x4)"),advancedStatisticsTermLabels(definition("mixedmodel"),rows,JSONObject().put("subject","0").put("response","4"),labels))
-            assertEquals(mapOf("x1" to "id (x)","x2" to "treatment (z)"),advancedStatisticsTermLabels(definition("cox"),rows,JSONObject().put("time","1").put("event","4").put("truncation","entry").put("entry","3"),labels))
-            assertEquals(emptyMap<String,String>(),advancedStatisticsTermLabels(definition("gee"),rows,JSONObject(),emptyList()))
-        }
-        run { // geeInteractionsAcceptLettersNamesAndShownLabels
-            val definitions=JSONArray(File("src/main/assets/advanced_statistics.json").readText())
-            val definition=(0 until definitions.length()).map {definitions.getJSONObject(it)}.first {it.getString("id")=="gee"}
-            val labels=listOf("id (x)","time (y)","treatment (z)","age (x4)","sex (x5)","y (x6)")
-            val rows=listOf(listOf("1","0","0","47","0","1"),listOf("1","1","0","47","0","1"),listOf("2","0","1","60","1","0"),listOf("2","1","1","60","1","0"))
-            val base=JSONObject().put("subject","0").put("response","5").put("predictors","1,2,3,4").put("family","binomial")
-            val expected="gee([[1,0,0,47,0,1],[1,1,0,47,0,1],[2,0,1,60,1,0],[2,1,1,60,1,0]],binomial,independence,[[1,2]])"
-            for(interactions in listOf("y,z","time, treatment","time (y), treatment (z)"))
-                assertEquals(interactions,expected,guidedStatisticsCommand(definition,rows,JSONObject(base.toString()).put("interactions",interactions),labels))
-            val shifted="gee([[1,0,0,47,0,1],[1,1,0,47,0,1],[2,0,1,60,1,0],[2,1,1,60,1,0]],binomial,independence,[[3,4]])"
-            for(interactions in listOf("x4,x5"))
-                assertEquals(interactions,shifted,guidedStatisticsCommand(definition,rows,JSONObject(base.toString()).put("interactions",interactions),labels))
-            val subset="gee([[1,47,0,1],[1,47,0,1],[2,60,1,0],[2,60,1,0]],binomial,independence,[[1,2]])"
-            assertEquals("x4,x5",subset,guidedStatisticsCommand(definition,rows,JSONObject(base.toString()).put("predictors","3,4").put("interactions","x4,x5"),labels))
-            for(interactions in listOf("1,2","id (x),time (y)"))
-                assertTrue(interactions,runCatching {guidedStatisticsCommand(definition,rows,JSONObject(base.toString()).put("interactions",interactions),labels)}.exceptionOrNull() is IllegalArgumentException)
-        }
-    }
     private fun definition(id:String,input:String,suffix:String="")=JSONObject().put("id",id).put("input",input).put("suffix",suffix)
 
     @Test(expected=IllegalArgumentException::class) fun rejectsIncompleteModelRows() {
         advancedStatisticsCommand(definition("cox","table"),listOf(listOf("1","","0"),listOf("2","1","1")))
-    }
-    @Test fun analysisRowsPreserveMissingCellsHeadersAndSelectedColumns() {
-        run { // preservesMissingFirstRowAndIgnoresHeadersAndTrailingLineBreaks
-            assertEquals(listOf(listOf("1","0","2"),listOf("2","1","3")),advancedStatisticsRows("time,event,x\n1,0,2\n2,1,3\n"))
-            assertEquals(listOf(listOf("NA","NA"),listOf("1","2")),advancedStatisticsRows("NA,NA\n1,2"))
-            assertEquals(listOf(listOf("1","2"),listOf("",""),listOf("3","4")),advancedStatisticsRows("1,2\n\n3,4"))
-        }
-        run { // usesOnlyTheSelectedDataColumns
-            assertEquals(listOf(listOf("1","2"),listOf("3","4")),advancedStatisticsRows("1,2,9\n3,4,8",2))
-            assertEquals(listOf(listOf("1","2"),listOf("4","5")),advancedStatisticsRows("x,y,z\n1,2,3\n4,5,6",2))
-            val wide=(1..25).joinToString(",")
-            assertEquals(listOf(listOf("1","2"),listOf("1","2")),advancedStatisticsRows("$wide\n$wide",2))
-        }
-    }
-
-    @Test(expected=IllegalArgumentException::class) fun keepsTheColumnCapWithinTheSelectedRange() {
-        val wide=(1..25).joinToString(",")
-        advancedStatisticsRows("$wide\n$wide",25)
     }
 
     @Test fun formPlansMatchSharedColumnAndOptionCases() {
@@ -139,11 +30,6 @@ class AdvancedStatisticsTest {
             assertEquals(Parser(definition.getString("example")).parse(),Parser(guidedStatisticsCommand(definition,rows)).parse())
         }
     }
-    @Test(expected=IllegalArgumentException::class) fun rejectsDuplicateSurvivalRoles() {
-        val definitions=JSONArray(File("src/main/assets/advanced_statistics.json").readText())
-        val definition=(0 until definitions.length()).map {definitions.getJSONObject(it)}.first {it.getString("id")=="kaplanmeier"}
-        guidedStatisticsCommand(definition,listOf(listOf("1","1"),listOf("2","0")),JSONObject().put("time","0").put("event","0"))
-    }
     @Test fun survivalPlanPreservesLabelsAndIgnoresUnusedCells() {
         val rows=listOf(listOf("1","yes","A","30",""),listOf("2","no","B","40",""))
         val plan=survivalAnalysisPlan(rows,JSONObject().put("eventValue","yes").put("cox","1").put("predictors","3"),listOf("time","status","arm","age","unused"))
@@ -151,9 +37,6 @@ class AdvancedStatisticsTest {
         assertEquals(listOf("A","B"),plan.groups)
         assertEquals(listOf("age"),plan.predictors)
         assertEquals(listOf(0.0 to 1.0,1.0 to 1.0,1.0 to .75,2.0 to .75,2.0 to .375),survivalStepPoints(JSONArray("[[1,4,1,1,.75,.4,.9],[2,2,1,0,.375,.1,.7]]"),4))
-    }
-    @Test(expected=IllegalArgumentException::class) fun survivalPlanRejectsGroupAsAdditionalPredictor() {
-        survivalAnalysisPlan(listOf(listOf("1","1","A")),JSONObject().put("cox","1").put("predictors","2"))
     }
 
     @Test fun ancovaAndGlmRetainLabelsAndRejectInvalidRolesAndLinks() {

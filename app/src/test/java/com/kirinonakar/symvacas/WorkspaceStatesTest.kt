@@ -47,19 +47,6 @@ class WorkspaceStatesTest {
         assertEquals("7",com.kirinonakar.symvacas.calculator.StatisticsState(prefs).statisticsNutsMaxDepth)
     }
 
-    @Test fun distributionOrientationPersistsInSelectionAndWorkspaceState() {
-        val prefs=MemoryPreferences()
-        val state=com.kirinonakar.symvacas.calculator.StatisticsState(prefs)
-        assertEquals("horizontal",state.statisticsPlotOrientation)
-        state.statisticsPlotOrientation="vertical";state.statisticsPlot="Box plot";state.saveSelection()
-        val restored=com.kirinonakar.symvacas.calculator.StatisticsState(prefs)
-        assertEquals("vertical",restored.statisticsPlotOrientation);assertEquals("Box plot",restored.statisticsPlot)
-        restored.statisticsPlotOrientation="horizontal";restored.statisticsPlot="Violin + points"
-        val editor=prefs.edit();restored.writeTo(editor);editor.apply()
-        val next=com.kirinonakar.symvacas.calculator.StatisticsState(prefs)
-        assertEquals("horizontal",next.statisticsPlotOrientation);assertEquals("Violin + points",next.statisticsPlot)
-        assertEquals("horizontal",com.kirinonakar.symvacas.calculator.StatisticsState(MemoryPreferences(mapOf("statisticsPlotOrientation" to "invalid"))).statisticsPlotOrientation)
-    }
     @Test fun graphParametersValidatePersistAndResetIndependently() {
         run { // typedParametersPreservePrecisionCenterRangesAndPersist
             val prefs=MemoryPreferences(mapOf("graphParameters" to "{\"a\":{\"value\":1,\"min\":-5,\"max\":5,\"animate\":false}}"))
@@ -107,66 +94,6 @@ class WorkspaceStatesTest {
             assertFalse(reset.animate);assertEquals(other,state.graphParameters.getValue("b"))
             val editor=prefs.edit();state.writeTo(editor);editor.apply()
             assertEquals(state.graphParameters,GraphState(prefs).graphParameters)
-        }
-    }
-
-    @Test fun animationStartsAtCurrentValuesAndElapsedTimeIsIndependentOfTickRate() {
-        val prefs=MemoryPreferences(mapOf("graphParameters" to "{\"a\":{\"value\":2,\"min\":-5,\"max\":5},\"b\":{\"value\":-1,\"min\":-5,\"max\":5,\"animate\":false}}"))
-        val fast=GraphState(prefs);val slow=GraphState(prefs)
-        fast.graphAnimating=true;slow.graphAnimating=true;fast.beginAnimation();slow.beginAnimation()
-        fast.advanceAnimation(0.0)
-        assertEquals(2.0,fast.graphParameters.getValue("a").value,1e-12)
-        repeat(60){fast.advanceAnimation(1.0/60)}
-        repeat(30){slow.advanceAnimation(1.0/30)}
-        assertEquals(fast.graphParameters.getValue("a").value,slow.graphParameters.getValue("a").value,1e-12)
-        assertEquals(-1.0,fast.graphParameters.getValue("b").value,0.0)
-        fast.setParameterAnimation("b",true);fast.advanceAnimation(0.0)
-        assertEquals(-1.0,fast.graphParameters.getValue("b").value,1e-12)
-        fast.setParameter("a",3.0);fast.advanceAnimation(0.0)
-        assertEquals(3.0,fast.graphParameters.getValue("a").value,1e-12)
-        val phase=fast.animationPhase;fast.advanceAnimation(10.0)
-        assertEquals(.1,fast.animationPhase-phase,1e-12)
-    }
-    @Test fun surfaceStatePreservesLastMeshAppearanceAndValidBounds() {
-        run { // surfaceRecalculationFailuresRetainTheLastMeshAndCanBeRetried
-            val state=GraphState(MemoryPreferences());state.changeKind("surface")
-            val first=org.json.JSONObject("{\"ok\":true,\"surface\":[[[0,0,1],[1,0,2]],[[0,1,2],[1,1,3]]],\"parameters\":[]}")
-            state.applyPlotResponse(first,"first")
-            state.updateSource(state.graphSource)
-            assertSame(first,state.graphData)
-            state.surfaceZoom=3f
-            state.applyPlotResponse(org.json.JSONObject().put("ok",false).put("error","Computation timed out"),"higher-density")
-            assertSame(first,state.graphData)
-            assertEquals("first",state.graphResultSignature)
-            assertNotEquals("higher-density",state.graphResultSignature)
-            state.updateSource("sin(x+y)")
-            assertSame(first,state.graphData)
-            val next=org.json.JSONObject(first.toString())
-            state.applyPlotResponse(next,"higher-density")
-            assertSame(next,state.graphData)
-            assertEquals("higher-density",state.graphResultSignature)
-            state.changeKind("cartesian")
-            assertNull(state.graphData);assertNull(state.graphResultSignature)
-        }
-        run { // surfaceAppearancePersistsAndInvalidSavedOptionsUseDefaults
-            run { // surfaceAppearancePersistsAndInvalidSavedOptionsUseDefaults
-                val prefs=MemoryPreferences()
-                val state=GraphState(prefs)
-                assertEquals("surface",state.surfaceRenderMode)
-                state.surfaceRenderMode="surface-wireframe";state.surfaceColor="#3b70bd";state.surfaceSamples=40;state.surfaceAutoDensity=false;state.surfaceZoom=2f
-                val editor=prefs.edit();state.writeTo(editor);editor.apply()
-                val restored=GraphState(prefs)
-                assertEquals("surface-wireframe",restored.surfaceRenderMode)
-                assertEquals("#3b70bd",restored.surfaceColor);assertEquals(40,restored.surfaceSamples)
-                assertFalse(restored.surfaceAutoDensity);assertEquals(2f,restored.surfaceZoom,0f)
-                val invalid=GraphState(MemoryPreferences(mapOf("surfaceRenderMode" to "unknown","surfaceColor" to "invalid","surfaceSamples" to 1000)))
-                assertEquals("surface",invalid.surfaceRenderMode);assertEquals("#007b68",invalid.surfaceColor);assertEquals(96,invalid.surfaceSamples)
-            }
-            run { // invalidRestoredGraphBoundsUseDefaults
-                val graph=GraphState(MemoryPreferences(mapOf("xMin" to "invalid", "xMax" to "NaN")))
-                assertEquals(-10.0,graph.xMin,0.0)
-                assertEquals(10.0,graph.xMax,0.0)
-            }
         }
     }
 

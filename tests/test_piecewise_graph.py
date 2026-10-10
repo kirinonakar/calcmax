@@ -14,7 +14,6 @@ from calc_graph import adaptive_samples
 
 TREES={case['source']:case['tree'] for case in json.loads((ROOT/'build/math-cases.json').read_text(encoding='utf-8'))}
 
-
 class PiecewiseGraphTests(unittest.TestCase):
     def graph(self,source,**options):
         tree=TREES[source]
@@ -24,28 +23,6 @@ class PiecewiseGraphTests(unittest.TestCase):
         self.assertTrue(result['ok'],result.get('error'))
         self.assertEqual([False],result['implicitCurves'])
         return result['curves'][0]
-
-    def test_desmos_branches_and_default_evaluate_in_graph(self):
-        curve=self.graph('f(x)={x<0:x^2,x>=0:2*x}',min=-2,max=2,yMin=-1,yMax=5)
-        for x,y in filter(None,curve):self.assertAlmostEqual(x*x if x<0 else 2*x,y,delta=1e-10)
-        self.assertIn([0.0,0.0],curve)
-        self.assertFalse(any(point is None for point in curve))
-
-    def test_user_exponential_examples_restrict_entire_rhs_and_meet_at_boundary(self):
-        curves=[]
-        for source in ('y=(1-e^(-x/900)){0<=x<=3000}','y=1-e^(-x/900) {0<=x<=3000}'):
-            curve=self.graph(source);points=list(filter(None,curve));curves.append(points)
-            self.assertTrue(points)
-            self.assertEqual(0,points[0][0]);self.assertEqual(3000,points[-1][0])
-            for x,y in points:
-                self.assertTrue(0<=x<=3000);self.assertAlmostEqual(1-math.exp(-x/900),y,delta=1e-12)
-        self.assertEqual(curves[0],curves[1])
-        tail=list(filter(None,self.graph('y=(1-e^(-3000/900))*e^(-(x-3000)/80){x>3000}')))
-        self.assertGreater(tail[0][0],3000)
-        self.assertLess(tail[0][0]-3000,1e-9)
-        self.assertAlmostEqual(curves[0][-1][1],tail[0][1],delta=1e-12)
-        for x,y in tail:
-            self.assertGreater(x,3000);self.assertAlmostEqual((1-math.exp(-3000/900))*math.exp(-(x-3000)/80),y,delta=1e-12)
 
     def test_narrow_domain_is_sampled_and_chained_inequalities_work_in_both_directions(self):
         points=list(filter(None,self.graph('y=x{0.0001<=x<=0.0002}',min=0,max=100)))

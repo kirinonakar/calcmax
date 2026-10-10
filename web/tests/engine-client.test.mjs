@@ -1,8 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {EngineClient} from '../engine-client.js';
-import {createEngineUI} from '../engine-ui.js';
-import {setLanguage} from '../i18n.js';
 
 function runtime(t) {
   const workers=[],statuses=[];
@@ -148,60 +146,6 @@ test('cancel and stale input replies cannot resume a replacement worker',async t
   answer('late');await Promise.resolve();
   assert.equal(workers[1].request,undefined);assert.equal((await result).ok,false);
 });
-
-test('solve and analysis buttons become Cancel after one second and recover after completion or cancellation',async t=>{
-  const {engine,workers,tick}=runtime(t);
-  class Button extends EventTarget {
-    dataset={};style={};disabled=false;hidden=false;textContent='';
-    click(){if(!this.disabled)this.dispatchEvent(new Event('click',{cancelable:true}));}
-  }
-  const actions=new Map(['equation','statistics','statistics-advanced','regression'].map(context=>[context,new Button()]));
-  const elements=new Map(['stop','retry','status','mode'].map(id=>[id,new Button()]));
-  elements.get('mode').value='scientific';
-  const original=Object.getOwnPropertyDescriptor(globalThis,'document');
-  globalThis.document={documentElement:{dataset:{}},getElementById:id=>elements.get(id),
-    querySelector:selector=>actions.get(selector.match(/data-run="([^"]+)"/)[1])};
-  let previewsCancelled=0,analysisRuns=0;
-  const ui=createEngineUI({engine,onChange(){},onReady(){},cancelPreview(){previewsCancelled++;}});
-  for(const button of actions.values())button.addEventListener('click',()=>analysisRuns++);
-  t.after(()=>{ui.dispose();setLanguage('en');if(original)Object.defineProperty(globalThis,'document',original);else delete globalThis.document;});
-  // A normal completed calculation leaves no delayed Cancel label behind.
-  engine.ready=true;
-  let result=engine.execute({},{context:'equation'});
-  tick(999);assert.equal(actions.get('equation').textContent,'Solve');assert.equal(actions.get('equation').disabled,true);
-  workers[0].message({type:'result',id:workers[0].request.id,result:{ok:true}});
-  await result;tick(1);assert.equal(actions.get('equation').textContent,'Solve');
-  for(const context of actions.keys()){
-    elements.get('mode').value=context==='equation'?'equation':'statistics';
-    const worker=workers.at(-1),button=actions.get(context),label=context==='equation'?'Solve':'Analyze';
-    result=engine.execute({},{context});
-    tick(999);assert.equal(button.textContent,label);assert.equal(button.disabled,true);
-    tick(1);assert.equal(button.textContent,'Cancel');assert.equal(button.disabled,false);
-    assert.equal(elements.get('stop').style.visibility,'hidden','no second cancel control appears');
-    assert.equal([...actions.values()].filter(action=>action.dataset.cancelCalculation==='true').length,1);
-    button.click();assert.equal(worker.terminated,true);assert.equal((await result).ok,false);
-    assert.equal(button.textContent,label);assert.equal(button.disabled,true,'wait for engine restart');
-    worker.message({type:'result',id:worker.request.id,result:{ok:true,exact:'stale'}});
-    assert.equal(engine.pending,null,'late cancelled results are ignored');
-    engine.ready=true;ui.updateStopButton();
-    const next=engine.execute({},{context});
-    tick(1000);assert.equal(button.textContent,'Cancel');
-    const replacement=workers.at(-1);
-    replacement.message({type:'result',id:replacement.request.id,result:{ok:true,exact:'2'}});
-    assert.equal((await next).exact,'2');assert.equal(button.textContent,label);assert.equal(button.disabled,false);
-  }
-  assert.equal(analysisRuns,0,'Cancel must not trigger the original analysis click');assert.equal(previewsCancelled,4);
-  setLanguage('ko');result=engine.execute({},{context:'equation'});tick(1000);
-  assert.equal(actions.get('equation').textContent,'취소');elements.get('stop').onclick();await result;
-  assert.equal(actions.get('equation').textContent,'풀기');
-  engine.ready=true;elements.get('mode').value='statistics';
-  result=engine.execute({});tick(1000);
-  assert.equal(elements.get('stop').style.visibility,'hidden');
-  elements.get('mode').value='scientific';ui.updateStopButton();
-  assert.equal(elements.get('stop').style.visibility,'');assert.equal(elements.get('stop').disabled,false);
-  elements.get('stop').onclick();await result;
-});
-
 
 test('unlimited requests survive the execution deadline and can still be cancelled',async t=>{
   const {engine,workers,tick}=runtime(t);

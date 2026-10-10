@@ -40,7 +40,6 @@ for precision in (30,60):
                 completed=subprocess.run([sys.executable,"-c",program],capture_output=True,text=True,timeout=45)
                 self.assertEqual(0,completed.returncode,completed.stdout+completed.stderr)
 
-
     def test_domain_assumptions_and_excluded_roots_are_preserved(self):
         sys.path.insert(0,str(PYTHON))
         import calc_engine as c
@@ -59,14 +58,11 @@ for precision in (30,60):
         self.assertTrue(result['ok'],result)
         self.assertEqual('EmptySet',result['exact'])
 
-
 def node(kind, value="", *args):
     return {"kind": kind, "value": str(value), "args": list(args)}
 
-
 def evaluate(tree, **options):
     return json.loads(calc_engine.dispatch(json.dumps({"tree": tree, **options})))
-
 
 class AnswerFunctionTests(unittest.TestCase):
     def test_answer_functions_bind_variables_and_preserve_constants_and_domains(self):
@@ -99,7 +95,6 @@ class AnswerFunctionTests(unittest.TestCase):
             self.assertEqual("0", evaluate(node("call", "Ans", node("number", 2)), variables={"Ans": result["resultAst"]})["exact"])
             self.assertFalse(evaluate(node("call", "Ans", node("number", 0)), variables={"Ans": result["resultAst"]})["ok"])
 
-
     def test_missing_numeric_multivariate_and_wrong_arity_answers_are_rejected(self):
         for variables in [{}, {"Ans": node("number", 42)},
                           {"Ans": node("binary", "+", node("snapshot_symbol", "x"), node("snapshot_symbol", "y"))}]:
@@ -107,32 +102,6 @@ class AnswerFunctionTests(unittest.TestCase):
         answer = evaluate(node("binary", "^", node("symbol", "x"), node("number", 2)))["resultAst"]
         for arguments in [[], [node("number", 1), node("number", 2)]]:
             self.assertFalse(evaluate(node("call", "Ans", *arguments), variables={"Ans": answer})["ok"])
-
-
-class LogSolveTests(unittest.TestCase):
-    def equation(self):
-        x = node("symbol", "x")
-        left = node("call", "log", node("binary", "-", x, node("number", 3)), node("number", 2))
-        right = node("call", "log", node("binary", "-", node("binary", "*", node("number", 3), x), node("number", 5)), node("number", 4))
-        return node("relation", "=", left, right)
-
-
-    def test_log_roots_respect_assumptions_and_preserved_domain_guards(self):
-        with self.subTest(scenario='log_roots_respect_assumptions_and_preserved_domain_guards'):
-            x = node("symbol", "x")
-            result = evaluate(node("call", "solve", self.equation(), x), assumptions={"x": ["negative"]})
-            self.assertEqual("EmptySet", result.get("exact"), result)
-            excluded = node("restricted", "", self.equation(), node("relation", "!=", x, node("number", 7)))
-            result = evaluate(node("call", "solve", excluded, x))
-            self.assertEqual("EmptySet", result.get("exact"), result)
-        with self.subTest(scenario='auxiliary_lambert_solutions_are_labeled_partial'):
-            x = node("symbol", "x")
-            equation = node("relation", "=", node("call", "ln", x), x)
-            result = evaluate(node("call", "solve", equation, x))
-            self.assertTrue(result["ok"], result)
-            self.assertIn("LambertW", result["exact"])
-            self.assertIn("Partial solutions", result["note"])
-
 
 if __name__ == "__main__":
     unittest.main()

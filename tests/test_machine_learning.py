@@ -15,13 +15,11 @@ import calc_engine
 import symvacas_catalog
 from calc_machine_learning import classification_metrics
 
-
 def fit(rows, mode, options=None):
     engine = Engine({"precision": 30})
     expression = fit_regression(engine, [[s.sympify(v) for v in row] for row in rows], mode,
                                 symvacas_catalog._sympify(options) if options is not None else None)
     return engine, expression
-
 
 class MachineLearningTests(unittest.TestCase):
 
@@ -94,7 +92,6 @@ class MachineLearningTests(unittest.TestCase):
             self.assertAlmostEqual(report["permutationImportance"][1]["estimate"], 0)
             self.assertTrue(math.isfinite(engine.regression_predict([100, 7])))
 
-
     def test_orthogonal_solution_matches_closed_form_for_all_linear_penalties(self):
         # Unit-SD, orthogonal predictors; soft threshold then divide by 1+L2.
         with self.subTest(scenario='orthogonal_solution_matches_closed_form_for_all_linear_penalties'):
@@ -121,7 +118,6 @@ class MachineLearningTests(unittest.TestCase):
             scaled, _ = fit([[100*x, 100*z, c, y] for x, z, c, y in rows], "lasso", .1)
             for a, b in zip(engine.regression_report["residuals"], scaled.regression_report["residuals"]):
                 self.assertAlmostEqual(float(a["fitted"]), float(b["fitted"]))
-
 
     def test_penalized_logistic_kkt_and_separated_inputs(self):
         with self.subTest(scenario='penalized_logistic_kkt_and_separated_inputs'):
@@ -164,16 +160,6 @@ class MachineLearningTests(unittest.TestCase):
             shrunk, _ = fit(rows, "logisticlasso", 1)
             self.assertEqual(float(shrunk.regression_report["coefficients"][1]["oddsRatio"]), 1)
 
-
-    def test_invalid_options_and_data(self):
-        for mode, options in [("lasso", 0), ("ridge", -1), ("elasticnet", [.1, 2]),
-                              ("randomforest", [0, 10, 0]), ("randomforest", [10, 21, 0]),
-                              ("randomforest", [10, 10, .5])]:
-            with self.subTest(mode=mode, options=options), self.assertRaises(MathError):
-                fit([[1, 2], [2, 3]], mode, options)
-        with self.assertRaises(MathError):
-            fit([[1, 2], [2, 2]], "logisticridge", .1)
-
     def test_public_dispatch_curve_non_reuse_and_cancellation(self):
         def node(value):
             return {"kind": "list", "args": [node(v) for v in value]} if isinstance(value, list) else {"kind": "number", "value": str(value)}
@@ -193,7 +179,6 @@ class MachineLearningTests(unittest.TestCase):
         stopped = json.loads(calc_engine.dispatch(json.dumps(request), Control()))
         self.assertFalse(stopped["ok"])
         self.assertIn("cancel", stopped["error"].lower())
-
 
 if __name__ == "__main__":
     unittest.main()

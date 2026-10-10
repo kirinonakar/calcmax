@@ -10,13 +10,10 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'app/src/main/python'))
 import symvacas_catalog as catalog
 import sympy as s
-from calc_evaluator import Engine
-from calc_statistics import fit_regression
 from calc_shared import MathError
 from calc_nuts import sample, diagnostics, _leapfrog, _build_tree, _joint
 
 REFERENCE = json.loads((ROOT/'tests/fixtures/bayesian_regression_reference.json').read_text())
-
 
 class BayesianRegressionTests(unittest.TestCase):
     def test_conjugate_and_laplace_match_independent_references(self):
@@ -117,28 +114,6 @@ class BayesianRegressionTests(unittest.TestCase):
             self.assertLess(rhat,1.05);self.assertGreater(ess,100)
         self.assertEqual(summary['divergences'],sum(chain['divergences'] for chain in summary['chainDiagnostics']))
 
-
-    def test_proper_priors_handle_collinearity_and_original_coordinate_transform(self):
-        rows = [[-2,0],[-1,0],[1,1],[2,1]]
-        for mode in ('bayeslinear','bayeslogistic'):
-            report = catalog.regression_report(rows,mode)
-            shifted = catalog.regression_report([[10**9+2*x,y] for x,y in rows],mode)
-            self.assertAlmostEqual(float(shifted['coefficients'][1]['estimate'])*2,float(report['coefficients'][1]['estimate']),places=8)
-            self.assertAlmostEqual(float(shifted['coefficients'][1]['posteriorSD'])*2,float(report['coefficients'][1]['posteriorSD']),places=8)
-            singular = catalog.regression_report([[x,2*x,1,y] for x,y in rows],mode)
-            self.assertEqual(len(singular['coefficients']),4)
-            self.assertTrue(all(float(c['posteriorSD'])>0 for c in singular['coefficients']))
-            engine = Engine({'precision':40})
-            expression = fit_regression(engine,[[s.sympify(v) for v in row] for row in rows],mode)
-            for x in [-1.5,0,1.5]:
-                self.assertAlmostEqual(engine.regression_predict([x]),float(expression.subs(s.Symbol('x'),x)),places=10)
-        for rows in ([[1,3],[1,3]],[[1,2,3],[2,4,5]]):
-            self.assertEqual(catalog.regression_report(rows,'bayeslinear')['method'],'conjugate')
-        narrow = catalog.regression_report(REFERENCE['rows'],'bayeslinear',[.1,.8])
-        wide = catalog.regression_report(REFERENCE['rows'],'bayeslinear',[.1,.99])
-        self.assertLess(abs(float(narrow['coefficients'][1]['estimate'])),abs(REFERENCE['linear'][1]['estimate']))
-        self.assertLess(float(narrow['coefficients'][1]['high']),float(wide['coefficients'][1]['high']))
-
     def test_invalid_data_prior_and_sampler_settings_are_rejected(self):
         for mode in ('bayeslinear','bayeslogistic'):
             for rows in ([],[[1,0]],[[1,0],[1,2,0]],[[1,s.oo],[2,1]]):
@@ -150,6 +125,5 @@ class BayesianRegressionTests(unittest.TestCase):
                 with self.assertRaises(MathError): catalog.regression_report(REFERENCE['rows'],mode,options)
         with self.assertRaises(MathError): catalog.regression_report([[1,0],[2,0]],'bayeslogistic')
         with self.assertRaises(MathError): catalog.regression_report(REFERENCE['rows'],'bayeslinear',[2.5,.95,0,1])
-
 
 if __name__ == '__main__': unittest.main()

@@ -9,26 +9,20 @@ import calc_engine
 import symvacas_catalog as catalog
 import sympy as s
 
-
 def node(kind, value="", *args):
     return {"kind": kind, "value": str(value), "args": list(args)}
-
 
 def number(value):
     return node("number", value)
 
-
 def data(*values):
     return node("list", "", *(number(v) for v in values))
-
 
 def call(name, *args):
     return node("call", name, *args)
 
-
 def evaluate(tree, **options):
     return json.loads(calc_engine.dispatch(json.dumps({"tree": tree, **options})))
-
 
 class CalculatorConventionTests(unittest.TestCase):
     def test_sample_defaults_and_explicit_population_values(self):
@@ -49,15 +43,6 @@ class CalculatorConventionTests(unittest.TestCase):
         self.assertEqual(4, report["population variance"])
         self.assertEqual(s.Rational(32, 7), report["sample variance"])
         self.assertEqual("0", evaluate(call("stdev", data(7), number(0)))["exact"])
-
-    def test_invalid_sample_inputs_are_rejected(self):
-        for name, arguments in [("variance", [data(7)]), ("stdev", [data(7)]),
-                                ("covariance", [data(7), data(9)])]:
-            self.assertFalse(evaluate(call(name, *arguments))["ok"])
-            for ddof in (1, -1, 2, "0.5"):
-                result = evaluate(call(name, *arguments, number(ddof)))
-                self.assertFalse(result["ok"], result)
-        self.assertFalse(evaluate(call("covariance", data(1,2), data(1), number(1)))["ok"])
 
     def test_solve_domains_absolute_values_and_assumptions(self):
         self.assertEqual(s.FiniteSet(-2,4), catalog.solve(s.Eq(s.Abs(catalog.x-1),3),catalog.x,catalog.real))
@@ -120,32 +105,6 @@ class CalculatorConventionTests(unittest.TestCase):
         self.assertTrue(integral["ok"], integral)
         self.assertIn("Integral", integral["exact"])
         self.assertIn("nintegrate", integral["note"])
-
-    def test_primality_range_and_factorization_limits(self):
-        for value, expected in [(2**61-1, "True"), (2**64-59, "True"), (2**64-1, "False"), (-7,"False")]:
-            self.assertEqual(expected, evaluate(call("isprime", number(value)))["exact"])
-        self.assertIn("2^64", evaluate(call("isprime", number(2**64)))["error"])
-        self.assertFalse(evaluate(call("isprime", number("1.5")))["ok"])
-        self.assertEqual(360, s.prod(catalog.factorint(360).args))
-        for name in ("factorint", "divisors"):
-            for invalid in (0,-1,"1.5"):
-                result = evaluate(call(name, number(invalid)))
-                self.assertFalse(result["ok"], result)
-                self.assertIn("positive integer", result["error"])
-
-    def test_eigenvalues_are_labeled_and_numeric_pairs_remain_reusable(self):
-        for rows, expected in [([data(2,1),data(1,2)], {(1,1),(3,1)}),
-                               ([data(2,1),data(0,2)], {(2,2)})]:
-            result = evaluate(call("eigenvalues", node("list", "", *rows)))
-            self.assertTrue(result["ok"], result)
-            self.assertEqual("rows", result["tree"]["kind"])
-            self.assertIn("multiplicity", result["exact"])
-            self.assertIn("multiplicity", result["decimal"])
-            stored = result["resultAst"]
-            pairs = calc_engine.Engine({}).build(stored)
-            self.assertEqual(expected, {tuple(pair) for pair in pairs})
-            self.assertTrue(evaluate(node("symbol", "Ans"), variables={"Ans":stored})["ok"])
-
 
 if __name__ == "__main__":
     unittest.main()

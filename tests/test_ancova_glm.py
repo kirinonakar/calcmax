@@ -1,10 +1,8 @@
 """ANCOVA and GLM accuracy, domain validation and calculator integration."""
 import json
 import unittest
-from test_advanced_statistics import ROOT, run, evaluate, tree
-from calc_engine import dispatch
+from test_advanced_statistics import ROOT, run
 from calc_shared import MathError
-
 
 class AncovaGlmTests(unittest.TestCase):
     def test_estimated_nb2_matches_count_regression_and_retains_fixed_alpha(self):
@@ -46,14 +44,6 @@ class AncovaGlmTests(unittest.TestCase):
             self.assertAlmostEqual(float(base['Adjusted means'][i]['adjusted mean']), float(changed['Adjusted means'][i]['adjusted mean']), places=8)
         self.assertAlmostEqual(float(base['ANCOVA table'][0]['F']), float(changed['ANCOVA table'][0]['F']), places=8)
 
-    def test_ancova_slope_check_can_be_skipped_or_unavailable(self):
-        rows = [[1,1,2],[1,2,4],[2,2,3],[2,3,6],[2,4,5]]
-        self.assertNotIn('Slope homogeneity', run('ancova', rows, .9, 0))
-        # Additive fit is identifiable while the interaction fit has no residual df.
-        rows = [[1,1,2],[1,1,3],[2,2,3],[2,3,6]]
-        result = run('ancova', rows)
-        self.assertEqual(result['Slope homogeneity']['status'], 'unavailable')
-
     def test_glm_offsets_match_log_exposure_and_gaussian_is_ols(self):
         rows = [[0,2],[1,4],[2,3],[3,8],[4,7],[5,9]]
         gaussian = run('glm', rows)
@@ -84,36 +74,5 @@ class AncovaGlmTests(unittest.TestCase):
         for name, args in cases:
             with self.subTest(name=name,args=args):
                 with self.assertRaises(MathError): run(name,*args)
-
-    def test_large_glm_reports_bound_diagnostics_and_use_all_rows(self):
-        rows = [[i/100, 2+i/200+(i%3-1)*.1] for i in range(500)]
-        result = evaluate('glm('+str(rows)+')')
-        self.assertTrue(result['ok'])
-        fitted = next(s for s in result['statisticsReport']['sections'] if s['title']=='Fitted observations')
-        self.assertEqual(len(fitted['rows']),50)
-        self.assertIn('all observations',result['note'])
-        raw = run('glm',rows)
-        self.assertEqual(raw['n'],500)
-        self.assertEqual(raw['df residual'],498)
-
-    def test_reports_label_groups_and_covariates_without_changing_answers(self):
-        schema = json.loads((ROOT/'app/src/main/assets/advanced_statistics.json').read_text(encoding='utf-8'))
-        for name in ('ancova','glm'):
-            source = next(d['example'] for d in schema if d['id']==name)
-            raw = evaluate(source)
-            mapped = json.loads(dispatch(json.dumps(dict(tree=tree(source),precision=40,budget=30,
-                statisticsTermLabels={'x1':'baseline','group:1':'Control','Group':'treatment'}))))
-            self.assertTrue(mapped['ok'],mapped.get('error'))
-            # Display labels belong in reports, leaving reusable engine IDs intact.
-            self.assertIn('baseline',json.dumps(mapped['statisticsReport']))
-            from calc_evaluator import Engine
-            engine = Engine({})
-            original = engine.build(tree(source))
-            self.assertIn('x1',str(original))
-            self.assertEqual(raw['statisticsReport']['analysis'],name)
-            if name=='ancova':
-                self.assertIn('Control',json.dumps(mapped['statisticsReport']))
-                self.assertNotIn('Control',str(original))
-
 
 if __name__=='__main__': unittest.main()

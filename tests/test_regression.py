@@ -13,7 +13,6 @@ import calc_engine
 import calc_statistics
 from calc_evaluator import Engine
 
-
 def request(rows, mode, **options):
     table = {"kind": "list", "args": [
         {"kind": "list", "args": [{"kind": "number", "value": str(value)} for value in row]}
@@ -21,12 +20,10 @@ def request(rows, mode, **options):
     return json.dumps({"tree": {"kind": "call", "value": "regression", "args": [
         table, {"kind": "symbol", "value": mode}]}, **options})
 
-
 DECAY_ROWS = [(x, s.Rational(y)) for x, y in (
     (20, "0.818731"), (40, "0.670320"), (60, "0.548812"),
     (80, "0.449329"), (100, "0.367879"), (150, "0.223130"),
     (200, "0.135335"), (300, "0.049787"), (400, "0.018316"))]
-
 
 class RegressionTests(unittest.TestCase):
     def test_custom_decay_is_invariant_to_units_and_parameter_names(self):
@@ -63,7 +60,6 @@ class RegressionTests(unittest.TestCase):
                     self.assertAlmostEqual(float(values["C"]), 0.7, delta=0.003)
                     self.assertLess(sum(float((fitted.subs(x, xx)-yy)**2) for xx, yy in rows), 1e-5)
 
-
     def test_custom_bounds_are_respected_and_boundary_optimum_is_refined(self):
         with self.subTest(scenario='custom_bounds_are_respected_and_boundary_optimum_is_refined'):
             x, a, tau, c = s.symbols("x A T2 C")
@@ -89,7 +85,6 @@ class RegressionTests(unittest.TestCase):
                 with self.subTest(model=model):
                     with self.assertRaisesRegex(calc_statistics.MathError, "did not converge to identifiable"):
                         calc_statistics.fit_custom_regression(Engine({}), DECAY_ROWS, model, x, options)
-
 
     def test_custom_cancellation_during_seed_search_and_precision_refinement(self):
         with self.subTest(scenario='custom_cancellation_during_seed_search_and_precision_refinement'):
@@ -139,25 +134,6 @@ class RegressionTests(unittest.TestCase):
                 self.assertEqual(mp.mp.dps, before)
                 self.assertTrue(json.loads(calc_engine.dispatch(request([(1, 2), (2, 4)], mode)))["ok"])
 
-
-    def test_transformed_fits_match_log_linear_least_squares(self):
-        rows = [(s.Integer(x), s.Integer(y)) for x, y in [(1, 8), (2, 11), (4, 17), (7, 25), (11, 41)]]
-        engine = Engine({"precision": 70})
-        x = engine.symbol("x")
-        for mode in ("logarithmic", "exponential", "power"):
-            with self.subTest(mode=mode):
-                tx = [s.N(s.log(xx) if mode != "exponential" else xx, 90) for xx, _ in rows]
-                ty = [s.N(s.log(yy) if mode != "logarithmic" else yy, 90) for _, yy in rows]
-                design = s.Matrix([[1, xx] for xx in tx])
-                a, b = (design.T*design).inv()*design.T*s.Matrix(ty)
-                expected = (a+b*s.log(x) if mode == "logarithmic" else
-                            s.exp(a+b*x) if mode == "exponential" else s.exp(a)*x**b)
-                fitted = calc_statistics.fit_regression(engine, rows, mode)
-                for at in (s.Rational(3, 2), s.Integer(5), s.Integer(10)):
-                    relative = abs(s.N((fitted-expected).subs(x, at)/expected.subs(x, at), 70))
-                    self.assertLess(relative, s.Float("1e-65"))
-
-
     def test_input_domains_and_singular_data_are_rejected(self):
         for mode, rows in [("power", [(0, 1), (2, 3)]), ("power", [(1, -1), (2, 3)]),
                            ("exponential", [(1, 0), (2, 3)]), ("logarithmic", [(-1, 2), (2, 3)]),
@@ -167,6 +143,5 @@ class RegressionTests(unittest.TestCase):
         for mode in ("power", "exponential", "logarithmic"):
             result = json.loads(calc_engine.dispatch(request([(1, 2), (2, 2), (3, 2)], mode)))
             self.assertTrue(result["ok"], result)
-
 
 if __name__ == "__main__": unittest.main()

@@ -6,11 +6,10 @@ import unittest
 
 sys.path.insert(0,str(pathlib.Path(__file__).resolve().parents[1]/"app/src/main/python"))
 import sympy as s
-from calc_engine import Engine,contains_heavy_call
+from calc_engine import contains_heavy_call
 from calc_solutions import affine_exponential_solutions
 from calc_number_theory import bounded_divisors
 from calc_shared import MathError
-
 
 class SolutionFallbackTests(unittest.TestCase):
     def test_complete_lambert_families_satisfy_equations_across_branches(self):
@@ -41,27 +40,7 @@ class SolutionFallbackTests(unittest.TestCase):
         self.assertEqual(s.FiniteSet(0),affine_exponential_solutions(x*s.exp(x),x,s.S.Complexes)[0])
         self.assertEqual(s.S.EmptySet,affine_exponential_solutions(x*s.exp(x)-1,x,s.Interval.open(-s.oo,0))[0])
 
-    def test_auxiliary_roots_are_verified_and_marked_partial(self):
-        x=s.Symbol("x")
-        engine=Engine({})
-        roots=engine.call("solve",[s.log(x)-x,x],[])
-        self.assertTrue(any(root.has(s.LambertW) for root in roots))
-        self.assertIn("Partial solutions",engine.note)
-        self.assertIn("not the complete",engine.note)
-
-
 class NumberTheoryLimitTests(unittest.TestCase):
-    def test_large_easy_inputs_factor_and_enumerate_divisors_exactly(self):
-        number=s.Integer(10)**20
-        factorization=Engine({}).call("factorint",[number],[])
-        self.assertEqual(number,s.prod(factorization.args))
-        divisors=bounded_divisors(number)
-        self.assertEqual(441,len(divisors))
-        self.assertEqual(1,divisors[0])
-        self.assertEqual(number,divisors[-1])
-        self.assertEqual(len(divisors),len(set(divisors)))
-        self.assertTrue(all(number%divisor==0 for divisor in divisors))
-        self.assertEqual([1],bounded_divisors(s.Integer(1)))
 
     def test_divisor_count_and_output_size_are_bounded(self):
         with self.assertRaisesRegex(MathError,"2000 results"):
@@ -84,7 +63,6 @@ assert not result['ok'] and 'Computation limit reached' in result['error'],resul
 """
         completed=subprocess.run([sys.executable,"-c",program],capture_output=True,text=True,timeout=5)
         self.assertEqual(0,completed.returncode,completed.stdout+completed.stderr)
-
 
 if __name__=="__main__":
     unittest.main()

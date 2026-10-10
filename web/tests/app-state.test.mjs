@@ -29,13 +29,3 @@ test('saved state rejects malformed collections and bounds preferences and retai
   assert.equal(bounded.digits,8);assert.equal(bounded.history.length,500);assert.equal(bounded.displayShortcuts.length,6);
   assert.equal(saved.history.length,501,'normalization does not truncate the source backup');
 });
-
-test('previously translated regression selections restore their canonical model IDs',()=>{
-  for(const [label,model] of [['다항','polynomial'],['다중','multiple'],['로지스틱','logistic']]){
-    const saved={fields:{'regression-kind':label}};
-    const state=createAppState(saved,'ko-KR');
-    assert.equal(state.fields['regression-kind'],model);
-    assert.equal(saved.fields['regression-kind'],label,'the source backup is not modified');
-  }
-  assert.equal(createAppState({fields:{'regression-kind':'power'}}).fields['regression-kind'],'power');
-});

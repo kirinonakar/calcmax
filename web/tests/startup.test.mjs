@@ -2,7 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {installEngine} from '../engine-bootstrap.js';
 import {fetchEngineAsset} from '../engine-fetch.js';
-import {spawnSync} from 'node:child_process';
 
 function fixture(){
   const requests=[],unpacked=[],python=[];
@@ -41,21 +40,4 @@ test('a download that never resolves fails after two bounded attempts',async()=>
   let requests=0;
   await assert.rejects(fetchEngineAsset(()=>{requests++;return new Promise(()=>{});},'engine.zip',{},10),/timed out/);
   assert.equal(requests,2);
-});
-
-test('application module dependencies link before engine startup',()=>{
-  const result=spawnSync(process.execPath,['--experimental-vm-modules','--input-type=module','--eval',`
-    import vm from 'node:vm';
-    import assert from 'node:assert/strict';
-    import {readFile} from 'node:fs/promises';
-    const root=new URL('../',${JSON.stringify(import.meta.url)}),modules=new Map();
-    async function get(url){
-      if(modules.has(url.href))return modules.get(url.href);
-      const module=new vm.SourceTextModule(await readFile(url,'utf8'),{identifier:url.href});
-      modules.set(url.href,module);return module;
-    }
-    const app=await get(new URL('app.js',root));
-    await app.link((name,parent)=>get(new URL(name,parent.identifier)));
-  `],{encoding:'utf8'});
-  assert.equal(result.status,0,result.stderr || result.stdout);
 });

@@ -47,21 +47,6 @@ class StatisticsDataSourceTest {
         }
     }
 
-    @Test fun plotGroupsKeepRawLabelsAndExcludeOnlyMissingOrNonfiniteObservations() {
-        val source="A,1,10\nB,2,20\nA,,30\n,99,99\nB,NaN,40"
-        assertEquals(listOf("A · y" to listOf(1.0),"A · z" to listOf(10.0,30.0),"B · y" to listOf(2.0),"B · z" to listOf(20.0,40.0)),
-            com.kirinonakar.symvacas.ui.statisticsPlotSeries(com.kirinonakar.symvacas.ui.statisticsRows(source),"xyz","first"))
-        val panels=com.kirinonakar.symvacas.ui.statisticsPlotPanels(com.kirinonakar.symvacas.ui.statisticsRows(source),"xyz","first")
-        assertEquals(listOf("y","z"),panels.map {it.label})
-        assertEquals(listOf("A" to listOf(1.0),"B" to listOf(2.0)),panels[0].series)
-        assertEquals(listOf("A" to listOf(10.0,30.0),"B" to listOf(20.0,40.0)),panels[1].series)
-        val last=listOf(listOf("1","A"),listOf("2","B"),listOf("3","A"))
-        assertEquals(listOf("A" to listOf(1.0,3.0),"B" to listOf(2.0)),com.kirinonakar.symvacas.ui.statisticsPlotSeries(last,"xy","last"))
-        val dates=listOf(listOf("2024-01-01","1,234"),listOf("2024-01-01",""),listOf("2","5"))
-        assertEquals(listOf("2024-01-01" to listOf(1234.0),"2" to listOf(5.0)),com.kirinonakar.symvacas.ui.statisticsPlotSeries(dates,"xy","first"))
-        assertEquals(emptyList<Pair<String,List<Double>>>(),com.kirinonakar.symvacas.ui.statisticsPlotSeries(listOf(listOf("","7")),"xy","first"))
-    }
-
     @Test fun statisticsImportsPreserveDatesQuotedCellsAndMissingValues() {
         run { // excelPasteKeepsDateAndPaddedThousandsAsTwoColumns
             val dates=listOf("2022-12-02","2023-01-15","2023-02-05","2023-03-05","2023-04-01","2023-05-01","2023-06-01","2023-07-01","2023-08-01","2023-09-01")

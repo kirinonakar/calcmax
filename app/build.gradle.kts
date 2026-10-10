@@ -14,7 +14,6 @@ android {
         applicationId = "com.kirinonakar.symvacas"
         minSdk = 26
         targetSdk = 36
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         versionCode = 46
         versionName = "1.4.6"
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
@@ -59,7 +58,5 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     testImplementation(libs.junit)
     testImplementation(libs.org.json)
-    androidTestImplementation("androidx.test:runner:1.7.0")
-    androidTestImplementation("androidx.test.ext:junit:1.3.0")
     debugImplementation(libs.androidx.compose.ui.tooling)
 }

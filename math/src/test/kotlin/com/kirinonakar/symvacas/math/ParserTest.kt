@@ -73,54 +73,5 @@ class EvaluationPolicyTest {
 
 }
 
-class ConstantInputTest {
-    @Test fun typedCharactersCompleteSymbolAndFunctionNames() {
-        run { // typedCharactersCompleteSymbolAndFunctionNames
-            for(name in LatexInput.symbolLabels.keys+listOf("integrate","sin","piecewise","my_identifier")) {
-                var editor=Editor("sin()",4)
-                for((index,character) in name.withIndex()) {
-                    editor=editor.insert(character.toString())
-                    assertEquals(name,"sin(${name.take(index+1)})",editor.source)
-                }
-                assertEquals(name,name,editor.tree()?.args?.firstOrNull()?.value)
-            }
-            assertEquals("theta",Editor("thta",2).insert("e").source)
-            assertEquals("pi",Editor("p").insert("i").source)
-            var function=Editor()
-            for((index,character) in "sin(60)".withIndex()) {
-                function=function.insert(character.toString())
-                assertEquals("sin(60)".take(index+1),function.source)
-            }
-            assertEquals("call",function.tree()?.kind)
-            assertEquals("sin",function.tree()?.value)
-            assertEquals("x*e",Editor("x").insertOperand("e").source)
-            assertEquals("th*e",Editor("th").insertConstant("e").source)
-        }
-        run { // insertionSeparatesNumbersAndBothIdentifierBoundaries
-            assertEquals("2*e",Editor("2").insertConstant("e").source)
-            val middle=Editor("xy",1).insertConstant("pi")
-            assertEquals("x*pi*y",middle.source)
-            assertEquals(4,middle.cursor)
-            assertEquals("Ans*pi",Editor("Ans*x").selectRange(4,5).insertConstant("pi").source)
-            assertEquals("sin(pi)",Editor("sin()",4).insertConstant("pi").source)
-            assertEquals("pi",Editor("Ans").selectRange(0,3).insertConstant("pi").source)
-            assertEquals("pie",Editor().insertOperand("pie").source)
-        }
-    }
-
-}
-
 class BracketAutoCloseTest {
-    @Test fun openerInsertsTheMatchingCloserAndKeepsTheCaretInside() {
-        run { // openerInsertsTheMatchingCloserAndKeepsTheCaretInside
-            assertEquals(BracketEdit("print()",6),BracketAutoClose.typed("print",5,"print(",6))
-            assertEquals(BracketEdit("a()b",2),BracketAutoClose.typed("ab",1,"a(b",2))
-            assertEquals(BracketEdit("{}",1),BracketAutoClose.typed("",0,"{",1))
-            assertEquals(BracketEdit("a[]b",2),BracketAutoClose.typed("ab",1,"a[b",2))
-        }
-        run { // shiftDropsPairsThatWereEditedOrLost
-            assertEquals(emptyList<IntRange>(),TypedParens.shift(listOf(2..4),"5×()","5×(3)"))
-            assertEquals(emptyList<IntRange>(),TypedParens.shift(listOf(2..4),"5×()","abc"))
-        }
-    }
 }

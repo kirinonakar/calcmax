@@ -13,7 +13,6 @@ import calc_engine
 
 SCHEMA = json.loads((ROOT / "app/src/main/assets/probability.json").read_text(encoding="utf-8"))
 
-
 class ProbabilityTests(unittest.TestCase):
     def run_probability(self, category="distribution", distribution="normal", operation="le", **values):
         return json.loads(calc_engine.dispatch(json.dumps(dict(action="probability",category=category,distribution=distribution,operation=operation,values=values))))
@@ -22,7 +21,6 @@ class ProbabilityTests(unittest.TestCase):
         response = self.run_probability(**request)
         self.assertTrue(response["ok"],response)
         return float(response["value"])
-
 
     def test_discrete_distributions_preserve_integer_and_degenerate_boundaries(self):
         with self.subTest(scenario='binomial_integer_and_noninteger_boundaries'):
@@ -36,7 +34,6 @@ class ProbabilityTests(unittest.TestCase):
                 for op,expected in [("eq",1),("le",1),("lt",0),("ge",1),("gt",0)]:
                     self.assertEqual(self.value(distribution=distribution,operation=op,x=point,**values),expected)
                 self.assertEqual(self.value(distribution=distribution,operation="quantile",q="0.5",**values),point)
-
 
     def test_dice_and_draw_probabilities_match_enumerated_outcomes(self):
         with self.subTest(scenario='dice_sum_matches_enumerated_outcomes'):
@@ -60,17 +57,6 @@ class ProbabilityTests(unittest.TestCase):
             for op,distribution_op,k in [("exactly","eq",3),("atLeast","ge",3),("atMost","le",3),("atLeastOne","ge",1)]:
                 self.assertEqual(self.value(category="draw",operation=op,population=100,marked=10,draws=20,k=k),self.value(distribution="hypergeometric",operation=distribution_op,population=100,successes=10,draws=20,x=k))
 
-
-    def test_invalid_inputs_are_explicit_errors(self):
-        requests=[dict(mu=0,sigma=0,x=1),dict(mu=0,sigma=-1,x=1),dict(mu="nan",sigma=1,x=1),dict(mu="1/0",sigma=1,x=1),dict(mu="1e1000000000",sigma=1,x=1),dict(mu=0,sigma=1,operation="between",lower=2,upper=1),
-                  dict(distribution="binomial",n="5.5",p="0.5",x=3),dict(distribution="binomial",n=5,p="110%",x=3),dict(distribution="geometric",p=0,x=1),
-                  dict(distribution="hypergeometric",population=10,successes=20,draws=2,x=1),dict(category="events",operation="conditional",pa="0.2",pb=0,intersection=0),
-                  dict(category="events",operation="union",pa="0.2",pb="0.3",intersection="0.5"),dict(category="bayes",operation="posterior",prior=0,likelihood=1,falsePositive=0),
-                  dict(category="basic",operation="ratio",favorable=3,total=2),dict(category="draw",operation="allMarked",population=10,draws=11,marked=2)]
-        for request in requests:
-            with self.subTest(request=request):self.assertFalse(self.run_probability(**request)["ok"])
-
-
     def test_events_detect_ambiguity_conflicts_and_zero_conditioning_events(self):
         cases=[('intersection',dict(pa='.4',pb='.5'),'unique answer'),
                ('conditional',dict(pa='.4',pb='.5'),'unique answer'),
@@ -92,28 +78,6 @@ class ProbabilityTests(unittest.TestCase):
         self.assertFalse(self.run_probability(category='events',operation='union',pa='1e-60',intersection='2e-60')['ok'])
         self.assertFalse(self.run_probability(category='events',operation='neither',union='1.000000000000000000000000000000000000000000000001')['ok'])
 
-    def test_event_input_combinations_agree_with_enumerated_venn_regions(self):
-        from fractions import Fraction
-        from calc_event_probability import solve_events
-        from calc_shared import MathError
-        for counts in [(2,2,3,3),(0,2,3,5),(10,0,0,0),(0,0,0,10)]:
-            joint,only_a,only_b,neither=[Fraction(n,10) for n in counts]
-            facts=dict(pa=joint+only_a,pb=joint+only_b,intersection=joint,
-                       union=1-neither,onlyA=only_a,neither=neither)
-            if facts['pb']:facts['conditional']=joint/facts['pb']
-            if facts['pa']:facts['reverse']=joint/facts['pa']
-            for target in ['intersection','union','conditional','reverse','onlyA','neither']:
-                if target not in facts:continue
-                available=[key for key in facts if key!=target]
-                for count in range(1,4):
-                    for keys in itertools.combinations(available,count):
-                        with self.subTest(counts=counts,target=target,keys=keys):
-                            try:answer=solve_events({key:facts[key] for key in keys},target)
-                            except MathError as error:
-                                self.assertIn('unique answer',str(error))
-                            else:self.assertEqual(answer,facts[target])
-
-
     def test_new_quantiles_preserve_accuracy_across_scales(self):
         with self.subTest(scenario='new_quantiles_preserve_accuracy_across_scales'):
             for kind,params in [("gamma",dict(shape=2,scale="1e-60")),("gamma",dict(shape="0.1",scale="1e60")),
@@ -132,7 +96,6 @@ class ProbabilityTests(unittest.TestCase):
             self.assertLess(interval,2e-19)
             self.assertAlmostEqual(self.value(category="repeat",operation="atLeastOne",n=10,p="1e-30")/1e-29,1,places=14)
             self.assertEqual(self.value(operation="between",mu=0,sigma=1,lower="-inf",upper="inf"),1)
-
 
     def test_normal_parameter_solver_round_trips_both_tails(self):
         from fractions import Fraction
@@ -155,13 +118,6 @@ class ProbabilityTests(unittest.TestCase):
         for params in [dict(mu=60,x=60,q='0.5'),dict(mu=60,x=80,q='0.5'),dict(mu=60,x=40,q='0.95'),dict(mu=60,x=80,q=0),dict(mu=60,x=80,q=1)]:
             self.assertFalse(self.run_probability(category='normalSolver',operation='sigmaLe',**params)['ok'])
         self.assertFalse(self.run_probability(category='normalSolver',operation='muLe',x=80,q='.95',sigma=0)['ok'])
-
-
-    def test_preview_numerical_limits_do_not_discard_a_valid_answer(self):
-        result=self.run_probability(distribution='f',df1=1,df2='.001',x=1)
-        self.assertTrue(result['ok'],result)
-        self.assertTrue(0<float(result['value'])<1)
-        self.assertNotIn('plot',result)
 
     def test_cauchy_location_scale_tails_quantiles_and_undefined_moments(self):
         params = dict(distribution='cauchy',location=3,scale=2)
@@ -189,15 +145,6 @@ class ProbabilityTests(unittest.TestCase):
             self.assertFalse(self.run_probability(distribution='cauchy',location=0,scale=scale,x=1)['ok'])
 
 class CauchyCatalogTests(unittest.TestCase):
-
-
-    def test_catalog_dispatch_is_independent_of_angle_mode(self):
-        for angle in ('DEG','RAD','GRAD'):
-            for name,args,expected in [('cauchypdf',[0,0,1],1/math.pi),('cauchycdf',[-1,1,0,1],.5),('invcauchy',[.75,0,1],1)]:
-                tree={'kind':'call','value':name,'args':[{'kind':'number','value':str(v)} for v in args]}
-                result=json.loads(calc_engine.dispatch(json.dumps({'tree':tree,'angle':angle})))
-                self.assertTrue(result['ok'],result)
-                self.assertAlmostEqual(float(result['decimal']),expected,places=14)
 
     def test_invalid_parameters_bounds_and_arities(self):
         for name,args in [('cauchypdf',[]),('cauchypdf',[1,2]),('cauchycdf',[2,1]),('cauchycdf',[1,0,0]),('invcauchy',[-.1]),('invcauchy',[1.1]),

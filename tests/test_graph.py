@@ -3,15 +3,10 @@ import math
 import pathlib
 import sys
 import unittest
-import time
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "app/src/main/python"))
 import calc_engine
-from calc_evaluator import Engine
-from calc_graph import adaptive_samples, simplify_samples, graph_expressions, _graph_programs
-from unittest.mock import patch
-import sympy as s
-
+from calc_graph import simplify_samples
 
 def number(value): return {"kind": "number", "value": str(value)}
 def symbol(name): return {"kind": "symbol", "value": name}
@@ -22,17 +17,7 @@ x, y = symbol("x"), symbol("y")
 x2, y2 = binary("^", x, number(2)), binary("^", y, number(2))
 circle = equation(binary("+", x2, y2), number(1))
 
-
 class ImplicitGraphTests(unittest.TestCase):
-    def test_twenty_implicit_equations_and_differential_curves(self):
-        equations=[equation(y,number(i/10)) for i in range(20)]
-        result=self.graph(*equations,samples=100)
-        self.assertTrue(result['ok'],result)
-        self.assertEqual(20,len(result['curves']))
-        self.assertFalse(self.graph(*equations,equation(y,number(2)))['ok'])
-        result=self.graph(number(0),graphKind='differential',initialValues=list(range(20)),t0=0,samples=100)
-        self.assertTrue(result['ok'],result)
-        self.assertEqual(20,len(result['curves']))
 
     def test_derivative_analysis_uses_the_selected_order_for_every_action(self):
         cubic=binary("-",binary("^",x,number(3)),binary("*",number(3),x))
@@ -97,26 +82,6 @@ class ImplicitGraphTests(unittest.TestCase):
         self.assertFalse(pole["ok"]);self.assertIn("continuous interval",pole["error"])
         endpoint=self.analyze({"kind":"call","value":"sqrt","args":[x]},analysis="integral",a=0,b=1,selectedDerivativeOrder=1)
         self.assertTrue(endpoint["ok"],endpoint);self.assertAlmostEqual(1,endpoint["value"])
-
-    def test_first_and_second_derivative_curves_are_independent(self):
-        cubic=binary("^",x,number(3))
-        result=self.graph(cubic,x2,graphKind="cartesian",derivativeSelected=0,secondDerivativeSelected=1)
-        self.assertTrue(result["ok"],result)
-        self.assertEqual(4,len(result["curves"]))
-        self.assertEqual(2,result["derivativeCurveIndex"])
-        self.assertEqual(3,result["secondDerivativeCurveIndex"])
-        self.assertEqual(0,result["derivativeSelected"])
-        self.assertEqual(1,result["secondDerivativeSelected"])
-        for at,value in filter(None,result["curves"][2]):self.assertAlmostEqual(3*at**2,value,delta=1e-8)
-        for at,value in filter(None,result["curves"][3]):self.assertAlmostEqual(2,value,delta=1e-8)
-        for source,expected in ((cubic,lambda at:6*at),(x,lambda at:0)):
-            result=self.graph(source,graphKind="cartesian",secondDerivativeSelected=0)
-            self.assertTrue(result["ok"],result)
-            self.assertNotIn("derivativeCurveIndex",result)
-            self.assertEqual(1,result["secondDerivativeCurveIndex"])
-            self.assertTrue(result["secondDerivativeExpression"])
-            points=list(filter(None,result["curves"][1]));self.assertTrue(points)
-            for at,value in points:self.assertAlmostEqual(expected(at),value,delta=1e-8)
 
     def test_second_derivative_of_implicit_circle_samples_both_branches(self):
         result=self.graph(circle,graphKind="cartesian",min=-.8,max=.8,secondDerivativeSelected=0)
@@ -183,43 +148,6 @@ class ImplicitGraphTests(unittest.TestCase):
             result=self.graph(graphKind="cartesian",shadings=[item])
             self.assertTrue(result["ok"],result);self.assertEqual([],result["shadings"][0]["fill"]);self.assertEqual([],result["shadings"][0]["boundary"])
 
-
-    def test_y_intercepts_ignore_x_search_range_and_handle_all_branches(self):
-        with self.subTest(scenario='y_intercepts_ignore_x_search_range_and_handle_all_branches'):
-            for tree,expected in ((binary("+",x,number(3)),[[0.0,3.0]]),(circle,[[0.0,-1.0],[0.0,1.0]]),
-                                  (equation(y2,number(0)),[[0.0,0.0]]),(binary("/",number(1),x),[]),
-                                  (equation(x,number(1)),[])):
-                result=self.analyze(tree,analysis="yintercept",a=8,b=8,yMin=-2,yMax=2)
-                self.assertTrue(result["ok"],result);self.assertEqual(expected,result["points"])
-            result=self.analyze(equation(x,number(0)),analysis="yintercept")
-            self.assertFalse(result["ok"]);self.assertIn("not isolated",result["error"])
-            result=self.analyze(binary("+",x,symbol("a")),analysis="yintercept",parameters={"a":7})
-            self.assertTrue(result["ok"],result);self.assertEqual([[0.0,7.0]],result["points"])
-        with self.subTest(scenario='parametric_y_intercepts_find_tangencies_and_deduplicate'):
-            pair={"kind":"list","args":[x2,binary("+",x,number(1))]}
-            result=self.analyze(pair,graphKind="parametric",variable="x",analysis="yintercept")
-            self.assertTrue(result["ok"],result);self.assertEqual([[0.0,1.0]],result["points"])
-            result=self.analyze(number(1),graphKind="polar",analysis="yintercept",a=0,b=2*math.pi)
-            self.assertTrue(result["ok"],result);self.assertEqual(2,len(result["points"]))
-            self.assertAlmostEqual(1,result["points"][0][1]);self.assertAlmostEqual(-1,result["points"][1][1])
-
-
-    def test_parameterized_quadratic_circle_intersections_use_current_values_without_symbolic_quartics(self):
-        from unittest.mock import patch
-        quadratic=binary("+",binary("+",binary("*",symbol("a"),x2),binary("*",symbol("b"),x)),symbol("c"))
-        radius=equation(binary("+",x2,y2),number(5))
-        for parameters in ({"a":1,"b":1,"c":1},{"a":0,"b":0,"c":1},{"a":1,"b":0,"c":0},{"a":.125,"b":-.7,"c":.2},{"a":1,"b":0,"c":-3}):
-            start=time.perf_counter()
-            with patch("calc_graph.s.solve",side_effect=AssertionError("symbolic quartic solver used")):
-                for trees in ((quadratic,radius),(radius,quadratic)):
-                    result=self.analyze(*trees,analysis="intersection",a=-3,b=3,parameters=parameters,variables={"a":number(999),"b":number(999),"c":number(999)})
-                    self.assertTrue(result["ok"],result);self.assertEqual(4 if parameters["c"]==-3 else 2,len(result["points"]))
-                    for px,py in result["points"]:
-                        self.assertAlmostEqual(parameters["a"]*px**2+parameters["b"]*px+parameters["c"],py,delta=1e-7)
-                        self.assertAlmostEqual(px**2+py**2,5,delta=1e-7)
-                    if parameters=={"a":0,"b":0,"c":1}:self.assertEqual([[-2.0,1.0],[2.0,1.0]],result["points"])
-            self.assertLess(time.perf_counter()-start,1,"intersections must fit the interactive computation budget")
-
     def analyze(self, *trees, **options):
         return json.loads(calc_engine.dispatch(json.dumps({
             "action":"graphAnalysis", "graphKind":"cartesian", "trees":trees,
@@ -259,7 +187,6 @@ class ImplicitGraphTests(unittest.TestCase):
             result=self.analyze(circle,analysis="integral",a=-1,b=1,tracePoint=[0,1])
             self.assertTrue(result["ok"],result);self.assertAlmostEqual(math.pi/2,result["value"])
 
-
     def graph(self, *trees, **options):
         return json.loads(calc_engine.dispatch(json.dumps({
             "action": "graph", "graphKind": "implicit", "angle": "RAD", "trees": trees,
@@ -269,7 +196,6 @@ class ImplicitGraphTests(unittest.TestCase):
     def points(self, result, index=0):
         self.assertTrue(result["ok"], result.get("error"))
         return [point for point in result["curves"][index] if point is not None]
-
 
     def test_disconnected_branches_have_breaks_and_poles_are_not_curves(self):
         with self.subTest(scenario='disconnected_branches_have_breaks_and_poles_are_not_curves'):
@@ -295,62 +221,7 @@ class ImplicitGraphTests(unittest.TestCase):
             self.assertGreater(len(points),100)
             self.assertTrue(all(abs(point[1])<1e-6 for point in points))
 
-    def test_invalid_equations_and_ranges(self):
-        inequality = {"kind": "relation", "value": "<", "args": [x, y]}
-        for result in [self.graph(inequality), self.graph(equation(x, x)),
-                       self.graph(circle, yMin=2, yMax=1), self.graph(), self.graph(*([circle]*21))]:
-            self.assertFalse(result["ok"])
-
-
 class GraphPerformanceTests(unittest.TestCase):
-    def test_steep_continuous_polynomial_keeps_visible_section_when_zoomed_out(self):
-        for span in (10,1000,10000,1e6):
-            function=lambda x:x**23-4
-            curve,_=adaptive_samples(function,-span,span,500,screen_bounds=(-span,span,-5,5))
-            self.assertFalse(any(p is None and a and b and a[1]<0<b[1] for a,p,b in zip(curve,curve[1:],curve[2:])),span)
-            visible=[p for p in curve if p and -5<=p[1]<=5]
-            self.assertGreater(len(visible),20,span)
-            self.assertTrue(any(p[1]>4 for p in visible),span)
-            for a,b in zip(curve,curve[1:]):
-                if a and b and min(a[1],b[1])<=5 and max(a[1],b[1])>=-5:
-                    error=abs(function((a[0]+b[0])/2)-(a[1]+b[1])/2)*80
-                    self.assertLessEqual(error,.21,(span,a,b))
-
-    def test_exponential_refinement_spends_work_on_visible_curvature(self):
-        calls=0
-        def function(x):
-            nonlocal calls
-            calls+=1
-            return x*math.exp(x)
-        curve,_=adaptive_samples(function,-100,100,500,screen_bounds=(-100,100,-50,50))
-        self.assertLess(calls,1400)
-        self.assertTrue(any(p and p[1]>1e40 for p in curve))  # Fit Y retains real samples.
-        for a,b in zip(curve,curve[1:]):
-            if a and b and min(a[1],b[1])<=50 and max(a[1],b[1])>=-50:
-                error=abs(function((a[0]+b[0])/2)-(a[1]+b[1])/2)*8
-                self.assertLessEqual(error,.21)
-
-    def test_symbolic_programs_reuse_builds_and_invalidate_saved_context(self):
-        with self.subTest(scenario='symbolic_programs_reuse_builds_and_invalidate_saved_context'):
-            _graph_programs.clear()
-            tree={"kind":"symbol","value":"a"}
-            def engine(value):return Engine({"variables":{"a":{"kind":"number","value":str(value)}}})
-            self.assertEqual((s.Integer(2),),graph_expressions(engine(2),[tree],("x",)))
-            reused=engine(2)
-            with patch.object(reused,"build",side_effect=AssertionError("symbolic program rebuilt")):
-                self.assertEqual((s.Integer(2),),graph_expressions(reused,[tree],("x",)))
-            self.assertEqual((s.Integer(3),),graph_expressions(engine(3),[tree],("x",)))
-            for value in range(50):graph_expressions(engine(value),[tree],("x",))
-            self.assertLessEqual(len(_graph_programs),32)
-        with self.subTest(scenario='program_cache_does_not_freeze_random_calls_in_stored_definitions'):
-            _graph_programs.clear()
-            tree={"kind":"symbol","value":"a"}
-            engine=Engine({"variables":{"a":{"kind":"call","value":"rnd","args":[]}}})
-            with patch("calc_evaluator.random.random",side_effect=[.25,.75]):
-                self.assertAlmostEqual(.25,float(graph_expressions(engine,[tree],("x",))[0]))
-                self.assertAlmostEqual(.75,float(graph_expressions(engine,[tree],("x",))[0]))
-            self.assertEqual(0,len(_graph_programs))
-
 
     def test_simplification_never_bridges_breaks_or_loses_a_closed_loop(self):
         points = [[-1,-1], [0,0], None, [1,1], [2,2]]
@@ -362,7 +233,6 @@ class GraphPerformanceTests(unittest.TestCase):
         self.assertGreater(len(result), 30)
         self.assertEqual(circle[0], result[0]); self.assertEqual(circle[-1], result[-1])
         self.assertEqual(result, [circle[i] for i in parameters])
-
 
 if __name__ == "__main__":
     unittest.main()

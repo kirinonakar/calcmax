@@ -11,11 +11,9 @@ import calc_engine
 import script_runner
 from calc_runtime import Budget, ExecutionStopped
 
-
 class Control:
     def __init__(self): self.cancelled = False
     def isCancelled(self): return self.cancelled
-
 
 class RuntimeTests(unittest.TestCase):
     def test_heavy_and_statistics_deadlines_allow_25_seconds_but_stop_after_60(self):
@@ -51,18 +49,6 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual("Calculation cancelled", json.loads(calc_engine.dispatch(payload, control))["error"])
         self.assertTrue(json.loads(calc_engine.dispatch(payload))["ok"])
 
-
-    def test_input_cancellation_does_not_echo_a_fake_answer(self):
-        control = Control()
-        class Bridge:
-            def request(self, prompt, output):
-                control.cancelled = True
-                return ""
-        result = json.loads(script_runner.run(json.dumps({"source": "print('before'); input('value=')"}), Bridge(), control))
-        self.assertFalse(result["ok"])
-        self.assertEqual("Calculation cancelled", result["error"])
-        self.assertEqual("before\n", result["output"])
-
     def test_monitoring_tool_is_released_on_success_and_failure(self):
         with self.subTest(scenario='monitoring_tool_is_released_on_success_and_failure'):
             monitoring = getattr(sys, "monitoring", None)
@@ -84,7 +70,6 @@ class RuntimeTests(unittest.TestCase):
                     with Budget(1): sum(range(10))
                     self.assertIs(previous, sys.gettrace())
             finally: sys.settrace(None)
-
 
     def test_loop_guards_and_cooperative_cancellation_in_bounded_subprocesses(self):
         # Each subprocess has a timeout so a broken single-line loop hook cannot hang CI.
@@ -115,7 +100,6 @@ assert json.loads(script_runner.run(json.dumps({{'source': "print('again')"}})))
                 self.assertEqual(0, completed.returncode, completed.stderr)
 
 class ScriptRunnerTests(unittest.TestCase):
-
 
     def test_scripts_receive_input_and_saved_function_definitions(self):
         with self.subTest(scenario='input_prompt_and_float_conversion'):

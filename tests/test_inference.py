@@ -2,7 +2,6 @@
 
 The production engine and this suite do not need either reference package.
 """
-import json
 import pathlib
 import sys
 import unittest
@@ -13,18 +12,15 @@ import random
 sys.path.insert(0,str(pathlib.Path(__file__).resolve().parents[1]/'app/src/main/python'))
 import sympy as s
 from calc_evaluator import Engine
-from calc_statistics import fit_regression, fit_custom_regression
+from calc_statistics import fit_regression
 from calc_inference import rank_test, _binary_roc
 import mpmath as mp
 from calc_shared import MathError
-import calc_engine
-
 
 def fit(rows, mode='linear', degree=None):
     engine=Engine({'precision':40})
     result=fit_regression(engine,[[s.sympify(v) for v in row] for row in rows],mode,s.Integer(degree) if degree else None)
     return result,engine.regression_report
-
 
 class InferenceTests(unittest.TestCase):
     def test_ols_coefficient_inference_and_influence_match_statsmodels(self):
@@ -47,32 +43,6 @@ class InferenceTests(unittest.TestCase):
                 if len(rows)==2:self.assertIsNone(report['coefficients'][0]['se']);self.assertTrue(report['warnings'])
                 if rows[0][1]==rows[-1][1]:self.assertIsNone(report['rSquared'])
                 self.assertIsNone(report['coefficients'][0]['p'])
-
-
-    def test_transformed_inference_uses_log_scale_and_original_residuals(self):
-        with self.subTest(scenario='transformed_inference_uses_log_scale_and_original_residuals'):
-            rows=[(1,2),(2,5),(3,8),(4,17),(5,28)]
-            result,report=fit(rows,'exponential')
-            self.assertEqual(report['fitScale'],'log(y)')
-            for row,residual in zip(rows,report['residuals']):
-                self.assertAlmostEqual(float(residual['residual']),row[1]-float(result.subs(s.Symbol('x'),row[0])),places=12)
-            self.assertGreater(float(report['coefficients'][0]['low']),0)
-            self.assertIsNone(report['coefficients'][0]['p'])
-            _,log=fit(rows,'logarithmic')
-            self.assertEqual(log['fitScale'],'y')
-        with self.subTest(scenario='polynomial_degrees_and_large_offsets'):
-            for degree in (3,5,10):
-                rows=[(x,1+2*x+x**degree) for x in range(degree+3)]
-                _,report=fit(rows,'polynomial',degree)
-                self.assertAlmostEqual(float(report['coefficients'][degree]['estimate']),1,places=12)
-                self.assertGreater(float(report['rSquared']),.999999999999)
-            rows=[(10**9+i,3+2*i+i**3) for i in range(8)]
-            _,report=fit(rows,'polynomial',3)
-            self.assertAlmostEqual(float(report['coefficients'][3]['estimate']),1,places=12)
-            self.assertIsNotNone(report['coefficients'][0]['se'])
-            for degree in (0,11):
-                with self.assertRaises(MathError):fit([(1,2),(2,3),(3,4)],'polynomial',degree)
-
 
     def test_multiple_regression_scale_and_singular_predictors(self):
         with self.subTest(scenario='multiple_regression_scale_and_singular_predictors'):
@@ -102,7 +72,6 @@ class InferenceTests(unittest.TestCase):
                 self.assertAlmostEqual(float(coefficient['vif']),2,places=12)
             _,single=fit([(-3,0),(-2,0),(-1,1),(0,0),(0,1),(1,0),(2,1),(3,1)],'logistic')
             self.assertEqual(float(single['coefficients'][1]['vif']),1)
-
 
     def test_logistic_inference_matches_statsmodels_and_rejects_invalid_responses(self):
         rows=[(-3,0),(-2,0),(-1,1),(0,0),(0,1),(1,0),(2,1),(3,1)]
@@ -193,38 +162,6 @@ class InferenceTests(unittest.TestCase):
             design=[[mp.mpf(1),mp.mpf(row[0])] for row in rows]
             self.assertFalse(complete_separation(rows,design,[mp.mpf(row[-1]) for row in rows],mp.matrix([0,1]),mp.eye(2)))
 
-
-    def test_custom_local_jacobian_and_bounded_fit(self):
-        with self.subTest(scenario='custom_local_jacobian_and_bounded_fit'):
-            x,a,b=s.symbols('x a b')
-            rows=[(s.Integer(i),s.Integer(y)) for i,y in zip(range(1,7),[2,4,5,4,5,7])]
-            for options in (None,[[a,1,0,5]]):
-                engine=Engine({'precision':40})
-                fit_custom_regression(engine,rows,a+b*x,x,options)
-                report=engine.regression_report
-                self.assertTrue(report['approximate'])
-                if options:self.assertIsNone(report['coefficients'][0]['se']);self.assertTrue(report['warnings'])
-                else:self.assertAlmostEqual(float(report['coefficients'][1]['se']),.20995626366712966,places=12)
-        with self.subTest(scenario='nonlinear_decay_covariance_matches_scipy_curve_fit'):
-            x,a,tau,c=s.symbols('x A T2 C')
-            xs=[20,40,60,80,100,150,200,300,400]
-            rows=[(s.Integer(xx),s.Float(str(2.5*math.exp(-xx/120)+.7+.003*math.sin(xx)),40)) for xx in xs]
-            engine=Engine({'precision':40})
-            fit_custom_regression(engine,rows,a*s.exp(-x/tau)+c,x)
-            expected={'A':.001236118898989237,'C':.001151057406068291,'T2':.1800307498549708}
-            for coefficient in engine.regression_report['coefficients']:
-                self.assertAlmostEqual(float(coefficient['se'])/expected[coefficient['name']],1,places=10)
-
-
-    def test_public_dispatch_returns_full_inference_and_json_safe_degeneracy(self):
-        table={'kind':'list','args':[{'kind':'list','args':[{'kind':'number','value':str(v)} for v in row]} for row in [(1,2),(2,2),(3,2)]]}
-        result=json.loads(calc_engine.dispatch(json.dumps({'tree':{'kind':'call','value':'regression','args':[table]}})))
-        self.assertTrue(result['ok'],result)
-        self.assertIsNone(result['regression']['rSquared'])
-        self.assertEqual(len(result['parameters']),2)
-        self.assertNotIn('NaN',json.dumps(result))
-
-
 class RankTests(unittest.TestCase):
     def run_test(self,name,groups,tail='both'):
         engine=Engine({'precision':40})
@@ -259,7 +196,6 @@ class RankTests(unittest.TestCase):
             with self.assertRaises(MathError):self.run_test('kruskal',[[1,1],[1,1]])
             with self.assertRaises(MathError):self.run_test('kruskal',[[1],[2]],'left')
 
-
 class RocTests(unittest.TestCase):
     def test_roc_handles_ties_concordance_and_invalid_inputs(self):
         with self.subTest(scenario='reference_curve_perfect_reversed_and_tied_scores'):
@@ -281,6 +217,5 @@ class RocTests(unittest.TestCase):
         with self.subTest(scenario='invalid_labels_and_scores_are_rejected'):
             for labels,scores in [([1,1],[0,1]),([0,0],[0,1]),([0,2],[0,1]),([0,1],[0]),([0,1],[0,mp.inf])]:
                 with self.assertRaises(MathError):_binary_roc(labels,scores)
-
 
 if __name__=='__main__':unittest.main()

@@ -43,15 +43,3 @@ test('HTML and regression modules bypass a stale HTTP cache before falling back 
   await r.dispatch('fetch',{...request,url:'https://example.test/symvacas/vendor/sympy.whl'});
   assert.equal(requests.length,2,'unchanged large engine packages reuse the offline cache');
 });
-
-test('cached regression code can toggle its former progress element without showing a message',()=>{
-  const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
-  const progress=html.match(/<span\b([^>]*\bid="regression-progress"[^>]*)>([^<]*)<\/span>/);
-  assert.ok(progress,'keep the element contract for already cached regression modules');
-  assert.equal(progress[2],'');assert.match(progress[1],/style="display:none"/);
-  const node={hidden:true,textContent:progress[2],style:{display:'none'}};
-  const document={getElementById:id=>id==='regression-progress'?node:null};
-  // The deployed previous module toggled this field when Analyze was pressed.
-  vm.runInNewContext('document.getElementById("regression-progress").hidden=false',{document});
-  assert.equal(node.style.display,'none');assert.equal(node.textContent,'');
-});

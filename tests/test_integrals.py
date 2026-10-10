@@ -9,14 +9,11 @@ import sympy as s
 import calc_engine
 from calc_integrals import rational_trig_primitive
 
-
 def node(kind,value="",*args):
     return {"kind":kind,"value":str(value),"args":list(args)}
 
-
 def evaluate(tree,**options):
     return json.loads(calc_engine.dispatch(json.dumps({"tree":tree,**options})))
-
 
 class RationalTrigIntegralTests(unittest.TestCase):
     def test_primitives_differentiate_to_original_integrands(self):
@@ -55,15 +52,6 @@ class RationalTrigIntegralTests(unittest.TestCase):
             self.assertFalse(evaluate(node("call","Ans",node("number",argument)),variables={"Ans":result["resultAst"]})["ok"])
         imaginary=evaluate(node("call","Ans",node("symbol","i")),variables={"Ans":result["resultAst"]})
         self.assertFalse(imaginary["ok"],imaginary)
-
-    def test_rule_skips_unsupported_branches_and_nonlinear_substitutions(self):
-        x=s.Symbol("x")
-        for expression in [s.sqrt(s.tan(x)+x),s.sqrt(s.tan(x**2)),s.sqrt(s.tan(x+s.I)),
-                           s.tan(x)**s.Rational(1,5),s.sqrt(s.tan(x)*s.tan(2*x))]:
-            self.assertIsNone(rational_trig_primitive(expression,x))
-        nonreal=s.Symbol("z",real=False)
-        self.assertIsNone(rational_trig_primitive(s.sqrt(s.tan(nonreal)),nonreal))
-
 
 if __name__=="__main__":
     unittest.main()

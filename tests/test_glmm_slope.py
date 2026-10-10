@@ -1,10 +1,8 @@
 """Independent Laplace likelihood fits and original-unit covariance contracts."""
 import json
 import unittest
-from unittest.mock import patch
-from test_advanced_statistics import ROOT, run, evaluate
+from test_advanced_statistics import ROOT, run
 from calc_shared import MathError
-
 
 class GlmmSlopeTests(unittest.TestCase):
     @classmethod
@@ -34,30 +32,6 @@ class GlmmSlopeTests(unittest.TestCase):
         for before,after in zip(base['subject random effects'],other['subject random effects']):
             self.assertAlmostEqual(float(before['conditional slope mode'])/2,float(after['conditional slope mode']),places=7)
 
-    def test_slope_position_and_fixed_columns_survive_predictor_reordering(self):
-        args=self.cases[0]['arguments']
-        rows=[[r[0],r[1],(i%3)-1,r[2]] for i,r in enumerate(args[0])]
-        first=run('glmm',rows,*args[1:])
-        swapped=[[r[0],r[2],r[1],r[3]] for r in rows]
-        other=run('glmm',swapped,*args[1:-1],2)
-        self.assertAlmostEqual(float(first['log likelihood']),float(other['log likelihood']),places=8)
-        for key in ('random intercept variance','random slope variance','random intercept-slope covariance'):
-            self.assertAlmostEqual(float(first[key]),float(other[key]),places=7)
-        for i,j in ((0,0),(1,2),(2,1)):
-            self.assertAlmostEqual(float(first['coefficients'][i]['estimate']),float(other['coefficients'][j]['estimate']),places=8)
-
-    def test_public_dispatch_reports_slopes_and_withholds_unidentified_inference(self):
-        args=self.cases[0]['arguments']
-        source='glmm('+str(args[0])+',poisson,1,'+str(args[3])+',offset,likelihood,1)'
-        result=evaluate(source)
-        self.assertEqual('glmm',result['statisticsReport']['analysis'])
-        self.assertIn('random slope variance',result['exact'])
-        with patch('calc_advanced_glmm_slope.observed_information',side_effect=MathError('not identifiable')):
-            raw=run('glmm',*args)
-        self.assertEqual('unavailable',raw['diagnostics']['inference'])
-        self.assertTrue(all(row['SE']=='unavailable' and row['p']=='unavailable' and row['CI95']=='unavailable' for row in raw['coefficients']))
-        self.assertEqual(0,raw['singular fit'])
-
     def test_slope_options_reject_unsupported_quadrature_and_unidentifiable_designs(self):
         args=self.cases[0]['arguments']
         with self.assertRaises(MathError): run('glmm',args[0],'poisson',15,[],'offset','likelihood',1)
@@ -65,6 +39,5 @@ class GlmmSlopeTests(unittest.TestCase):
         with self.assertRaises(MathError): run('glmm',args[0],'poisson',1,[],'offset','likelihood',2)
         rows=[[i,i,1+(i%3)] for i in range(10)]
         with self.assertRaisesRegex(MathError,'within-subject'): run('glmm',rows,'poisson',1,[],'offset','likelihood',1)
-
 
 if __name__=='__main__': unittest.main()

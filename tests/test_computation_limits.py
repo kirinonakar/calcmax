@@ -11,18 +11,14 @@ from calc_runtime import Budget
 from calc_advanced_common import integer, vector
 from calc_nuts import sample
 
-
 def number(value):
     return {'kind': 'number', 'value': str(value)}
-
 
 def call(name, *args):
     return {'kind': 'call', 'value': name, 'args': list(args)}
 
-
 def run(tree, **options):
     return json.loads(calc_engine.dispatch(json.dumps({'tree': tree, **options})))
-
 
 class ComputationLimitsTests(unittest.TestCase):
     def test_time_and_workload_are_unlimited_but_cancellation_still_works(self):

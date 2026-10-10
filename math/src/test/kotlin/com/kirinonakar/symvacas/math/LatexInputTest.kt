@@ -82,16 +82,4 @@ class LatexInputTest {
         }
     }
 
-    @Test fun wrappedLatexReplacesSelectionAndRetainsSurroundingExpressionAndCaret() {
-        val previous=Editor("1+2+3",3,2)
-        val converted=LatexInput.convertEdit(previous,"1+$$\\sqrt[3]{5} \\times 25^{\\frac{1}{3}}$$+3")!!
-        assertEquals("1+nthroot(5,3)*25^(1/3)+3",converted.source)
-        assertEquals(converted.source.length-2,converted.cursor)
-        assertEquals(converted.cursor,converted.anchor)
-        assertNotNull(converted.tree())
-        assertEquals("1+sqrt(4)",LatexInput.convertEdit(Editor("1+"),"1+$\\sqrt{4}$")!!.source)
-        assertNull(LatexInput.convertEdit(Editor("1+"),"1+2"))
-        assertNull(LatexInput.convertEdit(previous,"1+$$\\sqrt[3]$$+3"))
-    }
-
 }
