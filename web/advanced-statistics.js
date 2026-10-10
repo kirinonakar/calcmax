@@ -119,6 +119,8 @@ export function guidedStatisticsCommand(definition,rows,settings={},columnLabels
     if(keys.some(key=>!String(opts[key]).trim()))throw new Error('Enter all study design parameters');
     return `${id}(${keys.map(key=>opts[key]).join(',')},${opts.design}${opts.tail==='two'?'':','+opts.tail})`;
   }
+  if(id==='shapiro'){const sample=values(column('column'));if(sample.length<3||sample.length>5000)throw new Error('Shapiro-Wilk needs 3 to 5000 values');return `shapiro(${list(sample)})`;}
+  if(['tukey','gameshowell'].includes(id)){const plan=statisticsComparisonData(rows,opts,{all:true});if(plan.samples.length<2||plan.samples.some(sample=>sample.length<2))throw new Error('Enter at least two observations in each group');return `${id}(${plan.samples.map(list).join(',')})`;}
   if(id==='bootstrapci')return `bootstrapci(${list(values(column('column')))},${opts.statistic},${opts.level},${opts.samples},${opts.seed})`;
   if(id==='cohend')return `cohend(${statisticsComparisonData(rows,opts,{paired:opts.design==='paired',strict:true}).samples.map(list).join(',')},${opts.design})`;
   if(['twowayanova','linearmodel'].includes(id)){const plan=statisticsFactorialData(rows,opts,columnLabels);return id==='twowayanova'?`twowayanova(${table(plan.encoded)},${opts.interaction})`:`linearmodel(${table(plan.encoded)},${list(plan.categorical)},${opts.order},${opts.ssType},${opts.coding})`;}
@@ -283,10 +285,11 @@ export function advancedStatisticsTermLabels(definition,rows,settings={},columnL
   const opts=Object.fromEntries((definition.controls||[]).map(field=>[field.key,settings[field.key]??field.default]));
   const column=key=>Number(opts[key])===-1?n-1:Number(opts[key]);
   if(['twowayanova','linearmodel'].includes(id))return statisticsFactorialData(rows,opts,columnLabels).labels;
+  if(id==='shapiro')return {'sample:1':columnLabels[column('column')]||'Sample 1'};
   if(id==='kstest'&&opts.mode!=='two')return {'sample:1':columnLabels[column('first')]||'Sample 1'};
-  if(['cohend','bayescompare','levene','bartlett','eta2','friedman','repeatedanova','kstest'].includes(id)||id==='bayesbootstrap'&&opts.layout!=='single'){
+  if(['cohend','bayescompare','levene','bartlett','eta2','friedman','repeatedanova','kstest','tukey','gameshowell'].includes(id)||id==='bayesbootstrap'&&opts.layout!=='single'){
     const settings={...opts,grouping:id==='bayesbootstrap'?opts.layout:opts.grouping};
-    const plan=statisticsComparisonData(rows,settings,{all:['levene','bartlett','eta2','friedman','repeatedanova'].includes(id)});
+    const plan=statisticsComparisonData(rows,settings,{all:['levene','bartlett','eta2','friedman','repeatedanova','tukey','gameshowell'].includes(id)});
     let names=plan.labels.map(at=>settings.grouping==='groups'?at:columnLabels[Number(at)]||`Sample ${Number(at)+1}`);
     if(id==='bayesbootstrap'&&opts.order==='reverse'&&!opts.firstGroup&&!opts.secondGroup)names.reverse();
     const labels=Object.fromEntries(names.map((name,i)=>['sample:'+String(i+1),name]));
@@ -370,6 +373,9 @@ export function createAdvancedStatistics({state,persist,data,columnLimit,copy,ap
   const panelId=`statistics-${section}`;
   const panel=key=>$(`${panelId}-${key}`);
   const schema=advancedStatisticsSchema.filter(item=>item.section===section);
+  if(section==='general'&&state.fields['statistics-tests-kind']==='mcnemar'&&!state.fields[`${panelId}-kind`]){
+    for(const key of ['kind','source','input'])state.fields[`${panelId}-${key}`]=state.fields[`statistics-tests-${key}`];
+  }
   // Move the saved expression and input source together with the old selection.
   const legacy=state.fields['statistics-advanced-kind'];
   if(section!=='advanced'&&schema.some(item=>item.id===legacy)&&!state.fields[`${panelId}-kind`]){
@@ -382,8 +388,7 @@ export function createAdvancedStatistics({state,persist,data,columnLimit,copy,ap
   select.replaceChildren(...groups.map(group=>{const block=element('optgroup');block.dataset.group=group;block.label=group;for(const item of schema.filter(item=>item.group===group)){const option=element('option',item.label);option.value=item.id;block.append(option);}return block;}));
   select.value=previous||schema[0].id;
   if(!select.value)select.value=schema[0].id;
-  source.value=state.fields[source.id]||source.value;
-  if(section==='advanced'&&previous!==select.value)source.value='';
+  source.value=previous===select.value?state.fields[source.id]||source.value:'';
   if(!source.value)source.value=selected().example;
   input.value=(previous===select.value?state.fields[input.id]:null)||((state.fields[source.id]&&source.value!==selected().example)||!selected().controls?'expression':data().trim()&&selected().input!=='none'?'current':'example');
   if(selected().input==='none'&&input.value==='current')input.value='example';

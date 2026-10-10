@@ -157,8 +157,12 @@ def statistics_report(name, value, precision, labels=None):
         plots.append({'kind':'bars','title':'Raw and adjusted p values','values':list(map(float,value['adjusted p'])),'secondary':list(map(float,value['raw p'])),'labels':[str(i+1) for i in range(len(value['raw p']))],'ylabel':'p value','reference':float(value['alpha']),'maximum':1})
     visit('Summary' if isinstance(value, dict) else TITLES.get(name, name), value)
     priority=['p value','p','mean difference','posterior mean','Posterior Mean Difference (B - A)','Posterior Effect Size','BF10','P(μB > μA)','estimate','power','achieved power','n per group / pairs','R²','Adjusted R²','Kendall W','eta2','Cohen d','Cohen dz','RMSE','R2','inertia']
-    highlights=[{'label':key,'value':cell(value[key])} for key in priority if isinstance(value,dict) and key in value and finite(value[key]) is not None][:4]
-    return {'analysis': name, 'title': TITLES.get(name, name), 'sections': sections,'highlights':highlights,'plots':plots}
+    report_title=TITLES.get(name,name)
+    if name=='mcnemar' and isinstance(value,dict):
+        priority=['discordant pairs','p']
+        report_title={'asymptotic':'McNemar','exact':'Exact McNemar','corrected':'McNemar (continuity correction)'}.get(value.get('method'),report_title)
+    highlights=[{'label':'p value' if name=='mcnemar' and key=='p' else key,'value':cell(value[key])} for key in priority if isinstance(value,dict) and key in value and finite(value[key]) is not None][:4]
+    return {'analysis': name, 'title': report_title, 'sections': sections,'highlights':highlights,'plots':plots}
 
 
 def statistics_copy_report(name, value, details, precision):

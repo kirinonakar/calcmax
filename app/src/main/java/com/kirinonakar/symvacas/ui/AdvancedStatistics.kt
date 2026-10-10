@@ -60,15 +60,19 @@ internal fun advancedStatisticsRows(data:String,columnLimit:Int?=null,removeComp
     return if(statisticsHasHeader(rectangular)&&rectangular.first().none {it=="NA"})rectangular.drop(1) else rectangular
 }
 
-@Composable internal fun AdvancedStatistics(m:CalculatorModel,data:String,kind:String,section:String="advanced",title:String="Advanced analysis",onDataApplied:((String)->Unit)?=null) {
+@Composable internal fun AdvancedStatistics(m:CalculatorModel,data:String,kind:String,section:String="advanced",title:String="Advanced analysis",onDataApplied:((String)->Unit)?=null,embedded:Boolean=false) {
     val context=LocalContext.current
     val schema=remember {context.assets.open("advanced_statistics.json").bufferedReader().use {JSONArray(it.readText())}}
     val definitions=remember(section) {List(schema.length()){schema.getJSONObject(it)}.filter {it.getString("section")==section}}
     val legacy=m.advancedStatisticsDraft.takeIf {draft->definitions.any {it.getString("id")==draft.optString("kind")}}
-    val draft=m.advancedStatisticsDraft.optJSONObject("panels")?.optJSONObject(section) ?: legacy ?: JSONObject()
+    val panels=m.advancedStatisticsDraft.optJSONObject("panels")
+    val moved=panels?.optJSONObject("tests")?.takeIf {section=="general"&&it.optString("kind")=="mcnemar"}
+    val savedDraft=panels?.optJSONObject(section) ?: moved ?: legacy ?: JSONObject()
+    val draft=if(savedDraft.optString("kind").isBlank()||definitions.any {it.getString("id")==savedDraft.optString("kind")})savedDraft
+        else JSONObject().put("forms",savedDraft.optJSONObject("forms") ?: JSONObject())
     val ko=isKorean()
     val collapseRequest=LocalStatisticsCollapseRequest.current
-    val nested=section!="advanced"
+    val nested=section!="advanced"&&!embedded
     var expanded by rememberSaveable {mutableStateOf(section!="preparation"&&collapseRequest==0)}
     var selected by rememberSaveable {mutableStateOf(draft.optString("kind",definitions.first().getString("id")))}
     val definition=definitions.firstOrNull {it.getString("id")==selected} ?: definitions.first()
@@ -119,11 +123,13 @@ internal fun advancedStatisticsRows(data:String,columnLimit:Int?=null,removeComp
     }
     LaunchedEffect(collapseRequest){if(collapseRequest>0){expanded=false;menuOpen=false;exampleExpanded=false;expressionExpanded=false}}
     Column(Modifier.fillMaxWidth().padding(start=if(nested)14.dp else 0.dp)) {
-    HorizontalDivider()
-    StatisticsSectionToggle(title,expanded,"statistics-$section-toggle",depth=if(nested)1 else 0) {expanded=!expanded}
-    if(expanded) {
+    if(!embedded) {
+        HorizontalDivider()
+        StatisticsSectionToggle(title,expanded,"statistics-$section-toggle",depth=if(nested)1 else 0) {expanded=!expanded}
+    }
+    if(expanded||embedded) {
         fun choose(next:JSONObject) {selected=next.getString("id");source=next.getString("example");input=if(next.has("controls"))if(data.isBlank()||next.getString("input")=="none")"example" else "current" else "expression";message="";menuOpen=false;survivalReport=null;pending=false}
-        Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+        if(!embedded)Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
             Box {
                 OutlinedButton(onClick={menuOpen=true}){Text(definition.getString(if(ko)"ko" else "label"))}
                 DropdownMenu(expanded=menuOpen,onDismissRequest={menuOpen=false}) {

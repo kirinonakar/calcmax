@@ -770,14 +770,22 @@ References: [Firth logistic regression](https://search.r-project.org/CRAN/refman
 
 ## Advanced statistics
 
-In Statistics, missing-value imputation belongs to Data preparation; distribution/variance tests, group comparisons, effect sizes and multiple testing belong to General analysis; factorial linear, generalized/mixed regression and cross-validation belong to Regression. Advanced analysis is ordered as Bayesian inference, Resampling, Multivariate analysis, Survival analysis, then Power & sample size. Switch between current data, examples and an editable expression. Paired comparisons use complete pairs and support subject-ID matching. Wide repeated-measures inputs reject incomplete rows; impute converts them to NA. These analyses use binary64 numerics.
+In Statistics, missing-value imputation belongs to Data preparation; General analysis is ordered as Mean comparisons, Rank & nonparametric tests, Categorical data (including McNemar), then Confidence intervals; distribution/variance tests (including Shapiro–Wilk), post-hoc comparisons, additional group comparisons, effect sizes and multiple testing belong to More tests & effect sizes; factorial linear, generalized/mixed regression and cross-validation belong to Regression. Advanced analysis is ordered as Bayesian inference, Resampling, Multivariate analysis, Survival analysis, then Power & sample size. Switch between current data, examples and an editable expression. Paired comparisons use complete pairs and support subject-ID matching. Wide repeated-measures inputs reject incomplete rows; impute converts them to NA. These analyses use binary64 numerics.
 
 ### Data preparation
 
 `impute` — Prepare incomplete data by single imputation; subsequent inference omits imputation uncertainty. NA for missing cells; mean / median / mode / regression / knn with neighbours (default 5). Single imputation.
 Example: impute([[1,NA],[2,4],[NA,6],[4,8]],mean)
 
+### Categorical data
+
+`mcnemar` — Compare paired binary outcomes, such as yes/no before and after. Paired 2×2 count table; exact / corrected / asymptotic.
+Example: mcnemar([[20,8],[2,15]],exact)
+
 ### Distribution & variance
+
+`shapiro` — Check evidence against normality; interpret with Q–Q plots, not as a pass/fail gate. Normality test for 3 to 5000 observations; interpret with Q–Q plots.
+Example: shapiro([1,2,3,4,5])
 
 `kstest` — Compare continuous distributions or a sample with a fully specified distribution. Two sample lists, or kstest(data,normal,mu,sigma) / kstest(data,uniform,lower,width). Continuous null; one-sample p is asymptotic.
 Example: kstest([1,2,4,5],[2,3,5,8])
@@ -788,10 +796,15 @@ Example: levene([1,2,4,5],[2,3,5,8])
 `bartlett` — Check equal variances when group distributions are reasonably normal. Separate group lists; normality assumption.
 Example: bartlett([1,2,4,5],[2,3,5,8])
 
-### Group comparisons
+### Post-hoc comparisons
 
-`mcnemar` — Compare paired binary outcomes, such as yes/no before and after. Paired 2×2 count table; exact / corrected / asymptotic.
-Example: mcnemar([[20,8],[2,15]],exact)
+`tukey` — Identify which group means differ after ANOVA, with familywise multiplicity correction. All pairwise mean comparisons for independent groups with equal variances.
+Example: tukey([1,2,4,5],[2,3,5,8])
+
+`gameshowell` — Compare each pair of independent group means without equal variances, with adjusted p values and simultaneous intervals. All pairwise mean comparisons for independent groups with unequal variances.
+Example: gameshowell([1,2,4,5],[2,3,5,8])
+
+### Group comparisons
 
 `twowayanova` — Compare independent observations across two factors, testing both main effects and their interaction. Independent observations, two categorical factors and a numeric response. Type III F tests with sum contrasts; interaction 1 (default) or additive 0. Normal errors and common residual variance; replication and a full-rank design are required.
 Example: twowayanova([[1,1,2],[1,1,4],[1,2,5],[1,2,6],[2,1,4],[2,1,5],[2,2,8],[2,2,10]],1)

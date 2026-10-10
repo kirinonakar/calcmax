@@ -35,6 +35,21 @@ def run(name,*args):
 
 class AdvancedStatisticsTests(unittest.TestCase):
 
+    def test_mcnemar_methods_show_discordant_count_and_matching_p_value(self):
+        for method,title,p in [('asymptotic','McNemar',0.05777957112359715),
+                               ('exact','Exact McNemar',0.109375),
+                               ('corrected','McNemar (continuity correction)',0.11384629800665763)]:
+            with self.subTest(method=method):
+                result=evaluate(f'mcnemar([[20,8],[2,15]],{method})')
+                report=result['statisticsReport']
+                self.assertEqual(report['title'],title)
+                self.assertEqual([item['label'] for item in report['highlights']],['discordant pairs','p value'])
+                self.assertEqual(report['highlights'][0]['value']['exact'],'10')
+                self.assertAlmostEqual(float(report['highlights'][1]['value']['decimal']),p,places=12)
+                self.assertIn('discordant pairs: 10',result['exact'])
+                empty=evaluate(f'mcnemar([[20,0],[0,15]],{method})')['statisticsReport']['highlights']
+                self.assertEqual([item['value']['exact'] for item in empty],['0','1'])
+
     def test_statistics_tables_preserve_exact_answers_and_parallel_row_relationships(self):
         result=evaluate('stats([1,2,4])')
         summary=result['statisticsReport']['sections'][0]
@@ -56,7 +71,7 @@ class AdvancedStatisticsTests(unittest.TestCase):
     def test_advanced_analyses_reject_invalid_arity_and_data(self):
         with self.subTest(scenario='registered_analyses_reject_missing_and_excess_arguments'):
             definitions=json.loads((ROOT/'app/src/main/assets/advanced_statistics.json').read_text(encoding='utf-8'))
-            self.assertEqual(FUNCTIONS,{item['id'] for item in definitions})
+            self.assertEqual(FUNCTIONS,{item['id'] for item in definitions if item['id'] not in ('shapiro','tukey','gameshowell')})
             for name in FUNCTIONS:
                 for args in ([],[s.Integer(0)]*21):
                     with self.subTest(function=name,count=len(args)):

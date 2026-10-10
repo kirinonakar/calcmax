@@ -81,6 +81,223 @@
     ]
   },
   {
+    "id": "mcnemar",
+    "label": "McNemar",
+    "ko": "McNemar",
+    "input": "table",
+    "suffix": ",exact",
+    "example": "mcnemar([[20,8],[2,15]],exact)",
+    "help": "Paired 2×2 count table; exact / corrected / asymptotic.",
+    "helpKo": "대응 2×2 빈도표; exact / corrected / asymptotic.",
+    "section": "general",
+    "group": "Categorical data",
+    "groupKo": "범주형 자료",
+    "controls": [
+      {
+        "key": "layout",
+        "label": "Data",
+        "ko": "자료 형태",
+        "type": "choice",
+        "default": "counts",
+        "choices": [
+          {
+            "id": "counts",
+            "label": "2×2 counts",
+            "ko": "2×2 빈도표"
+          },
+          {
+            "id": "pairs",
+            "label": "Paired observations",
+            "ko": "대응 관측값"
+          },
+          {
+            "id": "groups",
+            "label": "Group / value columns",
+            "ko": "그룹·값 열"
+          }
+        ]
+      },
+      {
+        "key": "first",
+        "label": "Before / first",
+        "ko": "이전·첫째 열",
+        "type": "column",
+        "default": 0
+      },
+      {
+        "key": "second",
+        "label": "After / second",
+        "ko": "이후·둘째 열",
+        "type": "column",
+        "default": 1
+      },
+      {
+        "key": "method",
+        "label": "Method",
+        "ko": "검정 방법",
+        "type": "choice",
+        "default": "exact",
+        "choices": [
+          {
+            "id": "asymptotic",
+            "label": "McNemar",
+            "ko": "McNemar"
+          },
+          {
+            "id": "exact",
+            "label": "Exact McNemar",
+            "ko": "Exact McNemar"
+          },
+          {
+            "id": "corrected",
+            "label": "Continuity correction",
+            "ko": "연속성 보정"
+          }
+        ]
+      },
+      {
+        "key": "group",
+        "label": "Group column",
+        "ko": "그룹 열",
+        "type": "column",
+        "default": 0,
+        "when": {
+          "layout": [
+            "groups"
+          ]
+        }
+      },
+      {
+        "key": "value",
+        "label": "Value column",
+        "ko": "값 열",
+        "type": "column",
+        "default": 1,
+        "when": {
+          "layout": [
+            "groups"
+          ]
+        }
+      },
+      {
+        "key": "firstGroup",
+        "label": "Group A value",
+        "ko": "A 그룹 값",
+        "type": "group",
+        "default": "",
+        "when": {
+          "layout": [
+            "groups"
+          ]
+        }
+      },
+      {
+        "key": "secondGroup",
+        "label": "Group B value",
+        "ko": "B 그룹 값",
+        "type": "group",
+        "default": "",
+        "when": {
+          "layout": [
+            "groups"
+          ]
+        }
+      },
+      {
+        "key": "matching",
+        "label": "Pair matching",
+        "ko": "대응 연결",
+        "type": "choice",
+        "default": "order",
+        "choices": [
+          {
+            "id": "order",
+            "label": "Within-group row order",
+            "ko": "그룹 안의 행 순서"
+          },
+          {
+            "id": "subject",
+            "label": "Subject ID",
+            "ko": "대상 ID"
+          }
+        ],
+        "when": {
+          "layout": [
+            "groups"
+          ]
+        }
+      },
+      {
+        "key": "subject",
+        "label": "Subject ID",
+        "ko": "대상 ID 열",
+        "type": "column",
+        "default": 0,
+        "when": {
+          "matching": [
+            "subject"
+          ],
+          "layout": [
+            "groups"
+          ]
+        }
+      }
+    ],
+    "formHelp": "Use two paired category columns or a 2×2 count table. Choose McNemar (uncorrected chi-square), Exact McNemar (two-sided binomial), or continuity correction. Results show the number of discordant pairs (b + c) and the selected method’s p value together.",
+    "formHelpKo": "두 대응 범주 열 또는 2×2 빈도표를 사용합니다. McNemar(보정 없는 χ²), Exact McNemar(양측 이항), 연속성 보정을 선택합니다. 결과에 불일치 쌍의 수(b + c)와 선택한 방법의 p값을 함께 표시합니다.",
+    "exampleRows": [
+      [
+        "20",
+        "8"
+      ],
+      [
+        "2",
+        "15"
+      ]
+    ]
+  },
+  {
+    "id": "shapiro",
+    "label": "Shapiro–Wilk",
+    "ko": "Shapiro–Wilk",
+    "input": "list",
+    "suffix": "",
+    "example": "shapiro([1,2,3,4,5])",
+    "help": "Normality test for 3 to 5000 observations; interpret with Q–Q plots.",
+    "helpKo": "관측값 3~5000개의 정규성 검정; Q–Q plot과 함께 해석합니다.",
+    "section": "tests",
+    "group": "Distribution & variance",
+    "groupKo": "분포·분산 검정",
+    "controls": [
+      {
+        "key": "column",
+        "label": "Sample column",
+        "ko": "표본 열",
+        "type": "column",
+        "default": 0
+      }
+    ],
+    "formHelp": "Choose a numeric sample column to test normality. Interpret the p value with the Q–Q plot; it does not prove normality.",
+    "formHelpKo": "정규성을 검정할 숫자 표본 열을 선택합니다. p값은 Q–Q plot과 함께 해석하며 정규성의 증명이 아닙니다.",
+    "exampleRows": [
+      [
+        "1"
+      ],
+      [
+        "2"
+      ],
+      [
+        "3"
+      ],
+      [
+        "4"
+      ],
+      [
+        "5"
+      ]
+    ]
+  },
+  {
     "id": "kstest",
     "label": "Kolmogorov–Smirnov",
     "ko": "Kolmogorov–Smirnov",
@@ -449,34 +666,29 @@
     ]
   },
   {
-    "id": "mcnemar",
-    "label": "McNemar",
-    "ko": "McNemar",
-    "input": "table",
-    "suffix": ",exact",
-    "example": "mcnemar([[20,8],[2,15]],exact)",
-    "help": "Paired 2×2 count table; exact / corrected / asymptotic.",
-    "helpKo": "대응 2×2 빈도표; exact / corrected / asymptotic.",
+    "id": "tukey",
+    "label": "Tukey–Kramer",
+    "ko": "Tukey–Kramer",
+    "input": "groups",
+    "suffix": "",
+    "example": "tukey([1,2,4,5],[2,3,5,8])",
+    "help": "All pairwise mean comparisons for independent groups with equal variances.",
+    "helpKo": "등분산 독립 그룹의 모든 쌍별 평균 사후비교.",
     "section": "tests",
-    "group": "Group comparisons",
-    "groupKo": "그룹 비교",
+    "group": "Post-hoc comparisons",
+    "groupKo": "사후비교",
     "controls": [
       {
-        "key": "layout",
-        "label": "Data",
-        "ko": "자료 형태",
+        "key": "grouping",
+        "label": "Grouping",
+        "ko": "그룹 구성",
         "type": "choice",
-        "default": "counts",
+        "default": "columns",
         "choices": [
           {
-            "id": "counts",
-            "label": "2×2 counts",
-            "ko": "2×2 빈도표"
-          },
-          {
-            "id": "pairs",
-            "label": "Paired observations",
-            "ko": "대응 관측값"
+            "id": "columns",
+            "label": "Columns",
+            "ko": "열별 그룹"
           },
           {
             "id": "groups",
@@ -486,42 +698,16 @@
         ]
       },
       {
-        "key": "first",
-        "label": "Before / first",
-        "ko": "이전·첫째 열",
-        "type": "column",
-        "default": 0
-      },
-      {
-        "key": "second",
-        "label": "After / second",
-        "ko": "이후·둘째 열",
-        "type": "column",
-        "default": 1
-      },
-      {
-        "key": "method",
-        "label": "Method",
-        "ko": "검정 방법",
-        "type": "choice",
-        "default": "exact",
-        "choices": [
-          {
-            "id": "exact",
-            "label": "Exact",
-            "ko": "정확 검정"
-          },
-          {
-            "id": "corrected",
-            "label": "Continuity corrected",
-            "ko": "연속성 보정"
-          },
-          {
-            "id": "asymptotic",
-            "label": "Asymptotic",
-            "ko": "점근 검정"
-          }
-        ]
+        "key": "columns",
+        "label": "Group columns",
+        "ko": "그룹 열",
+        "type": "columns",
+        "default": "auto",
+        "when": {
+          "grouping": [
+            "columns"
+          ]
+        }
       },
       {
         "key": "group",
@@ -530,7 +716,7 @@
         "type": "column",
         "default": 0,
         "when": {
-          "layout": [
+          "grouping": [
             "groups"
           ]
         }
@@ -542,85 +728,120 @@
         "type": "column",
         "default": 1,
         "when": {
-          "layout": [
-            "groups"
-          ]
-        }
-      },
-      {
-        "key": "firstGroup",
-        "label": "Group A value",
-        "ko": "A 그룹 값",
-        "type": "group",
-        "default": "",
-        "when": {
-          "layout": [
-            "groups"
-          ]
-        }
-      },
-      {
-        "key": "secondGroup",
-        "label": "Group B value",
-        "ko": "B 그룹 값",
-        "type": "group",
-        "default": "",
-        "when": {
-          "layout": [
-            "groups"
-          ]
-        }
-      },
-      {
-        "key": "matching",
-        "label": "Pair matching",
-        "ko": "대응 연결",
-        "type": "choice",
-        "default": "order",
-        "choices": [
-          {
-            "id": "order",
-            "label": "Within-group row order",
-            "ko": "그룹 안의 행 순서"
-          },
-          {
-            "id": "subject",
-            "label": "Subject ID",
-            "ko": "대상 ID"
-          }
-        ],
-        "when": {
-          "layout": [
-            "groups"
-          ]
-        }
-      },
-      {
-        "key": "subject",
-        "label": "Subject ID",
-        "ko": "대상 ID 열",
-        "type": "column",
-        "default": 0,
-        "when": {
-          "matching": [
-            "subject"
-          ],
-          "layout": [
+          "grouping": [
             "groups"
           ]
         }
       }
     ],
-    "formHelp": "Use two paired category columns or a 2×2 count table.",
-    "formHelpKo": "두 대응 범주 열 또는 2×2 빈도표를 사용합니다.",
+    "formHelp": "Select independent group columns or group/value columns. Tukey–Kramer compares all pairs assuming equal variances and reports adjusted p values and 95% simultaneous intervals.",
+    "formHelpKo": "독립 그룹 열 또는 그룹·값 열을 선택합니다. Tukey–Kramer는 등분산을 가정하여 모든 쌍의 보정 p값·95% 동시 구간을 제공합니다.",
     "exampleRows": [
       [
-        "20",
-        "8"
+        "1",
+        "2"
       ],
       [
         "2",
-        "15"
+        "3"
+      ],
+      [
+        "4",
+        "5"
+      ],
+      [
+        "5",
+        "8"
+      ]
+    ]
+  },
+  {
+    "id": "gameshowell",
+    "label": "Games–Howell",
+    "ko": "Games–Howell",
+    "input": "groups",
+    "suffix": "",
+    "example": "gameshowell([1,2,4,5],[2,3,5,8])",
+    "help": "All pairwise mean comparisons for independent groups with unequal variances.",
+    "helpKo": "이분산 독립 그룹의 모든 쌍별 평균 사후비교.",
+    "section": "tests",
+    "group": "Post-hoc comparisons",
+    "groupKo": "사후비교",
+    "controls": [
+      {
+        "key": "grouping",
+        "label": "Grouping",
+        "ko": "그룹 구성",
+        "type": "choice",
+        "default": "columns",
+        "choices": [
+          {
+            "id": "columns",
+            "label": "Columns",
+            "ko": "열별 그룹"
+          },
+          {
+            "id": "groups",
+            "label": "Group / value columns",
+            "ko": "그룹·값 열"
+          }
+        ]
+      },
+      {
+        "key": "columns",
+        "label": "Group columns",
+        "ko": "그룹 열",
+        "type": "columns",
+        "default": "auto",
+        "when": {
+          "grouping": [
+            "columns"
+          ]
+        }
+      },
+      {
+        "key": "group",
+        "label": "Group column",
+        "ko": "그룹 열",
+        "type": "column",
+        "default": 0,
+        "when": {
+          "grouping": [
+            "groups"
+          ]
+        }
+      },
+      {
+        "key": "value",
+        "label": "Value column",
+        "ko": "값 열",
+        "type": "column",
+        "default": 1,
+        "when": {
+          "grouping": [
+            "groups"
+          ]
+        }
+      }
+    ],
+    "formHelp": "Select independent group columns or group/value columns. Games–Howell compares all pairs allowing unequal variances and reports adjusted p values and 95% simultaneous intervals.",
+    "formHelpKo": "독립 그룹 열 또는 그룹·값 열을 선택합니다. Games–Howell은 이분산을 허용하여 모든 쌍의 보정 p값·95% 동시 구간을 제공합니다.",
+    "exampleRows": [
+      [
+        "1",
+        "2"
+      ],
+      [
+        "2",
+        "3"
+      ],
+      [
+        "4",
+        "5"
+      ],
+      [
+        "5",
+        "8"
       ]
     ]
   },

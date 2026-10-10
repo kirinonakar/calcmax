@@ -60,7 +60,7 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
   }
   function resultOptions(){return {notation:engineeringConversion?'eng':state.resultDisplayMode,grouping,engineeringShift,showZeroExponent:engineeringConversion};}
   function renderStatisticsMenus(){
-    for(const id of ['statistics-summary-result','statistics-analysis-result','statistics-advanced-result','statistics-tests-result','statistics-models-result','statistics-preparation-result']){
+    for(const id of ['statistics-summary-result','statistics-analysis-result','statistics-advanced-result','statistics-tests-result','statistics-general-result','statistics-models-result','statistics-preparation-result']){
       const target=$(id);if(!target)continue;
       const visible=value('mode')==='statistics'&&lastResult?.statisticsReport&&statisticsResultTarget===id;
       target.hidden=!visible;

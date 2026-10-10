@@ -73,7 +73,7 @@ export function createWorkspaces({state,engine,ui,persist,restoreSelect,requestO
       }else if(workspace==='matrix'){source=matrix.command();
       }else if(workspace==='statistics-summary'){source=statistics.summaryExpression();advancedContext={termLabels:statistics.summaryTermLabels()};}
       else if(workspace==='statistics'){source=statistics.expression();statisticsContext=statistics.analysisSummary();advancedContext={termLabels:statistics.analysisTermLabels()};}
-      else if(['statistics-advanced','statistics-preparation','statistics-tests','statistics-models'].includes(workspace)){source=statistics.advancedExpression(workspace);advancedContext=statistics.advancedContext(workspace);}
+      else if(['statistics-advanced','statistics-preparation','statistics-tests','statistics-general','statistics-models'].includes(workspace)){source=statistics.advancedExpression(workspace);advancedContext=statistics.advancedContext(workspace);}
       else if(workspace==='units')source=`convert(${value('unit-value')},${value('unit-from')},${value('unit-to')})`;
       else if(workspace==='tip')source=tipExpression();
       else if(workspace==='currency'){source=`(${value('currency-amount')})*(${value('currency-rate')})`;}

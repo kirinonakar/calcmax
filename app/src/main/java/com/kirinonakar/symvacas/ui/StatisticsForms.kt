@@ -9,10 +9,11 @@ internal fun advancedStatisticsTermLabels(definition:JSONObject,rows:List<List<S
     val opts=(0 until (controls?.length() ?: 0)).associate {index->val field=controls!!.getJSONObject(index);val key=field.getString("key");key to settings.optString(key,field.get("default").toString())}
     fun column(key:String)=opts[key]?.toIntOrNull()?.let {if(it==-1)n-1 else it} ?: -1
     if(id in listOf("twowayanova","linearmodel"))return statisticsFactorialData(rows,opts,columnLabels).labels
+    if(id=="shapiro")return mapOf("sample:1" to columnLabels.getOrElse(column("column")){"Sample 1"})
     if(id=="kstest"&&opts["mode"]!="two")return mapOf("sample:1" to columnLabels.getOrElse(column("first")){"Sample 1"})
-    if(id in listOf("cohend","bayescompare","levene","bartlett","eta2","friedman","repeatedanova","kstest")||id=="bayesbootstrap"&&opts["layout"]!="single") {
+    if(id in listOf("cohend","bayescompare","levene","bartlett","eta2","friedman","repeatedanova","kstest","tukey","gameshowell")||id=="bayesbootstrap"&&opts["layout"]!="single") {
         val selections=opts+mapOf("grouping" to (if(id=="bayesbootstrap")opts["layout"].orEmpty() else opts["grouping"].orEmpty()))
-        val plan=statisticsComparisonData(rows,selections,all=id in listOf("levene","bartlett","eta2","friedman","repeatedanova"))
+        val plan=statisticsComparisonData(rows,selections,all=id in listOf("levene","bartlett","eta2","friedman","repeatedanova","tukey","gameshowell"))
         var names=plan.labels.map {at->if(selections["grouping"]=="groups")at else columnLabels.getOrElse(at.toInt()){"Sample ${at.toInt()+1}"}}
         if(id=="bayesbootstrap"&&opts["order"]=="reverse"&&opts["firstGroup"].isNullOrBlank()&&opts["secondGroup"].isNullOrBlank())names=names.reversed()
         val labels=names.mapIndexed {index,name->"sample:${index+1}" to name}.toMap().toMutableMap()
@@ -101,6 +102,8 @@ internal fun guidedStatisticsCommand(definition:JSONObject,rows:List<List<String
         return selected.map {row->listOf(row[0],if(row[1]==eventValue)"1" else "0")+row.drop(2)}
     }
     return when(id) {
+        "shapiro"->{val sample=values(col("column"));require(sample.size in 3..5000) {"Shapiro-Wilk needs 3 to 5000 values"};"shapiro(${vector(sample)})"}
+        "tukey","gameshowell"->{val plan=statisticsComparisonData(rows,opts,all=true);require(plan.samples.size>=2&&plan.samples.all {it.size>=2}) {"Enter at least two observations in each group"};"$id(${plan.samples.joinToString(",",transform=::vector)})"}
         "testpower","samplesize"->{
             val keys=listOf("effect",if(id=="testpower")"n" else "power","alpha")
             require(keys.all {opts[it].orEmpty().isNotBlank()}) {"Enter all study design parameters"}

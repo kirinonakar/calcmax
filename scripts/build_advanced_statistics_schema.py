@@ -12,6 +12,9 @@ CLUSTERS = '[[1,0,2],[1,1,4],[1,2,4],[2,0,3],[2,1,4],[2,2,6],[3,0,1],[3,1,3],[3,
 GLMM = '[[1,0,0],[1,1,0],[1,2,1],[2,0,0],[2,1,1],[2,2,1],[3,0,0],[3,1,0],[3,2,0],[4,0,1],[4,1,1],[4,2,1],[5,0,1],[5,1,0],[5,2,1],[6,0,0],[6,1,1],[6,2,0]]'
 SURVIVAL = '[[1,1],[2,0],[3,1],[4,1],[5,0],[6,1]]'
 specs = [
+    ('shapiro','Shapiro–Wilk','Shapiro–Wilk','list','','[1,2,3,4,5]','Normality test for 3 to 5000 observations; interpret with Q–Q plots.','관측값 3~5000개의 정규성 검정; Q–Q plot과 함께 해석합니다.'),
+    ('tukey','Tukey–Kramer','Tukey–Kramer','groups','',GROUPS,'All pairwise mean comparisons for independent groups with equal variances.','등분산 독립 그룹의 모든 쌍별 평균 사후비교.'),
+    ('gameshowell','Games–Howell','Games–Howell','groups','',GROUPS,'All pairwise mean comparisons for independent groups with unequal variances.','이분산 독립 그룹의 모든 쌍별 평균 사후비교.'),
     ('linearmodel','Factorial linear model / ANOVA','요인 선형회귀 / ANOVA','table',',[1,2],2,3,sum','[[1,1,2],[1,1,4],[1,2,5],[1,2,6],[2,1,4],[2,1,5],[2,2,8],[2,2,10]]','General OLS with numeric and categorical predictors. Categorical positions are one-based; interaction order, Type II/III, sum/treatment coding. Uses joint partial F tests for each term. Three-way and higher interactions require enough replicated observations and identifiable columns.','숫자·범주 설명변수를 포함한 일반 OLS. 범주 변수 번호는 1부터 시작하며 상호작용 차수·Type II/III·sum/treatment 코딩을 지정합니다. 항마다 여러 계수를 부분 F로 함께 검정합니다. 3요인 이상 상호작용에도 충분한 반복 관측·식별 가능한 열이 필요합니다.'),
     ('twowayanova','Two-way ANOVA','이요인 ANOVA','table',',1','[[1,1,2],[1,1,4],[1,2,5],[1,2,6],[2,1,4],[2,1,5],[2,2,8],[2,2,10]]','Independent observations, two categorical factors and a numeric response. Type III F tests with sum contrasts; interaction 1 (default) or additive 0. Normal errors and common residual variance; replication and a full-rank design are required.','독립 관측·두 범주 요인·숫자 반응. 합이 0인 대비의 Type III F 검정. 상호작용 1(기본) 또는 가법 0. 정규 오차·공통 잔차분산을 가정하며 반복 관측과 식별 가능한 설계가 필요합니다.'),
     ('friedman','Friedman test','Friedman 검정','table','','[[2,4,5],[3,4,7],[4,7,8],[2,3,6],[5,6,7]]','Rows are independent subjects; columns are at least three repeated conditions. Complete matched rows, midranks and tie correction. Chi-square approximation; small samples or few conditions can give inaccurate p values. Reports Kendall W.','행은 독립 대상, 열은 3개 이상 반복 조건입니다. 완전한 대응 행·평균순위·동점 보정. χ² 근사이므로 소표본·소수 조건에서 p값이 부정확할 수 있습니다. Kendall W를 제공합니다.'),
@@ -55,8 +58,10 @@ schema = [{'id':id_,'label':label,'ko':ko,'input':layout,'suffix':suffix,'exampl
 # Menu placement and order are shared by Android and Web; function IDs stay stable.
 menus = [
     ('preparation', 'Data preparation', '데이터 준비', ['impute']),
-    ('tests', 'Distribution & variance', '분포·분산 검정', ['kstest','levene','bartlett']),
-    ('tests', 'Group comparisons', '그룹 비교', ['mcnemar','twowayanova','ancova','repeatedanova','friedman']),
+    ('general', 'Categorical data', '범주형 자료', ['mcnemar']),
+    ('tests', 'Distribution & variance', '분포·분산 검정', ['shapiro','kstest','levene','bartlett']),
+    ('tests', 'Post-hoc comparisons', '사후비교', ['tukey','gameshowell']),
+    ('tests', 'Group comparisons', '그룹 비교', ['twowayanova','ancova','repeatedanova','friedman']),
     ('tests', 'Effect sizes & multiple testing', '효과크기·다중검정', ['cohend','eta2','padjust']),
     ('models', 'Generalized regression', '일반화 회귀', ['linearmodel','glm','poissonreg','nbreg','multinomial','ordinal']),
     ('models', 'Repeated & clustered data', '반복·군집 자료', ['mixedmodel','glmm','gee']),
@@ -90,6 +95,8 @@ cluster_fields=[col('subject','Subject / cluster','대상·군집 열',0),col('r
 offset_fields=[field('adjustment','Offset / exposure','오프셋·노출량','choice','none',[('none','None','없음'),('offset','Log offset','로그 오프셋'),('exposure','Exposure','노출량')]),dict(col('offset','Offset / exposure column','오프셋·노출량 열',0),when={'adjustment':['offset','exposure']})]
 count_fields=[col('response','Response','반응 열',-1),multi('predictors','Predictors','설명변수 열')]+offset_fields
 forms={
+    'shapiro':[col('column','Sample column','표본 열',0)],
+    'tukey':group_fields,'gameshowell':group_fields,
     'pca':[multi('columns','Feature columns','변수 열'),field('components','Components','주성분 수','number','2'),field('standardize','Scaling','척도','choice','1',[('1','Standardize (sample SD)','표준화 (표본 표준편차)'),('0','Center only','중심화만')])],
     'bayesbootstrap':[field('layout','Data layout','자료 구성','choice','single',[('single','Single sample','단일 표본'),('columns','Two columns','두 컬럼'),('groups','Group / value columns','그룹·값 컬럼')]),
         dict(col('column','Sample column','표본 열',0),when={'layout':['single']}),
@@ -116,7 +123,7 @@ forms={
         col('column','Count column','횟수 열',0),dict(col('exposure','Exposure','노출량 열',1),when={'layout':['exposure']}),field('alpha','Prior shape α','사전 shape α','number','1'),field('beta','Prior rate β','사전 rate β','number','1')]+credible_fields+[field('threshold','Threshold rate','기준 발생률','number','1')],
     'padjust':[col('column','p-value column','p값 열',0),field('method','Correction','보정 방법','choice','holm',[('bonferroni','Bonferroni','Bonferroni'),('holm','Holm','Holm'),('fdr','FDR (BH)','FDR (BH)')]),field('alpha','Significance α','유의수준 α','number','0.05')],
     'levene':group_fields,'bartlett':group_fields,
-    'mcnemar':[field('layout','Data','자료 형태','choice','counts',[('counts','2×2 counts','2×2 빈도표'),('pairs','Paired observations','대응 관측값')]),col('first','Before / first','이전·첫째 열',0),col('second','After / second','이후·둘째 열',1),field('method','Method','검정 방법','choice','exact',[('exact','Exact','정확 검정'),('corrected','Continuity corrected','연속성 보정'),('asymptotic','Asymptotic','점근 검정')])],
+    'mcnemar':[field('layout','Data','자료 형태','choice','counts',[('counts','2×2 counts','2×2 빈도표'),('pairs','Paired observations','대응 관측값')]),col('first','Before / first','이전·첫째 열',0),col('second','After / second','이후·둘째 열',1),field('method','Method','검정 방법','choice','exact',[('asymptotic','McNemar','McNemar'),('exact','Exact McNemar','Exact McNemar'),('corrected','Continuity correction','연속성 보정')])],
     'kaplanmeier':survival_fields+[field('level','Confidence level','신뢰수준','number','0.95')],
     'logrank':survival_fields+[col('group','Group','그룹 열',2)],
     'survivalanalysis':survival_fields+[field('grouping','Groups','그룹','choice','groups',[('groups','Group column','그룹 열'),('all','All subjects','전체 대상')]),
@@ -171,6 +178,9 @@ forms['bayesbootstrap'] += [dict(f,when={**{k:v for k,v in f.get('when',{}).item
 next(f for f in forms['mcnemar'] if f['key']=='layout')['choices'].append(dict(id='groups',label='Group / value columns',ko='그룹·값 열'))
 forms['mcnemar'] += [dict(f,when={**{k:v for k,v in f.get('when',{}).items() if k!='grouping'},'layout':['groups']}) for f in two_fields+matching_fields if f['key'] in ('group','value','firstGroup','secondGroup','matching','subject')]
 form_help={
+ 'shapiro':('Choose a numeric sample column to test normality. Interpret the p value with the Q–Q plot; it does not prove normality.','정규성을 검정할 숫자 표본 열을 선택합니다. p값은 Q–Q plot과 함께 해석하며 정규성의 증명이 아닙니다.'),
+ 'tukey':('Select independent group columns or group/value columns. Tukey–Kramer compares all pairs assuming equal variances and reports adjusted p values and 95% simultaneous intervals.','독립 그룹 열 또는 그룹·값 열을 선택합니다. Tukey–Kramer는 등분산을 가정하여 모든 쌍의 보정 p값·95% 동시 구간을 제공합니다.'),
+ 'gameshowell':('Select independent group columns or group/value columns. Games–Howell compares all pairs allowing unequal variances and reports adjusted p values and 95% simultaneous intervals.','독립 그룹 열 또는 그룹·값 열을 선택합니다. Games–Howell은 이분산을 허용하여 모든 쌍의 보정 p값·95% 동시 구간을 제공합니다.'),
  'linearmodel':('Choose response and predictors; mark only the categorical predictors. Numeric predictors retain their units. Interaction order 1 is additive, 2 includes all pairs, 3 all triples, etc. Choose Type II or III and sum or dummy coding; Type III factorial interactions require sum contrasts. Coefficient intervals and joint term F tests share the same OLS fit. Numeric main effects with interactions refer to zero: center covariates when appropriate.','반응·설명변수를 선택하고 그중 범주 변수만 표시합니다. 숫자 변수는 원래 단위를 사용합니다. 차수 1은 가법, 2는 모든 쌍, 3은 모든 삼중 상호작용 등을 포함합니다. Type II/III·합 대비/더미 코딩을 선택하며 Type III 요인 상호작용에는 합 대비가 필요합니다. 계수 구간·항별 부분 F 검정은 같은 OLS 적합을 사용합니다. 숫자 상호작용의 주효과는 0 기준이므로 필요하면 공변량을 중심화하세요.'),
  'twowayanova':('Select two categorical factor columns and the numeric response, or columns for every factor cell ordered with A slowest. Observations must be independent; repeated measures belong in Repeated-measures ANOVA. Type III sum contrasts handle unequal cell sizes. Replication and identifiable cells are required for the interaction model. Results include residual diagnostics and cell mean intervals.','두 범주 요인 열·숫자 반응 열 또는 A를 최외곽으로 정렬한 요인 조합별 열을 선택합니다. 관측은 독립이어야 하며 반복측정은 반복측정 ANOVA를 사용하세요. 합이 0인 대비의 Type III 검정으로 불균형 셀 크기를 처리합니다. 상호작용 모형에는 반복 관측·식별 가능한 셀이 필요합니다. 잔차 진단과 셀 평균 구간을 함께 제공합니다.'),
  'friedman':('Choose at least three numeric condition columns. Each row must be the same subject across conditions; incomplete selected rows are rejected. Tie-corrected chi-square approximation; small-sample p values can be inaccurate.','숫자 반복 조건 열을 3개 이상 선택합니다. 각 행은 모든 조건에서 같은 대상이어야 하며 선택 열의 불완전한 행은 거부합니다. 동점 보정 χ² 근사이며 소표본 p값은 부정확할 수 있습니다.'),
@@ -193,7 +203,7 @@ form_help={
  'padjust':('Adjust p values from the selected column.','선택한 열의 p값을 보정합니다.'),
  'levene':('Compare group variances using median centers.','중앙값 기준으로 그룹의 분산을 비교합니다.'),
  'bartlett':('Compare variances of normally distributed groups.','정규분포를 가정해 그룹의 분산을 비교합니다.'),
- 'mcnemar':('Use two paired category columns or a 2×2 count table.','두 대응 범주 열 또는 2×2 빈도표를 사용합니다.'),
+ 'mcnemar':('Use two paired category columns or a 2×2 count table. Choose McNemar (uncorrected chi-square), Exact McNemar (two-sided binomial), or continuity correction. Results show the number of discordant pairs (b + c) and the selected method’s p value together.','두 대응 범주 열 또는 2×2 빈도표를 사용합니다. McNemar(보정 없는 χ²), Exact McNemar(양측 이항), 연속성 보정을 선택합니다. 결과에 불일치 쌍의 수(b + c)와 선택한 방법의 p값을 함께 표시합니다.'),
  'kaplanmeier':('Choose time and event columns; other event values are censored.','시간·사건 열을 선택합니다. 발생 값 이외는 중도절단입니다.'),
  'logrank':('Compare exactly two groups; other event values are censored.','두 그룹을 비교합니다. 발생 값 이외는 중도절단입니다.'),
  'survivalanalysis':('Kaplan–Meier curves · log-rank · Cox; other event values are censored.','Kaplan–Meier 곡선 · log-rank · Cox. 발생 값 이외는 중도절단입니다.'),
@@ -231,8 +241,8 @@ for item in schema:
     arguments=ast.parse(item['example'],mode='eval').body.args
     first=literal(arguments[0])
     if item['input']=='none': rows=[]
-    elif item['id'] in ('padjust','bayesproportion','bayesmean','bayesrate','bayesbootstrap','bootstrapci'): rows=[[v] for v in first]
-    elif item['id'] in ('levene','bartlett','kstest','bayescompare','cohend','eta2'):
+    elif item['id'] in ('shapiro','padjust','bayesproportion','bayesmean','bayesrate','bayesbootstrap','bootstrapci'): rows=[[v] for v in first]
+    elif item['id'] in ('tukey','gameshowell','levene','bartlett','kstest','bayescompare','cohend','eta2'):
         samples=[literal(arg) for arg in (arguments[:2] if item['id'] in ('bayescompare','cohend') else arguments)]; rows=[[sample[i] if i<len(sample) else '' for sample in samples] for i in range(max(map(len,samples)))]
     elif item['id']=='logrank': rows=[r+[i+1] for i,arg in enumerate(arguments) for r in literal(arg)]
     else: rows=first
@@ -243,6 +253,10 @@ for item in schema:
             if choice['id']!='auto': choice['when']={'family':links[choice['id']]}
 (ROOT/'tests/fixtures').mkdir(exist_ok=True)
 cases=[
+ dict(id='mcnemar',rows=[['20','8'],['2','15']],settings=dict(method='asymptotic'),expected='mcnemar([[20,8],[2,15]],asymptotic)'),
+ dict(id='shapiro',rows=[['unused','1'],['','2'],['x',''],['y','4']],settings=dict(column='1'),expected='shapiro([1,2,4])'),
+ dict(id='tukey',rows=[['A','1'],['B','4'],['A','2'],['B','5']],settings=dict(grouping='groups',group='0',value='1'),expected='tukey([1,2],[4,5])'),
+ dict(id='gameshowell',rows=[['unused','1','4','9'],['','2','5','10']],settings=dict(columns='3,1'),expected='gameshowell([9,10],[1,2])'),
  dict(id='cohend',rows=[['s1','Pre','10','unused'],['s2','Pre','20',''],['s2','Post','24',''],['s1','Post','13','']],settings=dict(grouping='groups',group='1',value='2',firstGroup='Pre',secondGroup='Post',design='paired',matching='subject',subject='0'),expected='cohend([10,20],[13,24],paired)'),
  dict(id='bayescompare',rows=[['unused','B','4'],['x','A','2'],['y','B','6'],['z','A','3']],settings=dict(grouping='groups',group='1',value='2',firstGroup='A',secondGroup='B'),expected='bayescompare([2,3],[4,6],equal,0,0.01,2,1,0.95,20000,0)'),
  dict(id='kstest',rows=[['unused','B','4'],['x','A','2'],['y','B','6'],['z','A','3']],settings=dict(grouping='groups',group='1',value='2',firstGroup='A',secondGroup='B'),expected='kstest([2,3],[4,6])'),
@@ -334,7 +348,7 @@ for language in ('','_ko'):
     path=ROOT/f'app/src/main/assets/catalog_help{language}.md'
     text=path.read_text(encoding='utf-8').split('\n## Advanced statistics')[0].split('\n## 고급 통계')[0]
     heading='고급 통계' if language else 'Advanced statistics'
-    intro=('통계 화면에서 결측치 대체는 데이터 준비, 분포·분산 검정과 그룹 비교·효과크기·다중검정은 일반 분석, 요인 선형회귀·일반화·혼합 회귀와 교차검증은 회귀 메뉴에 있습니다. 고급 분석은 베이지안 추론 → 재표집 → 다변량 분석 → 생존분석 → 검정력·표본수 순서입니다. 현재 데이터·예제·분석 식을 전환할 수 있습니다. 대응 분석은 완전한 쌍을 사용하며 대상 ID로 연결할 수 있습니다. 반복측정의 열별 입력은 불완전한 행을 거부합니다. impute는 빈 셀을 NA로 변환합니다. 이 분석들은 64비트 수치 계산입니다.' if language else 'In Statistics, missing-value imputation belongs to Data preparation; distribution/variance tests, group comparisons, effect sizes and multiple testing belong to General analysis; factorial linear, generalized/mixed regression and cross-validation belong to Regression. Advanced analysis is ordered as Bayesian inference, Resampling, Multivariate analysis, Survival analysis, then Power & sample size. Switch between current data, examples and an editable expression. Paired comparisons use complete pairs and support subject-ID matching. Wide repeated-measures inputs reject incomplete rows; impute converts them to NA. These analyses use binary64 numerics.')
+    intro=('통계 화면에서 결측치 대체는 데이터 준비, 일반 분석은 평균 비교 → 순위·비모수 검정 → 범주형 자료(McNemar 포함) → 신뢰구간 순서이며, 분포·분산 검정(Shapiro–Wilk 포함)·사후비교·추가 그룹 비교·효과크기·다중검정은 추가 검정·효과크기, 요인 선형회귀·일반화·혼합 회귀와 교차검증은 회귀 메뉴에 있습니다. 고급 분석은 베이지안 추론 → 재표집 → 다변량 분석 → 생존분석 → 검정력·표본수 순서입니다. 현재 데이터·예제·분석 식을 전환할 수 있습니다. 대응 분석은 완전한 쌍을 사용하며 대상 ID로 연결할 수 있습니다. 반복측정의 열별 입력은 불완전한 행을 거부합니다. impute는 빈 셀을 NA로 변환합니다. 이 분석들은 64비트 수치 계산입니다.' if language else 'In Statistics, missing-value imputation belongs to Data preparation; General analysis is ordered as Mean comparisons, Rank & nonparametric tests, Categorical data (including McNemar), then Confidence intervals; distribution/variance tests (including Shapiro–Wilk), post-hoc comparisons, additional group comparisons, effect sizes and multiple testing belong to More tests & effect sizes; factorial linear, generalized/mixed regression and cross-validation belong to Regression. Advanced analysis is ordered as Bayesian inference, Resampling, Multivariate analysis, Survival analysis, then Power & sample size. Switch between current data, examples and an editable expression. Paired comparisons use complete pairs and support subject-ID matching. Wide repeated-measures inputs reject incomplete rows; impute converts them to NA. These analyses use binary64 numerics.')
     text+='\n## '+heading+'\n\n'+intro+'\n\n'
     previous_group = None
     for item in schema:

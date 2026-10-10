@@ -98,9 +98,23 @@ import com.kirinonakar.symvacas.ui.theme.LocalInstrument
     HorizontalDivider()
     StatisticsSectionToggle("General analysis",expanded,"statistics-analysis-toggle") {expanded=!expanded}
     if(!expanded)return
+    val categories=linkedMapOf(
+        "Mean comparisons" to listOf("t test","z test","ANOVA"),
+        "Rank & nonparametric tests" to listOf("Wilcoxon","Mann–Whitney","Kruskal–Wallis"),
+        "Categorical data" to listOf("χ² test","Fisher exact","McNemar"),
+        "Confidence intervals" to listOf("t interval","z interval")
+    )
+    val category=categories.entries.firstOrNull {test in it.value}?.key ?: categories.keys.first()
+    LaunchedEffect(test){if(categories.values.none {test in it})test="t test"}
+    StatisticsSelectionTitle("Category")
+    Choices(categories.keys.toList(),category,{test=categories.getValue(it).first()})
+    StatisticsSelectionTitle("Analyze")
+    Choices(categories.getValue(category),test,{test=it})
+    if(test=="McNemar") {
+        AdvancedStatistics(m,data,kind,"general",embedded=true)
+    } else {
     Text(if(kind.startsWith("columns:"))tr("Blank cells are omitted. Group comparisons use all columns.") else when(kind){"xy"->"Blank cells are omitted. Paired, χ², and Fisher tests use rows with both values; independent tests use each column separately. Fisher requires exactly two categories per column.";"xyz"->"Blank cells are omitted. ANOVA and Tukey HSD use x, y, and z as three independent groups.";else->"Blank cells are omitted from tests. Choose x,y or x,y,z data for group comparisons."},fontSize=12.sp,color=c.muted)
     Column(verticalArrangement=Arrangement.spacedBy(2.dp)) {
-        Choices(listOf("t test","z test","χ² test","Fisher exact","ANOVA","Tukey HSD","Games–Howell","Wilcoxon","Mann–Whitney","Kruskal–Wallis","Shapiro–Wilk","t interval","z interval"),test,{test=it})
         if(test=="ANOVA") {
             StatisticsSelectionTitle("ANOVA method")
             Choices(listOf("Welch (unequal variances)","Classic (equal variances)"),anovaMethod,{anovaMethod=it})
@@ -226,5 +240,6 @@ import com.kirinonakar.symvacas.ui.theme.LocalInstrument
     }
     statisticsReportFor(m.result,m.resultSource.ifBlank {m.editor.source},statisticsTestAnalyses(test))?.let {StatisticsResultReport(m,it)}
     Text(if(isKorean())"검정의 기본 대립가설은 양측입니다. 신뢰수준은 0.95 또는 95로 입력할 수 있습니다." else "Tests use a two-sided alternative by default. Confidence levels accept 0.95 or 95.",fontSize=11.sp,color=c.muted)
+    }
     AdvancedStatistics(m,data,kind,"tests","More tests & effect sizes")
 }

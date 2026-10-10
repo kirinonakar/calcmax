@@ -42,11 +42,13 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
     if(oldPlotType==='clusteredheatmap')$('statistics-heatmap-clustering').checked=true;
   }
   const menus=Object.fromEntries(['statistics-op','statistics-grouping','regression-kind','regression-response','statistics-plot-type'].map(id=>
-    [id,[...$(id).options].map(option=>({option,label:option.textContent}))]));
+    [id,[...$(id).options].map(option=>({option,label:option.textContent,group:option.parentElement.tagName==='OPTGROUP'?option.parentElement.label:''}))]));
   function filterMenu(id,available,fallback){
     const select=$(id),previous=select.value,entries=menus[id].filter(({option})=>available(option.value));
     for(const {option,label} of entries){option.disabled=false;setText(option,label);}
-    select.replaceChildren(...entries.map(({option})=>option));
+    if(id==='statistics-op'){
+      select.replaceChildren(...[...new Set(entries.map(entry=>entry.group))].map(group=>{const block=element('optgroup');block.label=t(group);block.append(...entries.filter(entry=>entry.group===group).map(entry=>entry.option));return block;}));
+    }else select.replaceChildren(...entries.map(({option})=>option));
     select.value=entries.some(({option})=>option.value===previous)?previous:
       entries.some(({option})=>option.value===fallback)?fallback:entries[0]?.option.value||'';
     return select.value!==previous;
@@ -147,7 +149,7 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
   $('regression-export').onclick=()=>downloadFile('regression-residuals.csv',regressionResidualCSV(statisticsGraph?.report),'text/csv');
   function statisticsControls(){
     const columns=dataColumns(),kind=dataKind(),columnsMode=value('statistics-kind')==='columns',pairOps=['correlation','ttestpaired','wilcoxon','chi2independence','fisherexact'],multiOps=['ttest2','ztest2','mannwhitney','anova','welchanova','tukey','gameshowell','kruskal'];
-    filterMenu('statistics-op',op=>columns!==1||op==='wilcoxon'||![...pairOps,...multiOps].includes(op),'stats');
+    filterMenu('statistics-op',op=>columns!==1||op==='wilcoxon'||![...pairOps,...multiOps].includes(op),'ttest');
     const op=value('statistics-op'),paired=pairOps.includes(op)&&!(op==='wilcoxon'&&columns===1),categorical=['chi2independence','fisherexact'].includes(op),selectablePairs=categorical||['wilcoxon','ttestpaired'].includes(op),multi=['ttest2','ztest2','mannwhitney'].includes(op),all=['anova','welchanova','tukey','gameshowell','kruskal'].includes(op);
     filterMenu('statistics-grouping',grouping=>grouping==='columns'||columns>1,'columns');
     const grouped=columns>1&&value('statistics-grouping')==='groups';
@@ -243,6 +245,8 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
     setText($('statistics-data-label'),kind==='list'?'One value per line':kind==='xy'?t('x, y values').replace('x, y',dataLabels):kind==='xyz'?t('x, y, z values').replace('x, y, z',dataLabels):dataLabels);
     try{$('statistics-samples').textContent=analysisSummary();}catch{setText($('statistics-samples'),'Enter data to see analyzed groups');}
     for(const panel of Object.values(analysisPanels))panel.render();
+    $('statistics-basic-controls').hidden=op==='mcnemar';
+    $('statistics-general').hidden=op!=='mcnemar';
     updateLineNumbers();
   }
   function updateHeatMapAxis(id,names,rows,excluded=new Set()){
@@ -435,7 +439,7 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
     }catch(exc){if(regressionRun===run)error(exc.message);}
     finally{if(regressionRun===run){regressionRun=null;regressionBusy(false);}}
   }
-  for(const section of ['preparation','tests','models','advanced'])analysisPanels[`statistics-${section}`]=createAdvancedStatistics({state,persist,data:()=>value('statistics-data'),columnLimit:()=>dataColumns(),copy:ui.clipboard,section,applyData:updated=>{
+  for(const section of ['preparation','general','tests','models','advanced'])analysisPanels[`statistics-${section}`]=createAdvancedStatistics({state,persist,data:()=>value('statistics-data'),columnLimit:()=>dataColumns(),copy:ui.clipboard,section,applyData:updated=>{
     $('statistics-data').value=updated;const selected=value('dataset-list');
     if(selected&&selected===value('dataset-name')&&Object.hasOwn(state.datasets,selected))state.datasets[selected]=updated;
     dataKindChange();persist();toast(t('Missing values applied to current data'));

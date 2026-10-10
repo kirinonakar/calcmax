@@ -1,5 +1,95 @@
 [
   {
+    "id": "mcnemar",
+    "rows": [
+      [
+        "20",
+        "8"
+      ],
+      [
+        "2",
+        "15"
+      ]
+    ],
+    "settings": {
+      "method": "asymptotic"
+    },
+    "expected": "mcnemar([[20,8],[2,15]],asymptotic)"
+  },
+  {
+    "id": "shapiro",
+    "rows": [
+      [
+        "unused",
+        "1"
+      ],
+      [
+        "",
+        "2"
+      ],
+      [
+        "x",
+        ""
+      ],
+      [
+        "y",
+        "4"
+      ]
+    ],
+    "settings": {
+      "column": "1"
+    },
+    "expected": "shapiro([1,2,4])"
+  },
+  {
+    "id": "tukey",
+    "rows": [
+      [
+        "A",
+        "1"
+      ],
+      [
+        "B",
+        "4"
+      ],
+      [
+        "A",
+        "2"
+      ],
+      [
+        "B",
+        "5"
+      ]
+    ],
+    "settings": {
+      "grouping": "groups",
+      "group": "0",
+      "value": "1"
+    },
+    "expected": "tukey([1,2],[4,5])"
+  },
+  {
+    "id": "gameshowell",
+    "rows": [
+      [
+        "unused",
+        "1",
+        "4",
+        "9"
+      ],
+      [
+        "",
+        "2",
+        "5",
+        "10"
+      ]
+    ],
+    "settings": {
+      "columns": "3,1"
+    },
+    "expected": "gameshowell([9,10],[1,2])"
+  },
+  {
     "id": "cohend",
     "rows": [
       [
