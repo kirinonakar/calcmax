@@ -2,7 +2,30 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {integralPolygons} from '../graph-integral.js';
 import {clipGraphSegment} from '../graph-geometry.js';
-import {surfaceLightingGradient} from '../surface-geometry.js';
+import {surfaceLightingGradient,prepareSurfaceFaces,projectSurfaceFaces,surfaceProjection} from '../surface-geometry.js';
+import {surfaceCameraMatrix} from '../surface-gpu.js';
+
+test('convex shells draw front faces last at every angle and camera depth agrees with projection',()=>{
+  const vertices=[[2,0,0],[-2,0,0],[0,1,0],[0,-1,0],[0,0,.5],[0,0,-.5]],ids=[[0,2,4],[2,1,4],[1,3,4],[3,0,4],[2,0,5],[1,2,5],[3,1,5],[0,3,5]];
+  const bounds={xmin:-3,xmax:3,ymin:-2,ymax:2,zmin:-1,zmax:1},triangles=ids.map(face=>face.map(i=>vertices[i]));
+  const normals=ids.map(face=>face.map(i=>vertices[i].map((v,k)=>v/[4,1,.25][k])));
+  const prepared=prepareSurfaceFaces([],bounds,triangles,normals,true);
+  assert.equal(prepared.closed,true);
+  const cut=prepareSurfaceFaces([], {...bounds,xmax:.5},triangles,normals,true);
+  assert.equal(cut.closed,false);
+  for(const rotation of [0,35,90,135,180,225,270,315,359])for(const elevation of [-90,-32,0,32,90]){
+    const projection=surfaceProjection(bounds,rotation,elevation),faces=projectSurfaceFaces(prepared,projection);
+    assert.ok(faces.length>0&&faces.every(face=>face.front));
+    const projected=projectSurfaceFaces(cut,surfaceProjection({...bounds,xmax:.5},rotation,elevation));
+    let front=false;for(const face of projected){if(face.front)front=true;else assert.equal(front,false,'back face painted over front');}
+    const matrix=surfaceCameraMatrix(rotation,elevation,100,800,460);
+    for(const point of vertices){
+      const normalized=projection.normalize(point),clip=Array.from({length:3},(_,r)=>normalized.reduce((sum,v,c)=>sum+matrix[c*4+r]*v,0));
+      const p=projection.project(point);
+      assert.ok(Math.abs(clip[0]-p[0]*.25)<1e-6);assert.ok(Math.abs(clip[1]+p[1]*200/460)<1e-6);assert.ok(Math.abs(clip[2]+p[2]/4)<1e-6);
+    }
+  }
+});
 
 test('smooth lighting reproduces every vertex and both triangles agree on their shared edge',()=>{
   const first=[[0,0],[2,0],[0,2]],second=[[2,0],[2,2],[0,2]];

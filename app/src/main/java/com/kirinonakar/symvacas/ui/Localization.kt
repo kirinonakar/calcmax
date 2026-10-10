@@ -654,6 +654,7 @@ private val korean = mapOf(
     "Enter one surface expression z=f(x,y) or F(x,y,z)=0" to "곡면식 z=f(x,y) 또는 F(x,y,z)=0을 하나 입력하세요.",
     "Equation is true everywhere; enter a surface equation" to "모든 점에서 참인 식입니다. 곡면을 정의하는 방정식을 입력하세요.",
     "Invalid surface z range" to "올바른 곡면 z 범위를 입력하세요.",
+    "Surface parameters must give finite real coefficients" to "곡면 매개변수의 계수가 유한한 실수가 되어야 합니다. 분모가 0인지 확인하세요.",
     "Enter an equation F(x,y)=0" to "F(x,y)=0 형태의 방정식을 입력하세요.",
     "Equation is true everywhere; enter a curve equation" to "모든 점에서 참인 식입니다. 곡선을 정의하는 방정식을 입력하세요.",
     "f(x) · one per line · [shade] y<f(x) or f, g" to "f(x) · 한 줄에 하나 · 음영: [shade] y<f(x) 또는 f, g",

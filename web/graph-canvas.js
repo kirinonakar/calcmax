@@ -1,12 +1,14 @@
 import {displayNumber} from './display-format.js';
 import {integralPolygons} from './graph-integral.js';
 import {clipGraphSegment} from './graph-geometry.js';
-import {clipSurfaceSegment,surfaceFaces,surfaceProjection,surfaceZRange} from './surface-geometry.js';
+import {clipSurfaceSegment,prepareSurfaceFaces,projectSurfaceFaces,surfaceProjection,surfaceZRange} from './surface-geometry.js';
+import {renderSurfaceGpu} from './surface-gpu.js';
 
 import {defaultGraphColors} from './graph-colors.js';
 export const graphCurveColor=(index,colors=defaultGraphColors)=>colors[index%colors.length];
 const w=800,pad=42;
 const finite=point=>point&&point.every(Number.isFinite);
+const surfaceGeometry=new WeakMap();
 
 // One persistent bitmap per workspace, with a backing store sized for its
 // actual CSS width and device pixel ratio. Geometry uses the gesture viewBox.
@@ -57,11 +59,19 @@ export function plotGraph(container,result,bounds,{colors=defaultGraphColors,dig
     const {rotation=35,elevation=32,zoom=1,renderMode='wireframe'}=surfaceView;
     const color=/^#[0-9a-f]{6}$/i.test(surfaceView.color||'')?surfaceView.color:colors[0],rgb=[1,3,5].map(i=>parseInt(color.slice(i,i+2),16));
     const [zmin,zmax]=surfaceZRange(result.zMin,result.zMax),box={...bounds,zmin,zmax},projection=surfaceProjection(box,rotation,elevation),scale=ih*.3*zoom;
-    const triangles=(result.surfaceTriangles||[]).map(face=>face.map(i=>result.surfaceVertices?.[i]));
-    const normals=(result.surfaceTriangles||[]).map(face=>face.map(i=>result.surfaceNormals?.[i]));
+    const key=result.surfaceVertices||result.surface,signature=JSON.stringify(box);
+    let cached=surfaceGeometry.get(key);
+    if(cached?.signature!==signature||cached.normalsSource!==result.surfaceNormals||cached.indexSource!==result.surfaceTriangles||cached.convex!==result.convexSurface){
+      const triangles=(result.surfaceTriangles||[]).map(face=>face.map(i=>result.surfaceVertices?.[i]));
+      const normals=(result.surfaceTriangles||[]).map(face=>face.map(i=>result.surfaceNormals?.[i]));
+      cached={signature,triangles,normalsSource:result.surfaceNormals,indexSource:result.surfaceTriangles,convex:result.convexSurface,prepared:prepareSurfaceFaces(result.surface,box,triangles,normals,result.convexSurface===true)};surfaceGeometry.set(key,cached);
+    }
+    const {triangles,prepared}=cached;
     const project=p=>{const [x,y]=projection.project(p);return [w/2+x*scale,h/2+y*scale];};
     clip();
-    if(renderMode!=='wireframe')for(const face of surfaceFaces(result.surface,box,projection,triangles,normals)){
+    const gpu=!contextFactory&&prepared.faces.length?renderSurfaceGpu(canvas,prepared,{rotation,elevation,scale,width:w,height:h,pixelWidth:canvas.width,pixelHeight:canvas.height,color,wireColor:/^#[0-9a-f]{6}$/i.test(muted)?muted:'#738a7c',renderMode}):null;
+    if(gpu)ctx.drawImage(gpu,0,0,w,h);
+    else if(renderMode!=='wireframe')for(const face of projectSurfaceFaces(prepared,projection)){
       const shade=value=>`rgb(${rgb.map(v=>Math.round(v*value)).join(',')})`;
       let fill=shade((.65+.35*face.height)*face.light);
       if(face.lighting){
@@ -69,7 +79,7 @@ export function plotGraph(container,result,bounds,{colors=defaultGraphColors,dig
         fill=ctx.createLinearGradient(w/2+start[0]*scale,h/2+start[1]*scale,w/2+end[0]*scale,h/2+end[1]*scale);
         fill.addColorStop(0,shade(min));fill.addColorStop(1,shade(max));
       }
-      polygon(face.points.map(project),fill,1,renderMode==='surface-wireframe'?muted:fill,renderMode==='surface-wireframe'?.65:.35);
+      polygon(face.projected.map(p=>[w/2+p[0]*scale,h/2+p[1]*scale]),fill,1,renderMode==='surface-wireframe'?muted:fill,renderMode==='surface-wireframe'?.65:.8);
     }
     else{
       ctx.beginPath();

@@ -4,6 +4,7 @@ import math
 import pathlib
 import sys
 import unittest
+from unittest.mock import patch
 
 sys.path.insert(0,str(pathlib.Path(__file__).resolve().parents[1]/'app/src/main/python'))
 from calc_engine import dispatch
@@ -26,6 +27,28 @@ class Graph3dTests(unittest.TestCase):
             'min':-2,'max':2,'surfaceYMin':-2,'surfaceYMax':2,'surfaceZMin':-2,'surfaceZMax':2,'surfaceSamples':20,**options})))
         self.assertTrue(result['ok'],result.get('error'))
         return result
+
+    def test_animated_ellipsoid_uses_exact_cached_topology_without_volume_sampling(self):
+        tree=equation(add(*(binary('/',binary('^',sym(axis),num(2)),binary('^',sym(parameter),num(2))) for axis,parameter in zip('xyz','abc'))),num(1))
+        topology=None
+        with patch('calc_graph3d.implicit_surface_samples',side_effect=AssertionError('Ellipsoids must not resample a volume')):
+            for i in range(12):
+                radii=(.1+i*.25,1.5,-.7)
+                result=self.run_graph(tree,parameters=dict(zip('abc',radii)),surfaceSamples=16 if i%2 else 32)
+                self.assertTrue(result['convexSurface']);self.assertEqual(['a','b','c'],result['parameters'])
+                self.assertEqual(642,len(result['surfaceVertices']));self.assertEqual(1280,len(result['surfaceTriangles']))
+                if topology is None:topology=result['surfaceTriangles']
+                self.assertEqual(topology,result['surfaceTriangles'])
+                for point,normal in zip(result['surfaceVertices'],result['surfaceNormals']):
+                    self.assertAlmostEqual(1,sum((v/r)**2 for v,r in zip(point,radii)),delta=1e-12)
+                    self.assertGreater(sum(v*n for v,n in zip(point,normal)),0)
+                for face in result['surfaceTriangles']:
+                    a,b,c=(result['surfaceVertices'][i] for i in face)
+                    u=[v-w for v,w in zip(b,a)];v=[v-w for v,w in zip(c,a)]
+                    cross=[u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0]]
+                    self.assertGreater(sum(n*p for n,p in zip(cross,a)),0)
+        invalid=json.loads(dispatch(json.dumps({'action':'graph','graphKind':'surface','trees':[tree],'parameters':{'a':0,'b':1,'c':1}})))
+        self.assertFalse(invalid['ok']);self.assertIn('finite real coefficients',invalid['error'])
 
     def test_sphere_has_both_z_branches_and_a_closed_shared_vertex_mesh(self):
         squared=add(*(binary('^',sym(axis),num(2)) for axis in 'xyz'))

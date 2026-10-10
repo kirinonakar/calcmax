@@ -21,6 +21,21 @@ class SurfaceMeshTest {
     private val bounds=SurfaceBounds(-1.0,1.0,-1.0,1.0,-1.0,1.0)
     private fun p(x:Double,y:Double,z:Double)=doubleArrayOf(x,y,z)
     private fun inside(point:DoubleArray)=point.all {it>=-1.0-1e-12&&it<=1.0+1e-12}
+    @Test fun convexEllipsoidsKeepBackFacesBehindFrontFacesAtAllAngles() {
+        val vertices=listOf(p(2.0,0.0,0.0),p(-2.0,0.0,0.0),p(0.0,1.0,0.0),p(0.0,-1.0,0.0),p(0.0,0.0,.5),p(0.0,0.0,-.5))
+        val indices=listOf(listOf(0,2,4),listOf(2,1,4),listOf(1,3,4),listOf(3,0,4),listOf(2,0,5),listOf(1,2,5),listOf(3,1,5),listOf(0,3,5))
+        val triangles=indices.map {face->face.map {vertices[it]}}
+        val normals=indices.map {face->face.map {i->DoubleArray(3){axis->vertices[i][axis]/listOf(4.0,1.0,.25)[axis]}}}
+        val box=SurfaceBounds(-3.0,3.0,-2.0,2.0,-1.0,1.0)
+        val prepared=SurfaceMesh.prepare(emptyList(),box,triangles,normals,true)
+        assertTrue(prepared.closed)
+        val cut=box.copy(xmax=.5);val clipped=SurfaceMesh.prepare(emptyList(),cut,triangles,normals,true);assertFalse(clipped.closed)
+        for(rotation in listOf(0.0,35.0,90.0,135.0,180.0,270.0,359.0))for(elevation in listOf(-90.0,-32.0,0.0,32.0,90.0)) {
+            val faces=SurfaceMesh.project(prepared,SurfaceProjection(box,rotation,elevation));assertTrue(faces.isNotEmpty());assertTrue(faces.all {it.front})
+            var front=false
+            for(face in SurfaceMesh.project(clipped,SurfaceProjection(cut,rotation,elevation))) {if(face.front)front=true else assertFalse(front)}
+        }
+    }
     @Test fun smoothLightingReproducesVerticesAndAgreesAcrossSharedEdges() {
         val points=listOf(p(0.0,0.0,0.0),p(2.0,0.0,0.0),p(0.0,2.0,0.0))
         val first=SurfaceMesh.lightingGradient(points,listOf(.3,.8,.5))!!

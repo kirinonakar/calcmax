@@ -6,18 +6,22 @@ data class SurfaceBounds(val xmin:Double,val xmax:Double,val ymin:Double,val yma
     val limits=listOf(xmin to xmax,ymin to ymax,zmin to zmax)
 }
 data class SurfaceLighting(val start:DoubleArray,val end:DoubleArray,val min:Double,val max:Double)
-data class SurfaceFace(val points:List<DoubleArray>,val depth:Double,val height:Double,val light:Double,val lighting:SurfaceLighting?=null)
+data class SurfaceFace(val points:List<DoubleArray>,val depth:Double,val height:Double,val light:Double,val lighting:SurfaceLighting?=null,val projected:List<DoubleArray> = emptyList(),val front:Boolean=false,val brightness:Double?=null)
+data class PreparedSurfaceFace(val points:List<DoubleArray>,val source:List<DoubleArray>,val normal:DoubleArray,val levels:List<Double>?,val height:Double,val light:Double)
+data class PreparedSurface(val faces:List<PreparedSurfaceFace>,val convex:Boolean,val closed:Boolean)
 
 class SurfaceProjection(val bounds:SurfaceBounds,rotation:Double,elevation:Double) {
     private val theta=Math.toRadians(rotation)
     private val tilt=Math.toRadians(elevation)
+    private val ct=cos(theta);private val st=sin(theta);private val ce=cos(tilt);private val se=sin(tilt)
+    val direction=doubleArrayOf(-st*ce,-ct*ce,se)
     fun normalize(point:DoubleArray)=DoubleArray(3) { i->val (low,high)=bounds.limits[i];2*(point[i]-low)/(high-low)-1 }
     // Screen x, screen y, and depth increasing toward the camera.
     fun project(point:DoubleArray):DoubleArray {
         val p=normalize(point)
-        val horizontal=p[0]*cos(theta)-p[1]*sin(theta)
-        val depth=p[0]*sin(theta)+p[1]*cos(theta)
-        return doubleArrayOf(horizontal,-depth*sin(tilt)-p[2]*cos(tilt),p[2]*sin(tilt)-depth*cos(tilt))
+        val horizontal=p[0]*ct-p[1]*st
+        val depth=p[0]*st+p[1]*ct
+        return doubleArrayOf(horizontal,-depth*se-p[2]*ce,p[2]*se-depth*ce)
     }
 }
 
@@ -50,6 +54,7 @@ object SurfaceMesh {
     }
     fun clipPolygon(points:List<DoubleArray>,bounds:SurfaceBounds):List<DoubleArray> {
         if(!points.all(::finite))return emptyList()
+        if(points.all {p->bounds.limits.withIndex().all {(i,limit)->p[i]>=limit.first&&p[i]<=limit.second}})return points
         var polygon=points
         for((axis,limit) in bounds.limits.withIndex())for((edge,above) in listOf(limit.first to true,limit.second to false)) {
             if(polygon.isEmpty())return emptyList()
@@ -78,35 +83,53 @@ object SurfaceMesh {
         val end=doubleArrayOf(start[0]+gx*span,start[1]+gy*span)
         return if(start.all(Double::isFinite)&&end.all(Double::isFinite))SurfaceLighting(start,end,low,high) else null
     }
-    fun faces(mesh:List<List<DoubleArray?>>,projection:SurfaceProjection,triangles:List<List<DoubleArray>> = emptyList(),triangleNormals:List<List<DoubleArray>> = emptyList()):List<SurfaceFace> {
-        val bounds=projection.bounds;val faces=mutableListOf<SurfaceFace>()
+    fun prepare(mesh:List<List<DoubleArray?>>,bounds:SurfaceBounds,triangles:List<List<DoubleArray>> = emptyList(),triangleNormals:List<List<DoubleArray>> = emptyList(),convex:Boolean=false):PreparedSurface {
+        val faces=mutableListOf<PreparedSurfaceFace>()
+        val normalize=SurfaceProjection(bounds,0.0,0.0)::normalize
         val input=triangles.toMutableList()
         for(row in 0 until mesh.lastIndex)for(col in 0 until min(mesh[row].size,mesh[row+1].size)-1) {
             val cell=listOf(mesh[row][col],mesh[row][col+1],mesh[row+1][col+1],mesh[row+1][col])
             if(!cell.all(::finite))continue
             input.add(listOf(cell[0]!!,cell[1]!!,cell[2]!!));input.add(listOf(cell[0]!!,cell[2]!!,cell[3]!!))
         }
+        val closed=convex&&input.all {triangle->triangle.all {p->finite(p)&&bounds.limits.withIndex().all {(i,limit)->p[i]>=limit.first&&p[i]<=limit.second}}}
         for((index,triangle) in input.withIndex()) {
                 if(triangle.size!=3 || !triangle.all(::finite))continue
                 val points=clipPolygon(triangle,bounds)
                 if(points.isEmpty())continue
-                val (a,b,c)=triangle.map(projection::normalize)
+                val (a,b,c)=triangle.map(normalize)
                 val u=DoubleArray(3) {b[it]-a[it]};val v=DoubleArray(3) {c[it]-a[it]}
                 val normal=doubleArrayOf(u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0])
                 val length=sqrt(normal.sumOf {it*it});if(length==0.0)continue
                 val light=.35+.65*abs((normal[0]*-.4+normal[1]*-.5+normal[2]*.75)/(length*sqrt(.4*.4+.5*.5+.75*.75)))
                 val normals=triangleNormals.getOrNull(index)
-                val lighting=if(normals?.size==3 && normals.all {finite(it)&&sqrt(it.sumOf {v->v*v})>0}) {
-                    val levels=normals.mapIndexed {i,n->
+                val levels=if(normals?.size==3 && normals.all {finite(it)&&sqrt(it.sumOf {v->v*v})>0}) {
+                    val average=DoubleArray(3) {axis->normals.sumOf {it[axis]}*(bounds.limits[axis].second-bounds.limits[axis].first)}
+                    if(normal.indices.sumOf {normal[it]*average[it]}<0)for(i in normal.indices)normal[i]=-normal[i]
+                    normals.mapIndexed {i,n->
                         val scaled=DoubleArray(3) {axis->n[axis]*(bounds.limits[axis].second-bounds.limits[axis].first)}
                         val size=sqrt(scaled.sumOf {it*it})
                         val brightness=.35+.65*abs((scaled[0]*-.4+scaled[1]*-.5+scaled[2]*.75)/(size*sqrt(.4*.4+.5*.5+.75*.75)))
                         (.65+.35*((triangle[i][2]-bounds.zmin)/(bounds.zmax-bounds.zmin)).coerceIn(0.0,1.0))*brightness
                     }
-                    lightingGradient(triangle.map(projection::project),levels)
                 } else null
-                faces.add(SurfaceFace(points,points.map {projection.project(it)[2]}.average(),points.map {(it[2]-bounds.zmin)/(bounds.zmax-bounds.zmin)}.average(),light,lighting))
+                faces.add(PreparedSurfaceFace(points,triangle,normal,levels,points.map {(it[2]-bounds.zmin)/(bounds.zmax-bounds.zmin)}.average(),light))
         }
-        return faces.sortedBy {it.depth}
+        return PreparedSurface(faces,convex,closed)
+    }
+    fun project(prepared:PreparedSurface,projection:SurfaceProjection):List<SurfaceFace> {
+        val cache=java.util.IdentityHashMap<DoubleArray,DoubleArray>()
+        fun point(p:DoubleArray)=cache.getOrPut(p){projection.project(p)}
+        val faces=prepared.faces.mapNotNull {face->
+            val front=face.normal.indices.sumOf {face.normal[it]*projection.direction[it]}>1e-12*sqrt(face.normal.sumOf {it*it})
+            if(prepared.closed&&!front)return@mapNotNull null
+            val projected=face.points.map(::point)
+            val lighting=face.levels?.let {lightingGradient(face.source.map(::point),it)}
+            SurfaceFace(face.points,projected.map {it[2]}.average(),face.height,face.light,lighting,projected,front,face.levels?.average())
+        }
+        return faces.sortedWith(compareBy<SurfaceFace> {if(prepared.convex&&it.front)1 else 0}.thenBy {it.depth})
+    }
+    fun faces(mesh:List<List<DoubleArray?>>,projection:SurfaceProjection,triangles:List<List<DoubleArray>> = emptyList(),triangleNormals:List<List<DoubleArray>> = emptyList(),convex:Boolean=false):List<SurfaceFace> {
+        return project(prepare(mesh,projection.bounds,triangles,triangleNormals,convex),projection)
     }
 }

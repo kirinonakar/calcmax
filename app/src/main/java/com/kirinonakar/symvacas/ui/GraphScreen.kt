@@ -973,10 +973,11 @@ internal fun graphShadeFormula(source:String,displayDigits:Int?=null):GraphShade
     }
     val triangles=remember(m.graphData) {
         val vertices=m.graphData?.optJSONArray("surfaceVertices")
+        val coordinates=(0 until (vertices?.length() ?: 0)).map {i->vertices!!.optJSONArray(i)?.let {p->doubleArrayOf(p.optDouble(0),p.optDouble(1),p.optDouble(2)).takeIf {it.all(Double::isFinite)}}}
         val faces=m.graphData?.optJSONArray("surfaceTriangles")
         (0 until (faces?.length() ?: 0)).mapNotNull {i->
             val face=faces?.optJSONArray(i) ?: return@mapNotNull null
-            (0 until face.length()).mapNotNull {k->vertices?.optJSONArray(face.optInt(k,-1))?.let {p->doubleArrayOf(p.optDouble(0),p.optDouble(1),p.optDouble(2)).takeIf {it.all(Double::isFinite)}}}.takeIf {it.size==3}
+            (0 until face.length()).mapNotNull {k->coordinates.getOrNull(face.optInt(k,-1))}.takeIf {it.size==3}
         }
     }
     val spaceCurves=remember(m.graphData) {
@@ -988,18 +989,46 @@ internal fun graphShadeFormula(source:String,displayDigits:Int?=null):GraphShade
     }
     val triangleNormals=remember(m.graphData) {
         val normals=m.graphData?.optJSONArray("surfaceNormals")
+        val vectors=(0 until (normals?.length() ?: 0)).map {i->normals!!.optJSONArray(i)?.let {p->doubleArrayOf(p.optDouble(0),p.optDouble(1),p.optDouble(2))}}
         val indices=m.graphData?.optJSONArray("surfaceTriangles")
         (0 until (indices?.length() ?: 0)).map {i->
             val face=indices!!.getJSONArray(i)
-            (0 until face.length()).mapNotNull {k->normals?.optJSONArray(face.optInt(k,-1))?.let {p->doubleArrayOf(p.optDouble(0),p.optDouble(1),p.optDouble(2))}}
+            (0 until face.length()).mapNotNull {k->vectors.getOrNull(face.optInt(k,-1))}
         }
     }
     val xmin=m.xMin;val xmax=m.xMax;val ymin=m.yMin;val ymax=m.yMax
     val (zmin,zmax)=SurfaceMesh.zRange(m.zMin ?: m.graphData?.optDouble("zMin",-1.0) ?: -1.0,m.zMax ?: m.graphData?.optDouble("zMax",1.0) ?: 1.0)
     val bounds=SurfaceBounds(xmin,xmax,ymin,ymax,zmin,zmax)
     val projection=remember(bounds,rotation,elevationDeg) {SurfaceProjection(bounds,rotation.toDouble(),elevationDeg.toDouble())}
-    val faces=remember(mesh,triangles,triangleNormals,projection,renderMode) {if(renderMode=="wireframe")emptyList() else SurfaceMesh.faces(mesh,projection,triangles,triangleNormals)}
+    val convex=m.graphData?.optBoolean("convexSurface",false)==true
+    val prepared=remember(mesh,triangles,triangleNormals,bounds,convex) {SurfaceMesh.prepare(mesh,bounds,triangles,triangleNormals,convex)}
+    val faces=remember(prepared,projection,renderMode) {if(renderMode=="wireframe")emptyList() else SurfaceMesh.project(prepared,projection)}
     val surfaceColor=remember(colorHex) {runCatching {Color(android.graphics.Color.parseColor(colorHex))}.getOrDefault(Color(0xFF007B68))}
+    val batch=remember(faces,surfaceColor) {
+        val count=faces.sumOf {(it.projected.size-2).coerceAtLeast(0)*3}
+        val positions=FloatArray(count*2);val colors=IntArray(count);var index=0
+        val base=surfaceColor.toArgb();val red=(base shr 16)and 255;val green=(base shr 8)and 255;val blue=base and 255
+        for(face in faces)for(i in 1 until face.projected.lastIndex)for(k in intArrayOf(0,i,i+1)) {
+            val p=face.projected[k];val gradient=face.lighting
+            val brightness=if(gradient==null)face.brightness ?: ((.65+.35*face.height)*face.light) else {
+                val dx=gradient.end[0]-gradient.start[0];val dy=gradient.end[1]-gradient.start[1]
+                gradient.min+(gradient.max-gradient.min)*((p[0]-gradient.start[0])*dx+(p[1]-gradient.start[1])*dy)/(dx*dx+dy*dy)
+            }
+            val shade=brightness.coerceIn(0.0,1.0)
+            positions[index*2]=p[0].toFloat();positions[index*2+1]=p[1].toFloat()
+            colors[index]=android.graphics.Color.rgb((red*shade).roundToInt(),(green*shade).roundToInt(),(blue*shade).roundToInt());index++
+        }
+        positions to colors
+    }
+    val wireEdges=remember(triangles) {
+        val ids=java.util.IdentityHashMap<DoubleArray,Int>();val edges=mutableSetOf<Long>();val result=mutableListOf<Pair<DoubleArray,DoubleArray>>()
+        triangles.forEach {triangle->for(i in 0..2) {
+            val a=triangle[i];val b=triangle[(i+1)%3];val ai=ids.getOrPut(a){ids.size};val bi=ids.getOrPut(b){ids.size}
+            val key=(minOf(ai,bi).toLong() shl 32) or maxOf(ai,bi).toLong()
+            if(edges.add(key))result.add(a to b)
+        }}
+        result
+    }
     ExportableGraphCanvas(modifier.background(c.display).semantics { contentDescription="Three dimensional surface. Drag to rotate freely, pinch to zoom, and adjust x, y and z ranges." },c.display,exports) {
         if(mesh.isEmpty() && triangles.isEmpty() && spaceCurves.isEmpty())return@ExportableGraphCanvas
         val scale=min(size.width,size.height)*.34f*zoom
@@ -1020,18 +1049,29 @@ internal fun graphShadeFormula(source:String,displayDigits:Int?=null):GraphShade
             path.moveTo(from.x,from.y);path.lineTo(to.x,to.y)
         }
         clipRect {
-            for(face in faces) {
+            val vector=isGraphVectorCanvas(drawContext.canvas.nativeCanvas)
+            if(!vector&&faces.isNotEmpty()) {
+                val canvas=drawContext.canvas.nativeCanvas
+                canvas.save();canvas.translate(size.width/2,size.height/2);canvas.scale(scale,scale)
+                try {drawGraphSurfaceBatch(canvas,batch.first,batch.second)} finally {canvas.restore()}
+                if(renderMode=="surface-wireframe") {
+                    val outline=Path()
+                    for(face in faces){face.projected.forEachIndexed {i,p->val x=size.width/2+p[0].toFloat()*scale;val y=size.height/2+p[1].toFloat()*scale;if(i==0)outline.moveTo(x,y)else outline.lineTo(x,y)};outline.close()}
+                    drawPath(outline,c.muted,style=Stroke(.65.dp.toPx()))
+                }
+            }
+            if(vector)for(face in faces) {
                 val path=Path().apply {
                     face.points.forEachIndexed { index,point->val p=project(point);if(index==0)moveTo(p.x,p.y)else lineTo(p.x,p.y) };close()
                 }
-                val color=lerp(Color.Black,surfaceColor,((.65+.35*face.height)*face.light).toFloat())
+                val color=lerp(Color.Black,surfaceColor,(face.brightness ?: ((.65+.35*face.height)*face.light)).toFloat())
                 val lighting=face.lighting
                 if(lighting!=null) {
                     val start=Offset(size.width/2+lighting.start[0].toFloat()*scale,size.height/2+lighting.start[1].toFloat()*scale)
                     val end=Offset(size.width/2+lighting.end[0].toFloat()*scale,size.height/2+lighting.end[1].toFloat()*scale)
                     drawGraphGradientPath(drawContext.canvas.nativeCanvas,path.asAndroidPath(),start,end,
                         lerp(Color.Black,surfaceColor,lighting.min.toFloat()).toArgb(),lerp(Color.Black,surfaceColor,lighting.max.toFloat()).toArgb(),
-                        if(renderMode=="surface-wireframe")0f else .35.dp.toPx())
+                        if(renderMode=="surface-wireframe")0f else .8.dp.toPx())
                     if(renderMode=="surface-wireframe")drawPath(path,c.muted,style=Stroke(.65.dp.toPx()))
                 } else {
                     drawPath(path,color)
@@ -1040,7 +1080,7 @@ internal fun graphShadeFormula(source:String,displayDigits:Int?=null):GraphShade
             }
             if(renderMode=="wireframe") {
             val rows=Path();val columns=Path()
-            triangles.forEach {triangle->for(i in 0..2)surfaceSegment(rows,triangle[i],triangle[(i+1)%3])}
+            wireEdges.forEach {(a,b)->surfaceSegment(rows,a,b)}
             mesh.forEach {row->
                 for(ci in 0 until row.lastIndex) {
                     val a=row[ci];val b=row[ci+1]

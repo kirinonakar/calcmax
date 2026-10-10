@@ -775,6 +775,18 @@ def graph_space(engine,request,trees,start,end):
             'zMin':min(zs) if zs else -1,'zMax':max(zs) if zs else 1}
 
 
+@lru_cache(maxsize=64)
+def axis_quadric(expression,axes):
+    try:
+        polynomial=s.Poly(expression,*axes)
+        allowed={(0,0,0),(2,0,0),(0,2,0),(0,0,2),(1,0,0),(0,1,0),(0,0,1)}
+        if not set(polynomial.monoms())<=allowed:return None
+        quadratic=tuple(polynomial.coeff_monomial(axis**2) for axis in axes)
+        if any(value==0 for value in quadratic):return None
+        return quadratic+tuple(polynomial.coeff_monomial(axis) for axis in axes)+(polynomial.coeff_monomial(1),)
+    except (s.PolynomialError,ValueError,TypeError):return None
+
+
 def graph_surface(engine, request, trees, xmin, xmax):
     require(len(trees) == 1, "Enter one surface expression z=f(x,y) or F(x,y,z)=0")
     ymin, ymax = float(request.get("surfaceYMin", -3)), float(request.get("surfaceYMax", 3))
@@ -796,6 +808,21 @@ def graph_surface(engine, request, trees, xmin, xmax):
         axes={"x","y","z"}
         names=parameter_names([expression],axes)
         sliders=resolved_parameters(engine,request,[expression],axes)
+        count=max(12,min(32,int(request.get('surfaceSamples',26))))
+        coefficients=axis_quadric(expression,(x,y,z))
+        if coefficients is not None:
+            try:values=[_finite_real(v) for v in graph_function(coefficients,(),sliders)()]
+            except (ValueError,TypeError,ZeroDivisionError,OverflowError):values=[]
+            require(len(values)==7 and all(v is not None for v in values),'Surface parameters must give finite real coefficients')
+            q,linear,constant=values[:3],values[3:6],values[6]
+            if all(v!=0 for v in q) and (all(v>0 for v in q) or all(v<0 for v in q)):
+                center=[-b/(2*a) for a,b in zip(q,linear)]
+                level=sum(a*c*c for a,c in zip(q,center))-constant
+                ratios=[level/a for a in q]
+                from calc_graph3d import ellipsoid_samples
+                vertices,triangles,normals=ellipsoid_samples(center,[math.sqrt(v) for v in ratios],count) if all(v>0 and math.isfinite(v) for v in ratios) else ([],[],[])
+                return {'surface':[],'surfaceVertices':vertices,'surfaceTriangles':triangles,'surfaceNormals':normals,
+                        'implicitSurface':True,'convexSurface':True,'surfaceSamples':count,'parameters':sorted(names),'zMin':zmin,'zMax':zmax}
         fn=graph_function(expression,(x,y,z),sliders)
         vertices,triangles,count,normals=implicit_surface_samples(fn,((xmin,xmax),(ymin,ymax),(zmin,zmax)),int(request.get('surfaceSamples',26)))
         return {"surface":[],"surfaceVertices":vertices,"surfaceTriangles":triangles,"surfaceNormals":normals,"implicitSurface":True,

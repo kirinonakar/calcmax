@@ -17,6 +17,19 @@ import {graphInputTree} from '../graph-workspace.js';
 // Reuse the interpreter for sequential integration scenarios. The cold solver
 // scenario below explicitly loads its own interpreter to keep startup coverage.
 let sharedRuntime;
+test('animated ellipsoids reuse a direct sphere topology through real WASM',async()=>{
+  const py=await runtime(),durations=[];let topology;
+  for(let i=0;i<10;i++){
+    const radii=[.25+i*.2,1.5,.7];
+    py.globals.set('payload',JSON.stringify({action:'graph',graphKind:'surface',trees:[parse('x^2/a^2+y^2/b^2+z^2/c^2=1')],min:-3,max:3,surfaceYMin:-3,surfaceYMax:3,surfaceSamples:16,parameters:Object.fromEntries('abc'.split('').map((p,k)=>[p,radii[k]]))}));
+    const start=performance.now(),result=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));durations.push(performance.now()-start);
+    assert.equal(result.ok,true,result.error);assert.equal(result.convexSurface,true);assert.equal(result.surfaceVertices.length,642);
+    if(!topology)topology=result.surfaceTriangles;assert.deepEqual(result.surfaceTriangles,topology);
+    for(const point of result.surfaceVertices)assert.ok(Math.abs(point.reduce((sum,v,k)=>sum+(v/radii[k])**2,0)-1)<1e-11);
+  }
+  console.log('WASM ellipsoid warm dispatch median:',durations.slice(1).sort((a,b)=>a-b)[4].toFixed(1),'ms');
+});
+
 test('implicit 3D surfaces and named scaled space curves run through real WASM and LaTeX input',async()=>{
   const py=await runtime();
   const run=(source,graphKind,options={})=>{

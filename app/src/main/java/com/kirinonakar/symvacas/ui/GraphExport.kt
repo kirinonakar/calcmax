@@ -133,6 +133,20 @@ internal fun drawGraphGradientPath(canvas:android.graphics.Canvas,path:android.g
     }
 }
 
+internal fun isGraphVectorCanvas(canvas:android.graphics.Canvas)=canvas is GraphSvgCanvas
+internal fun drawGraphSurfaceBatch(canvas:android.graphics.Canvas,positions:FloatArray,colors:IntArray) {
+    if(positions.isEmpty())return
+    val paint=Paint(Paint.ANTI_ALIAS_FLAG).apply {color=android.graphics.Color.WHITE}
+    // Non-indexed sorted triangles avoid the 16-bit index limit and allow one
+    // hardware draw with interpolated vertex colors instead of many shaders.
+    var offset=0
+    while(offset<positions.size) {
+        val count=minOf(65532,positions.size-offset)
+        canvas.drawVertices(android.graphics.Canvas.VertexMode.TRIANGLES,count,positions,offset,null,0,colors,offset/2,null,0,0,paint)
+        offset+=count
+    }
+}
+
 private class GraphSvgCanvas(private val width:Int,private val height:Int):android.graphics.Canvas() {
     private val elements=StringBuilder()
     private val gradients=StringBuilder()

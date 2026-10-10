@@ -1,5 +1,41 @@
 """Indexed isosurfaces from a bounded volume grid, shared by Android and WASM."""
 import math
+from functools import lru_cache
+
+
+@lru_cache(maxsize=3)
+def unit_sphere_mesh(level=3):
+    """Uniform, consistently outward triangles; reused for every ellipsoid frame."""
+    phi=(1+math.sqrt(5))/2
+    vertices=[[-1,phi,0],[1,phi,0],[-1,-phi,0],[1,-phi,0],[0,-1,phi],[0,1,phi],
+              [0,-1,-phi],[0,1,-phi],[phi,0,-1],[phi,0,1],[-phi,0,-1],[-phi,0,1]]
+    vertices=[[v/math.hypot(*p) for v in p] for p in vertices]
+    faces=[(0,11,5),(0,5,1),(0,1,7),(0,7,10),(0,10,11),(1,5,9),(5,11,4),(11,10,2),
+           (10,7,6),(7,1,8),(3,9,4),(3,4,2),(3,2,6),(3,6,8),(3,8,9),(4,9,5),(2,4,11),
+           (6,2,10),(8,6,7),(9,8,1)]
+    for _ in range(level):
+        edges={};next_faces=[]
+        def midpoint(a,b):
+            key=(min(a,b),max(a,b))
+            if key not in edges:
+                p=[(u+v)/2 for u,v in zip(vertices[a],vertices[b])];length=math.hypot(*p)
+                edges[key]=len(vertices);vertices.append([v/length for v in p])
+            return edges[key]
+        for a,b,c in faces:
+            ab,bc,ca=midpoint(a,b),midpoint(b,c),midpoint(c,a)
+            next_faces.extend(((a,ab,ca),(b,bc,ab),(c,ca,bc),(ab,bc,ca)))
+        faces=next_faces
+    return tuple(tuple(p) for p in vertices),tuple(faces)
+
+
+def ellipsoid_samples(center,radii,count):
+    directions,faces=unit_sphere_mesh(3 if count>=16 else 2)
+    vertices=[[center[i]+radii[i]*p[i] for i in range(3)] for p in directions]
+    normals=[]
+    for p in directions:
+        n=[p[i]/radii[i] for i in range(3)];length=math.hypot(*n)
+        normals.append([v/length for v in n])
+    return vertices,faces,normals
 
 _TETRAHEDRA = ((0,5,1,6),(0,1,2,6),(0,2,3,6),(0,3,7,6),(0,7,4,6),(0,4,5,6))
 
