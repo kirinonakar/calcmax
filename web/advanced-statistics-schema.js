@@ -598,6 +598,532 @@ export const advancedStatisticsSchema = [
     ]
   },
   {
+    "id": "cramerv",
+    "label": "Cramér’s V",
+    "ko": "Cramér의 V",
+    "input": "table",
+    "suffix": "",
+    "example": "cramerv([[20,5],[7,18]])",
+    "help": "Nonnegative integer contingency counts; uncorrected Pearson χ² and Cramér’s V. Independent observations; sparse counts can invalidate χ² p values.",
+    "helpKo": "음이 아닌 정수 분할표 빈도; 보정 없는 Pearson χ²·Cramér의 V. 독립 관측; 희소 빈도에서는 χ² p값이 부정확할 수 있습니다.",
+    "section": "general",
+    "group": "Categorical data",
+    "groupKo": "범주형 자료",
+    "controls": [
+      {
+        "key": "layout",
+        "label": "Data layout",
+        "ko": "자료 형태",
+        "type": "choice",
+        "default": "counts",
+        "choices": [
+          {
+            "id": "counts",
+            "label": "Contingency counts",
+            "ko": "분할표 빈도"
+          },
+          {
+            "id": "pairs",
+            "label": "Paired categories",
+            "ko": "범주 쌍"
+          }
+        ]
+      },
+      {
+        "key": "columns",
+        "label": "Count columns",
+        "ko": "빈도 열",
+        "type": "columns",
+        "default": "auto",
+        "when": {
+          "layout": [
+            "counts"
+          ]
+        }
+      },
+      {
+        "key": "first",
+        "label": "First variable / rater",
+        "ko": "첫 변수·평가자",
+        "type": "column",
+        "default": 0,
+        "when": {
+          "layout": [
+            "pairs"
+          ]
+        }
+      },
+      {
+        "key": "second",
+        "label": "Second variable / rater",
+        "ko": "둘째 변수·평가자",
+        "type": "column",
+        "default": 1,
+        "when": {
+          "layout": [
+            "pairs"
+          ]
+        }
+      }
+    ],
+    "formHelp": "Nonnegative integer contingency counts; uncorrected Pearson χ² and Cramér’s V. Independent observations; sparse counts can invalidate χ² p values.",
+    "formHelpKo": "음이 아닌 정수 분할표 빈도; 보정 없는 Pearson χ²·Cramér의 V. 독립 관측; 희소 빈도에서는 χ² p값이 부정확할 수 있습니다.",
+    "exampleRows": [
+      [
+        "20",
+        "5"
+      ],
+      [
+        "7",
+        "18"
+      ]
+    ]
+  },
+  {
+    "id": "phi",
+    "label": "Phi coefficient",
+    "ko": "phi 계수",
+    "input": "table",
+    "suffix": "",
+    "example": "phi([[20,5],[7,18]])",
+    "help": "Signed phi for a 2×2 integer count table; swapping one category order reverses its sign. No Yates correction.",
+    "helpKo": "2×2 정수 빈도표의 부호 있는 phi; 한 변수의 범주 순서를 바꾸면 부호가 반전됩니다. Yates 보정 없음.",
+    "section": "general",
+    "group": "Categorical data",
+    "groupKo": "범주형 자료",
+    "controls": [
+      {
+        "key": "layout",
+        "label": "Data layout",
+        "ko": "자료 형태",
+        "type": "choice",
+        "default": "counts",
+        "choices": [
+          {
+            "id": "counts",
+            "label": "Contingency counts",
+            "ko": "분할표 빈도"
+          },
+          {
+            "id": "pairs",
+            "label": "Paired categories",
+            "ko": "범주 쌍"
+          }
+        ]
+      },
+      {
+        "key": "columns",
+        "label": "Count columns",
+        "ko": "빈도 열",
+        "type": "columns",
+        "default": "auto",
+        "when": {
+          "layout": [
+            "counts"
+          ]
+        }
+      },
+      {
+        "key": "first",
+        "label": "First variable / rater",
+        "ko": "첫 변수·평가자",
+        "type": "column",
+        "default": 0,
+        "when": {
+          "layout": [
+            "pairs"
+          ]
+        }
+      },
+      {
+        "key": "second",
+        "label": "Second variable / rater",
+        "ko": "둘째 변수·평가자",
+        "type": "column",
+        "default": 1,
+        "when": {
+          "layout": [
+            "pairs"
+          ]
+        }
+      }
+    ],
+    "formHelp": "Signed phi for a 2×2 integer count table; swapping one category order reverses its sign. No Yates correction.",
+    "formHelpKo": "2×2 정수 빈도표의 부호 있는 phi; 한 변수의 범주 순서를 바꾸면 부호가 반전됩니다. Yates 보정 없음.",
+    "exampleRows": [
+      [
+        "20",
+        "5"
+      ],
+      [
+        "7",
+        "18"
+      ]
+    ]
+  },
+  {
+    "id": "cohenkappa",
+    "label": "Cohen’s κ agreement",
+    "ko": "Cohen의 κ 일치도",
+    "input": "table",
+    "suffix": ",unweighted",
+    "example": "cohenkappa([[25,4,2],[3,20,5],[1,6,24]],unweighted)",
+    "help": "Two-rater square count table with common category order. Unweighted, linear or quadratic kappa; multinomial delta-method SE and asymptotic Wald CI. Weighted categories must be ordered. Observed/expected agreement use the selected weights; exact agreement is also reported. Distinct from Bayesian prior strength kappa.",
+    "helpKo": "공통 범주 순서의 두 평가자 정방 빈도표. 무가중·선형·제곱 가중 κ; 다항 델타법 SE·점근 Wald CI. 가중 범주는 순서형이어야 합니다. 관측·기대 일치율은 선택한 가중치를 반영하며 정확 일치율도 제공합니다. 베이지안 사전 강도 kappa와 별도 기능입니다.",
+    "section": "general",
+    "group": "Categorical data",
+    "groupKo": "범주형 자료",
+    "controls": [
+      {
+        "key": "layout",
+        "label": "Data layout",
+        "ko": "자료 형태",
+        "type": "choice",
+        "default": "counts",
+        "choices": [
+          {
+            "id": "counts",
+            "label": "Contingency counts",
+            "ko": "분할표 빈도"
+          },
+          {
+            "id": "pairs",
+            "label": "Paired categories",
+            "ko": "범주 쌍"
+          }
+        ]
+      },
+      {
+        "key": "columns",
+        "label": "Count columns",
+        "ko": "빈도 열",
+        "type": "columns",
+        "default": "auto",
+        "when": {
+          "layout": [
+            "counts"
+          ]
+        }
+      },
+      {
+        "key": "first",
+        "label": "First variable / rater",
+        "ko": "첫 변수·평가자",
+        "type": "column",
+        "default": 0,
+        "when": {
+          "layout": [
+            "pairs"
+          ]
+        }
+      },
+      {
+        "key": "second",
+        "label": "Second variable / rater",
+        "ko": "둘째 변수·평가자",
+        "type": "column",
+        "default": 1,
+        "when": {
+          "layout": [
+            "pairs"
+          ]
+        }
+      },
+      {
+        "key": "weights",
+        "label": "Weights",
+        "ko": "가중치",
+        "type": "choice",
+        "default": "unweighted",
+        "choices": [
+          {
+            "id": "unweighted",
+            "label": "Unweighted",
+            "ko": "무가중"
+          },
+          {
+            "id": "linear",
+            "label": "Linear",
+            "ko": "선형"
+          },
+          {
+            "id": "quadratic",
+            "label": "Quadratic",
+            "ko": "제곱"
+          }
+        ]
+      },
+      {
+        "key": "categories",
+        "label": "Category order (comma separated; optional for unweighted)",
+        "ko": "범주 순서 (쉼표 구분; 무가중은 선택)",
+        "type": "text",
+        "default": "",
+        "when": {
+          "layout": [
+            "pairs"
+          ]
+        }
+      }
+    ],
+    "formHelp": "Two-rater square count table with common category order. Unweighted, linear or quadratic kappa; multinomial delta-method SE and asymptotic Wald CI. Weighted categories must be ordered. Observed/expected agreement use the selected weights; exact agreement is also reported. Distinct from Bayesian prior strength kappa.",
+    "formHelpKo": "공통 범주 순서의 두 평가자 정방 빈도표. 무가중·선형·제곱 가중 κ; 다항 델타법 SE·점근 Wald CI. 가중 범주는 순서형이어야 합니다. 관측·기대 일치율은 선택한 가중치를 반영하며 정확 일치율도 제공합니다. 베이지안 사전 강도 kappa와 별도 기능입니다.",
+    "exampleRows": [
+      [
+        "25",
+        "4",
+        "2"
+      ],
+      [
+        "3",
+        "20",
+        "5"
+      ],
+      [
+        "1",
+        "6",
+        "24"
+      ]
+    ]
+  },
+  {
+    "id": "cronbach",
+    "label": "Cronbach α reliability",
+    "ko": "Cronbach α 신뢰도",
+    "input": "table",
+    "suffix": ",raw",
+    "example": "cronbach([[1.987,2.255,1.895,1.448,2.702,2.043],[3.103,3.653,2.588,3.608,3.265,3.866],[5.16,4.181,6.042,4.848,4.128,5.317],[1.995,2.767,1.417,-0.304,-1.529,-0.2],[1.802,1.7,2.56,2.591,4.452,3.681],[5.242,3.886,4.375,5.082,5.152,4.701],[3.057,2.704,2.315,2.034,0.528,0.659],[4.576,5.304,4.688,5.573,4.66,5.626],[5.08,3.257,4.251,3.415,3.076,4.508],[2.502,2.733,2.919,3.058,3.403,2.427],[4.23,3.357,4.235,4.595,5.16,5.999],[2.86,3.515,2.619,0.955,1.766,0.26],[3.16,2.893,2.37,2.341,1.676,2.201],[1.101,3.477,2.018,2.67,2.235,3.664],[3.503,4.223,4.268,2.178,3.518,1.656],[3.623,3.309,4.28,2.605,3.676,3.647],[4.285,5.139,6.064,4.069,4.097,4.629],[3.301,2.767,3.271,2.832,3.249,3.621],[2.857,2.677,2.348,3.272,2.696,3.272],[0.449,1.323,0.652,3.013,3.114,1.652],[3.447,3.14,2.42,2.311,3.202,2.063],[2.401,2.196,3.998,1.025,2.349,1.691],[3.54,5.121,3.878,2.99,2.849,3.135],[3.67,4.081,4.264,3.472,3.458,4.419]],raw)",
+    "help": "Rows are subjects, columns are items; raw or standardized alpha. Reverse-code items first. Returns corrected item-total correlations and alpha if deleted. Alpha does not establish validity or unidimensionality.",
+    "helpKo": "행은 대상, 열은 문항; raw·standardized α. 역문항은 먼저 역코딩합니다. 수정 문항-총점 상관·문항 삭제 시 α를 제공합니다. α만으로 타당성·단일차원성을 입증할 수 없습니다.",
+    "section": "general",
+    "group": "Reliability",
+    "groupKo": "신뢰도",
+    "controls": [
+      {
+        "key": "columns",
+        "label": "Feature / item columns",
+        "ko": "변수·문항 열",
+        "type": "columns",
+        "default": "auto"
+      },
+      {
+        "key": "mode",
+        "label": "Alpha",
+        "ko": "α",
+        "type": "choice",
+        "default": "raw",
+        "choices": [
+          {
+            "id": "raw",
+            "label": "Raw",
+            "ko": "원척도"
+          },
+          {
+            "id": "standardized",
+            "label": "Standardized",
+            "ko": "표준화"
+          }
+        ]
+      }
+    ],
+    "formHelp": "Rows are subjects, columns are items; raw or standardized alpha. Reverse-code items first. Returns corrected item-total correlations and alpha if deleted. Alpha does not establish validity or unidimensionality.",
+    "formHelpKo": "행은 대상, 열은 문항; raw·standardized α. 역문항은 먼저 역코딩합니다. 수정 문항-총점 상관·문항 삭제 시 α를 제공합니다. α만으로 타당성·단일차원성을 입증할 수 없습니다.",
+    "exampleRows": [
+      [
+        "1.987",
+        "2.255",
+        "1.895",
+        "1.448",
+        "2.702",
+        "2.043"
+      ],
+      [
+        "3.103",
+        "3.653",
+        "2.588",
+        "3.608",
+        "3.265",
+        "3.866"
+      ],
+      [
+        "5.16",
+        "4.181",
+        "6.042",
+        "4.848",
+        "4.128",
+        "5.317"
+      ],
+      [
+        "1.995",
+        "2.767",
+        "1.417",
+        "-0.304",
+        "-1.529",
+        "-0.2"
+      ],
+      [
+        "1.802",
+        "1.7",
+        "2.56",
+        "2.591",
+        "4.452",
+        "3.681"
+      ],
+      [
+        "5.242",
+        "3.886",
+        "4.375",
+        "5.082",
+        "5.152",
+        "4.701"
+      ],
+      [
+        "3.057",
+        "2.704",
+        "2.315",
+        "2.034",
+        "0.528",
+        "0.659"
+      ],
+      [
+        "4.576",
+        "5.304",
+        "4.688",
+        "5.573",
+        "4.66",
+        "5.626"
+      ],
+      [
+        "5.08",
+        "3.257",
+        "4.251",
+        "3.415",
+        "3.076",
+        "4.508"
+      ],
+      [
+        "2.502",
+        "2.733",
+        "2.919",
+        "3.058",
+        "3.403",
+        "2.427"
+      ],
+      [
+        "4.23",
+        "3.357",
+        "4.235",
+        "4.595",
+        "5.16",
+        "5.999"
+      ],
+      [
+        "2.86",
+        "3.515",
+        "2.619",
+        "0.955",
+        "1.766",
+        "0.26"
+      ],
+      [
+        "3.16",
+        "2.893",
+        "2.37",
+        "2.341",
+        "1.676",
+        "2.201"
+      ],
+      [
+        "1.101",
+        "3.477",
+        "2.018",
+        "2.67",
+        "2.235",
+        "3.664"
+      ],
+      [
+        "3.503",
+        "4.223",
+        "4.268",
+        "2.178",
+        "3.518",
+        "1.656"
+      ],
+      [
+        "3.623",
+        "3.309",
+        "4.28",
+        "2.605",
+        "3.676",
+        "3.647"
+      ],
+      [
+        "4.285",
+        "5.139",
+        "6.064",
+        "4.069",
+        "4.097",
+        "4.629"
+      ],
+      [
+        "3.301",
+        "2.767",
+        "3.271",
+        "2.832",
+        "3.249",
+        "3.621"
+      ],
+      [
+        "2.857",
+        "2.677",
+        "2.348",
+        "3.272",
+        "2.696",
+        "3.272"
+      ],
+      [
+        "0.449",
+        "1.323",
+        "0.652",
+        "3.013",
+        "3.114",
+        "1.652"
+      ],
+      [
+        "3.447",
+        "3.14",
+        "2.42",
+        "2.311",
+        "3.202",
+        "2.063"
+      ],
+      [
+        "2.401",
+        "2.196",
+        "3.998",
+        "1.025",
+        "2.349",
+        "1.691"
+      ],
+      [
+        "3.54",
+        "5.121",
+        "3.878",
+        "2.99",
+        "2.849",
+        "3.135"
+      ],
+      [
+        "3.67",
+        "4.081",
+        "4.264",
+        "3.472",
+        "3.458",
+        "4.419"
+      ]
+    ]
+  },
+  {
     "id": "shapiro",
     "label": "Shapiro–Wilk",
     "ko": "Shapiro–Wilk",
@@ -1187,6 +1713,127 @@ export const advancedStatisticsSchema = [
     ]
   },
   {
+    "id": "dunn",
+    "label": "Dunn post-hoc test",
+    "ko": "Dunn 사후검정",
+    "input": "table",
+    "suffix": ",holm",
+    "example": "dunn([[1,2,4],[2,3,6],[3,5,8],[4,7,9]],holm)",
+    "help": "List of independent sample lists, then holm (default), bonferroni, fdr or none. Pooled midranks, tie correction, two-sided normal p values. Retains the Kruskal–Wallis pooled rank scale.",
+    "helpKo": "독립 표본 목록들의 목록과 holm(기본)·bonferroni·fdr·none. 전체 평균순위·동점 보정·양측 정규 p값. Kruskal–Wallis의 전체 순위 척도를 유지합니다.",
+    "section": "tests",
+    "group": "Post-hoc comparisons",
+    "groupKo": "사후비교",
+    "controls": [
+      {
+        "key": "grouping",
+        "label": "Grouping",
+        "ko": "그룹 구성",
+        "type": "choice",
+        "default": "columns",
+        "choices": [
+          {
+            "id": "columns",
+            "label": "Columns",
+            "ko": "열별 그룹"
+          },
+          {
+            "id": "groups",
+            "label": "Group / value columns",
+            "ko": "그룹·값 열"
+          }
+        ]
+      },
+      {
+        "key": "columns",
+        "label": "Group columns",
+        "ko": "그룹 열",
+        "type": "columns",
+        "default": "auto",
+        "when": {
+          "grouping": [
+            "columns"
+          ]
+        }
+      },
+      {
+        "key": "group",
+        "label": "Group column",
+        "ko": "그룹 열",
+        "type": "column",
+        "default": 0,
+        "when": {
+          "grouping": [
+            "groups"
+          ]
+        }
+      },
+      {
+        "key": "value",
+        "label": "Value column",
+        "ko": "값 열",
+        "type": "column",
+        "default": 1,
+        "when": {
+          "grouping": [
+            "groups"
+          ]
+        }
+      },
+      {
+        "key": "adjustment",
+        "label": "P-value adjustment",
+        "ko": "p값 보정",
+        "type": "choice",
+        "default": "holm",
+        "choices": [
+          {
+            "id": "holm",
+            "label": "Holm",
+            "ko": "Holm"
+          },
+          {
+            "id": "bonferroni",
+            "label": "Bonferroni",
+            "ko": "Bonferroni"
+          },
+          {
+            "id": "fdr",
+            "label": "FDR (BH)",
+            "ko": "FDR (BH)"
+          },
+          {
+            "id": "none",
+            "label": "None",
+            "ko": "None"
+          }
+        ]
+      }
+    ],
+    "formHelp": "List of independent sample lists, then holm (default), bonferroni, fdr or none. Pooled midranks, tie correction, two-sided normal p values. Retains the Kruskal–Wallis pooled rank scale.",
+    "formHelpKo": "독립 표본 목록들의 목록과 holm(기본)·bonferroni·fdr·none. 전체 평균순위·동점 보정·양측 정규 p값. Kruskal–Wallis의 전체 순위 척도를 유지합니다.",
+    "exampleRows": [
+      [
+        "1",
+        "2",
+        "3",
+        "4"
+      ],
+      [
+        "2",
+        "3",
+        "5",
+        "7"
+      ],
+      [
+        "4",
+        "6",
+        "8",
+        "9"
+      ]
+    ]
+  },
+  {
     "id": "twowayanova",
     "label": "Two-way ANOVA",
     "ko": "이요인 ANOVA",
@@ -1466,6 +2113,159 @@ export const advancedStatisticsSchema = [
         "3",
         "6",
         "11"
+      ]
+    ]
+  },
+  {
+    "id": "manova",
+    "label": "MANOVA",
+    "ko": "MANOVA (다변량 분산분석)",
+    "input": "table",
+    "suffix": "",
+    "example": "manova([[1,1.987,1.448],[1,3.103,3.608],[1,5.16,4.848],[1,1.995,-0.304],[1,1.802,2.591],[1,5.242,5.082],[1,3.057,2.034],[1,4.576,5.573],[2,5.08,3.415],[2,2.502,3.058],[2,4.23,4.595],[2,2.86,0.955],[2,3.16,2.341],[2,1.101,2.67],[2,3.503,2.178],[2,3.623,2.605],[3,4.285,4.069],[3,3.301,2.832],[3,2.857,3.272],[3,0.449,3.013],[3,3.447,2.311],[3,2.401,1.025],[3,3.54,2.99],[3,3.67,3.472]])",
+    "help": "One-factor independent MANOVA: group ID followed by multiple responses. Pillai F, Wilks Rao F, Hotelling–Lawley and Roy statistics. Assumes multivariate normal errors and equal covariance; no repeated or factorial MANOVA.",
+    "helpKo": "독립 일요인 MANOVA: 그룹 ID 뒤에 여러 종속변수. Pillai F·Wilks Rao F·Hotelling–Lawley·Roy 통계량. 다변량 정규 오차·등공분산 가정; 반복·다요인 MANOVA 미지원.",
+    "section": "tests",
+    "group": "Group comparisons",
+    "groupKo": "그룹 비교",
+    "controls": [
+      {
+        "key": "group",
+        "label": "Group",
+        "ko": "그룹 열",
+        "type": "column",
+        "default": 0
+      },
+      {
+        "key": "responses",
+        "label": "Response columns",
+        "ko": "종속변수 열",
+        "type": "columns",
+        "default": "auto"
+      }
+    ],
+    "formHelp": "One-factor independent MANOVA: group ID followed by multiple responses. Pillai F, Wilks Rao F, Hotelling–Lawley and Roy statistics. Assumes multivariate normal errors and equal covariance; no repeated or factorial MANOVA.",
+    "formHelpKo": "독립 일요인 MANOVA: 그룹 ID 뒤에 여러 종속변수. Pillai F·Wilks Rao F·Hotelling–Lawley·Roy 통계량. 다변량 정규 오차·등공분산 가정; 반복·다요인 MANOVA 미지원.",
+    "exampleRows": [
+      [
+        "1",
+        "1.987",
+        "1.448"
+      ],
+      [
+        "1",
+        "3.103",
+        "3.608"
+      ],
+      [
+        "1",
+        "5.16",
+        "4.848"
+      ],
+      [
+        "1",
+        "1.995",
+        "-0.304"
+      ],
+      [
+        "1",
+        "1.802",
+        "2.591"
+      ],
+      [
+        "1",
+        "5.242",
+        "5.082"
+      ],
+      [
+        "1",
+        "3.057",
+        "2.034"
+      ],
+      [
+        "1",
+        "4.576",
+        "5.573"
+      ],
+      [
+        "2",
+        "5.08",
+        "3.415"
+      ],
+      [
+        "2",
+        "2.502",
+        "3.058"
+      ],
+      [
+        "2",
+        "4.23",
+        "4.595"
+      ],
+      [
+        "2",
+        "2.86",
+        "0.955"
+      ],
+      [
+        "2",
+        "3.16",
+        "2.341"
+      ],
+      [
+        "2",
+        "1.101",
+        "2.67"
+      ],
+      [
+        "2",
+        "3.503",
+        "2.178"
+      ],
+      [
+        "2",
+        "3.623",
+        "2.605"
+      ],
+      [
+        "3",
+        "4.285",
+        "4.069"
+      ],
+      [
+        "3",
+        "3.301",
+        "2.832"
+      ],
+      [
+        "3",
+        "2.857",
+        "3.272"
+      ],
+      [
+        "3",
+        "0.449",
+        "3.013"
+      ],
+      [
+        "3",
+        "3.447",
+        "2.311"
+      ],
+      [
+        "3",
+        "2.401",
+        "1.025"
+      ],
+      [
+        "3",
+        "3.54",
+        "2.99"
+      ],
+      [
+        "3",
+        "3.67",
+        "3.472"
       ]
     ]
   },
@@ -2828,6 +3628,356 @@ export const advancedStatisticsSchema = [
     ]
   },
   {
+    "id": "zeroinflated",
+    "label": "Zero-inflated regression (ZIP/ZINB)",
+    "ko": "영과잉 회귀 (ZIP/ZINB)",
+    "input": "table",
+    "suffix": ",poisson,intercept",
+    "example": "zeroinflated([[0,0],[0,0],[0,0],[0,1],[0,2],[0,3],[1,0],[1,0],[1,1],[1,2],[1,3],[1,5],[2,0],[2,0],[2,1],[2,3],[2,5],[2,8],[3,0],[3,0],[3,2],[3,4],[3,7],[3,10]],poisson,intercept)",
+    "help": "Rows: predictors, integer counts. Poisson or estimated-alpha NB2 count mixture with logit structural zeros; inflation intercept or same predictors. Joint ML Wald inference; no hurdle model or automatic Vuong test.",
+    "helpKo": "열: 설명변수·정수 빈도. Poisson 또는 alpha 추정 NB2와 구조적 0의 logit 혼합; 영과잉 절편 또는 같은 설명변수. 공동 ML Wald 추론; 허들 모형·자동 Vuong 검정 미지원.",
+    "section": "models",
+    "group": "Generalized regression",
+    "groupKo": "일반화 회귀",
+    "controls": [
+      {
+        "key": "response",
+        "label": "Response",
+        "ko": "반응 열",
+        "type": "column",
+        "default": -1
+      },
+      {
+        "key": "predictors",
+        "label": "Predictors",
+        "ko": "설명변수 열",
+        "type": "columns",
+        "default": "auto"
+      },
+      {
+        "key": "family",
+        "label": "Count family",
+        "ko": "빈도 분포",
+        "type": "choice",
+        "default": "poisson",
+        "choices": [
+          {
+            "id": "poisson",
+            "label": "Poisson (ZIP)",
+            "ko": "Poisson (ZIP)"
+          },
+          {
+            "id": "nbinom",
+            "label": "Negative binomial (ZINB2)",
+            "ko": "음이항 (ZINB2)"
+          }
+        ]
+      },
+      {
+        "key": "inflation",
+        "label": "Inflation predictors",
+        "ko": "영과잉 설명변수",
+        "type": "choice",
+        "default": "intercept",
+        "choices": [
+          {
+            "id": "intercept",
+            "label": "Intercept only",
+            "ko": "절편만"
+          },
+          {
+            "id": "same",
+            "label": "Same predictors",
+            "ko": "같은 설명변수"
+          }
+        ]
+      }
+    ],
+    "formHelp": "Rows: predictors, integer counts. Poisson or estimated-alpha NB2 count mixture with logit structural zeros; inflation intercept or same predictors. Joint ML Wald inference; no hurdle model or automatic Vuong test.",
+    "formHelpKo": "열: 설명변수·정수 빈도. Poisson 또는 alpha 추정 NB2와 구조적 0의 logit 혼합; 영과잉 절편 또는 같은 설명변수. 공동 ML Wald 추론; 허들 모형·자동 Vuong 검정 미지원.",
+    "exampleRows": [
+      [
+        "0",
+        "0"
+      ],
+      [
+        "0",
+        "0"
+      ],
+      [
+        "0",
+        "0"
+      ],
+      [
+        "0",
+        "1"
+      ],
+      [
+        "0",
+        "2"
+      ],
+      [
+        "0",
+        "3"
+      ],
+      [
+        "1",
+        "0"
+      ],
+      [
+        "1",
+        "0"
+      ],
+      [
+        "1",
+        "1"
+      ],
+      [
+        "1",
+        "2"
+      ],
+      [
+        "1",
+        "3"
+      ],
+      [
+        "1",
+        "5"
+      ],
+      [
+        "2",
+        "0"
+      ],
+      [
+        "2",
+        "0"
+      ],
+      [
+        "2",
+        "1"
+      ],
+      [
+        "2",
+        "3"
+      ],
+      [
+        "2",
+        "5"
+      ],
+      [
+        "2",
+        "8"
+      ],
+      [
+        "3",
+        "0"
+      ],
+      [
+        "3",
+        "0"
+      ],
+      [
+        "3",
+        "2"
+      ],
+      [
+        "3",
+        "4"
+      ],
+      [
+        "3",
+        "7"
+      ],
+      [
+        "3",
+        "10"
+      ]
+    ]
+  },
+  {
+    "id": "tobit",
+    "label": "Tobit censored regression",
+    "ko": "Tobit 검열 회귀",
+    "input": "table",
+    "suffix": ",0,none",
+    "example": "tobit([[0,0],[1,0],[2,1],[3,3],[4,3],[5,6],[6,5],[7,8],[8,9],[9,8],[10,11],[11,12]],0,none)",
+    "help": "Rows: predictors, observed response; lower bound (default 0), upper bound (default none). Type-I normal censoring, joint ML coefficient/sigma inference. Values at bounds are censored; coefficients refer to the latent response. No truncation/selection model.",
+    "helpKo": "열: 설명변수·관측 반응; 하한(기본 0)·상한(기본 none). Type-I 정규 검열·공동 ML 계수/sigma 추론. 경계값은 검열 관측, 계수는 잠재 반응 기준. 절단·선택 모형 미지원.",
+    "section": "models",
+    "group": "Generalized regression",
+    "groupKo": "일반화 회귀",
+    "controls": [
+      {
+        "key": "response",
+        "label": "Response",
+        "ko": "반응 열",
+        "type": "column",
+        "default": -1
+      },
+      {
+        "key": "predictors",
+        "label": "Predictors",
+        "ko": "설명변수 열",
+        "type": "columns",
+        "default": "auto"
+      },
+      {
+        "key": "lower",
+        "label": "Lower bound (none = absent)",
+        "ko": "하한 (none = 없음)",
+        "type": "text",
+        "default": "0"
+      },
+      {
+        "key": "upper",
+        "label": "Upper bound (none = absent)",
+        "ko": "상한 (none = 없음)",
+        "type": "text",
+        "default": "none"
+      }
+    ],
+    "formHelp": "Rows: predictors, observed response; lower bound (default 0), upper bound (default none). Type-I normal censoring, joint ML coefficient/sigma inference. Values at bounds are censored; coefficients refer to the latent response. No truncation/selection model.",
+    "formHelpKo": "열: 설명변수·관측 반응; 하한(기본 0)·상한(기본 none). Type-I 정규 검열·공동 ML 계수/sigma 추론. 경계값은 검열 관측, 계수는 잠재 반응 기준. 절단·선택 모형 미지원.",
+    "exampleRows": [
+      [
+        "0",
+        "0"
+      ],
+      [
+        "1",
+        "0"
+      ],
+      [
+        "2",
+        "1"
+      ],
+      [
+        "3",
+        "3"
+      ],
+      [
+        "4",
+        "3"
+      ],
+      [
+        "5",
+        "6"
+      ],
+      [
+        "6",
+        "5"
+      ],
+      [
+        "7",
+        "8"
+      ],
+      [
+        "8",
+        "9"
+      ],
+      [
+        "9",
+        "8"
+      ],
+      [
+        "10",
+        "11"
+      ],
+      [
+        "11",
+        "12"
+      ]
+    ]
+  },
+  {
+    "id": "quantreg",
+    "label": "Quantile regression",
+    "ko": "분위회귀",
+    "input": "table",
+    "suffix": ",0.5",
+    "example": "quantreg([[0,2],[1,4],[2,3],[3,8],[4,7],[5,9],[6,10],[7,12],[8,11],[9,15],[10,17],[11,16]],0.5)",
+    "help": "Rows: predictors, response; quantile in (0,1). IRLS with subgradient optimality check; asymptotic Gaussian-kernel sandwich / Hall–Sheather bandwidth if residual density supports inference.",
+    "helpKo": "열: 설명변수·반응; (0,1)의 분위수. 부분기울기 최적성 검사 IRLS; 잔차 밀도가 추론을 허용하면 Gaussian 커널 샌드위치 / Hall–Sheather 대역폭의 점근 추론.",
+    "section": "models",
+    "group": "Generalized regression",
+    "groupKo": "일반화 회귀",
+    "controls": [
+      {
+        "key": "response",
+        "label": "Response",
+        "ko": "반응 열",
+        "type": "column",
+        "default": -1
+      },
+      {
+        "key": "predictors",
+        "label": "Predictors",
+        "ko": "설명변수 열",
+        "type": "columns",
+        "default": "auto"
+      },
+      {
+        "key": "quantile",
+        "label": "Quantile",
+        "ko": "분위수",
+        "type": "number",
+        "default": "0.5"
+      }
+    ],
+    "formHelp": "Rows: predictors, response; quantile in (0,1). IRLS with subgradient optimality check; asymptotic Gaussian-kernel sandwich / Hall–Sheather bandwidth if residual density supports inference.",
+    "formHelpKo": "열: 설명변수·반응; (0,1)의 분위수. 부분기울기 최적성 검사 IRLS; 잔차 밀도가 추론을 허용하면 Gaussian 커널 샌드위치 / Hall–Sheather 대역폭의 점근 추론.",
+    "exampleRows": [
+      [
+        "0",
+        "2"
+      ],
+      [
+        "1",
+        "4"
+      ],
+      [
+        "2",
+        "3"
+      ],
+      [
+        "3",
+        "8"
+      ],
+      [
+        "4",
+        "7"
+      ],
+      [
+        "5",
+        "9"
+      ],
+      [
+        "6",
+        "10"
+      ],
+      [
+        "7",
+        "12"
+      ],
+      [
+        "8",
+        "11"
+      ],
+      [
+        "9",
+        "15"
+      ],
+      [
+        "10",
+        "17"
+      ],
+      [
+        "11",
+        "16"
+      ]
+    ]
+  },
+  {
     "id": "multinomial",
     "label": "Multinomial logistic",
     "ko": "다항 로지스틱",
@@ -2986,6 +4136,354 @@ export const advancedStatisticsSchema = [
       [
         "2",
         "0"
+      ]
+    ]
+  },
+  {
+    "id": "mediation",
+    "label": "Mediation analysis",
+    "ko": "매개 분석",
+    "input": "table",
+    "suffix": ",2000,0",
+    "example": "mediation([[-2.191,-1.014,-0.857],[-0.662,0.471,0.662],[1.567,1.183,3.061],[2.013,1.591,3.248],[-1.857,-0.593,-0.9],[-0.348,1.302,0.7],[2.702,1.566,3.688],[-0.934,-0.125,-1.06],[-1.674,-0.681,-1.092],[-0.145,-0.168,1.046],[0.818,0.995,2.032],[0.809,1.054,1.548],[1.027,-0.185,-0.448],[-0.783,-0.785,0.117],[-1.612,-1.911,-1.425],[0.26,0.246,-0.084],[1.802,2.034,2.866],[-0.316,-0.156,0.409],[-0.667,-1.464,-1.077],[-0.268,-0.145,-0.343],[0.58,1.473,1.633],[2.444,1.513,2.462],[0.308,0.001,0.363],[1.209,0.904,0.926]],2000,0)",
+    "help": "Rows: X, M, optional covariates, Y. Single continuous mediator; adjusted OLS direct, total and indirect a×b effects, seeded row-bootstrap percentile CI and Sobel approximation. No causal identification from observational association alone.",
+    "helpKo": "열: X·M·선택적 공변량·Y. 단일 연속형 매개변수; 조정 OLS 직접·총·간접 a×b 효과, 시드 기반 행 부트스트랩 백분위 CI·Sobel 근사. 관측 연관성만으로 인과관계를 식별하지 않습니다.",
+    "section": "models",
+    "group": "Mediation & moderation",
+    "groupKo": "매개·조절 분석",
+    "controls": [
+      {
+        "key": "x",
+        "label": "Predictor X",
+        "ko": "설명변수 X",
+        "type": "column",
+        "default": 0
+      },
+      {
+        "key": "middle",
+        "label": "Mediator M / moderator W",
+        "ko": "매개 M·조절 W",
+        "type": "column",
+        "default": 1
+      },
+      {
+        "key": "response",
+        "label": "Outcome Y",
+        "ko": "결과 Y",
+        "type": "column",
+        "default": -1
+      },
+      {
+        "key": "covariates",
+        "label": "Covariate columns (optional)",
+        "ko": "공변량 열 (선택)",
+        "type": "columns",
+        "default": ""
+      },
+      {
+        "key": "samples",
+        "label": "Bootstrap samples",
+        "ko": "부트스트랩 횟수",
+        "type": "number",
+        "default": "2000"
+      },
+      {
+        "key": "seed",
+        "label": "Seed",
+        "ko": "시드",
+        "type": "number",
+        "default": "0"
+      }
+    ],
+    "formHelp": "Rows: X, M, optional covariates, Y. Single continuous mediator; adjusted OLS direct, total and indirect a×b effects, seeded row-bootstrap percentile CI and Sobel approximation. No causal identification from observational association alone.",
+    "formHelpKo": "열: X·M·선택적 공변량·Y. 단일 연속형 매개변수; 조정 OLS 직접·총·간접 a×b 효과, 시드 기반 행 부트스트랩 백분위 CI·Sobel 근사. 관측 연관성만으로 인과관계를 식별하지 않습니다.",
+    "exampleRows": [
+      [
+        "-2.191",
+        "-1.014",
+        "-0.857"
+      ],
+      [
+        "-0.662",
+        "0.471",
+        "0.662"
+      ],
+      [
+        "1.567",
+        "1.183",
+        "3.061"
+      ],
+      [
+        "2.013",
+        "1.591",
+        "3.248"
+      ],
+      [
+        "-1.857",
+        "-0.593",
+        "-0.9"
+      ],
+      [
+        "-0.348",
+        "1.302",
+        "0.7"
+      ],
+      [
+        "2.702",
+        "1.566",
+        "3.688"
+      ],
+      [
+        "-0.934",
+        "-0.125",
+        "-1.06"
+      ],
+      [
+        "-1.674",
+        "-0.681",
+        "-1.092"
+      ],
+      [
+        "-0.145",
+        "-0.168",
+        "1.046"
+      ],
+      [
+        "0.818",
+        "0.995",
+        "2.032"
+      ],
+      [
+        "0.809",
+        "1.054",
+        "1.548"
+      ],
+      [
+        "1.027",
+        "-0.185",
+        "-0.448"
+      ],
+      [
+        "-0.783",
+        "-0.785",
+        "0.117"
+      ],
+      [
+        "-1.612",
+        "-1.911",
+        "-1.425"
+      ],
+      [
+        "0.26",
+        "0.246",
+        "-0.084"
+      ],
+      [
+        "1.802",
+        "2.034",
+        "2.866"
+      ],
+      [
+        "-0.316",
+        "-0.156",
+        "0.409"
+      ],
+      [
+        "-0.667",
+        "-1.464",
+        "-1.077"
+      ],
+      [
+        "-0.268",
+        "-0.145",
+        "-0.343"
+      ],
+      [
+        "0.58",
+        "1.473",
+        "1.633"
+      ],
+      [
+        "2.444",
+        "1.513",
+        "2.462"
+      ],
+      [
+        "0.308",
+        "0.001",
+        "0.363"
+      ],
+      [
+        "1.209",
+        "0.904",
+        "0.926"
+      ]
+    ]
+  },
+  {
+    "id": "moderation",
+    "label": "Moderation analysis",
+    "ko": "조절 분석",
+    "input": "table",
+    "suffix": "",
+    "example": "moderation([[-2.191,-1.014,-0.857],[-0.662,0.471,0.662],[1.567,1.183,3.061],[2.013,1.591,3.248],[-1.857,-0.593,-0.9],[-0.348,1.302,0.7],[2.702,1.566,3.688],[-0.934,-0.125,-1.06],[-1.674,-0.681,-1.092],[-0.145,-0.168,1.046],[0.818,0.995,2.032],[0.809,1.054,1.548],[1.027,-0.185,-0.448],[-0.783,-0.785,0.117],[-1.612,-1.911,-1.425],[0.26,0.246,-0.084],[1.802,2.034,2.866],[-0.316,-0.156,0.409],[-0.667,-1.464,-1.077],[-0.268,-0.145,-0.343],[0.58,1.473,1.633],[2.444,1.513,2.462],[0.308,0.001,0.363],[1.209,0.904,0.926]])",
+    "help": "Rows: X, W, optional covariates, Y. Centered X/W and X×W interaction; conditional slopes at W mean ± SD with full covariance t inference. Continuous moderator, independent OLS errors.",
+    "helpKo": "열: X·W·선택적 공변량·Y. 중심화 X/W·X×W 상호작용; W 평균±SD의 조건부 기울기·전체 공분산 t 추론. 연속형 조절변수·독립 OLS 오차.",
+    "section": "models",
+    "group": "Mediation & moderation",
+    "groupKo": "매개·조절 분석",
+    "controls": [
+      {
+        "key": "x",
+        "label": "Predictor X",
+        "ko": "설명변수 X",
+        "type": "column",
+        "default": 0
+      },
+      {
+        "key": "middle",
+        "label": "Mediator M / moderator W",
+        "ko": "매개 M·조절 W",
+        "type": "column",
+        "default": 1
+      },
+      {
+        "key": "response",
+        "label": "Outcome Y",
+        "ko": "결과 Y",
+        "type": "column",
+        "default": -1
+      },
+      {
+        "key": "covariates",
+        "label": "Covariate columns (optional)",
+        "ko": "공변량 열 (선택)",
+        "type": "columns",
+        "default": ""
+      }
+    ],
+    "formHelp": "Rows: X, W, optional covariates, Y. Centered X/W and X×W interaction; conditional slopes at W mean ± SD with full covariance t inference. Continuous moderator, independent OLS errors.",
+    "formHelpKo": "열: X·W·선택적 공변량·Y. 중심화 X/W·X×W 상호작용; W 평균±SD의 조건부 기울기·전체 공분산 t 추론. 연속형 조절변수·독립 OLS 오차.",
+    "exampleRows": [
+      [
+        "-2.191",
+        "-1.014",
+        "-0.857"
+      ],
+      [
+        "-0.662",
+        "0.471",
+        "0.662"
+      ],
+      [
+        "1.567",
+        "1.183",
+        "3.061"
+      ],
+      [
+        "2.013",
+        "1.591",
+        "3.248"
+      ],
+      [
+        "-1.857",
+        "-0.593",
+        "-0.9"
+      ],
+      [
+        "-0.348",
+        "1.302",
+        "0.7"
+      ],
+      [
+        "2.702",
+        "1.566",
+        "3.688"
+      ],
+      [
+        "-0.934",
+        "-0.125",
+        "-1.06"
+      ],
+      [
+        "-1.674",
+        "-0.681",
+        "-1.092"
+      ],
+      [
+        "-0.145",
+        "-0.168",
+        "1.046"
+      ],
+      [
+        "0.818",
+        "0.995",
+        "2.032"
+      ],
+      [
+        "0.809",
+        "1.054",
+        "1.548"
+      ],
+      [
+        "1.027",
+        "-0.185",
+        "-0.448"
+      ],
+      [
+        "-0.783",
+        "-0.785",
+        "0.117"
+      ],
+      [
+        "-1.612",
+        "-1.911",
+        "-1.425"
+      ],
+      [
+        "0.26",
+        "0.246",
+        "-0.084"
+      ],
+      [
+        "1.802",
+        "2.034",
+        "2.866"
+      ],
+      [
+        "-0.316",
+        "-0.156",
+        "0.409"
+      ],
+      [
+        "-0.667",
+        "-1.464",
+        "-1.077"
+      ],
+      [
+        "-0.268",
+        "-0.145",
+        "-0.343"
+      ],
+      [
+        "0.58",
+        "1.473",
+        "1.633"
+      ],
+      [
+        "2.444",
+        "1.513",
+        "2.462"
+      ],
+      [
+        "0.308",
+        "0.001",
+        "0.363"
+      ],
+      [
+        "1.209",
+        "0.904",
+        "0.926"
       ]
     ]
   },
@@ -4635,6 +6133,1283 @@ export const advancedStatisticsSchema = [
     ]
   },
   {
+    "id": "efa",
+    "label": "Exploratory factor analysis (EFA)",
+    "ko": "탐색적 요인분석 (EFA)",
+    "input": "table",
+    "suffix": ",2,varimax",
+    "example": "efa([[1.987,2.255,1.895,1.448,2.702,2.043],[3.103,3.653,2.588,3.608,3.265,3.866],[5.16,4.181,6.042,4.848,4.128,5.317],[1.995,2.767,1.417,-0.304,-1.529,-0.2],[1.802,1.7,2.56,2.591,4.452,3.681],[5.242,3.886,4.375,5.082,5.152,4.701],[3.057,2.704,2.315,2.034,0.528,0.659],[4.576,5.304,4.688,5.573,4.66,5.626],[5.08,3.257,4.251,3.415,3.076,4.508],[2.502,2.733,2.919,3.058,3.403,2.427],[4.23,3.357,4.235,4.595,5.16,5.999],[2.86,3.515,2.619,0.955,1.766,0.26],[3.16,2.893,2.37,2.341,1.676,2.201],[1.101,3.477,2.018,2.67,2.235,3.664],[3.503,4.223,4.268,2.178,3.518,1.656],[3.623,3.309,4.28,2.605,3.676,3.647],[4.285,5.139,6.064,4.069,4.097,4.629],[3.301,2.767,3.271,2.832,3.249,3.621],[2.857,2.677,2.348,3.272,2.696,3.272],[0.449,1.323,0.652,3.013,3.114,1.652],[3.447,3.14,2.42,2.311,3.202,2.063],[2.401,2.196,3.998,1.025,2.349,1.691],[3.54,5.121,3.878,2.99,2.849,3.135],[3.67,4.081,4.264,3.472,3.458,4.419],[3.341,3.341,2.722,2.088,2.846,3.371],[2.491,2.816,1.44,1.192,2.551,1.975],[3.002,2.66,3.754,3.345,5.413,3.962],[2.893,3.409,3.316,3.336,3.614,4.426],[1.843,1.939,2.024,5.012,4.963,5.395],[4.404,3.051,4.195,4.157,2.983,3.546],[3.252,2.804,3.346,2.695,4.096,3.254],[3.384,3.477,4.064,1.625,1.051,0.949],[3.04,2.869,2.962,2.556,1.997,0.53],[2.398,2.777,2.227,3.809,3.915,4.636],[3.253,3.538,4.357,3.697,3.035,3.881],[2.896,2.958,0.826,0.678,1.802,0.825],[1.423,1.154,1.884,3.063,3.992,3.001],[3.389,3.692,2.134,3.7,4.094,4.75],[2.75,3.546,3.742,3.853,3.204,5.14],[3.966,2.911,2.755,2.152,3.222,1.657],[2.267,1.875,2.087,1.343,3.21,3.064],[4.436,4.095,5.016,4.363,3.93,4.141],[-0.224,1.681,0.508,1.922,1.822,2.534],[2.844,2.896,3.813,4.436,2.472,3.68],[2.548,3.279,1.79,2.175,1.88,1.092],[2.624,2.491,2.819,3.493,3.617,2.98],[3.027,3.869,2.073,2.693,2.873,3.391],[2.524,3.183,1.987,3.333,2.888,3.225]],2,varimax)",
+    "help": "Principal-axis factoring on Pearson correlations, SMC initialization; factor count, varimax or none. KMO, Bartlett sphericity, communalities, loadings and regression scores. Complete numeric rows; no polychoric or oblique rotation.",
+    "helpKo": "Pearson 상관의 주축요인법·SMC 초기값; 요인 수·varimax 또는 none. KMO·Bartlett 구형성·공통성·적재량·회귀 요인점수. 완전한 숫자 행; 다분상관·사각회전 미지원.",
+    "section": "advanced",
+    "group": "Measurement & structural models",
+    "groupKo": "측정·구조 모형",
+    "controls": [
+      {
+        "key": "columns",
+        "label": "Feature / item columns",
+        "ko": "변수·문항 열",
+        "type": "columns",
+        "default": "auto"
+      },
+      {
+        "key": "factors",
+        "label": "Number of factors",
+        "ko": "요인 수",
+        "type": "number",
+        "default": "2"
+      },
+      {
+        "key": "rotation",
+        "label": "Rotation",
+        "ko": "회전",
+        "type": "choice",
+        "default": "varimax",
+        "choices": [
+          {
+            "id": "varimax",
+            "label": "Varimax (orthogonal)",
+            "ko": "Varimax (직교)"
+          },
+          {
+            "id": "none",
+            "label": "None",
+            "ko": "없음"
+          }
+        ]
+      }
+    ],
+    "formHelp": "Principal-axis factoring on Pearson correlations, SMC initialization; factor count, varimax or none. KMO, Bartlett sphericity, communalities, loadings and regression scores. Complete numeric rows; no polychoric or oblique rotation.",
+    "formHelpKo": "Pearson 상관의 주축요인법·SMC 초기값; 요인 수·varimax 또는 none. KMO·Bartlett 구형성·공통성·적재량·회귀 요인점수. 완전한 숫자 행; 다분상관·사각회전 미지원.",
+    "exampleRows": [
+      [
+        "1.987",
+        "2.255",
+        "1.895",
+        "1.448",
+        "2.702",
+        "2.043"
+      ],
+      [
+        "3.103",
+        "3.653",
+        "2.588",
+        "3.608",
+        "3.265",
+        "3.866"
+      ],
+      [
+        "5.16",
+        "4.181",
+        "6.042",
+        "4.848",
+        "4.128",
+        "5.317"
+      ],
+      [
+        "1.995",
+        "2.767",
+        "1.417",
+        "-0.304",
+        "-1.529",
+        "-0.2"
+      ],
+      [
+        "1.802",
+        "1.7",
+        "2.56",
+        "2.591",
+        "4.452",
+        "3.681"
+      ],
+      [
+        "5.242",
+        "3.886",
+        "4.375",
+        "5.082",
+        "5.152",
+        "4.701"
+      ],
+      [
+        "3.057",
+        "2.704",
+        "2.315",
+        "2.034",
+        "0.528",
+        "0.659"
+      ],
+      [
+        "4.576",
+        "5.304",
+        "4.688",
+        "5.573",
+        "4.66",
+        "5.626"
+      ],
+      [
+        "5.08",
+        "3.257",
+        "4.251",
+        "3.415",
+        "3.076",
+        "4.508"
+      ],
+      [
+        "2.502",
+        "2.733",
+        "2.919",
+        "3.058",
+        "3.403",
+        "2.427"
+      ],
+      [
+        "4.23",
+        "3.357",
+        "4.235",
+        "4.595",
+        "5.16",
+        "5.999"
+      ],
+      [
+        "2.86",
+        "3.515",
+        "2.619",
+        "0.955",
+        "1.766",
+        "0.26"
+      ],
+      [
+        "3.16",
+        "2.893",
+        "2.37",
+        "2.341",
+        "1.676",
+        "2.201"
+      ],
+      [
+        "1.101",
+        "3.477",
+        "2.018",
+        "2.67",
+        "2.235",
+        "3.664"
+      ],
+      [
+        "3.503",
+        "4.223",
+        "4.268",
+        "2.178",
+        "3.518",
+        "1.656"
+      ],
+      [
+        "3.623",
+        "3.309",
+        "4.28",
+        "2.605",
+        "3.676",
+        "3.647"
+      ],
+      [
+        "4.285",
+        "5.139",
+        "6.064",
+        "4.069",
+        "4.097",
+        "4.629"
+      ],
+      [
+        "3.301",
+        "2.767",
+        "3.271",
+        "2.832",
+        "3.249",
+        "3.621"
+      ],
+      [
+        "2.857",
+        "2.677",
+        "2.348",
+        "3.272",
+        "2.696",
+        "3.272"
+      ],
+      [
+        "0.449",
+        "1.323",
+        "0.652",
+        "3.013",
+        "3.114",
+        "1.652"
+      ],
+      [
+        "3.447",
+        "3.14",
+        "2.42",
+        "2.311",
+        "3.202",
+        "2.063"
+      ],
+      [
+        "2.401",
+        "2.196",
+        "3.998",
+        "1.025",
+        "2.349",
+        "1.691"
+      ],
+      [
+        "3.54",
+        "5.121",
+        "3.878",
+        "2.99",
+        "2.849",
+        "3.135"
+      ],
+      [
+        "3.67",
+        "4.081",
+        "4.264",
+        "3.472",
+        "3.458",
+        "4.419"
+      ],
+      [
+        "3.341",
+        "3.341",
+        "2.722",
+        "2.088",
+        "2.846",
+        "3.371"
+      ],
+      [
+        "2.491",
+        "2.816",
+        "1.44",
+        "1.192",
+        "2.551",
+        "1.975"
+      ],
+      [
+        "3.002",
+        "2.66",
+        "3.754",
+        "3.345",
+        "5.413",
+        "3.962"
+      ],
+      [
+        "2.893",
+        "3.409",
+        "3.316",
+        "3.336",
+        "3.614",
+        "4.426"
+      ],
+      [
+        "1.843",
+        "1.939",
+        "2.024",
+        "5.012",
+        "4.963",
+        "5.395"
+      ],
+      [
+        "4.404",
+        "3.051",
+        "4.195",
+        "4.157",
+        "2.983",
+        "3.546"
+      ],
+      [
+        "3.252",
+        "2.804",
+        "3.346",
+        "2.695",
+        "4.096",
+        "3.254"
+      ],
+      [
+        "3.384",
+        "3.477",
+        "4.064",
+        "1.625",
+        "1.051",
+        "0.949"
+      ],
+      [
+        "3.04",
+        "2.869",
+        "2.962",
+        "2.556",
+        "1.997",
+        "0.53"
+      ],
+      [
+        "2.398",
+        "2.777",
+        "2.227",
+        "3.809",
+        "3.915",
+        "4.636"
+      ],
+      [
+        "3.253",
+        "3.538",
+        "4.357",
+        "3.697",
+        "3.035",
+        "3.881"
+      ],
+      [
+        "2.896",
+        "2.958",
+        "0.826",
+        "0.678",
+        "1.802",
+        "0.825"
+      ],
+      [
+        "1.423",
+        "1.154",
+        "1.884",
+        "3.063",
+        "3.992",
+        "3.001"
+      ],
+      [
+        "3.389",
+        "3.692",
+        "2.134",
+        "3.7",
+        "4.094",
+        "4.75"
+      ],
+      [
+        "2.75",
+        "3.546",
+        "3.742",
+        "3.853",
+        "3.204",
+        "5.14"
+      ],
+      [
+        "3.966",
+        "2.911",
+        "2.755",
+        "2.152",
+        "3.222",
+        "1.657"
+      ],
+      [
+        "2.267",
+        "1.875",
+        "2.087",
+        "1.343",
+        "3.21",
+        "3.064"
+      ],
+      [
+        "4.436",
+        "4.095",
+        "5.016",
+        "4.363",
+        "3.93",
+        "4.141"
+      ],
+      [
+        "-0.224",
+        "1.681",
+        "0.508",
+        "1.922",
+        "1.822",
+        "2.534"
+      ],
+      [
+        "2.844",
+        "2.896",
+        "3.813",
+        "4.436",
+        "2.472",
+        "3.68"
+      ],
+      [
+        "2.548",
+        "3.279",
+        "1.79",
+        "2.175",
+        "1.88",
+        "1.092"
+      ],
+      [
+        "2.624",
+        "2.491",
+        "2.819",
+        "3.493",
+        "3.617",
+        "2.98"
+      ],
+      [
+        "3.027",
+        "3.869",
+        "2.073",
+        "2.693",
+        "2.873",
+        "3.391"
+      ],
+      [
+        "2.524",
+        "3.183",
+        "1.987",
+        "3.333",
+        "2.888",
+        "3.225"
+      ]
+    ]
+  },
+  {
+    "id": "cfa",
+    "label": "Confirmatory factor analysis (CFA)",
+    "ko": "확인적 요인분석 (CFA)",
+    "input": "table",
+    "suffix": ",[1,1,1,2,2,2]",
+    "example": "cfa([[1.987,2.255,1.895,1.448,2.702,2.043],[3.103,3.653,2.588,3.608,3.265,3.866],[5.16,4.181,6.042,4.848,4.128,5.317],[1.995,2.767,1.417,-0.304,-1.529,-0.2],[1.802,1.7,2.56,2.591,4.452,3.681],[5.242,3.886,4.375,5.082,5.152,4.701],[3.057,2.704,2.315,2.034,0.528,0.659],[4.576,5.304,4.688,5.573,4.66,5.626],[5.08,3.257,4.251,3.415,3.076,4.508],[2.502,2.733,2.919,3.058,3.403,2.427],[4.23,3.357,4.235,4.595,5.16,5.999],[2.86,3.515,2.619,0.955,1.766,0.26],[3.16,2.893,2.37,2.341,1.676,2.201],[1.101,3.477,2.018,2.67,2.235,3.664],[3.503,4.223,4.268,2.178,3.518,1.656],[3.623,3.309,4.28,2.605,3.676,3.647],[4.285,5.139,6.064,4.069,4.097,4.629],[3.301,2.767,3.271,2.832,3.249,3.621],[2.857,2.677,2.348,3.272,2.696,3.272],[0.449,1.323,0.652,3.013,3.114,1.652],[3.447,3.14,2.42,2.311,3.202,2.063],[2.401,2.196,3.998,1.025,2.349,1.691],[3.54,5.121,3.878,2.99,2.849,3.135],[3.67,4.081,4.264,3.472,3.458,4.419],[3.341,3.341,2.722,2.088,2.846,3.371],[2.491,2.816,1.44,1.192,2.551,1.975],[3.002,2.66,3.754,3.345,5.413,3.962],[2.893,3.409,3.316,3.336,3.614,4.426],[1.843,1.939,2.024,5.012,4.963,5.395],[4.404,3.051,4.195,4.157,2.983,3.546],[3.252,2.804,3.346,2.695,4.096,3.254],[3.384,3.477,4.064,1.625,1.051,0.949],[3.04,2.869,2.962,2.556,1.997,0.53],[2.398,2.777,2.227,3.809,3.915,4.636],[3.253,3.538,4.357,3.697,3.035,3.881],[2.896,2.958,0.826,0.678,1.802,0.825],[1.423,1.154,1.884,3.063,3.992,3.001],[3.389,3.692,2.134,3.7,4.094,4.75],[2.75,3.546,3.742,3.853,3.204,5.14],[3.966,2.911,2.755,2.152,3.222,1.657],[2.267,1.875,2.087,1.343,3.21,3.064],[4.436,4.095,5.016,4.363,3.93,4.141],[-0.224,1.681,0.508,1.922,1.822,2.534],[2.844,2.896,3.813,4.436,2.472,3.68],[2.548,3.279,1.79,2.175,1.88,1.092],[2.624,2.491,2.819,3.493,3.617,2.98],[3.027,3.869,2.073,2.693,2.873,3.391],[2.524,3.183,1.987,3.333,2.888,3.225]],[1,1,1,2,2,2])",
+    "help": "Covariance ML for continuous indicators. Specify factor IDs in selected-indicator order; one loading per indicator, at least three indicators per factor, first loading fixed at 1. Correlated factors, independent errors; χ²/df/p, CFI, TLI, RMSEA and SRMR. No ordinal/robust estimator, FIML, cross-loadings or correlated errors.",
+    "helpKo": "연속형 지표의 공분산 ML. 선택 지표 순서의 요인 ID; 지표당 한 요인·요인당 최소 3개 지표·첫 적재량 1 고정. 요인 간 상관·독립 오차; χ²/df/p·CFI·TLI·RMSEA·SRMR. 순서형·강건 추정·FIML·교차적재·상관오차 미지원.",
+    "section": "advanced",
+    "group": "Measurement & structural models",
+    "groupKo": "측정·구조 모형",
+    "controls": [
+      {
+        "key": "columns",
+        "label": "Feature / item columns",
+        "ko": "변수·문항 열",
+        "type": "columns",
+        "default": "auto"
+      },
+      {
+        "key": "factors",
+        "label": "Factor IDs in selected order",
+        "ko": "선택 순서의 요인 ID",
+        "type": "text",
+        "default": "1,1,1,2,2,2"
+      }
+    ],
+    "formHelp": "Covariance ML for continuous indicators. Specify factor IDs in selected-indicator order; one loading per indicator, at least three indicators per factor, first loading fixed at 1. Correlated factors, independent errors; χ²/df/p, CFI, TLI, RMSEA and SRMR. No ordinal/robust estimator, FIML, cross-loadings or correlated errors.",
+    "formHelpKo": "연속형 지표의 공분산 ML. 선택 지표 순서의 요인 ID; 지표당 한 요인·요인당 최소 3개 지표·첫 적재량 1 고정. 요인 간 상관·독립 오차; χ²/df/p·CFI·TLI·RMSEA·SRMR. 순서형·강건 추정·FIML·교차적재·상관오차 미지원.",
+    "exampleRows": [
+      [
+        "1.987",
+        "2.255",
+        "1.895",
+        "1.448",
+        "2.702",
+        "2.043"
+      ],
+      [
+        "3.103",
+        "3.653",
+        "2.588",
+        "3.608",
+        "3.265",
+        "3.866"
+      ],
+      [
+        "5.16",
+        "4.181",
+        "6.042",
+        "4.848",
+        "4.128",
+        "5.317"
+      ],
+      [
+        "1.995",
+        "2.767",
+        "1.417",
+        "-0.304",
+        "-1.529",
+        "-0.2"
+      ],
+      [
+        "1.802",
+        "1.7",
+        "2.56",
+        "2.591",
+        "4.452",
+        "3.681"
+      ],
+      [
+        "5.242",
+        "3.886",
+        "4.375",
+        "5.082",
+        "5.152",
+        "4.701"
+      ],
+      [
+        "3.057",
+        "2.704",
+        "2.315",
+        "2.034",
+        "0.528",
+        "0.659"
+      ],
+      [
+        "4.576",
+        "5.304",
+        "4.688",
+        "5.573",
+        "4.66",
+        "5.626"
+      ],
+      [
+        "5.08",
+        "3.257",
+        "4.251",
+        "3.415",
+        "3.076",
+        "4.508"
+      ],
+      [
+        "2.502",
+        "2.733",
+        "2.919",
+        "3.058",
+        "3.403",
+        "2.427"
+      ],
+      [
+        "4.23",
+        "3.357",
+        "4.235",
+        "4.595",
+        "5.16",
+        "5.999"
+      ],
+      [
+        "2.86",
+        "3.515",
+        "2.619",
+        "0.955",
+        "1.766",
+        "0.26"
+      ],
+      [
+        "3.16",
+        "2.893",
+        "2.37",
+        "2.341",
+        "1.676",
+        "2.201"
+      ],
+      [
+        "1.101",
+        "3.477",
+        "2.018",
+        "2.67",
+        "2.235",
+        "3.664"
+      ],
+      [
+        "3.503",
+        "4.223",
+        "4.268",
+        "2.178",
+        "3.518",
+        "1.656"
+      ],
+      [
+        "3.623",
+        "3.309",
+        "4.28",
+        "2.605",
+        "3.676",
+        "3.647"
+      ],
+      [
+        "4.285",
+        "5.139",
+        "6.064",
+        "4.069",
+        "4.097",
+        "4.629"
+      ],
+      [
+        "3.301",
+        "2.767",
+        "3.271",
+        "2.832",
+        "3.249",
+        "3.621"
+      ],
+      [
+        "2.857",
+        "2.677",
+        "2.348",
+        "3.272",
+        "2.696",
+        "3.272"
+      ],
+      [
+        "0.449",
+        "1.323",
+        "0.652",
+        "3.013",
+        "3.114",
+        "1.652"
+      ],
+      [
+        "3.447",
+        "3.14",
+        "2.42",
+        "2.311",
+        "3.202",
+        "2.063"
+      ],
+      [
+        "2.401",
+        "2.196",
+        "3.998",
+        "1.025",
+        "2.349",
+        "1.691"
+      ],
+      [
+        "3.54",
+        "5.121",
+        "3.878",
+        "2.99",
+        "2.849",
+        "3.135"
+      ],
+      [
+        "3.67",
+        "4.081",
+        "4.264",
+        "3.472",
+        "3.458",
+        "4.419"
+      ],
+      [
+        "3.341",
+        "3.341",
+        "2.722",
+        "2.088",
+        "2.846",
+        "3.371"
+      ],
+      [
+        "2.491",
+        "2.816",
+        "1.44",
+        "1.192",
+        "2.551",
+        "1.975"
+      ],
+      [
+        "3.002",
+        "2.66",
+        "3.754",
+        "3.345",
+        "5.413",
+        "3.962"
+      ],
+      [
+        "2.893",
+        "3.409",
+        "3.316",
+        "3.336",
+        "3.614",
+        "4.426"
+      ],
+      [
+        "1.843",
+        "1.939",
+        "2.024",
+        "5.012",
+        "4.963",
+        "5.395"
+      ],
+      [
+        "4.404",
+        "3.051",
+        "4.195",
+        "4.157",
+        "2.983",
+        "3.546"
+      ],
+      [
+        "3.252",
+        "2.804",
+        "3.346",
+        "2.695",
+        "4.096",
+        "3.254"
+      ],
+      [
+        "3.384",
+        "3.477",
+        "4.064",
+        "1.625",
+        "1.051",
+        "0.949"
+      ],
+      [
+        "3.04",
+        "2.869",
+        "2.962",
+        "2.556",
+        "1.997",
+        "0.53"
+      ],
+      [
+        "2.398",
+        "2.777",
+        "2.227",
+        "3.809",
+        "3.915",
+        "4.636"
+      ],
+      [
+        "3.253",
+        "3.538",
+        "4.357",
+        "3.697",
+        "3.035",
+        "3.881"
+      ],
+      [
+        "2.896",
+        "2.958",
+        "0.826",
+        "0.678",
+        "1.802",
+        "0.825"
+      ],
+      [
+        "1.423",
+        "1.154",
+        "1.884",
+        "3.063",
+        "3.992",
+        "3.001"
+      ],
+      [
+        "3.389",
+        "3.692",
+        "2.134",
+        "3.7",
+        "4.094",
+        "4.75"
+      ],
+      [
+        "2.75",
+        "3.546",
+        "3.742",
+        "3.853",
+        "3.204",
+        "5.14"
+      ],
+      [
+        "3.966",
+        "2.911",
+        "2.755",
+        "2.152",
+        "3.222",
+        "1.657"
+      ],
+      [
+        "2.267",
+        "1.875",
+        "2.087",
+        "1.343",
+        "3.21",
+        "3.064"
+      ],
+      [
+        "4.436",
+        "4.095",
+        "5.016",
+        "4.363",
+        "3.93",
+        "4.141"
+      ],
+      [
+        "-0.224",
+        "1.681",
+        "0.508",
+        "1.922",
+        "1.822",
+        "2.534"
+      ],
+      [
+        "2.844",
+        "2.896",
+        "3.813",
+        "4.436",
+        "2.472",
+        "3.68"
+      ],
+      [
+        "2.548",
+        "3.279",
+        "1.79",
+        "2.175",
+        "1.88",
+        "1.092"
+      ],
+      [
+        "2.624",
+        "2.491",
+        "2.819",
+        "3.493",
+        "3.617",
+        "2.98"
+      ],
+      [
+        "3.027",
+        "3.869",
+        "2.073",
+        "2.693",
+        "2.873",
+        "3.391"
+      ],
+      [
+        "2.524",
+        "3.183",
+        "1.987",
+        "3.333",
+        "2.888",
+        "3.225"
+      ]
+    ]
+  },
+  {
+    "id": "sem",
+    "label": "Structural equation model (SEM)",
+    "ko": "구조방정식 모형 (SEM)",
+    "input": "table",
+    "suffix": ",[1,1,1,2,2,2],[[1,2]]",
+    "example": "sem([[1.987,2.255,1.895,1.448,2.702,2.043],[3.103,3.653,2.588,3.608,3.265,3.866],[5.16,4.181,6.042,4.848,4.128,5.317],[1.995,2.767,1.417,-0.304,-1.529,-0.2],[1.802,1.7,2.56,2.591,4.452,3.681],[5.242,3.886,4.375,5.082,5.152,4.701],[3.057,2.704,2.315,2.034,0.528,0.659],[4.576,5.304,4.688,5.573,4.66,5.626],[5.08,3.257,4.251,3.415,3.076,4.508],[2.502,2.733,2.919,3.058,3.403,2.427],[4.23,3.357,4.235,4.595,5.16,5.999],[2.86,3.515,2.619,0.955,1.766,0.26],[3.16,2.893,2.37,2.341,1.676,2.201],[1.101,3.477,2.018,2.67,2.235,3.664],[3.503,4.223,4.268,2.178,3.518,1.656],[3.623,3.309,4.28,2.605,3.676,3.647],[4.285,5.139,6.064,4.069,4.097,4.629],[3.301,2.767,3.271,2.832,3.249,3.621],[2.857,2.677,2.348,3.272,2.696,3.272],[0.449,1.323,0.652,3.013,3.114,1.652],[3.447,3.14,2.42,2.311,3.202,2.063],[2.401,2.196,3.998,1.025,2.349,1.691],[3.54,5.121,3.878,2.99,2.849,3.135],[3.67,4.081,4.264,3.472,3.458,4.419],[3.341,3.341,2.722,2.088,2.846,3.371],[2.491,2.816,1.44,1.192,2.551,1.975],[3.002,2.66,3.754,3.345,5.413,3.962],[2.893,3.409,3.316,3.336,3.614,4.426],[1.843,1.939,2.024,5.012,4.963,5.395],[4.404,3.051,4.195,4.157,2.983,3.546],[3.252,2.804,3.346,2.695,4.096,3.254],[3.384,3.477,4.064,1.625,1.051,0.949],[3.04,2.869,2.962,2.556,1.997,0.53],[2.398,2.777,2.227,3.809,3.915,4.636],[3.253,3.538,4.357,3.697,3.035,3.881],[2.896,2.958,0.826,0.678,1.802,0.825],[1.423,1.154,1.884,3.063,3.992,3.001],[3.389,3.692,2.134,3.7,4.094,4.75],[2.75,3.546,3.742,3.853,3.204,5.14],[3.966,2.911,2.755,2.152,3.222,1.657],[2.267,1.875,2.087,1.343,3.21,3.064],[4.436,4.095,5.016,4.363,3.93,4.141],[-0.224,1.681,0.508,1.922,1.822,2.534],[2.844,2.896,3.813,4.436,2.472,3.68],[2.548,3.279,1.79,2.175,1.88,1.092],[2.624,2.491,2.819,3.493,3.617,2.98],[3.027,3.869,2.073,2.693,2.873,3.391],[2.524,3.183,1.987,3.333,2.888,3.225]],[1,1,1,2,2,2],[[1,2]])",
+    "help": "Continuous covariance ML with the CFA measurement structure and recursive latent paths [source,target]. Exogenous factors may covary; endogenous disturbances are independent. Minimum three indicators per factor. No cycles, ordinal estimator, FIML, equality constraints or multi-group invariance tests.",
+    "helpKo": "CFA 측정 구조와 잠재변수 [출발,도착] 경로의 연속형 공분산 ML. 외생 요인 상관·독립 내생 교란. 요인당 최소 3개 지표. 순환·순서형 추정·FIML·동일성 제약·다집단 불변성 검정 미지원.",
+    "section": "advanced",
+    "group": "Measurement & structural models",
+    "groupKo": "측정·구조 모형",
+    "controls": [
+      {
+        "key": "columns",
+        "label": "Feature / item columns",
+        "ko": "변수·문항 열",
+        "type": "columns",
+        "default": "auto"
+      },
+      {
+        "key": "factors",
+        "label": "Factor IDs in selected order",
+        "ko": "선택 순서의 요인 ID",
+        "type": "text",
+        "default": "1,1,1,2,2,2"
+      },
+      {
+        "key": "paths",
+        "label": "Latent paths: source,target;…",
+        "ko": "잠재 경로: 출발,도착;…",
+        "type": "text",
+        "default": "1,2"
+      }
+    ],
+    "formHelp": "Continuous covariance ML with the CFA measurement structure and recursive latent paths [source,target]. Exogenous factors may covary; endogenous disturbances are independent. Minimum three indicators per factor. No cycles, ordinal estimator, FIML, equality constraints or multi-group invariance tests.",
+    "formHelpKo": "CFA 측정 구조와 잠재변수 [출발,도착] 경로의 연속형 공분산 ML. 외생 요인 상관·독립 내생 교란. 요인당 최소 3개 지표. 순환·순서형 추정·FIML·동일성 제약·다집단 불변성 검정 미지원.",
+    "exampleRows": [
+      [
+        "1.987",
+        "2.255",
+        "1.895",
+        "1.448",
+        "2.702",
+        "2.043"
+      ],
+      [
+        "3.103",
+        "3.653",
+        "2.588",
+        "3.608",
+        "3.265",
+        "3.866"
+      ],
+      [
+        "5.16",
+        "4.181",
+        "6.042",
+        "4.848",
+        "4.128",
+        "5.317"
+      ],
+      [
+        "1.995",
+        "2.767",
+        "1.417",
+        "-0.304",
+        "-1.529",
+        "-0.2"
+      ],
+      [
+        "1.802",
+        "1.7",
+        "2.56",
+        "2.591",
+        "4.452",
+        "3.681"
+      ],
+      [
+        "5.242",
+        "3.886",
+        "4.375",
+        "5.082",
+        "5.152",
+        "4.701"
+      ],
+      [
+        "3.057",
+        "2.704",
+        "2.315",
+        "2.034",
+        "0.528",
+        "0.659"
+      ],
+      [
+        "4.576",
+        "5.304",
+        "4.688",
+        "5.573",
+        "4.66",
+        "5.626"
+      ],
+      [
+        "5.08",
+        "3.257",
+        "4.251",
+        "3.415",
+        "3.076",
+        "4.508"
+      ],
+      [
+        "2.502",
+        "2.733",
+        "2.919",
+        "3.058",
+        "3.403",
+        "2.427"
+      ],
+      [
+        "4.23",
+        "3.357",
+        "4.235",
+        "4.595",
+        "5.16",
+        "5.999"
+      ],
+      [
+        "2.86",
+        "3.515",
+        "2.619",
+        "0.955",
+        "1.766",
+        "0.26"
+      ],
+      [
+        "3.16",
+        "2.893",
+        "2.37",
+        "2.341",
+        "1.676",
+        "2.201"
+      ],
+      [
+        "1.101",
+        "3.477",
+        "2.018",
+        "2.67",
+        "2.235",
+        "3.664"
+      ],
+      [
+        "3.503",
+        "4.223",
+        "4.268",
+        "2.178",
+        "3.518",
+        "1.656"
+      ],
+      [
+        "3.623",
+        "3.309",
+        "4.28",
+        "2.605",
+        "3.676",
+        "3.647"
+      ],
+      [
+        "4.285",
+        "5.139",
+        "6.064",
+        "4.069",
+        "4.097",
+        "4.629"
+      ],
+      [
+        "3.301",
+        "2.767",
+        "3.271",
+        "2.832",
+        "3.249",
+        "3.621"
+      ],
+      [
+        "2.857",
+        "2.677",
+        "2.348",
+        "3.272",
+        "2.696",
+        "3.272"
+      ],
+      [
+        "0.449",
+        "1.323",
+        "0.652",
+        "3.013",
+        "3.114",
+        "1.652"
+      ],
+      [
+        "3.447",
+        "3.14",
+        "2.42",
+        "2.311",
+        "3.202",
+        "2.063"
+      ],
+      [
+        "2.401",
+        "2.196",
+        "3.998",
+        "1.025",
+        "2.349",
+        "1.691"
+      ],
+      [
+        "3.54",
+        "5.121",
+        "3.878",
+        "2.99",
+        "2.849",
+        "3.135"
+      ],
+      [
+        "3.67",
+        "4.081",
+        "4.264",
+        "3.472",
+        "3.458",
+        "4.419"
+      ],
+      [
+        "3.341",
+        "3.341",
+        "2.722",
+        "2.088",
+        "2.846",
+        "3.371"
+      ],
+      [
+        "2.491",
+        "2.816",
+        "1.44",
+        "1.192",
+        "2.551",
+        "1.975"
+      ],
+      [
+        "3.002",
+        "2.66",
+        "3.754",
+        "3.345",
+        "5.413",
+        "3.962"
+      ],
+      [
+        "2.893",
+        "3.409",
+        "3.316",
+        "3.336",
+        "3.614",
+        "4.426"
+      ],
+      [
+        "1.843",
+        "1.939",
+        "2.024",
+        "5.012",
+        "4.963",
+        "5.395"
+      ],
+      [
+        "4.404",
+        "3.051",
+        "4.195",
+        "4.157",
+        "2.983",
+        "3.546"
+      ],
+      [
+        "3.252",
+        "2.804",
+        "3.346",
+        "2.695",
+        "4.096",
+        "3.254"
+      ],
+      [
+        "3.384",
+        "3.477",
+        "4.064",
+        "1.625",
+        "1.051",
+        "0.949"
+      ],
+      [
+        "3.04",
+        "2.869",
+        "2.962",
+        "2.556",
+        "1.997",
+        "0.53"
+      ],
+      [
+        "2.398",
+        "2.777",
+        "2.227",
+        "3.809",
+        "3.915",
+        "4.636"
+      ],
+      [
+        "3.253",
+        "3.538",
+        "4.357",
+        "3.697",
+        "3.035",
+        "3.881"
+      ],
+      [
+        "2.896",
+        "2.958",
+        "0.826",
+        "0.678",
+        "1.802",
+        "0.825"
+      ],
+      [
+        "1.423",
+        "1.154",
+        "1.884",
+        "3.063",
+        "3.992",
+        "3.001"
+      ],
+      [
+        "3.389",
+        "3.692",
+        "2.134",
+        "3.7",
+        "4.094",
+        "4.75"
+      ],
+      [
+        "2.75",
+        "3.546",
+        "3.742",
+        "3.853",
+        "3.204",
+        "5.14"
+      ],
+      [
+        "3.966",
+        "2.911",
+        "2.755",
+        "2.152",
+        "3.222",
+        "1.657"
+      ],
+      [
+        "2.267",
+        "1.875",
+        "2.087",
+        "1.343",
+        "3.21",
+        "3.064"
+      ],
+      [
+        "4.436",
+        "4.095",
+        "5.016",
+        "4.363",
+        "3.93",
+        "4.141"
+      ],
+      [
+        "-0.224",
+        "1.681",
+        "0.508",
+        "1.922",
+        "1.822",
+        "2.534"
+      ],
+      [
+        "2.844",
+        "2.896",
+        "3.813",
+        "4.436",
+        "2.472",
+        "3.68"
+      ],
+      [
+        "2.548",
+        "3.279",
+        "1.79",
+        "2.175",
+        "1.88",
+        "1.092"
+      ],
+      [
+        "2.624",
+        "2.491",
+        "2.819",
+        "3.493",
+        "3.617",
+        "2.98"
+      ],
+      [
+        "3.027",
+        "3.869",
+        "2.073",
+        "2.693",
+        "2.873",
+        "3.391"
+      ],
+      [
+        "2.524",
+        "3.183",
+        "1.987",
+        "3.333",
+        "2.888",
+        "3.225"
+      ]
+    ]
+  },
+  {
     "id": "pca",
     "label": "PCA",
     "ko": "주성분 분석",
@@ -4707,6 +7482,117 @@ export const advancedStatisticsSchema = [
     ]
   },
   {
+    "id": "discriminantanalysis",
+    "label": "Discriminant analysis (LDA/QDA)",
+    "ko": "판별분석 (LDA/QDA)",
+    "input": "table",
+    "suffix": ",lda,empirical",
+    "example": "discriminantanalysis([[1,2,1],[2,1,1],[1,1,1],[2,3,1],[4,5,2],[5,4,2],[4,4,2],[5,6,2]],lda,empirical)",
+    "help": "Rows: features, class. LDA pooled / QDA separate unbiased covariances; empirical/equal priors. Optional fourth argument: new feature rows. Training confusion and accuracy are resubstitution, not validation. No automatic regularization.",
+    "helpKo": "열: 변수·분류. LDA 합동 / QDA 개별 불편 공분산; 경험·동일 사전확률. 선택적 넷째 인수: 새 변수 행. 학습 혼동표·정확도는 재대입 평가이며 검증이 아닙니다. 자동 정규화 없음.",
+    "section": "advanced",
+    "group": "Multivariate analysis",
+    "groupKo": "다변량 분석",
+    "controls": [
+      {
+        "key": "response",
+        "label": "Class",
+        "ko": "분류 열",
+        "type": "column",
+        "default": -1
+      },
+      {
+        "key": "predictors",
+        "label": "Features",
+        "ko": "변수 열",
+        "type": "columns",
+        "default": "auto"
+      },
+      {
+        "key": "method",
+        "label": "Method",
+        "ko": "방법",
+        "type": "choice",
+        "default": "lda",
+        "choices": [
+          {
+            "id": "lda",
+            "label": "LDA",
+            "ko": "LDA"
+          },
+          {
+            "id": "qda",
+            "label": "QDA",
+            "ko": "QDA"
+          }
+        ]
+      },
+      {
+        "key": "prior",
+        "label": "Class priors",
+        "ko": "분류 사전확률",
+        "type": "choice",
+        "default": "empirical",
+        "choices": [
+          {
+            "id": "empirical",
+            "label": "Empirical",
+            "ko": "경험 빈도"
+          },
+          {
+            "id": "equal",
+            "label": "Equal",
+            "ko": "동일"
+          }
+        ]
+      }
+    ],
+    "formHelp": "Rows: features, class. LDA pooled / QDA separate unbiased covariances; empirical/equal priors. Optional fourth argument: new feature rows. Training confusion and accuracy are resubstitution, not validation. No automatic regularization.",
+    "formHelpKo": "열: 변수·분류. LDA 합동 / QDA 개별 불편 공분산; 경험·동일 사전확률. 선택적 넷째 인수: 새 변수 행. 학습 혼동표·정확도는 재대입 평가이며 검증이 아닙니다. 자동 정규화 없음.",
+    "exampleRows": [
+      [
+        "1",
+        "2",
+        "1"
+      ],
+      [
+        "2",
+        "1",
+        "1"
+      ],
+      [
+        "1",
+        "1",
+        "1"
+      ],
+      [
+        "2",
+        "3",
+        "1"
+      ],
+      [
+        "4",
+        "5",
+        "2"
+      ],
+      [
+        "5",
+        "4",
+        "2"
+      ],
+      [
+        "4",
+        "4",
+        "2"
+      ],
+      [
+        "5",
+        "6",
+        "2"
+      ]
+    ]
+  },
+  {
     "id": "kmeans",
     "label": "K-means clustering",
     "ko": "K-means 군집",
@@ -4743,6 +7629,111 @@ export const advancedStatisticsSchema = [
     ],
     "formHelp": "Select numeric feature columns, cluster count and seed. Uses raw feature scales, Euclidean distance and ten restarts; scale features appropriately. Plot axes show selected original features.",
     "formHelpKo": "숫자 변수 열·군집 수·시드를 선택합니다. 원래 척도의 유클리드 거리와 10회 초기화를 사용하므로 변수 척도를 확인하세요. 그래프 축은 선택한 원래 변수입니다.",
+    "exampleRows": [
+      [
+        "1",
+        "1"
+      ],
+      [
+        "1",
+        "2"
+      ],
+      [
+        "2",
+        "1"
+      ],
+      [
+        "8",
+        "8"
+      ],
+      [
+        "8",
+        "9"
+      ],
+      [
+        "9",
+        "8"
+      ]
+    ]
+  },
+  {
+    "id": "hcluster",
+    "label": "Hierarchical clustering",
+    "ko": "계층적 군집분석",
+    "input": "table",
+    "suffix": ",2,ward,1",
+    "example": "hcluster([[1,1],[1,2],[2,1],[8,8],[8,9],[9,8]],2,ward,1)",
+    "help": "Independent agglomerative analysis; clusters, single/complete/average/Ward Euclidean linkage, standardize 1/0. Returns all merges, heights, sizes and cut assignments. Leaves 1…n, merge nodes n+1…2n−1.",
+    "helpKo": "독립 응집 분석; 군집 수·single/complete/average/Ward 유클리드 연결·표준화 1/0. 전체 병합·거리·크기·절단 배정. 잎 1…n, 병합 노드 n+1…2n−1.",
+    "section": "advanced",
+    "group": "Multivariate analysis",
+    "groupKo": "다변량 분석",
+    "controls": [
+      {
+        "key": "columns",
+        "label": "Feature / item columns",
+        "ko": "변수·문항 열",
+        "type": "columns",
+        "default": "auto"
+      },
+      {
+        "key": "clusters",
+        "label": "Clusters",
+        "ko": "군집 수",
+        "type": "number",
+        "default": "2"
+      },
+      {
+        "key": "linkage",
+        "label": "Linkage",
+        "ko": "연결 방법",
+        "type": "choice",
+        "default": "ward",
+        "choices": [
+          {
+            "id": "ward",
+            "label": "Ward",
+            "ko": "Ward"
+          },
+          {
+            "id": "single",
+            "label": "Single",
+            "ko": "Single"
+          },
+          {
+            "id": "complete",
+            "label": "Complete",
+            "ko": "Complete"
+          },
+          {
+            "id": "average",
+            "label": "Average",
+            "ko": "Average"
+          }
+        ]
+      },
+      {
+        "key": "standardize",
+        "label": "Scaling",
+        "ko": "척도",
+        "type": "choice",
+        "default": "1",
+        "choices": [
+          {
+            "id": "1",
+            "label": "Standardize",
+            "ko": "표준화"
+          },
+          {
+            "id": "0",
+            "label": "Raw scale",
+            "ko": "원척도"
+          }
+        ]
+      }
+    ],
+    "formHelp": "Independent agglomerative analysis; clusters, single/complete/average/Ward Euclidean linkage, standardize 1/0. Returns all merges, heights, sizes and cut assignments. Leaves 1…n, merge nodes n+1…2n−1.",
+    "formHelpKo": "독립 응집 분석; 군집 수·single/complete/average/Ward 유클리드 연결·표준화 1/0. 전체 병합·거리·크기·절단 배정. 잎 1…n, 병합 노드 n+1…2n−1.",
     "exampleRows": [
       [
         "1",

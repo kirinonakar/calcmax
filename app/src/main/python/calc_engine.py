@@ -47,7 +47,7 @@ def statistics_display_terms(value, labels):
                 prefix, term = item.rsplit(': ', 1)
                 item = prefix + ': ' + labels.get(term, term)
             result[key] = item
-        else: result[key] = statistics_display_terms(item, labels)
+        else: result[labels.get(key,key) if key.startswith('response:') else key] = statistics_display_terms(item, labels)
     return result
 
 def shown_exact(rounded):

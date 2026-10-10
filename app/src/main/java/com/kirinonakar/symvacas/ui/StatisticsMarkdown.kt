@@ -79,6 +79,9 @@ internal fun statisticsResultMarkdown(result:JSONObject,formatCell:(JSONObject)-
         }
         if(table.size>2)blocks.add("### "+markdownCell(translate(section.optString("title")))+"\n\n"+table.joinToString("\n"))
     }
+    report.optJSONArray("assumptions")?.takeIf {it.length()>0}?.let {assumptions->
+        blocks.add("### "+translate("Assumptions")+"\n\n"+(0 until assumptions.length()).joinToString("\n\n"){markdownCell(translate(assumptions.getString(it)))})
+    }
     report.optJSONArray("notes")?.let {notes->for(index in 0 until notes.length())blocks.add(markdownCell(translate(notes.getString(index))))}
     result.optString("note").takeIf {it.isNotBlank()}?.let {blocks.add(markdownCell(it))}
     result.optJSONArray("conditions")?.takeIf {it.length()>0}?.let {conditions->

@@ -212,6 +212,14 @@
     "qty(,m)",
     "convert(,m,cm)"
   ],
+  "Reliability & association": [
+    "cronbach([],raw)",
+    "cramerv([])",
+    "phi([])",
+    "cohenkappa([],unweighted)",
+    "cohenkappa([],linear)",
+    "cohenkappa([],quadratic)"
+  ],
   "Data preparation": [
     "impute([],mean)"
   ],
@@ -256,7 +264,13 @@
     "gee([],gaussian)",
     "gee([],binomial)",
     "gee([],poisson)",
-    "crossvalidate([],5,0)"
+    "crossvalidate([],5,0)",
+    "quantreg([],0.5)",
+    "zeroinflated([],poisson,intercept)",
+    "zeroinflated([],nbinom,same)",
+    "tobit([],0,none)",
+    "mediation([],2000,0)",
+    "moderation([])"
   ],
   "Distributions": [
     "normpdf(,0,1)",
@@ -348,7 +362,9 @@
     "eta2([],[])",
     "padjust([],holm,0.05)",
     "padjust([],bonferroni)",
-    "padjust([],fdr)"
+    "padjust([],fdr)",
+    "dunn([[],[],[]],holm)",
+    "manova([])"
   ],
   "Advanced statistics": [
     "bayesmean([],0,1,2,1,0.95,0)",
@@ -365,7 +381,13 @@
     "logrank([],[])",
     "cox([])",
     "testpower(0.5,64,0.05,independent)",
-    "samplesize(0.5,0.8,0.05,independent)"
+    "samplesize(0.5,0.8,0.05,independent)",
+    "efa([],2,varimax)",
+    "cfa([],[1,1,1])",
+    "sem([],[1,1,1,2,2,2],[[1,2]])",
+    "discriminantanalysis([],lda,empirical)",
+    "discriminantanalysis([],qda,equal)",
+    "hcluster([],2,ward,1)"
   ],
   "Finance": [
     "tvmfv(,,,)",

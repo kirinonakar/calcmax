@@ -8,6 +8,7 @@ internal fun advancedStatisticsTermLabels(definition:JSONObject,rows:List<List<S
     val controls=definition.optJSONArray("controls")
     val opts=(0 until (controls?.length() ?: 0)).associate {index->val field=controls!!.getJSONObject(index);val key=field.getString("key");key to settings.optString(key,field.get("default").toString())}
     fun column(key:String)=opts[key]?.toIntOrNull()?.let {if(it==-1)n-1 else it} ?: -1
+    if(id in socialAnalysisIds)return socialStatisticsPlan(id,rows,opts,columnLabels).labels
     if(id in listOf("twowayanova","linearmodel"))return statisticsFactorialData(rows,opts,columnLabels).labels
     if(id=="shapiro")return mapOf("sample:1" to columnLabels.getOrElse(column("column")){"Sample 1"})
     if(id=="kstest"&&opts["mode"]!="two")return mapOf("sample:1" to columnLabels.getOrElse(column("first")){"Sample 1"})
@@ -83,6 +84,7 @@ internal fun guidedStatisticsCommand(definition:JSONObject,rows:List<List<String
             }) {"Invalid analysis option"}
         }
     }
+    if(id in socialAnalysisIds)return socialStatisticsPlan(id,rows,opts,columnLabels).expression
     fun col(key:String):Int {val raw=opts.getValue(key).toIntOrNull();val index=if(raw==-1)n-1 else raw;require(index!=null&&index in 0 until n) {"Choose valid data columns"};return index}
     fun vector(values:List<String>)=values.joinToString(",","[","]")
     fun table(values:List<List<String>>)=values.joinToString(",","[","]",transform=::vector)

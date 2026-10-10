@@ -5,6 +5,8 @@ math{font-family:"SymvaCAS Math","Cambria Math",math;font-weight:400;font-synthe
 .workspace[data-mode="statistics"] label:has(>select),.workspace[data-mode="statistics"] .statistics-form-columns legend{font-size:14px;font-weight:600;color:var(--ink)}
 .workspace[data-mode="statistics"] label>select{font-size:13px;font-weight:400}
 .statistics-result-report{width:100%;min-width:0;font-family:system-ui,sans-serif;font-size:13px;line-height:1.5;text-align:left;color:var(--ink);white-space:normal}
+.statistics-assumptions{min-width:0;max-width:100%;white-space:normal;overflow-wrap:anywhere}
+.statistics-assumptions h4{margin:0 0 6px;font-size:13px}
 .statistics-analysis-result{margin:12px 0 18px}
 .statistics-result-heading{display:flex;align-items:center;justify-content:flex-end;gap:6px;margin-bottom:12px}
 .statistics-result-heading>h3{flex:1;min-width:0;margin:0}

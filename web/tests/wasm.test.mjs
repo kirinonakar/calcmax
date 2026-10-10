@@ -15,6 +15,30 @@ import {graphInputTree} from '../graph-workspace.js';
 // scenario below explicitly loads its own interpreter to keep startup coverage.
 let sharedRuntime;
 
+test('social-science forms and weighted agreement run in real WASM',async()=>{
+  const py=await runtime();
+  const ids=['cronbach','efa','cfa','sem','manova','mediation','moderation','cramerv','phi','cohenkappa','dunn','discriminantanalysis','quantreg','zeroinflated','tobit','hcluster'];
+  for(const id of ids){
+    const definition=advancedStatisticsSchema.find(item=>item.id===id);
+    const settings=id==='mediation'?{samples:'100'}:{};
+    py.globals.set('payload',JSON.stringify({tree:parse(guidedStatisticsCommand(definition,definition.exampleRows,settings)),precision:15,budget:60}));
+    const result=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));
+    assert.equal(result.ok,true,`${id}: ${result.error}`);assert.equal(result.statisticsReport.analysis,id);
+  }
+  const definition=advancedStatisticsSchema.find(item=>item.id==='cohenkappa');
+  for(const weights of ['linear','quadratic']){
+    const source=guidedStatisticsCommand(definition,[['25','4','2'],['3','20','5'],['1','6','24']],{weights});
+    py.globals.set('payload',JSON.stringify({tree:parse(source),precision:15}));
+    const result=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));
+    assert.equal(result.ok,true,result.error);
+    const fixture=JSON.parse(readFileSync(new URL('../../tests/fixtures/social_statistics_reference.json',import.meta.url),'utf8')).cases.find(item=>item.function==='cohenkappa'&&item.arguments[1]===weights);
+    const expected=fixture.expected.find(([path])=>path[0]==='Cohen κ')[1];
+    assert.ok(Math.abs(Number(result.statisticsReport.highlights[0].value.decimal)-expected)<1e-12);
+  }
+  py.globals.set('payload',JSON.stringify({tree:parse('kruskal([1,2,3],[2,3,5],[4,6,7])'),budget:60}));
+  assert.ok(JSON.parse(py.runPython('calc_engine.dispatch(payload)')).statisticsReport.sections.some(section=>section.title==='Dunn post-hoc (Holm)'));
+});
+
 test('proportion z tests and relocated intervals run in real WASM',async()=>{
   const py=await runtime();
   for(const id of ['propztest','propztest2','tinterval','zinterval']){

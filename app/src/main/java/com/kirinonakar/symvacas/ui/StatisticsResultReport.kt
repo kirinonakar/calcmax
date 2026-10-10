@@ -110,6 +110,16 @@ internal fun statisticsCellText(m:CalculatorModel,cell:JSONObject)=ResultDisplay
             if(section.optInt("totalRows")>rows.length())Text("${rows.length()} / ${section.optInt("totalRows")} · ${tr("Copy result includes all rows.")}",fontSize=11.sp,color=c.muted)
         }
         if(!plotsShown)StatisticsVisualizations(report.optJSONArray("plots"))
+        report.optJSONArray("assumptions")?.takeIf {it.length()>0}?.let {assumptions->
+            Column(Modifier.fillMaxWidth().testTag("statistics-result-assumptions"),verticalArrangement=Arrangement.spacedBy(6.dp)) {
+                Text(tr("Assumptions"),fontSize=13.sp,fontWeight=FontWeight.SemiBold,color=c.ink)
+                SelectionContainer {
+                    Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(6.dp)) {
+                        for(index in 0 until assumptions.length())Text(tr(assumptions.getString(index)),Modifier.fillMaxWidth(),fontSize=12.sp,color=c.muted)
+                    }
+                }
+            }
+        }
         m.result?.optString("note")?.takeIf(String::isNotBlank)?.let {Text(it,fontSize=12.sp,color=c.muted)}
     }
 }

@@ -1,6 +1,7 @@
 import {statisticsImputationCSV} from './statistics-imputation.js';
 import {statisticsComparisonData} from './statistics-comparison-data.js';
 import {statisticsFactorialData} from './statistics-factorial-data.js';
+import {socialAnalysisIds,socialStatisticsPlan} from './statistics-social-forms.js';
 import {computationLimitsRemoved} from './computation-limits.js';
 import {advancedStatisticsSchema} from './advanced-statistics-schema.js';
 import {csvRows,statisticsCsvHasHeader,statisticsColumnLabels,statisticsColumnNames,statisticsCategoryLabels} from './workspace-commands.js';
@@ -104,6 +105,7 @@ export function guidedStatisticsCommand(definition,rows,settings={},columnLabels
   const n=Math.max(0,...rows.map(row=>row.length)),id=definition.id;
   const opts=Object.fromEntries(definition.controls.map(field=>[field.key,settings[field.key]??field.default]));
   for(const field of definition.controls)if(field.type==='choice'&&!field.choices.some(choice=>choice.id===opts[field.key]&&(!choice.when||Object.entries(choice.when).every(([key,values])=>values.includes(opts[key])))))throw new Error('Invalid analysis option');
+  if(socialAnalysisIds.has(id))return socialStatisticsPlan(id,rows,opts,columnLabels).expression;
   const column=key=>{let i=Number(opts[key]);if(i===-1)i=n-1;if(!Number.isInteger(i)||i<0||i>=n)throw new Error('Choose valid data columns');return i;};
   const list=values=>`[${values.join(',')}]`,table=values=>list(values.map(list));
   const values=i=>rows.map(row=>(row[i]||'').trim()).filter(Boolean);
@@ -305,6 +307,7 @@ export function guidedStatisticsCommand(definition,rows,settings={},columnLabels
 export function advancedStatisticsTermLabels(definition,rows,settings={},columnLabels=[]){
   const n=Math.max(0,...rows.map(row=>row.length)),id=definition.id;
   const opts=Object.fromEntries((definition.controls||[]).map(field=>[field.key,settings[field.key]??field.default]));
+  if(socialAnalysisIds.has(id))return socialStatisticsPlan(id,rows,opts,columnLabels).labels;
   const column=key=>Number(opts[key])===-1?n-1:Number(opts[key]);
   if(['twowayanova','linearmodel'].includes(id))return statisticsFactorialData(rows,opts,columnLabels).labels;
   if(id==='shapiro')return {'sample:1':columnLabels[column('column')]||'Sample 1'};
@@ -482,9 +485,9 @@ export function createAdvancedStatistics({state,persist,data,columnLimit,copy,cl
           };
           if(field.type==='columns'){
             const group=element('fieldset'),legend=element('legend',caption);group.append(legend);group.className='form-row statistics-form-columns';
-            const roles=definition.id==='ancova'?['group','response']:definition.id==='survivalanalysis'?['time','event',...(opts.grouping==='groups'?['group']:[])]:definition.id==='cox'?['time','event']:['poissonreg','nbreg','glm','ordinal','multinomial','crossvalidate','linearmodel'].includes(definition.id)?['response']:['subject','response'];
+            const roles=definition.id==='manova'?['group']:['mediation','moderation'].includes(definition.id)?['x','middle','response']:definition.id==='ancova'?['group','response']:definition.id==='survivalanalysis'?['time','event',...(opts.grouping==='groups'?['group']:[])]:definition.id==='cox'?['time','event']:['poissonreg','nbreg','glm','ordinal','multinomial','crossvalidate','linearmodel','discriminantanalysis','quantreg','zeroinflated','tobit'].includes(definition.id)?['response']:['subject','response'];
             if(['poissonreg','nbreg','glmm','glm'].includes(definition.id)&&opts.adjustment!=='none'&&(definition.id!=='glmm'||opts.family!=='binomial'))roles.push('offset');
-            const reserved=['predictors','categorical'].includes(field.key)?roles.map(key=>Number(opts[key])===-1?count-1:Number(opts[key])):[];
+            const reserved=['predictors','categorical','covariates','responses'].includes(field.key)?roles.map(key=>Number(opts[key])===-1?count-1:Number(opts[key])):[];
             const columns=value==='auto'?Array.from({length:count},(_,i)=>i).filter(i=>!reserved.includes(i)):String(value).split(',').filter(Boolean).map(Number);
             const store=element('input');store.type='hidden';store.id=id;store.value=String(value);group.append(store);
             for(let i=0;i<count;i++)if(!reserved.includes(i)){

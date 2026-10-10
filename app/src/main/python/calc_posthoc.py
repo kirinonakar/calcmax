@@ -5,6 +5,36 @@ from calc_shared import require
 from calc_statistics import _sample_mean_variance, _mpf, _studentized_range_sf, _studentized_range_critical
 
 
+def dunn_comparisons(groups, engine, adjustment='holm'):
+    """Two-sided pooled midrank comparisons with tie-corrected variance."""
+    from calc_advanced_common import vector, normal_p
+    from calc_advanced_inference import calculate
+    require(adjustment in ('holm','bonferroni','fdr','none'),'Choose Holm, Bonferroni, FDR or none')
+    groups=[vector(group) for group in groups]; require(len(groups)>=2,'Dunn requires at least two groups')
+    ordered=sorted((v,i) for i,group in enumerate(groups) for v in group)
+    n=len(ordered); sums=[0.]*len(groups); ties=0; at=0
+    while at<n:
+        end=at+1
+        while end<n and ordered[end][0]==ordered[at][0]: end+=1
+        rank=(at+1+end)/2
+        for _,i in ordered[at:end]: sums[i]+=rank
+        count=end-at; ties+=count**3-count; at=end
+    variance=n*(n+1)/12-ties/(12*(n-1))
+    require(variance>0,'Dunn is undefined when all observations are tied')
+    labels=engine.request.get('statisticsTermLabels',{})
+    rows=[]
+    for i in range(len(groups)):
+        for j in range(i+1,len(groups)):
+            difference=sums[i]/len(groups[i])-sums[j]/len(groups[j])
+            se=math.sqrt(variance*(1/len(groups[i])+1/len(groups[j]))); z=difference/se
+            rows.append({'Comparison':labels.get('sample:'+str(i+1),'Sample '+str(i+1))+' − '+labels.get('sample:'+str(j+1),'Sample '+str(j+1)),
+                         'Mean rank difference':difference,'SE':se,'z':z,'Raw p value':normal_p(z)})
+    probabilities=[row['Raw p value'] for row in rows]
+    adjusted=probabilities if adjustment=='none' else calculate(engine,'padjust',[probabilities,adjustment])['adjusted p']
+    for row,p in zip(rows,adjusted): row['Adjusted p value']=p
+    return {'Method':'Dunn (pooled midranks, tie corrected)','Adjustment':adjustment,'Comparisons':rows}
+
+
 def posthoc_comparisons(groups, method, engine):
     count=len(groups)
     moments=[_sample_mean_variance(group) for group in groups]

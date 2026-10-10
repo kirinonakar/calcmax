@@ -7,10 +7,12 @@ const cell=value=>({exact:value,decimal:value,decimalTree:{kind:'number',value}}
 test('result markdown retains table relationships, all rows, formatting and safe literal labels',()=>{
   const report={title:'Descriptive statistics',sections:[{title:'Summary',columns:['Metric','Value'],rows:[['mean',cell('1.234567')]],copyRows:[['mean',cell('1.234567')],['A|B\n<row>',cell('12345.6789')]]}]};
   setLanguage('en');
+  report.assumptions=['Independent rows; ordered categories.'];
   const text=statisticsResultMarkdown({statisticsReport:report,note:'Result only',exact:'source should not be copied'},{digits:3,grouping:true});
   assert.ok(text.includes('| Metric | Value |\n| --- | --- |\n| mean | 1.235 |'));
   assert.ok(text.includes('| A\\|B<br>&lt;row&gt; | 12,345.679 |'));
   assert.ok(text.endsWith('Result only'));
+  assert.ok(text.includes('### Assumptions\n\nIndependent rows; ordered categories.'));
   assert.ok(!text.includes('source should not be copied'));
   try{
     setLanguage('ko');const korean=statisticsResultMarkdown({statisticsReport:report});

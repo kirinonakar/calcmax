@@ -1,5 +1,5 @@
 {
-  "source": "SciPy 1.18.1 studentized_range / ttest_ind / friedmanchisquare; Welch formula inverse-variance weighting; SciPy pairwise tests and statsmodels multipletests Holm",
+  "source": "SciPy 1.18.1 studentized_range / ttest_ind / friedmanchisquare; Welch formula inverse-variance weighting; SciPy pairwise tests and statsmodels multipletests Holm; pooled-midrank Dunn with tie correction and SciPy normal tails",
   "samples": [
     [
       1,
@@ -123,14 +123,14 @@
     },
     "kruskal": {
       "raw": [
-        0.6666666666666666,
-        0.4,
-        1.0
+        0.3545394797735013,
+        0.2718987108196482,
+        0.9326466389658759
       ],
       "holm": [
-        1.0,
-        1.0,
-        1.0
+        0.8156961324589447,
+        0.8156961324589447,
+        0.9326466389658759
       ]
     }
   }

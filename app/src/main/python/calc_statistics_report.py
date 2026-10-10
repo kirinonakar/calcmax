@@ -16,6 +16,13 @@ TITLES.update({'propztest':'One-sample proportion z test', 'propztest2':'Two-sam
                'testpower':'Power', 'kstest':'Kolmogorov–Smirnov test',
                'bayesproportion':'Bayesian proportion', 'bayesmean':'Bayesian mean', 'bayesrate':'Bayesian rate',
                'bayescompare':'Bayesian Two-Sample Comparison','bayesbootstrap':'Bayesian Bootstrap'})
+TITLES.update({'cronbach':'Cronbach α reliability','efa':'Exploratory factor analysis (EFA)',
+               'cfa':'Confirmatory factor analysis (CFA)','sem':'Structural equation model (SEM)',
+               'manova':'MANOVA','mediation':'Mediation analysis','moderation':'Moderation analysis',
+               'cramerv':'Cramér’s V','phi':'Phi coefficient','cohenkappa':'Cohen’s κ agreement',
+               'dunn':'Dunn post-hoc test','discriminantanalysis':'Discriminant analysis (LDA/QDA)',
+               'quantreg':'Quantile regression','zeroinflated':'Zero-inflated regression (ZIP/ZINB)',
+               'tobit':'Tobit censored regression','hcluster':'Hierarchical clustering'})
 
 
 def statistics_report(name, value, precision, labels=None):
@@ -26,8 +33,9 @@ def statistics_report(name, value, precision, labels=None):
     """
     sections = []
     plots = []
+    assumptions = []
     table_labels = labels if isinstance(labels, dict) else {}
-    categorical = name in ('chi2independence', 'fisherexact', 'mcnemar') and all(table_labels.get(key) for key in ('table:row', 'table:column'))
+    categorical = name in ('chi2independence', 'fisherexact', 'mcnemar','cramerv','phi','cohenkappa') and all(table_labels.get(key) for key in ('table:row', 'table:column'))
 
     def cell(v):
         if isinstance(v, str): return v
@@ -65,6 +73,8 @@ def statistics_report(name, value, precision, labels=None):
         if isinstance(v, s.MatrixBase): v = v.tolist()
         if isinstance(v, dict):
             remaining = dict(v)
+            if isinstance(remaining.get('Assumptions'), str):
+                assumptions.append(remaining.pop('Assumptions'))
             if isinstance(remaining.get('diagnostics'),dict):
                 visit('Model diagnostics',remaining.pop('diagnostics'))
             estimate=v.get('estimate',v.get('posterior mean',v.get('sample mean')))
@@ -120,7 +130,7 @@ def statistics_report(name, value, precision, labels=None):
                 headers = {'survival table':['Time','At risk','Events','Censored','Survival','Lower 95% CI','Upper 95% CI'],
                            'observed':['Category 1','Category 2'], 'expected':['Category 1','Category 2']}.get(title)
                 if headers is None or len(headers) != width:
-                    prefix = 'PC' if title in ('loadings','scores') else 'Feature ' if title=='centroids' else 'Column '
+                    prefix = ('Factor ' if name=='efa' else 'PC') if title in ('loadings','scores') else 'Feature ' if title=='centroids' else 'Column '
                     headers = [prefix+str(i+1) for i in range(width)]
                     if title=='centroids': headers=[table_labels.get('feature:'+str(i+1),header) for i,header in enumerate(headers)]
                 index = 'Feature' if title == 'loadings' else 'Cluster' if title == 'centroids' else 'Observation'
@@ -129,7 +139,7 @@ def statistics_report(name, value, precision, labels=None):
                     add(title, [table_labels['table:row']]+headers,
                         [[table_labels.get('table:row:'+str(i+1), str(i+1))]+list(row) for i,row in enumerate(v)])
                     return
-                add(title, [index]+headers, [[table_labels.get('feature:'+str(i+1),i+1) if name=='pca' and index=='Feature' else i+1]+list(row) for i,row in enumerate(v)])
+                add(title, [index]+headers, [[table_labels.get('feature:'+str(i+1),i+1) if name in ('pca','efa') and index=='Feature' else i+1]+list(row) for i,row in enumerate(v)])
             elif vector(v):
                 if title in ('confidence interval','credible interval','difference credible interval','effect credible interval','quartiles (inclusive)','Quartiles'):
                     labels = ['Lower','Upper'] if len(v)==2 else ['Q1','Median','Q3']
@@ -157,13 +167,15 @@ def statistics_report(name, value, precision, labels=None):
     if name=='padjust' and isinstance(value,dict):
         plots.append({'kind':'bars','title':'Raw and adjusted p values','values':list(map(float,value['adjusted p'])),'secondary':list(map(float,value['raw p'])),'labels':[str(i+1) for i in range(len(value['raw p']))],'ylabel':'p value','reference':float(value['alpha']),'maximum':1})
     visit('Summary' if isinstance(value, dict) else TITLES.get(name, name), value)
-    priority=['p value','p','mean difference','posterior mean','Posterior Mean Difference (B - A)','Posterior Effect Size','BF10','P(μB > μA)','estimate','power','achieved power','n per group / pairs','R²','Adjusted R²','Kendall W','eta2','Cohen d','Cohen dz','RMSE','R2','inertia']
+    priority=['Cronbach α','Cohen κ',"Cramér’s V",'phi','Indirect effect a×b','CFI','RMSEA','KMO','p value','p','mean difference','posterior mean','Posterior Mean Difference (B - A)','Posterior Effect Size','BF10','P(μB > μA)','estimate','power','achieved power','n per group / pairs','R²','Adjusted R²','Kendall W','eta2','Cohen d','Cohen dz','RMSE','R2','inertia']
     report_title=TITLES.get(name,name)
     if name=='mcnemar' and isinstance(value,dict):
         priority=['discordant pairs','p']
         report_title={'asymptotic':'McNemar','exact':'Exact McNemar','corrected':'McNemar (continuity correction)'}.get(value.get('method'),report_title)
     highlights=[{'label':'p value' if name=='mcnemar' and key=='p' else key,'value':cell(value[key])} for key in priority if isinstance(value,dict) and key in value and finite(value[key]) is not None][:4]
-    return {'analysis': name, 'title': report_title, 'sections': sections,'highlights':highlights,'plots':plots}
+    report = {'analysis': name, 'title': report_title, 'sections': sections,'highlights':highlights,'plots':plots}
+    if assumptions: report['assumptions'] = assumptions
+    return report
 
 
 def statistics_copy_report(name, value, details, precision):

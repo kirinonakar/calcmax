@@ -56,6 +56,7 @@ export function statisticsResultMarkdown(result,options={}){
     })));}
     if(table.length>2)blocks.push('### '+markdownCell(t(section.title))+'\n\n'+table.join('\n'));
   }
+  if(report.assumptions?.length)blocks.push('### '+t('Assumptions')+'\n\n'+report.assumptions.map(value=>markdownCell(t(value))).join('\n\n'));
   for(const note of report.notes||[])blocks.push(markdownCell(t(note)));
   if(result.note)blocks.push(markdownCell(result.note));
   if(result.conditions?.length)blocks.push('### '+t('Conditions')+'\n\n'+result.conditions.map(condition=>'- '+markdownCell(condition)).join('\n'));

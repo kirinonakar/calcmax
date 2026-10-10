@@ -2289,5 +2289,421 @@
       "offset": "3"
     },
     "expected": "glmm([[1,0,2],[1,1,3],[2,0,4]],poisson,1,[4,2,5],exposure,likelihood,1)"
+  },
+  {
+    "id": "cronbach",
+    "rows": [
+      [
+        "ID",
+        "1",
+        "2"
+      ],
+      [
+        "",
+        "3",
+        "4"
+      ]
+    ],
+    "settings": {
+      "columns": "2,1",
+      "mode": "standardized"
+    },
+    "expected": "cronbach([[2,1],[4,3]],standardized)"
+  },
+  {
+    "id": "efa",
+    "rows": [
+      [
+        "A",
+        "1",
+        "2",
+        "3"
+      ],
+      [
+        "B",
+        "4",
+        "5",
+        "6"
+      ]
+    ],
+    "settings": {
+      "columns": "1,2,3",
+      "factors": "1",
+      "rotation": "none"
+    },
+    "expected": "efa([[1,2,3],[4,5,6]],1,none)"
+  },
+  {
+    "id": "cfa",
+    "rows": [
+      [
+        "id",
+        "1",
+        "2",
+        "3"
+      ],
+      [
+        "",
+        "4",
+        "5",
+        "6"
+      ]
+    ],
+    "settings": {
+      "columns": "1,2,3",
+      "factors": "1,1,1"
+    },
+    "expected": "cfa([[1,2,3],[4,5,6]],[1,1,1])"
+  },
+  {
+    "id": "sem",
+    "rows": [
+      [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6"
+      ]
+    ],
+    "settings": {},
+    "expected": "sem([[1,2,3,4,5,6]],[1,1,1,2,2,2],[[1,2]])"
+  },
+  {
+    "id": "manova",
+    "rows": [
+      [
+        "A",
+        "1",
+        "2",
+        ""
+      ],
+      [
+        "B",
+        "4",
+        "5",
+        "unused"
+      ]
+    ],
+    "settings": {
+      "responses": "2,1"
+    },
+    "expected": "manova([[1,2,1],[2,5,4]])"
+  },
+  {
+    "id": "mediation",
+    "rows": [
+      [
+        "8",
+        "1",
+        "2",
+        "7",
+        ""
+      ],
+      [
+        "9",
+        "4",
+        "5",
+        "6",
+        "ignored"
+      ]
+    ],
+    "settings": {
+      "x": "1",
+      "middle": "2",
+      "response": "0",
+      "covariates": "3",
+      "samples": "500",
+      "seed": "7"
+    },
+    "expected": "mediation([[1,2,7,8],[4,5,6,9]],500,7)"
+  },
+  {
+    "id": "moderation",
+    "rows": [
+      [
+        "8",
+        "1",
+        "2",
+        ""
+      ],
+      [
+        "9",
+        "4",
+        "5",
+        "ignored"
+      ]
+    ],
+    "settings": {
+      "x": "1",
+      "middle": "2",
+      "response": "0"
+    },
+    "expected": "moderation([[1,2,8],[4,5,9]])"
+  },
+  {
+    "id": "cramerv",
+    "rows": [
+      [
+        "ID",
+        "A",
+        "X"
+      ],
+      [
+        "",
+        "A",
+        "Y"
+      ],
+      [
+        "id",
+        "B",
+        "Y"
+      ]
+    ],
+    "settings": {
+      "layout": "pairs",
+      "first": "1",
+      "second": "2"
+    },
+    "expected": "cramerv([[1,1],[0,1]])"
+  },
+  {
+    "id": "phi",
+    "rows": [
+      [
+        "A",
+        "X"
+      ],
+      [
+        "A",
+        "Y"
+      ],
+      [
+        "B",
+        "Y"
+      ]
+    ],
+    "settings": {
+      "layout": "pairs"
+    },
+    "expected": "phi([[1,1],[0,1]])"
+  },
+  {
+    "id": "cohenkappa",
+    "rows": [
+      [
+        "high",
+        "low"
+      ],
+      [
+        "low",
+        "low"
+      ],
+      [
+        "mid",
+        "high"
+      ]
+    ],
+    "settings": {
+      "layout": "pairs",
+      "weights": "linear",
+      "categories": "low,mid,high"
+    },
+    "expected": "cohenkappa([[1,0,0],[0,0,1],[1,0,0]],linear)"
+  },
+  {
+    "id": "cohenkappa",
+    "rows": [
+      [
+        "high",
+        "low"
+      ],
+      [
+        "low",
+        "low"
+      ],
+      [
+        "mid",
+        "high"
+      ]
+    ],
+    "settings": {
+      "layout": "pairs",
+      "weights": "quadratic",
+      "categories": "low,mid,high"
+    },
+    "expected": "cohenkappa([[1,0,0],[0,0,1],[1,0,0]],quadratic)"
+  },
+  {
+    "id": "cohenkappa",
+    "rows": [
+      [
+        "unused",
+        "25",
+        "4",
+        "2"
+      ],
+      [
+        "",
+        "3",
+        "20",
+        "5"
+      ],
+      [
+        "id",
+        "1",
+        "6",
+        "24"
+      ]
+    ],
+    "settings": {
+      "columns": "1,2,3",
+      "weights": "quadratic"
+    },
+    "expected": "cohenkappa([[25,4,2],[3,20,5],[1,6,24]],quadratic)"
+  },
+  {
+    "id": "dunn",
+    "rows": [
+      [
+        "A",
+        "1",
+        ""
+      ],
+      [
+        "B",
+        "2",
+        "x"
+      ],
+      [
+        "A",
+        "3",
+        ""
+      ],
+      [
+        "B",
+        "4",
+        ""
+      ]
+    ],
+    "settings": {
+      "grouping": "groups",
+      "group": "0",
+      "value": "1",
+      "adjustment": "bonferroni"
+    },
+    "expected": "dunn([[1,3],[2,4]],bonferroni)"
+  },
+  {
+    "id": "discriminantanalysis",
+    "rows": [
+      [
+        "A",
+        "1",
+        "2",
+        ""
+      ],
+      [
+        "B",
+        "4",
+        "5",
+        "ignored"
+      ]
+    ],
+    "settings": {
+      "response": "0",
+      "predictors": "2,1",
+      "method": "qda",
+      "prior": "equal"
+    },
+    "expected": "discriminantanalysis([[2,1,1],[5,4,2]],qda,equal)"
+  },
+  {
+    "id": "quantreg",
+    "rows": [
+      [
+        "ID",
+        "1",
+        "8"
+      ],
+      [
+        "",
+        "2",
+        "9"
+      ]
+    ],
+    "settings": {
+      "response": "2",
+      "predictors": "1",
+      "quantile": "0.25"
+    },
+    "expected": "quantreg([[1,8],[2,9]],0.25)"
+  },
+  {
+    "id": "zeroinflated",
+    "rows": [
+      [
+        "ID",
+        "1",
+        "8"
+      ],
+      [
+        "",
+        "2",
+        "9"
+      ]
+    ],
+    "settings": {
+      "response": "2",
+      "predictors": "1",
+      "family": "nbinom",
+      "inflation": "same"
+    },
+    "expected": "zeroinflated([[1,8],[2,9]],nbinom,same)"
+  },
+  {
+    "id": "tobit",
+    "rows": [
+      [
+        "8",
+        "ID",
+        "1"
+      ],
+      [
+        "9",
+        "",
+        "2"
+      ]
+    ],
+    "settings": {
+      "response": "0",
+      "predictors": "2",
+      "lower": "none",
+      "upper": "10"
+    },
+    "expected": "tobit([[1,8],[2,9]],none,10)"
+  },
+  {
+    "id": "hcluster",
+    "rows": [
+      [
+        "ID",
+        "1",
+        "2"
+      ],
+      [
+        "",
+        "3",
+        "4"
+      ]
+    ],
+    "settings": {
+      "columns": "2,1",
+      "clusters": "1",
+      "linkage": "average",
+      "standardize": "0"
+    },
+    "expected": "hcluster([[2,1],[4,3]],1,average,0)"
   }
 ]

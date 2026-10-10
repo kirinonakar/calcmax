@@ -293,7 +293,7 @@ Example: quo(x^3-1,x-1,x)
 Example: rem(x^3-1,x-1,x)
 `resultant(a,b,x)` — Resultant of two polynomials in x.
 Example: resultant(x^2-1,x-2,x)
-`discriminant(poly,x)` — Discriminant of a polynomial in x.
+`discriminant(poly,x)` — Discriminant analysis (LDA/QDA). Discriminant of a polynomial in x.
 Example: discriminant(x^2-4x+3,x)
 `domain(expr,x)` — Real domain of the expression in x.
 Example: domain(1/(x-1),x)
@@ -789,6 +789,20 @@ Example: propztest2(60,100,45,100)
 `mcnemar` — Compare paired binary outcomes, such as yes/no before and after. Paired 2×2 count table; exact / corrected / asymptotic.
 Example: mcnemar([[20,8],[2,15]],exact)
 
+`cramerv` — Cramér’s V. Nonnegative integer contingency counts; uncorrected Pearson χ² and Cramér’s V. Independent observations; sparse counts can invalidate χ² p values.
+Example: cramerv([[20,5],[7,18]])
+
+`phi` — Phi coefficient. Signed phi for a 2×2 integer count table; swapping one category order reverses its sign. No Yates correction.
+Example: phi([[20,5],[7,18]])
+
+`cohenkappa` — Cohen’s κ agreement. Two-rater square count table with common category order. Unweighted, linear or quadratic kappa; multinomial delta-method SE and asymptotic Wald CI. Weighted categories must be ordered. Observed/expected agreement use the selected weights; exact agreement is also reported. Distinct from Bayesian prior strength kappa.
+Example: cohenkappa([[25,4,2],[3,20,5],[1,6,24]],unweighted)
+
+### Reliability
+
+`cronbach` — Cronbach α reliability. Rows are subjects, columns are items; raw or standardized alpha. Reverse-code items first. Returns corrected item-total correlations and alpha if deleted. Alpha does not establish validity or unidimensionality.
+Example: cronbach([[1.987,2.255,1.895,1.448,2.702,2.043],[3.103,3.653,2.588,3.608,3.265,3.866],[5.16,4.181,6.042,4.848,4.128,5.317],[1.995,2.767,1.417,-0.304,-1.529,-0.2],[1.802,1.7,2.56,2.591,4.452,3.681],[5.242,3.886,4.375,5.082,5.152,4.701],[3.057,2.704,2.315,2.034,0.528,0.659],[4.576,5.304,4.688,5.573,4.66,5.626],[5.08,3.257,4.251,3.415,3.076,4.508],[2.502,2.733,2.919,3.058,3.403,2.427],[4.23,3.357,4.235,4.595,5.16,5.999],[2.86,3.515,2.619,0.955,1.766,0.26],[3.16,2.893,2.37,2.341,1.676,2.201],[1.101,3.477,2.018,2.67,2.235,3.664],[3.503,4.223,4.268,2.178,3.518,1.656],[3.623,3.309,4.28,2.605,3.676,3.647],[4.285,5.139,6.064,4.069,4.097,4.629],[3.301,2.767,3.271,2.832,3.249,3.621],[2.857,2.677,2.348,3.272,2.696,3.272],[0.449,1.323,0.652,3.013,3.114,1.652],[3.447,3.14,2.42,2.311,3.202,2.063],[2.401,2.196,3.998,1.025,2.349,1.691],[3.54,5.121,3.878,2.99,2.849,3.135],[3.67,4.081,4.264,3.472,3.458,4.419]],raw)
+
 ### Distribution & variance
 
 `shapiro` — Check evidence against normality; interpret with Q–Q plots, not as a pass/fail gate. Normality test for 3 to 5000 observations; interpret with Q–Q plots.
@@ -811,6 +825,9 @@ Example: tukey([1,2,4,5],[2,3,5,8])
 `gameshowell` — Compare each pair of independent group means without equal variances, with adjusted p values and simultaneous intervals. All pairwise mean comparisons for independent groups with unequal variances.
 Example: gameshowell([1,2,4,5],[2,3,5,8])
 
+`dunn` — Dunn post-hoc test. List of independent sample lists, then holm (default), bonferroni, fdr or none. Pooled midranks, tie correction, two-sided normal p values. Retains the Kruskal–Wallis pooled rank scale.
+Example: dunn([[1,2,4],[2,3,6],[3,5,8],[4,7,9]],holm)
+
 ### Group comparisons
 
 `twowayanova` — Compare independent observations across two factors, testing both main effects and their interaction. Independent observations, two categorical factors and a numeric response. Type III F tests with sum contrasts; interaction 1 (default) or additive 0. Normal errors and common residual variance; replication and a full-rank design are required.
@@ -818,6 +835,9 @@ Example: twowayanova([[1,1,2],[1,1,4],[1,2,5],[1,2,6],[2,1,4],[2,1,5],[2,2,8],[2
 
 `ancova` — Compare group means while adjusting for numeric covariates. Rows: numeric group ID, one or more covariates, response; confidence level (default .95); slope homogeneity check 0/1 (default 1). One factor, common slopes, Type II F tests and adjusted means at pooled covariate means.
 Example: ancova([[1,1,3],[1,2,5],[1,3,4],[1,4,8],[2,2,6],[2,3,7],[2,4,9],[2,5,8],[3,1,5],[3,3,8],[3,4,10],[3,6,11]],0.95,1)
+
+`manova` — MANOVA. One-factor independent MANOVA: group ID followed by multiple responses. Pillai F, Wilks Rao F, Hotelling–Lawley and Roy statistics. Assumes multivariate normal errors and equal covariance; no repeated or factorial MANOVA.
+Example: manova([[1,1.987,1.448],[1,3.103,3.608],[1,5.16,4.848],[1,1.995,-0.304],[1,1.802,2.591],[1,5.242,5.082],[1,3.057,2.034],[1,4.576,5.573],[2,5.08,3.415],[2,2.502,3.058],[2,4.23,4.595],[2,2.86,0.955],[2,3.16,2.341],[2,1.101,2.67],[2,3.503,2.178],[2,3.623,2.605],[3,4.285,4.069],[3,3.301,2.832],[3,2.857,3.272],[3,0.449,3.013],[3,3.447,2.311],[3,2.401,1.025],[3,3.54,2.99],[3,3.67,3.472]])
 
 `repeatedanova` — Compare repeated conditions within the same subjects in a balanced design. Rows=subjects, columns=conditions. Second-factor levels: 1 = one-way, 2+ = two-way (first factor slowest); GG corrections.
 Example: repeatedanova([[2,4,5],[3,4,7],[4,7,8],[2,3,6],[5,6,7]],1)
@@ -858,11 +878,28 @@ Example: poissonreg([[0,1],[0,0],[1,3],[1,1],[2,2],[2,5],[3,4],[3,8],[4,6],[4,10
 `nbreg` — Model counts with extra variation beyond a Poisson model. Rows: predictors, integer count response. NB2 with estimated dispersion. Optional offset/exposure list and offset (default) / exposure mode.
 Example: nbreg([[0,0],[0,0],[0,1],[0,8],[1,0],[1,1],[1,3],[1,15],[2,0],[2,2],[2,5],[2,23],[3,1],[3,3],[3,10],[3,35]])
 
+`zeroinflated` — Zero-inflated regression (ZIP/ZINB). Rows: predictors, integer counts. Poisson or estimated-alpha NB2 count mixture with logit structural zeros; inflation intercept or same predictors. Joint ML Wald inference; no hurdle model or automatic Vuong test.
+Example: zeroinflated([[0,0],[0,0],[0,0],[0,1],[0,2],[0,3],[1,0],[1,0],[1,1],[1,2],[1,3],[1,5],[2,0],[2,0],[2,1],[2,3],[2,5],[2,8],[3,0],[3,0],[3,2],[3,4],[3,7],[3,10]],poisson,intercept)
+
+`tobit` — Tobit censored regression. Rows: predictors, observed response; lower bound (default 0), upper bound (default none). Type-I normal censoring, joint ML coefficient/sigma inference. Values at bounds are censored; coefficients refer to the latent response. No truncation/selection model.
+Example: tobit([[0,0],[1,0],[2,1],[3,3],[4,3],[5,6],[6,5],[7,8],[8,9],[9,8],[10,11],[11,12]],0,none)
+
+`quantreg` — Quantile regression. Rows: predictors, response; quantile in (0,1). IRLS with subgradient optimality check; asymptotic Gaussian-kernel sandwich / Hall–Sheather bandwidth if residual density supports inference.
+Example: quantreg([[0,2],[1,4],[2,3],[3,8],[4,7],[5,9],[6,10],[7,12],[8,11],[9,15],[10,17],[11,16]],0.5)
+
 `multinomial` — Predict unordered numeric categories from predictors. Rows: predictors, numeric category response. Smallest category is reference.
 Example: multinomial([[-2,0],[-2,1],[-1,0],[-1,2],[0,0],[0,1],[0,2],[1,1],[1,2],[2,1],[2,2],[2,0]])
 
 `ordinal` — Predict ordered categories under a proportional-odds model. Rows: predictors, ordered numeric response. Proportional-odds cumulative logit.
 Example: ordinal([[-2,0],[-2,1],[-1,0],[-1,2],[0,0],[0,1],[0,2],[1,1],[1,2],[2,1],[2,2],[2,0]])
+
+### Mediation & moderation
+
+`mediation` — Mediation analysis. Rows: X, M, optional covariates, Y. Single continuous mediator; adjusted OLS direct, total and indirect a×b effects, seeded row-bootstrap percentile CI and Sobel approximation. No causal identification from observational association alone.
+Example: mediation([[-2.191,-1.014,-0.857],[-0.662,0.471,0.662],[1.567,1.183,3.061],[2.013,1.591,3.248],[-1.857,-0.593,-0.9],[-0.348,1.302,0.7],[2.702,1.566,3.688],[-0.934,-0.125,-1.06],[-1.674,-0.681,-1.092],[-0.145,-0.168,1.046],[0.818,0.995,2.032],[0.809,1.054,1.548],[1.027,-0.185,-0.448],[-0.783,-0.785,0.117],[-1.612,-1.911,-1.425],[0.26,0.246,-0.084],[1.802,2.034,2.866],[-0.316,-0.156,0.409],[-0.667,-1.464,-1.077],[-0.268,-0.145,-0.343],[0.58,1.473,1.633],[2.444,1.513,2.462],[0.308,0.001,0.363],[1.209,0.904,0.926]],2000,0)
+
+`moderation` — Moderation analysis. Rows: X, W, optional covariates, Y. Centered X/W and X×W interaction; conditional slopes at W mean ± SD with full covariance t inference. Continuous moderator, independent OLS errors.
+Example: moderation([[-2.191,-1.014,-0.857],[-0.662,0.471,0.662],[1.567,1.183,3.061],[2.013,1.591,3.248],[-1.857,-0.593,-0.9],[-0.348,1.302,0.7],[2.702,1.566,3.688],[-0.934,-0.125,-1.06],[-1.674,-0.681,-1.092],[-0.145,-0.168,1.046],[0.818,0.995,2.032],[0.809,1.054,1.548],[1.027,-0.185,-0.448],[-0.783,-0.785,0.117],[-1.612,-1.911,-1.425],[0.26,0.246,-0.084],[1.802,2.034,2.866],[-0.316,-0.156,0.409],[-0.667,-1.464,-1.077],[-0.268,-0.145,-0.343],[0.58,1.473,1.633],[2.444,1.513,2.462],[0.308,0.001,0.363],[1.209,0.904,0.926]])
 
 ### Repeated & clustered data
 
@@ -902,13 +939,30 @@ Example: bootstrapci([1,2,3,4,5,8],mean,0.95,2000,0)
 `bayesbootstrap` — Quantify posterior uncertainty in statistics using random weights on observations. Dirichlet(1,…,1) weights on IID observed values; mean / median / variance / stdev, credible level, draws, seed. Median estimate uses the ordinary sample median (average the two middle values for even n); posterior draws use the Lower weighted quantile (smallest value with weighted CDF >= 0.5); variance/SD use population weights. Equal-tailed simulated posterior interval and histogram. Two samples: bayesbootstrap(A,B,mean,0.95,10000,0,independent); paired uses shared row weights. Comparison is statistic(B) - statistic(A).
 Example: bayesbootstrap([1,2,3,4,5,8],mean,0.95,10000,0)
 
+### Measurement & structural models
+
+`efa` — Exploratory factor analysis (EFA). Principal-axis factoring on Pearson correlations, SMC initialization; factor count, varimax or none. KMO, Bartlett sphericity, communalities, loadings and regression scores. Complete numeric rows; no polychoric or oblique rotation.
+Example: efa([[1.987,2.255,1.895,1.448,2.702,2.043],[3.103,3.653,2.588,3.608,3.265,3.866],[5.16,4.181,6.042,4.848,4.128,5.317],[1.995,2.767,1.417,-0.304,-1.529,-0.2],[1.802,1.7,2.56,2.591,4.452,3.681],[5.242,3.886,4.375,5.082,5.152,4.701],[3.057,2.704,2.315,2.034,0.528,0.659],[4.576,5.304,4.688,5.573,4.66,5.626],[5.08,3.257,4.251,3.415,3.076,4.508],[2.502,2.733,2.919,3.058,3.403,2.427],[4.23,3.357,4.235,4.595,5.16,5.999],[2.86,3.515,2.619,0.955,1.766,0.26],[3.16,2.893,2.37,2.341,1.676,2.201],[1.101,3.477,2.018,2.67,2.235,3.664],[3.503,4.223,4.268,2.178,3.518,1.656],[3.623,3.309,4.28,2.605,3.676,3.647],[4.285,5.139,6.064,4.069,4.097,4.629],[3.301,2.767,3.271,2.832,3.249,3.621],[2.857,2.677,2.348,3.272,2.696,3.272],[0.449,1.323,0.652,3.013,3.114,1.652],[3.447,3.14,2.42,2.311,3.202,2.063],[2.401,2.196,3.998,1.025,2.349,1.691],[3.54,5.121,3.878,2.99,2.849,3.135],[3.67,4.081,4.264,3.472,3.458,4.419],[3.341,3.341,2.722,2.088,2.846,3.371],[2.491,2.816,1.44,1.192,2.551,1.975],[3.002,2.66,3.754,3.345,5.413,3.962],[2.893,3.409,3.316,3.336,3.614,4.426],[1.843,1.939,2.024,5.012,4.963,5.395],[4.404,3.051,4.195,4.157,2.983,3.546],[3.252,2.804,3.346,2.695,4.096,3.254],[3.384,3.477,4.064,1.625,1.051,0.949],[3.04,2.869,2.962,2.556,1.997,0.53],[2.398,2.777,2.227,3.809,3.915,4.636],[3.253,3.538,4.357,3.697,3.035,3.881],[2.896,2.958,0.826,0.678,1.802,0.825],[1.423,1.154,1.884,3.063,3.992,3.001],[3.389,3.692,2.134,3.7,4.094,4.75],[2.75,3.546,3.742,3.853,3.204,5.14],[3.966,2.911,2.755,2.152,3.222,1.657],[2.267,1.875,2.087,1.343,3.21,3.064],[4.436,4.095,5.016,4.363,3.93,4.141],[-0.224,1.681,0.508,1.922,1.822,2.534],[2.844,2.896,3.813,4.436,2.472,3.68],[2.548,3.279,1.79,2.175,1.88,1.092],[2.624,2.491,2.819,3.493,3.617,2.98],[3.027,3.869,2.073,2.693,2.873,3.391],[2.524,3.183,1.987,3.333,2.888,3.225]],2,varimax)
+
+`cfa` — Confirmatory factor analysis (CFA). Covariance ML for continuous indicators. Specify factor IDs in selected-indicator order; one loading per indicator, at least three indicators per factor, first loading fixed at 1. Correlated factors, independent errors; χ²/df/p, CFI, TLI, RMSEA and SRMR. No ordinal/robust estimator, FIML, cross-loadings or correlated errors.
+Example: cfa([[1.987,2.255,1.895,1.448,2.702,2.043],[3.103,3.653,2.588,3.608,3.265,3.866],[5.16,4.181,6.042,4.848,4.128,5.317],[1.995,2.767,1.417,-0.304,-1.529,-0.2],[1.802,1.7,2.56,2.591,4.452,3.681],[5.242,3.886,4.375,5.082,5.152,4.701],[3.057,2.704,2.315,2.034,0.528,0.659],[4.576,5.304,4.688,5.573,4.66,5.626],[5.08,3.257,4.251,3.415,3.076,4.508],[2.502,2.733,2.919,3.058,3.403,2.427],[4.23,3.357,4.235,4.595,5.16,5.999],[2.86,3.515,2.619,0.955,1.766,0.26],[3.16,2.893,2.37,2.341,1.676,2.201],[1.101,3.477,2.018,2.67,2.235,3.664],[3.503,4.223,4.268,2.178,3.518,1.656],[3.623,3.309,4.28,2.605,3.676,3.647],[4.285,5.139,6.064,4.069,4.097,4.629],[3.301,2.767,3.271,2.832,3.249,3.621],[2.857,2.677,2.348,3.272,2.696,3.272],[0.449,1.323,0.652,3.013,3.114,1.652],[3.447,3.14,2.42,2.311,3.202,2.063],[2.401,2.196,3.998,1.025,2.349,1.691],[3.54,5.121,3.878,2.99,2.849,3.135],[3.67,4.081,4.264,3.472,3.458,4.419],[3.341,3.341,2.722,2.088,2.846,3.371],[2.491,2.816,1.44,1.192,2.551,1.975],[3.002,2.66,3.754,3.345,5.413,3.962],[2.893,3.409,3.316,3.336,3.614,4.426],[1.843,1.939,2.024,5.012,4.963,5.395],[4.404,3.051,4.195,4.157,2.983,3.546],[3.252,2.804,3.346,2.695,4.096,3.254],[3.384,3.477,4.064,1.625,1.051,0.949],[3.04,2.869,2.962,2.556,1.997,0.53],[2.398,2.777,2.227,3.809,3.915,4.636],[3.253,3.538,4.357,3.697,3.035,3.881],[2.896,2.958,0.826,0.678,1.802,0.825],[1.423,1.154,1.884,3.063,3.992,3.001],[3.389,3.692,2.134,3.7,4.094,4.75],[2.75,3.546,3.742,3.853,3.204,5.14],[3.966,2.911,2.755,2.152,3.222,1.657],[2.267,1.875,2.087,1.343,3.21,3.064],[4.436,4.095,5.016,4.363,3.93,4.141],[-0.224,1.681,0.508,1.922,1.822,2.534],[2.844,2.896,3.813,4.436,2.472,3.68],[2.548,3.279,1.79,2.175,1.88,1.092],[2.624,2.491,2.819,3.493,3.617,2.98],[3.027,3.869,2.073,2.693,2.873,3.391],[2.524,3.183,1.987,3.333,2.888,3.225]],[1,1,1,2,2,2])
+
+`sem` — Structural equation model (SEM). Continuous covariance ML with the CFA measurement structure and recursive latent paths [source,target]. Exogenous factors may covary; endogenous disturbances are independent. Minimum three indicators per factor. No cycles, ordinal estimator, FIML, equality constraints or multi-group invariance tests.
+Example: sem([[1.987,2.255,1.895,1.448,2.702,2.043],[3.103,3.653,2.588,3.608,3.265,3.866],[5.16,4.181,6.042,4.848,4.128,5.317],[1.995,2.767,1.417,-0.304,-1.529,-0.2],[1.802,1.7,2.56,2.591,4.452,3.681],[5.242,3.886,4.375,5.082,5.152,4.701],[3.057,2.704,2.315,2.034,0.528,0.659],[4.576,5.304,4.688,5.573,4.66,5.626],[5.08,3.257,4.251,3.415,3.076,4.508],[2.502,2.733,2.919,3.058,3.403,2.427],[4.23,3.357,4.235,4.595,5.16,5.999],[2.86,3.515,2.619,0.955,1.766,0.26],[3.16,2.893,2.37,2.341,1.676,2.201],[1.101,3.477,2.018,2.67,2.235,3.664],[3.503,4.223,4.268,2.178,3.518,1.656],[3.623,3.309,4.28,2.605,3.676,3.647],[4.285,5.139,6.064,4.069,4.097,4.629],[3.301,2.767,3.271,2.832,3.249,3.621],[2.857,2.677,2.348,3.272,2.696,3.272],[0.449,1.323,0.652,3.013,3.114,1.652],[3.447,3.14,2.42,2.311,3.202,2.063],[2.401,2.196,3.998,1.025,2.349,1.691],[3.54,5.121,3.878,2.99,2.849,3.135],[3.67,4.081,4.264,3.472,3.458,4.419],[3.341,3.341,2.722,2.088,2.846,3.371],[2.491,2.816,1.44,1.192,2.551,1.975],[3.002,2.66,3.754,3.345,5.413,3.962],[2.893,3.409,3.316,3.336,3.614,4.426],[1.843,1.939,2.024,5.012,4.963,5.395],[4.404,3.051,4.195,4.157,2.983,3.546],[3.252,2.804,3.346,2.695,4.096,3.254],[3.384,3.477,4.064,1.625,1.051,0.949],[3.04,2.869,2.962,2.556,1.997,0.53],[2.398,2.777,2.227,3.809,3.915,4.636],[3.253,3.538,4.357,3.697,3.035,3.881],[2.896,2.958,0.826,0.678,1.802,0.825],[1.423,1.154,1.884,3.063,3.992,3.001],[3.389,3.692,2.134,3.7,4.094,4.75],[2.75,3.546,3.742,3.853,3.204,5.14],[3.966,2.911,2.755,2.152,3.222,1.657],[2.267,1.875,2.087,1.343,3.21,3.064],[4.436,4.095,5.016,4.363,3.93,4.141],[-0.224,1.681,0.508,1.922,1.822,2.534],[2.844,2.896,3.813,4.436,2.472,3.68],[2.548,3.279,1.79,2.175,1.88,1.092],[2.624,2.491,2.819,3.493,3.617,2.98],[3.027,3.869,2.073,2.693,2.873,3.391],[2.524,3.183,1.987,3.333,2.888,3.225]],[1,1,1,2,2,2],[[1,2]])
+
 ### Multivariate analysis
 
 `pca` — Summarize correlated numeric features using fewer components. Rows=observations, columns=features; components, standardize 1/0.
 Example: pca([[1,2],[2,1],[3,4],[4,3],[5,7]],2,1)
 
+`discriminantanalysis` — Discriminant analysis (LDA/QDA). Rows: features, class. LDA pooled / QDA separate unbiased covariances; empirical/equal priors. Optional fourth argument: new feature rows. Training confusion and accuracy are resubstitution, not validation. No automatic regularization.
+Example: discriminantanalysis([[1,2,1],[2,1,1],[1,1,1],[2,3,1],[4,5,2],[5,4,2],[4,4,2],[5,6,2]],lda,empirical)
+
 `kmeans` — Group observations by numeric-feature similarity; check feature scales first. Numeric feature rows; k, seed. Euclidean distance, 10 restarts, raw feature scale.
 Example: kmeans([[1,1],[1,2],[2,1],[8,8],[8,9],[9,8]],2,0)
+
+`hcluster` — Hierarchical clustering. Independent agglomerative analysis; clusters, single/complete/average/Ward Euclidean linkage, standardize 1/0. Returns all merges, heights, sizes and cut assignments. Leaves 1…n, merge nodes n+1…2n−1.
+Example: hcluster([[1,1],[1,2],[2,1],[8,8],[8,9],[9,8]],2,ward,1)
 
 ### Survival analysis
 
@@ -948,6 +1002,8 @@ Bayesian Two-Sample Comparison: [Savage-Dickey density ratio and compatible null
 
 Factorial linear models: [Type II/III ANOVA and sum contrasts](https://www.statsmodels.org/stable/examples/notebooks/generated/interactions_anova.html). Welch / Games–Howell: [SciPy unequal-variance ANOVA](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.f_oneway.html), [studentized range](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.studentized_range.html). Friedman: [tie-corrected repeated rank test](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.friedmanchisquare.html).
 
-Post-hoc suites: Kruskal–Wallis includes pairwise Mann–Whitney + Holm (separately ranked pairs, not Dunn); Friedman includes paired Wilcoxon + Holm; repeated-measures ANOVA includes paired t + Holm and normality/Q–Q checks on within-subject contrasts. Global and pairwise tests answer different questions.
+Post-hoc suites: Kruskal–Wallis includes two-sided Dunn + Holm using pooled midranks and tie correction; Friedman includes paired Wilcoxon + Holm; repeated-measures ANOVA includes paired t + Holm and normality/Q–Q checks on within-subject contrasts. Global and pairwise tests answer different questions.
+
+Social-science methods: [Dunn pooled-rank comparisons](https://search.r-project.org/CRAN/refmans/rstatix/html/dunn_test.html), [Cohen and weighted kappa](https://www.statsmodels.org/stable/generated/statsmodels.stats.inter_rater.cohens_kappa.html), [CFA covariance ML](https://lavaan.ugent.be/tutorial/cfa.html), [ML N divisor](https://lavaan.ugent.be/tutorial/est.html), [MANOVA](https://www.statsmodels.org/stable/generated/statsmodels.multivariate.manova.MANOVA.html), [quantile regression](https://www.statsmodels.org/stable/generated/statsmodels.regression.quantile_regression.QuantReg.html), [LDA/QDA](https://scikit-learn.org/stable/modules/lda_qda.html).
 
 Test selection and diagnostics: [NIST t tests](https://www.itl.nist.gov/div898/handbook/eda/section3/eda353.htm), [Levene/Brown–Forsythe](https://www.itl.nist.gov/div898/handbook/eda/section3/eda35a.htm), [normal probability plots](https://www.itl.nist.gov/div898/handbook/eda/section3/normprpl.htm), [Wilcoxon assumptions](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.wilcoxon.html).

@@ -3,6 +3,7 @@ import json
 import ast
 from pathlib import Path
 from statistics_help import USES, enrich_help
+from statistics_social_schema import SPECS as SOCIAL_SPECS, forms as social_forms
 
 ROOT = Path(__file__).resolve().parents[1]
 GROUPS = '[1,2,4,5],[2,3,5,8]'
@@ -62,22 +63,26 @@ specs = [
     ('kmeans','K-means clustering','K-means 군집','table',',2,0','[[1,1],[1,2],[2,1],[8,8],[8,9],[9,8]]','Numeric feature rows; k, seed. Euclidean distance, 10 restarts, raw feature scale.','숫자 변수 행; k, 시드. 유클리드 거리, 10회 초기화, 원래 변수 척도.'),
     ('impute','Missing-value imputation','결측치 대체','table',',mean','[[1,NA],[2,4],[NA,6],[4,8]]','NA for missing cells; mean / median / mode / regression / knn with neighbours (default 5). Single imputation.','결측값은 NA; mean / median / mode / regression / knn(이웃 수 기본 5). 단일 대체.'),
 ]
+specs.extend(SOCIAL_SPECS)
 schema = [{'id':id_,'label':label,'ko':ko,'input':layout,'suffix':suffix,'example':f'{id_}({data}{suffix})','help':help_,'helpKo':helpko} for id_,label,ko,layout,suffix,data,help_,helpko in specs]
 # Menu placement and order are shared by Android and Web; function IDs stay stable.
 menus = [
     ('preparation', 'Data preparation', '데이터 준비', ['impute']),
-    ('general', 'Categorical data', '범주형 자료', ['propztest','propztest2','mcnemar']),
+    ('general', 'Categorical data', '범주형 자료', ['propztest','propztest2','mcnemar','cramerv','phi','cohenkappa']),
+    ('general', 'Reliability', '신뢰도', ['cronbach']),
     ('tests', 'Distribution & variance', '분포·분산 검정', ['shapiro','kstest','levene','bartlett']),
-    ('tests', 'Post-hoc comparisons', '사후비교', ['tukey','gameshowell']),
-    ('tests', 'Group comparisons', '그룹 비교', ['twowayanova','ancova','repeatedanova','friedman']),
+    ('tests', 'Post-hoc comparisons', '사후비교', ['tukey','gameshowell','dunn']),
+    ('tests', 'Group comparisons', '그룹 비교', ['twowayanova','ancova','manova','repeatedanova','friedman']),
     ('tests', 'Effect sizes & multiple testing', '효과크기·다중검정', ['cohend','eta2','padjust']),
     ('tests', 'Confidence intervals', '신뢰구간', ['tinterval','zinterval']),
-    ('models', 'Generalized regression', '일반화 회귀', ['linearmodel','glm','poissonreg','nbreg','multinomial','ordinal']),
+    ('models', 'Generalized regression', '일반화 회귀', ['linearmodel','glm','poissonreg','nbreg','zeroinflated','tobit','quantreg','multinomial','ordinal']),
+    ('models', 'Mediation & moderation', '매개·조절 분석', ['mediation','moderation']),
     ('models', 'Repeated & clustered data', '반복·군집 자료', ['mixedmodel','glmm','gee']),
     ('models', 'Model validation', '모형 검증', ['crossvalidate']),
     ('advanced', 'Bayesian inference', '베이지안 추론', ['bayesmean','bayescompare','bayesproportion','bayesrate']),
     ('advanced', 'Resampling', '재표집', ['bootstrapci','bayesbootstrap']),
-    ('advanced', 'Multivariate analysis', '다변량 분석', ['pca','kmeans']),
+    ('advanced', 'Measurement & structural models', '측정·구조 모형', ['efa','cfa','sem']),
+    ('advanced', 'Multivariate analysis', '다변량 분석', ['pca','discriminantanalysis','kmeans','hcluster']),
     ('advanced', 'Survival analysis', '생존분석', ['survivalanalysis','kaplanmeier','logrank','cox']),
     ('advanced', 'Power & sample size', '검정력·표본수', ['testpower','samplesize']),
 ]
@@ -248,6 +253,10 @@ form_help['propztest']=('Counts: rows are success/trial batches for one populati
 form_help['propztest2']=('Counts: exactly two rows, Group A then Group B. Binary data: independent columns or group/value columns with a common success value. H0: pA=pB; left/right alternatives refer to A−B. Uses the pooled null proportion; paired outcomes require McNemar.', '빈도 입력은 정확히 두 행이며 A 그룹·B 그룹 순서입니다. 이항 자료는 독립된 두 열 또는 그룹·값 열과 공통 성공 값을 선택합니다. H0: pA=pB, 좌측·우측은 A−B 기준입니다. 귀무가설의 합동 비율을 사용하며 대응 결과는 McNemar를 사용합니다.')
 definitions['propztest']['example']='propztest(0.5,[[60,100]])'
 definitions['propztest2']['example']='propztest2(60,100,45,100)'
+forms.update(social_forms(field,col,multi,group_fields))
+for spec in SOCIAL_SPECS:
+    form_help[spec[0]]=(spec[6],spec[7])
+    USES[spec[0]]=(spec[1]+'.',spec[2]+'.')
 for item in schema:
     if item['id'] in ('propztest','propztest2','tinterval','zinterval'): item['example']=definitions[item['id']]['example']
     if item['id'] not in forms: continue
@@ -273,6 +282,7 @@ for item in schema:
     elif item['id'] in ('tukey','gameshowell','levene','bartlett','kstest','bayescompare','cohend','eta2'):
         samples=[literal(arg) for arg in (arguments[:2] if item['id'] in ('bayescompare','cohend') else arguments)]; rows=[[sample[i] if i<len(sample) else '' for sample in samples] for i in range(max(map(len,samples)))]
     elif item['id']=='logrank': rows=[r+[i+1] for i,arg in enumerate(arguments) for r in literal(arg)]
+    elif item['id']=='dunn': rows=[[sample[i] if i<len(sample) else '' for sample in first] for i in range(max(map(len,first)))]
     else: rows=first
     item['exampleRows']=[[str(v) for v in row] for row in rows]
     if item['id']=='glm':
@@ -377,6 +387,26 @@ cases.extend([
  dict(id='glmm',rows=[['0','A','0'],['1','A','1'],['1','B','0']],settings=dict(subject='1',response='0',predictors='2',slope='1',sensitivity='refit'),expected='glmm([[1,0,0],[1,1,1],[2,0,1]],binomial,1,[],offset,likelihood,1)'),
  dict(id='glmm',rows=[['A','2','0','4'],['A','3','1','2'],['B','4','0','5']],settings=dict(subject='0',response='1',predictors='2',family='poisson',slope='1',adjustment='exposure',offset='3'),expected='glmm([[1,0,2],[1,1,3],[2,0,4]],poisson,1,[4,2,5],exposure,likelihood,1)')
 ])
+cases.extend([
+ dict(id='cronbach',rows=[['ID','1','2'],['','3','4']],settings=dict(columns='2,1',mode='standardized'),expected='cronbach([[2,1],[4,3]],standardized)'),
+ dict(id='efa',rows=[['A','1','2','3'],['B','4','5','6']],settings=dict(columns='1,2,3',factors='1',rotation='none'),expected='efa([[1,2,3],[4,5,6]],1,none)'),
+ dict(id='cfa',rows=[['id','1','2','3'],['','4','5','6']],settings=dict(columns='1,2,3',factors='1,1,1'),expected='cfa([[1,2,3],[4,5,6]],[1,1,1])'),
+ dict(id='sem',rows=[['1','2','3','4','5','6']],settings={},expected='sem([[1,2,3,4,5,6]],[1,1,1,2,2,2],[[1,2]])'),
+ dict(id='manova',rows=[['A','1','2',''],['B','4','5','unused']],settings=dict(responses='2,1'),expected='manova([[1,2,1],[2,5,4]])'),
+ dict(id='mediation',rows=[['8','1','2','7',''],['9','4','5','6','ignored']],settings=dict(x='1',middle='2',response='0',covariates='3',samples='500',seed='7'),expected='mediation([[1,2,7,8],[4,5,6,9]],500,7)'),
+ dict(id='moderation',rows=[['8','1','2',''],['9','4','5','ignored']],settings=dict(x='1',middle='2',response='0'),expected='moderation([[1,2,8],[4,5,9]])'),
+ dict(id='cramerv',rows=[['ID','A','X'],['','A','Y'],['id','B','Y']],settings=dict(layout='pairs',first='1',second='2'),expected='cramerv([[1,1],[0,1]])'),
+ dict(id='phi',rows=[['A','X'],['A','Y'],['B','Y']],settings=dict(layout='pairs'),expected='phi([[1,1],[0,1]])'),
+ dict(id='cohenkappa',rows=[['high','low'],['low','low'],['mid','high']],settings=dict(layout='pairs',weights='linear',categories='low,mid,high'),expected='cohenkappa([[1,0,0],[0,0,1],[1,0,0]],linear)'),
+ dict(id='cohenkappa',rows=[['high','low'],['low','low'],['mid','high']],settings=dict(layout='pairs',weights='quadratic',categories='low,mid,high'),expected='cohenkappa([[1,0,0],[0,0,1],[1,0,0]],quadratic)'),
+ dict(id='cohenkappa',rows=[['unused','25','4','2'],['','3','20','5'],['id','1','6','24']],settings=dict(columns='1,2,3',weights='quadratic'),expected='cohenkappa([[25,4,2],[3,20,5],[1,6,24]],quadratic)'),
+ dict(id='dunn',rows=[['A','1',''],['B','2','x'],['A','3',''],['B','4','']],settings=dict(grouping='groups',group='0',value='1',adjustment='bonferroni'),expected='dunn([[1,3],[2,4]],bonferroni)'),
+ dict(id='discriminantanalysis',rows=[['A','1','2',''],['B','4','5','ignored']],settings=dict(response='0',predictors='2,1',method='qda',prior='equal'),expected='discriminantanalysis([[2,1,1],[5,4,2]],qda,equal)'),
+ dict(id='quantreg',rows=[['ID','1','8'],['','2','9']],settings=dict(response='2',predictors='1',quantile='0.25'),expected='quantreg([[1,8],[2,9]],0.25)'),
+ dict(id='zeroinflated',rows=[['ID','1','8'],['','2','9']],settings=dict(response='2',predictors='1',family='nbinom',inflation='same'),expected='zeroinflated([[1,8],[2,9]],nbinom,same)'),
+ dict(id='tobit',rows=[['8','ID','1'],['9','','2']],settings=dict(response='0',predictors='2',lower='none',upper='10'),expected='tobit([[1,8],[2,9]],none,10)'),
+ dict(id='hcluster',rows=[['ID','1','2'],['','3','4']],settings=dict(columns='2,1',clusters='1',linkage='average',standardize='0'),expected='hcluster([[2,1],[4,3]],1,average,0)'),
+])
 (ROOT/'tests/fixtures/statistics_forms.json').write_text(json.dumps(cases,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
 (ROOT/'app/src/main/assets/advanced_statistics.json').write_text(json.dumps(schema,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
 for language in ('','_ko'):
@@ -402,7 +432,8 @@ for language in ('','_ko'):
     text+='\nGLMM: [lme4 adaptive quadrature reference](https://lme4.github.io/lme4/reference/glmer.html).\n'
     text+='\nBayesian Two-Sample Comparison: [Savage-Dickey density ratio and compatible null priors](https://statproofbook.github.io/P/bf-sddr.html).\n'
     text+='\nFactorial linear models: [Type II/III ANOVA and sum contrasts](https://www.statsmodels.org/stable/examples/notebooks/generated/interactions_anova.html). Welch / Games–Howell: [SciPy unequal-variance ANOVA](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.f_oneway.html), [studentized range](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.studentized_range.html). Friedman: [tie-corrected repeated rank test](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.friedmanchisquare.html).\n'
-    text+=('\n세트 사후비교: Kruskal–Wallis는 Mann–Whitney 쌍별 검정 + Holm(별도 쌍 순위이며 Dunn 검정이 아님), Friedman은 대응 Wilcoxon + Holm, 반복측정 ANOVA는 대응 t + Holm을 자동 제공합니다. 반복측정은 대상별 대비의 정규성·Q–Q plot도 점검합니다. 주 검정과 사후비교는 서로 다른 질문에 답합니다.\n' if language else '\nPost-hoc suites: Kruskal–Wallis includes pairwise Mann–Whitney + Holm (separately ranked pairs, not Dunn); Friedman includes paired Wilcoxon + Holm; repeated-measures ANOVA includes paired t + Holm and normality/Q–Q checks on within-subject contrasts. Global and pairwise tests answer different questions.\n')
+    text+=('\n세트 사후비교: Kruskal–Wallis는 전체 평균순위·동점 보정의 양측 Dunn + Holm, Friedman은 대응 Wilcoxon + Holm, 반복측정 ANOVA는 대응 t + Holm을 자동 제공합니다. 반복측정은 대상별 대비의 정규성·Q–Q plot도 점검합니다. 주 검정과 사후비교는 서로 다른 질문에 답합니다.\n' if language else '\nPost-hoc suites: Kruskal–Wallis includes two-sided Dunn + Holm using pooled midranks and tie correction; Friedman includes paired Wilcoxon + Holm; repeated-measures ANOVA includes paired t + Holm and normality/Q–Q checks on within-subject contrasts. Global and pairwise tests answer different questions.\n')
+    text+='\nSocial-science methods: [Dunn pooled-rank comparisons](https://search.r-project.org/CRAN/refmans/rstatix/html/dunn_test.html), [Cohen and weighted kappa](https://www.statsmodels.org/stable/generated/statsmodels.stats.inter_rater.cohens_kappa.html), [CFA covariance ML](https://lavaan.ugent.be/tutorial/cfa.html), [ML N divisor](https://lavaan.ugent.be/tutorial/est.html), [MANOVA](https://www.statsmodels.org/stable/generated/statsmodels.multivariate.manova.MANOVA.html), [quantile regression](https://www.statsmodels.org/stable/generated/statsmodels.regression.quantile_regression.QuantReg.html), [LDA/QDA](https://scikit-learn.org/stable/modules/lda_qda.html).\n'
     text=enrich_help(text,bool(language))
     text+='\nTest selection and diagnostics: [NIST t tests](https://www.itl.nist.gov/div898/handbook/eda/section3/eda353.htm), [Levene/Brown–Forsythe](https://www.itl.nist.gov/div898/handbook/eda/section3/eda35a.htm), [normal probability plots](https://www.itl.nist.gov/div898/handbook/eda/section3/normprpl.htm), [Wilcoxon assumptions](https://docs.scipy.org/doc/scipy/reference/generated/scipy.stats.wilcoxon.html).\n'
     path.write_text(text,encoding='utf-8')

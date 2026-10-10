@@ -251,12 +251,14 @@ internal fun advancedStatisticsRows(data:String,columnLimit:Int?=null,removeComp
                 val roles=when(id) {
                     "cox"->listOf("time","event")
                     "survivalanalysis"->listOf("time","event")+if(option("grouping")=="groups")listOf("group") else emptyList()
-                    "poissonreg","nbreg","glm","multinomial","ordinal","crossvalidate","linearmodel"->listOf("response")
+                    "poissonreg","nbreg","glm","multinomial","ordinal","crossvalidate","linearmodel","discriminantanalysis","quantreg","zeroinflated","tobit"->listOf("response")
+                    "manova"->listOf("group")
+                    "mediation","moderation"->listOf("x","middle","response")
                     "ancova"->listOf("group","response")
                     else->listOf("subject","response")
                 }
                 val offsetRoles=if(id in listOf("poissonreg","nbreg","glmm","glm")&&option("adjustment")!="none"&&(id!="glmm"||option("family")!="binomial"))listOf("offset") else emptyList()
-                val excluded=if(key in listOf("predictors","categorical"))roles+offsetRoles else emptyList()
+                val excluded=if(key in listOf("predictors","categorical","covariates","responses"))roles+offsetRoles else emptyList()
                 val reserved=excluded.mapNotNull {option(it).toIntOrNull()?.let {value->if(value==-1)columns.lastIndex else value}}
                 val selected=if(value=="auto")columns.indices.filter {it !in reserved} else value.split(',').mapNotNull(String::toIntOrNull)
                 StatisticsSelectionTitle(label,translate=false)

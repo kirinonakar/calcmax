@@ -7,14 +7,22 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.*
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.*
 import com.kirinonakar.symvacas.calculator.CalculatorModel
 import com.kirinonakar.symvacas.math.Editor
 import com.kirinonakar.symvacas.ui.theme.LocalInstrument
+import org.json.JSONArray
 
 @Composable internal fun StatisticsAnalysis(m: CalculatorModel,rows:List<List<String>>,kind:String,data:String="",rawRows:List<List<String>> = rows) {
     val c=LocalInstrument.current
+    val context=LocalContext.current
+    val generalDefinitions=remember {context.assets.open("advanced_statistics.json").bufferedReader().use {reader->
+        val schema=JSONArray(reader.readText());List(schema.length()){schema.getJSONObject(it)}.filter {it.getString("section")=="general"}
+    }}
+    fun generalLabel(definition:org.json.JSONObject)=if(definition.getString("id")=="mcnemar")"McNemar" else definition.getString("label")
+    val guidedAnalyses=generalDefinitions.associate {generalLabel(it) to it.getString("id")}
     val expanded=m.statisticsSectionExpanded("analysis")
     var test by rememberSaveable {mutableStateOf("t test")}
     var column by rememberSaveable {mutableStateOf("x")}
@@ -105,16 +113,17 @@ import com.kirinonakar.symvacas.ui.theme.LocalInstrument
     val categories=linkedMapOf(
         "Mean comparisons" to listOf("t test","z test","ANOVA"),
         "Rank & nonparametric tests" to listOf("Wilcoxon","Mann–Whitney","Kruskal–Wallis"),
-        "Categorical data" to listOf("χ² test","Fisher exact","One-sample proportion z test","Two-sample proportion z test","McNemar")
+        "Categorical data" to listOf("χ² test","Fisher exact")
     )
+    for((group,definitions) in generalDefinitions.groupBy {it.getString("group")})categories[group]=categories[group].orEmpty()+definitions.map(::generalLabel)
     val category=categories.entries.firstOrNull {test in it.value}?.key ?: categories.keys.first()
     LaunchedEffect(test){if(categories.values.none {test in it})test="t test"}
     StatisticsSelectionTitle("Category")
     Choices(categories.keys.toList(),category,{test=categories.getValue(it).first()})
     StatisticsSelectionTitle("Analyze")
     Choices(categories.getValue(category),test,{test=it})
-    if(test in listOf("McNemar","One-sample proportion z test","Two-sample proportion z test")) {
-        val analysis=when(test){"McNemar"->"mcnemar";"One-sample proportion z test"->"propztest";else->"propztest2"}
+    if(test in guidedAnalyses) {
+        val analysis=guidedAnalyses.getValue(test)
         key(analysis){AdvancedStatistics(m,data,kind,"general",embedded=true,fixedAnalysis=analysis)}
     } else {
     Text(if(kind.startsWith("columns:"))tr("Blank cells are omitted. Group comparisons use all columns.") else when(kind){"xy"->"Blank cells are omitted. Paired, χ², and Fisher tests use rows with both values; independent tests use each column separately. Fisher requires exactly two categories per column.";"xyz"->"Blank cells are omitted. ANOVA and Tukey HSD use x, y, and z as three independent groups.";else->"Blank cells are omitted from tests. Choose x,y or x,y,z data for group comparisons."},fontSize=12.sp,color=c.muted)

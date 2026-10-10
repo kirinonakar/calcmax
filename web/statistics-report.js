@@ -56,5 +56,11 @@ export function renderStatisticsReport(container,report,{digits=10,onCopy,onClea
     panel.append(block);
   }
   if(!plotsShown)renderStatisticsVisualizations(panel,report.plots);
+  if(report.assumptions?.length){
+    const block=element('section','','statistics-assumptions');
+    block.append(element('h4',t('Assumptions')));
+    for(const assumption of report.assumptions)block.append(element('p',t(assumption),'statistics-interpretation'));
+    panel.append(block);
+  }
   container.append(panel);
 }

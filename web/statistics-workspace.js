@@ -7,6 +7,7 @@ import {statisticsPlot,statisticsPlotPanels} from './statistics-plot.js';
 import {statisticsHeatMapData,statisticsCorrelationHeatMap,statisticsPlotNumber} from './statistics-plot-data.js';
 import {clusteredHeatMap} from './statistics-cluster.js';
 import {createAdvancedStatistics} from './advanced-statistics.js';
+import {advancedStatisticsSchema} from './advanced-statistics-schema.js';
 import {statisticsRequest} from './statistics-request.js';
 import {renderFormulas} from './formula-preview.js';
 import {editableTable} from './editable-table.js';
@@ -40,6 +41,14 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
     $('statistics-plot-type').value='heatmap';state.fields['statistics-plot-type']='heatmap';
     if(oldPlotType==='correlationheatmap')$('statistics-heatmap-mode').value='correlation';
     if(oldPlotType==='clusteredheatmap')$('statistics-heatmap-clustering').checked=true;
+  }
+  const generalDefinitions=advancedStatisticsSchema.filter(item=>item.section==='general');
+  const guidedGeneralIds=new Set(generalDefinitions.map(item=>item.id));
+  const generalMenu=$('statistics-op');
+  for(const definition of generalDefinitions)if(![...generalMenu.options].some(option=>option.value===definition.id)){
+    let group=[...generalMenu.querySelectorAll('optgroup')].find(group=>group.label===definition.group);
+    if(!group){group=element('optgroup');group.label=definition.group;generalMenu.append(group);}
+    const option=element('option',definition.label);option.value=definition.id;group.append(option);
   }
   const menus=Object.fromEntries(['statistics-op','statistics-grouping','regression-kind','regression-response','statistics-plot-type'].map(id=>
     [id,[...$(id).options].map(option=>({option,label:option.textContent,group:option.parentElement.tagName==='OPTGROUP'?option.parentElement.label:''}))]));
@@ -245,7 +254,7 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
     const dataLabels=statisticsColumnLabels(value('statistics-data'),kind).join(', ');
     setText($('statistics-data-label'),kind==='list'?'One value per line':kind==='xy'?t('x, y values').replace('x, y',dataLabels):kind==='xyz'?t('x, y, z values').replace('x, y, z',dataLabels):dataLabels);
     try{$('statistics-samples').textContent=analysisSummary();}catch{setText($('statistics-samples'),'Enter data to see analyzed groups');}
-    const guidedGeneral=['propztest','propztest2','mcnemar'].includes(op);
+    const guidedGeneral=guidedGeneralIds.has(op);
     if(guidedGeneral&&$('statistics-general-kind').value!==op){$('statistics-general-kind').value=op;$('statistics-general-kind').onchange();}
     for(const panel of Object.values(analysisPanels))panel.render();
     $('statistics-basic-controls').hidden=guidedGeneral;

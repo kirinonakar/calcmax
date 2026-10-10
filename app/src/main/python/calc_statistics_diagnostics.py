@@ -11,7 +11,7 @@ from calc_shared import MathError, flatten
 from calc_statistics import _shapiro_wilk, _tail_argument, statistical_test
 from calc_statistics_report import statistics_report
 from calc_advanced_inference import calculate as grouped_test
-from calc_posthoc import posthoc_comparisons, holm_comparisons
+from calc_posthoc import posthoc_comparisons, holm_comparisons, dunn_comparisons
 
 
 def normal_views(values, label):
@@ -99,8 +99,8 @@ def companion_report(report, name, value, inputs, precision, labels=None, residu
         samples=[flatten(group) for group in args if isinstance(group,(list,tuple))]
         if name in ('mannwhitney','kruskal'): notes.append('Rank tests compare distributions. A location or median interpretation requires comparable distribution shapes; independent observations are still required.')
         if name=='kruskal' and len(samples)>2:
-            extras.append(('Mann–Whitney post-hoc (Holm)',holm_comparisons(samples,'mannwhitney',proxy)))
-            notes.append('Rank post-hoc comparisons use separate pairwise ranks and Holm adjustment over all pairs. These are not Dunn tests. Interpret distributions and the study design, not just medians.')
+            extras.append(('Dunn post-hoc (Holm)',dunn_comparisons(samples,proxy)))
+            notes.append('Dunn comparisons retain the pooled ranks and tie-corrected variance of the Kruskal–Wallis sample, with two-sided normal p values and Holm adjustment over all pairs. Interpret distributions and the study design, not just medians.')
     elif name in ('repeatedanova','friedman') and args:
         conditions=[list(column) for column in zip(*args[0])]
         condition_labels={i:labels.get('feature:'+str(i+1),'Condition '+str(i+1)) for i in range(len(conditions))}

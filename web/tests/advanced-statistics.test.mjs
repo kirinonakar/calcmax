@@ -47,3 +47,16 @@ test('ANCOVA and GLM reject invalid roles and links and preserve source labels',
   assert.throws(()=>guidedStatisticsCommand(glm,rows,{predictors:'1',family:'poisson',link:'logit'}),/Invalid analysis option/);
   assert.throws(()=>guidedStatisticsCommand(glm,rows,{predictors:'1',adjustment:'offset',offset:'2'}),/different columns/);
 });
+
+test('weighted kappa requires an explicit shared ordinal category order',()=>{
+  const definition=schema.find(item=>item.id==='cohenkappa');
+  const rows=[['low','mid'],['high','high'],['mid','low']];
+  assert.throws(()=>guidedStatisticsCommand(definition,rows,{layout:'pairs',weights:'quadratic'}),/category order/i);
+  assert.throws(()=>guidedStatisticsCommand(definition,rows,{layout:'pairs',weights:'linear',categories:'low,high'}),/every observed category/);
+  assert.throws(()=>guidedStatisticsCommand(definition,rows,{layout:'pairs',weights:'quadratic',categories:'low,mid,mid,high'}),/exactly once/);
+  const settings={layout:'pairs',weights:'quadratic',categories:'low,mid,high'};
+  assert.equal(guidedStatisticsCommand(definition,rows,settings),'cohenkappa([[0,1,0],[1,0,0],[0,0,1]],quadratic)');
+  assert.deepEqual(advancedStatisticsTermLabels(definition,rows,settings,['Reviewer A','Reviewer B']),{'table:row':'Reviewer A','table:column':'Reviewer B','table:row:1':'low','table:row:2':'mid','table:row:3':'high','table:column:1':'low','table:column:2':'mid','table:column:3':'high'});
+  for(const id of ['mediation','moderation'])assert.throws(()=>guidedStatisticsCommand(schema.find(item=>item.id===id),[['1','2','3']],{response:'0'}),/different columns/);
+  assert.throws(()=>guidedStatisticsCommand(schema.find(item=>item.id==='cfa'),[['1','2','3']],{}),/one positive factor ID/);
+});

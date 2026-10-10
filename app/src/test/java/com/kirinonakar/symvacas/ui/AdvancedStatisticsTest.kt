@@ -8,6 +8,19 @@ import org.json.JSONArray
 import com.kirinonakar.symvacas.math.Parser
 
 class AdvancedStatisticsTest {
+    @Test fun weightedKappaRequiresOrderedSharedCategories() {
+        val schema=JSONArray(File("src/main/assets/advanced_statistics.json").readText())
+        val definition=List(schema.length()){schema.getJSONObject(it)}.first {it.getString("id")=="cohenkappa"}
+        val rows=listOf(listOf("low","mid"),listOf("high","high"),listOf("mid","low"))
+        val settings=JSONObject().put("layout","pairs").put("weights","quadratic")
+        assertTrue(runCatching {guidedStatisticsCommand(definition,rows,settings)}.isFailure)
+        settings.put("categories","low,mid,high")
+        assertEquals("cohenkappa([[0,1,0],[1,0,0],[0,0,1]],quadratic)",guidedStatisticsCommand(definition,rows,settings))
+        val labels=advancedStatisticsTermLabels(definition,rows,settings,listOf("Reviewer A","Reviewer B"))
+        assertEquals("mid",labels["table:column:2"]);assertEquals("Reviewer A",labels["table:row"])
+        settings.put("categories","low,high")
+        assertTrue(runCatching {guidedStatisticsCommand(definition,rows,settings)}.isFailure)
+    }
     @Test fun middlePlotGroupingKeepsHeaderLabelsAndValues() {
         val rows=listOf(listOf("1","Control","2"),listOf("3","Drug","4"),listOf("5","Control","6"))
         val labels=listOf("height (x)","treatment (y)","weight (z)")

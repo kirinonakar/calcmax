@@ -14,10 +14,11 @@ ROOT=Path(__file__).resolve().parents[1]
 class ComparisonTests(unittest.TestCase):
     def test_rank_and_repeated_posthoc_families_use_matched_samples_and_holm(self):
         ref=json.loads((ROOT/'tests/fixtures/statistics_group_reference.json').read_text())
-        for method,title in [('friedman','Wilcoxon post-hoc (Holm)'),('repeatedanova','Paired t post-hoc (Holm)'),('kruskal','Mann–Whitney post-hoc (Holm)')]:
+        for method,title in [('friedman','Wilcoxon post-hoc (Holm)'),('repeatedanova','Paired t post-hoc (Holm)'),('kruskal','Comparisons')]:
             source=method+'('+(str(ref['repeated']) if method!='kruskal' else ','.join(str(sample) for sample in ref['samples']))+')'
             report=evaluate(source)['statisticsReport']
             section=next(section for section in report['sections'] if section['title']==title)
+            if method=='kruskal': self.assertTrue(any(section['title']=='Dunn post-hoc (Holm)' for section in report['sections']))
             for i,row in enumerate(section['rows']):
                 for key,reference in [('Raw p value','raw'),('Adjusted p value','holm')]:
                     self.assertAlmostEqual(float(row[section['columns'].index(key)]['decimal']),ref['posthoc'][method][reference][i],places=12)

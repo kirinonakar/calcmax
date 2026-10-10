@@ -345,7 +345,9 @@ internal val LocalStatisticsCollapseRequest=staticCompositionLocalOf {0}
             val fittedResponseName=regressionColumns.getOrNull(fittedResponse).orEmpty()
         StatisticsSectionToggle("Visualize",visualizeExpanded,"statistics-visualize-toggle") {m.setStatisticsSectionExpanded("visualize",!visualizeExpanded)}
         if(visualizeExpanded) {
-        if(dataKind!="list")Text(if(isKorean())"x 날짜 형식: YYYY-MM-DD, YYYY/MM/DD, YYYY.MM.DD" else "x date formats: YYYY-MM-DD, YYYY/MM/DD, YYYY.MM.DD",fontSize=11.sp,color=LocalInstrument.current.muted)
+            if(dataKind!="list") {
+                Text(if(isKorean())"x 날짜 형식: YYYY-MM-DD, YYYY/MM/DD, YYYY.MM.DD" else "x date formats: YYYY-MM-DD, YYYY/MM/DD, YYYY.MM.DD",fontSize=11.sp,color=LocalInstrument.current.muted)
+            }
             Column(verticalArrangement=Arrangement.spacedBy(2.dp)) {
                 Choices(if(dataKind=="xy")listOf("Scatter","Histogram","Box plot","Violin + points","Heat map") else listOf("Histogram","Box plot","Violin + points","Heat map"),plotType,{plotType=it})
                 if(plotType in listOf("Box plot","Violin + points")) {

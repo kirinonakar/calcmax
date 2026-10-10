@@ -17,10 +17,10 @@ test('all shared analyses have one menu, grouped order, guided forms and local r
   }
   const ids=section=>schema.filter(item=>item.section===section).map(item=>item.id);
   assert.deepEqual(ids('preparation'),['impute']);
-  assert.deepEqual(ids('general'),['propztest','propztest2','mcnemar']);
-  assert.deepEqual(ids('tests'),['shapiro','kstest','levene','bartlett','tukey','gameshowell','twowayanova','ancova','repeatedanova','friedman','cohend','eta2','padjust','tinterval','zinterval']);
-  assert.deepEqual(ids('models'),['linearmodel','glm','poissonreg','nbreg','multinomial','ordinal','mixedmodel','glmm','gee','crossvalidate']);
-  assert.deepEqual(ids('advanced'),['bayesmean','bayescompare','bayesproportion','bayesrate','bootstrapci','bayesbootstrap','pca','kmeans','survivalanalysis','kaplanmeier','logrank','cox','testpower','samplesize']);
+  assert.deepEqual(ids('general'),['propztest','propztest2','mcnemar','cramerv','phi','cohenkappa','cronbach']);
+  assert.deepEqual(ids('tests'),['shapiro','kstest','levene','bartlett','tukey','gameshowell','dunn','twowayanova','ancova','manova','repeatedanova','friedman','cohend','eta2','padjust','tinterval','zinterval']);
+  assert.deepEqual(ids('models'),['linearmodel','glm','poissonreg','nbreg','zeroinflated','tobit','quantreg','multinomial','ordinal','mediation','moderation','mixedmodel','glmm','gee','crossvalidate']);
+  assert.deepEqual(ids('advanced'),['bayesmean','bayescompare','bayesproportion','bayesrate','bootstrapci','bayesbootstrap','efa','cfa','sem','pca','discriminantanalysis','kmeans','hcluster','survivalanalysis','kaplanmeier','logrank','cox','testpower','samplesize']);
   const catalog=readFileSync(new URL('../../app/src/main/java/com/kirinonakar/symvacas/ui/Catalog.kt',import.meta.url),'utf8');
   const advanced=catalog.match(/"Advanced statistics" to listOf\(([^\n]+)\)/)[1];
   assert.ok(!advanced.includes('impute(')&&!advanced.includes('levene(')&&!advanced.includes('glm('));

@@ -1,7 +1,7 @@
 """Public dispatch for portable advanced statistics (binary64 numerics).
 
 Analysis implementations live in the Bayesian, inference, survival, longitudinal,
-regression, resampling and learning modules. calc_advanced_common owns shared
+regression, resampling, learning, survey, SEM and social-science modules. calc_advanced_common owns shared
 validation, numerical tools and SymPy result conversion. Keep this entry point
 shared by calculator expressions and the Python catalog.
 """
@@ -21,10 +21,37 @@ from calc_advanced_ancova import calculate as ancova
 from calc_advanced_factorial import calculate as factorial
 from calc_advanced_glm import calculate as glm
 from calc_proportion_tests import calculate as proportion
+from calc_advanced_survey import calculate as survey
+from calc_advanced_association import calculate as association
+from calc_advanced_multivariate import calculate as multivariate
+from calc_advanced_social import calculate as social
+from calc_advanced_limited import calculate as limited
+from calc_advanced_sem import calculate as sem
+from calc_posthoc import dunn_comparisons
+
+
+def dunn(engine, name, a):
+    return dunn_comparisons(a[0],engine,str(a[1]) if len(a)>1 else 'holm')
 
 
 # Function names, argument limits and handlers share one registry.
 _ANALYSES = {
+    'cronbach': (1, 2, survey),
+    'efa': (1, 3, survey),
+    'cfa': (1, 2, sem),
+    'sem': (2, 3, sem),
+    'manova': (1, 1, multivariate),
+    'mediation': (1, 3, social),
+    'moderation': (1, 1, social),
+    'cramerv': (1, 1, association),
+    'phi': (1, 1, association),
+    'cohenkappa': (1, 2, association),
+    'dunn': (1, 2, dunn),
+    'discriminantanalysis': (1, 4, multivariate),
+    'quantreg': (1, 2, limited),
+    'zeroinflated': (1, 3, limited),
+    'tobit': (1, 3, limited),
+    'hcluster': (1, 4, multivariate),
     'propztest': (2, 4, proportion),
     'propztest2': (2, 5, proportion),
     'ancova': (1, 3, ancova),
