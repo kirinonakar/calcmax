@@ -146,7 +146,7 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
   $('regression-penalty').onchange=()=>{$('regression-kind').onchange();persist();};
   $('regression-response').onchange=()=>{state.fields['regression-response-auto']=false;state.fields['regression-response-choice']=value('regression-response');state.fields['regression-response-position']=Number(value('regression-response'))===0?'first':'last';invalidateRegression();refreshWorkspaceMath();persist();};
   $('regression-custom').hidden=regressionMode()!=='custom';
-  $('regression-clear').onclick=()=>{cancelRegression();statisticsGraph=null;$('regression-caption').replaceChildren();$('regression-inference').replaceChildren();$('regression-export').hidden=true;$('regression-transfer').hidden=true;if(!$('statistics-plot').hidden)$('statistics-plot-run').click();};
+  function clearRegression(){cancelRegression();statisticsGraph=null;$('regression-caption').replaceChildren();$('regression-inference').replaceChildren();$('regression-export').hidden=true;$('regression-transfer').hidden=true;if(!$('statistics-plot').hidden)$('statistics-plot-run').click();}
   $('regression-export').onclick=()=>downloadFile('regression-residuals.csv',regressionResidualCSV(statisticsGraph?.report),'text/csv');
   function statisticsControls(){
     const columns=dataColumns(),kind=dataKind(),columnsMode=value('statistics-kind')==='columns',pairOps=['correlation','ttestpaired','wilcoxon','chi2independence','fisherexact'],multiOps=['ttest2','ztest2','mannwhitney','anova','welchanova','tukey','gameshowell','kruskal'];
@@ -456,5 +456,5 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
   advanced=analysisPanels['statistics-advanced'];
   statisticsControls();
   return {datasetsList,summaryExpression,summaryTermLabels,expression:statisticsExpression,analysisTermLabels,advancedExpression:(panel='statistics-advanced')=>analysisPanels[panel].expression(),advancedContext:(panel='statistics-advanced')=>analysisPanels[panel].context(),showAdvancedResult:(result,context,panel='statistics-advanced')=>analysisPanels[panel]?.showResult(result,context),analysisSummary,render,showRegression,runRegression,
-    clearResult:result=>{if(statisticsGraph?.result===result)$('regression-clear').onclick();for(const panel of Object.values(analysisPanels))panel.clearResult(result);}};
+    clearResult:result=>{if(statisticsGraph?.result===result)clearRegression();for(const panel of Object.values(analysisPanels))panel.clearResult(result);}};
 }

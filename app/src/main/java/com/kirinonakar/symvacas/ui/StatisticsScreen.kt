@@ -423,9 +423,6 @@ internal val LocalStatisticsCollapseRequest=staticCompositionLocalOf {0}
         StatisticsSectionToggle("Regression & models",regressionExpanded,"statistics-regression-toggle") {m.setStatisticsSectionExpanded("regression",!regressionExpanded)}
         if(regressionExpanded) {
             Column(verticalArrangement=Arrangement.spacedBy(2.dp)) {
-                Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
-                    if(dataKind!="list")SmallAction("Clear regression"){m.clearRegression()}
-                }
                 val activeRegression=if(m.regressionFit.isNotBlank()&&m.regressionData==data)when {m.regressionMode.startsWith("randomforest")->"randomforest";m.regressionMode.startsWith("logistic")->"logistic";m.regressionMode in listOf("ridge","lasso","elasticnet")->if(dataColumns.size>2)"multiple" else "linear";else->m.regressionMode} else ""
                 if(dataColumns.size>1)Choices(if(dataKind=="xyz"||dataKind.startsWith("columns:"))listOf("multiple","logistic","randomforest","bayeslinear","bayeslogistic") else listOf("linear","quadratic","polynomial","logarithmic","exponential","power","logistic","randomforest","bayeslinear","bayeslogistic","custom"),if(regularized||regression in listOf("custom","polynomial","randomforest","bayeslinear","bayeslogistic"))regression else activeRegression,{selectedMode->
                     regression=selectedMode;plotType=if(dataKind=="xy")"Scatter" else "Histogram"
