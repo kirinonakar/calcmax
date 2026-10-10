@@ -29,10 +29,11 @@ const runtime=createEngineUI({engine,onChange:updateButtons,onReady:()=>calculat
 graphs=createGraphWorkspace({execute:(request,settings)=>engine.execute(request,settings),options:requestOptions,onError:error,onClearError:()=>{$('answer').querySelector('.error')?.remove();},persist,isBusy:()=>runtime.busy,isReady:()=>engine.ready,saved:state.graph,getColors:()=>graphColorsForTheme(state.graphColors,document.documentElement.dataset.theme)});
 calculator=createCalculator({state,engine,isBusy:()=>runtime.busy,ui,persist,schedulePersist,requestOptions,error,changeMode,updateButtons,graphs,
   onFunctionsChanged:()=>workspaces.renderFunctions(),
+  onResultCleared:result=>workspaces?.clearStatisticsResult(result),
   pressKey:input=>keypad.press(input),modeDialog:()=>dialogs.mode(),variablesDialog:()=>dialogs.variables(),matrixInsertDialog:()=>dialogs.matrixInsert()});
 keypad=createCalculatorKeypad({state,persist,isCalcActive:()=>calculator.calcActive,isBusy:()=>runtime.busy,handleKey:calculator.handleKey,updateButtons});
 workspaces=createWorkspaces({state,engine,ui,persist,restoreSelect:id=>restoreSelect(state,id),requestOptions,isBusy:()=>runtime.busy,error,changeMode,
-  replaceInput:calculator.replaceInput,insert:calculator.insert,evaluate:calculator.evaluate,showResult:calculator.showResult,graphs});
+  replaceInput:calculator.replaceInput,insert:calculator.insert,evaluate:calculator.evaluate,showResult:calculator.showResult,clearResult:calculator.clearResult,graphs});
 dialogs=createAppDialogs({state,ui,persist,calculator,changeMode,pressKey:keypad.press,refreshDisplays,renderMatrix:workspaces.renderMatrix,error});
 
 function updateButtons() {

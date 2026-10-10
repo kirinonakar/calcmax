@@ -30,12 +30,13 @@ import com.kirinonakar.symvacas.calculator.ResultDisplayMode
 import org.json.JSONObject
 import kotlin.math.abs
 
-@Composable internal fun RegressionInference(report:JSONObject,digits:Int,parameterLabels:Map<String,String> = emptyMap(),onCopy:(()->Unit)?=null) {
+@Composable internal fun RegressionInference(report:JSONObject,digits:Int,parameterLabels:Map<String,String> = emptyMap(),onCopy:(()->Unit)?=null,onClear:(()->Unit)?=null,clearEnabled:Boolean=true) {
     val colors=LocalInstrument.current
     val clipboard=LocalClipboardManager.current
     var expanded by remember(report) {mutableStateOf(false)}
     if(onCopy!=null)Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.End) {
-        SmallAction("Copy result",fontSize=12.sp,modifier=Modifier.testTag("statistics-regression-copy")){onCopy()}
+        SmallAction("Copy",fontSize=12.sp,modifier=Modifier.testTag("statistics-regression-copy")){onCopy()}
+        if(onClear!=null)SmallAction("Clear",enabled=clearEnabled,fontSize=12.sp,modifier=Modifier.testTag("statistics-regression-clear")){onClear()}
     }
     fun value(objectValue:JSONObject,key:String):String {
         val raw=objectValue.optString(key).takeUnless {objectValue.isNull(key)||it.isBlank()} ?: return "—"

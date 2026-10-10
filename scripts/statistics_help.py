@@ -16,6 +16,7 @@ GUIDES = [
 ├─ Categories / counts
 │  ├─ Independent categories → χ² independence
 │  │  └─ Sparse 2×2 table → Fisher exact
+│  ├─ One proportion vs a target / two independent proportions → Proportion z test
 │  ├─ Paired binary outcomes → McNemar
 │  └─ Counts vs expected frequencies → χ² goodness of fit
 ├─ Time until an event, with censoring → Survival analysis
@@ -41,6 +42,7 @@ Review shape, outliers and study design:
 ├─ 범주·빈도 자료
 │  ├─ 독립된 범주 간 관계 → χ² 독립성 검정
 │  │  └─ 기대빈도가 작은 2×2 표 → Fisher 정확 검정
+│  ├─ 한 비율 vs 기준 / 독립된 두 비율 → 비율 z 검정
 │  ├─ 대응된 이항 결과 → McNemar
 │  └─ 빈도 vs 기대빈도 → χ² 적합도 검정
 ├─ 중도절단이 있는 사건 발생 시간 → 생존분석
@@ -54,6 +56,8 @@ Review shape, outliers and study design:
 ''']
 
 USES = {
+ 'propztest':('Compare one binary success proportion with a target using a null-based z test.','이항 성공 비율을 귀무가설 기준값과 z 검정으로 비교합니다.'),
+ 'propztest2':('Compare two independent success proportions using a pooled z test.','독립된 두 성공 비율을 합동 z 검정으로 비교합니다.'),
  'linearmodel':('Fit numeric and categorical predictors with automatic interactions and Type II/III joint term F tests; supports one, two, three or more factors.','숫자·범주 설명변수·자동 상호작용을 적합하고 Type II/III 항별 부분 F 검정을 제공합니다. 1·2·3개 이상 요인을 지원합니다.'),
  'twowayanova':('Compare independent observations across two factors, testing both main effects and their interaction.','독립 관측에서 두 요인의 주효과와 상호작용을 함께 비교합니다.'),
  'friedman':('Compare three or more matched conditions by within-subject ranks; chi-square approximation with tie correction.','대상 안의 순위로 3개 이상 대응 조건을 비교하며 동점 보정 χ² 근사를 사용합니다.'),
@@ -121,7 +125,7 @@ ASSUMPTION_GUIDES = [
 - Bartlett: a variance test that is sensitive to non-normality; prefer median-centered Levene / Brown–Forsythe when normality is doubtful.
 
 ### Parametric models do not all require normal observations
-- z tests / z intervals require known population SDs and a normal or suitably approximated sampling distribution of the mean; a sample SD alone is insufficient.
+- Mean z tests / z intervals require known population SDs and a normal or suitably approximated sampling distribution of the mean; a sample SD alone is insufficient.
 - Binomial logistic, multinomial and ordinal models use categorical likelihoods; Poisson / negative-binomial models use count likelihoods. Check the chosen family, link, dispersion, design and model diagnostics instead of demanding normal outcomes.
 - GEE uses a mean/variance model and working correlation for clusters; it does not require normal raw outcomes. A robust covariance does not resolve very few clusters or a misspecified mean model.
 - GLMM assumptions follow its selected family and random effects. Bayesian proportion / Poisson rate models use binomial / Poisson likelihoods.
@@ -154,7 +158,7 @@ ASSUMPTION_GUIDES = [
 - Bartlett: 비정규성에 민감한 분산 검정입니다. 정규성이 의심되면 중앙값 기준 Levene·Brown–Forsythe를 우선 검토하세요.
 
 ### 모수 방법이라고 모두 원자료의 정규성이 필요한 것은 아닙니다
-- z 검정·z 구간: 알려진 모집단 표준편차와 평균의 정규 또는 적절히 근사된 표집분포가 필요합니다. 표본 표준편차만으로는 조건을 충족하지 못합니다.
+- 평균 z 검정·z 구간: 알려진 모집단 표준편차와 평균의 정규 또는 적절히 근사된 표집분포가 필요합니다. 표본 표준편차만으로는 조건을 충족하지 못합니다.
 - 이항 로지스틱·다항·순서형 모형은 범주 우도, 포아송·음이항 모형은 빈도 우도를 사용합니다. 반응값의 정규성 대신 분포족·연결함수·과산포·연구 설계·모형 진단을 확인하세요.
 - GEE는 군집의 평균·분산 모형과 작업상관을 사용하며 원자료의 정규성이 필수는 아닙니다. 강건 공분산도 극소수 군집이나 잘못된 평균 모형을 해결하지 못합니다.
 - GLMM은 선택한 분포족·랜덤효과의 가정을 확인합니다. 베이지안 비율·발생률은 각각 이항·포아송 우도를 사용합니다.

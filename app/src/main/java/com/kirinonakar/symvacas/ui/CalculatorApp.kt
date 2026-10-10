@@ -265,7 +265,8 @@ internal fun largeHistoryTree(root:JSONObject?):Boolean {
             val text=statisticsCopyResult?.let {statisticsResultCopyText(m,it,language)} ?: copyTarget.text
             if(text.isNotBlank())clipboard.setText(AnnotatedString(text))
             if(selection.isEmpty())copyExpression=copyTarget.expressionNext
-        },enabled=showInput||copyTarget.text.isNotBlank(),modifier=Modifier.height(36.dp),contentPadding=PaddingValues(horizontal=8.dp)){Text(if(!showInput)if(isKorean())"결과 복사" else "Copy result" else if(selection.isNotEmpty())"Copy" else copyTarget.label,fontSize=11.sp)}
+        },enabled=showInput||copyTarget.text.isNotBlank(),modifier=Modifier.height(36.dp),contentPadding=PaddingValues(horizontal=8.dp)){Text(if(!showInput)tr("Copy") else if(selection.isNotEmpty())"Copy" else copyTarget.label,fontSize=11.sp)}
+        if(!showInput)TextButton(onClick={m.clearStatisticsResult()},enabled=m.result!=null&&!m.busy&&!m.regressionBusy,modifier=Modifier.height(36.dp).testTag("statistics-output-clear"),contentPadding=PaddingValues(horizontal=8.dp)){Text(tr("Clear"),fontSize=11.sp)}
         if(showInput)TextButton(onClick={clipboard.getText()?.text?.let{if(m.calcSession!=null)m.insertCalcValue(it)else m.insert(it)}},modifier=Modifier.height(36.dp),contentPadding=PaddingValues(horizontal=8.dp)){Text("Paste",fontSize=11.sp)}
         if(showInput&&m.calcSession==null)TextButton(onClick=onToggleTyping,modifier=Modifier.height(36.dp),contentPadding=PaddingValues(horizontal=8.dp)){Text(if(typing)"Math input" else "Keyboard",fontSize=11.sp)}
     }

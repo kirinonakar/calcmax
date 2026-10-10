@@ -50,6 +50,12 @@ def companion_report(report, name, value, inputs, precision, labels=None, residu
         args=_tail_argument(args,nodes)[1]
     samples=[]; notes=[]; extras=[]; diagnostics=[]
     normality=False; variance=False
+    if name in ('propztest','propztest2'):
+        notes.append('Proportion z tests assume independent binary observations and use a normal approximation without continuity correction. Expected successes and failures are checked under the null hypothesis.')
+        if name=='propztest2':
+            notes.append('The two-sample test uses the pooled proportion under H0: pA = pB. The alternative refers to A − B; paired binary outcomes require McNemar.')
+        if any(row['Status']=='Small expected counts (< 10)' for row in value['Normal approximation checks']):
+            notes.append('Expected successes or failures are below 10; the normal approximation may be inaccurate. Consider an exact binomial test for one sample or Fisher exact for two independent samples.')
     if name in ('ttest','tinterval'):
         if len(args)==2 and isinstance(args[1],(list,tuple)): samples=[flatten(args[1])]
         normality=True

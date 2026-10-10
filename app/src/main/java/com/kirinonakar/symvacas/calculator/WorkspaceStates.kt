@@ -225,6 +225,22 @@ internal class GraphState(private val prefs:SharedPreferences) {
 
 /** Statistics datasets and regression work share the backed-up calculator.xml file. */
 internal class StatisticsState(private val prefs:SharedPreferences) {
+    private var sectionExpansion by mutableStateOf(prefs.jsonObject("statisticsSectionExpansion"))
+
+    fun sectionExpanded(section:String):Boolean = sectionExpansion.opt(section) as? Boolean ?: (section=="summary")
+
+    fun setSectionExpanded(section:String,expanded:Boolean) {
+        sectionExpansion=JSONObject(sectionExpansion.toString()).put(section,expanded)
+        prefs.edit().putString("statisticsSectionExpansion",sectionExpansion.toString()).apply()
+    }
+
+    fun collapseSections() {
+        val next=JSONObject(sectionExpansion.toString())
+        for(section in listOf("summary","visualize","regression","analysis","preparation","models","tests","advanced"))next.put(section,false)
+        sectionExpansion=next
+        prefs.edit().putString("statisticsSectionExpansion",next.toString()).apply()
+    }
+
     var dataSets by mutableStateOf(prefs.jsonObject("dataSets"))
     var regressionCurve by mutableStateOf(loadRegressionCurve())
     var regressionFit by mutableStateOf(prefs.getString("regressionFit","") ?: "")
@@ -320,7 +336,7 @@ internal class StatisticsState(private val prefs:SharedPreferences) {
     fun clearRegression() {regressionCurve=emptyList();regressionFit="";regressionData="";regressionMode="";regressionCorrelation=null;regressionParameters=emptyList();regressionReport=null;regressionResponseColumn=null;regressionBusy=false}
 
     fun writeTo(editor:SharedPreferences.Editor) {
-        editor.putString("dataSets",dataSets.toString())
+        editor.putString("statisticsSectionExpansion",sectionExpansion.toString()).putString("dataSets",dataSets.toString())
             .putBoolean("statisticsAutoColumns",statisticsAutoColumns)
             .putString("statisticsPlotOrientation",statisticsPlotOrientation)
             .putString("statisticsName",statisticsName).putString("statisticsData",statisticsData).putString("statisticsKind",statisticsKind)

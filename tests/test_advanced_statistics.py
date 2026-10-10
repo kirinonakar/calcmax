@@ -71,7 +71,7 @@ class AdvancedStatisticsTests(unittest.TestCase):
     def test_advanced_analyses_reject_invalid_arity_and_data(self):
         with self.subTest(scenario='registered_analyses_reject_missing_and_excess_arguments'):
             definitions=json.loads((ROOT/'app/src/main/assets/advanced_statistics.json').read_text(encoding='utf-8'))
-            self.assertEqual(FUNCTIONS,{item['id'] for item in definitions if item['id'] not in ('shapiro','tukey','gameshowell')})
+            self.assertEqual(FUNCTIONS,{item['id'] for item in definitions if item['id'] not in ('shapiro','tukey','gameshowell','tinterval','zinterval')})
             for name in FUNCTIONS:
                 for args in ([],[s.Integer(0)]*21):
                     with self.subTest(function=name,count=len(args)):

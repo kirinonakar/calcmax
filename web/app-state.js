@@ -18,6 +18,7 @@ export function createAppState(saved={},browserLanguage='en') {
     precision:Math.max(3,Math.min(200,Math.trunc(Number(saved.precision))||30)),
     digits:Math.max(2,Math.min(200,Math.trunc(Number(saved.precision))||30,Math.trunc(Number(saved.digits))||10)),
     fields:{...objectOrEmpty(saved.fields)},
+    statisticsSections:{...objectOrEmpty(saved.statisticsSections)},
     graph:{...objectOrEmpty(saved.graph)},
     graphColors:normalizeGraphColors(saved.graphColors,saved.graphColorsVersion!==2),
     graphColorsVersion:2,
@@ -61,6 +62,10 @@ export function createAppState(saved={},browserLanguage='en') {
 }
 
 export function restoreFields(state) {
+  for(const section of document.querySelectorAll('details.statistics-section[id]')) {
+    const expanded=state.statisticsSections[section.id];
+    if(typeof expanded==='boolean')section.open=expanded;
+  }
   for(const [id,setting] of Object.entries(state.fields)) {
     const field=$(id);
     if(!field || field.closest('dialog')) continue;
@@ -79,6 +84,7 @@ export function createPersistence({state,snapshot,onPersist,toast}) {
   function persist() {
     clearTimeout(saveTimer);saveTimer=null;
     const functionsChanged=removeExpiredAnswerFunctions(state.functions,state.variables.Ans);
+    for(const section of document.querySelectorAll('details.statistics-section[id]'))state.statisticsSections[section.id]=section.open;
     for(const field of document.querySelectorAll('main input[id],main textarea[id],main select[id],.mode-bar select[id]'))state.fields[field.id]=field.type==='checkbox'?field.checked:field.value;
     const draft=snapshot();
     state.fields.expression=draft.expression;

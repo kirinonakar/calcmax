@@ -21,7 +21,7 @@ export function regressionGraphSource(source,digits=10,variable='x') {
   return astSource(rounded(parse(latexInput(source))));
 }
 
-export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorkspaceMath,storeExpression,error,changeMode,replaceInput,graphs,onSummary}) {
+export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorkspaceMath,storeExpression,error,changeMode,replaceInput,graphs,clearResult,onSummary}) {
   const {toast,pickFile,openDialog}=ui;
   let statisticsGraph=null;
   let advanced=null,summaryOp="stats";
@@ -56,7 +56,8 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
   function invalidateRegression(){cancelClustering();cancelRegression();statisticsGraph=null;$('regression-caption').replaceChildren();$('regression-inference').replaceChildren();$('regression-export').hidden=true;$('regression-transfer').hidden=true;$('statistics-plot').replaceChildren();$('statistics-plot').hidden=true;}
   function regressionBusy(busy){$('regression-section').setAttribute('aria-busy',String(busy));}
   function cancelRegression(){if(!regressionRun)return;regressionRun=null;regressionBusy(false);engine.cancel();}
-  $('statistics-collapse-all').onclick=()=>{for(const details of document.querySelectorAll('.workspace[data-mode="statistics"] details[open]'))details.open=false;};
+  for(const details of document.querySelectorAll('details.statistics-section[id]'))details.addEventListener('toggle',persist);
+  $('statistics-collapse-all').onclick=()=>{for(const details of document.querySelectorAll('.workspace[data-mode="statistics"] details[open]'))details.open=false;persist();};
   $('statistics-new').onclick=()=>{
     cancelRegression();$('statistics-data').value='';$('dataset-name').value='';$('dataset-list').value='';
     dataKindChange();$('statistics-plot').hidden=true;persist();
@@ -244,9 +245,11 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
     const dataLabels=statisticsColumnLabels(value('statistics-data'),kind).join(', ');
     setText($('statistics-data-label'),kind==='list'?'One value per line':kind==='xy'?t('x, y values').replace('x, y',dataLabels):kind==='xyz'?t('x, y, z values').replace('x, y, z',dataLabels):dataLabels);
     try{$('statistics-samples').textContent=analysisSummary();}catch{setText($('statistics-samples'),'Enter data to see analyzed groups');}
+    const guidedGeneral=['propztest','propztest2','mcnemar'].includes(op);
+    if(guidedGeneral&&$('statistics-general-kind').value!==op){$('statistics-general-kind').value=op;$('statistics-general-kind').onchange();}
     for(const panel of Object.values(analysisPanels))panel.render();
-    $('statistics-basic-controls').hidden=op==='mcnemar';
-    $('statistics-general').hidden=op!=='mcnemar';
+    $('statistics-basic-controls').hidden=guidedGeneral;
+    $('statistics-general').hidden=!guidedGeneral;
     updateLineNumbers();
   }
   function updateHeatMapAxis(id,names,rows,excluded=new Set()){
@@ -344,10 +347,16 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
     $('statistics-table-toggle').setAttribute('aria-pressed',String(tableMode));
   };
   $('statistics-add-row').onclick=()=>{try{const rows=editorRows(),columns=Math.max(dataColumns(),rows[0]?.length||0);rows.push(Array(columns).fill(''));writeRows(rows);if(!$('statistics-grid').hidden)statisticsGrid();}catch(exc){error(exc.message);}};
-  $('statistics-editor-expand').onclick=()=>{
-    const expanded=$('statistics-editor').classList.toggle('expanded');
+  function setEditorExpanded(expanded){
+    $('statistics-editor').classList.toggle('expanded',expanded);
     setText($('statistics-editor-expand'),expanded?'Collapse':'Expand');
     $('statistics-editor-expand').setAttribute('aria-pressed',String(expanded));
+  }
+  setEditorExpanded(state.statisticsSections['statistics-editor']===true);
+  $('statistics-editor-expand').onclick=()=>{
+    const expanded=!$('statistics-editor').classList.contains('expanded');
+    setEditorExpanded(expanded);
+    state.statisticsSections['statistics-editor']=expanded;persist();
   };
   $('statistics-data').addEventListener('input',()=>{invalidateRegression();statisticsControls();});
   $('statistics-data').addEventListener('scroll',syncLineNumberScroll);
@@ -404,7 +413,7 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
   function render(){statisticsControls();if(!$('statistics-grid').hidden)statisticsGrid();if(statisticsGraph){drawStatisticsGraph();if(statisticsGraph.captions)renderFormulas($('regression-caption'),statisticsGraph.captions,{digits:state.digits});for(const [name,n] of statisticsGraph.parameters||[])$('regression-caption').append(element('span',`${regressionParameterName(name,statisticsGraph.parameterLabels)} = ${roundNumber(String(n),state.digits)}`,'regression-parameter'));
     const snapshot=statisticsGraph.result;
     const copyOptions={digits:state.digits,regressionVariables:statisticsGraph.regressionVariables,regressionPrefix:statisticsGraph.regressionPrefix};
-    renderRegressionReport($('regression-inference'),statisticsGraph.report,state.digits,statisticsGraph.parameterLabels,{onCopy:snapshot?()=>ui.clipboard(statisticsResultMarkdown(snapshot,copyOptions)):null});}}
+    renderRegressionReport($('regression-inference'),statisticsGraph.report,state.digits,statisticsGraph.parameterLabels,{onCopy:snapshot?()=>ui.clipboard(statisticsResultMarkdown(snapshot,copyOptions)):null,onClear:snapshot?()=>clearResult(snapshot):null});}}
   function showRegression(result) {
     const rows=numericStatisticsRows(dataRows()),names=statisticsColumnNames(dataColumns()),logistic=(regressionMode().startsWith('logistic')||regressionMode()==='bayeslogistic');
     const response=['multiple','logistic','polynomial','ridge','lasso','elasticnet','logisticridge','logisticlasso','logisticelasticnet','randomforest','randomforestclassifier','randomforestregressor','bayeslinear','bayeslogistic'].includes(regressionMode())?Number(value('regression-response')):names.length-1,predictors=names.filter((_,i)=>i!==response);
@@ -439,12 +448,13 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
     }catch(exc){if(regressionRun===run)error(exc.message);}
     finally{if(regressionRun===run){regressionRun=null;regressionBusy(false);}}
   }
-  for(const section of ['preparation','general','tests','models','advanced'])analysisPanels[`statistics-${section}`]=createAdvancedStatistics({state,persist,data:()=>value('statistics-data'),columnLimit:()=>dataColumns(),copy:ui.clipboard,section,applyData:updated=>{
+  for(const section of ['preparation','general','tests','models','advanced'])analysisPanels[`statistics-${section}`]=createAdvancedStatistics({state,persist,data:()=>value('statistics-data'),columnLimit:()=>dataColumns(),copy:ui.clipboard,clearResult,section,applyData:updated=>{
     $('statistics-data').value=updated;const selected=value('dataset-list');
     if(selected&&selected===value('dataset-name')&&Object.hasOwn(state.datasets,selected))state.datasets[selected]=updated;
     dataKindChange();persist();toast(t('Missing values applied to current data'));
   }});
   advanced=analysisPanels['statistics-advanced'];
   statisticsControls();
-  return {datasetsList,summaryExpression,summaryTermLabels,expression:statisticsExpression,analysisTermLabels,advancedExpression:(panel='statistics-advanced')=>analysisPanels[panel].expression(),advancedContext:(panel='statistics-advanced')=>analysisPanels[panel].context(),showAdvancedResult:(result,context,panel='statistics-advanced')=>analysisPanels[panel]?.showResult(result,context),analysisSummary,render,showRegression,runRegression};
+  return {datasetsList,summaryExpression,summaryTermLabels,expression:statisticsExpression,analysisTermLabels,advancedExpression:(panel='statistics-advanced')=>analysisPanels[panel].expression(),advancedContext:(panel='statistics-advanced')=>analysisPanels[panel].context(),showAdvancedResult:(result,context,panel='statistics-advanced')=>analysisPanels[panel]?.showResult(result,context),analysisSummary,render,showRegression,runRegression,
+    clearResult:result=>{if(statisticsGraph?.result===result)$('regression-clear').onclick();for(const panel of Object.values(analysisPanels))panel.clearResult(result);}};
 }

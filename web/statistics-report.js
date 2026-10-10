@@ -13,11 +13,12 @@ export function statisticsReportTarget(result,source='',requested=''){
   return !definition&&basicAnalyses.has(analysis)?'statistics-analysis-result':`statistics-${definition?.section||'advanced'}-result`;
 }
 
-export function renderStatisticsReport(container,report,{digits=10,onCopy,...options}={}){
+export function renderStatisticsReport(container,report,{digits=10,onCopy,onClear,...options}={}){
   container.replaceChildren();
   const panel=element('div','','statistics-result-report');
   const heading=element('div','','statistics-result-heading');heading.append(element('h3',t(report.title)));
-  if(onCopy)heading.append(control('Copy result',onCopy));panel.append(heading);
+  if(onCopy)heading.append(control('Copy',onCopy));
+  if(onClear)heading.append(control('Clear',onClear));panel.append(heading);
   if(report.highlights?.length){
     const cards=element('div','','statistics-highlights');
     for(const item of report.highlights){const card=element('div','','statistics-highlight');card.append(element('span',t(item.label)),resultMathDisplay(resultDisplayTree(item.value,{decimal:true,mixed:false}),digits,true,options));cards.append(card);}

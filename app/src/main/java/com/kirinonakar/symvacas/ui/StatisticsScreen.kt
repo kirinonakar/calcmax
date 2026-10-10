@@ -117,9 +117,9 @@ internal val LocalStatisticsCollapseRequest=staticCompositionLocalOf {0}
     val scope=rememberCoroutineScope()
     val panelScroll=rememberScrollState()
     var collapseRequest by rememberSaveable {mutableIntStateOf(0)}
-    var summaryExpanded by rememberSaveable {mutableStateOf(true)}
-    var visualizeExpanded by rememberSaveable {mutableStateOf(true)}
-    var regressionExpanded by rememberSaveable {mutableStateOf(true)}
+    val summaryExpanded=m.statisticsSectionExpanded("summary")
+    val visualizeExpanded=m.statisticsSectionExpanded("visualize")
+    val regressionExpanded=m.statisticsSectionExpanded("regression")
     val names=remember(m.dataSets) {m.dataSets.keys().asSequence().toList().sorted()}
     var selected by rememberSaveable {mutableStateOf(m.statisticsSelected)}
     var isNew by rememberSaveable {mutableStateOf(m.statisticsIsNew)}
@@ -175,7 +175,7 @@ internal val LocalStatisticsCollapseRequest=staticCompositionLocalOf {0}
     var heatMapLinkage by rememberSaveable {mutableStateOf("average")}
     var heatMapMetric by rememberSaveable {mutableStateOf("euclidean")}
     var csv by rememberSaveable {mutableStateOf(m.statisticsCsv)}
-    var editorExpanded by rememberSaveable {mutableStateOf(false)}
+    val editorExpanded=m.statisticsSectionExpanded("editor")
     var importPreview by remember {mutableStateOf<StatisticsCsvImport?>(null)}
     var importSheets by remember {mutableStateOf<List<StatisticsXlsxSheet>?>(null)}
     val importCsv=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) {uri->
@@ -263,7 +263,7 @@ internal val LocalStatisticsCollapseRequest=staticCompositionLocalOf {0}
             SmallAction(if(csv)"Table editor" else "Direct input"){csv=!csv}
             SmallAction("Add row"){if(parsedRows.size<999)data+="\n"+",".repeat(dataColumns.size-1)}
             val editorStateDescription=tr(if(editorExpanded)"Expanded" else "Collapsed")
-            SmallAction(if(editorExpanded)"Collapse" else "Expand",modifier=Modifier.testTag("statistics-editor-expand").semantics {stateDescription=editorStateDescription}) {editorExpanded=!editorExpanded}
+            SmallAction(if(editorExpanded)"Collapse" else "Expand",modifier=Modifier.testTag("statistics-editor-expand").semantics {stateDescription=editorStateDescription}) {m.setStatisticsSectionExpanded("editor",!editorExpanded)}
         }
         if(csv)StatDirectInput(data,{updated->data=normalizeStatisticsMarkdownPaste(data,updated)?:updated},if(dataKind=="list")tr("One value per line") else statisticsTableColumnLabels(data,dataKind).joinToString(", ")+(if(dataKind=="xy"||dataKind=="xyz")(if(isKorean())" 값" else " values") else ""),editorExpanded)
         else {
@@ -324,7 +324,7 @@ internal val LocalStatisticsCollapseRequest=staticCompositionLocalOf {0}
                 }
             }
         }
-        StatisticsSectionToggle("Quick summaries",summaryExpanded,"statistics-summary-toggle") {summaryExpanded=!summaryExpanded}
+        StatisticsSectionToggle("Quick summaries",summaryExpanded,"statistics-summary-toggle") {m.setStatisticsSectionExpanded("summary",!summaryExpanded)}
         if(summaryExpanded)Column(verticalArrangement=Arrangement.spacedBy(2.dp)) {
             Row(Modifier.horizontalScroll(rememberScrollState())) {
                 fun summarize(command:String,columnIndex:Int=0) {m.calculationAction="statistics-summary";m.edit(Editor(command));m.calculate(statisticsTermLabels=mapOf("sample:1" to statisticsColumnLabels(data,dataKind)[columnIndex]))}
@@ -343,7 +343,7 @@ internal val LocalStatisticsCollapseRequest=staticCompositionLocalOf {0}
             val fittedVariables=statisticsRegressionVariables(dataKind,fittedResponse)
             val parameterLabels=statisticsRegressionParameterLabels(dataKind,m.regressionMode,fittedResponse,data)
             val fittedResponseName=regressionColumns.getOrNull(fittedResponse).orEmpty()
-        StatisticsSectionToggle("Visualize",visualizeExpanded,"statistics-visualize-toggle") {visualizeExpanded=!visualizeExpanded}
+        StatisticsSectionToggle("Visualize",visualizeExpanded,"statistics-visualize-toggle") {m.setStatisticsSectionExpanded("visualize",!visualizeExpanded)}
         if(visualizeExpanded) {
         if(dataKind!="list")Text(if(isKorean())"x 날짜 형식: YYYY-MM-DD, YYYY/MM/DD, YYYY.MM.DD" else "x date formats: YYYY-MM-DD, YYYY/MM/DD, YYYY.MM.DD",fontSize=11.sp,color=LocalInstrument.current.muted)
             Column(verticalArrangement=Arrangement.spacedBy(2.dp)) {
@@ -420,7 +420,7 @@ internal val LocalStatisticsCollapseRequest=staticCompositionLocalOf {0}
             }
             if(dateAxis!=null&&plotType=="Scatter")Text((if(isKorean())"회귀식의 x: ${dateAxis.origin.plusDays(1)} = 1일째" else "Regression x: ${dateAxis.origin.plusDays(1)} = day 1"),fontSize=11.sp,color=LocalInstrument.current.muted)
         }
-        StatisticsSectionToggle("Regression & models",regressionExpanded,"statistics-regression-toggle") {regressionExpanded=!regressionExpanded}
+        StatisticsSectionToggle("Regression & models",regressionExpanded,"statistics-regression-toggle") {m.setStatisticsSectionExpanded("regression",!regressionExpanded)}
         if(regressionExpanded) {
             Column(verticalArrangement=Arrangement.spacedBy(2.dp)) {
                 Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
@@ -569,7 +569,9 @@ internal val LocalStatisticsCollapseRequest=staticCompositionLocalOf {0}
                     m.regressionReport?.let {report->
                         val language=LocalLanguage.current
                         val result=remember(report,m.result,m.history){regressionResultForCopy(m.result,m.history,report)}
-                        RegressionInference(report,m.displayDigits,parameterLabels,onCopy=result?.let {snapshot->{
+                        RegressionInference(report,m.displayDigits,parameterLabels,onClear={
+                            if(result!=null)m.clearStatisticsResult(result) else m.clearRegression()
+                        },clearEnabled=!m.busy&&!m.regressionBusy,onCopy=result?.let {snapshot->{
                             val prefix=if(m.regressionMode.startsWith("logistic")||m.regressionMode=="bayeslogistic")"P($fittedResponseName = 1) = " else "$fittedResponseName = "
                             clipboard.setText(AnnotatedString(statisticsResultCopyText(m,snapshot,language,fittedVariables,prefix)))
                         }})
@@ -605,7 +607,7 @@ internal val LocalStatisticsCollapseRequest=staticCompositionLocalOf {0}
         Display(m,requestInitialFocus=false,showInput=false)
         }
     }
-    FilledTonalButton(onClick={summaryExpanded=false;visualizeExpanded=false;regressionExpanded=false;collapseRequest++},
+    FilledTonalButton(onClick={m.collapseStatisticsSections();collapseRequest++},
         modifier=Modifier.align(Alignment.TopEnd).padding(top=8.dp,end=8.dp).testTag("statistics-collapse-all"),
         elevation=ButtonDefaults.filledTonalButtonElevation(defaultElevation=4.dp)) {Text(tr("Collapse all"),fontSize=12.sp)}
     }

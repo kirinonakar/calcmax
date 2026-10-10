@@ -1,5 +1,148 @@
 [
   {
+    "id": "propztest",
+    "rows": [
+      [
+        "yes"
+      ],
+      [
+        "no"
+      ],
+      [
+        "yes"
+      ]
+    ],
+    "settings": {
+      "layout": "binary",
+      "successValue": "yes",
+      "p0": "0.4",
+      "tail": "right"
+    },
+    "expected": "propztest(0.4,[1,0,1],right)"
+  },
+  {
+    "id": "propztest",
+    "rows": [
+      [
+        "60",
+        "100"
+      ],
+      [
+        "12",
+        "20"
+      ]
+    ],
+    "settings": {},
+    "expected": "propztest(0.5,[[60,100],[12,20]])"
+  },
+  {
+    "id": "propztest2",
+    "rows": [
+      [
+        "60",
+        "100"
+      ],
+      [
+        "45",
+        "100"
+      ]
+    ],
+    "settings": {
+      "tail": "left"
+    },
+    "expected": "propztest2(60,100,45,100,left)"
+  },
+  {
+    "id": "propztest2",
+    "rows": [
+      [
+        "yes",
+        "no"
+      ],
+      [
+        "yes",
+        "yes"
+      ],
+      [
+        "no",
+        ""
+      ]
+    ],
+    "settings": {
+      "layout": "binary",
+      "successValue": "yes"
+    },
+    "expected": "propztest2([1,1,0],[0,1])"
+  },
+  {
+    "id": "propztest2",
+    "rows": [
+      [
+        "A",
+        "yes"
+      ],
+      [
+        "B",
+        "no"
+      ],
+      [
+        "A",
+        "no"
+      ],
+      [
+        "B",
+        "no"
+      ]
+    ],
+    "settings": {
+      "layout": "binary",
+      "grouping": "groups",
+      "successValue": "yes"
+    },
+    "expected": "propztest2([1,0],[0,0])"
+  },
+  {
+    "id": "tinterval",
+    "rows": [
+      [
+        "unused",
+        "1"
+      ],
+      [
+        "ignored",
+        "2"
+      ],
+      [
+        "",
+        "4"
+      ]
+    ],
+    "settings": {
+      "column": "1",
+      "level": "90"
+    },
+    "expected": "tinterval(90,[1,2,4])"
+  },
+  {
+    "id": "zinterval",
+    "rows": [
+      [
+        "1"
+      ],
+      [
+        "2"
+      ],
+      [
+        "4"
+      ]
+    ],
+    "settings": {
+      "level": "99",
+      "sigma": "3"
+    },
+    "expected": "zinterval(99,3,[1,2,4])"
+  },
+  {
     "id": "mcnemar",
     "rows": [
       [

@@ -60,7 +60,7 @@ internal fun advancedStatisticsRows(data:String,columnLimit:Int?=null,removeComp
     return if(statisticsHasHeader(rectangular)&&rectangular.first().none {it=="NA"})rectangular.drop(1) else rectangular
 }
 
-@Composable internal fun AdvancedStatistics(m:CalculatorModel,data:String,kind:String,section:String="advanced",title:String="Advanced analysis",onDataApplied:((String)->Unit)?=null,embedded:Boolean=false) {
+@Composable internal fun AdvancedStatistics(m:CalculatorModel,data:String,kind:String,section:String="advanced",title:String="Advanced analysis",onDataApplied:((String)->Unit)?=null,embedded:Boolean=false,fixedAnalysis:String?=null) {
     val context=LocalContext.current
     val schema=remember {context.assets.open("advanced_statistics.json").bufferedReader().use {JSONArray(it.readText())}}
     val definitions=remember(section) {List(schema.length()){schema.getJSONObject(it)}.filter {it.getString("section")==section}}
@@ -68,13 +68,14 @@ internal fun advancedStatisticsRows(data:String,columnLimit:Int?=null,removeComp
     val panels=m.advancedStatisticsDraft.optJSONObject("panels")
     val moved=panels?.optJSONObject("tests")?.takeIf {section=="general"&&it.optString("kind")=="mcnemar"}
     val savedDraft=panels?.optJSONObject(section) ?: moved ?: legacy ?: JSONObject()
-    val draft=if(savedDraft.optString("kind").isBlank()||definitions.any {it.getString("id")==savedDraft.optString("kind")})savedDraft
+    val draft=if(fixedAnalysis!=null&&savedDraft.optString("kind")!=fixedAnalysis)JSONObject().put("forms",savedDraft.optJSONObject("forms") ?: JSONObject())
+        else if(savedDraft.optString("kind").isBlank()||definitions.any {it.getString("id")==savedDraft.optString("kind")})savedDraft
         else JSONObject().put("forms",savedDraft.optJSONObject("forms") ?: JSONObject())
     val ko=isKorean()
     val collapseRequest=LocalStatisticsCollapseRequest.current
     val nested=section!="advanced"&&!embedded
-    var expanded by rememberSaveable {mutableStateOf(section!="preparation"&&collapseRequest==0)}
-    var selected by rememberSaveable {mutableStateOf(draft.optString("kind",definitions.first().getString("id")))}
+    val expanded=m.statisticsSectionExpanded(section)
+    var selected by rememberSaveable {mutableStateOf(fixedAnalysis ?: draft.optString("kind",definitions.first().getString("id")))}
     val definition=definitions.firstOrNull {it.getString("id")==selected} ?: definitions.first()
     var source by rememberSaveable {mutableStateOf(draft.optString("source",definition.getString("example")))}
     var input by rememberSaveable {mutableStateOf(draft.optString("input",if(definition.has("controls")&&source==definition.getString("example"))if(data.isBlank()||definition.getString("input")=="none")"example" else "current" else "expression"))}
@@ -118,14 +119,17 @@ internal fun advancedStatisticsRows(data:String,columnLimit:Int?=null,removeComp
         m.updateAdvancedStatisticsDraft(next.put("panels",panels))
     }
     LaunchedEffect(selected,source,input,formsText,data) {survivalReport=null;survivalCopyResult=null;pending=false}
+    LaunchedEffect(m.clearedStatisticsResult) {
+        if(survivalCopyResult!=null&&m.clearedStatisticsResult===survivalCopyResult){survivalReport=null;survivalCopyResult=null;reportPlan=null;pending=false}
+    }
     LaunchedEffect(m.result,m.busy) {
         if(pending&&!m.busy&&m.result!=null&&m.result!==previousResult){survivalReport=m.result?.optJSONObject("survival");survivalCopyResult=m.result?.takeIf {survivalReport!=null};pending=false}
     }
-    LaunchedEffect(collapseRequest){if(collapseRequest>0){expanded=false;menuOpen=false;exampleExpanded=false;expressionExpanded=false}}
+    LaunchedEffect(collapseRequest){if(collapseRequest>0){menuOpen=false;exampleExpanded=false;expressionExpanded=false}}
     Column(Modifier.fillMaxWidth().padding(start=if(nested)14.dp else 0.dp)) {
     if(!embedded) {
         HorizontalDivider()
-        StatisticsSectionToggle(title,expanded,"statistics-$section-toggle",depth=if(nested)1 else 0) {expanded=!expanded}
+        StatisticsSectionToggle(title,expanded,"statistics-$section-toggle",depth=if(nested)1 else 0) {m.setStatisticsSectionExpanded(section,!expanded)}
     }
     if(expanded||embedded) {
         fun choose(next:JSONObject) {selected=next.getString("id");source=next.getString("example");input=if(next.has("controls"))if(data.isBlank()||next.getString("input")=="none")"example" else "current" else "expression";message="";menuOpen=false;survivalReport=null;pending=false}
@@ -191,7 +195,7 @@ internal fun advancedStatisticsRows(data:String,columnLimit:Int?=null,removeComp
         statisticsReportFor(m.result,m.resultSource.ifBlank {m.editor.source},setOf(selected))?.let {StatisticsResultReport(m,it)}
         if(selected=="survivalanalysis") {
             Row(verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) {Checkbox(band,{band=it},modifier=Modifier.testTag("statistics-survival-band"));Text(if(ko)"95% 신뢰구간 밴드" else "95% CI band",fontSize=12.sp)}
-            survivalReport?.let {report->SurvivalReport(report,reportPlan,band,onCopy=survivalCopyResult?.let {snapshot->{
+            survivalReport?.let {report->SurvivalReport(report,reportPlan,band,onClear={m.clearStatisticsResult(survivalCopyResult)},clearEnabled=!m.busy&&!m.regressionBusy,onCopy=survivalCopyResult?.let {snapshot->{
                 clipboard.setText(AnnotatedString(statisticsResultCopyText(m,snapshot,language)))
             }})}
         }
@@ -223,7 +227,7 @@ internal fun advancedStatisticsRows(data:String,columnLimit:Int?=null,removeComp
         }
         val label=field.getString(if(ko)"ko" else "label");val value=option(key)
         when(field.getString("type")) {
-            "number"->Field(value,label,Modifier.fillMaxWidth().testTag("statistics-form-$key")){onChange(key,it)}
+            "number","text"->Field(value,label,Modifier.fillMaxWidth().testTag("statistics-form-$key")){onChange(key,it)}
             "choice"->{
                 val rawChoices=field.getJSONArray("choices")
                 val choices=List(rawChoices.length()){rawChoices.getJSONObject(it)}.filter {choice->val conditions=choice.optJSONObject("when");conditions==null||conditions.keys().asSequence().all {name->val values=conditions.getJSONArray(name);(0 until values.length()).any {values.getString(it)==option(name)}}}

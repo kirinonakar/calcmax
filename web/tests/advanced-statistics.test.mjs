@@ -6,6 +6,14 @@ import {guidedStatisticsCommand,survivalAnalysisPlan,advancedStatisticsTermLabel
 import {survivalStepPoints,survivalNumber} from '../survival-report.js';
 import {parse} from '../parser.js';
 
+test('proportion forms reject incompatible binary categories and invalid count roles',()=>{
+  const single=schema.find(item=>item.id==='propztest'),two=schema.find(item=>item.id==='propztest2');
+  assert.throws(()=>guidedStatisticsCommand(single,[['a'],['b']],{layout:'binary',successValue:'yes'}),/Success value/);
+  assert.throws(()=>guidedStatisticsCommand(two,[['a','b'],['c','b']],{layout:'binary'}),/same binary/);
+  assert.throws(()=>guidedStatisticsCommand(two,[['1','2']]),/exactly two rows/);
+  assert.throws(()=>guidedStatisticsCommand(single,[['1','2']],{trials:'0'}),/different columns/);
+});
+
 test('survival plans validate distinct roles, preserve labels and omit unselected cells',()=>{
   const plan=survivalAnalysisPlan([['1','yes','A','30',''],['2','no','B','40','']],{eventValue:'yes',cox:'1',predictors:'3'},['time','status','arm','age','unused']);
   assert.deepEqual(plan,{expression:'survivalanalysis([[1,1,1,30],[2,0,2,40]],1,efron,-1,1)',groups:['A','B'],predictors:['age']});

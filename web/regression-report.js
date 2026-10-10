@@ -12,10 +12,10 @@ export function regressionParameterLabels(mode,columns,responseColumn){
 }
 export function regressionParameterName(name,labels={}){return labels[name]==='Intercept'?t('Intercept'):labels[name]||name;}
 
-export function renderRegressionReport(container,report,digits=10,parameterLabels={}, {onCopy}={}) {
+export function renderRegressionReport(container,report,digits=10,parameterLabels={}, {onCopy,onClear}={}) {
   container.replaceChildren();
   if(!report)return;
-  if(onCopy){const heading=element('div','','statistics-result-heading');heading.append(element('h3',t('Regression')),control('Copy result',onCopy));container.append(heading);}
+  if(onCopy||onClear){const heading=element('div','','statistics-result-heading');heading.append(element('h3',t('Regression')));if(onCopy)heading.append(control('Copy',onCopy));if(onClear)heading.append(control('Clear',onClear));container.append(heading);}
   const number=value=>value===null||value===undefined?'—':roundNumber(String(value),digits);
   const bayesian=!!report.bayesian;
   const machineLearning=!!report.model&&!bayesian;

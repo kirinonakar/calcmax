@@ -17,7 +17,7 @@ import {$,value,element,control} from './app-ui.js';
 import {renderStatisticsReport,statisticsReportTarget} from './statistics-report.js';
 import {statisticsResultMarkdown} from './statistics-markdown.js';
 
-export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist,requestOptions,error,changeMode,updateButtons,pressKey,modeDialog,variablesDialog,matrixInsertDialog,graphs,onFunctionsChanged=()=>{}}) {
+export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist,requestOptions,error,changeMode,updateButtons,pressKey,modeDialog,variablesDialog,matrixInsertDialog,graphs,onFunctionsChanged=()=>{},onResultCleared=()=>{}}) {
   const {toast,openDialog,clipboard}=ui;
   let lastResult=null,decimal=false,typing=false,overwrite=false,committed=false,screenExpanded=false,grouping=false,mixed=false,lastResultSource='';
   let calcSession=null,activeHistoryEntry=null,inputAnswer=null,tapeRows=null,tapeFormat='';
@@ -65,12 +65,13 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
       const visible=value('mode')==='statistics'&&lastResult?.statisticsReport&&statisticsResultTarget===id;
       target.hidden=!visible;
       if(visible){
-        renderStatisticsReport(target,lastResult.statisticsReport,{digits:state.digits,...resultOptions(),onCopy:()=>clipboard(statisticsResultMarkdown(lastResult,{digits:state.digits,...resultOptions()}))});
+        renderStatisticsReport(target,lastResult.statisticsReport,{digits:state.digits,...resultOptions(),onCopy:()=>clipboard(statisticsResultMarkdown(lastResult,{digits:state.digits,...resultOptions()})),onClear:()=>clearResult()});
         if(lastResult.note)target.append(element('p',lastResult.note,'hint'));
       }else target.replaceChildren();
     }
   }
   function renderResult() {
+    $('answer-clear').disabled=!lastResult||isBusy();
     renderStatisticsMenus();
     if(!lastResult){solutionSteps.clear();$('result-guidance').replaceChildren();renderTape();return;}
     const tree=resultDisplayTree(lastResult,{decimal,mixed});
@@ -298,6 +299,7 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
   document.addEventListener('paste',event=>{if(event.defaultPrevented||value('mode')!=='scientific'||typing||$('dialog').open||$('settings-dialog').open||event.target.closest?.('input,select,textarea')&&event.target!==$('expression'))return;const text=event.clipboardData?.getData('text/plain')||event.clipboardData?.getData('text');if(!text)return;event.preventDefault();try{insertPastedExpression(text);}catch(exc){toast(exc.message);}});
   $('answer-copy').onclick=()=>{if(lastResult)clipboard(value('mode')==='statistics'&&(lastResult.statisticsReport||lastResult.statisticsCopyReport)
     ?statisticsResultMarkdown(lastResult,{digits:state.digits,...resultOptions()}):resultText(lastResult,{decimal,mixed,digits:state.digits,...resultOptions()}));};
+  $('answer-clear').onclick=()=>clearResult();
   $('answer-insert').onclick=()=>{if(state.variables.Ans){changeMode('scientific');insert('Ans',null,{factor:true});}else toast('먼저 재사용 가능한 결과를 계산해 주세요.');};
   $('exact-toggle').onclick=()=>{decimal=!decimal;$('exact-toggle').textContent=decimal?'≈ Decimal':'Exact';renderResult();};
   $('screen-toggle').onclick=()=>{screenExpanded=!screenExpanded;document.documentElement.dataset.screenExpanded=String(screenExpanded);$('screen-toggle').classList.toggle('active',screenExpanded);};
@@ -430,6 +432,14 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
     if(lastResult?.resultAst){const result=await engine.execute({...requestOptions(),tree:parse(source)});showResult(result);}
   }
   function clearPreviewResult(){engineeringConversion=false;engineeringShift=0;syncEngineering();lastResult=null;lastResultSource='';renderStatisticsMenus();$('answer').replaceChildren();$('note').textContent='';solutionSteps.clear();$('result-guidance').replaceChildren();displaySizing.refresh();}
+  function clearResult(snapshot=lastResult){
+    if(!snapshot||isBusy())return;
+    if(snapshot===lastResult){
+      cancelCalculationPreview();clearPreviewResult();statisticsResultTarget='';displayedStepResult=null;
+      committed=false;$('commit-indicator').textContent='';$('answer-insert').disabled=true;$('answer-clear').disabled=true;updateResultSource();
+    }
+    onResultCleared(snapshot);persist();
+  }
   function syncEngineering(){document.documentElement.dataset.engineeringConversion=String(engineeringConversion);$('keypad').querySelectorAll('[data-input="ENG"]').forEach(button=>button.classList.toggle('active',engineeringConversion));}
   function exitEngineering(){engineeringConversion=false;engineeringShift=0;syncEngineering();renderResult();}
   function applyFonts(){document.documentElement.style.setProperty('--input-font',state.inputFont+'px');document.documentElement.style.setProperty('--output-font',state.outputFont+'px');renderInputCursor();}
@@ -479,13 +489,15 @@ export function createCalculator({state,engine,isBusy,ui,persist,schedulePersist
     document.querySelectorAll('.tape-expression').forEach(button=>button.disabled=isBusy()||!!calcSession);
     $('expression').readOnly=!typing||isBusy();
   }
-  function updateResultSource(){ $('result-source').hidden=['scientific','statistics','tip'].includes(value('mode'))||!lastResultSource; }
+  function updateResultSource(){ $('result-source').hidden=['scientific','statistics','tip'].includes(value('mode'))||!lastResultSource;
+    const statistics=value('mode')==='statistics';setText($('answer-copy'),statistics?'Copy':'Copy result');$('answer-clear').hidden=!statistics;$('answer-clear').disabled=!lastResult||isBusy();
+  }
   function dispose() {
     cancelCalculationPreview();tapeFollow.dispose();displaySizing.dispose();
     cursorResizeObserver?.disconnect();
     document.fonts?.removeEventListener('loadingdone',renderInputCursor);
   }
-  return {handleKey,insert,evaluate,showResult,renderResult,renderTape,renderNotation,preview,renderInputCursor,applyFonts,applyWordWrap,replaceInput,updateResultSource,
+  return {handleKey,insert,evaluate,showResult,clearResult,renderResult,renderTape,renderNotation,preview,renderInputCursor,applyFonts,applyWordWrap,replaceInput,updateResultSource,
     clearExplanations:()=>{solutionSteps.clear();displayedStepResult=null;$('result-guidance').replaceChildren();},
     cancelPreview:cancelCalculationPreview,schedulePreview:scheduleCalculationPreview,
     resetPreview:()=>{calculationPreviewKey=null;scheduleCalculationPreview();},

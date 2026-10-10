@@ -449,6 +449,7 @@ What do you want to compare?
 ├─ Categories / counts
 │  ├─ Independent categories → χ² independence
 │  │  └─ Sparse 2×2 table → Fisher exact
+│  ├─ One proportion vs a target / two independent proportions → Proportion z test
 │  ├─ Paired binary outcomes → McNemar
 │  └─ Counts vs expected frequencies → χ² goodness of fit
 ├─ Time until an event, with censoring → Survival analysis
@@ -486,7 +487,7 @@ Raw-data t tests, t intervals, ANOVA and Tukey include sample summaries, assumpt
 - Bartlett: a variance test that is sensitive to non-normality; prefer median-centered Levene / Brown–Forsythe when normality is doubtful.
 
 ### Parametric models do not all require normal observations
-- z tests / z intervals require known population SDs and a normal or suitably approximated sampling distribution of the mean; a sample SD alone is insufficient.
+- Mean z tests / z intervals require known population SDs and a normal or suitably approximated sampling distribution of the mean; a sample SD alone is insufficient.
 - Binomial logistic, multinomial and ordinal models use categorical likelihoods; Poisson / negative-binomial models use count likelihoods. Check the chosen family, link, dispersion, design and model diagnostics instead of demanding normal outcomes.
 - GEE uses a mean/variance model and working correlation for clusters; it does not require normal raw outcomes. A robust covariance does not resolve very few clusters or a misspecified mean model.
 - GLMM assumptions follow its selected family and random effects. Bayesian proportion / Poisson rate models use binomial / Poisson likelihoods.
@@ -770,7 +771,7 @@ References: [Firth logistic regression](https://search.r-project.org/CRAN/refman
 
 ## Advanced statistics
 
-In Statistics, missing-value imputation belongs to Data preparation; General analysis is ordered as Mean comparisons, Rank & nonparametric tests, Categorical data (including McNemar), then Confidence intervals; distribution/variance tests (including Shapiro–Wilk), post-hoc comparisons, additional group comparisons, effect sizes and multiple testing belong to More tests & effect sizes; factorial linear, generalized/mixed regression and cross-validation belong to Regression. Advanced analysis is ordered as Bayesian inference, Resampling, Multivariate analysis, Survival analysis, then Power & sample size. Switch between current data, examples and an editable expression. Paired comparisons use complete pairs and support subject-ID matching. Wide repeated-measures inputs reject incomplete rows; impute converts them to NA. These analyses use binary64 numerics.
+In Statistics, missing-value imputation belongs to Data preparation; General analysis is ordered as Mean comparisons, Rank & nonparametric tests, Categorical data (including proportion z tests and McNemar); confidence intervals, distribution/variance tests (including Shapiro–Wilk), post-hoc comparisons, additional group comparisons, effect sizes and multiple testing belong to More tests & effect sizes; factorial linear, generalized/mixed regression and cross-validation belong to Regression. Advanced analysis is ordered as Bayesian inference, Resampling, Multivariate analysis, Survival analysis, then Power & sample size. Switch between current data, examples and an editable expression. Paired comparisons use complete pairs and support subject-ID matching. Wide repeated-measures inputs reject incomplete rows; impute converts them to NA. Additional analyses other than proportion z tests and mean confidence intervals use binary64 numerics.
 
 ### Data preparation
 
@@ -778,6 +779,12 @@ In Statistics, missing-value imputation belongs to Data preparation; General ana
 Example: impute([[1,NA],[2,4],[NA,6],[4,8]],mean)
 
 ### Categorical data
+
+`propztest` — Compare one binary success proportion with a target using a null-based z test. propztest(p0,data) or propztest(p0,successes,trials); binary 0/1 data or [[successes,trials],...]. Optional both / left / right. Null-based standard error, no continuity correction; independent observations and adequate expected counts are required.
+Example: propztest(0.5,[[60,100]])
+
+`propztest2` — Compare two independent success proportions using a pooled z test. propztest2(A,B) or propztest2(successesA,trialsA,successesB,trialsB). H0: pA=pB; pooled standard error, no continuity correction. Optional both / left / right for A−B. Independent binary samples; paired outcomes require McNemar.
+Example: propztest2(60,100,45,100)
 
 `mcnemar` — Compare paired binary outcomes, such as yes/no before and after. Paired 2×2 count table; exact / corrected / asymptotic.
 Example: mcnemar([[20,8],[2,15]],exact)
@@ -828,6 +835,14 @@ Example: eta2([1,2,4,5],[2,3,5,8])
 
 `padjust` — Correct a family of p values when several hypotheses are tested together. p values; method bonferroni / holm / fdr (BH) / by; alpha.
 Example: padjust([0.01,0.04,0.03,0.2],holm,0.05)
+
+### Confidence intervals
+
+`tinterval` — Estimate a mean with uncertainty when population SD is unknown. Mean confidence interval with unknown population SD: tinterval(level,data) or tinterval(level,mean,SD,n).
+Example: tinterval(95,[1,2,3,4,5])
+
+`zinterval` — Estimate a mean interval when population SD is known. Mean confidence interval with known population SD: zinterval(level,sigma,data) or zinterval(level,sigma,mean,n).
+Example: zinterval(95,2,[1,2,3,4,5])
 
 ### Generalized regression
 

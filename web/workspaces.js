@@ -14,10 +14,10 @@ import {createPythonWorkspace} from './python-workspace.js';
 import {createProbabilityWorkspace} from './probability-workspace.js';
 import {createEquationSteps} from './equation-steps.js';
 
-export function createWorkspaces({state,engine,ui,persist,restoreSelect,requestOptions,isBusy,error,changeMode,replaceInput,insert,evaluate,showResult,graphs}) {
+export function createWorkspaces({state,engine,ui,persist,restoreSelect,requestOptions,isBusy,error,changeMode,replaceInput,insert,evaluate,showResult,clearResult,graphs}) {
   const {toast}=ui;
   const matrix=createMatrixWorkspace({state,persist,restoreSelect,refreshWorkspaceMath,storeExpression:storeWorkspaceExpression,error,changeMode,replaceInput});
-  const statistics=createStatisticsWorkspace({state,engine,ui,persist,refreshWorkspaceMath,storeExpression:storeWorkspaceExpression,error,changeMode,replaceInput,graphs,onSummary:()=>run("statistics-summary")});
+  const statistics=createStatisticsWorkspace({state,engine,ui,persist,refreshWorkspaceMath,storeExpression:storeWorkspaceExpression,error,changeMode,replaceInput,graphs,clearResult,onSummary:()=>run("statistics-summary")});
   const functions=createFunctionsWorkspace({state,ui,persist,refreshWorkspaceMath,changeMode,insert});
   const python=createPythonWorkspace({engine,ui,persist,requestOptions,error,run});
   const probability=createProbabilityWorkspace({state,engine,persist,requestOptions});
@@ -92,5 +92,5 @@ export function createWorkspaces({state,engine,ui,persist,restoreSelect,requestO
     statistics.datasetsList();functions.render();equationControls();refreshWorkspaceMath();
   }
   function render(){refreshWorkspaceMath();statistics.render();probability.render();equationSteps.render();}
-  return {initialize,render,refreshMath:refreshWorkspaceMath,renderMatrix:matrix.render,renderFunctions:functions.render,equationSource};
+  return {initialize,render,refreshMath:refreshWorkspaceMath,renderMatrix:matrix.render,renderFunctions:functions.render,equationSource,clearStatisticsResult:statistics.clearResult};
 }

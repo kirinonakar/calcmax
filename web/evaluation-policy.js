@@ -8,7 +8,7 @@ const multiArgumentFunctions=new Set([
   'linsolve','dot','cross','angle','projection','regression','qty','convert',
   'tpdf','tcdf','invt','chi2pdf','chi2cdf','fpdf','fcdf',
   'binompdf','binomcdf','poissonpdf','poissoncdf','geometpdf','geometcdf',
-  'ttest','ztest','chi2test','anova','tukey','wilcoxon','mannwhitney','kruskal','tinterval','zinterval',
+  'ttest','ztest','propztest','propztest2','chi2test','anova','tukey','wilcoxon','mannwhitney','kruskal','tinterval','zinterval',
   'ancova','glm','padjust','cohend','eta2','levene','bartlett','mcnemar','survivalanalysis','kaplanmeier','logrank','cox','repeatedanova','mixedmodel','glmm','gee','multinomial','ordinal','poissonreg','nbreg','bootstrapci','bayesbootstrap','testpower','samplesize','kstest','crossvalidate','pca','kmeans','impute',
   'tvmfv','tvmpv','tvmpmt','tvmn','tvmrate','npv','irr','amort','cagr'
 ]);

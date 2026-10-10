@@ -10,14 +10,15 @@ export function survivalStepPoints(curve,index){
   return points;
 }
 
-export function renderSurvivalReport(container,report,{groups=[],predictors=[],band=true,digits=5,onCopy}={}){
+export function renderSurvivalReport(container,report,{groups=[],predictors=[],band=true,digits=5,onCopy,onClear}={}){
   const ko=getLanguage()==='ko',text=(en,kr)=>ko?kr:en;
   const number=n=>survivalNumber(n,digits);
   const groupName=(group,i)=>groups[i]||(report.groups.length>1?text('Group ','그룹 ')+number(group.id):text('All subjects','전체'));
   const names=report.groups.map(groupName);
   const heading=element('div','','statistics-result-heading');
   heading.append(element('h3','Kaplan–Meier'));
-  if(onCopy)heading.append(control('Copy result',onCopy));
+  if(onCopy)heading.append(control('Copy',onCopy));
+  if(onClear)heading.append(control('Clear',onClear));
   container.hidden=false;container.replaceChildren(heading);
   const legend=element('div','','survival-legend');
   names.forEach((name,i)=>{const item=element('span',`${name} · n=${report.groups[i].n}`);item.style.color=colors[i%colors.length];legend.append(item);});

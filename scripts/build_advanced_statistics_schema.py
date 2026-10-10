@@ -12,6 +12,14 @@ CLUSTERS = '[[1,0,2],[1,1,4],[1,2,4],[2,0,3],[2,1,4],[2,2,6],[3,0,1],[3,1,3],[3,
 GLMM = '[[1,0,0],[1,1,0],[1,2,1],[2,0,0],[2,1,1],[2,2,1],[3,0,0],[3,1,0],[3,2,0],[4,0,1],[4,1,1],[4,2,1],[5,0,1],[5,1,0],[5,2,1],[6,0,0],[6,1,1],[6,2,0]]'
 SURVIVAL = '[[1,1],[2,0],[3,1],[4,1],[5,0],[6,1]]'
 specs = [
+    ('tinterval','t confidence interval','t 신뢰구간','list',',95','[1,2,3,4,5]','Mean confidence interval with unknown population SD: tinterval(level,data) or tinterval(level,mean,SD,n).','모집단 표준편차를 모르는 평균의 신뢰구간: tinterval(수준,자료) 또는 tinterval(수준,평균,표준편차,n).'),
+    ('zinterval','z confidence interval','z 신뢰구간','list',',95,2','[1,2,3,4,5]','Mean confidence interval with known population SD: zinterval(level,sigma,data) or zinterval(level,sigma,mean,n).','모집단 표준편차를 아는 평균의 신뢰구간: zinterval(수준,모집단표준편차,자료) 또는 zinterval(수준,모집단표준편차,평균,n).'),
+    ('propztest','One-sample proportion z test','단일 표본 비율 z 검정','table','','[[60,100]]',
+     'propztest(p0,data) or propztest(p0,successes,trials); binary 0/1 data or [[successes,trials],...]. Optional both / left / right. Null-based standard error, no continuity correction; independent observations and adequate expected counts are required.',
+     'propztest(p0,자료) 또는 propztest(p0,성공수,시행수); 0/1 자료 또는 [[성공수,시행수],...]. 선택적 both·left·right. 귀무가설의 표준오차, 연속성 보정 없음. 독립 관측·충분한 기대빈도가 필요합니다.'),
+    ('propztest2','Two-sample proportion z test','두 표본 비율 z 검정','table','','[[60,100],[45,100]]',
+     'propztest2(A,B) or propztest2(successesA,trialsA,successesB,trialsB). H0: pA=pB; pooled standard error, no continuity correction. Optional both / left / right for A−B. Independent binary samples; paired outcomes require McNemar.',
+     'propztest2(A,B) 또는 propztest2(성공수A,시행수A,성공수B,시행수B). H0: pA=pB, 합동 표준오차, 연속성 보정 없음. A−B에 대한 both·left·right 선택. 독립 이항 표본용이며 대응 결과는 McNemar를 사용합니다.'),
     ('shapiro','Shapiro–Wilk','Shapiro–Wilk','list','','[1,2,3,4,5]','Normality test for 3 to 5000 observations; interpret with Q–Q plots.','관측값 3~5000개의 정규성 검정; Q–Q plot과 함께 해석합니다.'),
     ('tukey','Tukey–Kramer','Tukey–Kramer','groups','',GROUPS,'All pairwise mean comparisons for independent groups with equal variances.','등분산 독립 그룹의 모든 쌍별 평균 사후비교.'),
     ('gameshowell','Games–Howell','Games–Howell','groups','',GROUPS,'All pairwise mean comparisons for independent groups with unequal variances.','이분산 독립 그룹의 모든 쌍별 평균 사후비교.'),
@@ -58,11 +66,12 @@ schema = [{'id':id_,'label':label,'ko':ko,'input':layout,'suffix':suffix,'exampl
 # Menu placement and order are shared by Android and Web; function IDs stay stable.
 menus = [
     ('preparation', 'Data preparation', '데이터 준비', ['impute']),
-    ('general', 'Categorical data', '범주형 자료', ['mcnemar']),
+    ('general', 'Categorical data', '범주형 자료', ['propztest','propztest2','mcnemar']),
     ('tests', 'Distribution & variance', '분포·분산 검정', ['shapiro','kstest','levene','bartlett']),
     ('tests', 'Post-hoc comparisons', '사후비교', ['tukey','gameshowell']),
     ('tests', 'Group comparisons', '그룹 비교', ['twowayanova','ancova','repeatedanova','friedman']),
     ('tests', 'Effect sizes & multiple testing', '효과크기·다중검정', ['cohend','eta2','padjust']),
+    ('tests', 'Confidence intervals', '신뢰구간', ['tinterval','zinterval']),
     ('models', 'Generalized regression', '일반화 회귀', ['linearmodel','glm','poissonreg','nbreg','multinomial','ordinal']),
     ('models', 'Repeated & clustered data', '반복·군집 자료', ['mixedmodel','glmm','gee']),
     ('models', 'Model validation', '모형 검증', ['crossvalidate']),
@@ -224,7 +233,23 @@ def literal(node):
     return ast.literal_eval(node)
 
 
+proportion_tail=field('tail','Alternative','대립가설','choice','both',[('both','Two-sided','양측'),('left','Less than','작다 (좌측)'),('right','Greater than','크다 (우측)')])
+forms['tinterval']=[col('column','Sample column','표본 열',0),field('level','Confidence level (%)','신뢰수준 (%)','number','95')]
+forms['zinterval']=forms['tinterval']+[field('sigma','Known population SD σ','알려진 모집단 표준편차 σ','number','2')]
+form_help['tinterval']=('Select a sample column and confidence level. Uses the sample SD and Student t distribution for the mean interval.', '표본 열과 신뢰수준을 선택합니다. 표본 표준편차와 Student t 분포로 평균 구간을 계산합니다.')
+form_help['zinterval']=('Select a sample column and confidence level; enter the known population SD. A sample SD cannot replace the population SD.', '표본 열·신뢰수준을 선택하고 알려진 모집단 표준편차를 입력합니다. 표본 표준편차로 대체할 수 없습니다.')
+definitions['tinterval']['example']='tinterval(95,[1,2,3,4,5])'
+definitions['zinterval']['example']='zinterval(95,2,[1,2,3,4,5])'
+proportion_layout=field('layout','Data layout','자료 구성','choice','counts',[('counts','Successes / trials','성공 수·시행 수'),('binary','Binary observations','이항 관측값')])
+proportion_counts=[dict(col('successes','Successes column','성공 수 열',0),when={'layout':['counts']}),dict(col('trials','Trials column','시행 수 열',1),when={'layout':['counts']})]
+forms['propztest']=[proportion_layout]+proportion_counts+[dict(col('column','Sample column','표본 열',0),when={'layout':['binary']}),dict(field('successValue','Success value','성공 값','text','1'),when={'layout':['binary']}),field('p0','Null proportion p0','귀무가설 비율 p0','number','0.5'),proportion_tail]
+forms['propztest2']=[proportion_layout]+proportion_counts+[dict(f,when={**f.get('when',{}),'layout':['binary']}) for f in two_fields]+[dict(field('successValue','Success value','성공 값','text','1'),when={'layout':['binary']}),proportion_tail]
+form_help['propztest']=('Counts: rows are success/trial batches for one population. Binary data: select a sample column and success value. H0: p=p0; p0 must be between 0 and 1. Expected successes and failures below 10 flag unreliable normal approximation.', '빈도 입력의 각 행은 같은 모집단의 성공 수·시행 수입니다. 이항 자료는 표본 열·성공 값을 선택합니다. H0: p=p0, p0는 0과 1 사이입니다. 기대 성공·실패 수가 10 미만이면 정규근사 주의를 표시합니다.')
+form_help['propztest2']=('Counts: exactly two rows, Group A then Group B. Binary data: independent columns or group/value columns with a common success value. H0: pA=pB; left/right alternatives refer to A−B. Uses the pooled null proportion; paired outcomes require McNemar.', '빈도 입력은 정확히 두 행이며 A 그룹·B 그룹 순서입니다. 이항 자료는 독립된 두 열 또는 그룹·값 열과 공통 성공 값을 선택합니다. H0: pA=pB, 좌측·우측은 A−B 기준입니다. 귀무가설의 합동 비율을 사용하며 대응 결과는 McNemar를 사용합니다.')
+definitions['propztest']['example']='propztest(0.5,[[60,100]])'
+definitions['propztest2']['example']='propztest2(60,100,45,100)'
 for item in schema:
+    if item['id'] in ('propztest','propztest2','tinterval','zinterval'): item['example']=definitions[item['id']]['example']
     if item['id'] not in forms: continue
     item['controls']=forms[item['id']]
     item['formHelp'],item['formHelpKo']=form_help[item['id']]
@@ -240,7 +265,10 @@ for item in schema:
         item['helpKo'] += ' ' + extra_ko
     arguments=ast.parse(item['example'],mode='eval').body.args
     first=literal(arguments[0])
-    if item['input']=='none': rows=[]
+    if item['id'] in ('tinterval','zinterval'): rows=[[v] for v in literal(arguments[-1])]
+    elif item['id']=='propztest': rows=literal(arguments[1])
+    elif item['id']=='propztest2': rows=[[60,100],[45,100]]
+    elif item['input']=='none': rows=[]
     elif item['id'] in ('shapiro','padjust','bayesproportion','bayesmean','bayesrate','bayesbootstrap','bootstrapci'): rows=[[v] for v in first]
     elif item['id'] in ('tukey','gameshowell','levene','bartlett','kstest','bayescompare','cohend','eta2'):
         samples=[literal(arg) for arg in (arguments[:2] if item['id'] in ('bayescompare','cohend') else arguments)]; rows=[[sample[i] if i<len(sample) else '' for sample in samples] for i in range(max(map(len,samples)))]
@@ -253,6 +281,13 @@ for item in schema:
             if choice['id']!='auto': choice['when']={'family':links[choice['id']]}
 (ROOT/'tests/fixtures').mkdir(exist_ok=True)
 cases=[
+ dict(id='propztest',rows=[['yes'],['no'],['yes']],settings=dict(layout='binary',successValue='yes',p0='0.4',tail='right'),expected='propztest(0.4,[1,0,1],right)'),
+ dict(id='propztest',rows=[['60','100'],['12','20']],settings={},expected='propztest(0.5,[[60,100],[12,20]])'),
+ dict(id='propztest2',rows=[['60','100'],['45','100']],settings=dict(tail='left'),expected='propztest2(60,100,45,100,left)'),
+ dict(id='propztest2',rows=[['yes','no'],['yes','yes'],['no','']],settings=dict(layout='binary',successValue='yes'),expected='propztest2([1,1,0],[0,1])'),
+ dict(id='propztest2',rows=[['A','yes'],['B','no'],['A','no'],['B','no']],settings=dict(layout='binary',grouping='groups',successValue='yes'),expected='propztest2([1,0],[0,0])'),
+ dict(id='tinterval',rows=[['unused','1'],['ignored','2'],['','4']],settings=dict(column='1',level='90'),expected='tinterval(90,[1,2,4])'),
+ dict(id='zinterval',rows=[['1'],['2'],['4']],settings=dict(level='99',sigma='3'),expected='zinterval(99,3,[1,2,4])'),
  dict(id='mcnemar',rows=[['20','8'],['2','15']],settings=dict(method='asymptotic'),expected='mcnemar([[20,8],[2,15]],asymptotic)'),
  dict(id='shapiro',rows=[['unused','1'],['','2'],['x',''],['y','4']],settings=dict(column='1'),expected='shapiro([1,2,4])'),
  dict(id='tukey',rows=[['A','1'],['B','4'],['A','2'],['B','5']],settings=dict(grouping='groups',group='0',value='1'),expected='tukey([1,2],[4,5])'),
@@ -348,7 +383,7 @@ for language in ('','_ko'):
     path=ROOT/f'app/src/main/assets/catalog_help{language}.md'
     text=path.read_text(encoding='utf-8').split('\n## Advanced statistics')[0].split('\n## 고급 통계')[0]
     heading='고급 통계' if language else 'Advanced statistics'
-    intro=('통계 화면에서 결측치 대체는 데이터 준비, 일반 분석은 평균 비교 → 순위·비모수 검정 → 범주형 자료(McNemar 포함) → 신뢰구간 순서이며, 분포·분산 검정(Shapiro–Wilk 포함)·사후비교·추가 그룹 비교·효과크기·다중검정은 추가 검정·효과크기, 요인 선형회귀·일반화·혼합 회귀와 교차검증은 회귀 메뉴에 있습니다. 고급 분석은 베이지안 추론 → 재표집 → 다변량 분석 → 생존분석 → 검정력·표본수 순서입니다. 현재 데이터·예제·분석 식을 전환할 수 있습니다. 대응 분석은 완전한 쌍을 사용하며 대상 ID로 연결할 수 있습니다. 반복측정의 열별 입력은 불완전한 행을 거부합니다. impute는 빈 셀을 NA로 변환합니다. 이 분석들은 64비트 수치 계산입니다.' if language else 'In Statistics, missing-value imputation belongs to Data preparation; General analysis is ordered as Mean comparisons, Rank & nonparametric tests, Categorical data (including McNemar), then Confidence intervals; distribution/variance tests (including Shapiro–Wilk), post-hoc comparisons, additional group comparisons, effect sizes and multiple testing belong to More tests & effect sizes; factorial linear, generalized/mixed regression and cross-validation belong to Regression. Advanced analysis is ordered as Bayesian inference, Resampling, Multivariate analysis, Survival analysis, then Power & sample size. Switch between current data, examples and an editable expression. Paired comparisons use complete pairs and support subject-ID matching. Wide repeated-measures inputs reject incomplete rows; impute converts them to NA. These analyses use binary64 numerics.')
+    intro=('통계 화면에서 결측치 대체는 데이터 준비, 일반 분석은 평균 비교 → 순위·비모수 검정 → 범주형 자료(비율 z 검정·McNemar 포함) 순서이며, 신뢰구간·분포·분산 검정(Shapiro–Wilk 포함)·사후비교·추가 그룹 비교·효과크기·다중검정은 추가 검정·효과크기, 요인 선형회귀·일반화·혼합 회귀와 교차검증은 회귀 메뉴에 있습니다. 고급 분석은 베이지안 추론 → 재표집 → 다변량 분석 → 생존분석 → 검정력·표본수 순서입니다. 현재 데이터·예제·분석 식을 전환할 수 있습니다. 대응 분석은 완전한 쌍을 사용하며 대상 ID로 연결할 수 있습니다. 반복측정의 열별 입력은 불완전한 행을 거부합니다. impute는 빈 셀을 NA로 변환합니다. 비율 z 검정·평균 신뢰구간을 제외한 추가 분석은 64비트 수치 계산입니다.' if language else 'In Statistics, missing-value imputation belongs to Data preparation; General analysis is ordered as Mean comparisons, Rank & nonparametric tests, Categorical data (including proportion z tests and McNemar); confidence intervals, distribution/variance tests (including Shapiro–Wilk), post-hoc comparisons, additional group comparisons, effect sizes and multiple testing belong to More tests & effect sizes; factorial linear, generalized/mixed regression and cross-validation belong to Regression. Advanced analysis is ordered as Bayesian inference, Resampling, Multivariate analysis, Survival analysis, then Power & sample size. Switch between current data, examples and an editable expression. Paired comparisons use complete pairs and support subject-ID matching. Wide repeated-measures inputs reject incomplete rows; impute converts them to NA. Additional analyses other than proportion z tests and mean confidence intervals use binary64 numerics.')
     text+='\n## '+heading+'\n\n'+intro+'\n\n'
     previous_group = None
     for item in schema:

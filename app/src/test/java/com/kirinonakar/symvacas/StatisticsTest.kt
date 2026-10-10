@@ -115,6 +115,22 @@ class StatisticsTestCommandsTest {
     private fun command(procedure: String, rows: List<List<String>>, kind: String = "list", column: String = "x") =
         statisticsTestCommand(procedure, rows, kind, column, "Two-sided", "0", "2", "95")
 
+    @Test fun meanTestsUseOneOrTwoSelectedColumnsIndependently() {
+        val rows=listOf(listOf("","","10","20"),listOf("","","12","23"),listOf("","","14","26"))
+        fun selected(test:String,mode:String,first:String="z",second:String="x4")=
+            statisticsTestCommand(test,rows,"columns:4",mode,"Two-sided","0","2","95","3",firstGroup=first,secondGroup=second)
+        assertEquals("ttest(0,[10,12,14])",selected("t test","z"))
+        assertEquals("ztest(0,2,[20,23,26])",selected("z test","x4"))
+        assertEquals("ttest2(0,[10,12,14],[20,23,26])",selected("t test","x-y"))
+        assertEquals("ztest2(0,2,3,[10,12,14],[20,23,26])",selected("z test","x-y"))
+        assertEquals("ttestpaired(0,[20,23,26],[10,12,14])",selected("t test","paired","x4","z"))
+        for(test in listOf("t test","z test")) {
+            assertNull(selected(test,"x-y","z","z"))
+            assertNull(selected(test,"x-y","z","x"))
+        }
+        assertNull(selected("t test","paired","z","z"))
+    }
+
     @Test fun statisticsCommandsValidatePairingGroupingAndSelectedColumns() {
         run { // rankTestsKeepPairingAndIndependentMissingCells
             val rows=listOf(listOf("1","4"),listOf("2",""),listOf("","5"),listOf("3","6"))

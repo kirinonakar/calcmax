@@ -15,6 +15,19 @@ import {graphInputTree} from '../graph-workspace.js';
 // scenario below explicitly loads its own interpreter to keep startup coverage.
 let sharedRuntime;
 
+test('proportion z tests and relocated intervals run in real WASM',async()=>{
+  const py=await runtime();
+  for(const id of ['propztest','propztest2','tinterval','zinterval']){
+    const definition=advancedStatisticsSchema.find(item=>item.id===id);
+    py.globals.set('payload',JSON.stringify({tree:parse(guidedStatisticsCommand(definition,definition.exampleRows)),precision:20,budget:30}));
+    const result=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));
+    assert.equal(result.ok,true,result.error);
+    assert.equal(result.statisticsReport.analysis,id);
+    if(id==='propztest')assert.ok(Math.abs(Number(result.statisticsReport.highlights[0].value.decimal)-0.0455002638963584)<1e-13);
+    if(id==='propztest2')assert.ok(result.statisticsReport.sections.some(section=>section.title==='Normal approximation checks'));
+  }
+});
+
 test('comparison suites and categorical factorial models run in real WASM',async()=>{
   const py=await runtime();
   const run=source=>{

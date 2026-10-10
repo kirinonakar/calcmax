@@ -65,6 +65,22 @@ class CalculatorModel(application: Application) : AndroidViewModel(application) 
         advancedStatisticsDraft=JSONObject(draft.toString())
         prefs.edit().putString("advancedStatisticsDraft",draft.toString()).apply()
     }
+    fun statisticsSectionExpanded(section:String)=statisticsState.sectionExpanded(section)
+    fun setStatisticsSectionExpanded(section:String,expanded:Boolean)=statisticsState.setSectionExpanded(section,expanded)
+    fun collapseStatisticsSections()=statisticsState.collapseSections()
+    var clearedStatisticsResult by mutableStateOf<JSONObject?>(null)
+        private set
+    fun clearStatisticsResult(snapshot:JSONObject?=result) {
+        if(snapshot==null||busy||regressionBusy)return
+        clearedStatisticsResult=snapshot
+        val regression=snapshot.optJSONObject("regression")
+        if(regression!=null&&regression.toString()==regressionReport?.toString())statisticsState.clearRegression()
+        if(snapshot===result||snapshot.toString()==result?.toString()) {
+            result=null;resultSource="";resultVersion=-1;error="";committed=false
+            dmsDisplay=false;dmsConversion=false;engineeringConversion=false;engineeringShift=0
+        }
+        save()
+    }
     var probabilityResult by mutableStateOf<JSONObject?>(null)
         private set
     var probabilityError by mutableStateOf("")

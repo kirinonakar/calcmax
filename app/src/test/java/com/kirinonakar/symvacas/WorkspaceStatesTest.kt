@@ -6,6 +6,25 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class WorkspaceStatesTest {
+    @Test fun statisticsSectionsDefaultToSummaryAndPersistIncludingHiddenChildren() {
+        val prefs=MemoryPreferences()
+        val sections=listOf("summary","visualize","regression","analysis","preparation","models","tests","advanced")
+        val state=com.kirinonakar.symvacas.calculator.StatisticsState(prefs)
+        for(section in sections)assertEquals(section=="summary",state.sectionExpanded(section))
+        state.setSectionExpanded("summary",false)
+        state.setSectionExpanded("regression",true)
+        state.setSectionExpanded("models",true)
+        val restored=com.kirinonakar.symvacas.calculator.StatisticsState(prefs)
+        assertFalse(restored.sectionExpanded("summary"));assertTrue(restored.sectionExpanded("regression"));assertTrue(restored.sectionExpanded("models"))
+        restored.collapseSections()
+        val collapsed=com.kirinonakar.symvacas.calculator.StatisticsState(prefs)
+        for(section in sections)assertFalse(collapsed.sectionExpanded(section))
+        collapsed.setSectionExpanded("regression",true)
+        val editor=prefs.edit();collapsed.writeTo(editor);editor.apply()
+        val reopened=com.kirinonakar.symvacas.calculator.StatisticsState(prefs)
+        assertTrue(reopened.sectionExpanded("regression"));assertFalse(reopened.sectionExpanded("models"))
+    }
+
     @Test fun graphUndoRestoresDeletedInputsAndParametersWithoutRecordingUndo() {
         val state=GraphState(MemoryPreferences())
         val source="a*x\ncos(x)\n[s] x, 2, -1..1"

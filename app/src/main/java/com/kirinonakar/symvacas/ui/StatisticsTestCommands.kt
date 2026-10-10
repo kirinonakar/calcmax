@@ -138,15 +138,15 @@ internal fun statisticsTestCommand(
                 if(plan.matrix.size<2)null else "ttestpaired($mu0,${plan.samples.joinToString(",",transform=::vector)}$tailArgument)"
             }.getOrNull()
             grouping=="group-value" -> if(first!=null&&second!=null&&first.second.size>=2&&second.second.size>=2)"ttest2($mu0,${vector(first.second)},${vector(second.second)}$independentArgument$tailArgument)" else null
-            names.size>1 && column == "x-y" && values(firstColumn).size>=2 && values(secondColumn).size>=2 -> "ttest2($mu0,${vector(values(firstColumn))},${vector(values(secondColumn))}$independentArgument$tailArgument)"
-            names.size>1 && column == "paired" && pairs.size >= 2 -> "ttestpaired($mu0,${vector(pairs.map { it.first })},${vector(pairs.map { it.second })}$tailArgument)"
+            names.size>1 && column == "x-y" && firstColumn!=secondColumn && values(firstColumn).size>=2 && values(secondColumn).size>=2 -> "ttest2($mu0,${vector(values(firstColumn))},${vector(values(secondColumn))}$independentArgument$tailArgument)"
+            names.size>1 && column == "paired" && firstColumn!=secondColumn && pairs.size >= 2 -> "ttestpaired($mu0,${vector(pairs.map { it.first })},${vector(pairs.map { it.second })}$tailArgument)"
             column in names -> sample.takeIf { it.size >= 2 }?.let { "ttest($mu0,${vector(it)}$tailArgument)" }
             else -> null
         }
         "z test" -> when {
             !validNumber(mu0) || !validSigma -> null
             grouping=="group-value" -> if(first!=null&&second!=null&&validSigmaY&&first.second.isNotEmpty()&&second.second.isNotEmpty())"ztest2($mu0,$sigma,$sigmaY,${vector(first.second)},${vector(second.second)}$tailArgument)" else null
-            names.size>1 && column == "x-y" && validSigmaY && x.isNotEmpty() && y.isNotEmpty() -> "ztest2($mu0,$sigma,$sigmaY,${vector(values(firstColumn))},${vector(values(secondColumn))}$tailArgument)"
+            names.size>1 && column == "x-y" && firstColumn!=secondColumn && validSigmaY && values(firstColumn).isNotEmpty() && values(secondColumn).isNotEmpty() -> "ztest2($mu0,$sigma,$sigmaY,${vector(values(firstColumn))},${vector(values(secondColumn))}$tailArgument)"
             column in names -> sample.takeIf { it.isNotEmpty() }?.let { "ztest($mu0,$sigma,${vector(it)}$tailArgument)" }
             else -> null
         }

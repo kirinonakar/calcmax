@@ -81,6 +81,347 @@
     ]
   },
   {
+    "id": "propztest",
+    "label": "One-sample proportion z test",
+    "ko": "단일 표본 비율 z 검정",
+    "input": "table",
+    "suffix": "",
+    "example": "propztest(0.5,[[60,100]])",
+    "help": "propztest(p0,data) or propztest(p0,successes,trials); binary 0/1 data or [[successes,trials],...]. Optional both / left / right. Null-based standard error, no continuity correction; independent observations and adequate expected counts are required.",
+    "helpKo": "propztest(p0,자료) 또는 propztest(p0,성공수,시행수); 0/1 자료 또는 [[성공수,시행수],...]. 선택적 both·left·right. 귀무가설의 표준오차, 연속성 보정 없음. 독립 관측·충분한 기대빈도가 필요합니다.",
+    "section": "general",
+    "group": "Categorical data",
+    "groupKo": "범주형 자료",
+    "controls": [
+      {
+        "key": "layout",
+        "label": "Data layout",
+        "ko": "자료 구성",
+        "type": "choice",
+        "default": "counts",
+        "choices": [
+          {
+            "id": "counts",
+            "label": "Successes / trials",
+            "ko": "성공 수·시행 수"
+          },
+          {
+            "id": "binary",
+            "label": "Binary observations",
+            "ko": "이항 관측값"
+          }
+        ]
+      },
+      {
+        "key": "successes",
+        "label": "Successes column",
+        "ko": "성공 수 열",
+        "type": "column",
+        "default": 0,
+        "when": {
+          "layout": [
+            "counts"
+          ]
+        }
+      },
+      {
+        "key": "trials",
+        "label": "Trials column",
+        "ko": "시행 수 열",
+        "type": "column",
+        "default": 1,
+        "when": {
+          "layout": [
+            "counts"
+          ]
+        }
+      },
+      {
+        "key": "column",
+        "label": "Sample column",
+        "ko": "표본 열",
+        "type": "column",
+        "default": 0,
+        "when": {
+          "layout": [
+            "binary"
+          ]
+        }
+      },
+      {
+        "key": "successValue",
+        "label": "Success value",
+        "ko": "성공 값",
+        "type": "text",
+        "default": "1",
+        "when": {
+          "layout": [
+            "binary"
+          ]
+        }
+      },
+      {
+        "key": "p0",
+        "label": "Null proportion p0",
+        "ko": "귀무가설 비율 p0",
+        "type": "number",
+        "default": "0.5"
+      },
+      {
+        "key": "tail",
+        "label": "Alternative",
+        "ko": "대립가설",
+        "type": "choice",
+        "default": "both",
+        "choices": [
+          {
+            "id": "both",
+            "label": "Two-sided",
+            "ko": "양측"
+          },
+          {
+            "id": "left",
+            "label": "Less than",
+            "ko": "작다 (좌측)"
+          },
+          {
+            "id": "right",
+            "label": "Greater than",
+            "ko": "크다 (우측)"
+          }
+        ]
+      }
+    ],
+    "formHelp": "Counts: rows are success/trial batches for one population. Binary data: select a sample column and success value. H0: p=p0; p0 must be between 0 and 1. Expected successes and failures below 10 flag unreliable normal approximation.",
+    "formHelpKo": "빈도 입력의 각 행은 같은 모집단의 성공 수·시행 수입니다. 이항 자료는 표본 열·성공 값을 선택합니다. H0: p=p0, p0는 0과 1 사이입니다. 기대 성공·실패 수가 10 미만이면 정규근사 주의를 표시합니다.",
+    "exampleRows": [
+      [
+        "60",
+        "100"
+      ]
+    ]
+  },
+  {
+    "id": "propztest2",
+    "label": "Two-sample proportion z test",
+    "ko": "두 표본 비율 z 검정",
+    "input": "table",
+    "suffix": "",
+    "example": "propztest2(60,100,45,100)",
+    "help": "propztest2(A,B) or propztest2(successesA,trialsA,successesB,trialsB). H0: pA=pB; pooled standard error, no continuity correction. Optional both / left / right for A−B. Independent binary samples; paired outcomes require McNemar.",
+    "helpKo": "propztest2(A,B) 또는 propztest2(성공수A,시행수A,성공수B,시행수B). H0: pA=pB, 합동 표준오차, 연속성 보정 없음. A−B에 대한 both·left·right 선택. 독립 이항 표본용이며 대응 결과는 McNemar를 사용합니다.",
+    "section": "general",
+    "group": "Categorical data",
+    "groupKo": "범주형 자료",
+    "controls": [
+      {
+        "key": "layout",
+        "label": "Data layout",
+        "ko": "자료 구성",
+        "type": "choice",
+        "default": "counts",
+        "choices": [
+          {
+            "id": "counts",
+            "label": "Successes / trials",
+            "ko": "성공 수·시행 수"
+          },
+          {
+            "id": "binary",
+            "label": "Binary observations",
+            "ko": "이항 관측값"
+          }
+        ]
+      },
+      {
+        "key": "successes",
+        "label": "Successes column",
+        "ko": "성공 수 열",
+        "type": "column",
+        "default": 0,
+        "when": {
+          "layout": [
+            "counts"
+          ]
+        }
+      },
+      {
+        "key": "trials",
+        "label": "Trials column",
+        "ko": "시행 수 열",
+        "type": "column",
+        "default": 1,
+        "when": {
+          "layout": [
+            "counts"
+          ]
+        }
+      },
+      {
+        "key": "grouping",
+        "label": "Grouping",
+        "ko": "그룹 구성",
+        "type": "choice",
+        "default": "columns",
+        "choices": [
+          {
+            "id": "columns",
+            "label": "Columns",
+            "ko": "열별 그룹"
+          },
+          {
+            "id": "groups",
+            "label": "Group / value columns",
+            "ko": "그룹·값 열"
+          }
+        ],
+        "when": {
+          "layout": [
+            "binary"
+          ]
+        }
+      },
+      {
+        "key": "first",
+        "label": "Group A column",
+        "ko": "A 그룹 열",
+        "type": "column",
+        "default": 0,
+        "when": {
+          "grouping": [
+            "columns"
+          ],
+          "layout": [
+            "binary"
+          ]
+        }
+      },
+      {
+        "key": "second",
+        "label": "Group B column",
+        "ko": "B 그룹 열",
+        "type": "column",
+        "default": 1,
+        "when": {
+          "grouping": [
+            "columns"
+          ],
+          "layout": [
+            "binary"
+          ]
+        }
+      },
+      {
+        "key": "group",
+        "label": "Group column",
+        "ko": "그룹 열",
+        "type": "column",
+        "default": 0,
+        "when": {
+          "grouping": [
+            "groups"
+          ],
+          "layout": [
+            "binary"
+          ]
+        }
+      },
+      {
+        "key": "value",
+        "label": "Value column",
+        "ko": "값 열",
+        "type": "column",
+        "default": 1,
+        "when": {
+          "grouping": [
+            "groups"
+          ],
+          "layout": [
+            "binary"
+          ]
+        }
+      },
+      {
+        "key": "firstGroup",
+        "label": "Group A value",
+        "ko": "A 그룹 값",
+        "type": "group",
+        "default": "",
+        "when": {
+          "grouping": [
+            "groups"
+          ],
+          "layout": [
+            "binary"
+          ]
+        }
+      },
+      {
+        "key": "secondGroup",
+        "label": "Group B value",
+        "ko": "B 그룹 값",
+        "type": "group",
+        "default": "",
+        "when": {
+          "grouping": [
+            "groups"
+          ],
+          "layout": [
+            "binary"
+          ]
+        }
+      },
+      {
+        "key": "successValue",
+        "label": "Success value",
+        "ko": "성공 값",
+        "type": "text",
+        "default": "1",
+        "when": {
+          "layout": [
+            "binary"
+          ]
+        }
+      },
+      {
+        "key": "tail",
+        "label": "Alternative",
+        "ko": "대립가설",
+        "type": "choice",
+        "default": "both",
+        "choices": [
+          {
+            "id": "both",
+            "label": "Two-sided",
+            "ko": "양측"
+          },
+          {
+            "id": "left",
+            "label": "Less than",
+            "ko": "작다 (좌측)"
+          },
+          {
+            "id": "right",
+            "label": "Greater than",
+            "ko": "크다 (우측)"
+          }
+        ]
+      }
+    ],
+    "formHelp": "Counts: exactly two rows, Group A then Group B. Binary data: independent columns or group/value columns with a common success value. H0: pA=pB; left/right alternatives refer to A−B. Uses the pooled null proportion; paired outcomes require McNemar.",
+    "formHelpKo": "빈도 입력은 정확히 두 행이며 A 그룹·B 그룹 순서입니다. 이항 자료는 독립된 두 열 또는 그룹·값 열과 공통 성공 값을 선택합니다. H0: pA=pB, 좌측·우측은 A−B 기준입니다. 귀무가설의 합동 비율을 사용하며 대응 결과는 McNemar를 사용합니다.",
+    "exampleRows": [
+      [
+        "60",
+        "100"
+      ],
+      [
+        "45",
+        "100"
+      ]
+    ]
+  },
+  {
     "id": "mcnemar",
     "label": "McNemar",
     "ko": "McNemar",
@@ -1751,6 +2092,109 @@
       ],
       [
         "0.2"
+      ]
+    ]
+  },
+  {
+    "id": "tinterval",
+    "label": "t confidence interval",
+    "ko": "t 신뢰구간",
+    "input": "list",
+    "suffix": ",95",
+    "example": "tinterval(95,[1,2,3,4,5])",
+    "help": "Mean confidence interval with unknown population SD: tinterval(level,data) or tinterval(level,mean,SD,n).",
+    "helpKo": "모집단 표준편차를 모르는 평균의 신뢰구간: tinterval(수준,자료) 또는 tinterval(수준,평균,표준편차,n).",
+    "section": "tests",
+    "group": "Confidence intervals",
+    "groupKo": "신뢰구간",
+    "controls": [
+      {
+        "key": "column",
+        "label": "Sample column",
+        "ko": "표본 열",
+        "type": "column",
+        "default": 0
+      },
+      {
+        "key": "level",
+        "label": "Confidence level (%)",
+        "ko": "신뢰수준 (%)",
+        "type": "number",
+        "default": "95"
+      }
+    ],
+    "formHelp": "Select a sample column and confidence level. Uses the sample SD and Student t distribution for the mean interval.",
+    "formHelpKo": "표본 열과 신뢰수준을 선택합니다. 표본 표준편차와 Student t 분포로 평균 구간을 계산합니다.",
+    "exampleRows": [
+      [
+        "1"
+      ],
+      [
+        "2"
+      ],
+      [
+        "3"
+      ],
+      [
+        "4"
+      ],
+      [
+        "5"
+      ]
+    ]
+  },
+  {
+    "id": "zinterval",
+    "label": "z confidence interval",
+    "ko": "z 신뢰구간",
+    "input": "list",
+    "suffix": ",95,2",
+    "example": "zinterval(95,2,[1,2,3,4,5])",
+    "help": "Mean confidence interval with known population SD: zinterval(level,sigma,data) or zinterval(level,sigma,mean,n).",
+    "helpKo": "모집단 표준편차를 아는 평균의 신뢰구간: zinterval(수준,모집단표준편차,자료) 또는 zinterval(수준,모집단표준편차,평균,n).",
+    "section": "tests",
+    "group": "Confidence intervals",
+    "groupKo": "신뢰구간",
+    "controls": [
+      {
+        "key": "column",
+        "label": "Sample column",
+        "ko": "표본 열",
+        "type": "column",
+        "default": 0
+      },
+      {
+        "key": "level",
+        "label": "Confidence level (%)",
+        "ko": "신뢰수준 (%)",
+        "type": "number",
+        "default": "95"
+      },
+      {
+        "key": "sigma",
+        "label": "Known population SD σ",
+        "ko": "알려진 모집단 표준편차 σ",
+        "type": "number",
+        "default": "2"
+      }
+    ],
+    "formHelp": "Select a sample column and confidence level; enter the known population SD. A sample SD cannot replace the population SD.",
+    "formHelpKo": "표본 열·신뢰수준을 선택하고 알려진 모집단 표준편차를 입력합니다. 표본 표준편차로 대체할 수 없습니다.",
+    "exampleRows": [
+      [
+        "1"
+      ],
+      [
+        "2"
+      ],
+      [
+        "3"
+      ],
+      [
+        "4"
+      ],
+      [
+        "5"
       ]
     ]
   },

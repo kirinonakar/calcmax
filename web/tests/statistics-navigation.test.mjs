@@ -17,14 +17,17 @@ test('all shared analyses have one menu, grouped order, guided forms and local r
   }
   const ids=section=>schema.filter(item=>item.section===section).map(item=>item.id);
   assert.deepEqual(ids('preparation'),['impute']);
-  assert.deepEqual(ids('general'),['mcnemar']);
-  assert.deepEqual(ids('tests'),['shapiro','kstest','levene','bartlett','tukey','gameshowell','twowayanova','ancova','repeatedanova','friedman','cohend','eta2','padjust']);
+  assert.deepEqual(ids('general'),['propztest','propztest2','mcnemar']);
+  assert.deepEqual(ids('tests'),['shapiro','kstest','levene','bartlett','tukey','gameshowell','twowayanova','ancova','repeatedanova','friedman','cohend','eta2','padjust','tinterval','zinterval']);
   assert.deepEqual(ids('models'),['linearmodel','glm','poissonreg','nbreg','multinomial','ordinal','mixedmodel','glmm','gee','crossvalidate']);
   assert.deepEqual(ids('advanced'),['bayesmean','bayescompare','bayesproportion','bayesrate','bootstrapci','bayesbootstrap','pca','kmeans','survivalanalysis','kaplanmeier','logrank','cox','testpower','samplesize']);
   const catalog=readFileSync(new URL('../../app/src/main/java/com/kirinonakar/symvacas/ui/Catalog.kt',import.meta.url),'utf8');
   const advanced=catalog.match(/"Advanced statistics" to listOf\(([^\n]+)\)/)[1];
   assert.ok(!advanced.includes('impute(')&&!advanced.includes('levene(')&&!advanced.includes('glm('));
   const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+  const generalMenu=html.match(/id="statistics-op">([\s\S]*?)<\/select>/)[1];
+  assert.ok(generalMenu.includes('value="propztest"')&&generalMenu.includes('value="propztest2"'));
+  assert.ok(!generalMenu.includes('value="tinterval"')&&!generalMenu.includes('value="zinterval"'));
   const all=[...html.matchAll(/\bid="([^"]+)"/g)].map(match=>match[1]);
   assert.equal(new Set(all).size,all.length,'DOM IDs must be unique');
   for(const section of ['advanced','general','tests','preparation','models'])for(const suffix of ['kind','source','controls','result','preview','example-preview'])assert.ok(all.includes(`statistics-${section}-${suffix}`));

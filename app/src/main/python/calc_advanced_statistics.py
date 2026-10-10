@@ -20,10 +20,13 @@ from calc_advanced_two_sample import calculate as two_sample
 from calc_advanced_ancova import calculate as ancova
 from calc_advanced_factorial import calculate as factorial
 from calc_advanced_glm import calculate as glm
+from calc_proportion_tests import calculate as proportion
 
 
 # Function names, argument limits and handlers share one registry.
 _ANALYSES = {
+    'propztest': (2, 4, proportion),
+    'propztest2': (2, 5, proportion),
     'ancova': (1, 3, ancova),
     'glm': (1, 6, glm),
     'bayesproportion': (1, 5, bayesian),
@@ -71,7 +74,7 @@ def advanced(engine, name, a):
     require(low <= len(a) <= high, name + ' argument count mismatch')
     with mp.workdps(25):
         result = calculate(engine, name, a)
-    return convert(result)
+    return result if name in ('propztest','propztest2') else convert(result)
 
 
 def calculate(engine, name, a):

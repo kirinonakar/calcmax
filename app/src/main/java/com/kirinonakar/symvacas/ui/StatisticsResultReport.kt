@@ -63,7 +63,8 @@ internal fun statisticsCellText(m:CalculatorModel,cell:JSONObject)=ResultDisplay
     Column(Modifier.fillMaxWidth().testTag("statistics-result-report"),verticalArrangement=Arrangement.spacedBy(12.dp)) {
         Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
             Text(tr(report.getString("title")),Modifier.weight(1f),style=MaterialTheme.typography.titleMedium,color=c.ink)
-            TextButton(onClick={m.result?.let {clipboard.setText(AnnotatedString(statisticsResultCopyText(m,it,language)))}}){Text(tr("Copy result"),fontSize=12.sp)}
+            TextButton(onClick={m.result?.let {clipboard.setText(AnnotatedString(statisticsResultCopyText(m,it,language)))}}){Text(tr("Copy"),fontSize=12.sp)}
+            TextButton(onClick={m.clearStatisticsResult()},enabled=!m.busy&&!m.regressionBusy,modifier=Modifier.testTag("statistics-result-clear")){Text(tr("Clear"),fontSize=12.sp)}
         }
         report.optJSONArray("highlights")?.let {highlights->
             for(start in 0 until highlights.length() step 2)Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)) {

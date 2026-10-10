@@ -102,6 +102,28 @@ internal fun guidedStatisticsCommand(definition:JSONObject,rows:List<List<String
         return selected.map {row->listOf(row[0],if(row[1]==eventValue)"1" else "0")+row.drop(2)}
     }
     return when(id) {
+        "tinterval","zinterval"->"$id(${opts["level"]},${if(id=="zinterval")"${opts["sigma"]}," else ""}${vector(values(col("column")))})"
+        "propztest","propztest2"->{
+            val tail=if(opts["tail"]=="both")"" else ",${opts["tail"]}"
+            fun binary(sample:List<String>):List<String> {
+                val success=opts.getValue("successValue").trim()
+                require(success.isNotBlank()) {"Enter the success value"}
+                require(sample.isNotEmpty()&&sample.distinct().size<=2) {"Choose nonempty binary samples"}
+                require(sample.distinct().size!=2||success in sample) {"Success value does not occur in the selected samples"}
+                return sample.map {if(it==success)"1" else "0"}
+            }
+            if(opts["layout"]=="counts") {
+                val selected=complete(listOf(col("successes"),col("trials")))
+                if(id=="propztest")"$id(${opts["p0"]},${table(selected)}$tail)"
+                else {require(selected.size==2) {"Two-sample counts require exactly two rows (A then B)"};"$id(${selected.flatten().joinToString(",")}$tail)"}
+            } else if(id=="propztest")"$id(${opts["p0"]},${vector(binary(complete(listOf(col("column"))).map {it[0]}))}$tail)"
+            else {
+                val plan=statisticsComparisonData(rows,opts,strict=true)
+                require(plan.samples.flatten().distinct().size<=2) {"Both samples must use the same binary categories"}
+                require(plan.samples.flatten().distinct().size!=2||opts.getValue("successValue").trim() in plan.samples.flatten()) {"Success value does not occur in the selected samples"}
+                "$id(${plan.samples.joinToString(",") {vector(binary(it))}}$tail)"
+            }
+        }
         "shapiro"->{val sample=values(col("column"));require(sample.size in 3..5000) {"Shapiro-Wilk needs 3 to 5000 values"};"shapiro(${vector(sample)})"}
         "tukey","gameshowell"->{val plan=statisticsComparisonData(rows,opts,all=true);require(plan.samples.size>=2&&plan.samples.all {it.size>=2}) {"Enter at least two observations in each group"};"$id(${plan.samples.joinToString(",",transform=::vector)})"}
         "testpower","samplesize"->{

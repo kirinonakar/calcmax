@@ -27,7 +27,7 @@ internal fun survivalStepPoints(curve:JSONArray,index:Int):List<Pair<Double,Doub
     return points
 }
 
-@Composable internal fun SurvivalReport(report:JSONObject,plan:SurvivalPlan?,band:Boolean,onCopy:(()->Unit)?=null) {
+@Composable internal fun SurvivalReport(report:JSONObject,plan:SurvivalPlan?,band:Boolean,onCopy:(()->Unit)?=null,onClear:(()->Unit)?=null,clearEnabled:Boolean=true) {
     val c=LocalInstrument.current;val ko=isKorean()
     val exports=remember {GraphExportState()}
     fun label(en:String,kr:String)=if(ko)kr else en
@@ -37,7 +37,8 @@ internal fun survivalStepPoints(curve:JSONArray,index:Int):List<Pair<Double,Doub
     val names=groups.mapIndexed {i,g->plan?.groups?.getOrNull(i) ?: if(groups.size==1)label("All subjects","전체") else label("Group ","그룹 ")+number(g.getDouble("id"))}
     Row(Modifier.fillMaxWidth(),verticalAlignment=androidx.compose.ui.Alignment.CenterVertically) {
         Text("Kaplan–Meier",Modifier.weight(1f),style=MaterialTheme.typography.titleSmall)
-        if(onCopy!=null)SmallAction("Copy result",fontSize=12.sp,modifier=Modifier.testTag("statistics-survival-copy")){onCopy()}
+        if(onCopy!=null)SmallAction("Copy",fontSize=12.sp,modifier=Modifier.testTag("statistics-survival-copy")){onCopy()}
+        if(onClear!=null)SmallAction("Clear",enabled=clearEnabled,fontSize=12.sp,modifier=Modifier.testTag("statistics-survival-clear")){onClear()}
     }
     groups.forEachIndexed {i,g->Text("${names[i]} · n=${g.getInt("n")}",color=c.curves[i%c.curves.size],fontSize=12.sp)}
     ExportableGraphCanvas(Modifier.fillMaxWidth().height(250.dp).testTag("statistics-survival-plot").semantics {contentDescription=if(ko)"Kaplan–Meier 생존곡선과 95% 신뢰구간" else "Kaplan–Meier survival curves and 95% confidence intervals"},c.display,exports,

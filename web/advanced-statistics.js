@@ -114,6 +114,28 @@ export function guidedStatisticsCommand(definition,rows,settings={},columnLabels
   };
   const distinct=indices=>{if(new Set(indices).size!==indices.length)throw new Error('Roles must use different columns');};
   const complete=indices=>{distinct(indices);const selected=rows.map(row=>indices.map(i=>(row[i]||'').trim()));if(selected.some(row=>row.some(cell=>!cell)))throw new Error('Complete selected rows required');return selected;};
+  if(['tinterval','zinterval'].includes(id))return `${id}(${opts.level},${id==='zinterval'?opts.sigma+',':''}${list(values(column('column')))})`;
+  if(['propztest','propztest2'].includes(id)){
+    const tail=opts.tail==='both'?'':`,${opts.tail}`;
+    const binary=sample=>{
+      const success=String(opts.successValue).trim(),categories=new Set(sample);
+      if(!success)throw new Error('Enter the success value');
+      if(!sample.length||categories.size>2)throw new Error('Choose nonempty binary samples');
+      if(categories.size===2&&!categories.has(success))throw new Error('Success value does not occur in the selected samples');
+      return sample.map(value=>value===success?'1':'0');
+    };
+    if(opts.layout==='counts'){
+      const selected=complete([column('successes'),column('trials')]);
+      if(id==='propztest')return `${id}(${opts.p0},${table(selected)}${tail})`;
+      if(selected.length!==2)throw new Error('Two-sample counts require exactly two rows (A then B)');
+      return `${id}(${selected.flat().join(',')}${tail})`;
+    }
+    if(id==='propztest')return `${id}(${opts.p0},${list(binary(complete([column('column')]).map(row=>row[0])))}${tail})`;
+    const plan=statisticsComparisonData(rows,opts),all=plan.samples.flat(),categories=new Set(all);
+    if(categories.size>2)throw new Error('Both samples must use the same binary categories');
+    if(categories.size===2&&!categories.has(String(opts.successValue).trim()))throw new Error('Success value does not occur in the selected samples');
+    return `${id}(${plan.samples.map(sample=>list(binary(sample))).join(',')}${tail})`;
+  }
   if(['testpower','samplesize'].includes(id)){
     const keys=['effect',id==='testpower'?'n':'power','alpha'];
     if(keys.some(key=>!String(opts[key]).trim()))throw new Error('Enter all study design parameters');
@@ -369,7 +391,7 @@ export function advancedStatisticsRows(source,columnLimit){
   return selected;
 }
 
-export function createAdvancedStatistics({state,persist,data,columnLimit,copy,applyData,section='advanced'}) {
+export function createAdvancedStatistics({state,persist,data,columnLimit,copy,clearResult,applyData,section='advanced'}) {
   const panelId=`statistics-${section}`;
   const panel=key=>$(`${panelId}-${key}`);
   const schema=advancedStatisticsSchema.filter(item=>item.section===section);
@@ -471,8 +493,8 @@ export function createAdvancedStatistics({state,persist,data,columnLimit,copy,ap
             }
             form.append(group);
           }else{
-            const label=element('label',caption),control=element(field.type==='number'?'input':'select');control.id=id;
-            if(field.type==='number'){control.value=value;control.oninput=()=>changed(control.value);}
+            const label=element('label',caption),control=element(['number','text'].includes(field.type)?'input':'select');control.id=id;
+            if(['number','text'].includes(field.type)){control.value=value;control.oninput=()=>changed(control.value);}
             else{
               const choices=field.type==='column'?labels.map((name,i)=>({id:String(i),label:name,ko:name})):field.type==='group'?[...new Set(currentRows().map(row=>String(row[Number(opts.group)]??'').trim()).filter(Boolean))].map(name=>({id:name,label:name,ko:name})):field.choices.filter(choice=>!choice.when||Object.entries(choice.when).every(([key,values])=>values.includes(opts[key])));
               control.replaceChildren(...choices.map(choice=>{const item=element('option',korean?choice.ko:choice.label);item.value=String(choice.id);return item;}));
@@ -511,9 +533,12 @@ export function createAdvancedStatistics({state,persist,data,columnLimit,copy,ap
   function renderSurvivalResult(){
     const snapshot=displayed.copyResult;
     renderSurvivalReport(report,displayed.result,{...displayed.context,band:$('statistics-survival-band').checked,digits:state.digits,
-      onCopy:copy&&snapshot?()=>copy(statisticsResultMarkdown(snapshot,{digits:state.digits,notation:state.resultDisplayMode})):null});
+      onCopy:copy&&snapshot?()=>copy(statisticsResultMarkdown(snapshot,{digits:state.digits,notation:state.resultDisplayMode})):null,onClear:snapshot?()=>clearResult(snapshot):null});
   }
-  return {expression,context,render:update,showResult:(result,runContext)=>{
+  return {expression,context,render:update,clearResult:result=>{
+    if(displayed?.copyResult===result){displayed=null;reportKey='';report.replaceChildren();report.hidden=true;}
+    if(imputation&&imputation.result===result.imputation){imputation=null;update();}
+  },showResult:(result,runContext)=>{
     if(result.ok&&result.imputation&&runContext.dataSnapshot!==undefined){try{if(JSON.stringify(context())===JSON.stringify(runContext)){imputation={result:result.imputation,context:runContext};update();}}catch{}}
     if(!result.ok||!result.survival)return;
     try{if(JSON.stringify(context())!==JSON.stringify(runContext))return;}catch{return;}
