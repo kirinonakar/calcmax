@@ -58,6 +58,7 @@ internal fun statisticsCellText(m:CalculatorModel,cell:JSONObject)=ResultDisplay
     val c=LocalInstrument.current
     val clipboard=LocalClipboardManager.current
     val language=LocalLanguage.current
+    val collapseRequest=LocalStatisticsCollapseRequest.current
     val sections=report.getJSONArray("sections")
     Column(Modifier.fillMaxWidth().testTag("statistics-result-report"),verticalArrangement=Arrangement.spacedBy(12.dp)) {
         Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
@@ -78,6 +79,7 @@ internal fun statisticsCellText(m:CalculatorModel,cell:JSONObject)=ResultDisplay
         }
         report.optJSONArray("notes")?.let {notes->
             if(notes.length()>0){var notesExpanded by remember(report){mutableStateOf(false)}
+                LaunchedEffect(collapseRequest){if(collapseRequest>0)notesExpanded=false}
                 TextButton(onClick={notesExpanded=!notesExpanded}){Text((if(notesExpanded)"▾ " else "▸ ")+tr("Interpretation & assumptions"))}
                 if(notesExpanded)for(index in 0 until notes.length())Text(tr(notes.getString(index)),fontSize=12.sp,color=c.muted)
             }
@@ -93,6 +95,7 @@ internal fun statisticsCellText(m:CalculatorModel,cell:JSONObject)=ResultDisplay
             val rows=section.getJSONArray("rows")
             val collapsible=section.optInt("totalRows")>12&&section.getString("title") !in prominent
             var expanded by remember(report,index) {mutableStateOf(!collapsible)}
+            LaunchedEffect(collapseRequest){if(collapseRequest>0&&collapsible)expanded=false}
             if(collapsible)TextButton(onClick={expanded=!expanded}){Text("${if(expanded)"▾" else "▸"} ${tr(section.getString("title"))} (${section.optInt("totalRows")})")}
             else Text(tr(section.getString("title")),fontSize=13.sp,fontWeight=FontWeight.SemiBold,color=c.ink)
             if(!expanded)continue

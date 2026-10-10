@@ -15,7 +15,9 @@ import com.kirinonakar.symvacas.ui.theme.LocalInstrument
 
 @Composable internal fun StatisticsAnalysis(m: CalculatorModel,rows:List<List<String>>,kind:String,data:String="",rawRows:List<List<String>> = rows) {
     val c=LocalInstrument.current
-    var expanded by rememberSaveable {mutableStateOf(true)}
+    val collapseRequest=LocalStatisticsCollapseRequest.current
+    var expanded by rememberSaveable {mutableStateOf(collapseRequest==0)}
+    LaunchedEffect(collapseRequest){if(collapseRequest>0)expanded=false}
     var test by rememberSaveable {mutableStateOf("t test")}
     var column by rememberSaveable {mutableStateOf("x")}
     var tail by rememberSaveable {mutableStateOf("Two-sided")}

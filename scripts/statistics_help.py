@@ -204,6 +204,13 @@ The table compares design-matched families, not interchangeable estimands. Rank 
 
 def enrich_help(text, korean=False):
     index=int(bool(korean))
+    # Keep the choosing guide before the first descriptive-statistics entry.
+    # Remove its earlier generated placement before rebuilding it below.
+    for old_heading in ('## Stats — choosing a test','## 통계 — 검정 선택'):
+        old_start=text.find(old_heading)
+        old_end=text.find('\n## ',old_start+3) if old_start>=0 else -1
+        if old_end>=0 and text[old_end+1:].startswith('## Data & units'):
+            text=text[:old_start]+text[old_end+1:]
     start=text.find('## Statistical tests')
     if start<0: start=text.find('## Stats — choosing a test')
     if start<0: start=text.find('## 통계 — 검정 선택')
@@ -218,6 +225,13 @@ def enrich_help(text, korean=False):
         if pos>=0:
             basic=('`ttest2(delta, A, B, student)` — 독립 두 그룹의 합동분산 Student t. 기본 3인수는 Welch입니다.\n\n`welchanova(A, B, ...)` — 이분산 일요인 ANOVA + Games–Howell 자동 세트.\n\n`gameshowell(A, B, ...)` — 이분산 쌍별 사후비교·95% 동시 구간.\n\n' if korean else '`ttest2(delta, A, B, student)` — Pooled Student t; the three-argument default remains Welch.\n\n`welchanova(A, B, ...)` — Unequal-variance one-way ANOVA with automatic Games–Howell.\n\n`gameshowell(A, B, ...)` — Pairwise unequal-variance comparisons and simultaneous 95% intervals.\n\n')
             text=text[:pos]+basic+text[pos:]
+    guide_start=text.find('## '+('통계 — 검정 선택' if korean else 'Stats — choosing a test'))
+    data_start=text.find('## Data & units')
+    if 0<=data_start<guide_start:
+        entries=text.index('`ttest(',guide_start)
+        guide=text[guide_start:entries]
+        text=text[:guide_start]+'## Statistical tests\n\n'+text[entries:]
+        text=text[:data_start]+guide+text[data_start:]
     def entry(match):
         signature,description=match.group(1),match.group(2)
         name=signature.split('(')[0]

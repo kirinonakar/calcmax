@@ -59,8 +59,8 @@ export const advancedStatisticsSchema = [
         }
       }
     ],
-    "formHelp": "Fill missing NA cells by mean, median, mode, regression or k-NN.",
-    "formHelpKo": "결측값(NA)을 평균·중앙값·최빈값·회귀·k-NN으로 대체합니다.",
+    "formHelp": "Analyze missing numeric cells by mean, median, mode, regression or k-NN; Apply to current data writes the replacements while retaining observed values and headers. Reanalyze after editing data.",
+    "formHelpKo": "숫자 자료의 결측값을 평균·중앙값·최빈값·회귀·k-NN으로 분석합니다. 현재 데이터에 적용하면 관측값·헤더를 유지하며 결측 셀을 실제로 대체합니다. 편집 후에는 다시 분석하세요.",
     "exampleRows": [
       [
         "1",

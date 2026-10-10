@@ -51,11 +51,13 @@ private fun parseHeatMapSelection(value:String,count:Int,defaults:Set<Int>):Set<
 }
 private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinToString(",").ifEmpty {"-"}
 
-@Composable internal fun StatisticsSectionToggle(title:String,expanded:Boolean,tag:String,onClick:()->Unit) {
+internal val LocalStatisticsCollapseRequest=staticCompositionLocalOf {0}
+
+@Composable internal fun StatisticsSectionToggle(title:String,expanded:Boolean,tag:String,depth:Int=0,onClick:()->Unit) {
     val description=tr(if(expanded)"Expanded" else "Collapsed")
     TextButton(onClick=onClick,modifier=Modifier.fillMaxWidth().testTag(tag).semantics {stateDescription=description},
         contentPadding=PaddingValues(horizontal=0.dp,vertical=8.dp)) {
-        Text((if(expanded)"▾ " else "▸ ")+tr(title),Modifier.weight(1f),style=MaterialTheme.typography.titleMedium)
+        Text((if(expanded)"▾ " else "▸ ")+tr(title),Modifier.weight(1f),fontSize=if(depth==0)16.sp else 14.sp,fontWeight=if(depth==0)FontWeight.Bold else FontWeight.SemiBold,color=if(depth==0)LocalInstrument.current.accent else LocalInstrument.current.ink)
     }
 }
 
@@ -114,6 +116,7 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
     val clipboard=LocalClipboardManager.current
     val scope=rememberCoroutineScope()
     val panelScroll=rememberScrollState()
+    var collapseRequest by rememberSaveable {mutableIntStateOf(0)}
     var summaryExpanded by rememberSaveable {mutableStateOf(true)}
     var visualizeExpanded by rememberSaveable {mutableStateOf(true)}
     var regressionExpanded by rememberSaveable {mutableStateOf(true)}
@@ -232,7 +235,9 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
     val yValues=if(dataKind!="list")numericRows.mapNotNull {it.getOrNull(1)?.toDoubleOrNull()?.takeIf {v->v.isFinite()}} else emptyList()
     val zValues=if(dataColumns.size>=3)numericRows.mapNotNull {it.getOrNull(2)?.toDoubleOrNull()?.takeIf {v->v.isFinite()}} else emptyList()
     val paired=numericRows.mapNotNull {row->val x=row.getOrNull(0)?.toDoubleOrNull();val y=row.getOrNull(1)?.toDoubleOrNull();if(x!=null&&y!=null&&x.isFinite()&&y.isFinite())x to y else null}
+    Box(Modifier.fillMaxSize()) {
     Panel("Data & statistics","",panelScroll) {
+        CompositionLocalProvider(LocalStatisticsCollapseRequest provides collapseRequest) {
         if(names.isNotEmpty())Choices(names,activeName,{name->m.clearRegression();selected=name;isNew=false;m.dataSets.optJSONObject(name)?.let {item->datasetName=name;data=item.optString("csv");selectedDataKind=item.optString("kind","list");columnCount=if(selectedDataKind.startsWith("columns:"))statisticsColumnCount(selectedDataKind).toString() else "4";plotType=if(selectedDataKind=="xy")"Scatter" else "Histogram"}})
         Row(horizontalArrangement=Arrangement.spacedBy(6.dp),verticalAlignment=Alignment.CenterVertically) {
             Field(datasetName,"Dataset name",Modifier.weight(1f)){datasetName=it}
@@ -329,11 +334,11 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
                 if(dataKind=="xy")SmallAction("correlation",active=if(correlationCommand==null)false else null,translate=false,modifier=Modifier.testTag("statistics-correlation")){correlationCommand?.let {summarize(it)}}
             }
             statisticsReportFor(m.result,m.resultSource,setOf("stats","mean","median","variance","stdev","sumdata","quartiles","correlation","covariance"))?.let {StatisticsResultReport(m,it)}
-        }
         AdvancedStatistics(m,data,dataKind,"preparation","Data preparation",onDataApplied={updated->
             m.clearRegression();data=updated
             if(activeName.isNotBlank()&&datasetName==activeName)m.saveDataSet(activeName,updated,dataKind)
         })
+        }
             val fittedResponse=if(m.regressionMode in listOf("multiple","logistic","polynomial","ridge","lasso","elasticnet","logisticridge","logisticlasso","logisticelasticnet","randomforest","randomforestclassifier","randomforestregressor","bayeslinear","bayeslogistic"))m.regressionResponseColumn?.takeIf {it in regressionColumns.indices} ?: regressionColumns.lastIndex else regressionColumns.lastIndex
             val fittedVariables=statisticsRegressionVariables(dataKind,fittedResponse)
             val parameterLabels=statisticsRegressionParameterLabels(dataKind,m.regressionMode,fittedResponse,data)
@@ -368,13 +373,13 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
                         StatisticsSelectionTitle("Correlation method")
                         Choices(listOf("Pearson (p)","Spearman (s)","Kendall (k)"),when(heatMapCorrelation){"spearman"->"Spearman (s)";"kendall"->"Kendall (k)";else->"Pearson (p)"},{heatMapCorrelation=when(it){"Spearman (s)"->"spearman";"Kendall (k)"->"kendall";else->"pearson"}})
                         if(heatMapAxisIndices.isEmpty())Text(tr("No numeric columns"),fontSize=11.sp,color=LocalInstrument.current.muted)
-                        HeatMapAxisPicker("X axis variables",heatMapAxisIndices.map {it to heatMapColumnNames[it]},heatMapXSelection) {index->
+                        HeatMapAxisPicker("X axis variables",heatMapAxisIndices.map {it to statisticsColumnLabels(data,dataKind)[it]},heatMapXSelection) {index->
                             val adding=index !in heatMapXSelection
                             val next=if(adding)heatMapXSelection+index else heatMapXSelection-index
                             heatMapXColumns=encodeHeatMapSelection(next)
                             heatMapYColumns=encodeHeatMapSelection(heatMapYSelection-index)
                         }
-                        HeatMapAxisPicker("Y axis variables",heatMapAxisIndices.map {it to heatMapColumnNames[it]},heatMapYSelection) {index->
+                        HeatMapAxisPicker("Y axis variables",heatMapAxisIndices.map {it to statisticsColumnLabels(data,dataKind)[it]},heatMapYSelection) {index->
                             val adding=index !in heatMapYSelection
                             val next=if(adding)heatMapYSelection+index else heatMapYSelection-index
                             heatMapYColumns=encodeHeatMapSelection(next)
@@ -544,7 +549,7 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
                         m.fitRegression("regression($table,custom,$customFormula,$customVariable$guesses)",data)
                     },enabled=customFormula.isNotBlank()&&customVariable.matches(Regex("[A-Za-z][A-Za-z0-9_]*"))&&paired.size>=2&&!m.busy)
                 }
-                AdvancedStatistics(m,data,dataKind,"models","Regression & models")
+                AdvancedStatistics(m,data,dataKind,"models","Models")
             }
             if(dataKind!="list"&&m.regressionData==data&&m.regressionFit.isNotBlank()) {
                 Column(verticalArrangement=Arrangement.spacedBy(0.dp)) {
@@ -598,6 +603,11 @@ private fun encodeHeatMapSelection(selection:Set<Int>)=selection.sorted().joinTo
         StatisticsAnalysis(m,numericRows,if(dataColumns.size==1)"list" else dataKind,data,parsedRows)
         AdvancedStatistics(m,data,dataKind)
         Display(m,requestInitialFocus=false,showInput=false)
+        }
+    }
+    FilledTonalButton(onClick={summaryExpanded=false;visualizeExpanded=false;regressionExpanded=false;collapseRequest++},
+        modifier=Modifier.align(Alignment.TopEnd).padding(top=8.dp,end=8.dp).testTag("statistics-collapse-all"),
+        elevation=ButtonDefaults.filledTonalButtonElevation(defaultElevation=4.dp)) {Text(tr("Collapse all"),fontSize=12.sp)}
     }
 }
 

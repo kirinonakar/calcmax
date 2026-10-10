@@ -7,6 +7,8 @@ import androidx.compose.runtime.staticCompositionLocalOf
 val LocalLanguage = staticCompositionLocalOf { "en" }
 
 private val korean = mapOf(
+    "Games–Howell comparisons" to "Games–Howell 사후비교", "Tukey comparisons" to "Tukey 사후비교", "One-way ANOVA" to "일요인 ANOVA", "Independent t test" to "독립표본 t 검정",
+    "Models" to "모형", "Collapse all" to "모두 접기",
     "General analysis" to "일반 분석",
     "Mann–Whitney post-hoc (Holm)" to "Mann–Whitney 사후비교 (Holm)", "Wilcoxon post-hoc (Holm)" to "Wilcoxon 사후비교 (Holm)", "Paired t post-hoc (Holm)" to "대응 t 사후비교 (Holm)", "Raw p value" to "원래 p값", "Adjusted p value" to "보정 p값",
     "Rank post-hoc comparisons use separate pairwise ranks and Holm adjustment over all pairs. These are not Dunn tests. Interpret distributions and the study design, not just medians." to "순위 사후비교는 쌍별 순위와 전체 쌍의 Holm 보정을 사용합니다. Dunn 검정은 아닙니다. 중앙값만이 아닌 분포·연구 설계를 해석하세요.",

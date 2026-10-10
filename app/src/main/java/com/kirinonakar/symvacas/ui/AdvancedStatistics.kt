@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -66,7 +67,9 @@ internal fun advancedStatisticsRows(data:String,columnLimit:Int?=null,removeComp
     val legacy=m.advancedStatisticsDraft.takeIf {draft->definitions.any {it.getString("id")==draft.optString("kind")}}
     val draft=m.advancedStatisticsDraft.optJSONObject("panels")?.optJSONObject(section) ?: legacy ?: JSONObject()
     val ko=isKorean()
-    var expanded by rememberSaveable {mutableStateOf(section!="preparation")}
+    val collapseRequest=LocalStatisticsCollapseRequest.current
+    val nested=section!="advanced"
+    var expanded by rememberSaveable {mutableStateOf(section!="preparation"&&collapseRequest==0)}
     var selected by rememberSaveable {mutableStateOf(draft.optString("kind",definitions.first().getString("id")))}
     val definition=definitions.firstOrNull {it.getString("id")==selected} ?: definitions.first()
     var source by rememberSaveable {mutableStateOf(draft.optString("source",definition.getString("example")))}
@@ -114,8 +117,10 @@ internal fun advancedStatisticsRows(data:String,columnLimit:Int?=null,removeComp
     LaunchedEffect(m.result,m.busy) {
         if(pending&&!m.busy&&m.result!=null&&m.result!==previousResult){survivalReport=m.result?.optJSONObject("survival");survivalCopyResult=m.result?.takeIf {survivalReport!=null};pending=false}
     }
+    LaunchedEffect(collapseRequest){if(collapseRequest>0){expanded=false;menuOpen=false;exampleExpanded=false;expressionExpanded=false}}
+    Column(Modifier.fillMaxWidth().padding(start=if(nested)14.dp else 0.dp)) {
     HorizontalDivider()
-    StatisticsSectionToggle(title,expanded,"statistics-$section-toggle") {expanded=!expanded}
+    StatisticsSectionToggle(title,expanded,"statistics-$section-toggle",depth=if(nested)1 else 0) {expanded=!expanded}
     if(expanded) {
         fun choose(next:JSONObject) {selected=next.getString("id");source=next.getString("example");input=if(next.has("controls"))if(data.isBlank()||next.getString("input")=="none")"example" else "current" else "expression";message="";menuOpen=false;survivalReport=null;pending=false}
         Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
@@ -123,8 +128,8 @@ internal fun advancedStatisticsRows(data:String,columnLimit:Int?=null,removeComp
                 OutlinedButton(onClick={menuOpen=true}){Text(definition.getString(if(ko)"ko" else "label"))}
                 DropdownMenu(expanded=menuOpen,onDismissRequest={menuOpen=false}) {
                     definitions.groupBy {it.getString(if(ko)"groupKo" else "group")}.forEach {(group,items)->
-                        Text(group,Modifier.padding(horizontal=12.dp,vertical=6.dp),fontSize=12.sp,color=LocalInstrument.current.muted)
-                        items.forEach {item->DropdownMenuItem(text={Text(item.getString(if(ko)"ko" else "label"))},onClick={choose(item)})}
+                        Text(group,Modifier.padding(horizontal=12.dp,vertical=8.dp),fontSize=14.sp,fontWeight=FontWeight.SemiBold,color=LocalInstrument.current.ink)
+                        items.forEach {item->DropdownMenuItem(contentPadding=PaddingValues(start=24.dp,end=12.dp),text={Text(item.getString(if(ko)"ko" else "label"),fontSize=13.sp,fontWeight=FontWeight.Normal,color=LocalInstrument.current.ink)},onClick={choose(item)})}
                     }
                 }
             }
@@ -184,6 +189,7 @@ internal fun advancedStatisticsRows(data:String,columnLimit:Int?=null,removeComp
                 clipboard.setText(AnnotatedString(statisticsResultCopyText(m,snapshot,language)))
             }})}
         }
+    }
     }
 }
 

@@ -113,7 +113,8 @@ internal fun statisticsReplaceDataRows(csv:String,rows:List<List<String>>):Strin
 internal data class StatisticsCsvImport(val rows:List<List<String>>,val hasHeader:Boolean,val columnCount:Int) {
     val labels:List<String> get()=(0 until columnCount).map {index->
         val header=if(hasHeader)rows.firstOrNull()?.getOrNull(index)?.trim().orEmpty() else ""
-        if(header.isBlank())"Column ${index+1}" else "Column ${index+1}: $header"
+        val alias=statisticsColumnNames(statisticsKindForColumns(columnCount))[index]
+        if(header.isBlank()||header==alias)alias else "$header ($alias)"
     }
 }
 

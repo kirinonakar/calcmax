@@ -1,4 +1,10 @@
 export const nativeKorean = {
+  "Games–Howell comparisons": "Games–Howell 사후비교",
+  "Tukey comparisons": "Tukey 사후비교",
+  "One-way ANOVA": "일요인 ANOVA",
+  "Independent t test": "독립표본 t 검정",
+  "Models": "모형",
+  "Collapse all": "모두 접기",
   "General analysis": "일반 분석",
   "Mann–Whitney post-hoc (Holm)": "Mann–Whitney 사후비교 (Holm)",
   "Wilcoxon post-hoc (Holm)": "Wilcoxon 사후비교 (Holm)",

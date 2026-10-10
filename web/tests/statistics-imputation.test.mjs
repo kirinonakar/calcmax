@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {statisticsImputationCSV} from '../statistics-imputation.js';
 import {statisticsCommand,statisticsAnalysisData} from '../workspace-commands.js';
+import {statisticsPlotPanels} from '../statistics-plot.js';
+import {statisticsHeatMapData} from '../statistics-plot-data.js';
 
 test('applying imputation preserves headers, observed precision and unselected cells',()=>{
   const source='"Height, cm",Weight,ID\n1,,s1\n2,4.000,s2\nNA,6,s3';
@@ -20,4 +22,15 @@ test('four-column comparisons select arbitrary roles and match subject IDs befor
   assert.equal(statisticsCommand('A,B,C,D\n1,2,3,4\n2,5,6,9',{kind:'columns:4',op:'ttest2',firstGroup:'z',secondGroup:'x4',independentMethod:'student'}),'ttest2(0,[3,6],[4,9],student)');
   assert.match(statisticsCommand('A,B\n1,2\n3,5',{kind:'xy',op:'anova'}),/^welchanova\(/);
   assert.match(statisticsCommand('A,B\n1,2\n3,5',{kind:'xy',op:'anova',anovaMethod:'classic'}),/^anova\(/);
+  assert.equal(statisticsCommand('ID,A,B,C\ns1,1,2,3\ns2,4,5,6',{kind:'columns:4',op:'anova',groupColumns:'1,3'}),'welchanova([1,4],[3,6])');
+});
+
+test('plot grouping can use a middle column and retains header plus column IDs',()=>{
+  const rows=[['1','Control','2'],['3','Drug','4'],['5','Control','6']],columnNames=['height (x)','treatment (y)','weight (z)'];
+  const panels=statisticsPlotPanels(rows,{grouping:'column:1',columnCount:3,columnNames});
+  assert.deepEqual(panels.map(panel=>panel.label),['height (x)','weight (z)']);
+  assert.deepEqual(panels[0].series,[{label:'Control',values:[1,5]},{label:'Drug',values:[3]}]);
+  const heatmap=statisticsHeatMapData(rows,{grouping:'column:1',columnCount:3,columnNames});
+  assert.deepEqual(heatmap.columns,['height (x)','weight (z)']);
+  assert.deepEqual(heatmap.rows.map(row=>row.label),['Control','Drug','Control']);
 });

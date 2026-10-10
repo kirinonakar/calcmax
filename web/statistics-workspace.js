@@ -54,6 +54,7 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
   function invalidateRegression(){cancelClustering();cancelRegression();statisticsGraph=null;$('regression-caption').replaceChildren();$('regression-inference').replaceChildren();$('regression-export').hidden=true;$('regression-transfer').hidden=true;$('statistics-plot').replaceChildren();$('statistics-plot').hidden=true;}
   function regressionBusy(busy){$('regression-section').setAttribute('aria-busy',String(busy));}
   function cancelRegression(){if(!regressionRun)return;regressionRun=null;regressionBusy(false);engine.cancel();}
+  $('statistics-collapse-all').onclick=()=>{for(const details of document.querySelectorAll('.workspace[data-mode="statistics"] details[open]'))details.open=false;};
   $('statistics-new').onclick=()=>{
     cancelRegression();$('statistics-data').value='';$('dataset-name').value='';$('dataset-list').value='';
     dataKindChange();$('statistics-plot').hidden=true;persist();
@@ -101,7 +102,7 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
       const headerLabel=element('label','Skip header row','check');headerLabel.append(header);content.append(headerLabel);
       for(let index=0;index<rows[0].length;index++){
         const input=element('input');input.type='checkbox';input.checked=index<3;input.onchange=updatePreview;columns.push(input);
-        const label=element('label',`${t('Column')} ${index+1}: ${rows[0][index]}`,'check');label.append(input);content.append(label);
+        const label=element('label',statisticsCsvHasHeader(rows)?`${rows[0][index]} (${statisticsColumnNames(rows[0].length)[index]})`:statisticsColumnNames(rows[0].length)[index],'check');label.append(input);content.append(label);
       }
       content.append(element('h3','Preview'),preview);updatePreview();
       content.append(control('Import CSV/XLSX',()=>{
@@ -227,7 +228,7 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
     $('statistics-plot-orientation-label').hidden=!['box','violin'].includes(value('statistics-plot-type'));
     if(correlation){
       let heatMapRows=[];try{heatMapRows=dataRows();}catch{}
-      const names=statisticsHeatMapColumnNames(value('statistics-data'),kind);
+      const names=statisticsColumnLabels(value('statistics-data'),kind);
       const numericCount=names.filter((_,index)=>heatMapRows.some(row=>statisticsPlotNumber(row[index])!==null)).length;
       if(heatMapNumericColumnCount!==null&&heatMapNumericColumnCount<2&&numericCount>=2){$('statistics-heatmap-x-axis').replaceChildren();$('statistics-heatmap-y-axis').replaceChildren();}
       updateHeatMapAxis('statistics-heatmap-x-axis',names,heatMapRows);

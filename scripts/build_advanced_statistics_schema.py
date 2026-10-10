@@ -205,7 +205,7 @@ form_help={
  'nbreg':('NB2 counts with estimated dispersion; optional offset / positive exposure.','과산포를 추정하는 NB2 빈도 모형; 선택적 오프셋·양수 노출량.'),
  'gee':('Working correlation independence / exchangeable / AR(1); dispersion-adjusted correlation and cluster-robust SE. Optional fifth argument small adds Mancl-DeRouen covariance and t inference with clusters minus coefficient count df; use [] as the fourth argument when there are no interactions. This does not guarantee reliable inference with very few clusters. AR(1): row order, equal spacing. Interactions accept header names (age,weight), the shown column letters or labels (y,z / age (y),weight (z)), column numbers (2,3) or predictor order (p1,p2); separate pairs with ;.','작업상관 independence / exchangeable / AR(1); 분산 보정 상관·군집 강건 표준오차. 선택적 다섯째 인수 small은 Mancl-DeRouen 공분산·군집 수-계수 수 자유도의 t 추론을 적용합니다. 상호작용이 없으면 넷째 인수는 []입니다. 극소수 군집에서의 신뢰성을 보장하지는 않습니다. AR(1): 행 순서·등간격. 상호작용은 열 이름(age,weight), 표시된 열 문자·라벨(y,z / age (y),weight (z)), 열 번호(2,3), 설명변수 순서(p1,p2)로 입력하고 쌍은 ;로 구분합니다.'),
  'kstest':('Compare two samples or a specified continuous distribution.','두 표본 또는 지정한 연속분포와 비교합니다.'),
- 'impute':('Fill missing NA cells by mean, median, mode, regression or k-NN.','결측값(NA)을 평균·중앙값·최빈값·회귀·k-NN으로 대체합니다.'),
+ 'impute':('Analyze missing numeric cells by mean, median, mode, regression or k-NN; Apply to current data writes the replacements while retaining observed values and headers. Reanalyze after editing data.','숫자 자료의 결측값을 평균·중앙값·최빈값·회귀·k-NN으로 분석합니다. 현재 데이터에 적용하면 관측값·헤더를 유지하며 결측 셀을 실제로 대체합니다. 편집 후에는 다시 분석하세요.'),
  'crossvalidate':('Held-out folds fitted on training rows only; choose split, model and penalty.','훈련 행으로만 적합하는 홀드아웃 폴드; 분할·모형·벌점을 선택합니다.')
 }
 def literal(node):

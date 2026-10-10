@@ -317,3 +317,17 @@ input:disabled,select:disabled{opacity:.45;cursor:default}
 .plot svg.statistics-heatmap.statistics-heatmap-fit{min-width:0;max-width:100%}
 .statistics-highlights{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin:12px 0}.statistics-highlight{padding:12px;background:var(--number);border:1px solid var(--line);border-radius:8px;min-width:0}.statistics-highlight>span{display:block;font-size:.8rem;color:var(--muted);margin-bottom:6px}.statistics-highlight .math-display{font-size:1.2rem}.statistics-interpretation{padding:10px 12px;border-left:3px solid var(--accent);background:var(--number);font-size:.85rem;line-height:1.5}.statistics-result-details{margin:12px 0}.statistics-visualization{margin:16px 0;padding:12px;border:1px solid var(--line);border-radius:8px}.statistics-visualization>label{display:block;margin:8px 0}.statistics-visualization h4{margin:0 0 10px}.statistics-section pre{white-space:pre-wrap;overflow-wrap:anywhere}
 .catalog-help-block pre{overflow:auto;white-space:pre;font:12px/1.65 monospace;padding:12px;background:var(--number);border:1px solid var(--line);border-radius:8px}.catalog-help-block table{border-collapse:collapse;min-width:600px;font-size:13px}.catalog-help-block th,.catalog-help-block td{padding:10px;border:1px solid var(--line);text-align:left;vertical-align:top}.catalog-help-block th{background:var(--number)}
+
+/* Statistics navigation: colored primary headings, indented neutral submenus. */
+.workspace[data-mode="statistics"]>details.statistics-section>summary{color:var(--accent);font-size:16px;font-weight:700}
+.workspace[data-mode="statistics"] .statistics-section .statistics-section{margin:12px 0 12px 8px;padding-left:14px;border-left:1px solid var(--line)}
+.workspace[data-mode="statistics"] .statistics-section .statistics-section>summary{color:var(--ink);font-size:14px;font-weight:600}
+.workspace[data-mode="statistics"] .statistics-section details:not(.statistics-section)>summary{color:var(--ink);font-size:12px;font-weight:400}
+
+#statistics-regression #regression-section>h2{font-size:14px;font-weight:600;color:var(--ink)}
+
+.workspace[data-mode="statistics"] select optgroup{font-size:14px;font-weight:600;color:var(--ink)}
+.workspace[data-mode="statistics"] select option{font-size:13px;font-weight:400;color:var(--ink)}
+
+#statistics-collapse-all{position:fixed;top:calc(env(safe-area-inset-top,0px) + 16px);right:calc(env(safe-area-inset-right,0px) + 16px);z-index:12;background:var(--bar);color:var(--accent);box-shadow:0 3px 12px #0002;border:1px solid var(--line);border-radius:20px;font-size:12px;padding:10px 14px}
+.workspace[data-mode="statistics"][hidden] #statistics-collapse-all{display:none}

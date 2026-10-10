@@ -110,7 +110,7 @@ def statistics_report(name, value, precision, labels=None):
                     high=row.get('Upper 95% CI',row.get('Upper CI'))
                     if label: intervals.append((label,estimate,low,high))
                     expanded.append(row)
-                if intervals: interval_plot(title+' intervals',intervals,0 if ('coefficients' in title.lower() or 'post-hoc' in title.lower()) else None)
+                if intervals: interval_plot(title+' intervals',intervals,0 if (name=='gameshowell' or 'coefficients' in title.lower() or 'post-hoc' in title.lower()) else None)
                 v=expanded
                 keys = list(dict.fromkeys(key for row in v for key in row))
                 add(title, keys, [[row.get(key, 'unavailable') for key in keys] for row in v])

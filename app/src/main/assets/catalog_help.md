@@ -432,6 +432,83 @@ Example: ctranspose([[1,2],[3,4]])
 `svd(A)` — Singular value decomposition as [U, S, V]; the symbolic result can be large.
 Example: svd([[1,0],[0,2]])
 
+## Stats — choosing a test
+
+```text
+What do you want to compare?
+├─ Numeric values
+│  ├─ One sample vs a target mean → One-sample t test
+│  ├─ Two independent groups → Welch t test
+│  ├─ Before/after on the same subjects → Paired t test
+│  ├─ 3+ independent groups → Welch ANOVA → Games–Howell
+│  │  └─ Equal-variance ANOVA selected → Tukey–Kramer
+│  ├─ Same subjects in several conditions → Repeated-measures ANOVA / Friedman
+│  ├─ Two independent factors → Two-way ANOVA
+│  ├─ 3+ factors / numeric covariates → Factorial linear model
+│  └─ Groups with covariates to adjust → ANCOVA
+├─ Categories / counts
+│  ├─ Independent categories → χ² independence
+│  │  └─ Sparse 2×2 table → Fisher exact
+│  ├─ Paired binary outcomes → McNemar
+│  └─ Counts vs expected frequencies → χ² goodness of fit
+├─ Time until an event, with censoring → Survival analysis
+└─ Predict a response from variables → Regression & models
+
+Review shape, outliers and study design:
+  Mean analysis → Shapiro–Wilk + Q–Q plot
+  Equal-variance assumption → Brown–Forsythe / Levene
+  Independent rank comparisons → Mann–Whitney (2), Kruskal–Wallis (3+)
+  Symmetric paired differences → Wilcoxon signed-rank
+```
+
+### Independent and paired samples at a glance
+
+| Data structure | Parametric comparison | Nonparametric comparison | Available in this app |
+| --- | --- | --- | --- |
+| Two independent groups | Student / Welch t-test | Mann–Whitney U | All provided; Welch default |
+| Two paired groups | Paired t-test | Wilcoxon signed-rank | Both provided |
+| 3+ independent groups | ANOVA / Welch ANOVA | Kruskal–Wallis | All provided; Welch ANOVA default |
+| 3+ repeated conditions | Repeated-measures ANOVA | Friedman test | Both provided |
+
+The table compares design-matched families, not interchangeable estimands. Rank comparisons need their own shape/symmetry assumptions for location interpretations. Repeated conditions are measurements of the same subjects, not independent groups.
+
+Choose by purpose, measurement scale and study design first. Do not automatically switch tests based only on a normality p value. Welch t does not require equal variances. One-way ANOVA defaults to Welch with Games–Howell. Choosing equal-variance ANOVA automatically adds Tukey. Rank tests also have assumptions. Use z tests only for known population SDs.
+
+Raw-data t tests, t intervals, ANOVA and Tukey include sample summaries, assumption checks, Q–Q plots and distributions. t tests add effect sizes and two-sided 95% mean intervals; ANOVA adds η² and automatic post-hoc comparisons; Tukey/Games–Howell add overall ANOVA. Paired t checks differences; ANCOVA and factorial linear models check residuals. Summary-only input explicitly reports that normality cannot be checked.
+
+### Parametric methods with normal-model assumptions
+- One-sample / paired t tests and t intervals: exact small-sample inference assumes a normal population; paired tests concern the differences. Larger samples may be robust, but inspect skewness and influential outliers.
+- Welch t: normal-model mean comparison; equal variances are not required. Student's pooled-variance t additionally requires equal variances. Welch is the default; Student is selectable.
+- Welch ANOVA / Games–Howell: normal-model independent mean comparisons without equal variances; default one-way suite.
+- Two-way ANOVA / factorial linear models: normal independent errors, common residual variance, identifiable replicated design, and correctly specified interactions. Type II respects marginality; Type III uses sum contrasts for factorial effects.
+- Classic ANOVA / Tukey: independent normal errors and equal group variances. ANCOVA adds linear covariate effects and common slopes; repeated-measures ANOVA uses within-subject assumptions and sphericity corrections.
+- Gaussian mixed models: normal conditional errors and random effects, not necessarily a normal raw pooled response. Bayesian mean / two-sample comparisons assume their specified normal likelihood.
+- Bartlett: a variance test that is sensitive to non-normality; prefer median-centered Levene / Brown–Forsythe when normality is doubtful.
+
+### Parametric models do not all require normal observations
+- z tests / z intervals require known population SDs and a normal or suitably approximated sampling distribution of the mean; a sample SD alone is insufficient.
+- Binomial logistic, multinomial and ordinal models use categorical likelihoods; Poisson / negative-binomial models use count likelihoods. Check the chosen family, link, dispersion, design and model diagnostics instead of demanding normal outcomes.
+- GEE uses a mean/variance model and working correlation for clusters; it does not require normal raw outcomes. A robust covariance does not resolve very few clusters or a misspecified mean model.
+- GLMM assumptions follow its selected family and random effects. Bayesian proportion / Poisson rate models use binomial / Poisson likelihoods.
+
+### Nonparametric methods: no normality requirement
+- Mann–Whitney U: two independent distributions. Kruskal–Wallis: several independent distributions. A median/location interpretation needs comparable shapes; neither is simply a drop-in test of means.
+- Friedman: three or more repeated conditions, ranked within independent subjects; complete matched data and a chi-square approximation with tie correction.
+- Wilcoxon signed-rank: paired or one-sample differences, with symmetry for a location interpretation. Strong asymmetry is not fixed by choosing a rank test.
+- Kolmogorov–Smirnov: compare continuous distributions. A one-sample reference distribution must be fully specified independently; fitting its parameters from the same sample invalidates the usual p value (no Lilliefors correction here).
+- Kaplan–Meier / log-rank: censored event times without normality, but censoring and study-design assumptions still matter. Cox is semiparametric and requires proportional hazards, not normal outcomes.
+- Bootstrap: no normality assumption, but this app's IID resampling requires independent, representative observations; use an appropriate design for paired, clustered or time-dependent data.
+
+### Categorical tests: normality is not the decision criterion
+- χ² independence / goodness of fit: independent counts and adequate expected frequencies. Fisher exact: sparse independent 2×2 tables. McNemar: paired binary outcomes. Choose by design and counts, not Shapiro p values.
+
+### How to choose
+- Start with the question: mean difference, distribution difference, association, prediction or survival. Then identify independent groups, paired observations or clusters.
+- For mean questions, use the t/ANOVA family when its error model and design are reasonable. Inspect Q–Q plots, sample sizes, skewness and outliers together. Use Welch for independent two-group means with unequal variances.
+- For ordinal/rank or distribution questions, consider Mann–Whitney or Kruskal–Wallis; for paired symmetric location differences, consider Wilcoxon. State the changed estimand rather than calling every rank result a mean or median difference.
+- For severely non-normal, asymmetric or dependent data, review transformations, an appropriate distribution/cluster model or design-aware inference; a nonparametric label alone is not a remedy.
+- Shapiro p ≥ 0.05 does not prove normality; p < 0.05 does not automatically invalidate every mean analysis. Do not let a preliminary significance test silently choose the main method.
+
 ## Data & units
 `stats(list)` — Summary statistics of a list.
 Example: stats([1,2,3,4])
@@ -559,82 +636,7 @@ Example: cauchycdf(-1,1,0,1)
 `invcauchy(q)` / `invcauchy(q,x₀,γ)` — Cauchy quantile for 0 ≤ q ≤ 1. Endpoints return −∞ and ∞; q=0.5 returns the location (median).
 Example: invcauchy(0.75,0,1)
 
-## Stats — choosing a test
-
-```text
-What do you want to compare?
-├─ Numeric values
-│  ├─ One sample vs a target mean → One-sample t test
-│  ├─ Two independent groups → Welch t test
-│  ├─ Before/after on the same subjects → Paired t test
-│  ├─ 3+ independent groups → Welch ANOVA → Games–Howell
-│  │  └─ Equal-variance ANOVA selected → Tukey–Kramer
-│  ├─ Same subjects in several conditions → Repeated-measures ANOVA / Friedman
-│  ├─ Two independent factors → Two-way ANOVA
-│  ├─ 3+ factors / numeric covariates → Factorial linear model
-│  └─ Groups with covariates to adjust → ANCOVA
-├─ Categories / counts
-│  ├─ Independent categories → χ² independence
-│  │  └─ Sparse 2×2 table → Fisher exact
-│  ├─ Paired binary outcomes → McNemar
-│  └─ Counts vs expected frequencies → χ² goodness of fit
-├─ Time until an event, with censoring → Survival analysis
-└─ Predict a response from variables → Regression & models
-
-Review shape, outliers and study design:
-  Mean analysis → Shapiro–Wilk + Q–Q plot
-  Equal-variance assumption → Brown–Forsythe / Levene
-  Independent rank comparisons → Mann–Whitney (2), Kruskal–Wallis (3+)
-  Symmetric paired differences → Wilcoxon signed-rank
-```
-
-### Independent and paired samples at a glance
-
-| Data structure | Parametric comparison | Nonparametric comparison | Available in this app |
-| --- | --- | --- | --- |
-| Two independent groups | Student / Welch t-test | Mann–Whitney U | All provided; Welch default |
-| Two paired groups | Paired t-test | Wilcoxon signed-rank | Both provided |
-| 3+ independent groups | ANOVA / Welch ANOVA | Kruskal–Wallis | All provided; Welch ANOVA default |
-| 3+ repeated conditions | Repeated-measures ANOVA | Friedman test | Both provided |
-
-The table compares design-matched families, not interchangeable estimands. Rank comparisons need their own shape/symmetry assumptions for location interpretations. Repeated conditions are measurements of the same subjects, not independent groups.
-
-Choose by purpose, measurement scale and study design first. Do not automatically switch tests based only on a normality p value. Welch t does not require equal variances. One-way ANOVA defaults to Welch with Games–Howell. Choosing equal-variance ANOVA automatically adds Tukey. Rank tests also have assumptions. Use z tests only for known population SDs.
-
-Raw-data t tests, t intervals, ANOVA and Tukey include sample summaries, assumption checks, Q–Q plots and distributions. t tests add effect sizes and two-sided 95% mean intervals; ANOVA adds η² and automatic post-hoc comparisons; Tukey/Games–Howell add overall ANOVA. Paired t checks differences; ANCOVA and factorial linear models check residuals. Summary-only input explicitly reports that normality cannot be checked.
-
-### Parametric methods with normal-model assumptions
-- One-sample / paired t tests and t intervals: exact small-sample inference assumes a normal population; paired tests concern the differences. Larger samples may be robust, but inspect skewness and influential outliers.
-- Welch t: normal-model mean comparison; equal variances are not required. Student's pooled-variance t additionally requires equal variances. Welch is the default; Student is selectable.
-- Welch ANOVA / Games–Howell: normal-model independent mean comparisons without equal variances; default one-way suite.
-- Two-way ANOVA / factorial linear models: normal independent errors, common residual variance, identifiable replicated design, and correctly specified interactions. Type II respects marginality; Type III uses sum contrasts for factorial effects.
-- Classic ANOVA / Tukey: independent normal errors and equal group variances. ANCOVA adds linear covariate effects and common slopes; repeated-measures ANOVA uses within-subject assumptions and sphericity corrections.
-- Gaussian mixed models: normal conditional errors and random effects, not necessarily a normal raw pooled response. Bayesian mean / two-sample comparisons assume their specified normal likelihood.
-- Bartlett: a variance test that is sensitive to non-normality; prefer median-centered Levene / Brown–Forsythe when normality is doubtful.
-
-### Parametric models do not all require normal observations
-- z tests / z intervals require known population SDs and a normal or suitably approximated sampling distribution of the mean; a sample SD alone is insufficient.
-- Binomial logistic, multinomial and ordinal models use categorical likelihoods; Poisson / negative-binomial models use count likelihoods. Check the chosen family, link, dispersion, design and model diagnostics instead of demanding normal outcomes.
-- GEE uses a mean/variance model and working correlation for clusters; it does not require normal raw outcomes. A robust covariance does not resolve very few clusters or a misspecified mean model.
-- GLMM assumptions follow its selected family and random effects. Bayesian proportion / Poisson rate models use binomial / Poisson likelihoods.
-
-### Nonparametric methods: no normality requirement
-- Mann–Whitney U: two independent distributions. Kruskal–Wallis: several independent distributions. A median/location interpretation needs comparable shapes; neither is simply a drop-in test of means.
-- Friedman: three or more repeated conditions, ranked within independent subjects; complete matched data and a chi-square approximation with tie correction.
-- Wilcoxon signed-rank: paired or one-sample differences, with symmetry for a location interpretation. Strong asymmetry is not fixed by choosing a rank test.
-- Kolmogorov–Smirnov: compare continuous distributions. A one-sample reference distribution must be fully specified independently; fitting its parameters from the same sample invalidates the usual p value (no Lilliefors correction here).
-- Kaplan–Meier / log-rank: censored event times without normality, but censoring and study-design assumptions still matter. Cox is semiparametric and requires proportional hazards, not normal outcomes.
-- Bootstrap: no normality assumption, but this app's IID resampling requires independent, representative observations; use an appropriate design for paired, clustered or time-dependent data.
-
-### Categorical tests: normality is not the decision criterion
-- χ² independence / goodness of fit: independent counts and adequate expected frequencies. Fisher exact: sparse independent 2×2 tables. McNemar: paired binary outcomes. Choose by design and counts, not Shapiro p values.
-
-### How to choose
-- Start with the question: mean difference, distribution difference, association, prediction or survival. Then identify independent groups, paired observations or clusters.
-- For mean questions, use the t/ANOVA family when its error model and design are reasonable. Inspect Q–Q plots, sample sizes, skewness and outliers together. Use Welch for independent two-group means with unequal variances.
-- For ordinal/rank or distribution questions, consider Mann–Whitney or Kruskal–Wallis; for paired symmetric location differences, consider Wilcoxon. State the changed estimand rather than calling every rank result a mean or median difference.
-- For severely non-normal, asymmetric or dependent data, review transformations, an appropriate distribution/cluster model or design-aware inference; a nonparametric label alone is not a remedy.
-- Shapiro p ≥ 0.05 does not prove normality; p < 0.05 does not automatically invalidate every mean analysis. Do not let a preliminary significance test silently choose the main method.
+## Statistical tests
 
 `ttest(μ0,[...])` — Compare one sample mean with a target, such as average score against 70. One-sample t test of the sample mean against μ0.
 Example: ttest(0,[1,2,3,4])

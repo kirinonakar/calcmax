@@ -8,6 +8,15 @@ import org.json.JSONArray
 import com.kirinonakar.symvacas.math.Parser
 
 class AdvancedStatisticsTest {
+    @Test fun middlePlotGroupingKeepsHeaderLabelsAndValues() {
+        val rows=listOf(listOf("1","Control","2"),listOf("3","Drug","4"),listOf("5","Control","6"))
+        val labels=listOf("height (x)","treatment (y)","weight (z)")
+        val panels=statisticsPlotPanels(rows,"xyz","column:1",labels)
+        assertEquals(listOf("height (x)","weight (z)"),panels.map {it.label})
+        assertEquals(listOf("Control" to listOf(1.0,5.0),"Drug" to listOf(3.0)),panels[0].series)
+        assertEquals(listOf("height (x)","weight (z)"),statisticsHeatMapData(rows,"xyz","column:1",columnNames=labels).columns)
+        assertEquals("welchanova([1,4],[3,6])",statisticsTestCommand("ANOVA",listOf(listOf("s1","1","2","3"),listOf("s2","4","5","6")),"columns:4","x","Two-sided","0","2","95",groupColumns="1,3"))
+    }
     @Test fun imputationApplicationPreservesHeadersAndObservedPrecision() {
         val source="\"Height, cm\",Weight,ID\n1,,s1\n2,4.000,s2\nNA,6,s3"
         val filled=JSONArray("[[\"1\",\"5\"],[\"2\",\"4\"],[\"1.5\",\"6\"]]")
