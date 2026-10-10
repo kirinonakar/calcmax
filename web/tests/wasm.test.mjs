@@ -12,11 +12,23 @@ import {statisticsResultMarkdown} from '../statistics-markdown.js';
 import {statisticsRequest} from '../statistics-request.js';
 import {guidedStatisticsCommand} from '../advanced-statistics.js';
 import {advancedStatisticsSchema} from '../advanced-statistics-schema.js';
-import {graphInputTree} from '../graph-workspace.js';
+import {graphInputTree,graphExpressions} from '../graph-workspace.js';
 
 // Reuse the interpreter for sequential integration scenarios. The cold solver
 // scenario below explicitly loads its own interpreter to keep startup coverage.
 let sharedRuntime;
+test('five surfaces and five space curves survive the real WASM graph request',async()=>{
+  const py=await runtime();
+  for(const [kind,source] of [['surface','x^2/a^2+y^2/b^2+z^2/c^2=1\nz=x+y\nz=x-y\nz=sin(x)\nx^2+y^2+z^2=1'],['space',Array.from({length:5},(_,i)=>`C(t)=(sin(t),cos(t),${i})`).join('\n')]]){
+    py.globals.set('payload',JSON.stringify({action:'graph',graphKind:kind,trees:graphExpressions(source,kind).map(s=>graphInputTree(s,kind)),min:-2,max:2,surfaceYMin:-2,surfaceYMax:2,surfaceSamples:16,parameters:{a:1,b:1.5,c:.7}}));
+    const result=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));
+    assert.equal(result.ok,true,result.error);
+    if(kind==='surface'){
+      assert.equal(result.surfaces.length,5);assert.deepEqual(result.parameters,['a','b','c']);assert.equal(result.surfaces[0].convexSurface,true);
+      assert.equal(result.surfaces[0].surfaceVertices.length,642);assert.ok(result.surfaces[1].surface.length>0);
+    }else assert.equal(result.spaceCurves.length,5);
+  }
+});
 test('animated ellipsoids reuse a direct sphere topology through real WASM',async()=>{
   const py=await runtime(),durations=[];let topology;
   for(let i=0;i<10;i++){

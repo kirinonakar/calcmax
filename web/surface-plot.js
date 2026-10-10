@@ -6,7 +6,7 @@ function element(tag,attributes={},text=''){
   for(const [name,value] of Object.entries(attributes))node.setAttribute(name,String(value));
   node.textContent=text;return node;
 }
-export function plotSurface(container,result,view,{digits=10,rotation=35,elevation=32,zoom=1,renderMode='wireframe',color='#007b68'}={}){
+export function plotSurface(container,result,view,{digits=10,rotation=35,elevation=32,zoom=1,renderMode='surface',color='#007b68'}={}){
   if(!/^#[0-9a-f]{6}$/i.test(color))color='#007b68';
   const rgb=[1,3,5].map(index=>parseInt(color.slice(index,index+2),16));
   const [zmin,zmax]=surfaceZRange(result.zMin,result.zMax),bounds={...view,zmin,zmax},w=800,h=460,pad=42,scale=(h-2*pad)*.3*zoom;

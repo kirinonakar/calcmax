@@ -27,7 +27,7 @@ internal class GraphState(private val prefs:SharedPreferences) {
     var yMax by mutableDoubleStateOf(prefs.getString("yMax","5")?.toDoubleOrNull()?.takeIf(Double::isFinite) ?: 5.0)
     var zMin by mutableStateOf(prefs.getString("zMin",null)?.toDoubleOrNull()?.takeIf(Double::isFinite))
     var zMax by mutableStateOf(prefs.getString("zMax",null)?.toDoubleOrNull()?.takeIf(Double::isFinite))
-    var surfaceRenderMode by mutableStateOf(prefs.getString("surfaceRenderMode","wireframe")?.takeIf {it in listOf("wireframe","surface","surface-wireframe")} ?: "wireframe")
+    var surfaceRenderMode by mutableStateOf(prefs.getString("surfaceRenderMode","surface")?.takeIf {it in listOf("wireframe","surface","surface-wireframe")} ?: "surface")
     var surfaceColor by mutableStateOf(prefs.getString("surfaceColor","#007b68")?.takeIf {it.matches(Regex("#[0-9a-fA-F]{6}"))} ?: "#007b68")
     var surfaceSamples by mutableIntStateOf(prefs.getInt("surfaceSamples",26).coerceIn(12,96))
     var surfaceAutoDensity by mutableStateOf(prefs.getBoolean("surfaceAutoDensity",true))

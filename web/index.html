@@ -43,6 +43,7 @@ y=2*x {x&gt;2}</pre>
         <p><strong>Other graph types</strong></p>
         <p class="hint">Parametric: [cos(t),sin(t)] · Polar: 1+cos(t) (radians) · Sequence: u(n-1)+1 (enter initial values) · 3D surface: z=sin(x)*cos(y) · Differential equation: -y (dy/dt; enter t₀ and initial y values)</p>
         <p class="hint">3D: z=f(x,y) or F(x,y,z)=0 · x^2+y^2+z^2+sin(4*x)+sin(4*y)+sin(4*z)=a</p>
+        <p class="hint">3D graphs · up to 5 · one per line</p>
         <p class="hint">3D curve: C(t)=4*(sin(t),cos(t),0.6*sin(2*t)) · [x(t),y(t),z(t)]</p>
         <p class="hint">3D implicit surfaces use the x, y and z ranges. Auto z uses the y range; other letters become sliders.</p>
         <p class="hint">Tap to trace · drag to pan · pinch or scroll to zoom</p>
@@ -62,7 +63,7 @@ y=2*x {x&gt;2}</pre>
       <div id="graph-viewport-ranges" class="form-row"><label>View x min<input id="graph-xmin" type="number" value="-10" step="any"></label><label>View x max<input id="graph-xmax" type="number" value="10" step="any"></label></div>
       <div id="graph-surface-controls" class="graph-surface-panel" hidden="">
         <div class="graph-surface-appearance">
-          <label><span>Rendering</span><select id="graph-surface-render"><option value="wireframe">Wireframe</option><option value="surface">Surface</option><option value="surface-wireframe">Surface + mesh</option></select></label>
+          <label><span>Rendering</span><select id="graph-surface-render"><option value="wireframe">Wireframe</option><option value="surface" selected>Surface</option><option value="surface-wireframe">Surface + mesh</option></select></label>
           <label><span>Surface color</span><input id="graph-surface-color" type="color" value="#007b68"></label>
           <div class="graph-surface-density"><div class="graph-surface-density-heading"><label for="graph-surface-samples">Mesh density</label><label class="check"><input id="graph-auto-density" type="checkbox" checked>Auto</label></div><span class="graph-surface-slider"><input id="graph-surface-samples" type="range" min="12" max="96" step="1" value="26"><output id="graph-surface-samples-value">26 × 26</output></span></div>
         </div>

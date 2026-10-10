@@ -757,7 +757,7 @@ def graph_sequence(engine, request, trees, start, end):
 
 def graph_space(engine,request,trees,start,end):
     from calc_graph3d import space_coordinate_trees,space_curve_samples
-    require(1<=len(trees)<=20,"Enter one to twenty 3D curves [x(t),y(t),z(t)]")
+    require(1<=len(trees)<=5,"Enter one to five 3D curves [x(t),y(t),z(t)]")
     coordinates=[space_coordinate_trees(tree) for tree in trees]
     require(all(coordinates),"Enter a 3D curve [x(t),y(t),z(t)] or C(t)=(x(t),y(t),z(t))")
     t=engine.symbol('t');engine.bindings['t']=t
@@ -788,12 +788,22 @@ def axis_quadric(expression,axes):
 
 
 def graph_surface(engine, request, trees, xmin, xmax):
-    require(len(trees) == 1, "Enter one surface expression z=f(x,y) or F(x,y,z)=0")
+    require(1<=len(trees)<=5,"Enter one to five surface expressions z=f(x,y) or F(x,y,z)=0")
+    if len(trees)==1:
+        return graph_surface_single(engine,request,trees[0],xmin,xmax)
+    surfaces=[graph_surface_single(engine,request,tree,xmin,xmax) for tree in trees]
+    return {'surface':[], 'surfaces':surfaces,
+            'parameters':sorted({name for surface in surfaces for name in surface['parameters']}),
+            'zMin':min(surface['zMin'] for surface in surfaces),
+            'zMax':max(surface['zMax'] for surface in surfaces)}
+
+
+def graph_surface_single(engine, request, tree, xmin, xmax):
     ymin, ymax = float(request.get("surfaceYMin", -3)), float(request.get("surfaceYMax", 3))
     require(math.isfinite(ymin) and math.isfinite(ymax) and ymax > ymin, "Invalid surface y range")
     x, y, z = engine.symbol("x"), engine.symbol("y"), engine.symbol("z")
     engine.bindings.update({"x":x, "y":y, "z":z})
-    expression = graph_expressions(engine, trees, ("x", "y", "z"))[0]
+    expression = graph_expressions(engine, [tree], ("x", "y", "z"))[0]
     if isinstance(expression,s.Equality):
         implicit=not (expression.lhs==z and not expression.rhs.has(z))
         expression=expression.lhs-expression.rhs if implicit else expression.rhs

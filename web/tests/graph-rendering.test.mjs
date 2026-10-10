@@ -2,8 +2,23 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {integralPolygons} from '../graph-integral.js';
 import {clipGraphSegment} from '../graph-geometry.js';
-import {surfaceLightingGradient,prepareSurfaceFaces,projectSurfaceFaces,surfaceProjection} from '../surface-geometry.js';
+import {surfaceLightingGradient,prepareSurfaceFaces,combineSurfaceFaces,projectSurfaceFaces,surfaceProjection} from '../surface-geometry.js';
 import {surfaceCameraMatrix} from '../surface-gpu.js';
+
+test('multiple surfaces sort across groups and preserve each groups closed-shell culling',()=>{
+  const bounds={xmin:-1,xmax:1,ymin:-1,ymax:1,zmin:-1,zmax:1};
+  const triangle=[[-.5,-.5,0],[.5,-.5,0],[0,.5,0]];
+  const group=prepareSurfaceFaces([],bounds,[triangle]);
+  const closed={...group,closed:true};
+  const combined=combineSurfaceFaces([group,closed,group,closed,group]);
+  assert.equal(combined.convex,false);assert.equal(combined.closed,false);
+  for(const elevation of [-32,32]){
+    const faces=projectSurfaceFaces(combined,surfaceProjection(bounds,35,elevation));
+    assert.ok(faces.some(f=>f.group===0)&&faces.some(f=>f.group===2)&&faces.some(f=>f.group===4));
+    assert.ok(faces.filter(f=>f.group===1||f.group===3).every(f=>f.front));
+    for(let i=1;i<faces.length;i++)assert.ok(faces[i].depth>=faces[i-1].depth);
+  }
+});
 
 test('convex shells draw front faces last at every angle and camera depth agrees with projection',()=>{
   const vertices=[[2,0,0],[-2,0,0],[0,1,0],[0,-1,0],[0,0,.5],[0,0,-.5]],ids=[[0,2,4],[2,1,4],[1,3,4],[3,0,4],[2,0,5],[1,2,5],[3,1,5],[0,3,5]];

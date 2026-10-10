@@ -34,19 +34,23 @@ internal fun isImplicitSurface(source:String):Boolean = runCatching {
     else tree.nodes().any {it.kind=="symbol" && it.value=="z"}
 }.getOrDefault(false)
 
+internal fun graphCurveLimit(kind:String):Int=when(kind){"differential"->1;"surface","space"->5;else->20}
+internal fun graphSourceLimit(kind:String):Int=when(kind){"differential"->1;"surface","space"->5;else->24}
+internal fun hasImplicitSurface(source:String):Boolean=source.lines().filter(String::isNotBlank).take(5).any(::isImplicitSurface)
+
 internal fun appendGraphSource(existing:String,source:String,kind:String="cartesian"):String {
     val lines=existing.lines().filter(String::isNotBlank)
-    val limit=if(kind in listOf("surface","differential"))1 else 20
+    val limit=graphCurveLimit(kind)
     if(lines.any {it.trim()==source.trim()})return existing
-    require(lines.size<24 && lines.count {!isGraphShading(it)}<limit) {"Graph limit reached. Remove a function before adding another."}
+    require(lines.size<graphSourceLimit(kind) && lines.count {!isGraphShading(it)}<limit) {"Graph limit reached. Remove a function before adding another."}
     return existing.trimEnd()+(if(lines.isEmpty())"" else "\n")+source
 }
 
 internal fun removeGraphSource(existing:String,index:Int,kind:String="cartesian",shading:Boolean=false):String {
     val lines=existing.lines()
-    val visible=lines.withIndex().filter {it.value.isNotBlank()}.take(if(kind in listOf("surface","differential"))1 else 24)
+    val visible=lines.withIndex().filter {it.value.isNotBlank()}.take(graphSourceLimit(kind))
     val target=visible.filter {isGraphShading(it.value)==shading}
-        .take(if(shading)4 else if(kind in listOf("surface","differential"))1 else 20).getOrNull(index) ?: return existing
+        .take(if(shading)4 else graphCurveLimit(kind)).getOrNull(index) ?: return existing
     return lines.filterIndexed {i,_->i!=target.index}.joinToString("\n")
 }
 
@@ -70,13 +74,13 @@ internal object CalculatorGraphActions {
         continuation.invokeOnCancellation {Handler(Looper.getMainLooper()).post {clock.removeFrameCallback(callback)}}
     }
     fun CalculatorModel.performPlot(auto: Boolean = false, preview: Boolean = false) {
-        val limit=if(graphKind in listOf("surface","differential")) 1 else 20
+        val limit=graphCurveLimit(graphKind)
         // Coalesce animation ticks before reparsing or allocating another request.
         if((graphAnimating || preview) && graphJob?.isActive==true) {graphPendingPlot={performPlot(auto,preview)};return}
         val trees=mutableListOf<JSONObject>()
         val shadings=JSONArray()
         try {
-            graphSource.lines().filter { it.isNotBlank() }.take(if(graphKind in listOf("surface","differential")) 1 else 24).forEach { raw->
+            graphSource.lines().filter { it.isNotBlank() }.take(graphSourceLimit(graphKind)).forEach { raw->
                 val line=raw.trim()
                 if(isGraphShading(line)) {
                     if(graphKind!="cartesian")throw SyntaxException("Shading is available on Cartesian graphs",0)
@@ -107,7 +111,7 @@ internal object CalculatorGraphActions {
         if(secondDerivativeSelected!=null)request.put("secondDerivativeSelected",secondDerivativeSelected)
         if(shadings.length()>0)request.put("shadings",shadings)
         if(kind=="surface") {
-            val implicit=isImplicitSurface(source)
+            val implicit=hasImplicitSurface(source)
             val density=SurfaceMesh.sampleCount(xMin,xMax,yMin,yMax,surfaceSamples,surfaceAutoDensity,surfaceZoom.toDouble(),implicit)
             request.put("surfaceYMin",yMin).put("surfaceYMax",yMax).put("surfaceSamples",if(graphAnimating)minOf(density,if(implicit)16 else 32) else density)
             request.put("surfaceZMin",zMin ?: yMin).put("surfaceZMax",zMax ?: yMax)

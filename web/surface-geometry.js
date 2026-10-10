@@ -100,7 +100,7 @@ export function projectSurfaceFaces(prepared,projection){
   const cache=new Map(),project=p=>{if(!cache.has(p))cache.set(p,projection.project(p));return cache.get(p);},faces=[];
   for(const face of prepared.faces){
     const front=face.normal.reduce((sum,v,i)=>sum+v*projection.direction[i],0)>1e-12*Math.hypot(...face.normal);
-    if(prepared.closed&&!front)continue;
+    if((face.closed??prepared.closed)&&!front)continue;
     const projected=face.points.map(project);
     const lighting=face.levels?surfaceLightingGradient(face.source.map(project),face.levels):null;
     faces.push({...face,projected,front,lighting,depth:projected.reduce((sum,p)=>sum+p[2],0)/projected.length});
@@ -108,6 +108,12 @@ export function projectSurfaceFaces(prepared,projection){
   // A convex shell's front and back each project without self-overlap. Draw
   // every back face before every front face, including when ranges cut it open.
   return faces.sort((a,b)=>prepared.convex&&a.front!==b.front?Number(a.front)-Number(b.front):a.depth-b.depth);
+}
+// Keep all surfaces in one scene so their depths interleave across groups.
+export function combineSurfaceFaces(groups){
+  if(groups.length===1)return groups[0];
+  return {faces:groups.flatMap((group,index)=>group.faces.map(face=>({...face,group:index,closed:group.closed}))),
+    closed:groups.every(group=>group.closed),convex:false,limits:groups[0]?.limits};
 }
 export function surfaceFaces(mesh,bounds,projection,triangles=null,triangleNormals=null,convex=false){
   return projectSurfaceFaces(prepareSurfaceFaces(mesh,bounds,triangles,triangleNormals,convex),projection);

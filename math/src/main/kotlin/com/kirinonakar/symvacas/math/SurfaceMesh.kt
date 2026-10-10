@@ -6,8 +6,8 @@ data class SurfaceBounds(val xmin:Double,val xmax:Double,val ymin:Double,val yma
     val limits=listOf(xmin to xmax,ymin to ymax,zmin to zmax)
 }
 data class SurfaceLighting(val start:DoubleArray,val end:DoubleArray,val min:Double,val max:Double)
-data class SurfaceFace(val points:List<DoubleArray>,val depth:Double,val height:Double,val light:Double,val lighting:SurfaceLighting?=null,val projected:List<DoubleArray> = emptyList(),val front:Boolean=false,val brightness:Double?=null)
-data class PreparedSurfaceFace(val points:List<DoubleArray>,val source:List<DoubleArray>,val normal:DoubleArray,val levels:List<Double>?,val height:Double,val light:Double)
+data class SurfaceFace(val points:List<DoubleArray>,val depth:Double,val height:Double,val light:Double,val lighting:SurfaceLighting?=null,val projected:List<DoubleArray> = emptyList(),val front:Boolean=false,val brightness:Double?=null,val group:Int=0)
+data class PreparedSurfaceFace(val points:List<DoubleArray>,val source:List<DoubleArray>,val normal:DoubleArray,val levels:List<Double>?,val height:Double,val light:Double,val group:Int=0,val closed:Boolean?=null)
 data class PreparedSurface(val faces:List<PreparedSurfaceFace>,val convex:Boolean,val closed:Boolean)
 
 class SurfaceProjection(val bounds:SurfaceBounds,rotation:Double,elevation:Double) {
@@ -122,12 +122,16 @@ object SurfaceMesh {
         fun point(p:DoubleArray)=cache.getOrPut(p){projection.project(p)}
         val faces=prepared.faces.mapNotNull {face->
             val front=face.normal.indices.sumOf {face.normal[it]*projection.direction[it]}>1e-12*sqrt(face.normal.sumOf {it*it})
-            if(prepared.closed&&!front)return@mapNotNull null
+            if((face.closed ?: prepared.closed)&&!front)return@mapNotNull null
             val projected=face.points.map(::point)
             val lighting=face.levels?.let {lightingGradient(face.source.map(::point),it)}
-            SurfaceFace(face.points,projected.map {it[2]}.average(),face.height,face.light,lighting,projected,front,face.levels?.average())
+            SurfaceFace(face.points,projected.map {it[2]}.average(),face.height,face.light,lighting,projected,front,face.levels?.average(),face.group)
         }
         return faces.sortedWith(compareBy<SurfaceFace> {if(prepared.convex&&it.front)1 else 0}.thenBy {it.depth})
+    }
+    fun combine(groups:List<PreparedSurface>):PreparedSurface {
+        if(groups.size==1)return groups.first()
+        return PreparedSurface(groups.flatMapIndexed {index,group->group.faces.map {it.copy(group=index,closed=group.closed)}},false,groups.all {it.closed})
     }
     fun faces(mesh:List<List<DoubleArray?>>,projection:SurfaceProjection,triangles:List<List<DoubleArray>> = emptyList(),triangleNormals:List<List<DoubleArray>> = emptyList(),convex:Boolean=false):List<SurfaceFace> {
         return project(prepare(mesh,projection.bounds,triangles,triangleNormals,convex),projection)

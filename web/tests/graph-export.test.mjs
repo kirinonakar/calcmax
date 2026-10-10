@@ -7,6 +7,17 @@ function plotContainer(){
   return {querySelector:()=>canvas,closest:()=>null,ownerDocument:{defaultView:{devicePixelRatio:1,getComputedStyle:()=>({getPropertyValue:key=>key==='--number'?'#123456':'',borderLeftWidth:'0',borderRightWidth:'0'})}}};
 }
 
+test('five surface groups export together with distinct colors in solid and wireframe modes',()=>{
+  const colors=['#ff0000','#00ff00','#0000ff','#ff00ff','#00ffff'];
+  const result={surface:[],surfaces:colors.map((_,i)=>({surface:[[[-1,-1,i/4],[1,-1,i/4]],[[-1,1,i/4],[1,1,i/4]]]})),zMin:-1,zMax:1};
+  const bounds={xmin:-1,xmax:1,ymin:-1,ymax:1};
+  const wire=graphSvg(plotContainer(),result,bounds,{colors,surfaceView:{renderMode:'wireframe'}});
+  for(const color of colors)assert.ok(wire.includes(`stroke="${color}"`));
+  const solid=graphSvg(plotContainer(),result,bounds,{colors});
+  const fills=[...solid.matchAll(/fill="(rgb\([^)]+\))"/g)].map(m=>m[1]);
+  assert.equal(new Set(fills).size,5);assert.doesNotMatch(solid,/NaN|Infinity/);
+});
+
 test('SVG records the actual 2D plot with gaps, clipping, shading and dashed analysis',()=>{
   const result={curves:[[[-1,-1],[0,0],null,[.5,.25],[1,1]]],shadings:[{fill:[[[-1,-1],[0,0],[0,-1]]]}]};
   const svg=graphSvg(plotContainer(),result,{xmin:-1,xmax:1,ymin:-1,ymax:1},{analysis:{line:[[-1,0],[1,0]]},trace:[0,0]});

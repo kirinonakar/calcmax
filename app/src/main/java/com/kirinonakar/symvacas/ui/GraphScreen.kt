@@ -39,6 +39,9 @@ import androidx.compose.ui.unit.*
 import com.kirinonakar.symvacas.calculator.CalculatorModel
 import com.kirinonakar.symvacas.calculator.isGraphShading
 import com.kirinonakar.symvacas.calculator.removeGraphInputLine
+import com.kirinonakar.symvacas.calculator.graphCurveLimit
+import com.kirinonakar.symvacas.calculator.graphSourceLimit
+import com.kirinonakar.symvacas.calculator.hasImplicitSurface
 import com.kirinonakar.symvacas.calculator.isImplicitSurface
 import com.kirinonakar.symvacas.calculator.graphShadingBody
 import com.kirinonakar.symvacas.math.PiAxis
@@ -150,7 +153,7 @@ import kotlin.math.*
     val plotHeight=if(halfGraphHeight)graphHeight*0.5f else graphHeight
     Column(Modifier.fillMaxSize().verticalScroll(graphScrollState)) {
     Column(Modifier.fillMaxWidth().zIndex(1f)) {
-        GraphSourceInput(m.graphSource,{m.updateGraphSource(it)},m.graphKind in listOf("surface","differential"))
+        GraphSourceInput(m.graphSource,{m.updateGraphSource(it)},m.graphKind=="differential")
         TextButton(onClick={inputHelpOpen=!inputHelpOpen},modifier=Modifier.padding(horizontal=4.dp).testTag("graph-input-help-toggle")) {
             Text("${if(inputHelpOpen)"▾" else "▸"} ${tr("Graph input help")}",fontSize=12.sp)
         }
@@ -171,6 +174,7 @@ import kotlin.math.*
             Text(tr("Other graph types"),fontSize=12.sp,color=c.ink,fontWeight=FontWeight.SemiBold)
             Text(tr("3D implicit surfaces use the x, y and z ranges. Auto z uses the y range; other letters become sliders."),fontSize=12.sp,color=c.muted)
             Text("x^2+y^2+z^2+sin(4*x)+sin(4*y)+sin(4*z)=a",fontSize=12.sp,color=c.ink)
+            Text(tr("3D graphs · up to 5 · one per line"),fontSize=12.sp,color=c.ink)
             Text(tr("3D curve: C(t)=4*(sin(t),cos(t),0.6*sin(2*t)) · [x(t),y(t),z(t)]"),fontSize=12.sp,color=c.ink)
             Text(tr("Parametric: [cos(t),sin(t)] · Polar: 1+cos(t) (radians) · Sequence: u(n-1)+1 (enter initial values) · 3D surface: z=sin(x)*cos(y) · Differential equation: -y (dy/dt; enter t₀ and initial y values)"),fontSize=12.sp,color=c.muted)
         }
@@ -264,8 +268,8 @@ import kotlin.math.*
             val line=m.graphAnalysis?.optJSONArray("line")
             if(line==null||line.length()!=2)null else listOfNotNull(line.optJSONArray(0)?.let {it.getDouble(0) to it.getDouble(1)},line.optJSONArray(1)?.let {it.getDouble(0) to it.getDouble(1)}).takeIf {it.size==2}
         }
-        val visibleSources=m.graphSource.lines().filter(String::isNotBlank).take(if(m.graphKind in listOf("surface","differential"))1 else 24)
-        val sources=visibleSources.filter {!(m.graphKind=="cartesian" && isGraphShading(it))}.take(if(m.graphKind in listOf("surface","differential"))1 else 20)
+        val visibleSources=m.graphSource.lines().filter(String::isNotBlank).take(graphSourceLimit(m.graphKind))
+        val sources=visibleSources.filter {!(m.graphKind=="cartesian" && isGraphShading(it))}.take(graphCurveLimit(m.graphKind))
         val analysisCurveKey=if(selectedDerivativeOrder==0)selected else -selectedDerivativeOrder
         val analysisCurveLabels=buildMap {
             sources.indices.forEach {put(it,"f${it+1}")}
@@ -340,7 +344,7 @@ import kotlin.math.*
             }
             val surfaceZRange=m.graphData?.let {SurfaceMesh.zRange(m.zMin ?: it.optDouble("zMin",-1.0),m.zMax ?: it.optDouble("zMax",1.0))}
             Column(Modifier.fillMaxWidth()) {
-            GraphFormulas(m.graphKind,sources,0,null,"",shadeSources,null,{},removeSource,m.displayDigits,c.curves)
+            GraphFormulas(m.graphKind,sources,0,null,"",shadeSources,null,{},removeSource,m.displayDigits,if(sources.size==1)listOf(Color(android.graphics.Color.parseColor(m.surfaceColor))) else c.curves)
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal=14.dp),horizontalArrangement=Arrangement.spacedBy(6.dp),verticalAlignment=Alignment.CenterVertically) {
                 Text(if(isKorean())"렌더링" else "Rendering",fontSize=11.sp,color=c.muted)
                 listOf("wireframe" to (if(isKorean())"와이어프레임" else "Wireframe"),"surface" to (if(isKorean())"표면" else "Surface"),"surface-wireframe" to (if(isKorean())"표면+격자" else "Surface + mesh")).forEach { (mode,label)->
@@ -679,10 +683,10 @@ import kotlin.math.*
             Column(Modifier.width(64.dp).fillMaxHeight().clipToBounds().background(c.scientific).verticalScroll(vertical).padding(vertical=10.dp)) {
                 repeat(value.count {it=='\n'}+1) {index->
                     Row(Modifier.fillMaxWidth().height(rowHeight),verticalAlignment=Alignment.CenterVertically) {
-                        Text("${index+1}",Modifier.weight(1f),style=style.copy(color=c.muted),textAlign=TextAlign.End,softWrap=false)
                         Box(Modifier.width(32.dp).fillMaxHeight().clickable {onValue(removeGraphInputLine(value,index))}.semantics {contentDescription="$deleteLabel ${index+1}"}.testTag("graph-delete-line-${index+1}"),contentAlignment=Alignment.Center) {
                             Text("×",style=style.copy(color=c.muted))
                         }
+                        Text("${index+1}",Modifier.weight(1f).padding(end=8.dp),style=style.copy(color=c.muted),textAlign=TextAlign.End,softWrap=false)
                     }
                 }
             }
@@ -950,7 +954,7 @@ internal fun graphShadeFormula(source:String,displayDigits:Int?=null):GraphShade
     })
     if(m.graphKind!="space")Row(Modifier.fillMaxWidth().height(38.dp).padding(horizontal=14.dp),verticalAlignment=Alignment.CenterVertically) {
         Text(if(isKorean())"격자 밀도" else "Mesh density",fontSize=11.sp,color=c.muted)
-        val implicit=isImplicitSurface(m.graphSource)
+        val implicit=hasImplicitSurface(m.graphSource)
         val count=SurfaceMesh.sampleCount(m.xMin,m.xMax,m.yMin,m.yMax,m.surfaceSamples,m.surfaceAutoDensity,m.surfaceZoom.toDouble(),implicit)
         CompactSlider(count.toFloat(),{m.surfaceSamples=it.roundToInt()},Modifier.weight(1f),valueRange=12f..(if(implicit)32f else 96f),steps=if(implicit)19 else 83,onValueChangeFinished={m.save()},enabled=!m.surfaceAutoDensity)
         Text(if(implicit)"$count × $count × $count" else "$count × $count",fontSize=11.sp,color=c.muted)
@@ -959,26 +963,35 @@ internal fun graphShadeFormula(source:String,displayDigits:Int?=null):GraphShade
     }
 }
 
+private data class SurfaceGeometry(val mesh:List<List<DoubleArray?>>,val triangles:List<List<DoubleArray>>,val normals:List<List<DoubleArray>>,val convex:Boolean)
+private fun readSurfaceGeometry(data:JSONObject):SurfaceGeometry {
+    fun points(name:String):List<DoubleArray?> {
+        val values=data.optJSONArray(name)
+        return (0 until (values?.length() ?: 0)).map {i->values!!.optJSONArray(i)?.let {p->
+            if(p.isNull(2))null else doubleArrayOf(p.optDouble(0),p.optDouble(1),p.optDouble(2)).takeIf {it.all(Double::isFinite)}
+        }}
+    }
+    val rows=data.optJSONArray("surface")
+    val mesh=(0 until (rows?.length() ?: 0)).map {i->
+        val row=rows!!.getJSONArray(i)
+        (0 until row.length()).map {k->row.optJSONArray(k)?.let {p->if(p.isNull(2))null else doubleArrayOf(p.optDouble(0),p.optDouble(1),p.optDouble(2)).takeIf {it.all(Double::isFinite)}}}
+    }
+    val vertices=points("surfaceVertices");val normals=points("surfaceNormals")
+    val indices=data.optJSONArray("surfaceTriangles")
+    val faces=(0 until (indices?.length() ?: 0)).mapNotNull {i->
+        val face=indices!!.getJSONArray(i);val ids=(0 until face.length()).map {face.optInt(it,-1)}
+        ids.takeIf {it.size==3&&it.all {id->vertices.getOrNull(id)!=null}}
+    }
+    return SurfaceGeometry(mesh,faces.map {face->face.map {vertices[it]!!}},faces.map {face->face.mapNotNull {normals.getOrNull(it)}},data.optBoolean("convexSurface",false))
+}
+
 @Composable private fun SurfaceGraph(m:CalculatorModel,rotation:Float,elevationDeg:Float,zoom:Float,renderMode:String,colorHex:String,exports:GraphExportState,modifier:Modifier=Modifier) {
     val c=LocalInstrument.current
-    val mesh=remember(m.graphData) {
-        val rows=m.graphData?.optJSONArray("surface")
-        (0 until (rows?.length() ?: 0)).map { ri->
-            val row=rows!!.optJSONArray(ri)
-            (0 until (row?.length() ?: 0)).map { ci->
-                val point=row?.optJSONArray(ci)
-                if(point==null || point.isNull(2)) null else doubleArrayOf(point.optDouble(0),point.optDouble(1),point.optDouble(2)).takeIf {it.all(Double::isFinite)}
-            }
-        }
-    }
-    val triangles=remember(m.graphData) {
-        val vertices=m.graphData?.optJSONArray("surfaceVertices")
-        val coordinates=(0 until (vertices?.length() ?: 0)).map {i->vertices!!.optJSONArray(i)?.let {p->doubleArrayOf(p.optDouble(0),p.optDouble(1),p.optDouble(2)).takeIf {it.all(Double::isFinite)}}}
-        val faces=m.graphData?.optJSONArray("surfaceTriangles")
-        (0 until (faces?.length() ?: 0)).mapNotNull {i->
-            val face=faces?.optJSONArray(i) ?: return@mapNotNull null
-            (0 until face.length()).mapNotNull {k->coordinates.getOrNull(face.optInt(k,-1))}.takeIf {it.size==3}
-        }
+    val groups=remember(m.graphData) {
+        val data=m.graphData
+        val surfaces=data?.optJSONArray("surfaces")
+        val sources=if(surfaces==null)listOfNotNull(data) else (0 until surfaces.length()).map {surfaces.getJSONObject(it)}
+        sources.map(::readSurfaceGeometry)
     }
     val spaceCurves=remember(m.graphData) {
         val curves=m.graphData?.optJSONArray("spaceCurves")
@@ -987,28 +1000,19 @@ internal fun graphShadeFormula(source:String,displayDigits:Int?=null):GraphShade
             (0 until curve.length()).map {k->curve.optJSONArray(k)?.let {p->doubleArrayOf(p.optDouble(0),p.optDouble(1),p.optDouble(2)).takeIf {it.all(Double::isFinite)}}}
         }
     }
-    val triangleNormals=remember(m.graphData) {
-        val normals=m.graphData?.optJSONArray("surfaceNormals")
-        val vectors=(0 until (normals?.length() ?: 0)).map {i->normals!!.optJSONArray(i)?.let {p->doubleArrayOf(p.optDouble(0),p.optDouble(1),p.optDouble(2))}}
-        val indices=m.graphData?.optJSONArray("surfaceTriangles")
-        (0 until (indices?.length() ?: 0)).map {i->
-            val face=indices!!.getJSONArray(i)
-            (0 until face.length()).mapNotNull {k->vectors.getOrNull(face.optInt(k,-1))}
-        }
-    }
     val xmin=m.xMin;val xmax=m.xMax;val ymin=m.yMin;val ymax=m.yMax
     val (zmin,zmax)=SurfaceMesh.zRange(m.zMin ?: m.graphData?.optDouble("zMin",-1.0) ?: -1.0,m.zMax ?: m.graphData?.optDouble("zMax",1.0) ?: 1.0)
     val bounds=SurfaceBounds(xmin,xmax,ymin,ymax,zmin,zmax)
     val projection=remember(bounds,rotation,elevationDeg) {SurfaceProjection(bounds,rotation.toDouble(),elevationDeg.toDouble())}
-    val convex=m.graphData?.optBoolean("convexSurface",false)==true
-    val prepared=remember(mesh,triangles,triangleNormals,bounds,convex) {SurfaceMesh.prepare(mesh,bounds,triangles,triangleNormals,convex)}
+    val prepared=remember(groups,bounds) {SurfaceMesh.combine(groups.map {SurfaceMesh.prepare(it.mesh,bounds,it.triangles,it.normals,it.convex)})}
     val faces=remember(prepared,projection,renderMode) {if(renderMode=="wireframe")emptyList() else SurfaceMesh.project(prepared,projection)}
     val surfaceColor=remember(colorHex) {runCatching {Color(android.graphics.Color.parseColor(colorHex))}.getOrDefault(Color(0xFF007B68))}
-    val batch=remember(faces,surfaceColor) {
+    val palette=if(groups.size>1)c.curves else listOf(surfaceColor)
+    val batch=remember(faces,palette) {
         val count=faces.sumOf {(it.projected.size-2).coerceAtLeast(0)*3}
         val positions=FloatArray(count*2);val colors=IntArray(count);var index=0
-        val base=surfaceColor.toArgb();val red=(base shr 16)and 255;val green=(base shr 8)and 255;val blue=base and 255
         for(face in faces)for(i in 1 until face.projected.lastIndex)for(k in intArrayOf(0,i,i+1)) {
+            val base=palette[face.group%palette.size].toArgb();val red=(base shr 16)and 255;val green=(base shr 8)and 255;val blue=base and 255
             val p=face.projected[k];val gradient=face.lighting
             val brightness=if(gradient==null)face.brightness ?: ((.65+.35*face.height)*face.light) else {
                 val dx=gradient.end[0]-gradient.start[0];val dy=gradient.end[1]-gradient.start[1]
@@ -1020,17 +1024,17 @@ internal fun graphShadeFormula(source:String,displayDigits:Int?=null):GraphShade
         }
         positions to colors
     }
-    val wireEdges=remember(triangles) {
+    val wireEdges=remember(groups) {groups.map {group->
         val ids=java.util.IdentityHashMap<DoubleArray,Int>();val edges=mutableSetOf<Long>();val result=mutableListOf<Pair<DoubleArray,DoubleArray>>()
-        triangles.forEach {triangle->for(i in 0..2) {
+        group.triangles.forEach {triangle->for(i in 0..2) {
             val a=triangle[i];val b=triangle[(i+1)%3];val ai=ids.getOrPut(a){ids.size};val bi=ids.getOrPut(b){ids.size}
             val key=(minOf(ai,bi).toLong() shl 32) or maxOf(ai,bi).toLong()
             if(edges.add(key))result.add(a to b)
         }}
         result
-    }
+    }}
     ExportableGraphCanvas(modifier.background(c.display).semantics { contentDescription="Three dimensional surface. Drag to rotate freely, pinch to zoom, and adjust x, y and z ranges." },c.display,exports) {
-        if(mesh.isEmpty() && triangles.isEmpty() && spaceCurves.isEmpty())return@ExportableGraphCanvas
+        if(groups.all {it.mesh.isEmpty()&&it.triangles.isEmpty()} && spaceCurves.isEmpty())return@ExportableGraphCanvas
         val scale=min(size.width,size.height)*.34f*zoom
         fun project(point:DoubleArray):Offset {
             val p=projection.project(point)
@@ -1061,16 +1065,17 @@ internal fun graphShadeFormula(source:String,displayDigits:Int?=null):GraphShade
                 }
             }
             if(vector)for(face in faces) {
+                val faceColor=palette[face.group%palette.size]
                 val path=Path().apply {
                     face.points.forEachIndexed { index,point->val p=project(point);if(index==0)moveTo(p.x,p.y)else lineTo(p.x,p.y) };close()
                 }
-                val color=lerp(Color.Black,surfaceColor,(face.brightness ?: ((.65+.35*face.height)*face.light)).toFloat())
+                val color=lerp(Color.Black,faceColor,(face.brightness ?: ((.65+.35*face.height)*face.light)).toFloat())
                 val lighting=face.lighting
                 if(lighting!=null) {
                     val start=Offset(size.width/2+lighting.start[0].toFloat()*scale,size.height/2+lighting.start[1].toFloat()*scale)
                     val end=Offset(size.width/2+lighting.end[0].toFloat()*scale,size.height/2+lighting.end[1].toFloat()*scale)
                     drawGraphGradientPath(drawContext.canvas.nativeCanvas,path.asAndroidPath(),start,end,
-                        lerp(Color.Black,surfaceColor,lighting.min.toFloat()).toArgb(),lerp(Color.Black,surfaceColor,lighting.max.toFloat()).toArgb(),
+                        lerp(Color.Black,faceColor,lighting.min.toFloat()).toArgb(),lerp(Color.Black,faceColor,lighting.max.toFloat()).toArgb(),
                         if(renderMode=="surface-wireframe")0f else .8.dp.toPx())
                     if(renderMode=="surface-wireframe")drawPath(path,c.muted,style=Stroke(.65.dp.toPx()))
                 } else {
@@ -1079,22 +1084,25 @@ internal fun graphShadeFormula(source:String,displayDigits:Int?=null):GraphShade
                 }
             }
             if(renderMode=="wireframe") {
-            val rows=Path();val columns=Path()
-            wireEdges.forEach {(a,b)->surfaceSegment(rows,a,b)}
-            mesh.forEach {row->
-                for(ci in 0 until row.lastIndex) {
-                    val a=row[ci];val b=row[ci+1]
-                    surfaceSegment(rows,a,b)
+                groups.forEachIndexed {index,group->
+                    val mesh=group.mesh;val wireColor=palette[index%palette.size]
+                    val rows=Path();val columns=Path()
+                    wireEdges[index].forEach {(a,b)->surfaceSegment(rows,a,b)}
+                    mesh.forEach {row->
+                        for(ci in 0 until row.lastIndex) {
+                            val a=row[ci];val b=row[ci+1]
+                            surfaceSegment(rows,a,b)
+                        }
+                    }
+                    if(mesh.isNotEmpty())for(ci in mesh.first().indices) {
+                        for(ri in 0 until mesh.lastIndex) {
+                            val a=mesh[ri].getOrNull(ci);val b=mesh[ri+1].getOrNull(ci)
+                            surfaceSegment(columns,a,b)
+                        }
+                    }
+                    drawPath(rows,wireColor.copy(alpha=.78f),style=Stroke(1.15.dp.toPx()))
+                    drawPath(columns,wireColor.copy(alpha=.78f),style=Stroke(1.dp.toPx()))
                 }
-            }
-            if(mesh.isNotEmpty())for(ci in mesh.first().indices) {
-                for(ri in 0 until mesh.lastIndex) {
-                    val a=mesh[ri].getOrNull(ci);val b=mesh[ri+1].getOrNull(ci)
-                    surfaceSegment(columns,a,b)
-                }
-            }
-            drawPath(rows,surfaceColor.copy(alpha=.78f),style=Stroke(1.15.dp.toPx()))
-            drawPath(columns,surfaceColor.copy(alpha=.78f),style=Stroke(1.dp.toPx()))
             }
             spaceCurves.forEachIndexed {i,curve->
                 val path=Path()

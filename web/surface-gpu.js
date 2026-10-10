@@ -15,20 +15,21 @@ function createRenderer(canvas){
     if(!gl.getShaderParameter(value,gl.COMPILE_STATUS)){gl.deleteShader(value);throw new Error('Surface shader compilation failed');}
     return value;
   };
-  const vertex=shader(gl.VERTEX_SHADER,'attribute vec3 position;attribute float brightness;uniform mat4 camera;varying mediump float light;void main(){gl_Position=camera*vec4(position,1.0);light=brightness;}');
-  const fragment=shader(gl.FRAGMENT_SHADER,'precision mediump float;varying mediump float light;uniform vec3 color;uniform float shaded;void main(){gl_FragColor=vec4(color*mix(1.0,light,shaded),1.0);}');
+  const vertex=shader(gl.VERTEX_SHADER,'attribute vec3 position;attribute float brightness;attribute float group;uniform mat4 camera;uniform vec3 palette[5];varying mediump float light;varying mediump vec3 tint;void main(){gl_Position=camera*vec4(position,1.0);light=brightness;tint=group<0.5?palette[0]:group<1.5?palette[1]:group<2.5?palette[2]:group<3.5?palette[3]:palette[4];}');
+  const fragment=shader(gl.FRAGMENT_SHADER,'precision mediump float;varying mediump float light;varying mediump vec3 tint;uniform vec3 color;uniform float wire;uniform float shaded;void main(){gl_FragColor=vec4(mix(tint,color,wire)*mix(1.0,light,shaded),1.0);}');
   const program=gl.createProgram();gl.attachShader(program,vertex);gl.attachShader(program,fragment);gl.linkProgram(program);
   gl.deleteShader(vertex);gl.deleteShader(fragment);
   if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw new Error('Surface shader linking failed');
   gl.useProgram(program);
-  const position=gl.getAttribLocation(program,'position'),brightness=gl.getAttribLocation(program,'brightness');
-  const camera=gl.getUniformLocation(program,'camera'),color=gl.getUniformLocation(program,'color'),shaded=gl.getUniformLocation(program,'shaded');
+  const position=gl.getAttribLocation(program,'position'),brightness=gl.getAttribLocation(program,'brightness'),group=gl.getAttribLocation(program,'group');
+  const camera=gl.getUniformLocation(program,'camera'),color=gl.getUniformLocation(program,'color'),shaded=gl.getUniformLocation(program,'shaded'),wire=gl.getUniformLocation(program,'wire'),palette=gl.getUniformLocation(program,'palette[0]');
   const triangles=gl.createBuffer(),edges=gl.createBuffer();
   let geometry=null,count=0,edgeCount=0;
   layer.addEventListener('webglcontextlost',event=>{event.preventDefault();renderers.delete(canvas);});
   const bind=buffer=>{
-    gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.enableVertexAttribArray(position);gl.vertexAttribPointer(position,3,gl.FLOAT,false,16,0);
-    gl.enableVertexAttribArray(brightness);gl.vertexAttribPointer(brightness,1,gl.FLOAT,false,16,12);
+    gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.enableVertexAttribArray(position);gl.vertexAttribPointer(position,3,gl.FLOAT,false,20,0);
+    gl.enableVertexAttribArray(brightness);gl.vertexAttribPointer(brightness,1,gl.FLOAT,false,20,12);
+    gl.enableVertexAttribArray(group);gl.vertexAttribPointer(group,1,gl.FLOAT,false,20,16);
   };
   return {draw(prepared,options){
     if(gl.isContextLost())return null;
@@ -46,16 +47,16 @@ function createRenderer(canvas){
           const b=(vv*qu-uv*qv)/d,c=(uu*qv-uv*qu)/d;
           return gradient[0]+b*(gradient[1]-gradient[0])+c*(gradient[2]-gradient[0]);
         };
-        const polygon=face.points.map(p=>{const n=normalize(p);return [...n,cross(n)];});
+        const polygon=face.points.map(p=>{const n=normalize(p);return [...n,cross(n),face.group||0];});
         for(let i=1;i<polygon.length-1;i++)vertices.push(...polygon[0],...polygon[i],...polygon[i+1]);
         for(let i=0;i<polygon.length;i++){
-          const a=polygon[i],b=polygon[(i+1)%polygon.length],ka=a.slice(0,3).join(','),kb=b.slice(0,3).join(','),key=ka<kb?ka+'|'+kb:kb+'|'+ka;
+          const a=polygon[i],b=polygon[(i+1)%polygon.length],ka=a.slice(0,3).join(','),kb=b.slice(0,3).join(','),key=(face.group||0)+':'+(ka<kb?ka+'|'+kb:kb+'|'+ka);
           if(!seen.has(key)){seen.set(key,true);lines.push(...a,...b);}
         }
       }
       gl.bindBuffer(gl.ARRAY_BUFFER,triangles);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(vertices),gl.STATIC_DRAW);
       gl.bindBuffer(gl.ARRAY_BUFFER,edges);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(lines),gl.STATIC_DRAW);
-      count=vertices.length/4;edgeCount=lines.length/4;geometry=prepared;
+      count=vertices.length/5;edgeCount=lines.length/5;geometry=prepared;
     }
     const maximum=gl.getParameter(gl.MAX_RENDERBUFFER_SIZE),ratio=Math.min(1,maximum/options.pixelWidth,maximum/options.pixelHeight);
     const pixelWidth=Math.max(1,Math.floor(options.pixelWidth*ratio)),pixelHeight=Math.max(1,Math.floor(options.pixelHeight*ratio));
@@ -64,6 +65,8 @@ function createRenderer(canvas){
     gl.viewport(0,0,layer.width,layer.height);gl.clearColor(0,0,0,0);gl.clearDepth(1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
     gl.uniformMatrix4fv(camera,false,surfaceCameraMatrix(options.rotation,options.elevation,options.scale,options.width,options.height));
     const rgb=hex=>[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255);
+    gl.uniform3fv(palette,Array.from({length:5},(_,i)=>rgb(options.palette?.[i]||options.color)).flat());
+    gl.uniform1f(wire,0);
     gl.enable(gl.DEPTH_TEST);gl.depthFunc(gl.LEQUAL);gl.disable(gl.BLEND);
     if(prepared.closed){gl.enable(gl.CULL_FACE);gl.cullFace(gl.BACK);gl.frontFace(gl.CCW);}else gl.disable(gl.CULL_FACE);
     if(options.renderMode!=='wireframe'){
@@ -72,7 +75,7 @@ function createRenderer(canvas){
     }
     if(options.renderMode!=='surface'){
       if(options.renderMode==='wireframe')gl.disable(gl.DEPTH_TEST);
-      gl.uniform3fv(color,rgb(options.renderMode==='wireframe'?options.color:options.wireColor));gl.uniform1f(shaded,0);bind(edges);gl.drawArrays(gl.LINES,0,edgeCount);
+      gl.uniform3fv(color,rgb(options.wireColor));gl.uniform1f(wire,options.renderMode==='wireframe'?0:1);gl.uniform1f(shaded,0);bind(edges);gl.drawArrays(gl.LINES,0,edgeCount);
     }
     return layer;
   }};

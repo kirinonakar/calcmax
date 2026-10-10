@@ -1,7 +1,7 @@
 import {displayNumber} from './display-format.js';
 import {integralPolygons} from './graph-integral.js';
 import {clipGraphSegment} from './graph-geometry.js';
-import {clipSurfaceSegment,prepareSurfaceFaces,projectSurfaceFaces,surfaceProjection,surfaceZRange} from './surface-geometry.js';
+import {clipSurfaceSegment,prepareSurfaceFaces,combineSurfaceFaces,projectSurfaceFaces,surfaceProjection,surfaceZRange} from './surface-geometry.js';
 import {renderSurfaceGpu} from './surface-gpu.js';
 
 import {defaultGraphColors} from './graph-colors.js';
@@ -20,7 +20,7 @@ export function plotGraph(container,result,bounds,{colors=defaultGraphColors,dig
   let canvas=container.querySelector('canvas');
   if(!canvas){canvas=document.createElement('canvas');canvas.setAttribute('role','img');container.replaceChildren(canvas);}
   canvas.setAttribute('aria-label',result.surface?'3D surface graph':'Function graph');
-  canvas.dataset.renderMode=result.surface?(surfaceView.renderMode||'wireframe'):'curves';
+  canvas.dataset.renderMode=result.surface?(surfaceView.renderMode||'surface'):'curves';
   canvas.dataset.halfHeight=String(scale===.5);canvas.dataset.heightScale=String(scale);canvas.dataset.plotHeight=String(h);canvas.style.aspectRatio=`${w}/${h}`;
   const window=container.ownerDocument.defaultView,ratio=window.devicePixelRatio||1;
   const cssWidth=canvas.getBoundingClientRect().width||container.getBoundingClientRect().width||w;
@@ -56,22 +56,27 @@ export function plotGraph(container,result,bounds,{colors=defaultGraphColors,dig
   };
   const clip=()=>{ctx.save();ctx.beginPath();ctx.rect(left,pad,iw,ih);ctx.clip();};
   if(result.surface){
-    const {rotation=35,elevation=32,zoom=1,renderMode='wireframe'}=surfaceView;
-    const color=/^#[0-9a-f]{6}$/i.test(surfaceView.color||'')?surfaceView.color:colors[0],rgb=[1,3,5].map(i=>parseInt(color.slice(i,i+2),16));
+    const {rotation=35,elevation=32,zoom=1,renderMode='surface'}=surfaceView;
+    const color=/^#[0-9a-f]{6}$/i.test(surfaceView.color||'')?surfaceView.color:colors[0];
+    const surfaces=result.surfaces||[result],palette=surfaces.length>1?surfaces.map((_,i)=>graphCurveColor(i,colors)):[color];
     const [zmin,zmax]=surfaceZRange(result.zMin,result.zMax),box={...bounds,zmin,zmax},projection=surfaceProjection(box,rotation,elevation),scale=ih*.3*zoom;
-    const key=result.surfaceVertices||result.surface,signature=JSON.stringify(box);
+    const key=result.surfaces||result.surfaceVertices||result.surface,signature=JSON.stringify(box);
     let cached=surfaceGeometry.get(key);
     if(cached?.signature!==signature||cached.normalsSource!==result.surfaceNormals||cached.indexSource!==result.surfaceTriangles||cached.convex!==result.convexSurface){
-      const triangles=(result.surfaceTriangles||[]).map(face=>face.map(i=>result.surfaceVertices?.[i]));
-      const normals=(result.surfaceTriangles||[]).map(face=>face.map(i=>result.surfaceNormals?.[i]));
-      cached={signature,triangles,normalsSource:result.surfaceNormals,indexSource:result.surfaceTriangles,convex:result.convexSurface,prepared:prepareSurfaceFaces(result.surface,box,triangles,normals,result.convexSurface===true)};surfaceGeometry.set(key,cached);
+      const groups=surfaces.map(surface=>{
+        const triangles=(surface.surfaceTriangles||[]).map(face=>face.map(i=>surface.surfaceVertices?.[i]));
+        const normals=(surface.surfaceTriangles||[]).map(face=>face.map(i=>surface.surfaceNormals?.[i]));
+        return {mesh:surface.surface||[],triangles,prepared:prepareSurfaceFaces(surface.surface||[],box,triangles,normals,surface.convexSurface===true)};
+      });
+      cached={signature,groups,normalsSource:result.surfaceNormals,indexSource:result.surfaceTriangles,convex:result.convexSurface,prepared:combineSurfaceFaces(groups.map(group=>group.prepared))};surfaceGeometry.set(key,cached);
     }
-    const {triangles,prepared}=cached;
+    const {groups,prepared}=cached;
     const project=p=>{const [x,y]=projection.project(p);return [w/2+x*scale,h/2+y*scale];};
     clip();
-    const gpu=!contextFactory&&prepared.faces.length?renderSurfaceGpu(canvas,prepared,{rotation,elevation,scale,width:w,height:h,pixelWidth:canvas.width,pixelHeight:canvas.height,color,wireColor:/^#[0-9a-f]{6}$/i.test(muted)?muted:'#738a7c',renderMode}):null;
+    const gpu=!contextFactory&&prepared.faces.length?renderSurfaceGpu(canvas,prepared,{rotation,elevation,scale,width:w,height:h,pixelWidth:canvas.width,pixelHeight:canvas.height,color,palette,wireColor:/^#[0-9a-f]{6}$/i.test(muted)?muted:'#738a7c',renderMode}):null;
     if(gpu)ctx.drawImage(gpu,0,0,w,h);
     else if(renderMode!=='wireframe')for(const face of projectSurfaceFaces(prepared,projection)){
+      const rgb=[1,3,5].map(i=>parseInt(palette[face.group||0].slice(i,i+2),16));
       const shade=value=>`rgb(${rgb.map(v=>Math.round(v*value)).join(',')})`;
       let fill=shade((.65+.35*face.height)*face.light);
       if(face.lighting){
@@ -81,14 +86,14 @@ export function plotGraph(container,result,bounds,{colors=defaultGraphColors,dig
       }
       polygon(face.projected.map(p=>[w/2+p[0]*scale,h/2+p[1]*scale]),fill,1,renderMode==='surface-wireframe'?muted:fill,renderMode==='surface-wireframe'?.65:.8);
     }
-    else{
+    else for(const [index,{mesh,triangles}] of groups.entries()){
       ctx.beginPath();
       const wire=points=>{for(let i=1;i<points.length;i++){const segment=clipSurfaceSegment(points[i-1],points[i],box);if(segment){ctx.moveTo(...project(segment[0]));ctx.lineTo(...project(segment[1]));}}};
-      for(const row of result.surface)wire(row);
+      for(const row of mesh)wire(row);
       for(const triangle of triangles)if(triangle.every(finite))wire([...triangle,triangle[0]]);
-      const columns=Math.max(0,...result.surface.map(row=>row.length));
-      for(let col=0;col<columns;col++)wire(result.surface.map(row=>row[col]));
-      ctx.strokeStyle=color;ctx.lineWidth=1.3;ctx.stroke();
+      const columns=Math.max(0,...mesh.map(row=>row.length));
+      for(let col=0;col<columns;col++)wire(mesh.map(row=>row[col]));
+      ctx.strokeStyle=palette[index];ctx.lineWidth=1.3;ctx.stroke();
     }
     for(const [i,curve] of (result.spaceCurves||[]).entries()){
       ctx.beginPath();let pen=null;

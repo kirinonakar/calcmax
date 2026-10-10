@@ -18,6 +18,20 @@ class GraphClipTest {
 }
 
 class SurfaceMeshTest {
+    @Test fun combinedSurfacesSortTogetherAndRetainEachClosedShellsCulling() {
+        val box=SurfaceBounds(-1.0,1.0,-1.0,1.0,-1.0,1.0)
+        val triangle=listOf(doubleArrayOf(-.5,-.5,0.0),doubleArrayOf(.5,-.5,0.0),doubleArrayOf(0.0,.5,0.0))
+        val group=SurfaceMesh.prepare(emptyList(),box,listOf(triangle))
+        val closed=group.copy(closed=true)
+        val combined=SurfaceMesh.combine(listOf(group,closed,group,closed,group))
+        assertFalse(combined.convex);assertFalse(combined.closed)
+        for(elevation in listOf(-32.0,32.0)) {
+            val faces=SurfaceMesh.project(combined,SurfaceProjection(box,35.0,elevation))
+            for(i in listOf(0,2,4))assertTrue(faces.any {it.group==i})
+            assertTrue(faces.filter {it.group in listOf(1,3)}.all {it.front})
+            assertTrue(faces.zipWithNext().all {(a,b)->a.depth<=b.depth})
+        }
+    }
     private val bounds=SurfaceBounds(-1.0,1.0,-1.0,1.0,-1.0,1.0)
     private fun p(x:Double,y:Double,z:Double)=doubleArrayOf(x,y,z)
     private fun inside(point:DoubleArray)=point.all {it>=-1.0-1e-12&&it<=1.0+1e-12}

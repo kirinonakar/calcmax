@@ -1,7 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {graphInputTree,graphExpressionTarget,isImplicitSurface,surfaceFormula,graphShadings,graphExpressions,appendGraphSource,removeGraphInputLine,createGraphInputHistory,removeGraphSource,graphSelectedCurveIndex,graphAnalysisTarget,graphAnalysisCurves} from '../graph-workspace.js';
+import {graphInputTree,graphExpressionTarget,isImplicitSurface,hasImplicitSurface,surfaceFormula,graphShadings,graphExpressions,appendGraphSource,removeGraphInputLine,createGraphInputHistory,removeGraphSource,graphSelectedCurveIndex,graphAnalysisTarget,graphAnalysisCurves} from '../graph-workspace.js';
 import {curvePointAtX} from '../graph-view.js';
+
+test('both 3D types accept five rows and deleting the fifth preserves earlier rows',()=>{
+  for(const kind of ['surface','space']){
+    let source='';for(let i=1;i<=5;i++)source=appendGraphSource(source,`x+${i}`,kind);
+    assert.equal(graphExpressions(source,kind).length,5);
+    assert.throws(()=>appendGraphSource(source,'x+6',kind),/Graph limit/);
+    assert.equal(graphExpressions(source+'\nx+6',kind).length,5);
+    assert.equal(removeGraphSource(source,4,kind),source.split('\n').slice(0,4).join('\n'));
+    const history=createGraphInputHistory();history.remember(kind,{source});assert.equal(history.undo(kind).source,source);
+  }
+  assert.equal(hasImplicitSurface('z=x+y\nx^2+y^2+z^2=a'),true);
+  assert.equal(hasImplicitSurface('z=x+y\nz=x-y'),false);
+  assert.equal(graphExpressions('x\ny','differential').length,1);
+});
 
 test('3D transfers keep implicit equations and named scaled space curves intact',()=>{
   const implicit='x^2+y^2+z^2+sin(4*x)+sin(4*y)+sin(4*z)=a';

@@ -22,6 +22,34 @@ def add(*terms):
 
 
 class Graph3dTests(unittest.TestCase):
+    def test_five_mixed_surfaces_keep_geometry_parameters_and_shared_z_range(self):
+        sphere=equation(add(*(binary('^',sym(axis),num(2)) for axis in 'xyz')),sym('a'))
+        explicit=equation(sym('z'),binary('+',sym('x'),sym('b')))
+        trees=[sphere,explicit,sphere,explicit,sphere]
+        result=self.run_graph(sphere,trees=trees,parameters={'a':1,'b':3})
+        self.assertEqual(['a','b'],result['parameters'])
+        self.assertEqual(5,len(result['surfaces']))
+        self.assertEqual(-2,result['zMin']);self.assertEqual(5,result['zMax'])
+        for index,surface in enumerate(result['surfaces']):
+            if index%2==0:
+                self.assertTrue(surface['convexSurface'])
+                self.assertEqual(642,len(surface['surfaceVertices']))
+                self.assertEqual(1280,len(surface['surfaceTriangles']))
+            else:
+                for row in surface['surface']:
+                    for x,y,z in row:self.assertEqual(x+3,z)
+        for kind,tree in [('surface',sphere),('space',{'kind':'tuple','args':[sym('t'),sym('t'),sym('t')]})]:
+            invalid=json.loads(dispatch(json.dumps({'action':'graph','graphKind':kind,'trees':[tree]*6})))
+            self.assertFalse(invalid['ok']);self.assertIn('one to five',invalid['error'])
+
+    def test_five_space_curves_keep_their_own_samples(self):
+        trees=[{'kind':'tuple','args':[sym('t'),num(i),num(i+1)]} for i in range(5)]
+        result=self.run_graph(trees[0],kind='space',trees=trees,min=0,max=1)
+        self.assertEqual(5,len(result['spaceCurves']))
+        for i,curve in enumerate(result['spaceCurves']):
+            self.assertTrue(curve)
+            for k,point in enumerate(curve):self.assertEqual([result['curveParameters'][i][k],i,i+1],point)
+
     def run_graph(self,tree,kind='surface',**options):
         result=json.loads(dispatch(json.dumps({'action':'graph','graphKind':kind,'trees':[tree],
             'min':-2,'max':2,'surfaceYMin':-2,'surfaceYMax':2,'surfaceZMin':-2,'surfaceZMax':2,'surfaceSamples':20,**options})))
