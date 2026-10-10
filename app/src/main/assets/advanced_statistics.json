@@ -129,8 +129,8 @@
     "input": "table",
     "suffix": ",gaussian,auto,1",
     "example": "glm([[0,2],[1,4],[2,4],[3,7],[4,8],[5,9]],gaussian,auto,1)",
-    "help": "Rows: predictors, response; family gaussian / binomial (0/1) / poisson / gamma / inversegaussian / nbinom; link auto or a supported link; fixed NB2 alpha (default 1); optional offset/exposure vector and mode. Default links: identity, logit, log, log, log, log. Model-based Wald z 95% intervals; Pearson dispersion for Gaussian/Gamma/inverse Gaussian. NB2 alpha is fixed, not estimated.",
-    "helpKo": "열: 설명변수, 반응변수; 분포 gaussian·binomial(0/1)·poisson·gamma·inversegaussian·nbinom; 연결함수 auto 또는 지원 함수; 고정 NB2 alpha(기본 1); 선택적 오프셋·노출량 목록과 유형. 기본 연결함수는 identity·logit·log·log·log·log. 모형 기반 Wald z 95% 구간; 정규·Gamma·역가우스는 Pearson 분산 추정. NB2 alpha는 추정하지 않고 고정합니다.",
+    "help": "Rows: predictors, response; family gaussian / binomial (0/1) / poisson / gamma / inversegaussian / nbinom; link auto or a supported link; NB2 alpha: positive fixed value (default 1) or estimate for joint ML; optional offset/exposure vector and mode. Default links: identity, logit, log, log, log, log. Model-based Wald z 95% intervals; Pearson dispersion for Gaussian/Gamma/inverse Gaussian. Use estimate as the fourth argument to estimate NB2 alpha jointly with coefficients; its uncertainty enters the observed-information covariance. Numeric alpha retains the fixed-alpha model.",
+    "helpKo": "열: 설명변수, 반응변수; 분포 gaussian·binomial(0/1)·poisson·gamma·inversegaussian·nbinom; 연결함수 auto 또는 지원 함수; NB2 alpha: 양수 고정값(기본 1) 또는 estimate(공동 ML 추정); 선택적 오프셋·노출량 목록과 유형. 기본 연결함수는 identity·logit·log·log·log·log. 모형 기반 Wald z 95% 구간; 정규·Gamma·역가우스는 Pearson 분산 추정. 넷째 인수를 estimate로 지정하면 NB2 alpha와 계수를 공동 ML 추정하며 관측 정보행렬에 alpha의 불확실성을 반영합니다. 숫자를 입력하면 alpha를 고정합니다.",
     "controls": [
       {
         "key": "response",
@@ -274,6 +274,30 @@
         ]
       },
       {
+        "key": "dispersionMode",
+        "label": "NB2 dispersion",
+        "ko": "NB2 과산포",
+        "type": "choice",
+        "default": "fixed",
+        "choices": [
+          {
+            "id": "fixed",
+            "label": "Fixed alpha",
+            "ko": "alpha 고정"
+          },
+          {
+            "id": "estimate",
+            "label": "Estimate by ML",
+            "ko": "ML 추정"
+          }
+        ],
+        "when": {
+          "family": [
+            "nbinom"
+          ]
+        }
+      },
+      {
         "key": "alpha",
         "label": "NB2 alpha (fixed)",
         "ko": "NB2 alpha (고정)",
@@ -282,6 +306,9 @@
         "when": {
           "family": [
             "nbinom"
+          ],
+          "dispersionMode": [
+            "fixed"
           ]
         }
       },
@@ -323,8 +350,8 @@
         }
       }
     ],
-    "formHelp": "Choose a family, its link, response and predictors. Binomial uses 0/1; counts use nonnegative integers; Gamma/inverse Gaussian use positive responses. Exposure requires a log link. NB2 alpha is fixed.",
-    "formHelpKo": "분포·연결함수·반응변수·설명변수를 선택하세요. 이항은 0/1, 빈도는 음이 아닌 정수, Gamma·역가우스는 양수입니다. 노출량은 로그 연결에서만 사용합니다. NB2 alpha는 고정합니다.",
+    "formHelp": "Choose a family, its link, response and predictors. Binomial uses 0/1; counts use nonnegative integers; Gamma/inverse Gaussian use positive responses. Exposure requires a log link. NB2 dispersion: fixed alpha or joint ML estimation.",
+    "formHelpKo": "분포·연결함수·반응변수·설명변수를 선택하세요. 이항은 0/1, 빈도는 음이 아닌 정수, Gamma·역가우스는 양수입니다. 노출량은 로그 연결에서만 사용합니다. NB2 과산포는 alpha 고정 또는 공동 ML 추정을 선택합니다.",
     "exampleRows": [
       [
         "0",
@@ -1837,8 +1864,8 @@
     "input": "table",
     "suffix": ",binomial,15",
     "example": "glmm([[1,0,0],[1,1,0],[1,2,1],[2,0,0],[2,1,1],[2,2,1],[3,0,0],[3,1,0],[3,2,0],[4,0,1],[4,1,1],[4,2,1],[5,0,1],[5,1,0],[5,2,1],[6,0,0],[6,1,1],[6,2,0]],binomial,15)",
-    "help": "Rows: subject ID, predictors, response. Random intercept; binomial (0/1, logit), poisson or nbinom (NB2, log). ML adaptive Gauss-Hermite quadrature: 15 points default, 1 = Laplace, otherwise 7-31. Optional fourth argument offset vector, fifth offset / exposure. Limit 1500 rows, 8 fixed coefficients. Subject-specific effects; joint marginal observed information by central differences; asymptotic Wald inference. Few-subject Wald inference may be unreliable. Integration checks compare likelihood at another point count, including Laplace/31 points; optional sixth argument refit compares coefficients and suppresses CI/p if shifts exceed 0.1 SE. To omit offsets use [],offset before refit.",
-    "helpKo": "열: 대상 ID, 설명변수, 반응. 랜덤 절편; binomial(0/1, 로짓), poisson·nbinom(NB2, 로그). ML 적응형 Gauss-Hermite 적분: 기본 15점, 1=Laplace, 그 외 7~31점. 선택적 넷째 인수 오프셋 목록, 다섯째 offset·exposure. 최대 1500행·고정계수 8개. 대상별 조건부 효과, 중앙차분 관측 정보행렬·점근 Wald 추론. 소수 대상의 Wald 추론은 부정확할 수 있습니다. Laplace·31점도 다른 적분점의 우도를 비교합니다. 선택적 여섯째 인수 refit은 재적합 계수를 비교하고 0.1 SE 초과 변동이면 CI·p값을 생략합니다. 오프셋이 없으면 refit 앞에 [],offset을 사용합니다.",
+    "help": "Rows: subject ID, predictors, response. Random intercept, optionally one correlated random slope (seventh argument: selected predictor position, 0 = none). Slopes use two-dimensional Laplace (third argument 1), without quadrature refit; use [],offset,likelihood before the slope position. Covariance and conditional modes are reported in original units. Random intercept: binomial (0/1, logit), poisson or nbinom (NB2, log). ML adaptive Gauss-Hermite quadrature: 15 points default, 1 = Laplace, otherwise 7-31. Optional fourth argument offset vector, fifth offset / exposure. Limit 1500 rows, 8 fixed coefficients. Subject-specific effects; joint marginal observed information by central differences; asymptotic Wald inference. Few-subject Wald inference may be unreliable. Integration checks compare likelihood at another point count, including Laplace/31 points; optional sixth argument refit compares coefficients and suppresses CI/p if shifts exceed 0.1 SE. To omit offsets use [],offset before refit.",
+    "helpKo": "열: 대상 ID, 설명변수, 반응. 랜덤 절편 + 선택적 상관 랜덤 기울기 1개(일곱째 인수: 선택한 설명변수 번호, 0 없음). 기울기는 2차원 Laplace(셋째 인수 1), 적분점 재적합 미지원; 번호 앞에 [],offset,likelihood를 지정합니다. 공분산·조건부 최빈값은 원래 단위로 표시합니다. 랜덤 절편: binomial(0/1, 로짓), poisson·nbinom(NB2, 로그). ML 적응형 Gauss-Hermite 적분: 기본 15점, 1=Laplace, 그 외 7~31점. 선택적 넷째 인수 오프셋 목록, 다섯째 offset·exposure. 최대 1500행·고정계수 8개. 대상별 조건부 효과, 중앙차분 관측 정보행렬·점근 Wald 추론. 소수 대상의 Wald 추론은 부정확할 수 있습니다. Laplace·31점도 다른 적분점의 우도를 비교합니다. 선택적 여섯째 인수 refit은 재적합 계수를 비교하고 0.1 SE 초과 변동이면 CI·p값을 생략합니다. 오프셋이 없으면 refit 앞에 [],offset을 사용합니다.",
     "controls": [
       {
         "key": "subject",
@@ -1860,6 +1887,13 @@
         "ko": "설명변수 열",
         "type": "columns",
         "default": "auto"
+      },
+      {
+        "key": "slope",
+        "label": "Random slope position (0 = none, Laplace)",
+        "ko": "랜덤 기울기 번호 (0 = 없음, Laplace)",
+        "type": "number",
+        "default": "0"
       },
       {
         "key": "family",
@@ -1890,7 +1924,12 @@
         "label": "Quadrature points (1 = Laplace)",
         "ko": "적분 점 수 (1 = Laplace)",
         "type": "number",
-        "default": "15"
+        "default": "15",
+        "when": {
+          "slope": [
+            "0"
+          ]
+        }
       },
       {
         "key": "sensitivity",
@@ -1909,7 +1948,12 @@
             "label": "Refit and compare coefficients",
             "ko": "재적합·계수 비교"
           }
-        ]
+        ],
+        "when": {
+          "slope": [
+            "0"
+          ]
+        }
       },
       {
         "key": "adjustment",
@@ -1959,8 +2003,8 @@
         }
       }
     ],
-    "formHelp": "Random intercept; binomial / Poisson / NB2. ML quadrature (15 default, 1 Laplace, 7-31); conditional effects. Count families support log offset or positive exposure. Few-subject Wald inference may be unreliable. Integration checks compare likelihood at another point count, including Laplace/31 points; optional sixth argument refit compares coefficients and suppresses CI/p if shifts exceed 0.1 SE. To omit offsets use [],offset before refit.",
-    "formHelpKo": "랜덤 절편; 이항·포아송·NB2. ML 적분(기본 15점, 1 Laplace, 7~31); 조건부 효과. 빈도 분포는 로그 오프셋·양수 노출량 지원. 소수 대상의 Wald 추론은 부정확할 수 있습니다. Laplace·31점도 다른 적분점의 우도를 비교합니다. 선택적 여섯째 인수 refit은 재적합 계수를 비교하고 0.1 SE 초과 변동이면 CI·p값을 생략합니다. 오프셋이 없으면 refit 앞에 [],offset을 사용합니다.",
+    "formHelp": "Random intercept, optionally one correlated random slope (seventh argument: selected predictor position, 0 = none). Slopes use two-dimensional Laplace (third argument 1), without quadrature refit; use [],offset,likelihood before the slope position. Covariance and conditional modes are reported in original units. Random intercept: binomial / Poisson / NB2. ML quadrature (15 default, 1 Laplace, 7-31); conditional effects. Count families support log offset or positive exposure. Few-subject Wald inference may be unreliable. Integration checks compare likelihood at another point count, including Laplace/31 points; optional sixth argument refit compares coefficients and suppresses CI/p if shifts exceed 0.1 SE. To omit offsets use [],offset before refit.",
+    "formHelpKo": "랜덤 절편 또는 절편 + 상관 기울기 1개. 선택적 일곱째 인수: 선택한 설명변수 번호(0 없음). 기울기는 Laplace(셋째 인수 1), 3개 이상 대상 내 설명변수 변화가 필요하며 적분 민감도 확인은 미지원입니다. ICC는 x=0 기준이며 singular·식별 불가 적합은 Wald 추론을 생략합니다. 이항·포아송·NB2. ML 적분(기본 15점, 1 Laplace, 7~31); 조건부 효과. 빈도 분포는 로그 오프셋·양수 노출량 지원. 소수 대상의 Wald 추론은 부정확할 수 있습니다. Laplace·31점도 다른 적분점의 우도를 비교합니다. 선택적 여섯째 인수 refit은 재적합 계수를 비교하고 0.1 SE 초과 변동이면 CI·p값을 생략합니다. 오프셋이 없으면 refit 앞에 [],offset을 사용합니다.",
     "exampleRows": [
       [
         "1",

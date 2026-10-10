@@ -62,7 +62,46 @@ def symmetric_quadratic_system_steps(polynomials, variables):
     return {"method": "Sum and difference method", "steps": steps}
 
 
-def nonlinear_system_steps(equations, variables):
+def polynomial_elimination_steps(equations, variables, answer):
+    """Show an exact elimination basis and verify the solver's finite candidates.
+
+    This explains the reduction and back-substitution, not Buchberger's entire
+    internal polynomial-division trace. No additional solve is performed.
+    """
+    expressions = [item.lhs-item.rhs for item in equations]
+    try:
+        polys = [s.Poly(expr, *variables) for expr in expressions]
+        if any(poly.total_degree() > 3 or len(poly.terms()) > 12
+               or not all(c.is_Rational for c in poly.coeffs()) for poly in polys): return None
+        basis = s.groebner(expressions, *variables, order='lex')
+    except (s.PolynomialError, ValueError):
+        return None
+    if not basis.is_zero_dimensional or len(basis.polys) > 6: return None
+    if any(s.count_ops(poly.as_expr()) > 80 for poly in basis.polys): return None
+    remaining = variables[-1]
+    eliminated = [poly.as_expr() for poly in basis.polys if not poly.as_expr().has(*variables[:-1])]
+    if not eliminated or any(s.degree(expr, remaining) > 6 for expr in eliminated): return None
+    if not isinstance(answer, list) or len(answer) > 16 or not all(isinstance(item, dict) for item in answer): return None
+    steps = []
+    def eq(left, right=0): return s.Eq(left, right, evaluate=False)
+    def add(title, explanation, formulas):
+        steps.append({'title': title, 'explanation': explanation,
+                      'equations': [{'exact': readable(value), 'tree': display_tree(value)} for value in formulas]})
+    add('Eliminate variables with a polynomial basis', 'Polynomial division and combinations of the equations give an equivalent lexicographic basis. The displayed basis exposes an equation in one unknown; internal polynomial-division steps are omitted.', [eq(poly.as_expr()) for poly in basis.polys])
+    add('Solve the reduced polynomial', 'The last-variable equation supplies candidates. Use the remaining basis equations to recover the other variables, then check every candidate in the original system.', [eq(expr) for expr in eliminated])
+    for candidate in answer:
+        if not all(variable in candidate for variable in variables): return None
+        if sum(s.count_ops(value) for value in candidate.values()) > 40: return None
+        residuals = [s.simplify(expr.subs(candidate, simultaneous=True)) for expr in expressions]
+        if any(value != 0 for value in residuals): return None
+        add('Back-substitute each candidate root', 'Insert this candidate into the remaining equations to recover its matching values.', [eq(variable, candidate[variable]) for variable in reversed(variables)])
+        add('Check candidates in the original equation', 'Substitution into every original equation gives zero residual. Retain the original domain restrictions.', [eq(expr.subs(candidate, simultaneous=True), 0) for expr in expressions])
+    if not answer:
+        add('No candidates satisfy the selected domain', 'The solver returned no solutions in the selected domain after applying the original equations and restrictions.', [s.EmptySet])
+    return {'method': 'Polynomial elimination method', 'steps': steps}
+
+
+def nonlinear_system_steps(equations, variables, answer=None):
     """Explain two-variable polynomial systems reducible to degree at most two.
 
     Derive candidates algebraically; the caller keeps the solver's actual
@@ -75,7 +114,9 @@ def nonlinear_system_steps(equations, variables):
     except s.PolynomialError:
         return None
     linear_index = next((index for index, poly in enumerate(polynomials) if poly.total_degree() == 1), None)
-    if linear_index is None: return symmetric_quadratic_system_steps(polynomials, variables)
+    if linear_index is None:
+        return (symmetric_quadratic_system_steps(polynomials, variables)
+                or polynomial_elimination_steps(equations, variables, answer))
     linear, other = polynomials[linear_index], equations[1-linear_index]
     columns = [index for index, var in enumerate(variables) if linear.coeff_monomial(var).is_zero is False]
     if not columns: return None
@@ -89,7 +130,8 @@ def nonlinear_system_steps(equations, variables):
         reduced = s.Poly(expanded, remaining)
     except s.PolynomialError:
         return None
-    if s.count_ops(expanded) > 60 or reduced.degree() > 2: return None
+    if s.count_ops(expanded) > 60 or reduced.degree() > 2:
+        return polynomial_elimination_steps(equations, variables, answer)
     if not reduced.is_zero and reduced.LC().is_zero is not False: return None
 
     steps = []

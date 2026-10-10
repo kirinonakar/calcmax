@@ -13,6 +13,7 @@ from calc_solutions import product_exponential_form
 
 
 SUMMARY = "Detailed transformations are unavailable for this equation; the steps below summarize the solver input and result."
+VERIFIED_ODE = "A full derivation is unavailable for this differential equation. Substitution verifies the returned explicit solution; domain restrictions still apply."
 LIMIT = "The equation is too large for a detailed derivation; showing a solver summary."
 
 
@@ -121,7 +122,13 @@ def equation_steps(engine, method, values, answer):
     if any(s.count_ops(item) > 160 or any(power.exp.is_Integer and abs(power.exp) > 8 for power in item.atoms(s.Pow)) for item in expressions):
         note = LIMIT
     elif isinstance(source, Relational) and not isinstance(source, s.Equality):
-        note = SUMMARY
+        from calc_inequality_steps import inequality_steps
+        explanation = inequality_steps(source, values[1], engine.conditions)
+        if explanation is None:
+            note = SUMMARY
+        else:
+            steps.extend(explanation.pop('steps'))
+            extra.update(explanation)
     elif method in ("dsolve", "desolve", "pdsolve"):
         expression = residual(source)
         add_changed("Move all terms to the left", eq(expression))
@@ -180,6 +187,50 @@ def equation_steps(engine, method, values, answer):
                             add("Characteristic roots", [eq(r, root) for root in dict.fromkeys(roots)])
                             add("Build the homogeneous solution", eq(function, candidate))
                             note = ""
+        if method in ("dsolve", "desolve") and note == SUMMARY and expression.atoms(s.Derivative) == {derivative}:
+            try:
+                first = s.Poly(expression, derivative)
+                a = first.coeff_monomial(derivative)
+                rhs = s.cancel(-first.coeff_monomial(1)/a)
+                used = {str(symbol) for symbol in expression.free_symbols}
+                u_name = 'u'
+                while u_name in used: u_name += '1'
+                u = s.Symbol(u_name)
+                separated = s.separatevars(rhs.xreplace({function:u}), symbols=[variable,u], dict=True)
+            except (s.PolynomialError, ValueError, ZeroDivisionError):
+                separated = None
+                a = s.S.Zero
+            if (separated and first.degree() == 1 and a.is_zero is False and not a.has(function)
+                    and separated[u].has(u)):
+                f, g = separated['coeff']*separated[variable], separated[u]
+                add('Separate the dependent and independent variables', [eq(u,function), eq(derivative/g.xreplace({u:function}), f)])
+                steps[-1]['explanation'] = 'Divide by the dependent-variable factor only where it is nonzero. Constant solutions at its zeros must be checked separately.'
+                constant_name = 'C1'
+                while constant_name in used or constant_name == u_name: constant_name += '1'
+                add('Integrate the separated equation', eq(s.Integral(1/g, u), s.Integral(f, variable)+s.Symbol(constant_name)))
+                steps[-1]['explanation'] = 'Integrate each side in its own variable. The left integration variable represents the dependent function; these integrals may remain formal.'
+                try:
+                    numerator = s.fraction(g)[0]
+                    poly = s.Poly(numerator, u)
+                    equilibria = s.roots(poly) if poly.degree() <= 4 else {}
+                except s.PolynomialError:
+                    equilibria = {}
+                constants = [root for root in equilibria if s.simplify(rhs.xreplace({function:root})) == 0]
+                if constants:
+                    add('Check constant solutions before division', [eq(function, root) for root in constants])
+                    steps[-1]['explanation'] = 'A zero of the divided factor can be a constant solution. Verify it in the original differential equation so separation does not discard it.'
+                note = ''
+                extra['method'] = 'Separation of variables'
+        if method in ("dsolve", "desolve"):
+            solutions = answer if isinstance(answer, (list, tuple)) else [answer]
+            for candidate in solutions[:8]:
+                if isinstance(candidate, s.Equality) and candidate.lhs == function and not candidate.rhs.has(function):
+                    if s.count_ops(candidate.rhs) > 100: continue
+                    substituted = expression.subs(function, candidate.rhs).doit()
+                    if s.count_ops(substituted) <= 160 and s.simplify(substituted) == 0:
+                        add('Substitute the solution into the differential equation', eq(substituted, 0))
+                        steps[-1]['explanation'] = 'Differentiate the explicit solution and substitute it into the original differential equation. A zero residual verifies the equation wherever the solution and coefficients are defined.'
+                        if note == SUMMARY: note = VERIFIED_ODE
         if method in ("dsolve", "desolve") and len(values) == 4:
             add("Apply initial conditions", values[3])
     elif method == "nsolve":
@@ -206,7 +257,7 @@ def equation_steps(engine, method, values, answer):
             steps.extend(explanation.pop("steps"))
             extra.update(explanation)
         else:
-            explanation = nonlinear_system_steps(equations, variables)
+            explanation = nonlinear_system_steps(equations, variables, answer)
             if explanation is not None:
                 steps.extend(explanation.pop("steps"))
                 extra.update(explanation)
@@ -437,5 +488,6 @@ def equation_steps(engine, method, values, answer):
     if engine.note:
         note = (note+"\n" if note else "")+engine.note
     for step in steps:
-        if step["title"] in EXPLANATIONS: step["explanation"] = EXPLANATIONS[step["title"]]
+        if step["title"] in EXPLANATIONS and not step.get("explanation"):
+            step["explanation"] = EXPLANATIONS[step["title"]]
     return {"steps": steps, "note": note, **extra}

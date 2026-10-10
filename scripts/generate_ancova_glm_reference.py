@@ -90,5 +90,14 @@ fit = sm.GLM(y,sm.add_constant(x),family=sm.families.Poisson(),exposure=exposure
 add('GLM Poisson exposure','glm',[np.column_stack([x,y]).tolist(),'poisson','log',1,exposure.tolist(),'exposure'],
     [[['deviance'],float(fit.deviance)],[['null deviance'],float(fit.null_deviance)]]+
     [[['coefficients',i,key],float(values[i])] for key,values in [('estimate',fit.params),('SE',fit.bse)] for i in range(2)])
+# Unlike the fixed-alpha GLM family, the discrete NB2 model jointly estimates
+# alpha and includes its uncertainty in the observed-information covariance.
+x=rng.normal(0,.6,(100,2)); exposure=rng.uniform(.5,3,100)
+mu=exposure*np.exp(.3+.4*x[:,0]-.2*x[:,1])
+y=rng.negative_binomial(1.4,1.4/(1.4+mu))
+fit=sm.NegativeBinomial(y,sm.add_constant(x),loglike_method='nb2',exposure=exposure).fit(disp=False,method='newton',tol=1e-11,maxiter=200)
+add('GLM NB2 joint ML exposure','glm',[np.column_stack([x,y]).tolist(),'nbinom','log','estimate',exposure.tolist(),'exposure'],
+    [[['log likelihood'],float(fit.llf)],[['AIC'],float(fit.aic)],[['dispersion alpha (NB2)'],float(fit.params[-1])]]+
+    [[['coefficients',i,key],float(values[i])] for key,values in [('estimate',fit.params),('SE',fit.bse),('p',fit.pvalues)] for i in range(3)])
 (ROOT/'tests/fixtures/ancova_glm_reference.json').write_text(json.dumps(fixtures,indent=2)+'\n',encoding='utf-8')
 print(f'Wrote {len(fixtures)} independent reference cases')

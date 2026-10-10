@@ -184,6 +184,10 @@ def calculus_steps(engine, method, values, answer):
                 add("Combine antiderivatives", "Put the integrated terms and constant multipliers together.", primitive)
             else: note = SUMMARY
         else: note = "An antiderivative was not found. This does not prove that no closed form exists. For a numerical value, supply a finite integration interval." if answer.has(s.Integral) else SUMMARY
+        if len(values) == 2 and note == SUMMARY and verified_primitive(answer, expression, variable):
+            derivative = s.diff(answer, variable)
+            add('Verify the antiderivative by differentiation', 'Differentiate the returned antiderivative and simplify. This checks the result on its original domain without claiming a rule-by-rule derivation.', eq(s.Derivative(answer, variable, evaluate=False), derivative), eq(s.simplify(derivative-expression), 0))
+            note = 'A rule-by-rule derivation is unavailable. The returned antiderivative has been checked by differentiation on its original domain.'
         if len(values) == 4 and not answer.has(s.Integral):
             # Avoid a second integration: the rule primitive, when available, supplies F.
             if 'primitive' in locals() and agrees:

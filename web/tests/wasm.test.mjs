@@ -17,6 +17,36 @@ import {graphInputTree,graphExpressions} from '../graph-workspace.js';
 // Reuse the interpreter for sequential integration scenarios. The cold solver
 // scenario below explicitly loads its own interpreter to keep startup coverage.
 let sharedRuntime;
+
+test('review improvements run exact inequalities, elimination, ODE checks and estimated NB2 through WASM',async()=>{
+  const py=await runtime();
+  const compact=value=>JSON.stringify(value,(_key,item)=>typeof item==='number'?Math.round(item*1e4)/1e4:item);
+  const run=source=>{
+    py.globals.set('payload',JSON.stringify({tree:parse(source),angle:'RAD',solutionSteps:true,budget:60}));
+    const result=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));
+    assert.equal(result.ok,true,result.error);return result;
+  };
+  for(const [source,title] of [
+    ['solve(x^2<4,x)','Test the sign in each interval'],
+    ['solve((x-1)/(x+2)<=0,x)','Exclude zero denominators'],
+    ['solve([x^2+2*y^2=9,x*y=2],[x,y])','Eliminate variables with a polynomial basis'],
+    ['dsolve(diff(y(t),t)=y(t)*(1-y(t)),y(t),t)','Check constant solutions before division'],
+  ]){
+    const result=run(source);
+    assert.equal(result.solutionSteps.note,'',source);
+    assert.ok(result.solutionSteps.steps.some(step=>step.title===title),source);
+    assert.equal(result.solutionSteps.steps.at(-1).exact,result.exact);
+  }
+  assert.equal(run('solve(x^2<4,x)').exact,'(-2 < x) & (x < 2)');
+  const nbCase=JSON.parse(readFileSync(new URL('../../tests/fixtures/ancova_glm_reference.json',import.meta.url),'utf8')).find(c=>c.name==='GLM NB2 joint ML exposure');
+  const [rows,,,mode,exposure]=nbCase.arguments;
+  const nb=run(`glm(${compact(rows)},nbinom,log,${mode},${compact(exposure)},exposure)`);
+  assert.match(nb.exact,/NB2 dispersion estimation: joint ML/);
+  const slopeCase=JSON.parse(readFileSync(new URL('../../tests/fixtures/glmm_slope_reference.json',import.meta.url),'utf8'))[0];
+  const slope=run(`glmm(${compact(slopeCase.arguments[0])},poisson,1,${compact(slopeCase.arguments[3])},offset,likelihood,1)`);
+  assert.match(slope.exact,/random slope variance/);
+  assert.match(slope.note,/two-dimensional Laplace/);
+});
 test('five surfaces and five space curves survive the real WASM graph request',async()=>{
   const py=await runtime();
   for(const [kind,source] of [['surface','x^2/a^2+y^2/b^2+z^2/c^2=1\nz=x+y\nz=x-y\nz=sin(x)\nx^2+y^2+z^2=1'],['space',Array.from({length:5},(_,i)=>`C(t)=(sin(t),cos(t),${i})`).join('\n')]]){

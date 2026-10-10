@@ -168,7 +168,10 @@ class GraphDisplayFormatTest {
         assertEquals("$source\nx^2+y^2=1",appendGraphSource(source,"x^2+y^2=1"))
         assertEquals(source,appendGraphSource(source,"y=x+1"))
         assertEquals("x",appendGraphSource("","x"))
-        assertThrows(IllegalArgumentException::class.java) {appendGraphSource("x\n2*x\n3*x\n4*x\n5*x\n6*x","7*x")}
-        assertThrows(IllegalArgumentException::class.java) {appendGraphSource("x+y","x-y","surface")}
+        val cartesian=(1..20).joinToString("\n") {"$it*x"}
+        assertThrows(IllegalArgumentException::class.java) {appendGraphSource(cartesian,"21*x")}
+        assertEquals("x+y\nx-y",appendGraphSource("x+y","x-y","surface"))
+        val surfaces=listOf("x+y","x-y","x","y","x*y").joinToString("\n")
+        assertThrows(IllegalArgumentException::class.java) {appendGraphSource(surfaces,"x^2+y^2","surface")}
     }
 }

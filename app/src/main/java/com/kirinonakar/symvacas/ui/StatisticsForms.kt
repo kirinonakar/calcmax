@@ -136,7 +136,8 @@ internal fun guidedStatisticsCommand(definition:JSONObject,rows:List<List<String
             val reserved=listOfNotNull(response,offset);distinct(reserved)
             val mapped=complete(multiple("predictors",reserved)+response)
             val suffix=if(offset==null)"" else ",${vector(complete(listOf(offset)).map {it[0]})},${opts["adjustment"]}"
-            "glm(${table(mapped)},${opts["family"]},${opts["link"]},${if(opts["family"]=="nbinom")opts["alpha"] else "1"}$suffix)"
+            val alpha=if(opts["family"]=="nbinom") {if(opts["dispersionMode"]=="estimate")"estimate" else opts["alpha"]} else "1"
+            "glm(${table(mapped)},${opts["family"]},${opts["link"]},$alpha$suffix)"
         }
         "bayescompare"->{
             val first=col("first");val second=col("second");distinct(listOf(first,second))
@@ -197,9 +198,16 @@ internal fun guidedStatisticsCommand(definition:JSONObject,rows:List<List<String
             val selected=complete(listOf(subject)+selectedColumns+response);val labels=selected.map {it[0]}.distinct()
             val mapped=selected.map {row->listOf((labels.indexOf(row[0])+1).toString())+row.drop(1)}
             if(id=="glmm") {
-                var suffix=if(offset==null)"" else ",${vector(complete(listOf(offset)).map {it[0]})},${opts["adjustment"]}"
-                if(opts["sensitivity"]=="refit")suffix=(suffix.ifEmpty {",[],offset"})+",refit"
-                "glmm(${table(mapped)},${opts["family"]},${opts["points"]}$suffix)"
+                val slope=(opts["slope"] ?: "0").trim().toIntOrNull()
+                require(slope!=null&&slope in 0..selectedColumns.size) {"Choose 0 or one selected predictor position for the GLMM random slope"}
+                if(slope>0) {
+                    val suffix=if(offset==null)",[],offset" else ",${vector(complete(listOf(offset)).map {it[0]})},${opts["adjustment"]}"
+                    "glmm(${table(mapped)},${opts["family"]},1$suffix,likelihood,$slope)"
+                } else {
+                    var suffix=if(offset==null)"" else ",${vector(complete(listOf(offset)).map {it[0]})},${opts["adjustment"]}"
+                    if(opts["sensitivity"]=="refit")suffix=(suffix.ifEmpty {",[],offset"})+",refit"
+                    "glmm(${table(mapped)},${opts["family"]},${opts["points"]}$suffix)"
+                }
             } else if(id=="gee") {
                 val pairs=interactionPairs(opts["interactions"],selectedColumns,columnLabels)
                 require(pairs.distinct().size==pairs.size) {"Interaction pairs must be distinct"}

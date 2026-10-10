@@ -18,6 +18,17 @@ def run(tree,**options): return json.loads(dispatch(json.dumps({"tree":tree,"ang
 
 
 class CalculusExplanationTests(unittest.TestCase):
+    def test_missing_integral_rule_verifies_the_actual_primitive_only(self):
+        x=s.Symbol('x'); expression=x**x*(1+s.log(x))
+        report=calculus_steps(Engine({}),'integrate',[expression,x],x**x)
+        title='Verify the antiderivative by differentiation'
+        self.assertIn(title,[step['title'] for step in report['steps']])
+        self.assertIn('checked by differentiation',report['note'])
+        wrong=calculus_steps(Engine({}),'integrate',[expression,x],2*x**x)
+        self.assertNotIn(title,[step['title'] for step in wrong['steps']])
+        definite=calculus_steps(Engine({}),'integrate',[expression,x,s.Integer(1),s.Integer(2)],s.Integer(3))
+        self.assertNotIn(title,[step['title'] for step in definite['steps']])
+
     def report(self,method,expression,*args):
         tree=call(method,result_ast(expression),symbol("x"),*[result_ast(s.sympify(arg)) for arg in args])
         plain=run(tree)

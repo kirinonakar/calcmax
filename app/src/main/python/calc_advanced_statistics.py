@@ -41,7 +41,7 @@ _ANALYSES = {
     'survivalanalysis': (1, 5, survival),
     'repeatedanova': (1, 2, longitudinal),
     'mixedmodel': (1, 4, longitudinal),
-    'glmm': (1, 6, glmm),
+    'glmm': (1, 7, glmm),
     'gee': (1, 5, longitudinal),
     'multinomial': (1, 1, regression),
     'ordinal': (1, 1, regression),

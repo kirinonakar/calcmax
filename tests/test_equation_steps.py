@@ -34,6 +34,64 @@ def visible_formula(tree):
 
 
 class EquationStepTests(unittest.TestCase):
+    def test_rational_inequality_sign_charts_match_solver_and_exclude_poles(self):
+        x=s.Symbol('x')
+        cases=[(s.Lt(x*x,4),s.Interval.open(-2,2)),
+               (s.Le(x*x,4),s.Interval(-2,2)),
+               (s.Le((x-1)/(x+2),0),s.Interval(-2,1,left_open=True)),
+               (s.Ge((x-1)**2/(x+2),0),s.Interval.open(-2,s.oo)),
+               (s.Lt(x*x+1,0),s.EmptySet), (s.Le((x-1)**2,0),s.FiniteSet(1))]
+        for source,expected in cases:
+            with self.subTest(source=source):
+                result,report=self.report(source,x)
+                self.assertEqual('',report['note'])
+                self.assertEqual('Sign chart method',report['method'])
+                selected=next(step for step in report['steps'] if step['title']=='Select intervals and check endpoints')
+                self.assertEqual(expected,s.sympify(selected['equations'][0]['exact']))
+                solver=s.sympify(result['exact'],locals={'x':x})
+                if solver == s.false: solver=s.EmptySet
+                self.assertEqual(expected,solver.as_set() if hasattr(solver,'as_set') else solver)
+                self.assertEqual(result['tree'],report['steps'][-1]['tree'])
+
+    def test_polynomial_elimination_checks_all_original_equations(self):
+        x,y=s.symbols('x y')
+        source=[s.Eq(x*x+2*y*y,9),s.Eq(x*y,2)]
+        result,report=self.report(source,[x,y])
+        self.assertEqual('',report['note'])
+        self.assertEqual('Polynomial elimination method',report['method'])
+        self.assertEqual(4,sum(step['title']=='Back-substitute each candidate root' for step in report['steps']))
+        for check in (step for step in report['steps'] if step['title']=='Check candidates in the original equation'):
+            self.assertEqual(2,len(check['equations']))
+            for formula in check['equations']:
+                relation=s.sympify(formula['exact'],evaluate=False)
+                self.assertTrue(relation == s.true or s.simplify(relation.lhs-relation.rhs) == 0)
+        self.assertEqual(4,len(result['resultAst']['args']))
+
+    def test_inequality_chart_preserves_canceled_denominator_exclusions(self):
+        from calc_inequality_steps import inequality_steps
+        x=s.Symbol('x')
+        report=inequality_steps(s.Gt(x+1,0),x,[s.Ne(x,1)])
+        selection=report['steps'][-1]['equations'][0]['exact']
+        self.assertEqual(s.Union(s.Interval.open(-1,1),s.Interval.open(1,s.oo)),s.sympify(selection))
+
+    def test_separable_odes_retain_equilibria_and_general_odes_verify_solutions(self):
+        t=s.Symbol('t'); y=s.Function('y')(t); c=s.Symbol('C1')
+        source=s.Eq(s.diff(y,t),y*(1-y))
+        answer=s.Eq(y,1/(1+c*s.exp(-t)))
+        report=equation_steps(Engine({}),'dsolve',[source,y,t],answer)
+        self.assertEqual('',report['note'])
+        self.assertEqual('Separation of variables',report['method'])
+        constants=next(step for step in report['steps'] if step['title']=='Check constant solutions before division')
+        self.assertEqual({s.Eq(y,0),s.Eq(y,1)},set(s.sympify(constants['exact'])))
+        title='Substitute the solution into the differential equation'
+        self.assertIn(title,[step['title'] for step in report['steps']])
+        source=s.Eq(s.diff(y,t,2)+t*y,0)
+        report=equation_steps(Engine({}),'dsolve',[source,y,t],s.Eq(y,s.airyai(-t)))
+        self.assertIn('Substitution verifies',report['note'])
+        self.assertIn(title,[step['title'] for step in report['steps']])
+        invalid=equation_steps(Engine({}),'dsolve',[source,y,t],s.Eq(y,t))
+        self.assertNotIn(title,[step['title'] for step in invalid['steps']])
+
     def test_root_equations_show_power_isolation_and_original_equation_checks(self):
         x = s.Symbol("x")
         for index in (2, 3, 4, 5, 7):

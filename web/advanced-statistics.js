@@ -156,7 +156,7 @@ export function guidedStatisticsCommand(definition,rows,settings={},columnLabels
     const reserved=[response,...(offset===null?[]:[offset])];distinct(reserved);
     const mapped=complete([...multiple('predictors',reserved),response]);
     const suffix=offset===null?'':`,${list(complete([offset]).map(row=>row[0]))},${opts.adjustment}`;
-    return `glm(${table(mapped)},${opts.family},${opts.link},${opts.family==='nbinom'?opts.alpha:1}${suffix})`;
+    return `glm(${table(mapped)},${opts.family},${opts.link},${opts.family==='nbinom'?(opts.dispersionMode==='estimate'?'estimate':opts.alpha):1}${suffix})`;
   }
   if(id==='bayescompare'){
     const first=column('first'),second=column('second');distinct([first,second]);
@@ -222,6 +222,12 @@ export function guidedStatisticsCommand(definition,rows,settings={},columnLabels
     const selected=complete([subject,...selectedColumns,response]);const labels=[...new Set(selected.map(row=>row[0]))];
     const mapped=selected.map(row=>[String(labels.indexOf(row[0])+1),...row.slice(1)]);
     if(id==='glmm'){
+      const slope=String(opts.slope??'0').trim();
+      if(!/^\d+$/.test(slope)||Number(slope)>selectedColumns.length)throw new Error('Choose 0 or one selected predictor position for the GLMM random slope');
+      if(Number(slope)>0){
+        const adjustment=offset===null?',[],offset':`,${list(complete([offset]).map(row=>row[0]))},${opts.adjustment}`;
+        return `glmm(${table(mapped)},${opts.family},1${adjustment},likelihood,${Number(slope)})`;
+      }
       let suffix=offset===null?'':`,${list(complete([offset]).map(row=>row[0]))},${opts.adjustment}`;
       if(opts.sensitivity==='refit')suffix=(suffix||',[],offset')+',refit';
       return `glmm(${table(mapped)},${opts.family},${opts.points}${suffix})`;
@@ -402,7 +408,7 @@ export function createAdvancedStatistics({state,persist,data,columnLimit,copy}) 
       const count=Math.max(1,...rows.map(row=>row.length)),opts=settings();
       let labels=Array.from({length:count},(_,i)=>['x','y','z'][i]||`x${i+1}`);
       if(input.value==='current')try{const raw=csvRows(data(),{skipHeader:false});if(statisticsCsvHasHeader(raw)&&!raw[0].some(cell=>cell==='NA'))labels=labels.map((name,i)=>raw[0][i]&&raw[0][i]!==name?`${raw[0][i]} (${name})`:name);}catch{}
-      const next=JSON.stringify([definition.id,input.value,labels,korean,definition.controls.filter(f=>f.type==='choice'||f.type==='column').map(f=>opts[f.key])]);
+      const next=JSON.stringify([definition.id,input.value,labels,korean,definition.controls.filter(f=>f.type==='choice'||f.type==='column').map(f=>opts[f.key]),definition.controls.map(f=>!f.when||Object.entries(f.when).every(([key,values])=>values.includes(opts[key])))]);
       if(next!==signature){
         signature=next;form.replaceChildren();
         for(const field of definition.controls){

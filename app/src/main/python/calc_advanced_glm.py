@@ -1,4 +1,4 @@
-"""Portable GLMs: damped Fisher scoring, model-based covariance and diagnostics."""
+"""Portable GLMs: Fisher scoring or joint NB2 ML, covariance and diagnostics."""
 import math
 import mpmath as mp
 from calc_shared import MathError, require
@@ -39,6 +39,7 @@ def variance(mu, family, alpha):
 
 
 def deviance(y, mu, family, alpha):
+    if family == 'nbinom' and alpha == 0: return deviance(y, mu, 'poisson', 0)
     if family == 'gaussian': return (y-mu)**2
     if family == 'binomial': return -2*(math.log(mu) if y else math.log1p(-mu))
     if family == 'poisson': return 2*((y*math.log(y/mu) if y else 0)-(y-mu))
@@ -103,6 +104,7 @@ def fit(x, y, offsets, family, link, alpha):
 
 
 def log_likelihood(y, mus, family, scale, alpha, link):
+    if family == 'nbinom' and alpha == 0: return log_likelihood(y, mus, 'poisson', scale, 0, link)
     if family == 'gaussian':
         if link != 'identity': return -.5*math.fsum((v-mu)**2/scale+math.log(2*math.pi*scale) for v, mu in zip(y, mus))
         # Concentrated Gaussian likelihood uses the ML residual variance.
@@ -125,8 +127,9 @@ def calculate(engine, name, a):
     link = option(a, 2, 'auto')
     if link == 'auto': link = LINKS[family][0]
     require(link in LINKS[family], 'Choose a link supported by the selected GLM family')
-    alpha = number(a[3]) if len(a) > 3 else 1.0
-    require(alpha > 0, 'NB2 dispersion alpha must be positive')
+    estimate_alpha = family == 'nbinom' and option(a, 3, '1') in ('estimate', 'auto')
+    alpha = 1.0 if estimate_alpha else number(a[3]) if len(a) > 3 else 1.0
+    require(alpha > 0, 'NB2 dispersion alpha must be positive, or use estimate')
     y = [row[-1] for row in rows]
     if family == 'binomial': require(all(v in (0, 1) for v in y) and 0 < sum(y) < len(y), 'Binomial response must contain both 0 and 1')
     elif family in ('poisson','nbinom'): require(all(v >= 0 and v.is_integer() for v in y) and sum(y) > 0, 'Response must be nonnegative integer counts with at least one event')
@@ -142,17 +145,40 @@ def calculate(engine, name, a):
         offsets = [math.log(v) for v in offsets]
     require(all(abs(v) < 700 for v in offsets), 'Offset exceeds the numeric range')
     x, transform, _, _ = standardized_design([[1.0]+row[:-1] for row in rows])
-    beta, cov, mus, dev, iterations = fit(x, y, offsets, family, link, alpha)
+    estimated = None
+    boundary = False
+    if estimate_alpha:
+        from calc_advanced_regression import model
+        try:
+            estimated = model(rows, 'nbreg', offsets)
+            alpha = estimated['dispersion alpha (NB2)']
+        except MathError:
+            # A finite NB2 MLE may be on the Poisson boundary. Never replace an
+            # interior fitting failure with a boundary result without a check.
+            beta, cov, mus, dev, iterations = fit(x, y, offsets, 'poisson', link, 0)
+            require(math.fsum((v-mu)**2-v for v, mu in zip(y, mus)) <= 0,
+                    'NB2 dispersion estimation did not converge to an identifiable estimate')
+            alpha = 0.0
+            boundary = True
+    if estimated is not None:
+        coefficients = [row['estimate'] for row in estimated['coefficients']]
+        mus = [math.exp(dot([1.0]+row[:-1], coefficients)+off) for row, off in zip(rows, offsets)]
+        dev = math.fsum(deviance(v, mu, family, alpha) for v, mu in zip(y, mus))
+        iterations = estimated['iterations']
+        beta = coefficients
+    elif not boundary:
+        beta, cov, mus, dev, iterations = fit(x, y, offsets, family, link, alpha)
     df = len(y)-len(beta)
     pearson = math.fsum((v-mu)**2/variance(mu, family, alpha) for v, mu in zip(y, mus))
     scale = 1.0 if family in ('binomial','poisson','nbinom') else pearson/df
     require(scale > 0 and math.isfinite(scale), 'Positive residual variation is required for inference')
-    coefficients = list(map(float, transform*mp.matrix(beta)))
-    coefficient_cov = transform*cov*transform.T*scale
+    if estimated is None:
+        coefficients = list(map(float, transform*mp.matrix(beta)))
+        coefficient_cov = transform*cov*transform.T*scale
     ll = log_likelihood(y, mus, family, scale, alpha, link)
     result = {'family':family, 'link':link, 'n':len(y), 'df residual':df, 'dispersion':scale,
-              'deviance':dev, 'Pearson chi2':pearson, 'log likelihood':ll, 'AIC':2*len(beta)-2*ll,
-              'iterations':iterations, 'fitted preview rows':min(len(y), 50), 'coefficients':inference(coefficients, coefficient_cov, ['Intercept']+['x'+str(i) for i in range(1, len(beta))], link in ('log','logit')),
+              'deviance':dev, 'Pearson chi2':pearson, 'log likelihood':ll, 'AIC':2*(len(beta)+int(estimate_alpha))-2*ll,
+              'iterations':iterations, 'fitted preview rows':min(len(y), 50), 'coefficients':estimated['coefficients'] if estimated else inference(coefficients, coefficient_cov, ['Intercept']+['x'+str(i) for i in range(1, len(beta))], link in ('log','logit')),
               'Fitted observations':[{'row':i+1, 'observed':v, 'fitted':mu, 'residual':v-mu,
                                       'Pearson residual':(v-mu)/math.sqrt(variance(mu, family, alpha)),
                                       'Deviance residual':math.copysign(math.sqrt(max(0, deviance(v, mu, family, alpha))), v-mu)} for i, (v, mu) in enumerate(zip(y[:50], mus[:50]))]}
@@ -161,7 +187,14 @@ def calculate(engine, name, a):
         result['null deviance'] = null_deviance
     except MathError:
         result['null deviance'] = None
-    if family == 'nbinom': result['dispersion alpha (NB2, fixed)'] = alpha
-    engine.note += ' GLM by damped Fisher scoring; independent observations, model-based SE and Wald z 95% intervals. Gaussian/Gamma/inverse Gaussian use Pearson dispersion; other scales are 1. NB2 alpha is fixed, not estimated. Gamma/inverse Gaussian likelihood and AIC plug in the Pearson dispersion.'
+    if family == 'nbinom':
+        result['dispersion alpha (NB2)' if estimate_alpha else 'dispersion alpha (NB2, fixed)'] = alpha
+        result['NB2 dispersion estimation'] = 'ML (Poisson boundary)' if boundary else 'joint ML' if estimate_alpha else 'fixed'
+        if estimate_alpha: result['null dispersion alpha (NB2, held at full fit)'] = alpha
+    engine.note += (' GLM NB2 by joint ML with analytic observed information including dispersion uncertainty.' if estimated else ' GLM by damped Fisher scoring; independent observations, model-based SE and Wald z 95% intervals.')
+    engine.note += ' Gaussian/Gamma/inverse Gaussian use Pearson dispersion; other scales are 1. Gamma/inverse Gaussian likelihood and AIC plug in the Pearson dispersion.'
+    if family == 'nbinom': engine.note += ' NB2 alpha is estimated.' if estimate_alpha else ' NB2 alpha is fixed, not estimated.'
+    if boundary: engine.note += ' NB2 dispersion is zero (Poisson boundary); coefficient inference uses the limiting Poisson model.'
+    if estimate_alpha: engine.note += ' Null deviance holds alpha at the full-model estimate; AIC counts the estimated dispersion parameter.'
     if len(y) > 50: engine.note += ' Fitted observations show the first 50 rows; model statistics use all observations.'
     return result

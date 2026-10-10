@@ -7,6 +7,26 @@ from calc_shared import MathError
 
 
 class AncovaGlmTests(unittest.TestCase):
+    def test_estimated_nb2_matches_count_regression_and_retains_fixed_alpha(self):
+        rows=[[x,y] for x,counts in enumerate([[0,0,1,8],[0,1,3,15],[0,2,5,23],[1,3,10,35]]) for y in counts]
+        estimate=run('glm',rows,'nbinom','log','estimate')
+        reference=run('nbreg',rows)
+        self.assertAlmostEqual(float(reference['dispersion alpha (NB2)']),float(estimate['dispersion alpha (NB2)']),places=10)
+        self.assertAlmostEqual(float(reference['AIC']),float(estimate['AIC']),places=9)
+        self.assertEqual('joint ML',estimate['NB2 dispersion estimation'])
+        fixed=run('glm',rows,'nbinom','log',.5)
+        self.assertEqual(.5,float(fixed['dispersion alpha (NB2, fixed)']))
+        self.assertEqual('fixed',fixed['NB2 dispersion estimation'])
+        for i,row in enumerate(reference['coefficients']):
+            self.assertAlmostEqual(float(row['SE']),float(estimate['coefficients'][i]['SE']),places=9)
+        # Underdispersed data have an alpha=0 boundary, not a negative estimate.
+        rows=[[i%2,2+i%2] for i in range(30)]
+        boundary=run('glm',rows,'nbinom','log','estimate')
+        poisson=run('glm',rows,'poisson')
+        self.assertEqual(0,float(boundary['dispersion alpha (NB2)']))
+        self.assertEqual('ML (Poisson boundary)',boundary['NB2 dispersion estimation'])
+        self.assertAlmostEqual(float(poisson['log likelihood']),float(boundary['log likelihood']),places=9)
+
     def test_independent_statsmodels_references(self):
         cases = json.loads((ROOT/'tests/fixtures/ancova_glm_reference.json').read_text())
         for case in cases:

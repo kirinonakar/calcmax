@@ -1,4 +1,4 @@
-"""Portable random-intercept GLMM: ML by adaptive Gauss-Hermite quadrature.
+"""Portable GLMM: random-intercept quadrature or one correlated slope by Laplace.
 
 No SciPy/NumPy dependency. Conditional mode derivatives are analytic; the
 joint marginal observed information uses central differences of the integrated
@@ -47,7 +47,23 @@ def observed_information(objective,point):
     return covariance
 
 
+def conditional_response(eta,value,alpha,family,factorial):
+    """Conditional log likelihood, score and negative second derivative in eta."""
+    if family=='binomial':
+        mu=logistic(eta)
+        return value*eta-softplus(eta),value-mu,mu*(1-mu)
+    mu=math.exp(eta)
+    if alpha==0: return value*eta-mu-factorial,value-mu,mu
+    r=1/alpha
+    gamma=math.fsum(math.log1p(k/r) for k in range(int(value))) if value<=100 else math.lgamma(r+value)-math.lgamma(r)-value*math.log(r)
+    ll=gamma-factorial+value*eta-(value+r)*math.log1p(mu/r)
+    return ll,(value-mu)/(1+alpha*mu),mu*(1+alpha*value)/(1+alpha*mu)**2
+
+
 def calculate(engine,name,a):
+    if len(a)>6 and str(a[6])!='0':
+        from calc_advanced_glmm_slope import calculate as slope_calculate
+        return slope_calculate(engine,name,a)
     rows=table(a[0],6,3); family=option(a,1,'binomial')
     require(family in ('binomial','poisson','nbinom'),'GLMM family: binomial, poisson, or nbinom (NB2)')
     nodes_count=integer(a[2],1,31,capacity=True) if len(a)>2 else 15
@@ -70,17 +86,7 @@ def calculate(engine,name,a):
     factorials=[math.lgamma(v+1) for v in y]
 
     def conditional(eta,value,alpha,index):
-        if family=='binomial':
-            mu=logistic(eta)
-            return value*eta-softplus(eta),value-mu,mu*(1-mu)
-        mu=math.exp(eta)
-        if alpha==0:
-            return value*eta-mu-factorials[index],value-mu,mu
-        r=1/alpha
-        # Avoid cancellation in gamma differences when alpha is near zero.
-        gamma=math.fsum(math.log1p(k/r) for k in range(int(value))) if value<=100 else math.lgamma(r+value)-math.lgamma(r)-value*math.log(r)
-        ll=gamma-factorials[index]+value*eta-(value+r)*math.log1p(mu/r)
-        return ll,(value-mu)/(1+alpha*mu),mu*(1+alpha*value)/(1+alpha*mu)**2
+        return conditional_response(eta,value,alpha,family,factorials[index])
 
     def marginal(beta,sd,alpha,details=False,rule=None):
         active_nodes,active_logweights=rule if rule is not None else (nodes,logweights)
