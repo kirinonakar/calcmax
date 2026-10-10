@@ -5,7 +5,6 @@ Equal mode shares one InvGamma(alpha0,beta0) variance; unequal mode has
 independent variances with that prior. H0 is the H1 prior conditioned on
 Delta = muB-muA = 0, including its induced nuisance-parameter prior.
 Thus BF01 = posterior_density(Delta=0) / prior_density(Delta=0).
-This is not the JZS/Cauchy Bayesian t-test. No MCMC or SciPy is needed.
 """
 import math
 import random
@@ -129,15 +128,11 @@ def calculate(engine, name, args):
         interval = [quantile(differences,float(tail)),quantile(differences,float(1-tail))]
         probability = math.fsum(probabilities)/samples
         effect_mean = math.fsum(effect_locations)/samples
-    engine.note += (' Independent normal samples; difference = B - A. Proper normal-inverse-gamma H1 prior: '
-                    'muA,muB | variances ~ independent Normal(mu0,variance/kappa0); '
-                    'variance ~ InvGamma(alpha0,beta0), shared in equal mode, independent in unequal mode. '
-                    'H0: muB-muA=0, with nuisance prior induced by conditioning H1 on this restriction. '
-                    'BF10 uses the Savage-Dickey density ratio (analytic equal variance, numerical Student-t convolution unequal variance); '
-                    'it is not a posterior hypothesis probability or a JZS/Cauchy t-test. '
-                    'Intervals are equal-tailed H1 posterior credible intervals. Effect size = (muB-muA)/sqrt((varianceA+varianceB)/2). '
-                    'Direct IID posterior simulation (no MCMC): effect interval in both modes; difference interval and probability in unequal mode. '
-                    'MCSE measures simulation error, not posterior uncertainty. Priors depend on measurement units; adjust them to your scale.')
+    engine.note += (' Independent normal samples; difference = B - A. Normal-inverse-gamma prior with shared variance in equal mode and separate variances in unequal mode. '
+                    'H0: muB-muA=0, with the H1 prior conditioned on this restriction. BF10 uses the Savage-Dickey density ratio. '
+                    'Intervals are equal-tailed posterior intervals. Effect size = (muB-muA)/sqrt((varianceA+varianceB)/2). '
+                    'Effect intervals use IID simulation; unequal-variance difference intervals and probabilities also use simulation. '
+                    'MCSE measures simulation error. Adjust priors to the measurement scale.')
     return {'n A':len(a), 'n B':len(b), 'Mean A':sum(a)/len(a), 'Mean B':sum(b)/len(b),
             'variance model':mode, 'prior mean':mu, 'prior kappa':kappa, 'prior alpha':alpha, 'prior beta':beta,
             'posterior mean A':ma, 'posterior mean B':mb, 'Posterior Mean Difference (B - A)':difference,

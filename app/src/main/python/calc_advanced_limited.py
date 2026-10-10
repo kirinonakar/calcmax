@@ -50,7 +50,7 @@ def quantreg(rows,a):
     coefficients=inference(original,covariance,names) if covariance is not None else [{'term':key,'estimate':v,'SE':None,'p':None,'CI95':None} for key,v in zip(names,original)]
     return {'n':n,'Quantile':q,'Check loss':loss,'coefficients':coefficients,'Iterations':iteration+1,'Bandwidth':bandwidth,
             'Inference':'Asymptotic Gaussian-kernel sandwich / Hall–Sheather' if covariance is not None else 'Unavailable: insufficient residual density / bandwidth',
-            'Assumptions':'Independent rows; linear conditional quantile. Full-rank design and checked subgradient optimum. SEs are asymptotic; small samples and discrete outcomes may not support density-based inference.'}
+            'Assumptions':'Independent rows, linear conditional quantile and a full-rank design. SEs use asymptotic density-based inference; review sample size and residual density.'}
 
 
 def logcdf(z):
@@ -92,7 +92,7 @@ def tobit(rows,a):
     return {'n':n,'Uncensored n':len(uncensored),'Left censored n':sum(v==lower for v in y),'Right censored n':sum(v==upper for v in y),'Lower bound':lower,'Upper bound':upper,
             'coefficients':inference(original,t*cov*t.T,['Intercept']+['x'+str(j) for j in range(1,p)]+['sigma']),
             'log likelihood':-n*value,'AIC':2*(p+1)+2*n*value,'Iterations':iterations,
-            'Assumptions':'Type-I censored-normal regression, constant latent SD; responses at specified bounds are censored. Coefficients predict the latent response, not observed marginal effects. Truncated samples and selection models are not supported.'}
+            'Assumptions':'Type-I censored-normal regression, constant latent SD; responses at specified bounds are censored. Coefficients describe the latent response.'}
 
 
 def zeroinflated(rows,a):
@@ -145,7 +145,7 @@ def zeroinflated(rows,a):
     names=['Count Intercept']+['Count: x'+str(j) for j in range(1,p)]+['Inflation Intercept']+['Inflation: x'+str(j) for j in range(1,k)]+(['alpha'] if family=='nbinom' else [])
     fitted=[{'Observation':i+1,'Structural-zero probability':logistic(dot(zi,parameters[p:p+k])),'Expected count':(1-logistic(dot(zi,parameters[p:p+k])))*math.exp(dot(row,parameters[:p]))} for i,(row,zi) in enumerate(zip(x,z))]
     return {'n':n,'Family':'ZIP' if family=='poisson' else 'ZINB2','coefficients':inference(original,t*cov*t.T,names),'log likelihood':-n*value,'AIC':2*len(parameters)+2*n*value,
-            'Iterations':iterations,'Fitted observations':fitted,'Assumptions':'Independent count observations; log count mean and logit structural-zero probability. Inflation uses an intercept or the same predictors. Joint ML observed-information Wald inference; mixture boundary / singular information is rejected. No automatic Vuong test.'}
+            'Iterations':iterations,'Fitted observations':fitted,'Assumptions':'Independent count observations; log count mean and logit structural-zero probability. Inflation uses an intercept or the same predictors. Joint ML observed-information Wald inference.'}
 
 
 def calculate(engine,name,a):

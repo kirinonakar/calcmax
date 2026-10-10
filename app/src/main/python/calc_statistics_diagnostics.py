@@ -113,7 +113,7 @@ def companion_report(report, name, value, inputs, precision, labels=None, residu
             samples=[[sum(float(conditions[j][row]) for j in range(i))-i*float(conditions[i][row]) for row in range(len(conditions[0]))] for i in range(1,len(conditions))]
             labels={'sample:'+str(i):'Within-subject contrast '+str(i) for i in range(1,len(conditions))}
             normality=True
-            notes.append('Repeated-measures normality checks use within-subject Helmert contrasts across independent subjects. Marginal checks do not establish joint multivariate normality. Review the Greenhouse–Geisser corrected p values and sphericity assumptions; do not treat repeated conditions as independent groups.')
+            notes.append('Repeated-measures normality checks use within-subject Helmert contrasts across independent subjects. Review the contrast Q–Q plots, Greenhouse–Geisser corrected p values and sphericity assumptions.')
     elif name in ('ancova','twowayanova','linearmodel') and residuals:
         samples=residuals['groups']; normality=True; variance=True
         labels={'sample:'+str(i+1):label for i,label in enumerate(residuals['labels'])}
@@ -126,7 +126,7 @@ def companion_report(report, name, value, inputs, precision, labels=None, residu
         notes.append('A two-sample z test requires known population standard deviations; equal variances are not required.')
 
     if normality and not samples:
-        diagnostics.append(['Shapiro–Wilk','Raw data','unavailable','unavailable','unavailable','Raw observations are required; summary statistics cannot establish normality.'])
+        diagnostics.append(['Shapiro–Wilk','Raw data','unavailable','unavailable','unavailable','Enter raw observations for normality checks.'])
     qq=[]; distributions=[]; summary=[]
     for i,sample in enumerate(samples):
         label=labels.get('sample:'+str(i+1), 'Sample '+str(i+1))
@@ -152,7 +152,7 @@ def companion_report(report, name, value, inputs, precision, labels=None, residu
         except (MathError,ValueError,ZeroDivisionError,OverflowError) as error:
             diagnostics.append(['Brown–Forsythe','Across samples','unavailable','unavailable',sum(map(len,samples)),str(error)])
     if diagnostics:
-        notes.append('Assumption checks use α = 0.05. A non-significant result does not prove the assumption. Small samples have low power; large samples can detect minor departures. Review Q–Q plots and study design. Independence cannot be tested from these values alone.')
+        notes.append('Assumption checks use α = 0.05. Review the p values with Q–Q plots, sample sizes and study design.')
     if name=='ttest' and samples and isinstance(value,dict):
         sd=float(value['sample SD'])
         if sd>0: extras.append(('Effect size',{'Cohen d (one sample)':(float(value['sample mean'])-float(args[0]))/sd}))

@@ -133,7 +133,7 @@ def calculate(engine, name, args):
             log_bf = mp.loggamma(post_a)+mp.loggamma(post_b)-mp.loggamma(post_a+post_b)
             log_bf -= mp.loggamma(alpha)+mp.loggamma(beta)-mp.loggamma(alpha+beta)
             log_bf -= count*mp.log(threshold)+(total-count)*mp.log1p(-threshold)
-            engine.note += ' Beta-Binomial; equal-tailed credible interval. BF10 compares H1: p ~ the chosen Beta prior with H0: p = threshold; it is not a posterior hypothesis probability.'
+            engine.note += ' Beta-Binomial; equal-tailed credible interval. BF10 compares H1: p ~ the chosen Beta prior with H0: p = threshold.'
             return {'successes':count, 'trials':total, 'prior alpha':alpha, 'prior beta':beta,
                     'posterior alpha':post_a, 'posterior beta':post_b, 'posterior mean':average, 'posterior SD':sd,
                     'credible level':level, 'credible interval':[beta_quantile(post_a, post_b, tail), beta_quantile(post_a, post_b, 1-tail)],

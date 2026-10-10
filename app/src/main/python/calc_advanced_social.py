@@ -37,7 +37,7 @@ def calculate(engine,name,a):
             interval=inference([estimate],[[uncertainty]],['Slope'],df=n-len(beta))[0]['CI95']
             slopes.append({'Moderator value':mw+shift,'estimate':estimate,'SE':se,'p':float(2*_t_sf(abs(estimate/se),n-len(beta))),'CI95':interval})
         return {'n':n,'Predictor center':mx,'Moderator center':mw,'coefficients':coef,'Conditional slopes':slopes,'R²':1-fit[2]/sum((v-mean(y))**2 for v in y),
-                'Assumptions':'OLS with centered predictor and moderator, their product, and additive covariates; independent homoscedastic normal errors for t inference. Slopes shown at moderator mean ± sample SD. Association alone does not establish causation.'}
+                'Assumptions':'OLS with centered predictor and moderator, their product, and additive covariates; independent homoscedastic normal errors for t inference. Slopes shown at moderator mean ± sample SD.'}
     samples=integer(a[1],100,20000,capacity=True) if len(a)>1 else 2000; seed=integer(a[2],0,2**32-1) if len(a)>2 else 0
     ax=[[1.,xx]+cc for xx,cc in zip(x,c)]
     bx=[[1.,xx,mm]+cc for xx,mm,cc in zip(x,w,c)]
@@ -56,4 +56,4 @@ def calculate(engine,name,a):
     return {'n':n,'a (X → M)':ab[1],'b (M → Y | X)':bb[2],'Direct effect c′':bb[1],'Total effect c':total[1],'Indirect effect a×b':effect,
             'Bootstrap percentile CI95':[quantile(draws,.025),quantile(draws,.975)],'Bootstrap successful':len(draws),'Bootstrap singular':failures,'Seed':seed,
             'Sobel SE':se,'Sobel p (normal approximation)':normal_p(effect/se) if se>0 else None,'Mediator coefficients':acoef,'Outcome coefficients':bcoef,'Total-effect coefficients':tcoef,
-            'Assumptions':'One continuous mediator; independent rows, linear additive OLS, same covariates in all equations. Row bootstrap percentile CI (not BCa). Causal mediation needs temporal order and no unmeasured confounding; this model alone cannot establish it.'}
+            'Assumptions':'One continuous mediator; independent rows, linear additive OLS, same covariates in all equations. Row bootstrap percentile CI. Causal interpretation requires temporal order and control of confounding.'}

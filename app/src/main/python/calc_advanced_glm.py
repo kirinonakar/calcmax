@@ -193,7 +193,7 @@ def calculate(engine, name, a):
         if estimate_alpha: result['null dispersion alpha (NB2, held at full fit)'] = alpha
     engine.note += (' GLM NB2 by joint ML with analytic observed information including dispersion uncertainty.' if estimated else ' GLM by damped Fisher scoring; independent observations, model-based SE and Wald z 95% intervals.')
     engine.note += ' Gaussian/Gamma/inverse Gaussian use Pearson dispersion; other scales are 1. Gamma/inverse Gaussian likelihood and AIC plug in the Pearson dispersion.'
-    if family == 'nbinom': engine.note += ' NB2 alpha is estimated.' if estimate_alpha else ' NB2 alpha is fixed, not estimated.'
+    if family == 'nbinom': engine.note += ' NB2 alpha is estimated.' if estimate_alpha else ' NB2 alpha is fixed.'
     if boundary: engine.note += ' NB2 dispersion is zero (Poisson boundary); coefficient inference uses the limiting Poisson model.'
     if estimate_alpha: engine.note += ' Null deviance holds alpha at the full-model estimate; AIC counts the estimated dispersion parameter.'
     if len(y) > 50: engine.note += ' Fitted observations show the first 50 rows; model statistics use all observations.'

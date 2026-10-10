@@ -73,4 +73,4 @@ def calculate(engine,a):
     e=residual.T*residual; mu=mp.matrix(centers); h=n*mu*mu.T
     return {'n':n,'responses per occasion':p,'Occasions':occasions,'df residual':n-1,'Design':'Repeated / wide within-subject contrasts',
             'Multivariate tests':multivariate_tests(e,h,1,n-1),'Error SSCP':e.tolist(),'Hypothesis SSCP':h.tolist(),
-            'Assumptions':'One independent subject per wide row, equal response blocks ordered by occasion. Tests equality of response means across occasions jointly using within-subject contrasts; no sphericity assumption. Complete observations and nonsingular contrast covariance required. No between-subject factors, multi-factor within-subject design or irregular visits. Roy F is an upper bound.'}
+            'Assumptions':'One independent subject per wide row, equal response blocks ordered by occasion. Tests equality of response means across occasions jointly using within-subject contrasts; no sphericity assumption. Complete observations and nonsingular contrast covariance required. Roy F is an upper bound.'}

@@ -768,8 +768,8 @@
     "input": "table",
     "suffix": ",unweighted",
     "example": "cohenkappa([[25,4,2],[3,20,5],[1,6,24]],unweighted)",
-    "help": "Two-rater square count table with common category order. Unweighted, linear or quadratic kappa; multinomial delta-method SE and asymptotic Wald CI. Weighted categories must be ordered. Observed/expected agreement use the selected weights; exact agreement is also reported. Distinct from Bayesian prior strength kappa.",
-    "helpKo": "공통 범주 순서의 두 평가자 정방 빈도표. 무가중·선형·제곱 가중 κ; 다항 델타법 SE·점근 Wald CI. 가중 범주는 순서형이어야 합니다. 관측·기대 일치율은 선택한 가중치를 반영하며 정확 일치율도 제공합니다. 베이지안 사전 강도 kappa와 별도 기능입니다.",
+    "help": "Two-rater square count table with common category order. Unweighted, linear or quadratic kappa; multinomial delta-method SE and asymptotic Wald CI. Weighted categories must be ordered. Observed/expected agreement use the selected weights; exact agreement is also reported.",
+    "helpKo": "공통 범주 순서의 두 평가자 정방 빈도표. 무가중·선형·제곱 가중 κ; 다항 델타법 SE·점근 Wald CI. 가중 범주는 순서형이어야 합니다. 관측·기대 일치율은 선택한 가중치를 반영하며 정확 일치율도 제공합니다.",
     "section": "general",
     "group": "Categorical data",
     "groupKo": "범주형 자료",
@@ -866,8 +866,8 @@
         }
       }
     ],
-    "formHelp": "Two-rater square count table with common category order. Unweighted, linear or quadratic kappa; multinomial delta-method SE and asymptotic Wald CI. Weighted categories must be ordered. Observed/expected agreement use the selected weights; exact agreement is also reported. Distinct from Bayesian prior strength kappa.",
-    "formHelpKo": "공통 범주 순서의 두 평가자 정방 빈도표. 무가중·선형·제곱 가중 κ; 다항 델타법 SE·점근 Wald CI. 가중 범주는 순서형이어야 합니다. 관측·기대 일치율은 선택한 가중치를 반영하며 정확 일치율도 제공합니다. 베이지안 사전 강도 kappa와 별도 기능입니다.",
+    "formHelp": "Two-rater square count table with common category order. Unweighted, linear or quadratic kappa; multinomial delta-method SE and asymptotic Wald CI. Weighted categories must be ordered. Observed/expected agreement use the selected weights; exact agreement is also reported.",
+    "formHelpKo": "공통 범주 순서의 두 평가자 정방 빈도표. 무가중·선형·제곱 가중 κ; 다항 델타법 SE·점근 Wald CI. 가중 범주는 순서형이어야 합니다. 관측·기대 일치율은 선택한 가중치를 반영하며 정확 일치율도 제공합니다.",
     "exampleRows": [
       [
         "25",
@@ -893,8 +893,8 @@
     "input": "table",
     "suffix": ",raw",
     "example": "cronbach([[1.987,2.255,1.895,1.448,2.702,2.043],[3.103,3.653,2.588,3.608,3.265,3.866],[5.16,4.181,6.042,4.848,4.128,5.317],[1.995,2.767,1.417,-0.304,-1.529,-0.2],[1.802,1.7,2.56,2.591,4.452,3.681],[5.242,3.886,4.375,5.082,5.152,4.701],[3.057,2.704,2.315,2.034,0.528,0.659],[4.576,5.304,4.688,5.573,4.66,5.626],[5.08,3.257,4.251,3.415,3.076,4.508],[2.502,2.733,2.919,3.058,3.403,2.427],[4.23,3.357,4.235,4.595,5.16,5.999],[2.86,3.515,2.619,0.955,1.766,0.26],[3.16,2.893,2.37,2.341,1.676,2.201],[1.101,3.477,2.018,2.67,2.235,3.664],[3.503,4.223,4.268,2.178,3.518,1.656],[3.623,3.309,4.28,2.605,3.676,3.647],[4.285,5.139,6.064,4.069,4.097,4.629],[3.301,2.767,3.271,2.832,3.249,3.621],[2.857,2.677,2.348,3.272,2.696,3.272],[0.449,1.323,0.652,3.013,3.114,1.652],[3.447,3.14,2.42,2.311,3.202,2.063],[2.401,2.196,3.998,1.025,2.349,1.691],[3.54,5.121,3.878,2.99,2.849,3.135],[3.67,4.081,4.264,3.472,3.458,4.419]],raw)",
-    "help": "Rows are subjects, columns are items; raw or standardized alpha. Reverse-code items first. Returns corrected item-total correlations and alpha if deleted. Alpha does not establish validity or unidimensionality.",
-    "helpKo": "행은 대상, 열은 문항; raw·standardized α. 역문항은 먼저 역코딩합니다. 수정 문항-총점 상관·문항 삭제 시 α를 제공합니다. α만으로 타당성·단일차원성을 입증할 수 없습니다.",
+    "help": "Rows are subjects, columns are items; raw or standardized alpha. Reverse-code items first. Returns corrected item-total correlations and alpha if deleted. Alpha measures internal consistency.",
+    "helpKo": "행은 대상, 열은 문항; raw·standardized α. 역문항은 먼저 역코딩합니다. 수정 문항-총점 상관·문항 삭제 시 α를 제공합니다. α는 내적 일관성을 나타냅니다.",
     "section": "general",
     "group": "Reliability",
     "groupKo": "신뢰도",
@@ -926,8 +926,8 @@
         ]
       }
     ],
-    "formHelp": "Rows are subjects, columns are items; raw or standardized alpha. Reverse-code items first. Returns corrected item-total correlations and alpha if deleted. Alpha does not establish validity or unidimensionality.",
-    "formHelpKo": "행은 대상, 열은 문항; raw·standardized α. 역문항은 먼저 역코딩합니다. 수정 문항-총점 상관·문항 삭제 시 α를 제공합니다. α만으로 타당성·단일차원성을 입증할 수 없습니다.",
+    "formHelp": "Rows are subjects, columns are items; raw or standardized alpha. Reverse-code items first. Returns corrected item-total correlations and alpha if deleted. Alpha measures internal consistency.",
+    "formHelpKo": "행은 대상, 열은 문항; raw·standardized α. 역문항은 먼저 역코딩합니다. 수정 문항-총점 상관·문항 삭제 시 α를 제공합니다. α는 내적 일관성을 나타냅니다.",
     "exampleRows": [
       [
         "1.987",
@@ -1144,8 +1144,8 @@
         "default": 0
       }
     ],
-    "formHelp": "Choose a numeric sample column to test normality. Interpret the p value with the Q–Q plot; it does not prove normality.",
-    "formHelpKo": "정규성을 검정할 숫자 표본 열을 선택합니다. p값은 Q–Q plot과 함께 해석하며 정규성의 증명이 아닙니다.",
+    "formHelp": "Choose a numeric sample column to test normality. Interpret the p value with the Q–Q plot alongside the sample distribution.",
+    "formHelpKo": "정규성을 검정할 숫자 표본 열을 선택합니다. p값은 Q–Q plot·표본 분포와 함께 해석합니다.",
     "exampleRows": [
       [
         "1"
@@ -2123,8 +2123,8 @@
     "input": "table",
     "suffix": "",
     "example": "manova([[1,1.987,1.448],[1,3.103,3.608],[1,5.16,4.848],[1,1.995,-0.304],[1,1.802,2.591],[1,5.242,5.082],[1,3.057,2.034],[1,4.576,5.573],[2,5.08,3.415],[2,2.502,3.058],[2,4.23,4.595],[2,2.86,0.955],[2,3.16,2.341],[2,1.101,2.67],[2,3.503,2.178],[2,3.623,2.605],[3,4.285,4.069],[3,3.301,2.832],[3,2.857,3.272],[3,0.449,3.013],[3,3.447,2.311],[3,2.401,1.025],[3,3.54,2.99],[3,3.67,3.472]])",
-    "help": "One-way: group ID then multiple responses (legacy default). Factorial: manova(data,factorial,factor count,interaction order), categorical factor columns first; Type III coefficient-block tests with sum contrasts and hierarchical interactions. Repeated: manova(wide data,repeated,occasions), one independent subject per row and equally sized response blocks in occasion order; tests within-subject mean equality using joint contrasts without sphericity. Pillai, Wilks Rao, Hotelling–Lawley F and Roy upper-bound F. Complete data, normal errors and nonsingular residual covariance required. No mixed between/within repeated design, multiple within factors or irregular visits.",
-    "helpKo": "일요인: 그룹 ID 뒤에 여러 반응(기존 기본값). 요인설계: manova(자료,factorial,요인 수,상호작용 차수), 범주 요인 열을 먼저 배치; 합 대비·계층적 상호작용의 Type III 계수 블록 검정. 반복측정: manova(넓은 자료,repeated,시점 수), 행당 독립 대상 1명·시점 순서의 동일 크기 반응 블록; 구형성 없이 대상 내 평균 동일성을 공동 대비로 검정. Pillai·Wilks Rao·Hotelling–Lawley F와 Roy 상한 F. 완전자료·정규 오차·비특이 잔차 공분산 필요. 집단 간/내 혼합 반복설계·다중 대상 내 요인·불규칙 방문 미지원.",
+    "help": "One-way: group column followed by response columns. Factorial: manova(data,factorial,factor count,interaction order), categorical factors first; Type III tests with sum contrasts. Repeated: manova(wide data,repeated,occasions), one subject per row and equal-sized response blocks in occasion order. Tests mean equality across occasions using within-subject contrasts. Reports Pillai, Wilks Rao, Hotelling–Lawley F and Roy upper-bound F. Use complete data and nonsingular residual covariance; independent subjects and normal errors are assumed, with equal group covariance for independent-group designs.",
+    "helpKo": "일요인: 그룹 열 뒤에 종속변수 열을 배치합니다. 요인설계: manova(자료,factorial,요인 수,상호작용 차수), 범주 요인 열을 먼저 배치하며 합 대비의 Type III 검정을 사용합니다. 반복측정: manova(넓은 자료,repeated,시점 수), 행당 대상 1명·시점 순서의 동일 크기 반응 블록입니다. 대상 내 대비로 시점 간 평균 동일성을 검정합니다. Pillai·Wilks Rao·Hotelling–Lawley F·Roy 상한 F를 제공합니다. 완전자료·비특이 잔차 공분산이 필요하며 독립 대상·정규 오차, 독립 그룹 설계의 등공분산을 가정합니다.",
     "section": "tests",
     "group": "Group comparisons",
     "groupKo": "그룹 비교",
@@ -2209,8 +2209,8 @@
         }
       }
     ],
-    "formHelp": "One-way: group ID then multiple responses (legacy default). Factorial: manova(data,factorial,factor count,interaction order), categorical factor columns first; Type III coefficient-block tests with sum contrasts and hierarchical interactions. Repeated: manova(wide data,repeated,occasions), one independent subject per row and equally sized response blocks in occasion order; tests within-subject mean equality using joint contrasts without sphericity. Pillai, Wilks Rao, Hotelling–Lawley F and Roy upper-bound F. Complete data, normal errors and nonsingular residual covariance required. No mixed between/within repeated design, multiple within factors or irregular visits.",
-    "formHelpKo": "일요인: 그룹 ID 뒤에 여러 반응(기존 기본값). 요인설계: manova(자료,factorial,요인 수,상호작용 차수), 범주 요인 열을 먼저 배치; 합 대비·계층적 상호작용의 Type III 계수 블록 검정. 반복측정: manova(넓은 자료,repeated,시점 수), 행당 독립 대상 1명·시점 순서의 동일 크기 반응 블록; 구형성 없이 대상 내 평균 동일성을 공동 대비로 검정. Pillai·Wilks Rao·Hotelling–Lawley F와 Roy 상한 F. 완전자료·정규 오차·비특이 잔차 공분산 필요. 집단 간/내 혼합 반복설계·다중 대상 내 요인·불규칙 방문 미지원.",
+    "formHelp": "One-way: group column followed by response columns. Factorial: manova(data,factorial,factor count,interaction order), categorical factors first; Type III tests with sum contrasts. Repeated: manova(wide data,repeated,occasions), one subject per row and equal-sized response blocks in occasion order. Tests mean equality across occasions using within-subject contrasts. Reports Pillai, Wilks Rao, Hotelling–Lawley F and Roy upper-bound F. Use complete data and nonsingular residual covariance; independent subjects and normal errors are assumed, with equal group covariance for independent-group designs.",
+    "formHelpKo": "일요인: 그룹 열 뒤에 종속변수 열을 배치합니다. 요인설계: manova(자료,factorial,요인 수,상호작용 차수), 범주 요인 열을 먼저 배치하며 합 대비의 Type III 검정을 사용합니다. 반복측정: manova(넓은 자료,repeated,시점 수), 행당 대상 1명·시점 순서의 동일 크기 반응 블록입니다. 대상 내 대비로 시점 간 평균 동일성을 검정합니다. Pillai·Wilks Rao·Hotelling–Lawley F·Roy 상한 F를 제공합니다. 완전자료·비특이 잔차 공분산이 필요하며 독립 대상·정규 오차, 독립 그룹 설계의 등공분산을 가정합니다.",
     "exampleRows": [
       [
         "1",
@@ -3043,8 +3043,8 @@
         "default": "2"
       }
     ],
-    "formHelp": "Select a sample column and confidence level; enter the known population SD. A sample SD cannot replace the population SD.",
-    "formHelpKo": "표본 열·신뢰수준을 선택하고 알려진 모집단 표준편차를 입력합니다. 표본 표준편차로 대체할 수 없습니다.",
+    "formHelp": "Select a sample column and confidence level; enter the known population SD.",
+    "formHelpKo": "표본 열·신뢰수준을 선택하고 알려진 모집단 표준편차를 입력합니다.",
     "exampleRows": [
       [
         "1"
@@ -3699,8 +3699,8 @@
     "input": "table",
     "suffix": ",poisson,intercept",
     "example": "zeroinflated([[0,0],[0,0],[0,0],[0,1],[0,2],[0,3],[1,0],[1,0],[1,1],[1,2],[1,3],[1,5],[2,0],[2,0],[2,1],[2,3],[2,5],[2,8],[3,0],[3,0],[3,2],[3,4],[3,7],[3,10]],poisson,intercept)",
-    "help": "Rows: predictors, integer counts. Poisson or estimated-alpha NB2 count mixture with logit structural zeros; inflation intercept or same predictors. Joint ML Wald inference; no hurdle model or automatic Vuong test.",
-    "helpKo": "열: 설명변수·정수 빈도. Poisson 또는 alpha 추정 NB2와 구조적 0의 logit 혼합; 영과잉 절편 또는 같은 설명변수. 공동 ML Wald 추론; 허들 모형·자동 Vuong 검정 미지원.",
+    "help": "Rows: predictors, integer counts. Poisson or estimated-alpha NB2 count mixture with logit structural zeros; inflation intercept or same predictors. Joint ML Wald inference.",
+    "helpKo": "열: 설명변수·정수 빈도. Poisson 또는 alpha 추정 NB2와 구조적 0의 logit 혼합; 영과잉 절편 또는 같은 설명변수. 공동 ML Wald 추론;",
     "section": "models",
     "group": "Generalized regression",
     "groupKo": "일반화 회귀",
@@ -3758,8 +3758,8 @@
         ]
       }
     ],
-    "formHelp": "Rows: predictors, integer counts. Poisson or estimated-alpha NB2 count mixture with logit structural zeros; inflation intercept or same predictors. Joint ML Wald inference; no hurdle model or automatic Vuong test.",
-    "formHelpKo": "열: 설명변수·정수 빈도. Poisson 또는 alpha 추정 NB2와 구조적 0의 logit 혼합; 영과잉 절편 또는 같은 설명변수. 공동 ML Wald 추론; 허들 모형·자동 Vuong 검정 미지원.",
+    "formHelp": "Rows: predictors, integer counts. Poisson or estimated-alpha NB2 count mixture with logit structural zeros; inflation intercept or same predictors. Joint ML Wald inference.",
+    "formHelpKo": "열: 설명변수·정수 빈도. Poisson 또는 alpha 추정 NB2와 구조적 0의 logit 혼합; 영과잉 절편 또는 같은 설명변수. 공동 ML Wald 추론;",
     "exampleRows": [
       [
         "0",
@@ -3866,8 +3866,8 @@
     "input": "table",
     "suffix": ",0,none",
     "example": "tobit([[0,0],[1,0],[2,1],[3,3],[4,3],[5,6],[6,5],[7,8],[8,9],[9,8],[10,11],[11,12]],0,none)",
-    "help": "Rows: predictors, observed response; lower bound (default 0), upper bound (default none). Type-I normal censoring, joint ML coefficient/sigma inference. Values at bounds are censored; coefficients refer to the latent response. No truncation/selection model.",
-    "helpKo": "열: 설명변수·관측 반응; 하한(기본 0)·상한(기본 none). Type-I 정규 검열·공동 ML 계수/sigma 추론. 경계값은 검열 관측, 계수는 잠재 반응 기준. 절단·선택 모형 미지원.",
+    "help": "Rows: predictors, observed response; lower bound (default 0), upper bound (default none). Type-I normal censoring, joint ML coefficient/sigma inference. Values at bounds are censored; coefficients refer to the latent response.",
+    "helpKo": "열: 설명변수·관측 반응; 하한(기본 0)·상한(기본 none). Type-I 정규 검열·공동 ML 계수/sigma 추론. 경계값은 검열 관측, 계수는 잠재 반응 기준.",
     "section": "models",
     "group": "Generalized regression",
     "groupKo": "일반화 회귀",
@@ -3901,8 +3901,8 @@
         "default": "none"
       }
     ],
-    "formHelp": "Rows: predictors, observed response; lower bound (default 0), upper bound (default none). Type-I normal censoring, joint ML coefficient/sigma inference. Values at bounds are censored; coefficients refer to the latent response. No truncation/selection model.",
-    "formHelpKo": "열: 설명변수·관측 반응; 하한(기본 0)·상한(기본 none). Type-I 정규 검열·공동 ML 계수/sigma 추론. 경계값은 검열 관측, 계수는 잠재 반응 기준. 절단·선택 모형 미지원.",
+    "formHelp": "Rows: predictors, observed response; lower bound (default 0), upper bound (default none). Type-I normal censoring, joint ML coefficient/sigma inference. Values at bounds are censored; coefficients refer to the latent response.",
+    "formHelpKo": "열: 설명변수·관측 반응; 하한(기본 0)·상한(기본 none). Type-I 정규 검열·공동 ML 계수/sigma 추론. 경계값은 검열 관측, 계수는 잠재 반응 기준.",
     "exampleRows": [
       [
         "0",
@@ -4211,8 +4211,8 @@
     "input": "table",
     "suffix": ",2000,0",
     "example": "mediation([[-2.191,-1.014,-0.857],[-0.662,0.471,0.662],[1.567,1.183,3.061],[2.013,1.591,3.248],[-1.857,-0.593,-0.9],[-0.348,1.302,0.7],[2.702,1.566,3.688],[-0.934,-0.125,-1.06],[-1.674,-0.681,-1.092],[-0.145,-0.168,1.046],[0.818,0.995,2.032],[0.809,1.054,1.548],[1.027,-0.185,-0.448],[-0.783,-0.785,0.117],[-1.612,-1.911,-1.425],[0.26,0.246,-0.084],[1.802,2.034,2.866],[-0.316,-0.156,0.409],[-0.667,-1.464,-1.077],[-0.268,-0.145,-0.343],[0.58,1.473,1.633],[2.444,1.513,2.462],[0.308,0.001,0.363],[1.209,0.904,0.926]],2000,0)",
-    "help": "Rows: X, M, optional covariates, Y. Single continuous mediator; adjusted OLS direct, total and indirect a×b effects, seeded row-bootstrap percentile CI and Sobel approximation. No causal identification from observational association alone.",
-    "helpKo": "열: X·M·선택적 공변량·Y. 단일 연속형 매개변수; 조정 OLS 직접·총·간접 a×b 효과, 시드 기반 행 부트스트랩 백분위 CI·Sobel 근사. 관측 연관성만으로 인과관계를 식별하지 않습니다.",
+    "help": "Rows: X, M, optional covariates, Y. Single continuous mediator; adjusted OLS direct, total and indirect a×b effects, seeded row-bootstrap percentile CI and Sobel approximation.",
+    "helpKo": "열: X·M·선택적 공변량·Y. 단일 연속형 매개변수; 조정 OLS 직접·총·간접 a×b 효과, 시드 기반 행 부트스트랩 백분위 CI·Sobel 근사.",
     "section": "models",
     "group": "Mediation & moderation",
     "groupKo": "매개·조절 분석",
@@ -4260,8 +4260,8 @@
         "default": "0"
       }
     ],
-    "formHelp": "Rows: X, M, optional covariates, Y. Single continuous mediator; adjusted OLS direct, total and indirect a×b effects, seeded row-bootstrap percentile CI and Sobel approximation. No causal identification from observational association alone.",
-    "formHelpKo": "열: X·M·선택적 공변량·Y. 단일 연속형 매개변수; 조정 OLS 직접·총·간접 a×b 효과, 시드 기반 행 부트스트랩 백분위 CI·Sobel 근사. 관측 연관성만으로 인과관계를 식별하지 않습니다.",
+    "formHelp": "Rows: X, M, optional covariates, Y. Single continuous mediator; adjusted OLS direct, total and indirect a×b effects, seeded row-bootstrap percentile CI and Sobel approximation.",
+    "formHelpKo": "열: X·M·선택적 공변량·Y. 단일 연속형 매개변수; 조정 OLS 직접·총·간접 a×b 효과, 시드 기반 행 부트스트랩 백분위 CI·Sobel 근사.",
     "exampleRows": [
       [
         "-2.191",
@@ -4733,8 +4733,8 @@
     "input": "table",
     "suffix": ",binomial,15",
     "example": "glmm([[1,0,0],[1,1,0],[1,2,1],[2,0,0],[2,1,1],[2,2,1],[3,0,0],[3,1,0],[3,2,0],[4,0,1],[4,1,1],[4,2,1],[5,0,1],[5,1,0],[5,2,1],[6,0,0],[6,1,1],[6,2,0]],binomial,15)",
-    "help": "Rows: subject ID, predictors, response. Random intercept, optionally one correlated random slope (seventh argument: selected predictor position, 0 = none). Slopes use two-dimensional Laplace (third argument 1), without quadrature refit; use [],offset,likelihood before the slope position. Covariance and conditional modes are reported in original units. Random intercept: binomial (0/1, logit), poisson or nbinom (NB2, log). ML adaptive Gauss-Hermite quadrature: 15 points default, 1 = Laplace, otherwise 7-31. Optional fourth argument offset vector, fifth offset / exposure. Limit 1500 rows, 8 fixed coefficients. Subject-specific effects; joint marginal observed information by central differences; asymptotic Wald inference. Few-subject Wald inference may be unreliable. Integration checks compare likelihood at another point count, including Laplace/31 points; optional sixth argument refit compares coefficients and suppresses CI/p if shifts exceed 0.1 SE. To omit offsets use [],offset before refit.",
-    "helpKo": "열: 대상 ID, 설명변수, 반응. 랜덤 절편 + 선택적 상관 랜덤 기울기 1개(일곱째 인수: 선택한 설명변수 번호, 0 없음). 기울기는 2차원 Laplace(셋째 인수 1), 적분점 재적합 미지원; 번호 앞에 [],offset,likelihood를 지정합니다. 공분산·조건부 최빈값은 원래 단위로 표시합니다. 랜덤 절편: binomial(0/1, 로짓), poisson·nbinom(NB2, 로그). ML 적응형 Gauss-Hermite 적분: 기본 15점, 1=Laplace, 그 외 7~31점. 선택적 넷째 인수 오프셋 목록, 다섯째 offset·exposure. 최대 1500행·고정계수 8개. 대상별 조건부 효과, 중앙차분 관측 정보행렬·점근 Wald 추론. 소수 대상의 Wald 추론은 부정확할 수 있습니다. Laplace·31점도 다른 적분점의 우도를 비교합니다. 선택적 여섯째 인수 refit은 재적합 계수를 비교하고 0.1 SE 초과 변동이면 CI·p값을 생략합니다. 오프셋이 없으면 refit 앞에 [],offset을 사용합니다.",
+    "help": "Rows: subject ID, predictors, response. Random intercept, optionally one correlated random slope (seventh argument: selected predictor position, 0 = none). Slopes use two-dimensional Laplace (third argument 1), use [],offset,likelihood before the slope position. Covariance and conditional modes are reported in original units. Random intercept: binomial (0/1, logit), poisson or nbinom (NB2, log). ML adaptive Gauss-Hermite quadrature: 15 points default, 1 = Laplace, otherwise 7-31. Optional fourth argument offset vector, fifth offset / exposure. Limit 1500 rows, 8 fixed coefficients. Subject-specific effects; joint marginal observed information by central differences; asymptotic Wald inference. Few-subject Wald inference may be unreliable. Integration checks compare likelihood at another point count, including Laplace/31 points; optional sixth argument refit compares coefficients and suppresses CI/p if shifts exceed 0.1 SE. To omit offsets use [],offset before refit.",
+    "helpKo": "열: 대상 ID, 설명변수, 반응. 랜덤 절편 + 선택적 상관 랜덤 기울기 1개(일곱째 인수: 선택한 설명변수 번호, 0 없음). 기울기는 2차원 Laplace(셋째 인수 1), 번호 앞에 [],offset,likelihood를 지정합니다. 공분산·조건부 최빈값은 원래 단위로 표시합니다. 랜덤 절편: binomial(0/1, 로짓), poisson·nbinom(NB2, 로그). ML 적응형 Gauss-Hermite 적분: 기본 15점, 1=Laplace, 그 외 7~31점. 선택적 넷째 인수 오프셋 목록, 다섯째 offset·exposure. 최대 1500행·고정계수 8개. 대상별 조건부 효과, 중앙차분 관측 정보행렬·점근 Wald 추론. 소수 대상의 Wald 추론은 부정확할 수 있습니다. Laplace·31점도 다른 적분점의 우도를 비교합니다. 선택적 여섯째 인수 refit은 재적합 계수를 비교하고 0.1 SE 초과 변동이면 CI·p값을 생략합니다. 오프셋이 없으면 refit 앞에 [],offset을 사용합니다.",
     "section": "models",
     "group": "Repeated & clustered data",
     "groupKo": "반복·군집 자료",
@@ -4875,8 +4875,8 @@
         }
       }
     ],
-    "formHelp": "Random intercept, optionally one correlated random slope (seventh argument: selected predictor position, 0 = none). Slopes use two-dimensional Laplace (third argument 1), without quadrature refit; use [],offset,likelihood before the slope position. Covariance and conditional modes are reported in original units. Random intercept: binomial / Poisson / NB2. ML quadrature (15 default, 1 Laplace, 7-31); conditional effects. Count families support log offset or positive exposure. Few-subject Wald inference may be unreliable. Integration checks compare likelihood at another point count, including Laplace/31 points; optional sixth argument refit compares coefficients and suppresses CI/p if shifts exceed 0.1 SE. To omit offsets use [],offset before refit.",
-    "formHelpKo": "랜덤 절편 또는 절편 + 상관 기울기 1개. 선택적 일곱째 인수: 선택한 설명변수 번호(0 없음). 기울기는 Laplace(셋째 인수 1), 3개 이상 대상 내 설명변수 변화가 필요하며 적분 민감도 확인은 미지원입니다. ICC는 x=0 기준이며 singular·식별 불가 적합은 Wald 추론을 생략합니다. 이항·포아송·NB2. ML 적분(기본 15점, 1 Laplace, 7~31); 조건부 효과. 빈도 분포는 로그 오프셋·양수 노출량 지원. 소수 대상의 Wald 추론은 부정확할 수 있습니다. Laplace·31점도 다른 적분점의 우도를 비교합니다. 선택적 여섯째 인수 refit은 재적합 계수를 비교하고 0.1 SE 초과 변동이면 CI·p값을 생략합니다. 오프셋이 없으면 refit 앞에 [],offset을 사용합니다.",
+    "formHelp": "Random intercept, optionally one correlated random slope (seventh argument: selected predictor position, 0 = none). Slopes use two-dimensional Laplace (third argument 1), use [],offset,likelihood before the slope position. Covariance and conditional modes are reported in original units. Random intercept: binomial / Poisson / NB2. ML quadrature (15 default, 1 Laplace, 7-31); conditional effects. Count families support log offset or positive exposure. Few-subject Wald inference may be unreliable. Integration checks compare likelihood at another point count, including Laplace/31 points; optional sixth argument refit compares coefficients and suppresses CI/p if shifts exceed 0.1 SE. To omit offsets use [],offset before refit.",
+    "formHelpKo": "랜덤 절편 또는 절편 + 상관 기울기 1개. 선택적 일곱째 인수: 선택한 설명변수 번호(0 없음). 기울기는 Laplace(셋째 인수 1), 3개 이상 대상 내 설명변수 변화가 필요합니다. ICC는 x=0 기준이며 singular·식별 불가 적합은 Wald 추론을 생략합니다. 이항·포아송·NB2. ML 적분(기본 15점, 1 Laplace, 7~31); 조건부 효과. 빈도 분포는 로그 오프셋·양수 노출량 지원. 소수 대상의 Wald 추론은 부정확할 수 있습니다. Laplace·31점도 다른 적분점의 우도를 비교합니다. 선택적 여섯째 인수 refit은 재적합 계수를 비교하고 0.1 SE 초과 변동이면 CI·p값을 생략합니다. 오프셋이 없으면 refit 앞에 [],offset을 사용합니다.",
     "exampleRows": [
       [
         "1",
@@ -4977,8 +4977,8 @@
     "input": "table",
     "suffix": ",gaussian,independence",
     "example": "gee([[1,0,2],[1,1,4],[1,2,4],[2,0,3],[2,1,4],[2,2,6],[3,0,1],[3,1,3],[3,2,4],[4,0,4],[4,1,5],[4,2,8]],gaussian,independence)",
-    "help": "Rows: cluster ID, predictors, response. gaussian / binomial / poisson; working correlation independence / exchangeable / ar1; fourth argument [i,j] interaction pairs; sandwich SE. Pearson dispersion-adjusted correlation; AR(1) uses row order and equal spacing. Few-cluster Wald inference may be unreliable. Optional fifth argument small adds Mancl-DeRouen covariance and t inference with clusters minus coefficient count df; use [] as the fourth argument when there are no interactions. This does not guarantee reliable inference with very few clusters.",
-    "helpKo": "열: 군집 ID, 설명변수, 반응. gaussian / binomial / poisson; 작업상관 independence / exchangeable / ar1; 넷째 인수 [i,j] 상호작용 쌍; 강건 SE. Pearson 분산 보정 상관; AR(1)은 행 순서·등간격 사용. 소수 군집의 Wald 추론은 부정확할 수 있습니다. 선택적 다섯째 인수 small은 Mancl-DeRouen 공분산·군집 수-계수 수 자유도의 t 추론을 적용합니다. 상호작용이 없으면 넷째 인수는 []입니다. 극소수 군집에서의 신뢰성을 보장하지는 않습니다.",
+    "help": "Rows: cluster ID, predictors, response. gaussian / binomial / poisson; working correlation independence / exchangeable / ar1; fourth argument [i,j] interaction pairs; sandwich SE. Pearson dispersion-adjusted correlation; AR(1) uses row order and equal spacing. Few-cluster Wald inference may be unreliable. Optional fifth argument small adds Mancl-DeRouen covariance and t inference with clusters minus coefficient count df; use [] as the fourth argument when there are no interactions. Review the cluster count when interpreting intervals.",
+    "helpKo": "열: 군집 ID, 설명변수, 반응. gaussian / binomial / poisson; 작업상관 independence / exchangeable / ar1; 넷째 인수 [i,j] 상호작용 쌍; 강건 SE. Pearson 분산 보정 상관; AR(1)은 행 순서·등간격 사용. 소수 군집의 Wald 추론은 부정확할 수 있습니다. 선택적 다섯째 인수 small은 Mancl-DeRouen 공분산·군집 수-계수 수 자유도의 t 추론을 적용합니다. 상호작용이 없으면 넷째 인수는 []입니다. 구간 해석 시 군집 수를 확인하세요.",
     "section": "models",
     "group": "Repeated & clustered data",
     "groupKo": "반복·군집 자료",
@@ -5079,8 +5079,8 @@
         "default": ""
       }
     ],
-    "formHelp": "Working correlation independence / exchangeable / AR(1); dispersion-adjusted correlation and cluster-robust SE. Optional fifth argument small adds Mancl-DeRouen covariance and t inference with clusters minus coefficient count df; use [] as the fourth argument when there are no interactions. This does not guarantee reliable inference with very few clusters. AR(1): row order, equal spacing. Interactions accept header names (age,weight), the shown column letters or labels (y,z / age (y),weight (z)), column numbers (2,3) or predictor order (p1,p2); separate pairs with ;.",
-    "formHelpKo": "작업상관 independence / exchangeable / AR(1); 분산 보정 상관·군집 강건 표준오차. 선택적 다섯째 인수 small은 Mancl-DeRouen 공분산·군집 수-계수 수 자유도의 t 추론을 적용합니다. 상호작용이 없으면 넷째 인수는 []입니다. 극소수 군집에서의 신뢰성을 보장하지는 않습니다. AR(1): 행 순서·등간격. 상호작용은 열 이름(age,weight), 표시된 열 문자·라벨(y,z / age (y),weight (z)), 열 번호(2,3), 설명변수 순서(p1,p2)로 입력하고 쌍은 ;로 구분합니다.",
+    "formHelp": "Working correlation independence / exchangeable / AR(1); dispersion-adjusted correlation and cluster-robust SE. Optional fifth argument small adds Mancl-DeRouen covariance and t inference with clusters minus coefficient count df; use [] as the fourth argument when there are no interactions. Review the cluster count when interpreting intervals. AR(1): row order, equal spacing. Interactions accept header names (age,weight), the shown column letters or labels (y,z / age (y),weight (z)), column numbers (2,3) or predictor order (p1,p2); separate pairs with ;.",
+    "formHelpKo": "작업상관 independence / exchangeable / AR(1); 분산 보정 상관·군집 강건 표준오차. 선택적 다섯째 인수 small은 Mancl-DeRouen 공분산·군집 수-계수 수 자유도의 t 추론을 적용합니다. 상호작용이 없으면 넷째 인수는 []입니다. 구간 해석 시 군집 수를 확인하세요. AR(1): 행 순서·등간격. 상호작용은 열 이름(age,weight), 표시된 열 문자·라벨(y,z / age (y),weight (z)), 열 번호(2,3), 설명변수 순서(p1,p2)로 입력하고 쌍은 ;로 구분합니다.",
     "exampleRows": [
       [
         "1",
@@ -5402,8 +5402,8 @@
     "input": "groups",
     "suffix": ",equal,0,0.01,2,1,0.95,20000,0",
     "example": "bayescompare([10,11,9,10,12],[13,14,12,15,13],equal,0,0.01,2,1,0.95,20000,0)",
-    "help": "Two independent normal samples (at least 2 each); variance equal / unequal; mu0,kappa0,alpha0,beta0; credible level; IID posterior draws (2000-100000), seed. H1: independent Normal(mu0,variance/kappa0) means with shared (equal) or independent (unequal) InvGamma(alpha0,beta0) variances. H0: B-A=0 with nuisance prior conditioned from H1. BF10/BF01 use Savage-Dickey, not a JZS/Cauchy prior. Reports B-A mean, equal-tailed credible interval, P(muB>muA), and posterior effect (B-A)/sqrt((varianceA+varianceB)/2). Equal-mode difference summaries and BF are analytic; unequal BF uses numerical t convolution, unequal intervals/probability and effect intervals use simulation. MCSE, draws and seed are reported. Defaults are proper but unit-dependent; choose priors before inspecting outcomes.",
-    "helpKo": "독립 정규 표본 두 개(각 2개 이상); 분산 equal·unequal; mu0,kappa0,alpha0,beta0; 구간 수준; IID 사후 추출 수(2000~100000), 시드. H1: 평균|분산은 독립 Normal(mu0,분산/kappa0), 분산은 공통(등분산) 또는 독립(이분산) InvGamma(alpha0,beta0). H0: B-A=0이며 H1을 이 조건으로 제한한 방해모수 사전분포를 사용합니다. BF10/BF01은 Savage-Dickey 방식이며 JZS/Cauchy 검정이 아닙니다. B-A 평균·등꼬리 신용구간·P(muB>muA)·사후 효과크기 (B-A)/sqrt((분산A+분산B)/2)를 출력합니다. 등분산 차이 요약·BF는 해석적, 이분산 BF는 t 합성곱 수치 적분, 이분산 구간·확률 및 효과크기 구간은 시뮬레이션입니다. MCSE·추출 수·시드 포함. 기본 사전분포는 적정하지만 단위에 의존하므로 결과를 보기 전에 척도에 맞게 지정하세요.",
+    "help": "Two independent normal samples (at least 2 each); variance equal / unequal; mu0,kappa0,alpha0,beta0; credible level; IID posterior draws (2000-100000), seed. H1: independent Normal(mu0,variance/kappa0) means with shared (equal) or independent (unequal) InvGamma(alpha0,beta0) variances. H0: B-A=0 with nuisance prior conditioned from H1. BF10/BF01 use the Savage-Dickey density ratio. Reports B-A mean, equal-tailed credible interval, P(muB>muA), and posterior effect (B-A)/sqrt((varianceA+varianceB)/2). Equal-mode difference summaries and BF are analytic; unequal BF uses numerical t convolution, unequal intervals/probability and effect intervals use simulation. MCSE, draws and seed are reported. Defaults are proper but unit-dependent; choose priors before inspecting outcomes.",
+    "helpKo": "독립 정규 표본 두 개(각 2개 이상); 분산 equal·unequal; mu0,kappa0,alpha0,beta0; 구간 수준; IID 사후 추출 수(2000~100000), 시드. H1: 평균|분산은 독립 Normal(mu0,분산/kappa0), 분산은 공통(등분산) 또는 독립(이분산) InvGamma(alpha0,beta0). H0: B-A=0이며 H1을 이 조건으로 제한한 방해모수 사전분포를 사용합니다. BF10/BF01은 Savage-Dickey 밀도비를 사용합니다. B-A 평균·등꼬리 신용구간·P(muB>muA)·사후 효과크기 (B-A)/sqrt((분산A+분산B)/2)를 출력합니다. 등분산 차이 요약·BF는 해석적, 이분산 BF는 t 합성곱 수치 적분, 이분산 구간·확률 및 효과크기 구간은 시뮬레이션입니다. MCSE·추출 수·시드 포함. 기본 사전분포는 적정하지만 단위에 의존하므로 결과를 보기 전에 척도에 맞게 지정하세요.",
     "section": "advanced",
     "group": "Bayesian inference",
     "groupKo": "베이지안 추론",
@@ -5568,8 +5568,8 @@
         "default": "0"
       }
     ],
-    "formHelp": "Independent groups; B - A. Blank cells are omitted separately in each selected column, so sample sizes may differ. Choose proper NIG priors in your measurement units. BF uses the H1-conditioned point null, not the default Cauchy t-test. Simulation intervals and MCSE are labeled.",
-    "formHelpKo": "독립 두 집단; 차이는 B - A. 선택한 각 열의 빈 셀은 독립적으로 제외하므로 표본수가 달라도 됩니다. 측정 단위에 맞게 NIG 사전분포를 지정하세요. BF는 H1을 조건부 제한한 점귀무 모형 기준이며 기본 Cauchy t 검정과 다릅니다. 시뮬레이션 구간·MCSE를 표시합니다.",
+    "formHelp": "Independent groups; B - A. Blank cells are omitted separately in each selected column, so sample sizes may differ. Choose proper NIG priors in your measurement units. BF compares H1 with its conditioned point null. Simulation intervals and MCSE are labeled.",
+    "formHelpKo": "독립 두 집단; 차이는 B - A. 선택한 각 열의 빈 셀은 독립적으로 제외하므로 표본수가 달라도 됩니다. 측정 단위에 맞게 NIG 사전분포를 지정하세요. BF는 H1과 이를 조건부 제한한 점귀무 모형을 비교합니다. 시뮬레이션 구간·MCSE를 표시합니다.",
     "exampleRows": [
       [
         "10",
@@ -5805,7 +5805,7 @@
         "default": "1"
       }
     ],
-    "formHelp": "Gamma prior → Poisson rate · credible interval · P(rate > threshold). β is rate, not scale.",
+    "formHelp": "Gamma prior → Poisson rate · credible interval · P(rate > threshold). β is the rate parameter.",
     "formHelpKo": "Gamma 사전 → 포아송 발생률 · 베이지안 구간 · 기준 초과 확률. β는 rate(척도의 역수)입니다.",
     "exampleRows": [
       [
@@ -5891,8 +5891,8 @@
         "default": "0"
       }
     ],
-    "formHelp": "Choose a column and statistic, confidence level, resamples and seed. IID percentile bootstrap; not BCa.",
-    "formHelpKo": "자료 열·통계량·신뢰수준·재표집 수·시드를 선택합니다. IID 백분위 부트스트랩이며 BCa는 아닙니다.",
+    "formHelp": "Choose a column and statistic, confidence level, resamples and seed. IID percentile bootstrap.",
+    "formHelpKo": "자료 열·통계량·신뢰수준·재표집 수·시드를 선택합니다. IID 백분위 부트스트랩입니다.",
     "exampleRows": [
       [
         "1"
@@ -6204,8 +6204,8 @@
     "input": "table",
     "suffix": ",2,varimax",
     "example": "efa([[1.987,2.255,1.895,1.448,2.702,2.043],[3.103,3.653,2.588,3.608,3.265,3.866],[5.16,4.181,6.042,4.848,4.128,5.317],[1.995,2.767,1.417,-0.304,-1.529,-0.2],[1.802,1.7,2.56,2.591,4.452,3.681],[5.242,3.886,4.375,5.082,5.152,4.701],[3.057,2.704,2.315,2.034,0.528,0.659],[4.576,5.304,4.688,5.573,4.66,5.626],[5.08,3.257,4.251,3.415,3.076,4.508],[2.502,2.733,2.919,3.058,3.403,2.427],[4.23,3.357,4.235,4.595,5.16,5.999],[2.86,3.515,2.619,0.955,1.766,0.26],[3.16,2.893,2.37,2.341,1.676,2.201],[1.101,3.477,2.018,2.67,2.235,3.664],[3.503,4.223,4.268,2.178,3.518,1.656],[3.623,3.309,4.28,2.605,3.676,3.647],[4.285,5.139,6.064,4.069,4.097,4.629],[3.301,2.767,3.271,2.832,3.249,3.621],[2.857,2.677,2.348,3.272,2.696,3.272],[0.449,1.323,0.652,3.013,3.114,1.652],[3.447,3.14,2.42,2.311,3.202,2.063],[2.401,2.196,3.998,1.025,2.349,1.691],[3.54,5.121,3.878,2.99,2.849,3.135],[3.67,4.081,4.264,3.472,3.458,4.419],[3.341,3.341,2.722,2.088,2.846,3.371],[2.491,2.816,1.44,1.192,2.551,1.975],[3.002,2.66,3.754,3.345,5.413,3.962],[2.893,3.409,3.316,3.336,3.614,4.426],[1.843,1.939,2.024,5.012,4.963,5.395],[4.404,3.051,4.195,4.157,2.983,3.546],[3.252,2.804,3.346,2.695,4.096,3.254],[3.384,3.477,4.064,1.625,1.051,0.949],[3.04,2.869,2.962,2.556,1.997,0.53],[2.398,2.777,2.227,3.809,3.915,4.636],[3.253,3.538,4.357,3.697,3.035,3.881],[2.896,2.958,0.826,0.678,1.802,0.825],[1.423,1.154,1.884,3.063,3.992,3.001],[3.389,3.692,2.134,3.7,4.094,4.75],[2.75,3.546,3.742,3.853,3.204,5.14],[3.966,2.911,2.755,2.152,3.222,1.657],[2.267,1.875,2.087,1.343,3.21,3.064],[4.436,4.095,5.016,4.363,3.93,4.141],[-0.224,1.681,0.508,1.922,1.822,2.534],[2.844,2.896,3.813,4.436,2.472,3.68],[2.548,3.279,1.79,2.175,1.88,1.092],[2.624,2.491,2.819,3.493,3.617,2.98],[3.027,3.869,2.073,2.693,2.873,3.391],[2.524,3.183,1.987,3.333,2.888,3.225]],2,varimax)",
-    "help": "Pearson correlation extraction: principal axis (pa, default; SMC start) or principal components (pca). Factor count or parallel; rotation varimax, none, promax (power 4, Kaiser) or oblimin (delta 0). Arguments: data,count,rotation,extraction,parallel simulations (0 off),seed,percentile (0.95). parallel automatically uses 100 simulations when omitted. Horn normal simulations use component roots for PCA or SMC-reduced roots for principal axis. Displays pattern/structure loadings, factor correlations and regression scores. PCA is not common-factor analysis; select the same extraction as the comparison software. Oblique squared pattern loadings are not additive variance. Complete numeric rows; no polychoric estimator.",
-    "helpKo": "Pearson 상관 추출: 주축요인법(pa, 기본; SMC 초기값) 또는 주성분(pca). 요인 수 또는 parallel; varimax·none·promax(지수 4, Kaiser)·oblimin(delta 0). 인수: 자료,요인 수,회전,추출,병렬분석 횟수(0=끔),시드,백분위(0.95). parallel 자동 선택은 횟수 생략 시 100회. Horn 정규 시뮬레이션에서 PCA는 성분 고유값, 주축요인법은 SMC 축소 고유값을 비교합니다. 패턴·구조 적재량, 요인 상관, 회귀 점수 제공. 주성분은 공통요인 분석과 다르므로 비교 소프트웨어와 추출법을 맞추세요. 사각 패턴 적재량 제곱합은 가산 설명분산이 아닙니다. 완전한 숫자 행; 다분상관 미지원.",
+    "help": "Select numeric item columns. Extraction: pa (principal axis, default) or pca (principal components). Enter a factor count or parallel for automatic selection. Rotations: varimax, none, promax (power 4) or oblimin (delta 0). Arguments: data,count,rotation,extraction,parallel simulations,seed,percentile. Parallel simulations: 0 = off; automatic selection defaults to 100, percentile 0.95. Reports KMO, Bartlett, communalities, pattern and structure loadings, factor correlations and regression scores. Principal axis uses SMC-reduced eigenvalues for parallel analysis; PCA uses correlation eigenvalues. For correlated factors, interpret communalities with the factor correlations.",
+    "helpKo": "숫자 문항 열을 선택합니다. 추출: 주축요인법(pa, 기본) 또는 주성분(pca). 요인 수 또는 자동 선택 parallel을 입력합니다. 회전: varimax·none·promax(지수 4)·oblimin(delta 0). 인수: 자료,요인 수,회전,추출,병렬분석 횟수,시드,백분위. 횟수 0은 끔, 자동 선택 기본값은 100회·백분위 0.95입니다. KMO·Bartlett·공통성·패턴/구조 적재량·요인 상관·회귀 점수를 제공합니다. 병렬분석은 주축요인법에서 SMC 축소 고유값, 주성분에서 상관 고유값을 사용합니다. 사각회전의 공통성은 요인 상관을 함께 반영해 해석합니다.",
     "section": "advanced",
     "group": "Measurement & structural models",
     "groupKo": "측정·구조 모형",
@@ -6294,8 +6294,8 @@
         "default": "0.95"
       }
     ],
-    "formHelp": "Pearson correlation extraction: principal axis (pa, default; SMC start) or principal components (pca). Factor count or parallel; rotation varimax, none, promax (power 4, Kaiser) or oblimin (delta 0). Arguments: data,count,rotation,extraction,parallel simulations (0 off),seed,percentile (0.95). parallel automatically uses 100 simulations when omitted. Horn normal simulations use component roots for PCA or SMC-reduced roots for principal axis. Displays pattern/structure loadings, factor correlations and regression scores. PCA is not common-factor analysis; select the same extraction as the comparison software. Oblique squared pattern loadings are not additive variance. Complete numeric rows; no polychoric estimator.",
-    "formHelpKo": "Pearson 상관 추출: 주축요인법(pa, 기본; SMC 초기값) 또는 주성분(pca). 요인 수 또는 parallel; varimax·none·promax(지수 4, Kaiser)·oblimin(delta 0). 인수: 자료,요인 수,회전,추출,병렬분석 횟수(0=끔),시드,백분위(0.95). parallel 자동 선택은 횟수 생략 시 100회. Horn 정규 시뮬레이션에서 PCA는 성분 고유값, 주축요인법은 SMC 축소 고유값을 비교합니다. 패턴·구조 적재량, 요인 상관, 회귀 점수 제공. 주성분은 공통요인 분석과 다르므로 비교 소프트웨어와 추출법을 맞추세요. 사각 패턴 적재량 제곱합은 가산 설명분산이 아닙니다. 완전한 숫자 행; 다분상관 미지원.",
+    "formHelp": "Select numeric item columns. Extraction: pa (principal axis, default) or pca (principal components). Enter a factor count or parallel for automatic selection. Rotations: varimax, none, promax (power 4) or oblimin (delta 0). Arguments: data,count,rotation,extraction,parallel simulations,seed,percentile. Parallel simulations: 0 = off; automatic selection defaults to 100, percentile 0.95. Reports KMO, Bartlett, communalities, pattern and structure loadings, factor correlations and regression scores. Principal axis uses SMC-reduced eigenvalues for parallel analysis; PCA uses correlation eigenvalues. For correlated factors, interpret communalities with the factor correlations.",
+    "formHelpKo": "숫자 문항 열을 선택합니다. 추출: 주축요인법(pa, 기본) 또는 주성분(pca). 요인 수 또는 자동 선택 parallel을 입력합니다. 회전: varimax·none·promax(지수 4)·oblimin(delta 0). 인수: 자료,요인 수,회전,추출,병렬분석 횟수,시드,백분위. 횟수 0은 끔, 자동 선택 기본값은 100회·백분위 0.95입니다. KMO·Bartlett·공통성·패턴/구조 적재량·요인 상관·회귀 점수를 제공합니다. 병렬분석은 주축요인법에서 SMC 축소 고유값, 주성분에서 상관 고유값을 사용합니다. 사각회전의 공통성은 요인 상관을 함께 반영해 해석합니다.",
     "exampleRows": [
       [
         "1.987",
@@ -6690,8 +6690,8 @@
     "input": "table",
     "suffix": ",[1,1,1,2,2,2]",
     "example": "cfa([[1.987,2.255,1.895,1.448,2.702,2.043],[3.103,3.653,2.588,3.608,3.265,3.866],[5.16,4.181,6.042,4.848,4.128,5.317],[1.995,2.767,1.417,-0.304,-1.529,-0.2],[1.802,1.7,2.56,2.591,4.452,3.681],[5.242,3.886,4.375,5.082,5.152,4.701],[3.057,2.704,2.315,2.034,0.528,0.659],[4.576,5.304,4.688,5.573,4.66,5.626],[5.08,3.257,4.251,3.415,3.076,4.508],[2.502,2.733,2.919,3.058,3.403,2.427],[4.23,3.357,4.235,4.595,5.16,5.999],[2.86,3.515,2.619,0.955,1.766,0.26],[3.16,2.893,2.37,2.341,1.676,2.201],[1.101,3.477,2.018,2.67,2.235,3.664],[3.503,4.223,4.268,2.178,3.518,1.656],[3.623,3.309,4.28,2.605,3.676,3.647],[4.285,5.139,6.064,4.069,4.097,4.629],[3.301,2.767,3.271,2.832,3.249,3.621],[2.857,2.677,2.348,3.272,2.696,3.272],[0.449,1.323,0.652,3.013,3.114,1.652],[3.447,3.14,2.42,2.311,3.202,2.063],[2.401,2.196,3.998,1.025,2.349,1.691],[3.54,5.121,3.878,2.99,2.849,3.135],[3.67,4.081,4.264,3.472,3.458,4.419],[3.341,3.341,2.722,2.088,2.846,3.371],[2.491,2.816,1.44,1.192,2.551,1.975],[3.002,2.66,3.754,3.345,5.413,3.962],[2.893,3.409,3.316,3.336,3.614,4.426],[1.843,1.939,2.024,5.012,4.963,5.395],[4.404,3.051,4.195,4.157,2.983,3.546],[3.252,2.804,3.346,2.695,4.096,3.254],[3.384,3.477,4.064,1.625,1.051,0.949],[3.04,2.869,2.962,2.556,1.997,0.53],[2.398,2.777,2.227,3.809,3.915,4.636],[3.253,3.538,4.357,3.697,3.035,3.881],[2.896,2.958,0.826,0.678,1.802,0.825],[1.423,1.154,1.884,3.063,3.992,3.001],[3.389,3.692,2.134,3.7,4.094,4.75],[2.75,3.546,3.742,3.853,3.204,5.14],[3.966,2.911,2.755,2.152,3.222,1.657],[2.267,1.875,2.087,1.343,3.21,3.064],[4.436,4.095,5.016,4.363,3.93,4.141],[-0.224,1.681,0.508,1.922,1.822,2.534],[2.844,2.896,3.813,4.436,2.472,3.68],[2.548,3.279,1.79,2.175,1.88,1.092],[2.624,2.491,2.819,3.493,3.617,2.98],[3.027,3.869,2.073,2.693,2.873,3.391],[2.524,3.183,1.987,3.333,2.888,3.225]],[1,1,1,2,2,2])",
-    "help": "Continuous normal-theory ML, with optional FIML and configural/metric multi-group models. Arguments: data,primary factor IDs,cross-loadings [[indicator,factor],...],complete/fiml,row-aligned group IDs [],configural/metric. Positions refer to selected indicator order. Three primary indicators per factor; first primary loading fixed at 1, marker cross-loadings forbidden. FIML uses NA/blank cells, observed-data likelihood and free means under MCAR/MAR; all-empty rows excluded. Metric shares raw loadings while means, factor variances, errors and paths remain group free; this is not scalar/strict invariance. χ²/df/p, CFI, TLI, RMSEA; SRMR for single complete group only. No ordinal/robust estimator, correlated errors or general equality constraints; not a full AMOS/lavaan replacement.",
-    "helpKo": "연속형 정규이론 ML, 선택적 FIML·다집단 형태/측정 불변성 모형. 인수: 자료,주 요인 ID,교차적재 [[지표,요인],...],complete/fiml,행별 집단 ID [],configural/metric. 지표 번호는 선택 순서 기준. 요인당 주 지표 최소 3개·첫 주 적재량 1 고정, 기준 지표 교차적재 금지. FIML은 NA/빈 셀을 관측자료 우도·자유 평균으로 처리(MCAR/MAR), 전부 결측인 행 제외. metric은 원척도 적재량만 동일하게 제약하며 평균·요인분산·오차·경로는 집단별 자유; scalar/strict 불변성 아님. χ²/df/p·CFI·TLI·RMSEA, 단일 완전자료 집단에서 SRMR 제공. 순서형/강건 추정·상관오차·일반 동일성 제약 미지원; AMOS/lavaan 전체 대체 기능 아님.",
+    "help": "Continuous-indicator ML. Enter primary factor IDs in selected indicator order; at least three primary indicators per factor. The first primary loading is fixed at 1. Add cross-loadings as [indicator,factor] pairs on other indicators. Missing data: complete rows or FIML with NA/blank cells under MCAR/MAR; all-empty rows are excluded. Groups: configural (group-specific parameters) or metric (equal raw loadings; other parameters group-specific). Arguments: data,factors,cross-loadings,complete/fiml,group IDs,configural/metric. Reports χ², df, p, CFI, TLI and RMSEA; SRMR for a single complete-data group. Indicator errors are independent.",
+    "helpKo": "연속형 지표의 ML 모형입니다. 선택 지표 순서로 주 요인 ID를 입력하며 요인당 주 지표는 최소 3개입니다. 첫 주 적재량은 1로 고정합니다. 다른 지표의 교차적재는 [지표,요인] 쌍으로 지정합니다. 결측 처리: 완전한 행 또는 MCAR/MAR 가정의 FIML(NA/빈 셀); 전부 결측인 행은 제외합니다. 집단: configural(집단별 자유 모수), metric(원척도 적재량 동일·나머지 모수는 집단별 자유). 인수: 자료,요인,교차적재,complete/fiml,집단 ID,configural/metric. χ²·df·p·CFI·TLI·RMSEA, 단일 완전자료 집단의 SRMR을 제공합니다. 지표 오차는 독립을 가정합니다.",
     "section": "advanced",
     "group": "Measurement & structural models",
     "groupKo": "측정·구조 모형",
@@ -6792,8 +6792,8 @@
         }
       }
     ],
-    "formHelp": "Continuous normal-theory ML, with optional FIML and configural/metric multi-group models. Arguments: data,primary factor IDs,cross-loadings [[indicator,factor],...],complete/fiml,row-aligned group IDs [],configural/metric. Positions refer to selected indicator order. Three primary indicators per factor; first primary loading fixed at 1, marker cross-loadings forbidden. FIML uses NA/blank cells, observed-data likelihood and free means under MCAR/MAR; all-empty rows excluded. Metric shares raw loadings while means, factor variances, errors and paths remain group free; this is not scalar/strict invariance. χ²/df/p, CFI, TLI, RMSEA; SRMR for single complete group only. No ordinal/robust estimator, correlated errors or general equality constraints; not a full AMOS/lavaan replacement.",
-    "formHelpKo": "연속형 정규이론 ML, 선택적 FIML·다집단 형태/측정 불변성 모형. 인수: 자료,주 요인 ID,교차적재 [[지표,요인],...],complete/fiml,행별 집단 ID [],configural/metric. 지표 번호는 선택 순서 기준. 요인당 주 지표 최소 3개·첫 주 적재량 1 고정, 기준 지표 교차적재 금지. FIML은 NA/빈 셀을 관측자료 우도·자유 평균으로 처리(MCAR/MAR), 전부 결측인 행 제외. metric은 원척도 적재량만 동일하게 제약하며 평균·요인분산·오차·경로는 집단별 자유; scalar/strict 불변성 아님. χ²/df/p·CFI·TLI·RMSEA, 단일 완전자료 집단에서 SRMR 제공. 순서형/강건 추정·상관오차·일반 동일성 제약 미지원; AMOS/lavaan 전체 대체 기능 아님.",
+    "formHelp": "Continuous-indicator ML. Enter primary factor IDs in selected indicator order; at least three primary indicators per factor. The first primary loading is fixed at 1. Add cross-loadings as [indicator,factor] pairs on other indicators. Missing data: complete rows or FIML with NA/blank cells under MCAR/MAR; all-empty rows are excluded. Groups: configural (group-specific parameters) or metric (equal raw loadings; other parameters group-specific). Arguments: data,factors,cross-loadings,complete/fiml,group IDs,configural/metric. Reports χ², df, p, CFI, TLI and RMSEA; SRMR for a single complete-data group. Indicator errors are independent.",
+    "formHelpKo": "연속형 지표의 ML 모형입니다. 선택 지표 순서로 주 요인 ID를 입력하며 요인당 주 지표는 최소 3개입니다. 첫 주 적재량은 1로 고정합니다. 다른 지표의 교차적재는 [지표,요인] 쌍으로 지정합니다. 결측 처리: 완전한 행 또는 MCAR/MAR 가정의 FIML(NA/빈 셀); 전부 결측인 행은 제외합니다. 집단: configural(집단별 자유 모수), metric(원척도 적재량 동일·나머지 모수는 집단별 자유). 인수: 자료,요인,교차적재,complete/fiml,집단 ID,configural/metric. χ²·df·p·CFI·TLI·RMSEA, 단일 완전자료 집단의 SRMR을 제공합니다. 지표 오차는 독립을 가정합니다.",
     "exampleRows": [
       [
         "1.987",
@@ -7188,8 +7188,8 @@
     "input": "table",
     "suffix": ",[1,1,1,2,2,2],[[1,2]]",
     "example": "sem([[1.987,2.255,1.895,1.448,2.702,2.043],[3.103,3.653,2.588,3.608,3.265,3.866],[5.16,4.181,6.042,4.848,4.128,5.317],[1.995,2.767,1.417,-0.304,-1.529,-0.2],[1.802,1.7,2.56,2.591,4.452,3.681],[5.242,3.886,4.375,5.082,5.152,4.701],[3.057,2.704,2.315,2.034,0.528,0.659],[4.576,5.304,4.688,5.573,4.66,5.626],[5.08,3.257,4.251,3.415,3.076,4.508],[2.502,2.733,2.919,3.058,3.403,2.427],[4.23,3.357,4.235,4.595,5.16,5.999],[2.86,3.515,2.619,0.955,1.766,0.26],[3.16,2.893,2.37,2.341,1.676,2.201],[1.101,3.477,2.018,2.67,2.235,3.664],[3.503,4.223,4.268,2.178,3.518,1.656],[3.623,3.309,4.28,2.605,3.676,3.647],[4.285,5.139,6.064,4.069,4.097,4.629],[3.301,2.767,3.271,2.832,3.249,3.621],[2.857,2.677,2.348,3.272,2.696,3.272],[0.449,1.323,0.652,3.013,3.114,1.652],[3.447,3.14,2.42,2.311,3.202,2.063],[2.401,2.196,3.998,1.025,2.349,1.691],[3.54,5.121,3.878,2.99,2.849,3.135],[3.67,4.081,4.264,3.472,3.458,4.419],[3.341,3.341,2.722,2.088,2.846,3.371],[2.491,2.816,1.44,1.192,2.551,1.975],[3.002,2.66,3.754,3.345,5.413,3.962],[2.893,3.409,3.316,3.336,3.614,4.426],[1.843,1.939,2.024,5.012,4.963,5.395],[4.404,3.051,4.195,4.157,2.983,3.546],[3.252,2.804,3.346,2.695,4.096,3.254],[3.384,3.477,4.064,1.625,1.051,0.949],[3.04,2.869,2.962,2.556,1.997,0.53],[2.398,2.777,2.227,3.809,3.915,4.636],[3.253,3.538,4.357,3.697,3.035,3.881],[2.896,2.958,0.826,0.678,1.802,0.825],[1.423,1.154,1.884,3.063,3.992,3.001],[3.389,3.692,2.134,3.7,4.094,4.75],[2.75,3.546,3.742,3.853,3.204,5.14],[3.966,2.911,2.755,2.152,3.222,1.657],[2.267,1.875,2.087,1.343,3.21,3.064],[4.436,4.095,5.016,4.363,3.93,4.141],[-0.224,1.681,0.508,1.922,1.822,2.534],[2.844,2.896,3.813,4.436,2.472,3.68],[2.548,3.279,1.79,2.175,1.88,1.092],[2.624,2.491,2.819,3.493,3.617,2.98],[3.027,3.869,2.073,2.693,2.873,3.391],[2.524,3.183,1.987,3.333,2.888,3.225]],[1,1,1,2,2,2],[[1,2]])",
-    "help": "CFA measurement options plus acyclic latent [source,target] paths. Arguments: data,primary factors,paths,cross-loadings,complete/fiml,group IDs,configural/metric. Exogenous factors may covary; endogenous disturbances and indicator errors are independent. Cross-loadings, MAR FIML with free indicator means, and group-free/configural or equal-loading metric models supported. Metric does not constrain structural paths or means; no scalar/strict invariance, ordinal/robust estimator, correlated errors, arbitrary equality constraints or cycles. Paths do not establish causality; not a full AMOS/lavaan replacement.",
-    "helpKo": "CFA 측정 옵션과 비순환 잠재 [출발,도착] 경로. 인수: 자료,주 요인,경로,교차적재,complete/fiml,집단 ID,configural/metric. 외생 요인 상관·독립 내생 교란과 지표 오차. 교차적재, 자유 지표 평균을 포함한 MAR FIML, 다집단 형태/적재량 동일 모형 지원. metric은 구조경로·평균을 제약하지 않습니다. scalar/strict 불변성·순서형/강건 추정·상관오차·임의 동일성 제약·순환 미지원. 경로만으로 인과성을 입증하지 않으며 AMOS/lavaan 전체 대체 기능 아님.",
+    "help": "Use the CFA indicator, cross-loading, missing-data and group settings, then specify acyclic latent paths [source,target]. Arguments: data,primary factors,paths,cross-loadings,complete/fiml,group IDs,configural/metric. Exogenous factors may covary; endogenous disturbances and indicator errors are independent. Metric groups share raw measurement loadings; paths, means, errors and factor variances are estimated separately by group. Path coefficients describe the specified conditional relationships.",
+    "helpKo": "CFA와 같은 지표·교차적재·결측·집단 설정에 비순환 잠재 경로 [출발,도착]를 지정합니다. 인수: 자료,주 요인,경로,교차적재,complete/fiml,집단 ID,configural/metric. 외생 요인 간 상관을 허용하며 내생 교란과 지표 오차는 독립을 가정합니다. metric은 원척도 측정 적재량을 동일하게 제약하고 경로·평균·오차·요인분산은 집단별로 추정합니다. 경로 계수는 지정한 조건부 관계를 나타냅니다.",
     "section": "advanced",
     "group": "Measurement & structural models",
     "groupKo": "측정·구조 모형",
@@ -7297,8 +7297,8 @@
         "default": "1,2"
       }
     ],
-    "formHelp": "CFA measurement options plus acyclic latent [source,target] paths. Arguments: data,primary factors,paths,cross-loadings,complete/fiml,group IDs,configural/metric. Exogenous factors may covary; endogenous disturbances and indicator errors are independent. Cross-loadings, MAR FIML with free indicator means, and group-free/configural or equal-loading metric models supported. Metric does not constrain structural paths or means; no scalar/strict invariance, ordinal/robust estimator, correlated errors, arbitrary equality constraints or cycles. Paths do not establish causality; not a full AMOS/lavaan replacement.",
-    "formHelpKo": "CFA 측정 옵션과 비순환 잠재 [출발,도착] 경로. 인수: 자료,주 요인,경로,교차적재,complete/fiml,집단 ID,configural/metric. 외생 요인 상관·독립 내생 교란과 지표 오차. 교차적재, 자유 지표 평균을 포함한 MAR FIML, 다집단 형태/적재량 동일 모형 지원. metric은 구조경로·평균을 제약하지 않습니다. scalar/strict 불변성·순서형/강건 추정·상관오차·임의 동일성 제약·순환 미지원. 경로만으로 인과성을 입증하지 않으며 AMOS/lavaan 전체 대체 기능 아님.",
+    "formHelp": "Use the CFA indicator, cross-loading, missing-data and group settings, then specify acyclic latent paths [source,target]. Arguments: data,primary factors,paths,cross-loadings,complete/fiml,group IDs,configural/metric. Exogenous factors may covary; endogenous disturbances and indicator errors are independent. Metric groups share raw measurement loadings; paths, means, errors and factor variances are estimated separately by group. Path coefficients describe the specified conditional relationships.",
+    "formHelpKo": "CFA와 같은 지표·교차적재·결측·집단 설정에 비순환 잠재 경로 [출발,도착]를 지정합니다. 인수: 자료,주 요인,경로,교차적재,complete/fiml,집단 ID,configural/metric. 외생 요인 간 상관을 허용하며 내생 교란과 지표 오차는 독립을 가정합니다. metric은 원척도 측정 적재량을 동일하게 제약하고 경로·평균·오차·요인분산은 집단별로 추정합니다. 경로 계수는 지정한 조건부 관계를 나타냅니다.",
     "exampleRows": [
       [
         "1.987",
@@ -7765,8 +7765,8 @@
     "input": "table",
     "suffix": ",lda,empirical",
     "example": "discriminantanalysis([[1,2,1],[2,1,1],[1,1,1],[2,3,1],[4,5,2],[5,4,2],[4,4,2],[5,6,2]],lda,empirical)",
-    "help": "Rows: features, class. LDA pooled / QDA separate unbiased covariances; empirical/equal priors. Optional fourth argument: new feature rows. Training confusion and accuracy are resubstitution, not validation. No automatic regularization.",
-    "helpKo": "열: 변수·분류. LDA 합동 / QDA 개별 불편 공분산; 경험·동일 사전확률. 선택적 넷째 인수: 새 변수 행. 학습 혼동표·정확도는 재대입 평가이며 검증이 아닙니다. 자동 정규화 없음.",
+    "help": "Rows: features, class. LDA pooled / QDA separate unbiased covariances; empirical/equal priors. Optional fourth argument: new feature rows. Training confusion and accuracy use the fitted sample.",
+    "helpKo": "열: 변수·분류. LDA 합동 / QDA 개별 불편 공분산; 경험·동일 사전확률. 선택적 넷째 인수: 새 변수 행. 학습 혼동표·정확도는 적합에 사용한 표본 기준입니다.",
     "section": "advanced",
     "group": "Multivariate analysis",
     "groupKo": "다변량 분석",
@@ -7824,8 +7824,8 @@
         ]
       }
     ],
-    "formHelp": "Rows: features, class. LDA pooled / QDA separate unbiased covariances; empirical/equal priors. Optional fourth argument: new feature rows. Training confusion and accuracy are resubstitution, not validation. No automatic regularization.",
-    "formHelpKo": "열: 변수·분류. LDA 합동 / QDA 개별 불편 공분산; 경험·동일 사전확률. 선택적 넷째 인수: 새 변수 행. 학습 혼동표·정확도는 재대입 평가이며 검증이 아닙니다. 자동 정규화 없음.",
+    "formHelp": "Rows: features, class. LDA pooled / QDA separate unbiased covariances; empirical/equal priors. Optional fourth argument: new feature rows. Training confusion and accuracy use the fitted sample.",
+    "formHelpKo": "열: 변수·분류. LDA 합동 / QDA 개별 불편 공분산; 경험·동일 사전확률. 선택적 넷째 인수: 새 변수 행. 학습 혼동표·정확도는 적합에 사용한 표본 기준입니다.",
     "exampleRows": [
       [
         "1",

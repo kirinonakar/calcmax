@@ -1,11 +1,4 @@
-"""Legacy complete-data CFA/SEM, routing extended options to a separate fitter.
-
-Each indicator loads on exactly one factor, with a fixed first loading. All
-factors need at least three indicators. Exogenous factors may covary;
-endogenous disturbances and indicator errors are independent. No cross-loadings,
-cycles or ordinal estimators in this path; extended options add cross-loadings,
-group constraints and observed-data FIML in calc_advanced_sem_extended.
-"""
+"""Complete-data CFA/SEM and routing for extended model options."""
 import math
 import mpmath as mp
 from calc_shared import require
@@ -112,5 +105,5 @@ def calculate(engine,name,a):
             'Loadings':loading_rows,'Structural paths':path_rows,'Residual variances':[{'term':'feature:'+str(i+1),'Variance':theta[i]*scales[i]**2} for i in range(p)],
             'Latent covariance':[[float(total[i,j])*latent_scales[i]*latent_scales[j] for j in range(k)] for i in range(k)],
             'Implied covariance':[[float(sigma[i,j])*scales[i]*scales[j] for j in range(p)] for i in range(p)],'Iterations':iterations,
-            'Assumptions':'Continuous multivariate-normal indicators and complete rows. Each indicator loads on one factor; first loading fixed to 1; at least three indicators per factor. Recursive latent paths, correlated exogenous factors, independent endogenous disturbances and indicator errors. Observed-information Wald inference. Paths alone do not establish causality. No ordinal/robust estimator, cross-loadings, correlated errors, mean structure, multi-group invariance or FIML.'}
+            'Assumptions':'Continuous multivariate-normal indicators and complete rows. One factor per indicator, at least three indicators per factor, first loading fixed at 1. Acyclic latent paths, correlated exogenous factors, independent endogenous disturbances and indicator errors. Observed-information Wald inference.'}
     return result

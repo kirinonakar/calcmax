@@ -96,11 +96,12 @@ FUNCTIONS = set(_ANALYSES)
 
 def advanced(engine, name, a):
     """Entry point shared by calculator expressions and Python catalog."""
-    engine.note = 'Numerical statistics use binary64 precision.'
+    engine.note = ''
     low, high, _ = _ANALYSES[name]
     require(low <= len(a) <= high, name + ' argument count mismatch')
     with mp.workdps(25):
         result = calculate(engine, name, a)
+    engine.note = engine.note.strip()
     return result if name in ('propztest','propztest2') else convert(result)
 
 

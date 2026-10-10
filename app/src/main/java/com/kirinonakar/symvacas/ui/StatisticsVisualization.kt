@@ -156,7 +156,7 @@ private fun plotNumber(value:Double)=String.format(Locale.ROOT,"%.4g",value)
             Column {for(i in 0 until labels.length())Text("● "+labels.getString(i),fontSize=11.sp,color=c.curves[i%c.curves.size])}
             Text(tr("Lines connect fitted cell means; nonparallel lines suggest interaction. Intervals are shown separately. Interpret with the interaction F test."),fontSize=11.sp,color=c.muted)
         }
-        if(kind=="clusters")Text(tr("Colors: cluster membership · crosses: centroids. Axes show original feature values, not a dimensionality reduction."),fontSize=11.sp,color=c.muted)
+        if(kind=="clusters")Text(tr("Colors: cluster membership · crosses: centroids. Axes show original feature values."),fontSize=11.sp,color=c.muted)
         if(kind=="clusters")Column {for(i in 0 until plot.getJSONArray("centroids").length())Text("● ${tr("Cluster")} ${i+1}",fontSize=11.sp,color=c.curves[i%c.curves.size])}
         PlotExportActions(exports,"symvacas-$kind")
     }

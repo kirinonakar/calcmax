@@ -61,7 +61,7 @@ def calculate(engine,name,a):
     return {'n':n,'Method':method.upper(),'Class order':labels,'Priors':priors,'Class means':centers,'Training predictions':predictions,
             'Training confusion matrix':confusion,'Training accuracy':sum(r[at]==fit for r,fit in zip(rows,predictions))/n,
             'Predictions':[{'Observation':i+1,'Predicted class':prediction(x)[0],**{'P(class '+str(label)+')':prob for label,prob in zip(labels,prediction(x)[1])}} for i,x in enumerate(new)],
-            'Assumptions':'Multivariate normal classes; LDA uses pooled unbiased within-class covariance, QDA uses separate unbiased covariances. Training accuracy is resubstitution, not validation. No automatic regularization.'}
+            'Assumptions':'Multivariate normal classes; LDA uses pooled unbiased within-class covariance, QDA uses separate unbiased covariances. Training accuracy uses the fitted sample.'}
 
 
 def cluster(rows,a):

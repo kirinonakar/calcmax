@@ -143,7 +143,7 @@ export function renderStatisticsVisualizations(container,plots=[]){
     if(plot.groupLabels)block.append(element('p',`A: ${plot.groupLabels[0]} · B: ${plot.groupLabels[1]} · ${t('Difference (B − A)')}`,'hint'));
     if(plot.kind==='loadings')block.append(element('p',plot.labels.map((label,i)=>`${i+1}: ${label}`).join(' · '),'hint'));
     if(plot.kind==='qq')block.append(element('p',t('Reference line passes through the first and third quartiles. Curvature or tail departures suggest non-normality; up to 200 ordered points are shown.'),'hint'));
-    if(plot.kind==='clusters')block.append(element('p',t('Colors: cluster membership · crosses: centroids. Axes show original feature values, not a dimensionality reduction.'),'hint'));
+    if(plot.kind==='clusters')block.append(element('p',t('Colors: cluster membership · crosses: centroids. Axes show original feature values.'),'hint'));
     if(plot.kind==='interaction'){
       const legend=element('div','','form-row');plot.lineLabels.forEach((label,i)=>{const item=element('span',`● ${label}`);item.style.color=['var(--accent)','var(--gold)','#9466b8','#437db0','#bd5c67','#598e85'][i%6];legend.append(item);});block.append(legend);
       block.append(element('p',t('Lines connect fitted cell means; nonparallel lines suggest interaction. Intervals are shown separately. Interpret with the interaction F test.'),'hint'));

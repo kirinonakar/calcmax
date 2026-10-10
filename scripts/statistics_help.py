@@ -108,91 +108,81 @@ USES = {
  'kstest':('Compare continuous distributions or a sample with a fully specified distribution.','연속분포끼리 또는 표본과 모수가 지정된 연속분포를 비교합니다.'),
  'testpower':('Evaluate power for a planned t-test design and effect size.','계획한 t 검정 설계·효과크기의 검정력을 평가합니다.'),
  'samplesize':('Plan the sample size needed for a target t-test power.','목표 t 검정력을 위한 표본수를 계획합니다.'),
- 'crossvalidate':('Assess held-out predictive performance rather than training fit.','훈련 적합도가 아닌 홀드아웃 예측 성능을 평가합니다.'),
+ 'crossvalidate':('Assess predictive performance on held-out observations.','홀드아웃 관측의 예측 성능을 평가합니다.'),
  'pca':('Summarize correlated numeric features using fewer components.','상관된 숫자 변수들을 더 적은 주성분으로 요약합니다.'),
  'kmeans':('Group observations by numeric-feature similarity; check feature scales first.','숫자 변수의 유사성으로 관측을 군집화하며 먼저 변수 척도를 확인합니다.'),
  'impute':('Prepare incomplete data by single imputation; subsequent inference omits imputation uncertainty.','단일 대체로 불완전한 자료를 준비합니다. 이후 추론은 대체 불확실성을 반영하지 않습니다.'),
 }
 
 ASSUMPTION_GUIDES = [
-'''### Parametric methods with normal-model assumptions
-- One-sample / paired t tests and t intervals: exact small-sample inference assumes a normal population; paired tests concern the differences. Larger samples may be robust, but inspect skewness and influential outliers.
-- Welch t: normal-model mean comparison; equal variances are not required. Student's pooled-variance t additionally requires equal variances. Welch is the default; Student is selectable.
-- Welch ANOVA / Games–Howell: normal-model independent mean comparisons without equal variances; default one-way suite.
-- Two-way ANOVA / factorial linear models: normal independent errors, common residual variance, identifiable replicated design, and correctly specified interactions. Type II respects marginality; Type III uses sum contrasts for factorial effects.
-- Classic ANOVA / Tukey: independent normal errors and equal group variances. ANCOVA adds linear covariate effects and common slopes; repeated-measures ANOVA uses within-subject assumptions and sphericity corrections.
-- Gaussian mixed models: normal conditional errors and random effects, not necessarily a normal raw pooled response. Bayesian mean / two-sample comparisons assume their specified normal likelihood.
-- Bartlett: a variance test that is sensitive to non-normality; prefer median-centered Levene / Brown–Forsythe when normality is doubtful.
+'''### Normal-model methods (parametric)
+- One-sample t / t intervals: normal population for exact small-sample inference. Paired t: normally distributed within-pair differences. Inspect Q–Q plots, skewness and outliers.
+- Welch t / Welch ANOVA / Games–Howell: independent group means with unequal variances. Student t / classic ANOVA / Tukey: equal variances.
+- ANCOVA / factorial linear models: normal independent errors, common residual variance and a full-rank design. ANCOVA uses linear covariate effects and common slopes. Review interactions before main effects; Type II respects marginality and Type III uses sum contrasts.
+- Repeated-measures ANOVA: complete within-subject measurements; review sphericity and Greenhouse–Geisser corrected p values.
+- Gaussian mixed models: normal conditional errors and random effects. Bayesian mean / two-sample models: normal likelihood with the selected priors.
+- Bartlett: normally distributed groups. For uncertain normality, use median-centered Levene / Brown–Forsythe.
 
-### Parametric models do not all require normal observations
-- Mean z tests / z intervals require known population SDs and a normal or suitably approximated sampling distribution of the mean; a sample SD alone is insufficient.
-- Binomial logistic, multinomial and ordinal models use categorical likelihoods; Poisson / negative-binomial models use count likelihoods. Check the chosen family, link, dispersion, design and model diagnostics instead of demanding normal outcomes.
-- GEE uses a mean/variance model and working correlation for clusters; it does not require normal raw outcomes. A robust covariance does not resolve very few clusters or a misspecified mean model.
-- GLMM assumptions follow its selected family and random effects. Bayesian proportion / Poisson rate models use binomial / Poisson likelihoods.
+### Distribution assumptions by model
+- Mean z tests / z intervals: enter known population SDs; the mean sampling distribution is normal or adequately approximated.
+- Logistic / multinomial / ordinal: categorical outcomes. Poisson / negative binomial: count outcomes. Check the family, link, dispersion and model diagnostics.
+- GEE: cluster mean/variance model and working correlation. Review cluster count, mean specification and robust standard errors.
+- GLMM: selected response family and random effects. Bayesian proportion / rate: binomial / Poisson likelihoods.
 
-### Nonparametric methods: no normality requirement
-- Mann–Whitney U: two independent distributions. Kruskal–Wallis: several independent distributions. A median/location interpretation needs comparable shapes; neither is simply a drop-in test of means.
-- Friedman: three or more repeated conditions, ranked within independent subjects; complete matched data and a chi-square approximation with tie correction.
-- Wilcoxon signed-rank: paired or one-sample differences, with symmetry for a location interpretation. Strong asymmetry is not fixed by choosing a rank test.
-- Kolmogorov–Smirnov: compare continuous distributions. A one-sample reference distribution must be fully specified independently; fitting its parameters from the same sample invalidates the usual p value (no Lilliefors correction here).
-- Kaplan–Meier / log-rank: censored event times without normality, but censoring and study-design assumptions still matter. Cox is semiparametric and requires proportional hazards, not normal outcomes.
-- Bootstrap: no normality assumption, but this app's IID resampling requires independent, representative observations; use an appropriate design for paired, clustered or time-dependent data.
+### Rank, distribution and resampling methods (nonparametric)
+- Mann–Whitney / Kruskal–Wallis: independent distributions. Comparable distribution shapes are needed for location interpretations.
+- Wilcoxon signed-rank: paired or one-sample differences; symmetry is needed for a location interpretation.
+- Friedman: three or more repeated conditions; complete matched rows, ranks within subjects and tie correction.
+- Kolmogorov–Smirnov: continuous distributions. Specify one-sample reference parameters independently of the tested sample.
+- Kaplan–Meier / log-rank: censored event times. Review independent subjects and censoring; Cox uses proportional hazards.
+- IID bootstrap: independent, representative observations. Match paired, clustered or time-dependent sampling to the data structure.
 
-### Categorical tests: normality is not the decision criterion
-- χ² independence / goodness of fit: independent counts and adequate expected frequencies. Fisher exact: sparse independent 2×2 tables. McNemar: paired binary outcomes. Choose by design and counts, not Shapiro p values.
+### Categorical tests
+- χ²: independent counts and adequate expected frequencies. Fisher exact: independent 2×2 counts. McNemar: paired binary outcomes.
 
-### How to choose
-- Start with the question: mean difference, distribution difference, association, prediction or survival. Then identify independent groups, paired observations or clusters.
-- For mean questions, use the t/ANOVA family when its error model and design are reasonable. Inspect Q–Q plots, sample sizes, skewness and outliers together. Use Welch for independent two-group means with unequal variances.
-- For ordinal/rank or distribution questions, consider Mann–Whitney or Kruskal–Wallis; for paired symmetric location differences, consider Wilcoxon. State the changed estimand rather than calling every rank result a mean or median difference.
-- For severely non-normal, asymmetric or dependent data, review transformations, an appropriate distribution/cluster model or design-aware inference; a nonparametric label alone is not a remedy.
-- Shapiro p ≥ 0.05 does not prove normality; p < 0.05 does not automatically invalidate every mean analysis. Do not let a preliminary significance test silently choose the main method.
+### Choosing a method
+Choose the outcome and question first: means, distributions, association, prediction or survival. Then select independent groups, paired observations or clusters. Assess assumptions using Q–Q plots, p values, sample sizes and study design. For skewed or dependent data, review transformations and a model that matches the distribution and sampling structure.
 ''',
-'''### 정규 모형 가정이 필요한 모수 방법 (parametric)
-- 단일·대응 t 검정, t 신뢰구간: 정확한 소표본 추론은 모집단의 정규성을 가정합니다. 대응 검정에서는 원자료가 아닌 차이값의 정규성입니다. 큰 표본에서는 어느 정도 강건할 수 있지만 왜도·영향이 큰 이상값을 함께 확인하세요.
-- Welch t: 정규 모형에 근거한 평균 비교이며 등분산은 필요하지 않습니다. Student 합동분산 t는 등분산도 필요합니다. 기본값은 Welch이며 Student도 선택할 수 있습니다.
-- Welch ANOVA·Games–Howell: 정규 모형의 독립 평균 비교이며 등분산은 필요하지 않습니다. 일요인 분석의 기본 세트입니다.
-- 이요인 ANOVA·요인 선형회귀: 정규·독립 오차, 잔차 등분산, 식별 가능한 반복 관측 설계와 적절한 상호작용이 필요합니다. Type II는 주변성 원리를, Type III 요인 효과는 합 대비를 사용합니다.
-- 일반 ANOVA·Tukey: 독립된 정규 오차와 그룹 간 등분산을 가정합니다. ANCOVA는 공변량 효과의 선형성·공통 기울기, 반복측정 ANOVA는 대상 내 구조·구형성 및 보정을 함께 확인합니다.
-- Gaussian 혼합모형: 조건부 오차·랜덤효과의 정규성을 가정하며 전체 원자료가 정규여야 한다는 뜻은 아닙니다. 베이지안 평균·두 표본 비교도 지정한 정규 우도를 가정합니다.
-- Bartlett: 비정규성에 민감한 분산 검정입니다. 정규성이 의심되면 중앙값 기준 Levene·Brown–Forsythe를 우선 검토하세요.
+'''### 정규 모형 방법 (parametric)
+- 일표본 t·t 구간: 정확한 소표본 추론은 모집단의 정규성을 가정합니다. 대응 t는 대상별 차이값의 정규성을 점검합니다. Q–Q plot·왜도·이상값을 함께 확인하세요.
+- Welch t·Welch ANOVA·Games–Howell: 이분산 독립 그룹의 평균 비교. Student t·일반 ANOVA·Tukey: 등분산 가정.
+- ANCOVA·요인 선형회귀: 정규·독립 오차, 잔차 등분산, 식별 가능한 설계. ANCOVA는 선형 공변량 효과·공통 기울기를 사용합니다. 주 효과보다 상호작용을 먼저 확인하며 Type II는 주변성 원리, Type III는 합 대비를 사용합니다.
+- 반복측정 ANOVA: 완전한 대상 내 측정. 구형성과 Greenhouse–Geisser 보정 p값을 확인하세요.
+- Gaussian 혼합모형: 조건부 오차·랜덤효과의 정규성. 베이지안 평균·두 표본 모형: 정규 우도와 선택한 사전분포.
+- Bartlett: 정규 그룹의 분산 비교. 정규성이 불확실하면 중앙값 기준 Levene·Brown–Forsythe를 사용하세요.
 
-### 모수 방법이라고 모두 원자료의 정규성이 필요한 것은 아닙니다
-- 평균 z 검정·z 구간: 알려진 모집단 표준편차와 평균의 정규 또는 적절히 근사된 표집분포가 필요합니다. 표본 표준편차만으로는 조건을 충족하지 못합니다.
-- 이항 로지스틱·다항·순서형 모형은 범주 우도, 포아송·음이항 모형은 빈도 우도를 사용합니다. 반응값의 정규성 대신 분포족·연결함수·과산포·연구 설계·모형 진단을 확인하세요.
-- GEE는 군집의 평균·분산 모형과 작업상관을 사용하며 원자료의 정규성이 필수는 아닙니다. 강건 공분산도 극소수 군집이나 잘못된 평균 모형을 해결하지 못합니다.
-- GLMM은 선택한 분포족·랜덤효과의 가정을 확인합니다. 베이지안 비율·발생률은 각각 이항·포아송 우도를 사용합니다.
+### 모형별 분포 가정
+- 평균 z 검정·z 구간: 알려진 모집단 표준편차를 입력합니다. 평균의 표집분포는 정규이거나 적절히 근사되어야 합니다.
+- 로지스틱·다항·순서형: 범주 반응. 포아송·음이항: 빈도 반응. 분포족·연결함수·과산포·모형 진단을 확인하세요.
+- GEE: 군집 평균·분산 모형과 작업상관. 군집 수·평균 모형·강건 표준오차를 확인하세요.
+- GLMM: 선택한 반응 분포족·랜덤효과. 베이지안 비율·발생률: 이항·포아송 우도.
 
-### 정규성 가정이 필요 없는 비모수 방법 (nonparametric)
-- Mann–Whitney U: 독립된 두 분포. Kruskal–Wallis: 여러 독립 분포. 중앙값·위치 차이 해석에는 비슷한 분포 형태가 필요하며 단순히 평균 검정을 대체하는 방법은 아닙니다.
-- Friedman: 독립 대상의 3개 이상 반복 조건을 대상 안에서 순위로 비교합니다. 완전 대응 자료·동점 보정 χ² 근사를 사용합니다.
-- Wilcoxon 부호순위: 대응 또는 일표본 차이값을 분석합니다. 위치 차이 해석에는 대칭성이 필요합니다. 차이값의 심한 비대칭은 순위 검정을 선택한다고 해결되지 않습니다.
-- Kolmogorov–Smirnov: 연속분포를 비교합니다. 일표본 기준분포는 독립적으로 모수가 지정되어야 합니다. 같은 표본에서 모수를 추정하면 통상 p값이 맞지 않으며 이 앱은 Lilliefors 보정을 제공하지 않습니다.
-- Kaplan–Meier·로그순위: 정규성 없이 중도절단 사건 시간을 다루지만 중도절단·연구 설계 가정은 여전히 중요합니다. Cox는 반모수 방법이며 정규성 대신 비례위험을 가정합니다.
-- 부트스트랩: 정규성은 필요하지 않지만 이 앱의 IID 재표집에는 독립적이고 대표성 있는 관측이 필요합니다. 대응·군집·시계열에는 자료 구조에 맞는 추론이 필요합니다.
+### 순위·분포·재표집 방법 (nonparametric)
+- Mann–Whitney·Kruskal–Wallis: 독립 분포 비교. 위치 차이 해석에는 비슷한 분포 형태가 필요합니다.
+- Wilcoxon 부호순위: 대응·일표본 차이값. 위치 차이 해석에는 대칭성이 필요합니다.
+- Friedman: 3개 이상 반복 조건. 완전 대응 행·대상 내 순위·동점 보정을 사용합니다.
+- Kolmogorov–Smirnov: 연속분포 비교. 일표본 기준분포의 모수는 검정할 표본과 독립적으로 지정하세요.
+- Kaplan–Meier·로그순위: 중도절단 사건 시간. 대상 독립성·중도절단을 점검하며 Cox는 비례위험을 가정합니다.
+- IID 부트스트랩: 독립적이고 대표성 있는 관측. 대응·군집·시계열은 자료 구조에 맞는 표집을 사용하세요.
 
-### 범주형 검정: 정규성으로 선택하지 않습니다
-- χ² 독립성·적합도: 독립된 빈도와 충분한 기대빈도. Fisher 정확: 희소한 독립 2×2 표. McNemar: 대응 이항 결과. Shapiro p값 대신 연구 설계·빈도를 보고 선택하세요.
+### 범주형 검정
+- χ²: 독립 빈도·충분한 기대빈도. Fisher 정확: 독립 2×2 빈도. McNemar: 대응 이항 결과.
 
-### 어느 것을 선택하나요?
-- 먼저 질문을 정하세요: 평균 차이, 분포 차이, 연관성, 예측, 생존 중 무엇인가요? 이어서 독립 그룹·대응 관측·군집을 구분하세요.
-- 평균이 목적이면 오차 모형·설계가 적절한 t·ANOVA 계열을 사용합니다. Q–Q plot·표본수·왜도·이상값을 함께 확인하고, 독립 두 그룹이 이분산이면 Welch를 사용하세요.
-- 순서·순위나 분포 비교가 목적이면 Mann–Whitney·Kruskal–Wallis를, 대칭적인 대응 위치 차이면 Wilcoxon을 검토하세요. 평균에서 분포·위치로 분석 목적이 바뀌었음을 명시하세요.
-- 심한 비정규성·비대칭·의존성이 있으면 변환, 적절한 분포·군집 모형, 설계를 반영하는 추론을 검토하세요. 비모수라는 이름만으로 문제가 해결되지는 않습니다.
-- Shapiro p ≥ 0.05는 정규성의 증명이 아니며 p < 0.05도 모든 평균 분석의 자동 탈락 기준은 아닙니다. 예비 검정의 유의 여부만으로 주 검정을 몰래 바꾸지 마세요.
+### 방법 선택
+평균·분포·연관성·예측·생존 중 분석 목적과 반응 척도를 정한 뒤 독립 그룹·대응 관측·군집을 구분하세요. Q–Q plot·p값·표본 수·연구 설계로 가정을 점검합니다. 왜도·의존성이 큰 자료는 변환과 분포·표집 구조에 맞는 모형을 검토하세요.
 ''']
 
 COMPARISON_TABLES = [
 '''### Independent and paired samples at a glance
 
-| Data structure | Parametric comparison | Nonparametric comparison | Available in this app |
+| Data structure | Parametric comparison | Nonparametric comparison | Defaults / options |
 | --- | --- | --- | --- |
-| Two independent groups | Student / Welch t-test | Mann–Whitney U | All provided; Welch default |
-| Two paired groups | Paired t-test | Wilcoxon signed-rank | Both provided |
-| 3+ independent groups | ANOVA / Welch ANOVA | Kruskal–Wallis | All provided; Welch ANOVA default |
-| 3+ repeated conditions | Repeated-measures ANOVA | Friedman test | Both provided |
+| Two independent groups | Student / Welch t-test | Mann–Whitney U | Welch default; Student selectable |
+| Two paired groups | Paired t-test | Wilcoxon signed-rank | Complete paired observations |
+| 3+ independent groups | ANOVA / Welch ANOVA | Kruskal–Wallis | Welch ANOVA default |
+| 3+ repeated conditions | Repeated-measures ANOVA | Friedman test | Complete paired observations |
 
-The table compares design-matched families, not interchangeable estimands. Rank comparisons need their own shape/symmetry assumptions for location interpretations. Repeated conditions are measurements of the same subjects, not independent groups.
+Select by the data structure and target quantity. Rank-based location comparisons require appropriate distribution shapes or symmetry. Repeated conditions are measurements of the same subjects.
 ''',
 '''### 독립표본·대응표본에 따른 검정 비교
 
@@ -203,7 +193,7 @@ The table compares design-matched families, not interchangeable estimands. Rank 
 | 독립된 3집단 이상 | ANOVA / Welch ANOVA | Kruskal–Wallis | 모두 지원; Welch ANOVA 기본 |
 | 반복측정 3조건 이상 | Repeated-measures ANOVA | Friedman test | 모두 지원 |
 
-이 표는 같은 자료 설계에 맞는 방법군을 비교하며 분석 목적까지 서로 같다는 뜻은 아닙니다. 순위 검정을 위치 차이로 해석하려면 형태·대칭성 가정을 별도로 확인하세요. 반복 조건은 같은 대상의 측정이며 독립 그룹이 아닙니다.
+자료 구조와 비교할 통계량에 맞춰 선택하세요. 순위 기반 위치 비교는 분포 형태·대칭성 가정을 확인합니다. 반복 조건은 같은 대상의 측정입니다.
 ''']
 
 def enrich_help(text, korean=False):
@@ -221,8 +211,8 @@ def enrich_help(text, korean=False):
     if start>=0:
         first=text.index('`ttest(',start)
         heading='통계 — 검정 선택' if korean else 'Stats — choosing a test'
-        caution=('목적·측정척도·연구 설계로 먼저 선택하고, 정규성 p값만으로 검정 방법을 자동 전환하지 마세요. Welch t는 등분산이 필수는 아닙니다. One-way ANOVA의 기본값은 Welch이며 Games–Howell을 함께 실행합니다. 등분산 ANOVA를 선택하면 Tukey를 함께 실행합니다. 순위 검정도 모든 가정에서 자유로운 검정은 아닙니다. 알려진 모집단 SD일 때만 z 검정을 선택하세요.' if korean else 'Choose by purpose, measurement scale and study design first. Do not automatically switch tests based only on a normality p value. Welch t does not require equal variances. One-way ANOVA defaults to Welch with Games–Howell. Choosing equal-variance ANOVA automatically adds Tukey. Rank tests also have assumptions. Use z tests only for known population SDs.')
-        suite=('원자료 t 검정·t 구간·ANOVA·Tukey는 표본 요약, 가정 점검, Q–Q plot·분포를 함께 제공합니다. t 검정은 효과크기·95% 양측 평균 구간을, ANOVA는 η²·자동 사후비교를, Tukey/Games–Howell은 전체 ANOVA를 함께 표시합니다. 대응 t는 차이값의 정규성을, ANCOVA·요인 ANOVA·요인 선형회귀는 잔차를 점검합니다. 요약 통계만 입력한 경우 정규성은 확인할 수 없다고 표시합니다.' if korean else 'Raw-data t tests, t intervals, ANOVA and Tukey include sample summaries, assumption checks, Q–Q plots and distributions. t tests add effect sizes and two-sided 95% mean intervals; ANOVA adds η² and automatic post-hoc comparisons; Tukey/Games–Howell add overall ANOVA. Paired t checks differences; ANCOVA and factorial linear models check residuals. Summary-only input explicitly reports that normality cannot be checked.')
+        caution=('목적·측정척도·연구 설계에 맞춰 선택합니다. 이분산 평균 비교에는 Welch를 사용하세요. One-way ANOVA 기본값은 Welch·Games–Howell 세트이며 등분산 ANOVA는 Tukey를 함께 실행합니다. z 검정에는 알려진 모집단 SD를 입력합니다.' if korean else 'Choose by purpose, measurement scale and study design. Use Welch for unequal-variance means. One-way ANOVA defaults to Welch with Games–Howell; equal-variance ANOVA adds Tukey. Enter known population SDs for z tests.')
+        suite=('원자료 t 검정·t 구간·ANOVA·Tukey는 표본 요약, 가정 점검, Q–Q plot·분포를 함께 제공합니다. t 검정은 효과크기·95% 양측 평균 구간을, ANOVA는 η²·자동 사후비교를, Tukey/Games–Howell은 전체 ANOVA를 함께 표시합니다. 대응 t는 차이값의 정규성을, ANCOVA·요인 ANOVA·요인 선형회귀는 잔차를 점검합니다. 정규성 점검에는 원자료를 입력하세요.' if korean else 'Raw-data t tests, t intervals, ANOVA and Tukey include sample summaries, assumption checks, Q–Q plots and distributions. t tests add effect sizes and two-sided 95% mean intervals; ANOVA adds η² and automatic post-hoc comparisons; Tukey/Games–Howell add overall ANOVA. Paired t checks differences; ANCOVA and factorial linear models check residuals. Enter raw observations for normality checks.')
         text=text[:start]+'## '+heading+'\n\n```text\n'+GUIDES[index].rstrip()+'\n```\n\n'+COMPARISON_TABLES[index]+'\n'+caution+'\n\n'+suite+'\n\n'+ASSUMPTION_GUIDES[index]+'\n'+text[first:]
     if '`welchanova(' not in text:
         pos=text.find('`tukey(')

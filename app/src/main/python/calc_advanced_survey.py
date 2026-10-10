@@ -55,7 +55,7 @@ def calculate(engine,name,a):
             items.append({'term':'feature:'+str(j+1),'Corrected item-total correlation':cross/math.sqrt(float(used[j,j])*restvar) if restvar>0 else None,
                           'Alpha if deleted':alpha(mp.matrix([[used[i,k] for k in rest] for i in rest])) if p>2 and restvar>0 else None})
         return {'n':n,'items':p,'Cronbach α':alpha(used),'Raw α':alpha(cov),'Standardized α':alpha(corr),'Item diagnostics':items,
-                'Assumptions':'Complete rows; reverse-code items before analysis. Alpha is internal consistency, not evidence of unidimensionality or validity.'}
+                'Assumptions':'Complete rows; reverse-code items before analysis. Alpha measures internal consistency.'}
     rotation=option(a,2,'varimax'); extraction=option(a,3,'pa')
     require(rotation in ('varimax','none','promax','oblimin'),'Choose varimax, promax, oblimin or none')
     require(extraction in ('pa','pca'),'Choose pa (principal axis) or pca (principal components)')
@@ -104,5 +104,5 @@ def calculate(engine,name,a):
             'Bartlett χ²':bartlett,'Bartlett df':df,'Bartlett p':float(_chisq_sf(bartlett,df)),
             'Item diagnostics':[{'term':'feature:'+str(i+1),'Communality':updated[i],'Uniqueness':1-updated[i],'KMO':float(sum(corr[i,j]**2 for j in range(p) if j!=i)/sum(corr[i,j]**2+partial[i,j]**2 for j in range(p) if j!=i))} for i in range(p)],
             'loadings':loadings.tolist(),'Structure loadings':structure.tolist(),'Factor correlations':phi.tolist(),'scores':scores.tolist(),'Correlation eigenvalues':list(reversed(list(mp.eigsy(corr,eigvals_only=True)))),
-            ('Pattern squared-loading sums (not additive variance)' if rotation in ('promax','oblimin') else 'Factor variance'):[float(sum(loadings[i,j]**2 for i in range(p))) for j in range(k)],
-            'Assumptions':'Pearson correlations of complete numeric rows. Principal axis estimates common factors; PCA extracts components and yields different values. Promax (power 4, Kaiser normalization) and oblimin (delta 0) allow correlated factors: loadings are pattern coefficients, structure loadings are correlations. Oblique squared pattern loadings are not additive explained variance. Scores are regression estimates. Parallel analysis uses seeded normal simulations with the selected extraction eigenvalues. No ordinal/polychoric estimator.'}
+            ('Pattern squared-loading sums' if rotation in ('promax','oblimin') else 'Factor variance'):[float(sum(loadings[i,j]**2 for i in range(p))) for j in range(k)],
+            'Assumptions':'Pearson correlations of complete numeric rows. Principal axis estimates common factors; PCA extracts components. Promax (power 4, Kaiser normalization) and oblimin (delta 0) allow correlated factors: loadings are pattern coefficients, structure loadings are correlations. For correlated factors, communalities include the factor correlations. Scores are regression estimates. Parallel analysis uses seeded normal simulations with the selected extraction eigenvalues.'}

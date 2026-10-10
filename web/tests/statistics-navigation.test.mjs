@@ -51,7 +51,7 @@ test('both help documents preserve the selection flowchart and searchable use ca
     assert.ok(diagram.text.includes('Welch'));assert.ok(diagram.text.includes('McNemar'));
     assert.ok(diagram.text.includes('ANCOVA'));assert.ok(!blocks.some(block=>block.text==='```text'));
     assert.ok(text.includes('parametric')&&text.includes('nonparametric'));
-    assert.ok(text.includes('GEE')&&text.includes('Lilliefors'));
+    assert.ok(text.includes('GEE')&&text.includes('Kolmogorov–Smirnov'));
     const table=blocks.find(block=>block.kind==='table');assert.equal(table.columns.length,4);assert.equal(table.rows.length,4);
     assert.ok(table.rows[3].join(' ').includes('Friedman'));assert.ok(parseCatalogHelp(text,'Friedman').some(block=>block.kind==='table'));
     assert.ok(parseCatalogHelp(text,'Welch').some(block=>block.kind==='diagram'));
