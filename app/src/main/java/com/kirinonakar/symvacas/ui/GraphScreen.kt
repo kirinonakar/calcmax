@@ -680,13 +680,13 @@ import kotlin.math.*
     val inputLabel=tr("Graph expression")
     Column(Modifier.fillMaxWidth().padding(start=10.dp,end=10.dp,top=8.dp)) {
         Row(Modifier.fillMaxWidth().height(rowHeight*(if(singleRule)1 else 3)+20.dp).border(1.dp,if(focused)c.accent else c.grid,RoundedCornerShape(7.dp))) {
-            Column(Modifier.width(64.dp).fillMaxHeight().clipToBounds().background(c.scientific).verticalScroll(vertical).padding(vertical=10.dp)) {
+            Column(Modifier.width(46.dp).fillMaxHeight().clipToBounds().background(c.scientific).verticalScroll(vertical).padding(vertical=10.dp)) {
                 repeat(value.count {it=='\n'}+1) {index->
                     Row(Modifier.fillMaxWidth().height(rowHeight),verticalAlignment=Alignment.CenterVertically) {
-                        Box(Modifier.width(32.dp).fillMaxHeight().clickable {onValue(removeGraphInputLine(value,index))}.semantics {contentDescription="$deleteLabel ${index+1}"}.testTag("graph-delete-line-${index+1}"),contentAlignment=Alignment.Center) {
+                        Box(Modifier.width(24.dp).fillMaxHeight().clickable {onValue(removeGraphInputLine(value,index))}.semantics {contentDescription="$deleteLabel ${index+1}"}.testTag("graph-delete-line-${index+1}"),contentAlignment=Alignment.Center) {
                             Text("×",style=style.copy(color=c.muted))
                         }
-                        Text("${index+1}",Modifier.weight(1f).padding(end=8.dp),style=style.copy(color=c.muted),textAlign=TextAlign.End,softWrap=false)
+                        Text("${index+1}",Modifier.weight(1f).padding(end=4.dp),style=style.copy(color=c.muted),textAlign=TextAlign.End,softWrap=false)
                     }
                 }
             }

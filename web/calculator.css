@@ -156,10 +156,10 @@ input:disabled,select:disabled{opacity:.45;cursor:default}
 #answer,:root[data-workspace="scientific"] #answer{padding-right:8px;padding-bottom:10px}
 .graph-source-editor{display:flex;align-items:stretch;height:94px;min-width:0;margin-bottom:12px}
 .graph-source-editor #graph-source{flex:1;min-width:0;height:100%;resize:none;border-radius:0 7px 7px 0;font:14px/24px Consolas,"SFMono-Regular",monospace;padding:10px 12px}
-.graph-line-gutter{flex:none;width:64px;overflow:hidden;padding:10px 0;border:1px solid var(--line);border-right:0;border-radius:7px 0 0 7px;background:var(--bar);color:var(--muted);font:14px/24px Consolas,"SFMono-Regular",monospace}
+.graph-line-gutter{flex:none;width:46px;overflow:hidden;padding:10px 0;border:1px solid var(--line);border-right:0;border-radius:7px 0 0 7px;background:var(--bar);color:var(--muted);font:14px/24px Consolas,"SFMono-Regular",monospace}
 .graph-input-line{display:flex;align-items:center;height:24px}
-.graph-input-line>span{flex:1;padding-right:8px;text-align:right;user-select:none}
-.graph-input-line>button{flex:none;width:32px;height:24px;min-height:0;padding:0;border-radius:4px;color:var(--muted);font:inherit}
+.graph-input-line>span{flex:1;padding-right:4px;text-align:right;user-select:none}
+.graph-input-line>button{flex:none;width:24px;height:24px;min-height:0;padding:0;border-radius:4px;color:var(--muted);font:inherit}
 #answer math{max-width:none}.graph-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:8px 0}.graph-toolbar label{margin:0;min-width:100px}.graph-toolbar button{background:var(--bar)}
 .graph-toolbar .graph-curve-picker{flex-direction:row;align-items:center;gap:10px}.graph-curve-picker span{white-space:nowrap}.graph-curve-picker select{width:auto;min-width:85px}
 #graph-formulas{display:flex;flex-wrap:nowrap;align-items:baseline;gap:8px;overflow-x:auto;max-width:100%;padding:4px 2px;font-family:"SymvaCAS Math","Cambria Math",math}
