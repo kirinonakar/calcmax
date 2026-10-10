@@ -1076,7 +1076,8 @@
           ]
         ],
         2,
-        "varimax"
+        "varimax",
+        "pa"
       ],
       "expected": [
         [

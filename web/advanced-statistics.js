@@ -394,6 +394,15 @@ export function advancedStatisticsRows(source,columnLimit){
   return selected;
 }
 
+export function advancedStatisticsExampleRows(definition,settings={}){
+  let rows=definition.exampleRows;
+  if(['cfa','sem'].includes(definition.id)){
+    if(settings.estimator==='wlsmv')rows=rows.map(row=>row.map(value=>String(1+definition.ordinalExampleCuts.filter(cut=>Number(value)>cut).length)));
+    if(settings.groupMode==='multi')rows=definition.multiGroupExampleIds.flatMap(group=>rows.map(row=>[group,...row]));
+  }
+  return rows;
+}
+
 export function createAdvancedStatistics({state,persist,data,columnLimit,copy,clearResult,applyData,section='advanced'}) {
   const panelId=`statistics-${section}`;
   const panel=key=>$(`${panelId}-${key}`);
@@ -421,14 +430,14 @@ export function createAdvancedStatistics({state,persist,data,columnLimit,copy,cl
   const report=$('statistics-survival-result');
   let displayed=null,reportKey='',imputation=null;
   const apply=section==='preparation'?panel('apply'):null;
-  const fieldId=key=>`statistics-form-${selected().id}-${key}`;
+  const fieldId=key=>`statistics-${input.value==='example'&&['cfa','sem'].includes(selected().id)?'example-':''}form-${selected().id}-${key}`;
   const settings=()=>Object.fromEntries((selected().controls||[]).map(field=>{
     const id=fieldId(field.key),auto=id+'-auto';
     if(field.type==='column'&&Number(field.default)===-1){if(state.fields[auto]===undefined)state.fields[auto]=!Object.hasOwn(state.fields,id);if(state.fields[auto])return [field.key,-1];}
     return [field.key,state.fields[id]??field.default];
   }));
   const limit=()=>{const value=Number(columnLimit?.());return Number.isInteger(value)&&value>0?value:null;};
-  const currentRows=()=>input.value==='example'?selected().exampleRows:advancedStatisticsRows(data(),limit());
+  const currentRows=()=>input.value==='example'?advancedStatisticsExampleRows(selected(),settings()):advancedStatisticsRows(data(),limit());
   const context=()=>{
     const plan=selected().id==='survivalanalysis'&&input.value!=='expression'?survivalAnalysisPlan(currentRows(),settings(),resolvedColumnNames()):{expression:expression(),groups:[],predictors:[]};
     let usesCurrentData=input.value==='current'&&!!selected().controls;
@@ -437,7 +446,7 @@ export function createAdvancedStatistics({state,persist,data,columnLimit,copy,cl
     if(selected().id==='impute'&&input.value==='current')Object.assign(plan,{dataSnapshot:data(),columnCount:limit()});
     return plan;
   };
-  function resolvedColumnNames(){if(input.value==='example')return statisticsColumnNames(Math.max(1,...(selected().exampleRows||[]).map(row=>row.length)));if(input.value!=='current'||!data().trim())return [];const rows=csvRows(data(),{skipHeader:false});const count=Math.min(limit()??Infinity,Math.max(0,...rows.map(row=>row.length)));return statisticsCsvHasHeader(rows)&&!rows[0].some(cell=>cell==='NA')?statisticsColumnLabels(data(),`columns:${count}`):[];}
+  function resolvedColumnNames(){if(input.value==='example')return statisticsColumnNames(Math.max(1,...(currentRows()||[]).map(row=>row.length)));if(input.value!=='current'||!data().trim())return [];const rows=csvRows(data(),{skipHeader:false});const count=Math.min(limit()??Infinity,Math.max(0,...rows.map(row=>row.length)));return statisticsCsvHasHeader(rows)&&!rows[0].some(cell=>cell==='NA')?statisticsColumnLabels(data(),`columns:${count}`):[];}
   const expression=()=>selected().controls&&input.value!=='expression'?guidedStatisticsCommand(selected(),currentRows(),settings(),resolvedColumnNames()):source.value.trim();
   const preview=()=>{
     if(selected().controls&&input.value!=='expression'){
@@ -471,6 +480,8 @@ export function createAdvancedStatistics({state,persist,data,columnLimit,copy,cl
       if(input.value==='current')try{const raw=csvRows(data(),{skipHeader:false});if(statisticsCsvHasHeader(raw)&&!raw[0].some(cell=>cell==='NA'))labels=labels.map((name,i)=>raw[0][i]&&raw[0][i]!==name?`${raw[0][i]} (${name})`:name);}catch{}
       const next=JSON.stringify([definition.id,input.value,labels,korean,definition.controls.filter(f=>f.type==='choice'||f.type==='column').map(f=>opts[f.key]),definition.controls.map(f=>!f.when||Object.entries(f.when).every(([key,values])=>values.includes(opts[key])))]);
       if(next!==signature){
+        const focused=form.contains(document.activeElement)?document.activeElement:null;
+        const selection=focused&&typeof focused.selectionStart==='number'?[focused.selectionStart,focused.selectionEnd,focused.selectionDirection]:null;
         signature=next;form.replaceChildren();
         for(const field of definition.controls){
           if(field.when&&!Object.entries(field.when).every(([key,values])=>values.includes(opts[key])))continue;
@@ -480,14 +491,16 @@ export function createAdvancedStatistics({state,persist,data,columnLimit,copy,cl
             state.fields[id]=newValue;
             if(definition.id==='glm'&&field.key==='family')state.fields[fieldId('link')]='auto';
             if(['time','event','subject','response','group','grouping','offset','adjustment'].includes(field.key)||(definition.id==='glmm'&&field.key==='family'))state.fields[fieldId('predictors')]=definition.id==='survivalanalysis'?'':'auto';
-            if(field.type!=='number')signature='';update();
+            if(input.value==='example'&&['cfa','sem'].includes(definition.id)&&['groupMode','group'].includes(field.key))state.fields[fieldId('columns')]='auto';
+            // Keep text editors mounted while updating the preview and saved values.
+            if(!['number','text'].includes(field.type))signature='';update();
             persist();
           };
           if(field.type==='columns'){
             const group=element('fieldset'),legend=element('legend',caption);group.append(legend);group.className='form-row statistics-form-columns';
             const roles=definition.id==='manova'?['group']:['mediation','moderation'].includes(definition.id)?['x','middle','response']:definition.id==='ancova'?['group','response']:definition.id==='survivalanalysis'?['time','event',...(opts.grouping==='groups'?['group']:[])]:definition.id==='cox'?['time','event']:['poissonreg','nbreg','glm','ordinal','multinomial','crossvalidate','linearmodel','discriminantanalysis','quantreg','zeroinflated','tobit'].includes(definition.id)?['response']:['subject','response'];
             if(['poissonreg','nbreg','glmm','glm'].includes(definition.id)&&opts.adjustment!=='none'&&(definition.id!=='glmm'||opts.family!=='binomial'))roles.push('offset');
-            const reserved=['predictors','categorical','covariates','responses'].includes(field.key)?roles.map(key=>Number(opts[key])===-1?count-1:Number(opts[key])):[];
+            const reserved=['cfa','sem'].includes(definition.id)&&field.key==='columns'&&opts.groupMode==='multi'?[Number(opts.group)]:['predictors','categorical','covariates','responses'].includes(field.key)?roles.map(key=>Number(opts[key])===-1?count-1:Number(opts[key])):[];
             const columns=value==='auto'?Array.from({length:count},(_,i)=>i).filter(i=>!reserved.includes(i)):String(value).split(',').filter(Boolean).map(Number);
             const store=element('input');store.type='hidden';store.id=id;store.value=String(value);group.append(store);
             for(let i=0;i<count;i++)if(!reserved.includes(i)){
@@ -496,8 +509,9 @@ export function createAdvancedStatistics({state,persist,data,columnLimit,copy,cl
             }
             form.append(group);
           }else{
-            const label=element('label',caption),control=element(['number','text'].includes(field.type)?'input':'select');control.id=id;
-            if(['number','text'].includes(field.type)){control.value=value;control.oninput=()=>changed(control.value);}
+            const typing=['number','text'].includes(field.type);
+            const label=element('label',caption),control=typing&&focused?.id===id?focused:element(typing?'input':'select');control.id=id;
+            if(typing){if(control.value!==String(value))control.value=value;control.oninput=()=>changed(control.value);}
             else{
               const choices=field.type==='column'?labels.map((name,i)=>({id:String(i),label:name,ko:name})):field.type==='group'?[...new Set(currentRows().map(row=>String(row[Number(opts.group)]??'').trim()).filter(Boolean))].map(name=>({id:name,label:name,ko:name})):field.choices.filter(choice=>!choice.when||Object.entries(choice.when).every(([key,values])=>values.includes(opts[key])));
               control.replaceChildren(...choices.map(choice=>{const item=element('option',korean?choice.ko:choice.label);item.value=String(choice.id);return item;}));
@@ -507,6 +521,15 @@ export function createAdvancedStatistics({state,persist,data,columnLimit,copy,cl
               control.onchange=()=>changed(control.value);
             }
             label.append(control);form.append(label);
+          }
+        }
+        // Numeric options can change which neighbouring fields are visible.
+        // Reuse the active editor and restore its caret after that structural update.
+        if(focused?.id){
+          const target=document.getElementById(focused.id);
+          if(target&&form.contains(target)){
+            target.focus({preventScroll:true});
+            if(selection&&typeof target.setSelectionRange==='function')target.setSelectionRange(...selection);
           }
         }
       }

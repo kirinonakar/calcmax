@@ -8,6 +8,41 @@ import org.json.JSONArray
 import com.kirinonakar.symvacas.math.Parser
 
 class AdvancedStatisticsTest {
+    @Test fun measurementExamplesIgnoreCurrentDataSelectionsAndKeepTheirOwnDrafts() {
+        val schema=JSONArray(File("src/main/assets/advanced_statistics.json").readText())
+        val sem=List(schema.length()){schema.getJSONObject(it)}.first {it.getString("id")=="sem"}
+        val stale=JSONObject().put("sem",JSONObject().put("columns","0,1,2,3,4,5,6").put("factors","1,1")).toString()
+        val current=advancedStatisticsFormSettings("sem","current",stale,"{}")
+        assertEquals("1,1",current.getString("factors"))
+        assertTrue(runCatching {guidedStatisticsCommand(sem,advancedStatisticsExampleRows(sem),current)}.isFailure)
+        val example=advancedStatisticsFormSettings("sem","example",stale,"{}")
+        val expression=guidedStatisticsCommand(sem,advancedStatisticsExampleRows(sem,example),example)
+        assertEquals(Parser(sem.getString("example")).parse(),Parser(expression).parse())
+        val saved=JSONObject().put("sem",JSONObject().put("groupMode","multi").put("invariance","strict")).toString()
+        val restored=advancedStatisticsFormSettings("sem","example",stale,saved)
+        assertEquals("strict",restored.getString("invariance"))
+        assertEquals("1,1",advancedStatisticsFormSettings("sem","current",stale,saved).getString("factors"))
+        val grouped=Parser(guidedStatisticsCommand(sem,advancedStatisticsExampleRows(sem,restored),restored)).parse()
+        assertEquals(6,grouped.args[0].args[0].args.size)
+        assertEquals(96,grouped.args[5].args.size)
+    }
+
+    @Test fun measurementExampleEstimationAndGroupChoicesKeepFactorIdsAligned() {
+        val schema=JSONArray(File("src/main/assets/advanced_statistics.json").readText())
+        for(id in listOf("cfa","sem")) {
+            val definition=List(schema.length()){schema.getJSONObject(it)}.first {it.getString("id")==id}
+            for(estimator in listOf("ml","wlsmv"))for(group in listOf("single","multi"))for(invariance in listOf("configural","metric","scalar","strict")) {
+                val settings=JSONObject().put("estimator",estimator).put("groupMode",group).put("invariance",invariance)
+                val rows=advancedStatisticsExampleRows(definition,settings)
+                val tree=Parser(guidedStatisticsCommand(definition,rows,settings)).parse()
+                assertEquals(6,tree.args[0].args[0].args.size)
+                assertEquals(6,tree.args[1].args.size)
+                assertEquals(if(group=="multi")7 else 6,rows.first().size)
+                if(estimator=="wlsmv")assertTrue(rows.all {row->row.drop(if(group=="multi")1 else 0).all {it.toInt() in 1..4}})
+            }
+        }
+    }
+
     @Test fun weightedKappaRequiresOrderedSharedCategories() {
         val schema=JSONArray(File("src/main/assets/advanced_statistics.json").readText())
         val definition=List(schema.length()){schema.getJSONObject(it)}.first {it.getString("id")=="cohenkappa"}

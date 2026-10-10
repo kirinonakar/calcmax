@@ -7,13 +7,57 @@ import {installEngine} from '../engine-bootstrap.js';
 import {parse,latexInput} from '../parser.js';
 import {tipCommand,moneyResult} from '../money.js';
 import {statisticsCommand,distributionCommand,equationCommand} from '../workspace-commands.js';
-import {guidedStatisticsCommand} from '../advanced-statistics.js';
+import {guidedStatisticsCommand,advancedStatisticsExampleRows} from '../advanced-statistics.js';
 import {advancedStatisticsSchema} from '../advanced-statistics-schema.js';
 import {graphInputTree} from '../graph-workspace.js';
+import {setComputationLimitsRemoved} from '../computation-limits.js';
 
 // Reuse the interpreter for sequential integration scenarios. The cold solver
 // scenario below explicitly loads its own interpreter to keep startup coverage.
 let sharedRuntime;
+
+test('SEM sample presets execute with separate group columns and ordinal indicators',async()=>{
+  const py=await runtime(),definition=advancedStatisticsSchema.find(d=>d.id==='sem');
+  for(const [estimator,groupMode,invariance] of [['ml','multi','strict'],['wlsmv','single','configural'],['wlsmv','multi','strict']]){
+    const settings={estimator,groupMode,invariance},rows=advancedStatisticsExampleRows(definition,settings);
+    const source=guidedStatisticsCommand(definition,rows,settings),tree=parse(source);
+    assert.equal(tree.args[0].args[0].args.length,6);
+    py.globals.set('payload',JSON.stringify({tree,precision:15,budget:60}));
+    const result=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));
+    assert.equal(result.ok,true,`${estimator} ${groupMode} ${invariance}: ${result.error}`);
+    const sections=result.statisticsReport.sections;
+    assert.equal(sections.find(s=>s.title==='Loadings').rows.length,groupMode==='multi'?12:6);
+    assert.equal(sections.find(s=>s.title==='Structural paths').rows.length,groupMode==='multi'?2:1);
+    if(estimator==='wlsmv')assert.ok(sections.some(s=>s.title==='Thresholds'));
+    if(groupMode==='multi')assert.equal(sections.find(s=>s.title==='Group summary').rows.length,2);
+  }
+});
+
+test('PCA defaults, scalar/strict ML and ordinal WLSMV execute in real WASM',async t=>{
+  setComputationLimitsRemoved(true);t.after(()=>setComputationLimitsRemoved(false));
+  const py=await runtime(),cases=JSON.parse(readFileSync(new URL('../../tests/fixtures/sem_estimation_reference.json',import.meta.url),'utf8')).cases;
+  for(const index of [0,2,3,4,6]){
+    const item=cases[index],definition=advancedStatisticsSchema.find(d=>d.id===item.function);
+    const ordinal=item.arguments.at(-1)==='wlsmv',rows=item.arguments[0].map(row=>row.map(String));
+    let settings={factors:item.arguments[1].join(','),estimator:ordinal?'wlsmv':'ml'};
+    const offset=item.function==='sem'?3:2,groups=item.arguments[offset+2];
+    if(groups.length){rows.forEach((row,i)=>row.unshift(String(groups[i])));settings={...settings,columns:item.arguments[1].map((_,i)=>i+1).join(','),groupMode:'multi',group:'0',invariance:item.arguments[offset+3]};}
+    const source=guidedStatisticsCommand(definition,rows,settings);
+    py.globals.set('payload',JSON.stringify({tree:parse(source),precision:15,budget:60,removeComputationLimit:true}));
+    const result=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));
+    assert.equal(result.ok,true,`${item.function} ${settings.estimator} ${settings.invariance||''}: ${result.error}`);
+    const summary=result.statisticsReport.sections.find(s=>s.title==='Summary');
+    const statistic=summary.rows.find(row=>row[0]==='χ²')[1];
+    const expected=item.expected.find(([path])=>path.length===1&&path[0]==='χ²')[1];
+    assert.ok(Math.abs(Number(statistic.decimal)-expected)<item.tolerance*Math.max(1,Math.abs(expected)));
+    assert.ok(result.statisticsReport.sections.some(s=>s.title===(ordinal?'Thresholds':'Latent means')));
+  }
+  const efa=advancedStatisticsSchema.find(d=>d.id==='efa');
+  assert.equal(efa.controls.find(field=>field.key==='extraction').default,'pca');
+  py.globals.set('payload',JSON.stringify({tree:parse(guidedStatisticsCommand(efa,efa.exampleRows)),budget:60}));
+  const result=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));
+  assert.equal(result.ok,true,result.error);assert.match(result.exact,/Principal components/);
+});
 
 test('expanded statistical designs, oblique rotation and FIML run in real WASM',async()=>{
   const py=await runtime(),cases=JSON.parse(readFileSync(new URL('../../tests/fixtures/statistics_extension_reference.json',import.meta.url),'utf8')).cases;

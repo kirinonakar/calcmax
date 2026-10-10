@@ -2179,6 +2179,164 @@
     "expected": "glmm([[1,0,0],[1,1,1],[2,0,1]],binomial,15,[],offset,refit)"
   },
   {
+    "id": "sem",
+    "rows": [
+      [
+        "A",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6"
+      ],
+      [
+        "B",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7"
+      ]
+    ],
+    "settings": {
+      "columns": "0,1,2,3,4,5,6",
+      "groupMode": "multi",
+      "group": "0",
+      "factors": "[1,1,1,2,2,2]"
+    },
+    "expected": "sem([[1,2,3,4,5,6],[2,3,4,5,6,7]],[1,1,1,2,2,2],[[1,2]],[],complete,[1,2],configural)"
+  },
+  {
+    "id": "cfa",
+    "rows": [
+      [
+        "1",
+        "2",
+        "3",
+        "A",
+        "4",
+        "5",
+        "6"
+      ],
+      [
+        "2",
+        "3",
+        "4",
+        "B",
+        "5",
+        "6",
+        "7"
+      ]
+    ],
+    "settings": {
+      "columns": "0,1,2,3,4,5,6",
+      "groupMode": "multi",
+      "group": "3",
+      "factors": "[1,1,1,2,2,2]"
+    },
+    "expected": "cfa([[1,2,3,4,5,6],[2,3,4,5,6,7]],[1,1,1,2,2,2],[],complete,[1,2],configural)"
+  },
+  {
+    "id": "efa",
+    "rows": [
+      [
+        "1",
+        "2",
+        "3"
+      ],
+      [
+        "4",
+        "5",
+        "6"
+      ]
+    ],
+    "settings": {
+      "extraction": "pa",
+      "rotation": "none",
+      "factors": "1"
+    },
+    "expected": "efa([[1,2,3],[4,5,6]],1,none,pa,0,0,0.95)"
+  },
+  {
+    "id": "cfa",
+    "rows": [
+      [
+        "A",
+        "1",
+        "2",
+        "3"
+      ],
+      [
+        "B",
+        "2",
+        "3",
+        "4"
+      ]
+    ],
+    "settings": {
+      "columns": "1,2,3",
+      "factors": "1,1,1",
+      "groupMode": "multi",
+      "group": "0",
+      "invariance": "scalar"
+    },
+    "expected": "cfa([[1,2,3],[2,3,4]],[1,1,1],[],complete,[1,2],scalar)"
+  },
+  {
+    "id": "sem",
+    "rows": [
+      [
+        "A",
+        "1",
+        "2",
+        "3",
+        "1",
+        "2",
+        "3"
+      ],
+      [
+        "B",
+        "2",
+        "3",
+        "4",
+        "2",
+        "3",
+        "4"
+      ]
+    ],
+    "settings": {
+      "columns": "1,2,3,4,5,6",
+      "groupMode": "multi",
+      "group": "0",
+      "invariance": "strict",
+      "estimator": "wlsmv",
+      "missing": "fiml"
+    },
+    "expected": "sem([[1,2,3,1,2,3],[2,3,4,2,3,4]],[1,1,1,2,2,2],[[1,2]],[],complete,[1,2],strict,wlsmv)"
+  },
+  {
+    "id": "cfa",
+    "rows": [
+      [
+        "1",
+        "2",
+        "3"
+      ],
+      [
+        "2",
+        "3",
+        "4"
+      ]
+    ],
+    "settings": {
+      "factors": "1,1,1",
+      "estimator": "wlsmv"
+    },
+    "expected": "cfa([[1,2,3],[2,3,4]],[1,1,1],[],complete,[],configural,wlsmv)"
+  },
+  {
     "id": "efa",
     "rows": [
       [

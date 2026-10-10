@@ -55,7 +55,7 @@ for j in range(2):
     if loadings[np.argmax(abs(loadings[:,j])),j]<0: loadings[:,j]*=-1
 expected=[(['Item diagnostics',i,'Communality'],v) for i,v in enumerate(updated)]
 expected += [(['loadings',i,j],loadings[i,j]) for i in range(k) for j in range(2)]
-add('efa',[survey,2,'varimax'],expected,tolerance=3e-5)
+add('efa',[survey,2,'varimax','pa'],expected,tolerance=3e-5)
 
 for function,paths in (('cfa',''),('sem','\nf2 ~ f1')):
     model=Model('f1 =~ v1+v2+v3\nf2 =~ v4+v5+v6'+paths)

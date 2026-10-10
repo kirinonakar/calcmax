@@ -7,8 +7,11 @@ export function socialStatisticsPlan(id,rows,opts,columnLabels=[]){
   const col=key=>{let i=Number(opts[key]);if(i===-1)i=n-1;if(!Number.isInteger(i)||i<0||i>=n)throw new Error('Choose valid data columns');return i;};
   const columns=(key,excluded=[],optional=false)=>{
     const raw=opts[key],indices=raw==='auto'?Array.from({length:n},(_,i)=>i).filter(i=>!excluded.includes(i)):String(raw??'').split(',').filter(Boolean).map(Number);
-    if((!optional&&!indices.length)||new Set(indices).size!==indices.length||indices.some(i=>!Number.isInteger(i)||i<0||i>=n||excluded.includes(i)))throw new Error('Choose distinct analysis columns');
-    return indices;
+    const measurement=key==='columns'&&['cfa','sem'].includes(id);
+    if(new Set(indices).size!==indices.length||indices.some(i=>!Number.isInteger(i)||i<0||i>=n||!measurement&&excluded.includes(i)))throw new Error('Choose distinct analysis columns');
+    const selected=measurement?indices.filter(i=>!excluded.includes(i)):indices;
+    if(!optional&&!selected.length)throw new Error('Choose distinct analysis columns');
+    return selected;
   };
   const complete=indices=>{
     if(new Set(indices).size!==indices.length)throw new Error('Roles must use different columns');
@@ -26,24 +29,27 @@ export function socialStatisticsPlan(id,rows,opts,columnLabels=[]){
     expression=`dunn(${table(plan.samples)},${opts.adjustment})`;
   }else if(['cronbach','efa','cfa','sem','hcluster'].includes(id)){
     const multigroup=['cfa','sem'].includes(id)&&opts.groupMode==='multi',group=multigroup?col('group'):null;
-    const indices=columns('columns',multigroup?[group]:[]),selected=['cfa','sem'].includes(id)&&opts.missing==='fiml'?rows.map(row=>indices.map(i=>String(row[i]??'').trim()||'NA')):complete(indices);featureLabels(indices);
+    const missing=opts.estimator==='wlsmv'?'complete':opts.missing||'complete';
+    const indices=columns('columns',multigroup?[group]:[]),selected=['cfa','sem'].includes(id)&&missing==='fiml'?rows.map(row=>indices.map(i=>String(row[i]??'').trim()||'NA')):complete(indices);featureLabels(indices);
     let efaSuffix=`${opts.factors},${opts.rotation}`;
     const samples=String(opts.factors)==='parallel'&&Number(opts.parallelSamples||0)===0?'100':opts.parallelSamples||'0';
-    if(id==='efa'&&(opts.extraction==='pca'||Number(samples)>0||String(opts.factors)==='parallel'))efaSuffix+=`,${opts.extraction||'pa'},${samples},${opts.seed||'0'},${opts.percentile||'0.95'}`;
+    if(id==='efa'&&(opts.extraction==='pa'||Number(samples)>0||String(opts.factors)==='parallel'))efaSuffix+=`,${opts.extraction||'pca'},${samples},${opts.seed||'0'},${opts.percentile||'0.95'}`;
     const suffix=id==='cronbach'?opts.mode:id==='efa'?efaSuffix:id==='hcluster'?`${opts.clusters},${opts.linkage},${opts.standardize}`:null;
     if(suffix!==null)expression=`${id}(${table(selected)},${suffix})`;
     else{
-      const factors=String(opts.factors).split(',').map(value=>value.trim());
-      if(factors.length!==indices.length||factors.some(value=>!/^\d+$/.test(value)||Number(value)<1))throw new Error('Specify one positive factor ID per selected indicator');
+      const factors=String(opts.factors).trim().replace(/^\[([\s\S]*)\]$/,'$1').split(',').map(value=>value.trim());
+      if(factors.some(value=>!/^\d+$/.test(value)||Number(value)<1))throw new Error('Specify one positive factor ID per selected indicator');
+      if(factors.length!==indices.length)throw new Error('Factor ID count must match selected indicators');
       const paths=String(opts.paths??'').trim().split(';').filter(Boolean).map(value=>value.split(',').map(token=>token.trim()));
       if(paths.some(pair=>pair.length!==2||pair.some(value=>!/^\d+$/.test(value))))throw new Error('Use latent paths like 1,2;2,3');
       const cross=String(opts.cross??'').trim().split(';').filter(Boolean).map(value=>value.split(',').map(token=>token.trim()));
       if(cross.some(pair=>pair.length!==2||pair.some(value=>!/^\d+$/.test(value)||Number(value)<1)))throw new Error('Use cross-loadings like 2,2;5,1 in selected indicator order');
       let extra='';
-      if(cross.length||opts.missing==='fiml'||multigroup){
+      if(cross.length||missing==='fiml'||multigroup||opts.estimator==='wlsmv'){
         let ids=[];
         if(multigroup){const groupRows=complete([group]),groups=[...new Set(groupRows.map(row=>row[0]))];ids=groupRows.map(row=>groups.indexOf(row[0])+1);groups.forEach((name,i)=>{labels[`group:${i+1}`]=name;});}
-        extra=`,${table(cross)},${opts.missing||'complete'},${list(ids)},${opts.invariance||'configural'}`;
+        extra=`,${table(cross)},${missing},${list(ids)},${opts.invariance||'configural'}`;
+        if(opts.estimator==='wlsmv')extra+=',wlsmv';
       }
       expression=`${id}(${table(selected)},${list(factors)}${id==='sem'?','+table(paths):''}${extra})`;
     }

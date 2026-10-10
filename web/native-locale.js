@@ -816,6 +816,8 @@ export const nativeKorean = {
   "Enter data first": "데이터를 입력하세요",
   "Choose valid data columns": "자료 열을 선택하세요",
   "Choose distinct analysis columns": "서로 다른 분석 열을 선택하세요",
+  "Factor ID count must match selected indicators": "선택한 지표 수와 주 요인 ID 수를 맞추세요",
+  "Specify one positive factor ID per selected indicator": "각 지표의 주 요인 ID를 1 이상의 정수로 입력하세요",
   "Roles must use different columns": "각 역할에 서로 다른 열을 선택하세요",
   "Complete selected rows required": "선택한 열의 빈 셀을 채우세요",
   "Choose at least two groups": "그룹을 둘 이상 선택하세요",

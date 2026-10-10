@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {advancedStatisticsSchema as schema} from '../advanced-statistics-schema.js';
-import {guidedStatisticsCommand,survivalAnalysisPlan,advancedStatisticsTermLabels} from '../advanced-statistics.js';
+import {guidedStatisticsCommand,survivalAnalysisPlan,advancedStatisticsTermLabels,advancedStatisticsExampleRows} from '../advanced-statistics.js';
 import {survivalStepPoints,survivalNumber} from '../survival-report.js';
 import {parse} from '../parser.js';
 
@@ -58,5 +58,21 @@ test('weighted kappa requires an explicit shared ordinal category order',()=>{
   assert.equal(guidedStatisticsCommand(definition,rows,settings),'cohenkappa([[0,1,0],[1,0,0],[0,0,1]],quadratic)');
   assert.deepEqual(advancedStatisticsTermLabels(definition,rows,settings,['Reviewer A','Reviewer B']),{'table:row':'Reviewer A','table:column':'Reviewer B','table:row:1':'low','table:row:2':'mid','table:row:3':'high','table:column:1':'low','table:column:2':'mid','table:column:3':'high'});
   for(const id of ['mediation','moderation'])assert.throws(()=>guidedStatisticsCommand(schema.find(item=>item.id===id),[['1','2','3']],{response:'0'}),/different columns/);
-  assert.throws(()=>guidedStatisticsCommand(schema.find(item=>item.id==='cfa'),[['1','2','3']],{}),/one positive factor ID/);
+  assert.throws(()=>guidedStatisticsCommand(schema.find(item=>item.id==='cfa'),[['1','2','3']],{}),/Factor ID count/);
+});
+
+test('CFA/SEM presets retain six indicators when switching estimator or groups',()=>{
+  for(const id of ['cfa','sem']){
+    const definition=schema.find(item=>item.id===id);
+    for(const estimator of ['ml','wlsmv'])for(const groupMode of ['single','multi'])for(const invariance of ['configural','metric','scalar','strict']){
+      const settings={estimator,groupMode,invariance},rows=advancedStatisticsExampleRows(definition,settings);
+      const expression=guidedStatisticsCommand(definition,rows,settings),tree=parse(expression);
+      assert.equal(tree.args[0].args[0].args.length,6);
+      assert.equal(tree.args[1].args.length,6);
+      if(estimator==='wlsmv')assert.ok(rows.every(row=>row.slice(groupMode==='multi'?1:0).every(value=>Number(value)>=1&&Number(value)<=4)));
+      if(groupMode==='multi')assert.equal(tree.args[id==='sem'?5:4].args.length,rows.length);
+    }
+    assert.throws(()=>guidedStatisticsCommand(definition,definition.exampleRows,{factors:'0,1,1,2,2,2'}),/positive factor ID/);
+    assert.throws(()=>guidedStatisticsCommand(definition,definition.exampleRows,{columns:'0,0,1,2,3,4'}),/distinct/);
+  }
 });

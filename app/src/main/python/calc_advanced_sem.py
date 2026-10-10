@@ -2,7 +2,7 @@
 import math
 import mpmath as mp
 from calc_shared import require
-from calc_advanced_common import table, vector, integer, inference
+from calc_advanced_common import table, vector, integer, inference, option
 from calc_advanced_survey import correlation
 from calc_advanced_multivariate import positive
 from calc_advanced_optimize import minimize, information
@@ -11,6 +11,11 @@ from calc_statistics import _chisq_sf
 
 def calculate(engine,name,a):
     offset=3 if name=='sem' else 2
+    estimator=option(a,offset+4,'ml')
+    require(estimator in ('ml','wlsmv'),'Choose ml or wlsmv estimation')
+    if estimator=='wlsmv':
+        from calc_advanced_sem_ordinal import calculate as ordinal
+        return ordinal(engine,name,a)
     if len(a)>offset:
         from calc_advanced_sem_extended import calculate as extended
         return extended(engine,name,a)

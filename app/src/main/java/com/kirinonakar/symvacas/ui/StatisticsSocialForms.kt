@@ -10,7 +10,10 @@ internal fun socialStatisticsPlan(id:String,rows:List<List<String>>,opts:Map<Str
     fun col(key:String):Int {val raw=opts.getValue(key).toIntOrNull();val at=if(raw==-1)n-1 else raw;require(at!=null&&at in 0 until n){"Choose valid data columns"};return at}
     fun columns(key:String,excluded:List<Int> = emptyList(),optional:Boolean=false):List<Int> {
         val raw=opts.getValue(key);val indices=if(raw=="auto")(0 until n).filter {it !in excluded} else raw.split(',').filter(String::isNotBlank).map {it.toIntOrNull() ?: -1}
-        require((optional||indices.isNotEmpty())&&indices.distinct().size==indices.size&&indices.all {it in 0 until n&&it !in excluded}){"Choose distinct analysis columns"};return indices
+        val measurement=key=="columns"&&id in listOf("cfa","sem")
+        require(indices.distinct().size==indices.size&&indices.all {it in 0 until n&&(measurement||it !in excluded)}){"Choose distinct analysis columns"}
+        val selected=if(measurement)indices.filter {it !in excluded} else indices
+        require(optional||selected.isNotEmpty()){"Choose distinct analysis columns"};return selected
     }
     fun complete(indices:List<Int>):List<List<String>> {
         require(indices.distinct().size==indices.size){"Roles must use different columns"}
@@ -28,26 +31,28 @@ internal fun socialStatisticsPlan(id:String,rows:List<List<String>>,opts:Map<Str
         "cronbach","efa","cfa","sem","hcluster"->{
             val multigroup=id in listOf("cfa","sem")&&opts["groupMode"]=="multi"
             val group=if(multigroup)col("group") else -1
+            val missing=if(opts["estimator"]=="wlsmv")"complete" else opts["missing"] ?: "complete"
             val indices=columns("columns",if(multigroup)listOf(group) else emptyList())
-            val selected=if(id in listOf("cfa","sem")&&opts["missing"]=="fiml")rows.map {row->indices.map {row.getOrElse(it){""}.trim().ifBlank {"NA"}}} else complete(indices)
+            val selected=if(id in listOf("cfa","sem")&&missing=="fiml")rows.map {row->indices.map {row.getOrElse(it){""}.trim().ifBlank {"NA"}}} else complete(indices)
             indices.forEachIndexed {i,at->labels["feature:${i+1}"]=label(at,"Feature ${i+1}")}
             val samples=if(opts["factors"]=="parallel"&&(opts["parallelSamples"]?.toDoubleOrNull() ?: 0.0)==0.0)"100" else opts["parallelSamples"] ?: "0"
-            val efaExtra=if(opts["extraction"]=="pca"||(samples.toDoubleOrNull() ?: 0.0)>0.0||opts["factors"]=="parallel")",${opts["extraction"] ?: "pa"},$samples,${opts["seed"] ?: "0"},${opts["percentile"] ?: "0.95"}" else ""
+            val efaExtra=if(opts["extraction"]=="pa"||(samples.toDoubleOrNull() ?: 0.0)>0.0||opts["factors"]=="parallel")",${opts["extraction"] ?: "pca"},$samples,${opts["seed"] ?: "0"},${opts["percentile"] ?: "0.95"}" else ""
             val suffix=when(id){"cronbach"->opts["mode"];"efa"->"${opts["factors"]},${opts["rotation"]}$efaExtra";"hcluster"->"${opts["clusters"]},${opts["linkage"]},${opts["standardize"]}";else->null}
             if(suffix!=null)"$id(${table(selected)},$suffix)" else {
-                val factors=opts.getValue("factors").split(',').map(String::trim)
-                require(factors.size==indices.size&&factors.all {it.matches(Regex("\\d+"))&&(it.toIntOrNull() ?: 0)>0}){"Specify one positive factor ID per selected indicator"}
+                val factors=opts.getValue("factors").trim().removeSurrounding("[","]").split(',').map(String::trim)
+                require(factors.all {it.matches(Regex("\\d+"))&&(it.toIntOrNull() ?: 0)>0}){"Specify one positive factor ID per selected indicator"}
+                require(factors.size==indices.size){"Factor ID count must match selected indicators"}
                 val paths=opts["paths"].orEmpty().trim().split(';').filter(String::isNotBlank).map {it.split(',').map(String::trim)}
                 require(paths.all {pair->pair.size==2&&pair.all {it.matches(Regex("\\d+"))}}){"Use latent paths like 1,2;2,3"}
                 val cross=opts["cross"].orEmpty().trim().split(';').filter(String::isNotBlank).map {it.split(',').map(String::trim)}
                 require(cross.all {pair->pair.size==2&&pair.all {it.matches(Regex("\\d+"))&&(it.toIntOrNull() ?: 0)>0}}){"Use cross-loadings like 2,2;5,1 in selected indicator order"}
-                val extra=if(cross.isNotEmpty()||opts["missing"]=="fiml"||multigroup) {
+                val extra=if(cross.isNotEmpty()||missing=="fiml"||multigroup||opts["estimator"]=="wlsmv") {
                     val ids=if(multigroup) {
                         val groupRows=complete(listOf(group));val groups=groupRows.map {it[0]}.distinct()
                         groups.forEachIndexed {i,name->labels["group:${i+1}"]=name}
                         groupRows.map {(groups.indexOf(it[0])+1).toString()}
                     } else emptyList()
-                    ",${table(cross)},${opts["missing"] ?: "complete"},${vector(ids)},${opts["invariance"] ?: "configural"}"
+                    ",${table(cross)},$missing,${vector(ids)},${opts["invariance"] ?: "configural"}${if(opts["estimator"]=="wlsmv")",wlsmv" else ""}"
                 } else ""
                 "$id(${table(selected)},${vector(factors)}${if(id=="sem")","+table(paths) else ""}$extra)"
             }

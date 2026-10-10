@@ -285,6 +285,11 @@ for item in schema:
     elif item['id']=='dunn': rows=[[sample[i] if i<len(sample) else '' for sample in first] for i in range(max(map(len,first)))]
     else: rows=first
     item['exampleRows']=[[str(v) for v in row] for row in rows]
+    if item['id'] in ('cfa','sem'):
+        # Every multi-group preset has a dedicated group column followed by the
+        # same six indicators, so factor IDs continue to refer to those six.
+        item['ordinalExampleCuts']=[2,3,4]
+        item['multiGroupExampleIds']=['1','2']
     if item['id']=='glm':
         links={'identity':['gaussian'],'log':['gaussian','poisson','gamma','inversegaussian','nbinom'],'logit':['binomial'],'probit':['binomial'],'cloglog':['binomial'],'inverse':['gamma'],'inverse_squared':['inversegaussian']}
         for choice in next(f for f in item['controls'] if f['key']=='link')['choices']:
@@ -382,6 +387,12 @@ cases += [
  dict(id='glmm',rows=[['0','A','0'],['1','A','1'],['1','B','0']],settings=dict(subject='1',response='0',predictors='2',sensitivity='refit'),expected='glmm([[1,0,0],[1,1,1],[2,0,1]],binomial,15,[],offset,refit)')
 ]
 cases.extend([
+ dict(id='sem',rows=[['A','1','2','3','4','5','6'],['B','2','3','4','5','6','7']],settings=dict(columns='0,1,2,3,4,5,6',groupMode='multi',group='0',factors='[1,1,1,2,2,2]'),expected='sem([[1,2,3,4,5,6],[2,3,4,5,6,7]],[1,1,1,2,2,2],[[1,2]],[],complete,[1,2],configural)'),
+ dict(id='cfa',rows=[['1','2','3','A','4','5','6'],['2','3','4','B','5','6','7']],settings=dict(columns='0,1,2,3,4,5,6',groupMode='multi',group='3',factors='[1,1,1,2,2,2]'),expected='cfa([[1,2,3,4,5,6],[2,3,4,5,6,7]],[1,1,1,2,2,2],[],complete,[1,2],configural)'),
+ dict(id='efa',rows=[['1','2','3'],['4','5','6']],settings=dict(extraction='pa',rotation='none',factors='1'),expected='efa([[1,2,3],[4,5,6]],1,none,pa,0,0,0.95)'),
+ dict(id='cfa',rows=[['A','1','2','3'],['B','2','3','4']],settings=dict(columns='1,2,3',factors='1,1,1',groupMode='multi',group='0',invariance='scalar'),expected='cfa([[1,2,3],[2,3,4]],[1,1,1],[],complete,[1,2],scalar)'),
+ dict(id='sem',rows=[['A','1','2','3','1','2','3'],['B','2','3','4','2','3','4']],settings=dict(columns='1,2,3,4,5,6',groupMode='multi',group='0',invariance='strict',estimator='wlsmv',missing='fiml'),expected='sem([[1,2,3,1,2,3],[2,3,4,2,3,4]],[1,1,1,2,2,2],[[1,2]],[],complete,[1,2],strict,wlsmv)'),
+ dict(id='cfa',rows=[['1','2','3'],['2','3','4']],settings=dict(factors='1,1,1',estimator='wlsmv'),expected='cfa([[1,2,3],[2,3,4]],[1,1,1],[],complete,[],configural,wlsmv)'),
  dict(id='efa',rows=[['1','2','3'],['4','5','6']],settings=dict(extraction='pca',rotation='promax',factors='parallel',seed='7'),expected='efa([[1,2,3],[4,5,6]],parallel,promax,pca,100,7,0.95)'),
  dict(id='cfa',rows=[['A','1','','3','4','5','6'],['B','2','3','4','5','6','7']],settings=dict(columns='1,2,3,4,5,6',factors='1,1,1,2,2,2',cross='2,2',missing='fiml',groupMode='multi',group='0',invariance='metric'),expected='cfa([[1,NA,3,4,5,6],[2,3,4,5,6,7]],[1,1,1,2,2,2],[[2,2]],fiml,[1,2],metric)'),
  dict(id='sem',rows=[['1','2','3','4','5','6']],settings=dict(cross='5,1'),expected='sem([[1,2,3,4,5,6]],[1,1,1,2,2,2],[[1,2]],[[5,1]],complete,[],configural)'),

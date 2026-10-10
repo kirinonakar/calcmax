@@ -620,6 +620,8 @@ private val korean = mapOf(
     "Rows × columns · color = value" to "행 × 열 · 색 = 값", "Pearson r · pairwise complete observations" to "Pearson r · 각 열 쌍의 결측값 제외",
     "Input source" to "자료 선택", "Current data" to "현재 데이터", "Expression" to "분석 식",
     "Enter data first" to "데이터를 입력하세요", "Choose valid data columns" to "자료 열을 선택하세요", "Choose distinct analysis columns" to "서로 다른 분석 열을 선택하세요",
+    "Factor ID count must match selected indicators" to "선택한 지표 수와 주 요인 ID 수를 맞추세요",
+    "Specify one positive factor ID per selected indicator" to "각 지표의 주 요인 ID를 1 이상의 정수로 입력하세요",
     "Roles must use different columns" to "각 역할에 서로 다른 열을 선택하세요", "Complete selected rows required" to "선택한 열의 빈 셀을 채우세요", "Choose at least two groups" to "그룹을 둘 이상 선택하세요",
     "Choose at least two conditions" to "조건 열을 둘 이상 선택하세요", "Paired observations require the same two categories" to "대응 관측값에는 공통된 두 범주가 필요합니다",
     "The count table needs exactly two rows" to "빈도표는 정확히 두 행이어야 합니다", "Enter the event value" to "사건 발생 값을 입력하세요", "Event column must have at most two values" to "사건 열에는 두 종류 이하의 값이 필요합니다",

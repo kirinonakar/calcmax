@@ -1,7 +1,8 @@
-"""Continuous ML: cross-loadings, observed-data FIML and configural/metric groups.
+"""Continuous ML: cross-loadings, FIML and measurement invariance.
 
-Means are freely estimated for FIML. Metric models share unstandardized loadings
-in common pooled units; factor variances, paths, errors and means stay group free.
+Configural/metric FIML estimates free indicator means. Metric shares raw
+loadings; scalar also shares intercepts and frees non-reference latent means.
+Strict also shares residual variances. Pooled units preserve raw equalities.
 """
 import math
 import mpmath as mp
@@ -107,7 +108,9 @@ def calculate(engine,name,a):
     group_ids=vector(a[offset+2],len(rows)) if len(a)>offset+2 and a[offset+2] else [1.]*len(rows)
     require(len(group_ids)==len(rows),'Group IDs must align with every data row')
     invariance=option(a,offset+3,'configural')
-    require(invariance in ('configural','metric'),'Choose configural or metric invariance')
+    require(invariance in ('configural','metric','scalar','strict'),'Choose configural, metric, scalar or strict invariance')
+    scalar=invariance in ('scalar','strict')
+    use_means=missing=='fiml' or scalar
     # Shared scaling preserves equality of raw loadings across groups.
     labels=sorted(set(group_ids)); scales=[]
     for i in range(p):
@@ -117,18 +120,20 @@ def calculate(engine,name,a):
         require(all(value>0 for value in sums),'Each indicator must vary within each group')
         scales.append(math.sqrt(math.fsum(sums)/(sum(map(len,bygroup))-len(labels))))
     prepared=[]; start=[]; sharing={}
+    pooled_centers=[math.fsum(r[i] for r in rows if r[i] is not None)/sum(r[i] is not None for r in rows) for i in range(p)]
     exogenous=set(range(k))-{target for _,target in paths}
     for group,label in enumerate(labels):
         selected=[r for r,g in zip(rows,group_ids) if g==label and any(v is not None for v in r)]
         n=len(selected); require(n>p,'Each group needs more observed rows than indicators')
         require(all(sum(r[i] is not None and r[j] is not None for r in selected)>=2 for i in range(p) for j in range(i,p)),
                 'Every indicator pair needs at least two joint observations in each group')
-        centers=[math.fsum(r[i] for r in selected if r[i] is not None)/sum(r[i] is not None for r in selected) for i in range(p)]
+        centers=pooled_centers if scalar else [math.fsum(r[i] for r in selected if r[i] is not None)/sum(r[i] is not None for r in selected) for i in range(p)]
         standardized=[[None if v is None else (v-centers[j])/scales[j] for j,v in enumerate(r)] for r in selected]
-        patterns=summaries(standardized); use_means=missing=='fiml'
+        patterns=summaries(standardized)
         local=[]
         def add(kind,i,j,value):
-            key=(kind,i,j) if invariance=='metric' and kind=='loading' else (group,kind,i,j)
+            shared=(kind=='loading' and invariance!='configural') or (kind=='mean' and scalar) or (kind=='error' and invariance=='strict')
+            key=(kind,i,j) if shared else (group,kind,i,j)
             if key not in sharing:
                 sharing[key]=len(start); start.append(value)
             local.append((kind,i,j,sharing[key]))
@@ -144,24 +149,30 @@ def calculate(engine,name,a):
         observed_means=[math.fsum(r[i] for r in standardized if r[i] is not None)/sum(r[i] is not None for r in standardized) for i in range(p)]
         if use_means:
             for i in range(p): add('mean',i,i,observed_means[i])
-            saturated_loss=saturated(standardized,patterns)
+            if scalar and group:
+                for i in range(k): add('latentmean',i,i,0.)
+            if missing=='fiml': saturated_loss=saturated(standardized,patterns)
+            else:
+                from calc_advanced_survey import covariance
+                complete_sample=covariance(standardized,divisor=n)[0]; positive(complete_sample)
+                saturated_loss=(float(mp.log(mp.det(complete_sample)))+p)/2
             diagonal=mp.diag([math.fsum((r[i]-observed_means[i])**2 for r in standardized if r[i] is not None)/sum(r[i] is not None for r in standardized) for i in range(p)])
             base=2*(observed_loss(mp.matrix(observed_means),diagonal,patterns)[0]-n*saturated_loss)
-            sample=None
+            sample=None if missing=='fiml' else complete_sample
         else:
             from calc_advanced_survey import covariance
             sample=covariance(standardized,divisor=n)[0]; positive(sample)
             saturated_loss=(float(mp.log(mp.det(sample)))+p)/2
             base=n*(sum(math.log(float(sample[i,i])) for i in range(p))-float(mp.log(mp.det(sample))))
         for kind,i,j,index in local:
-            if kind=='loading' and (invariance!='metric' or group==0):
+            if kind=='loading' and (invariance=='configural' or group==0):
                 observed=[(r[i],r[markers[j]]) for r in standardized if r[i] is not None and r[markers[j]] is not None]
                 if math.fsum(left*right for left,right in observed)<0: start[index]=-abs(start[index])
         prepared.append(dict(n=n,local=local,patterns=patterns,sample=sample,saturated=saturated_loss,baseline=base,means=observed_means,centers=centers))
-    totaln=sum(g['n'] for g in prepared); moments=len(labels)*(p*(p+1)//2+(p if missing=='fiml' else 0)); df=moments-len(start)
+    totaln=sum(g['n'] for g in prepared); moments=len(labels)*(p*(p+1)//2+(p if use_means else 0)); df=moments-len(start)
     require(df>=0,'Model has negative degrees of freedom; remove free parameters')
     def model(parameters,g,derivatives=False):
-        load=mp.zeros(p,k); factor=mp.zeros(k); structural=mp.zeros(k); theta=[0.]*p; mu=mp.matrix(g['means'])
+        load=mp.zeros(p,k); factor=mp.zeros(k); structural=mp.zeros(k); theta=[0.]*p; mu=mp.matrix(g['means']); latentmean=mp.zeros(k,1)
         for j,i in enumerate(markers): load[i,j]=1.
         for kind,i,j,index in g['local']:
             value=parameters[index]
@@ -170,36 +181,41 @@ def calculate(engine,name,a):
             elif kind=='diagonal': factor[i,j]=math.exp(value)
             elif kind=='covariance': factor[i,j]=value
             elif kind=='mean': mu[i]=value
+            elif kind=='latentmean': latentmean[i]=value
             else: structural[i,j]=value
         propagation=(mp.eye(k)-structural)**-1; psi=factor*factor.T; total=propagation*psi*propagation.T
         sigma=load*total*load.T+mp.diag(theta)
+        mu+=load*latentmean
         if not derivatives: return sigma,load,total,structural,theta,mu
         deriv=[]; t=load*propagation
         for kind,i,j,index in g['local']:
+            dm=mp.zeros(p,1)
             if kind=='loading':
                 dl=mp.zeros(p,k); dl[i,j]=1; part=dl*total*load.T; d=part+part.T
+                dm[i]=latentmean[j]
             elif kind=='error': d=mp.zeros(p); d[i,i]=theta[i]
             elif kind in ('diagonal','covariance'):
                 dc=mp.zeros(k); dc[i,j]=factor[i,j] if kind=='diagonal' else 1.
                 d=t*(dc*factor.T+factor*dc.T)*t.T
             elif kind=='path':
                 db=mp.zeros(k); db[i,j]=1.; dt=t*db*propagation; part=dt*psi*t.T; d=part+part.T
-            else: d=None
-            deriv.append((index,d,i))
+            elif kind=='mean': d=None; dm[i]=1.
+            else: d=None; dm=load[:,i]
+            deriv.append((index,d,dm))
         return sigma,mu,deriv
     def objective(parameters):
         value=0.; gradient=[0.]*len(start)
         for g in prepared:
             sigma,mu,deriv=model(parameters,g,True)
-            if missing=='fiml': raw,gm,score=observed_loss(mu,sigma,g['patterns'])
+            if use_means: raw,gm,score=observed_loss(mu,sigma,g['patterns'])
             else:
                 inv=sigma**-1; sample=g['sample']; det=mp.det(sigma)
                 require(det>0,'Implied covariance is not positive definite')
                 raw=g['n']*(float(mp.log(det))+float(sum((inv*sample)[i,i] for i in range(p))))/2
                 score=(inv-inv*sample*inv)*g['n']/2; gm=mp.zeros(p,1)
             value+=(raw-g['n']*g['saturated'])/totaln
-            for index,d,i in deriv:
-                gradient[index]+=float(gm[i] if d is None else sum(score[i,j]*d[j,i] for i in range(p) for j in range(p)))/totaln
+            for index,d,dm in deriv:
+                gradient[index]+=float((gm.T*dm)[0]+(sum(score[i,j]*d[j,i] for i in range(p) for j in range(p)) if d is not None else 0))/totaln
         return value,gradient
     parameters,loss,iterations=minimize(start,objective,tolerance=2e-7,maximum=1000)
     cov=information(parameters,objective,totaln)
@@ -223,17 +239,21 @@ def calculate(engine,name,a):
                'Residual variances':[{'term':'feature:'+str(i+1),'Variance':theta[i]*scales[i]**2} for i in range(p)],
                'Latent covariance':[[float(total[i,j])*scales[markers[i]]*scales[markers[j]] for j in range(k)] for i in range(k)],
                'Implied covariance':[[float(sigma[i,j])*scales[i]*scales[j] for j in range(p)] for i in range(p)]}
-        if missing=='fiml': local['Indicator means']=[{'term':'feature:'+str(i+1),'Mean':float(mu[i])*scales[i]+g['centers'][i]} for i in range(p)]
+        if use_means: local['Indicator means']=[{'term':'feature:'+str(i+1),'Mean':float(mu[i])*scales[i]+g['centers'][i]} for i in range(p)]
+        if scalar:
+            local['Indicator intercepts']=[{'term':'feature:'+str(i+1),'Intercept':parameters[index]*scales[i]+g['centers'][i]} for kind,i,j,index in g['local'] if kind=='mean']
+            free_means={i:index for kind,i,j,index in g['local'] if kind=='latentmean'}
+            local['Latent means']=[dict(Factor=i+1,**inference([parameters[free_means[i]]*scales[markers[i]]],[[cov[free_means[i],free_means[i]]*scales[markers[i]]**2]],[str(i+1)])[0]) if i in free_means else {'Factor':i+1,'estimate':0.,'Fixed':1} for i in range(k)]
         results.append(local)
     statistic=max(0.,2*totaln*loss); base=max(0.,sum(g['baseline'] for g in prepared)); basedf=len(labels)*p*(p-1)/2
-    result={'n':totaln,'Estimator':'Normal-theory observed-data FIML' if missing=='fiml' else 'Normal-theory covariance ML (N divisor)',
+    result={'n':totaln,'Estimator':'Normal-theory observed-data FIML' if missing=='fiml' else 'Normal-theory mean/covariance ML (N divisor)' if scalar else 'Normal-theory covariance ML (N divisor)',
             'df':df,'χ²':statistic,'p':float(_chisq_sf(statistic,df)) if df else None,
             'CFI':1-max(statistic-df,0)/max(statistic-df,base-basedf,1e-15),
             'TLI':(base/basedf-statistic/df)/(base/basedf-1) if df and abs(base/basedf-1)>1e-12 else None,
             'RMSEA':math.sqrt(max(statistic-df,0)*len(labels)/(df*(totaln-len(labels)))) if df else None,'Iterations':iterations,
             'RMSEA convention':'N−G denominator, group multiplier G; uncorrected normal-theory index',
             'Missing patterns':sum(len(g['patterns']) for g in prepared),'Dropped empty rows':len(rows)-totaln,
-            'Assumptions':'Continuous multivariate-normal indicators; at least three primary indicators per factor and first primary loading fixed at 1. Cross-loadings use selected indicator positions on non-marker indicators. Acyclic latent paths, independent indicator errors and endogenous disturbances. FIML estimates the observed-data likelihood and indicator means under MCAR/MAR. Configural groups estimate separate parameters; metric groups share raw loadings and estimate other parameters separately. Observed-information Wald inference.'}
+            'Assumptions':'Continuous multivariate-normal indicators; at least three primary indicators per factor and first primary loading fixed at 1. Cross-loadings use selected indicator positions on non-marker indicators. Acyclic latent paths, independent indicator errors and endogenous disturbances. FIML estimates the observed-data likelihood and indicator means under MCAR/MAR. Configural groups estimate separate parameters; metric groups share raw loadings and estimate other parameters separately. Scalar groups also share raw indicator intercepts, with reference latent means fixed at zero and other-group latent means free; strict also shares raw residual variances. Observed-information Wald inference.'}
     if len(labels)==1:
         result.update(results[0])
         sample=prepared[0]['sample']
@@ -244,7 +264,7 @@ def calculate(engine,name,a):
     else:
         result['Groups']=len(labels); result['Invariance']=invariance
         # Flat report tables retain group identity and avoid opaque nested objects.
-        for key in ('Loadings','Structural paths','Residual variances','Indicator means'):
+        for key in ('Loadings','Structural paths','Residual variances','Indicator means','Indicator intercepts','Latent means'):
             result[key]=[dict(Group='group:'+format(label,'.15g'),**row) for label,local in zip(labels,results) for row in local.get(key,[])]
         result['Group summary']=[{'Group':'group:'+format(label,'.15g'),'n':local['n']} for label,local in zip(labels,results)]
         for index,local in enumerate(results):

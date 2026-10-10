@@ -60,6 +60,29 @@ internal fun advancedStatisticsRows(data:String,columnLimit:Int?=null,removeComp
     return if(statisticsHasHeader(rectangular)&&rectangular.first().none {it=="NA"})rectangular.drop(1) else rectangular
 }
 
+internal fun advancedStatisticsExampleRows(definition:JSONObject,settings:JSONObject=JSONObject()):List<List<String>> {
+    val measurement=definition.getString("id") in listOf("cfa","sem")
+    val ordinal=measurement&&settings.optString("estimator")=="wlsmv"
+    val multi=measurement&&settings.optString("groupMode")=="multi"
+    val array=definition.getJSONArray("exampleRows")
+    var rows=List(array.length()){i->array.getJSONArray(i).let {row->List(row.length()){row.getString(it)}}}
+    if(ordinal) {
+        val thresholds=definition.getJSONArray("ordinalExampleCuts")
+        val cuts=List(thresholds.length()){thresholds.getDouble(it)}
+        rows=rows.map {row->row.map {value->(1+cuts.count {value.toDouble()>it}).toString()}}
+    }
+    if(multi) {
+        val groups=definition.getJSONArray("multiGroupExampleIds")
+        rows=List(groups.length()){groups.getString(it)}.flatMap {group->rows.map {row->listOf(group)+row}}
+    }
+    return rows
+}
+
+internal fun advancedStatisticsFormSettings(analysis:String,input:String,formsText:String,exampleFormsText:String):JSONObject {
+    val example=input=="example"&&analysis in listOf("cfa","sem")
+    return JSONObject(if(example)exampleFormsText else formsText).optJSONObject(analysis) ?: JSONObject()
+}
+
 @Composable internal fun AdvancedStatistics(m:CalculatorModel,data:String,kind:String,section:String="advanced",title:String="Advanced analysis",onDataApplied:((String)->Unit)?=null,embedded:Boolean=false,fixedAnalysis:String?=null) {
     val context=LocalContext.current
     val schema=remember {context.assets.open("advanced_statistics.json").bufferedReader().use {JSONArray(it.readText())}}
@@ -68,9 +91,9 @@ internal fun advancedStatisticsRows(data:String,columnLimit:Int?=null,removeComp
     val panels=m.advancedStatisticsDraft.optJSONObject("panels")
     val moved=panels?.optJSONObject("tests")?.takeIf {section=="general"&&it.optString("kind")=="mcnemar"}
     val savedDraft=panels?.optJSONObject(section) ?: moved ?: legacy ?: JSONObject()
-    val draft=if(fixedAnalysis!=null&&savedDraft.optString("kind")!=fixedAnalysis)JSONObject().put("forms",savedDraft.optJSONObject("forms") ?: JSONObject())
+    val draft=if(fixedAnalysis!=null&&savedDraft.optString("kind")!=fixedAnalysis)JSONObject().put("forms",savedDraft.optJSONObject("forms") ?: JSONObject()).put("exampleForms",savedDraft.optJSONObject("exampleForms") ?: JSONObject())
         else if(savedDraft.optString("kind").isBlank()||definitions.any {it.getString("id")==savedDraft.optString("kind")})savedDraft
-        else JSONObject().put("forms",savedDraft.optJSONObject("forms") ?: JSONObject())
+        else JSONObject().put("forms",savedDraft.optJSONObject("forms") ?: JSONObject()).put("exampleForms",savedDraft.optJSONObject("exampleForms") ?: JSONObject())
     val ko=isKorean()
     val collapseRequest=LocalStatisticsCollapseRequest.current
     val nested=section!="advanced"&&!embedded
@@ -80,6 +103,7 @@ internal fun advancedStatisticsRows(data:String,columnLimit:Int?=null,removeComp
     var source by rememberSaveable {mutableStateOf(draft.optString("source",definition.getString("example")))}
     var input by rememberSaveable {mutableStateOf(draft.optString("input",if(definition.has("controls")&&source==definition.getString("example"))if(data.isBlank()||definition.getString("input")=="none")"example" else "current" else "expression"))}
     var formsText by rememberSaveable {mutableStateOf(draft.optJSONObject("forms")?.toString() ?: "{}")}
+    var exampleFormsText by rememberSaveable {mutableStateOf(draft.optJSONObject("exampleForms")?.toString() ?: "{}")}
     var message by remember {mutableStateOf("")}
     var menuOpen by remember {mutableStateOf(false)}
     var band by rememberSaveable {mutableStateOf(draft.optBoolean("band",true))}
@@ -94,11 +118,11 @@ internal fun advancedStatisticsRows(data:String,columnLimit:Int?=null,removeComp
     var pending by remember {mutableStateOf(false)}
     var imputationData by remember {mutableStateOf<String?>(null)}
     var imputationExpression by remember {mutableStateOf("")}
-    val forms=JSONObject(formsText)
-    val settings=forms.optJSONObject(selected) ?: JSONObject()
+    val exampleSettings=input=="example"&&selected in listOf("cfa","sem")
+    val settings=advancedStatisticsFormSettings(selected,input,formsText,exampleFormsText)
     val columnLimit=statisticsColumnCount(kind)
     val currentRows=runCatching {advancedStatisticsRows(data,columnLimit,m.removeComputationLimit)}
-    val rows=if(input=="example"&&definition.has("exampleRows"))definition.getJSONArray("exampleRows").let {array->List(array.length()){i->array.getJSONArray(i).let {row->List(row.length()){row.getString(it)}}}} else currentRows.getOrDefault(emptyList())
+    val rows=if(input=="example"&&definition.has("exampleRows"))advancedStatisticsExampleRows(definition,settings) else currentRows.getOrDefault(emptyList())
     val count=rows.maxOfOrNull {it.size} ?: statisticsColumnCount(kind)
     val labels=if(input=="example")statisticsColumnNames(statisticsKindForColumns(count)) else statisticsColumnLabels(data,statisticsKindForColumns(count))
     val columns=List(count){i->labels.getOrNull(i) ?: "x${i+1}"}
@@ -110,15 +134,18 @@ internal fun advancedStatisticsRows(data:String,columnLimit:Int?=null,removeComp
         val next=JSONObject(settings.toString()).put(key,value)
         if(selected=="glm"&&key=="family")next.put("link","auto")
         if(key in listOf("time","event","subject","response","group","grouping","offset","adjustment")||(selected=="glmm"&&key=="family"))next.put("predictors",if(selected=="survivalanalysis")"" else "auto")
-        formsText=JSONObject(formsText).put(selected,next).toString();message=""
+        if(exampleSettings&&key in listOf("groupMode","group"))next.put("columns","auto")
+        if(exampleSettings)exampleFormsText=JSONObject(exampleFormsText).put(selected,next).toString()
+        else formsText=JSONObject(formsText).put(selected,next).toString()
+        message=""
     }
-    LaunchedEffect(selected,source,input,formsText,band) {
+    LaunchedEffect(selected,source,input,formsText,exampleFormsText,band) {
         val next=JSONObject(m.advancedStatisticsDraft.toString())
         val panels=next.optJSONObject("panels") ?: JSONObject()
-        panels.put(section,JSONObject().put("kind",selected).put("source",source).put("input",input).put("forms",JSONObject(formsText)).put("band",band))
+        panels.put(section,JSONObject().put("kind",selected).put("source",source).put("input",input).put("forms",JSONObject(formsText)).put("exampleForms",JSONObject(exampleFormsText)).put("band",band))
         m.updateAdvancedStatisticsDraft(next.put("panels",panels))
     }
-    LaunchedEffect(selected,source,input,formsText,data) {survivalReport=null;survivalCopyResult=null;pending=false}
+    LaunchedEffect(selected,source,input,formsText,exampleFormsText,data) {survivalReport=null;survivalCopyResult=null;pending=false}
     LaunchedEffect(m.clearedStatisticsResult) {
         if(survivalCopyResult!=null&&m.clearedStatisticsResult===survivalCopyResult){survivalReport=null;survivalCopyResult=null;reportPlan=null;pending=false}
     }
@@ -258,7 +285,7 @@ internal fun advancedStatisticsRows(data:String,columnLimit:Int?=null,removeComp
                     else->listOf("subject","response")
                 }
                 val offsetRoles=if(id in listOf("poissonreg","nbreg","glmm","glm")&&option("adjustment")!="none"&&(id!="glmm"||option("family")!="binomial"))listOf("offset") else emptyList()
-                val excluded=if(key in listOf("predictors","categorical","covariates","responses"))roles+offsetRoles else emptyList()
+                val excluded=if(id in listOf("cfa","sem")&&key=="columns"&&option("groupMode")=="multi")listOf("group") else if(key in listOf("predictors","categorical","covariates","responses"))roles+offsetRoles else emptyList()
                 val reserved=excluded.mapNotNull {option(it).toIntOrNull()?.let {value->if(value==-1)columns.lastIndex else value}}
                 val selected=if(value=="auto")columns.indices.filter {it !in reserved} else value.split(',').mapNotNull(String::toIntOrNull)
                 StatisticsSelectionTitle(label,translate=false)
