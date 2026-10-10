@@ -2,6 +2,20 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {integralPolygons} from '../graph-integral.js';
 import {clipGraphSegment} from '../graph-geometry.js';
+import {surfaceLightingGradient} from '../surface-geometry.js';
+
+test('smooth lighting reproduces every vertex and both triangles agree on their shared edge',()=>{
+  const first=[[0,0],[2,0],[0,2]],second=[[2,0],[2,2],[0,2]];
+  const a=surfaceLightingGradient(first,[.3,.8,.5]),b=surfaceLightingGradient(second,[.8,.9,.5]);
+  const brightness=(gradient,point)=>{
+    const d=gradient.end.map((v,i)=>v-gradient.start[i]);
+    const fraction=point.reduce((sum,v,i)=>sum+(v-gradient.start[i])*d[i],0)/d.reduce((sum,v)=>sum+v*v,0);
+    return gradient.min+(gradient.max-gradient.min)*fraction;
+  };
+  for(const [i,p] of first.entries())assert.ok(Math.abs(brightness(a,p)-[.3,.8,.5][i])<1e-12);
+  for(const t of [0,.25,.5,.75,1])assert.ok(Math.abs(brightness(a,[2*(1-t),2*t])-brightness(b,[2*(1-t),2*t]))<1e-12);
+  assert.equal(surfaceLightingGradient(first,[.5,.5,.5]),null);
+});
 
 test('clip before projecting huge exponential coordinates and retain viewport crossings',()=>{
   const bounds={xmin:-10,xmax:10,ymin:-5,ymax:5};

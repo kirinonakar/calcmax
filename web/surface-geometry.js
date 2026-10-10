@@ -49,7 +49,20 @@ export function surfaceProjection(bounds,rotation,elevation){
   };
   return {project,normalize};
 }
-export function surfaceFaces(mesh,bounds,projection,triangles=null){
+// An affine lighting plane on each projected triangle is Gouraud shading.
+// Shared vertex brightness gives neighboring triangles identical edge colors.
+export function surfaceLightingGradient(points,levels){
+  const [[x,y],[x1,y1],[x2,y2]]=points,dx1=x1-x,dy1=y1-y,dx2=x2-x,dy2=y2-y;
+  const determinant=dx1*dy2-dx2*dy1;
+  if(Math.abs(determinant)<1e-14)return null;
+  const a=levels[1]-levels[0],b=levels[2]-levels[0],gx=(a*dy2-b*dy1)/determinant,gy=(dx1*b-dx2*a)/determinant;
+  const length2=gx*gx+gy*gy,min=Math.min(...levels),max=Math.max(...levels);
+  if(!Number.isFinite(length2)||length2<1e-16||max-min<1e-7)return null;
+  const offset=(min-levels[0])/length2,span=(max-min)/length2;
+  const start=[x+gx*offset,y+gy*offset],end=[start[0]+gx*span,start[1]+gy*span];
+  return [...start,...end].every(Number.isFinite)?{start,end,min,max}:null;
+}
+export function surfaceFaces(mesh,bounds,projection,triangles=null,triangleNormals=null){
   const faces=[];
   const input=triangles?[...triangles]:[];
   for(let row=0;row<mesh.length-1;row++)for(let col=0;col<Math.min(mesh[row].length,mesh[row+1].length)-1;col++){
@@ -57,14 +70,24 @@ export function surfaceFaces(mesh,bounds,projection,triangles=null){
     if(!cell.every(finite))continue;
     input.push([cell[0],cell[1],cell[2]],[cell[0],cell[2],cell[3]]);
   }
-  for(const triangle of input){
+  for(const [index,triangle] of input.entries()){
       if(triangle.length!==3||!triangle.every(finite))continue;
       const points=clipSurfacePolygon(triangle,bounds);if(!points.length)continue;
       const [a,b,c]=triangle.map(projection.normalize),u=b.map((v,i)=>v-a[i]),v=c.map((n,i)=>n-a[i]);
       const normal=[u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0]],length=Math.hypot(...normal);
       if(!length)continue;
       const light=.35+.65*Math.abs((normal[0]*-.4+normal[1]*-.5+normal[2]*.75)/(length*Math.hypot(.4,.5,.75)));
-      faces.push({points,depth:points.reduce((sum,p)=>sum+projection.project(p)[2],0)/points.length,light,height:points.reduce((sum,p)=>sum+(p[2]-bounds.zmin)/(bounds.zmax-bounds.zmin),0)/points.length});
+      const normals=triangleNormals?.[index];
+      let lighting=null;
+      if(normals?.length===3&&normals.every(n=>finite(n)&&Math.hypot(...n)>0)){
+        const levels=normals.map((n,i)=>{
+          const scaled=n.map((v,k)=>v*(limits(bounds)[k][1]-limits(bounds)[k][0])),size=Math.hypot(...scaled);
+          const brightness=.35+.65*Math.abs((scaled[0]*-.4+scaled[1]*-.5+scaled[2]*.75)/(size*Math.hypot(.4,.5,.75)));
+          return (.65+.35*Math.max(0,Math.min(1,(triangle[i][2]-bounds.zmin)/(bounds.zmax-bounds.zmin))))*brightness;
+        });
+        lighting=surfaceLightingGradient(triangle.map(projection.project),levels);
+      }
+      faces.push({points,depth:points.reduce((sum,p)=>sum+projection.project(p)[2],0)/points.length,light,height:points.reduce((sum,p)=>sum+(p[2]-bounds.zmin)/(bounds.zmax-bounds.zmin),0)/points.length,lighting});
   }
   return faces.sort((a,b)=>a.depth-b.depth);
 }

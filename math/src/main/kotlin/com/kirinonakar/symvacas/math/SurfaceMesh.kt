@@ -5,7 +5,8 @@ import kotlin.math.*
 data class SurfaceBounds(val xmin:Double,val xmax:Double,val ymin:Double,val ymax:Double,val zmin:Double,val zmax:Double) {
     val limits=listOf(xmin to xmax,ymin to ymax,zmin to zmax)
 }
-data class SurfaceFace(val points:List<DoubleArray>,val depth:Double,val height:Double,val light:Double)
+data class SurfaceLighting(val start:DoubleArray,val end:DoubleArray,val min:Double,val max:Double)
+data class SurfaceFace(val points:List<DoubleArray>,val depth:Double,val height:Double,val light:Double,val lighting:SurfaceLighting?=null)
 
 class SurfaceProjection(val bounds:SurfaceBounds,rotation:Double,elevation:Double) {
     private val theta=Math.toRadians(rotation)
@@ -64,7 +65,20 @@ object SurfaceMesh {
         }
         return if(polygon.size>=3)polygon else emptyList()
     }
-    fun faces(mesh:List<List<DoubleArray?>>,projection:SurfaceProjection,triangles:List<List<DoubleArray>> = emptyList()):List<SurfaceFace> {
+    fun lightingGradient(points:List<DoubleArray>,levels:List<Double>):SurfaceLighting? {
+        val (p,a,b)=points;val dx1=a[0]-p[0];val dy1=a[1]-p[1];val dx2=b[0]-p[0];val dy2=b[1]-p[1]
+        val determinant=dx1*dy2-dx2*dy1
+        if(abs(determinant)<1e-14)return null
+        val l1=levels[1]-levels[0];val l2=levels[2]-levels[0]
+        val gx=(l1*dy2-l2*dy1)/determinant;val gy=(dx1*l2-dx2*l1)/determinant
+        val length2=gx*gx+gy*gy;val low=levels.min();val high=levels.max()
+        if(!length2.isFinite()||length2<1e-16||high-low<1e-7)return null
+        val offset=(low-levels[0])/length2;val span=(high-low)/length2
+        val start=doubleArrayOf(p[0]+gx*offset,p[1]+gy*offset)
+        val end=doubleArrayOf(start[0]+gx*span,start[1]+gy*span)
+        return if(start.all(Double::isFinite)&&end.all(Double::isFinite))SurfaceLighting(start,end,low,high) else null
+    }
+    fun faces(mesh:List<List<DoubleArray?>>,projection:SurfaceProjection,triangles:List<List<DoubleArray>> = emptyList(),triangleNormals:List<List<DoubleArray>> = emptyList()):List<SurfaceFace> {
         val bounds=projection.bounds;val faces=mutableListOf<SurfaceFace>()
         val input=triangles.toMutableList()
         for(row in 0 until mesh.lastIndex)for(col in 0 until min(mesh[row].size,mesh[row+1].size)-1) {
@@ -72,7 +86,7 @@ object SurfaceMesh {
             if(!cell.all(::finite))continue
             input.add(listOf(cell[0]!!,cell[1]!!,cell[2]!!));input.add(listOf(cell[0]!!,cell[2]!!,cell[3]!!))
         }
-        for(triangle in input) {
+        for((index,triangle) in input.withIndex()) {
                 if(triangle.size!=3 || !triangle.all(::finite))continue
                 val points=clipPolygon(triangle,bounds)
                 if(points.isEmpty())continue
@@ -81,7 +95,17 @@ object SurfaceMesh {
                 val normal=doubleArrayOf(u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],u[0]*v[1]-u[1]*v[0])
                 val length=sqrt(normal.sumOf {it*it});if(length==0.0)continue
                 val light=.35+.65*abs((normal[0]*-.4+normal[1]*-.5+normal[2]*.75)/(length*sqrt(.4*.4+.5*.5+.75*.75)))
-                faces.add(SurfaceFace(points,points.map {projection.project(it)[2]}.average(),points.map {(it[2]-bounds.zmin)/(bounds.zmax-bounds.zmin)}.average(),light))
+                val normals=triangleNormals.getOrNull(index)
+                val lighting=if(normals?.size==3 && normals.all {finite(it)&&sqrt(it.sumOf {v->v*v})>0}) {
+                    val levels=normals.mapIndexed {i,n->
+                        val scaled=DoubleArray(3) {axis->n[axis]*(bounds.limits[axis].second-bounds.limits[axis].first)}
+                        val size=sqrt(scaled.sumOf {it*it})
+                        val brightness=.35+.65*abs((scaled[0]*-.4+scaled[1]*-.5+scaled[2]*.75)/(size*sqrt(.4*.4+.5*.5+.75*.75)))
+                        (.65+.35*((triangle[i][2]-bounds.zmin)/(bounds.zmax-bounds.zmin)).coerceIn(0.0,1.0))*brightness
+                    }
+                    lightingGradient(triangle.map(projection::project),levels)
+                } else null
+                faces.add(SurfaceFace(points,points.map {projection.project(it)[2]}.average(),points.map {(it[2]-bounds.zmin)/(bounds.zmax-bounds.zmin)}.average(),light,lighting))
         }
         return faces.sortedBy {it.depth}
     }

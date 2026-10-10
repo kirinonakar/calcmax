@@ -21,6 +21,21 @@ class SurfaceMeshTest {
     private val bounds=SurfaceBounds(-1.0,1.0,-1.0,1.0,-1.0,1.0)
     private fun p(x:Double,y:Double,z:Double)=doubleArrayOf(x,y,z)
     private fun inside(point:DoubleArray)=point.all {it>=-1.0-1e-12&&it<=1.0+1e-12}
+    @Test fun smoothLightingReproducesVerticesAndAgreesAcrossSharedEdges() {
+        val points=listOf(p(0.0,0.0,0.0),p(2.0,0.0,0.0),p(0.0,2.0,0.0))
+        val first=SurfaceMesh.lightingGradient(points,listOf(.3,.8,.5))!!
+        val second=SurfaceMesh.lightingGradient(listOf(points[1],p(2.0,2.0,0.0),points[2]),listOf(.8,.9,.5))!!
+        fun brightness(gradient:SurfaceLighting,point:DoubleArray):Double {
+            val dx=gradient.end[0]-gradient.start[0];val dy=gradient.end[1]-gradient.start[1]
+            return gradient.min+(gradient.max-gradient.min)*((point[0]-gradient.start[0])*dx+(point[1]-gradient.start[1])*dy)/(dx*dx+dy*dy)
+        }
+        points.forEachIndexed {i,p->assertEquals(listOf(.3,.8,.5)[i],brightness(first,p),1e-12)}
+        for(t in listOf(0.0,.25,.5,.75,1.0)) {
+            val point=p(2*(1-t),2*t,0.0)
+            assertEquals(brightness(first,point),brightness(second,point),1e-12)
+        }
+        assertNull(SurfaceMesh.lightingGradient(points,listOf(.5,.5,.5)))
+    }
     @Test fun adaptiveDensityGrowsWithRangeAndZoomAndRespectsBudgetAndManualControl() {
         assertEquals(26,SurfaceMesh.sampleCount(-1.0,1.0,-1.0,1.0))
         assertEquals(80,SurfaceMesh.sampleCount(-5.0,5.0,-3.0,3.0))

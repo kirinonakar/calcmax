@@ -797,8 +797,8 @@ def graph_surface(engine, request, trees, xmin, xmax):
         names=parameter_names([expression],axes)
         sliders=resolved_parameters(engine,request,[expression],axes)
         fn=graph_function(expression,(x,y,z),sliders)
-        vertices,triangles,count=implicit_surface_samples(fn,((xmin,xmax),(ymin,ymax),(zmin,zmax)),int(request.get('surfaceSamples',26)))
-        return {"surface":[],"surfaceVertices":vertices,"surfaceTriangles":triangles,"implicitSurface":True,
+        vertices,triangles,count,normals=implicit_surface_samples(fn,((xmin,xmax),(ymin,ymax),(zmin,zmax)),int(request.get('surfaceSamples',26)))
+        return {"surface":[],"surfaceVertices":vertices,"surfaceTriangles":triangles,"surfaceNormals":normals,"implicitSurface":True,
                 "zMin":zmin,"zMax":zmax,"surfaceSamples":count,"parameters":sorted(names)}
     names = parameter_names([expression], {"x","y"})
     fn = graph_function(expression, (x,y), resolved_parameters(engine, request, [expression], {"x","y"}))

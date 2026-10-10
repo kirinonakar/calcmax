@@ -58,10 +58,17 @@ export function plotGraph(container,result,bounds,{colors=defaultGraphColors,dig
     const color=/^#[0-9a-f]{6}$/i.test(surfaceView.color||'')?surfaceView.color:colors[0],rgb=[1,3,5].map(i=>parseInt(color.slice(i,i+2),16));
     const [zmin,zmax]=surfaceZRange(result.zMin,result.zMax),box={...bounds,zmin,zmax},projection=surfaceProjection(box,rotation,elevation),scale=ih*.3*zoom;
     const triangles=(result.surfaceTriangles||[]).map(face=>face.map(i=>result.surfaceVertices?.[i]));
+    const normals=(result.surfaceTriangles||[]).map(face=>face.map(i=>result.surfaceNormals?.[i]));
     const project=p=>{const [x,y]=projection.project(p);return [w/2+x*scale,h/2+y*scale];};
     clip();
-    if(renderMode!=='wireframe')for(const face of surfaceFaces(result.surface,box,projection,triangles)){
-      const fill=`rgb(${rgb.map(v=>Math.round(v*(.65+.35*face.height)*face.light)).join(',')})`;
+    if(renderMode!=='wireframe')for(const face of surfaceFaces(result.surface,box,projection,triangles,normals)){
+      const shade=value=>`rgb(${rgb.map(v=>Math.round(v*value)).join(',')})`;
+      let fill=shade((.65+.35*face.height)*face.light);
+      if(face.lighting){
+        const {start,end,min,max}=face.lighting;
+        fill=ctx.createLinearGradient(w/2+start[0]*scale,h/2+start[1]*scale,w/2+end[0]*scale,h/2+end[1]*scale);
+        fill.addColorStop(0,shade(min));fill.addColorStop(1,shade(max));
+      }
       polygon(face.points.map(project),fill,1,renderMode==='surface-wireframe'?muted:fill,renderMode==='surface-wireframe'?.65:.35);
     }
     else{

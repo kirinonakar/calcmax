@@ -27,6 +27,11 @@ test('implicit 3D surfaces and named scaled space curves run through real WASM a
   };
   const surface=run(String.raw`x^{2}+y^{2}+z^{2}+\sin4x+\sin4y+\sin4z=a`,'surface',{parameters:{a:1}});
   assert.equal(surface.implicitSurface,true);assert.deepEqual(surface.parameters,['a']);assert.ok(surface.surfaceTriangles.length>100);
+  assert.equal(surface.surfaceNormals.length,surface.surfaceVertices.length);
+  for(const [i,point] of surface.surfaceVertices.entries()){
+    assert.ok(Math.abs(point.reduce((sum,v)=>sum+v*v+Math.sin(4*v),-1))<1e-3);
+    assert.ok(Math.abs(Math.hypot(...surface.surfaceNormals[i])-1)<1e-10);
+  }
   assert.ok(surface.surfaceVertices.some(p=>p[2]<-.5)&&surface.surfaceVertices.some(p=>p[2]>.5));
   const curve=run(String.raw`C(t)=4(\sin t,\cos t,0.6\sin(2t))`,'space',{min:0,max:2*Math.PI});
   assert.deepEqual(curve.parameters,[]);assert.deepEqual(curve.spaceCurves[0][0],[0,4,0]);

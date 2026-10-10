@@ -35,7 +35,11 @@ class Graph3dTests(unittest.TestCase):
             vertices=result['surfaceVertices'];faces=result['surfaceTriangles']
             self.assertEqual(['a'],result['parameters']);self.assertTrue(faces)
             self.assertLess(min(p[2] for p in vertices),-.9*math.sqrt(a));self.assertGreater(max(p[2] for p in vertices),.9*math.sqrt(a))
-            for point in vertices:self.assertAlmostEqual(a,sum(v*v for v in point),delta=.04)
+            for point in vertices:self.assertAlmostEqual(a,sum(v*v for v in point),delta=1e-3)
+            for point,normal in zip(vertices,result['surfaceNormals']):
+                length=math.hypot(*point)
+                self.assertAlmostEqual(1,math.hypot(*normal),delta=1e-12)
+                self.assertGreater(sum(v*n/length for v,n in zip(point,normal)),1-1e-8)
             edges=collections.Counter(tuple(sorted((face[i],face[(i+1)%3]))) for face in faces for i in range(3))
             self.assertTrue(all(count==2 for count in edges.values()))
             self.assertLess(len(vertices),len(faces))
@@ -46,9 +50,13 @@ class Graph3dTests(unittest.TestCase):
         result=self.run_graph(tree,parameters={'a':1},surfaceSamples=24)
         self.assertTrue(result['implicitSurface']);self.assertTrue(result['surfaceTriangles'])
         self.assertEqual(['a'],result['parameters'])
-        for point in result['surfaceVertices']:
+        self.assertEqual(len(result['surfaceVertices']),len(result['surfaceNormals']))
+        for point,normal in zip(result['surfaceVertices'],result['surfaceNormals']):
             residual=sum(v*v+math.sin(4*v) for v in point)-1
-            self.assertLess(abs(residual),.35)
+            self.assertLess(abs(residual),1e-3)
+            gradient=[2*v+4*math.cos(4*v) for v in point];length=math.hypot(*gradient)
+            self.assertAlmostEqual(1,math.hypot(*normal),delta=1e-12)
+            self.assertGreater(sum(v*n/length for v,n in zip(gradient,normal)),1-1e-8)
         explicit=self.run_graph(equation(sym('z'),binary('+',sym('x'),sym('y'))))
         self.assertNotIn('implicitSurface',explicit)
         for row in explicit['surface']:

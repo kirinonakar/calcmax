@@ -6,6 +6,11 @@ export function createGraphSvgContext(measure,width,height){
   const fields=['fillStyle','strokeStyle','lineWidth','lineCap','lineJoin','globalAlpha','font','textAlign'];
   const ctx={fillStyle:'#000',strokeStyle:'#000',lineWidth:1,lineCap:'butt',lineJoin:'miter',globalAlpha:1,font:'10px sans-serif',textAlign:'left',dash:[],
     setTransform(){},clearRect(){},
+    createLinearGradient(x0,y0,x1,y1){
+      const id=`surface-gradient-${definitions.length}`,stops=[];
+      definitions.push({toString:()=>`<linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}">${stops.map(([at,color])=>`<stop offset="${at}" stop-color="${escape(color)}"/>`).join('')}</linearGradient>`});
+      return {addColorStop:(at,color)=>stops.push([at,color]),toString:()=>`url(#${id})`};
+    },
     beginPath(){path=[];},
     moveTo(x,y){if(Number.isFinite(x)&&Number.isFinite(y))path.push(`M${x} ${y}`);},
     lineTo(x,y){if(Number.isFinite(x)&&Number.isFinite(y))path.push(`L${x} ${y}`);},

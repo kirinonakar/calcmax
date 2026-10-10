@@ -35,6 +35,10 @@ test('indexed implicit triangles and space curves use the actual 3D export path'
   const result={surface:[],surfaceVertices:[[-1,-1,0],[1,-1,0],[0,1,1]],surfaceTriangles:[[0,1,2]],zMin:-1,zMax:1};
   const svg=graphSvg(plotContainer(),result,bounds,{surfaceView:{renderMode:'surface'}});
   assert.match(svg,/fill="rgb\(/);assert.doesNotMatch(svg,/NaN|Infinity/);
+  const smooth=graphSvg(plotContainer(),{...result,surfaceNormals:[[0,0,1],[.5,0,.866],[0,.5,.866]]},bounds,{surfaceView:{renderMode:'surface'}});
+  assert.match(smooth,/<linearGradient[^>]+gradientUnits="userSpaceOnUse"/);
+  assert.match(smooth,/fill="url\(#surface-gradient-/);
+  assert.doesNotMatch(smooth,/\[object Object\]|NaN|Infinity/);
   const curve=graphSvg(plotContainer(),{surface:[],spaceCurves:[[[-1,0,0],[0,1,1],[1,0,0]]],zMin:-1,zMax:1},bounds);
   assert.match(curve,/stroke-width="3"/);assert.doesNotMatch(curve,/NaN|Infinity/);
 });

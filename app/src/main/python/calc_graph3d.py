@@ -84,6 +84,11 @@ def implicit_surface_samples(function, bounds, count):
                 except (ValueError,TypeError,ZeroDivisionError,OverflowError):
                     values.append(None)
     vertices=[];triangles=[];edges={}
+    def evaluate(point):
+        try:
+            value=float(function(*point))
+            return value if math.isfinite(value) else None
+        except (ValueError,TypeError,ZeroDivisionError,OverflowError):return None
     def crossing(first,last):
         a,b=values[first],values[last]
         key=(first,first) if a==0 else (last,last) if b==0 else (min(first,last),max(first,last))
@@ -92,6 +97,24 @@ def implicit_surface_samples(function, bounds, count):
         scale=max(abs(a),abs(b));aa,bb=a/scale,b/scale
         t=aa/(aa-bb)
         point=[u+(v-u)*t for u,v in zip(points[first],points[last])]
+        # Keep shared edge topology, but solve the actual function along the
+        # edge instead of leaving the vertex on a linear field approximation.
+        if a!=0 and b!=0:
+            low,high=0.0,1.0;lo,hi=a,b
+            initial=evaluate(point)
+            best=abs(initial) if initial is not None else math.inf;best_point=point
+            for _ in range(10):
+                value=evaluate(point)
+                if value is None:break
+                if abs(value)<=1e-10*max(1.0,min(abs(a),abs(b))):break
+                if abs(value)<best:best,best_point=abs(value),point
+                if (value<0)==(lo<0):low,lo=t,value;hi*=.5
+                else:high,hi=t,value;lo*=.5
+                scale=max(abs(lo),abs(hi));aa,bb=lo/scale,hi/scale
+                t=low+(high-low)*aa/(aa-bb)
+                point=[u+(v-u)*t for u,v in zip(points[first],points[last])]
+            value=evaluate(point)
+            if value is None or abs(value)>best:point=best_point
         index=len(vertices);vertices.append(point);edges[key]=index
         return index
     offsets=(0,1,n+1,n,plane,plane+1,plane+n+1,plane+n)
@@ -109,4 +132,19 @@ def implicit_surface_samples(function, bounds, count):
                     for triangle in _CASES[mask]:
                         face=[crossing(ids[a],ids[b]) for a,b in triangle]
                         if len(set(face))==3:triangles.append(face)
-    return vertices,triangles,count
+    # The gradient belongs to the mathematical surface, not to one triangle.
+    # Sharing these normals makes lighting continuous across tessellation edges.
+    normals=[]
+    for point in vertices:
+        gradient=[]
+        center=evaluate(point)
+        for axis,(low,high) in enumerate(bounds):
+            step=max((high-low)/count*1e-4,math.ulp(point[axis])*16,1e-12)
+            before=point.copy();after=point.copy();before[axis]-=step;after[axis]+=step
+            a,b=evaluate(before),evaluate(after)
+            gradient.append((b-a)/(2*step) if a is not None and b is not None else
+                            (b-center)/step if b is not None and center is not None else
+                            (center-a)/step if a is not None and center is not None else 0.0)
+        length=math.hypot(*gradient)
+        normals.append([v/length for v in gradient] if math.isfinite(length) and length>0 else [0.0,0.0,0.0])
+    return vertices,triangles,count,normals

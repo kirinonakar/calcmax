@@ -986,11 +986,19 @@ internal fun graphShadeFormula(source:String,displayDigits:Int?=null):GraphShade
             (0 until curve.length()).map {k->curve.optJSONArray(k)?.let {p->doubleArrayOf(p.optDouble(0),p.optDouble(1),p.optDouble(2)).takeIf {it.all(Double::isFinite)}}}
         }
     }
+    val triangleNormals=remember(m.graphData) {
+        val normals=m.graphData?.optJSONArray("surfaceNormals")
+        val indices=m.graphData?.optJSONArray("surfaceTriangles")
+        (0 until (indices?.length() ?: 0)).map {i->
+            val face=indices!!.getJSONArray(i)
+            (0 until face.length()).mapNotNull {k->normals?.optJSONArray(face.optInt(k,-1))?.let {p->doubleArrayOf(p.optDouble(0),p.optDouble(1),p.optDouble(2))}}
+        }
+    }
     val xmin=m.xMin;val xmax=m.xMax;val ymin=m.yMin;val ymax=m.yMax
     val (zmin,zmax)=SurfaceMesh.zRange(m.zMin ?: m.graphData?.optDouble("zMin",-1.0) ?: -1.0,m.zMax ?: m.graphData?.optDouble("zMax",1.0) ?: 1.0)
     val bounds=SurfaceBounds(xmin,xmax,ymin,ymax,zmin,zmax)
     val projection=remember(bounds,rotation,elevationDeg) {SurfaceProjection(bounds,rotation.toDouble(),elevationDeg.toDouble())}
-    val faces=remember(mesh,triangles,projection,renderMode) {if(renderMode=="wireframe")emptyList() else SurfaceMesh.faces(mesh,projection,triangles)}
+    val faces=remember(mesh,triangles,triangleNormals,projection,renderMode) {if(renderMode=="wireframe")emptyList() else SurfaceMesh.faces(mesh,projection,triangles,triangleNormals)}
     val surfaceColor=remember(colorHex) {runCatching {Color(android.graphics.Color.parseColor(colorHex))}.getOrDefault(Color(0xFF007B68))}
     ExportableGraphCanvas(modifier.background(c.display).semantics { contentDescription="Three dimensional surface. Drag to rotate freely, pinch to zoom, and adjust x, y and z ranges." },c.display,exports) {
         if(mesh.isEmpty() && triangles.isEmpty() && spaceCurves.isEmpty())return@ExportableGraphCanvas
@@ -1017,8 +1025,18 @@ internal fun graphShadeFormula(source:String,displayDigits:Int?=null):GraphShade
                     face.points.forEachIndexed { index,point->val p=project(point);if(index==0)moveTo(p.x,p.y)else lineTo(p.x,p.y) };close()
                 }
                 val color=lerp(Color.Black,surfaceColor,((.65+.35*face.height)*face.light).toFloat())
-                drawPath(path,color)
-                drawPath(path,if(renderMode=="surface-wireframe")c.muted else color,style=Stroke(if(renderMode=="surface-wireframe").65.dp.toPx() else .35.dp.toPx()))
+                val lighting=face.lighting
+                if(lighting!=null) {
+                    val start=Offset(size.width/2+lighting.start[0].toFloat()*scale,size.height/2+lighting.start[1].toFloat()*scale)
+                    val end=Offset(size.width/2+lighting.end[0].toFloat()*scale,size.height/2+lighting.end[1].toFloat()*scale)
+                    drawGraphGradientPath(drawContext.canvas.nativeCanvas,path.asAndroidPath(),start,end,
+                        lerp(Color.Black,surfaceColor,lighting.min.toFloat()).toArgb(),lerp(Color.Black,surfaceColor,lighting.max.toFloat()).toArgb(),
+                        if(renderMode=="surface-wireframe")0f else .35.dp.toPx())
+                    if(renderMode=="surface-wireframe")drawPath(path,c.muted,style=Stroke(.65.dp.toPx()))
+                } else {
+                    drawPath(path,color)
+                    drawPath(path,if(renderMode=="surface-wireframe")c.muted else color,style=Stroke(if(renderMode=="surface-wireframe").65.dp.toPx() else .35.dp.toPx()))
+                }
             }
             if(renderMode=="wireframe") {
             val rows=Path();val columns=Path()

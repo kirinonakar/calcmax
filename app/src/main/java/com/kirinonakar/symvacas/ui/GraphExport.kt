@@ -13,6 +13,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -118,8 +119,32 @@ internal class GraphExportImage(private val svg:String?,private val picture:Pict
 
 /** The graph uses paths, lines, circles and native text. Record those same calls
  * as vectors. Paint.getFillPath preserves dashed strokes, caps and joins. */
+internal fun drawGraphGradientPath(canvas:android.graphics.Canvas,path:android.graphics.Path,start:Offset,end:Offset,low:Int,high:Int,edgeWidth:Float) {
+    val paint=Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color=low
+        style=if(edgeWidth>0)Paint.Style.FILL_AND_STROKE else Paint.Style.FILL
+        strokeWidth=edgeWidth
+        strokeJoin=Paint.Join.ROUND
+    }
+    if(canvas is GraphSvgCanvas)canvas.drawGradientPath(path,paint,start,end,low,high)
+    else {
+        paint.shader=android.graphics.LinearGradient(start.x,start.y,end.x,end.y,low,high,android.graphics.Shader.TileMode.CLAMP)
+        canvas.drawPath(path,paint)
+    }
+}
+
 private class GraphSvgCanvas(private val width:Int,private val height:Int):android.graphics.Canvas() {
     private val elements=StringBuilder()
+    private val gradients=StringBuilder()
+    private var gradientCount=0
+    private var gradientFill:String?=null
+    fun drawGradientPath(path:android.graphics.Path,paint:Paint,start:Offset,end:Offset,low:Int,high:Int) {
+        val id="surface-gradient-${gradientCount++}"
+        fun rgb(value:Int)="#"+Integer.toHexString(value and 0xffffff).padStart(6,'0')
+        gradients.append("<linearGradient id=\"$id\" gradientUnits=\"userSpaceOnUse\" x1=\"${start.x}\" y1=\"${start.y}\" x2=\"${end.x}\" y2=\"${end.y}\"><stop offset=\"0\" stop-color=\"${rgb(low)}\"/><stop offset=\"1\" stop-color=\"${rgb(high)}\"/></linearGradient>")
+        gradientFill="url(#$id)"
+        try {drawPath(path,paint)} finally {gradientFill=null}
+    }
     private fun escape(text:String)=text.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;").replace("\"","&quot;")
     private fun color(paint:Paint)="#"+Integer.toHexString(paint.color and 0xffffff).padStart(6,'0')
     private fun opacity(paint:Paint)=paint.alpha/255f
@@ -141,7 +166,7 @@ private class GraphSvgCanvas(private val width:Int,private val height:Int):andro
             data.append(if(i==0||fraction==previousFraction)"M" else "L").append(x).append(' ').append(y).append(' ')
             previousFraction=fraction
         }
-        val style=if(filled)"fill=\"${color(paint)}\"" else "fill=\"none\" stroke=\"${color(paint)}\" stroke-width=\"1\""
+        val style=if(filled)"fill=\"${gradientFill ?: color(paint)}\"" else "fill=\"none\" stroke=\"${color(paint)}\" stroke-width=\"1\""
         val rule=if(geometry.fillType==android.graphics.Path.FillType.EVEN_ODD)"evenodd" else "nonzero"
         elements.append("<path d=\"$data\" $style fill-rule=\"$rule\" opacity=\"${opacity(paint)}\" transform=\"${transform()}\"/>")
     }
@@ -158,5 +183,5 @@ private class GraphSvgCanvas(private val width:Int,private val height:Int):andro
         val anchor=when(paint.textAlign){Paint.Align.CENTER->"middle";Paint.Align.RIGHT->"end";else->"start"}
         elements.append("<text x=\"$x\" y=\"$y\" fill=\"${color(paint)}\" opacity=\"${opacity(paint)}\" font-family=\"sans-serif\" font-size=\"${paint.textSize}\" text-anchor=\"$anchor\" font-weight=\"${if(paint.isFakeBoldText)"bold" else "normal"}\" transform=\"${transform()}\">${escape(text)}</text>")
     }
-    fun document()="<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"$width\" height=\"$height\" viewBox=\"0 0 $width $height\"><defs><clipPath id=\"viewport\"><rect width=\"$width\" height=\"$height\"/></clipPath></defs><g clip-path=\"url(#viewport)\">$elements</g></svg>"
+    fun document()="<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"$width\" height=\"$height\" viewBox=\"0 0 $width $height\"><defs><clipPath id=\"viewport\"><rect width=\"$width\" height=\"$height\"/></clipPath>$gradients</defs><g clip-path=\"url(#viewport)\">$elements</g></svg>"
 }
