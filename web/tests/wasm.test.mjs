@@ -15,6 +15,30 @@ import {graphInputTree} from '../graph-workspace.js';
 // scenario below explicitly loads its own interpreter to keep startup coverage.
 let sharedRuntime;
 
+test('expanded statistical designs, oblique rotation and FIML run in real WASM',async()=>{
+  const py=await runtime(),cases=JSON.parse(readFileSync(new URL('../../tests/fixtures/statistics_extension_reference.json',import.meta.url),'utf8')).cases;
+  const indices=[0,1,4,5,6,7,8,9,10];
+  for(const at of indices){
+    const item=cases[at],definition=advancedStatisticsSchema.find(d=>d.id===item.function);
+    const rows=item.arguments[0].map(row=>row.map(String));
+    let settings={};
+    if(item.function==='efa')settings={factors:'2',rotation:item.arguments[2],extraction:item.arguments[3],parallelSamples:String(item.arguments[4]||0),seed:String(item.arguments[5]||0)};
+    else if(item.function==='manova')settings=item.arguments[1]==='factorial'?{design:'factorial',factorColumns:'0,1',responses:'2,3',order:'2'}:{design:'repeated',occasions:'3'};
+    else settings={cross:(item.arguments[item.function==='sem'?3:2]||[]).map(pair=>pair.join(',')).join(';'),missing:item.arguments[3]==='fiml'?'fiml':'complete'};
+    if(at===10){rows.forEach((row,i)=>row.unshift(String(item.arguments[4][i])));settings={...settings,columns:'1,2,3,4,5,6',groupMode:'multi',group:'0',invariance:'metric'};}
+    const source=guidedStatisticsCommand(definition,rows,settings);
+    py.globals.set('payload',JSON.stringify({tree:parse(source),precision:15,budget:60}));
+    const result=JSON.parse(py.runPython('calc_engine.dispatch(payload)'));
+    assert.equal(result.ok,true,`${item.function} case ${at}: ${result.error}`);
+    assert.equal(result.statisticsReport.analysis,item.function);
+    const has=title=>result.statisticsReport.sections.some(s=>s.title===title);
+    if(item.function==='efa')assert.ok(has('Factor correlations')&&has('Structure loadings'));
+    if(item.function==='manova')assert.ok(has('Multivariate tests'));
+    if(at===9)assert.ok(has('Indicator means'));
+    if(at===10)assert.ok(has('Group summary'));
+  }
+});
+
 test('social-science forms and weighted agreement run in real WASM',async()=>{
   const py=await runtime();
   const ids=['cronbach','efa','cfa','sem','manova','mediation','moderation','cramerv','phi','cohenkappa','dunn','discriminantanalysis','quantreg','zeroinflated','tobit','hcluster'];

@@ -25,20 +25,42 @@ export function socialStatisticsPlan(id,rows,opts,columnLabels=[]){
     plan.labels.forEach((at,i)=>{labels[`sample:${i+1}`]=opts.grouping==='groups'?at:label(Number(at),`Sample ${i+1}`);});
     expression=`dunn(${table(plan.samples)},${opts.adjustment})`;
   }else if(['cronbach','efa','cfa','sem','hcluster'].includes(id)){
-    const indices=columns('columns'),selected=complete(indices);featureLabels(indices);
-    const suffix=id==='cronbach'?opts.mode:id==='efa'?`${opts.factors},${opts.rotation}`:id==='hcluster'?`${opts.clusters},${opts.linkage},${opts.standardize}`:null;
+    const multigroup=['cfa','sem'].includes(id)&&opts.groupMode==='multi',group=multigroup?col('group'):null;
+    const indices=columns('columns',multigroup?[group]:[]),selected=['cfa','sem'].includes(id)&&opts.missing==='fiml'?rows.map(row=>indices.map(i=>String(row[i]??'').trim()||'NA')):complete(indices);featureLabels(indices);
+    let efaSuffix=`${opts.factors},${opts.rotation}`;
+    const samples=String(opts.factors)==='parallel'&&Number(opts.parallelSamples||0)===0?'100':opts.parallelSamples||'0';
+    if(id==='efa'&&(opts.extraction==='pca'||Number(samples)>0||String(opts.factors)==='parallel'))efaSuffix+=`,${opts.extraction||'pa'},${samples},${opts.seed||'0'},${opts.percentile||'0.95'}`;
+    const suffix=id==='cronbach'?opts.mode:id==='efa'?efaSuffix:id==='hcluster'?`${opts.clusters},${opts.linkage},${opts.standardize}`:null;
     if(suffix!==null)expression=`${id}(${table(selected)},${suffix})`;
     else{
       const factors=String(opts.factors).split(',').map(value=>value.trim());
       if(factors.length!==indices.length||factors.some(value=>!/^\d+$/.test(value)||Number(value)<1))throw new Error('Specify one positive factor ID per selected indicator');
       const paths=String(opts.paths??'').trim().split(';').filter(Boolean).map(value=>value.split(',').map(token=>token.trim()));
       if(paths.some(pair=>pair.length!==2||pair.some(value=>!/^\d+$/.test(value))))throw new Error('Use latent paths like 1,2;2,3');
-      expression=`${id}(${table(selected)},${list(factors)}${id==='sem'?','+table(paths):''})`;
+      const cross=String(opts.cross??'').trim().split(';').filter(Boolean).map(value=>value.split(',').map(token=>token.trim()));
+      if(cross.some(pair=>pair.length!==2||pair.some(value=>!/^\d+$/.test(value)||Number(value)<1)))throw new Error('Use cross-loadings like 2,2;5,1 in selected indicator order');
+      let extra='';
+      if(cross.length||opts.missing==='fiml'||multigroup){
+        let ids=[];
+        if(multigroup){const groupRows=complete([group]),groups=[...new Set(groupRows.map(row=>row[0]))];ids=groupRows.map(row=>groups.indexOf(row[0])+1);groups.forEach((name,i)=>{labels[`group:${i+1}`]=name;});}
+        extra=`,${table(cross)},${opts.missing||'complete'},${list(ids)},${opts.invariance||'configural'}`;
+      }
+      expression=`${id}(${table(selected)},${list(factors)}${id==='sem'?','+table(paths):''}${extra})`;
     }
   }else if(id==='manova'){
+    if(opts.design==='factorial'){
+      const factors=columns('factorColumns'),responses=columns('responses',factors),selected=complete([...factors,...responses]);
+      const categories=factors.map((_,i)=>[...new Set(selected.map(row=>row[i]))]);
+      factors.forEach((at,i)=>{labels[`factor:${i+1}`]=label(at,`Factor ${i+1}`);});
+      responses.forEach((at,i)=>{labels[`response:${i+1}`]=label(at,`Response ${i+1}`);});
+      expression=`manova(${table(selected.map(row=>row.map((v,i)=>i<factors.length?categories[i].indexOf(v)+1:v)))},factorial,${factors.length},${opts.order||'2'})`;
+    }else if(opts.design==='repeated'){
+      const responses=columns('responses');expression=`manova(${table(complete(responses))},repeated,${opts.occasions||'3'})`;
+    }else{
     const group=col('group'),responses=columns('responses',[group]),selected=complete([group,...responses]),groups=[...new Set(selected.map(row=>row[0]))];
     groups.forEach((name,i)=>{labels[`group:${i+1}`]=name;});responses.forEach((at,i)=>{labels[`response:${i+1}`]=label(at,`Response ${i+1}`);});
     expression=`manova(${table(selected.map(row=>[groups.indexOf(row[0])+1,...row.slice(1)]))})`;
+    }
   }else if(['mediation','moderation'].includes(id)){
     const x=col('x'),middle=col('middle'),response=col('response'),covariates=columns('covariates',[x,middle,response],true),indices=[x,middle,...covariates];
     indices.forEach((at,i)=>{labels[`x${i+1}`]=label(at,`x${i+1}`);});labels['x1:x2']=`${labels.x1}:${labels.x2}`;

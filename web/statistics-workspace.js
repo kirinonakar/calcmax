@@ -147,7 +147,7 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
     const selected=plan.samples.map(sample=>value('statistics-grouping')==='groups'&&!plan.categorical?sample.label:labels[names.indexOf(sample.label)]||sample.label);
     return plan.categorical?statisticsCategoryLabels(plan.pairs,...selected):Object.fromEntries(selected.map((label,i)=>[`sample:${i+1}`,label]));
   }
-  $('regression-kind').onchange=()=>{invalidateRegression();statisticsControls();$('regression-custom').hidden=regressionMode()!=='custom';$('regression-penalty-label').hidden=!['linear','multiple','logistic'].includes(value('regression-kind'));$('regression-lasso').hidden=!['ridge','lasso','elasticnet','logisticridge','logisticlasso','logisticelasticnet'].includes(regressionMode());$('regression-ratio-label').hidden=!regressionMode().endsWith('elasticnet');$('regression-nuts').hidden=!regressionMode().startsWith('bayes')||value('regression-bayesian-method')!=='nuts';setText($('regression-bayesian-method').options[0],regressionMode()==='bayeslinear'?'Conjugate (exact)':'Laplace approximation');$('regression-bayesian').hidden=!regressionMode().startsWith('bayes');$('regression-variance-shape').closest('label').hidden=regressionMode()!=='bayeslinear';$('regression-variance-scale').closest('label').hidden=regressionMode()!=='bayeslinear';$('regression-forest').hidden=!regressionMode().startsWith('randomforest');$('regression-degree').closest('label').hidden=regressionMode()!=='polynomial';$('regression-data-help').hidden=!['multiple','logistic','polynomial','ridge','lasso','elasticnet','logisticridge','logisticlasso','logisticelasticnet','randomforest','randomforestclassifier','randomforestregressor','bayeslinear','bayeslogistic'].includes(regressionMode());$('regression-response').closest('label').hidden=!['multiple','logistic','polynomial','ridge','lasso','elasticnet','logisticridge','logisticlasso','logisticelasticnet','randomforest','randomforestclassifier','randomforestregressor','bayeslinear','bayeslogistic'].includes(regressionMode());setText($('regression-data-help'),(regressionMode().startsWith('logistic')||regressionMode()==='bayeslogistic')?'Selected column is response; others are predictors. Logistic response: 0 or 1.':'Selected column is response; others are predictors.');refreshWorkspaceMath();};
+  $('regression-kind').onchange=()=>{invalidateRegression();statisticsControls();$('regression-custom').hidden=regressionMode()!=='custom';$('regression-penalty-label').hidden=!['linear','multiple','logistic'].includes(value('regression-kind'));$('regression-lasso').hidden=!['ridge','lasso','elasticnet','logisticridge','logisticlasso','logisticelasticnet'].includes(regressionMode());$('regression-ratio-label').hidden=!regressionMode().endsWith('elasticnet');$('regression-nuts').hidden=!regressionMode().startsWith('bayes')||value('regression-bayesian-method')!=='nuts';setText($('regression-bayesian-method').options[0],regressionMode()==='bayeslinear'?'Conjugate (exact)':'Laplace approximation');$('regression-bayesian').hidden=!regressionMode().startsWith('bayes');$('regression-variance-shape').closest('label').hidden=regressionMode()!=='bayeslinear';$('regression-variance-scale').closest('label').hidden=regressionMode()!=='bayeslinear';$('regression-forest').hidden=!regressionMode().startsWith('randomforest');$('regression-degree').closest('label').hidden=regressionMode()!=='polynomial';$('regression-data-details').hidden=!['multiple','logistic','polynomial','ridge','lasso','elasticnet','logisticridge','logisticlasso','logisticelasticnet','randomforest','randomforestclassifier','randomforestregressor','bayeslinear','bayeslogistic'].includes(regressionMode());$('regression-response').closest('label').hidden=!['multiple','logistic','polynomial','ridge','lasso','elasticnet','logisticridge','logisticlasso','logisticelasticnet','randomforest','randomforestclassifier','randomforestregressor','bayeslinear','bayeslogistic'].includes(regressionMode());setText($('regression-data-help'),(regressionMode().startsWith('logistic')||regressionMode()==='bayeslogistic')?'Selected column is response; others are predictors. Logistic response: 0 or 1.':'Selected column is response; others are predictors.');refreshWorkspaceMath();};
   $('regression-kind').onchange();
   for(const id of ['regression-nuts-samples','regression-nuts-warmup','regression-nuts-max-depth','regression-nuts-seed','regression-nuts-chains','regression-prior-sd','regression-credible-level','regression-variance-shape','regression-variance-scale','regression-alpha','regression-ratio','regression-trees','regression-depth','regression-seed'])$(id).addEventListener('input',()=>{invalidateRegression();refreshWorkspaceMath();});
   $('regression-bayesian-method').onchange=()=>{$('regression-kind').onchange();persist();};
@@ -216,7 +216,7 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
     filterMenu('regression-response',column=>Number(column)<columns,String(columns-1));
     if(kind!=='list'&&!automaticResponse())state.fields['regression-response-choice']=value('regression-response');
     if(filterMenu('regression-kind',model=>kind==='xyz'||kind.startsWith('columns:')?columns>1&&['multiple','logistic','randomforest','bayeslinear','bayeslogistic'].includes(model):kind==='xy'&&model!=='multiple',kind==='xyz'||kind.startsWith('columns:')?'multiple':'linear'))$('regression-kind').onchange();
-    $('regression-data-help').hidden=!['multiple','logistic','polynomial','ridge','lasso','elasticnet','logisticridge','logisticlasso','logisticelasticnet','randomforest','randomforestclassifier','randomforestregressor','bayeslinear','bayeslogistic'].includes(regressionMode());
+    $('regression-data-details').hidden=!['multiple','logistic','polynomial','ridge','lasso','elasticnet','logisticridge','logisticlasso','logisticelasticnet','randomforest','randomforestclassifier','randomforestregressor','bayeslinear','bayeslogistic'].includes(regressionMode());
     $('regression-response').closest('label').hidden=!['multiple','logistic','polynomial','ridge','lasso','elasticnet','logisticridge','logisticlasso','logisticelasticnet','randomforest','randomforestclassifier','randomforestregressor','bayeslinear','bayeslogistic'].includes(regressionMode());
     $('regression-firth-label').hidden=regressionMode()!=='logistic';
     $('regression-alpha').disabled=$('regression-alpha-cv').checked;
@@ -304,9 +304,15 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
   function editorRows(){return value('statistics-data').trim()?csvRows(value('statistics-data'),{preserveEmptyRows:true}):[];}
   // Number every logical line; the gutter shares the textarea line height and mirrors its vertical scroll.
   function updateLineNumbers(){
-    const field=$('statistics-data'),gutter=$('statistics-line-numbers'),count=field.value.split('\n').length,numbers=[];
-    for(let line=1;line<=count;line++)numbers.push(line);
-    gutter.textContent=numbers.join('\n');syncLineNumberScroll();
+    const field=$('statistics-data'),gutter=$('statistics-line-numbers'),lines=field.value.split('\n');
+    gutter.replaceChildren(...lines.map((_,index)=>{
+      const row=element('div','','graph-input-line'),number=element('span',String(index+1));
+      const remove=control('×',()=>{
+        const updated=field.value.split('\n');updated.splice(index,1);field.value=updated.join('\n');
+        field.dispatchEvent(new Event('input',{bubbles:true}));
+      });
+      remove.setAttribute('aria-label',`${t('Delete')} ${index+1}`);row.append(remove,number);return row;
+    }));syncLineNumberScroll();
   }
   function syncLineNumberScroll(){$('statistics-line-numbers').style.transform=`translateY(${-$('statistics-data').scrollTop}px)`;}
   // The grid edits only the rows below a detected header, so the header row has to survive every write-back.
@@ -351,7 +357,7 @@ export function createStatisticsWorkspace({state,engine,ui,persist,refreshWorksp
   $('statistics-table-toggle').onclick=()=>{
     const grid=$('statistics-grid'),tableMode=grid.hidden;
     if(tableMode)try{statisticsGrid();}catch(exc){error(exc.message);return;}
-    grid.hidden=!tableMode;$('statistics-data').closest('label').hidden=tableMode;
+    grid.hidden=!tableMode;$('statistics-data').closest('.statistics-direct-input').hidden=tableMode;
     setText($('statistics-table-toggle'),tableMode?'Direct input':'Table editor');
     $('statistics-table-toggle').setAttribute('aria-pressed',String(tableMode));
   };

@@ -9,6 +9,7 @@ export const nativeKorean = {
   "Reliability": "신뢰도",
   "Cronbach α reliability": "Cronbach α 신뢰도",
   "Assumptions": "분석 가정",
+  "Model details": "모델 상세 설명",
   "Reliability & association": "신뢰도·연관성",
   "Weights": "가중치",
   "Cohen κ": "Cohen κ",

@@ -15,10 +15,12 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -77,6 +79,7 @@ internal val LocalStatisticsCollapseRequest=staticCompositionLocalOf {0}
     val fieldFocus=remember {FocusRequester()}
     var focused by remember {mutableStateOf(false)}
     val lineHeight=24.sp
+    val rowHeight=with(LocalDensity.current){lineHeight.toDp()}
     // Keep the first/last line leading and font metrics identical in both columns.
     val style=MaterialTheme.typography.bodyLarge.copy(fontFamily=FontFamily.Monospace,lineHeight=lineHeight,color=c.ink,
         platformStyle=PlatformTextStyle(includeFontPadding=false),
@@ -85,8 +88,15 @@ internal val LocalStatisticsCollapseRequest=staticCompositionLocalOf {0}
     Column(Modifier.fillMaxWidth()) {
         Text(label,fontSize=11.sp,color=c.muted)
         Row(Modifier.fillMaxWidth().height(if(expanded)360.dp else 180.dp).border(1.dp,if(focused)c.accent else c.grid)) {
-            Box(Modifier.width(38.dp).fillMaxHeight().background(c.scientific).verticalScroll(vertical).then(statCellTouch(fieldFocus))) {
-                Text((1..lineCount).joinToString("\n"),Modifier.fillMaxWidth().padding(horizontal=4.dp,vertical=10.dp),style=style.copy(color=c.muted),textAlign=TextAlign.End,softWrap=false)
+            Column(Modifier.width(62.dp).fillMaxHeight().background(c.scientific).verticalScroll(vertical).padding(vertical=10.dp)) {
+                repeat(lineCount) {index->
+                    Row(Modifier.fillMaxWidth().height(rowHeight),verticalAlignment=Alignment.CenterVertically) {
+                        StatRemoveRow(Modifier.width(26.dp).fillMaxHeight(),index) {
+                            onValue(value.split('\n').filterIndexed {i,_->i!=index}.joinToString("\n"))
+                        }
+                        Text("${index+1}",Modifier.weight(1f).padding(end=4.dp).then(statCellTouch(fieldFocus)),style=style.copy(color=c.muted),textAlign=TextAlign.End,softWrap=false)
+                    }
+                }
             }
             VerticalDivider(color=c.grid,thickness=1.dp)
             BoxWithConstraints(Modifier.weight(1f).fillMaxHeight().then(statCellTouch(fieldFocus))) {
@@ -101,6 +111,14 @@ internal val LocalStatisticsCollapseRequest=staticCompositionLocalOf {0}
                 }
             }
         }
+    }
+}
+
+@Composable private fun StatRemoveRow(modifier:Modifier,index:Int,onRemove:()->Unit) {
+    val c=LocalInstrument.current
+    val description=tr("Delete")+" ${index+1}"
+    Box(modifier.clickable(role=Role.Button,onClick=onRemove).semantics {contentDescription=description},contentAlignment=Alignment.Center) {
+        Text("×",fontSize=16.sp,color=c.muted)
     }
 }
 
@@ -275,13 +293,14 @@ internal val LocalStatisticsCollapseRequest=staticCompositionLocalOf {0}
                 Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
                     Column(Modifier.width(tableWidth).border(1.dp,grid).testTag("statistics-table")) {
                         Row(Modifier.fillMaxWidth().height(30.dp).background(LocalInstrument.current.scientific)) {
+                            StatHeader("",Modifier.width(32.dp)); VerticalDivider(color=grid,thickness=1.dp)
                             StatHeader("#",Modifier.width(30.dp)); VerticalDivider(color=grid,thickness=1.dp)
                             tableColumns.forEach {name->StatHeader(name,Modifier.weight(1f));VerticalDivider(color=grid,thickness=1.dp)}
-                            StatHeader("",Modifier.width(48.dp))
                         }
                         HorizontalDivider(color=grid,thickness=1.dp)
                         if(tableColumns.size>1) {
                             Row(Modifier.fillMaxWidth().height(30.dp).background(LocalInstrument.current.scientific)) {
+                                Box(Modifier.width(32.dp).fillMaxHeight()); VerticalDivider(color=grid,thickness=1.dp)
                                 Box(Modifier.width(30.dp).fillMaxHeight()); VerticalDivider(color=grid,thickness=1.dp)
                                 tableColumns.forEachIndexed {column,_->
                                     Row(Modifier.weight(1f).fillMaxHeight()) {
@@ -299,7 +318,6 @@ internal val LocalStatisticsCollapseRequest=staticCompositionLocalOf {0}
                                     }
                                     VerticalDivider(color=grid,thickness=1.dp)
                                 }
-                                Box(Modifier.width(48.dp).fillMaxHeight())
                             }
                             HorizontalDivider(color=grid,thickness=1.dp)
                         }
@@ -307,6 +325,8 @@ internal val LocalStatisticsCollapseRequest=staticCompositionLocalOf {0}
                             parsedRows.forEachIndexed {index,row->
                                 val cellFocus=remember(index,tableColumns.size) {List(tableColumns.size){FocusRequester()} }
                                 Row(Modifier.fillMaxWidth().height(44.dp)) {
+                                    StatRemoveRow(Modifier.width(32.dp).fillMaxHeight(),index) {data=statisticsReplaceDataRows(data,parsedRows.filterIndexed {i,_->i!=index})}
+                                    VerticalDivider(color=grid,thickness=1.dp)
                                     Box(Modifier.width(30.dp).fillMaxHeight().then(statCellTouch(cellFocus.first())),contentAlignment=Alignment.Center){Text("${index+1}",fontSize=12.sp,color=LocalInstrument.current.muted)}
                                     VerticalDivider(color=grid,thickness=1.dp)
                                     repeat(tableColumns.size) {column->
@@ -315,7 +335,6 @@ internal val LocalStatisticsCollapseRequest=staticCompositionLocalOf {0}
                                         }
                                         VerticalDivider(color=grid,thickness=1.dp)
                                     }
-                                    Box(Modifier.width(48.dp).fillMaxHeight(),contentAlignment=Alignment.Center){SmallAction("−"){data=statisticsReplaceDataRows(data,parsedRows.filterIndexed {i,_->i!=index})}}
                                 }
                                 if(index<parsedRows.lastIndex)HorizontalDivider(color=grid,thickness=1.dp)
                             }
@@ -448,7 +467,7 @@ internal val LocalStatisticsCollapseRequest=staticCompositionLocalOf {0}
                             Text(tr("Cross-validate α (5 folds)"),fontSize=12.sp,color=LocalInstrument.current.ink)
                         }
                         if(regularization=="elasticnet")Field(l1Ratio,"L1 ratio (0–1)",Modifier.fillMaxWidth()){m.clearRegression();l1Ratio=it}
-                        Text(tr("Predictors standardized; coefficients in original units."),fontSize=11.sp,color=LocalInstrument.current.muted)
+                        StatisticsExplanation("Model details",tr("Predictors standardized; coefficients in original units."),"statistics-regularized-help")
                     } else {
                         StatisticsSelectionTitle("Forest task")
                         val tasks=mapOf("Auto (0/1 → classification)" to "auto","Regression" to "regression","Binary classification" to "classification")
@@ -477,7 +496,7 @@ internal val LocalStatisticsCollapseRequest=staticCompositionLocalOf {0}
                             Field(nutsSeed,"Random seed",Modifier.weight(1f)){m.clearRegression();nutsSeed=it}
                             Spacer(Modifier.weight(1f))
                         }
-                        Text(tr("NUTS adapts trajectory length; step size adapts during warmup. Check rank-normalized R-hat, bulk/tail ESS and divergences."),fontSize=11.sp,color=LocalInstrument.current.muted)
+                        StatisticsExplanation("Model details",tr("NUTS adapts trajectory length; step size adapts during warmup. Check rank-normalized R-hat, bulk/tail ESS and divergences."),"statistics-nuts-help")
                     }
 
                     Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
@@ -488,9 +507,9 @@ internal val LocalStatisticsCollapseRequest=staticCompositionLocalOf {0}
                         Field(bayesianShape,"Variance prior shape",Modifier.weight(1f)){m.clearRegression();bayesianShape=it}
                         Field(bayesianScale,"Variance prior scale",Modifier.weight(1f)){m.clearRegression();bayesianScale=it}
                     }
-                    Text(tr("Zero-mean priors include the intercept on standardized predictors; coefficients in original units."),fontSize=11.sp,color=LocalInstrument.current.muted)
+                    StatisticsExplanation("Model details",tr("Zero-mean priors include the intercept on standardized predictors; coefficients in original units."),"statistics-prior-help")
                 }
-                if(dataKind!="list"&&regression in listOf("multiple","logistic","bayeslinear","bayeslogistic"))Text(tr(if(regression in listOf("logistic","bayeslogistic"))"Selected column is response; others are predictors. Logistic response: 0 or 1." else "Selected column is response; others are predictors."),fontSize=11.sp,color=LocalInstrument.current.muted)
+                if(dataKind!="list"&&regression in listOf("multiple","logistic","bayeslinear","bayeslogistic"))StatisticsExplanation("Model details",tr(if(regression in listOf("logistic","bayeslogistic"))"Selected column is response; others are predictors. Logistic response: 0 or 1." else "Selected column is response; others are predictors."),"statistics-regression-data-help",regression)
                 if(dataColumns.size>1&&(regularized||regression in listOf("multiple","logistic","polynomial","randomforest","bayeslinear","bayeslogistic"))) {
                     StatisticsSelectionTitle("Dependent variable")
                     val responseLabels=statisticsColumnLabels(data,dataKind)

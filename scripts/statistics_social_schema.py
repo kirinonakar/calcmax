@@ -31,20 +31,45 @@ SPECS=[
  ('hcluster','Hierarchical clustering','계층적 군집분석','table',',2,ward,1','[[1,1],[1,2],[2,1],[8,8],[8,9],[9,8]]','Independent agglomerative analysis; clusters, single/complete/average/Ward Euclidean linkage, standardize 1/0. Returns all merges, heights, sizes and cut assignments. Leaves 1…n, merge nodes n+1…2n−1.','독립 응집 분석; 군집 수·single/complete/average/Ward 유클리드 연결·표준화 1/0. 전체 병합·거리·크기·절단 배정. 잎 1…n, 병합 노드 n+1…2n−1.'),
 ]
 
+# Keep executable defaults stable; expanded options are exposed by both guided UIs.
+EXPANDED_HELP={
+ 'efa':('Pearson correlation extraction: principal axis (pa, default; SMC start) or principal components (pca). Factor count or parallel; rotation varimax, none, promax (power 4, Kaiser) or oblimin (delta 0). Arguments: data,count,rotation,extraction,parallel simulations (0 off),seed,percentile (0.95). parallel automatically uses 100 simulations when omitted. Horn normal simulations use component roots for PCA or SMC-reduced roots for principal axis. Displays pattern/structure loadings, factor correlations and regression scores. PCA is not common-factor analysis; select the same extraction as the comparison software. Oblique squared pattern loadings are not additive variance. Complete numeric rows; no polychoric estimator.',
+        'Pearson 상관 추출: 주축요인법(pa, 기본; SMC 초기값) 또는 주성분(pca). 요인 수 또는 parallel; varimax·none·promax(지수 4, Kaiser)·oblimin(delta 0). 인수: 자료,요인 수,회전,추출,병렬분석 횟수(0=끔),시드,백분위(0.95). parallel 자동 선택은 횟수 생략 시 100회. Horn 정규 시뮬레이션에서 PCA는 성분 고유값, 주축요인법은 SMC 축소 고유값을 비교합니다. 패턴·구조 적재량, 요인 상관, 회귀 점수 제공. 주성분은 공통요인 분석과 다르므로 비교 소프트웨어와 추출법을 맞추세요. 사각 패턴 적재량 제곱합은 가산 설명분산이 아닙니다. 완전한 숫자 행; 다분상관 미지원.'),
+ 'cfa':('Continuous normal-theory ML, with optional FIML and configural/metric multi-group models. Arguments: data,primary factor IDs,cross-loadings [[indicator,factor],...],complete/fiml,row-aligned group IDs [],configural/metric. Positions refer to selected indicator order. Three primary indicators per factor; first primary loading fixed at 1, marker cross-loadings forbidden. FIML uses NA/blank cells, observed-data likelihood and free means under MCAR/MAR; all-empty rows excluded. Metric shares raw loadings while means, factor variances, errors and paths remain group free; this is not scalar/strict invariance. χ²/df/p, CFI, TLI, RMSEA; SRMR for single complete group only. No ordinal/robust estimator, correlated errors or general equality constraints; not a full AMOS/lavaan replacement.',
+        '연속형 정규이론 ML, 선택적 FIML·다집단 형태/측정 불변성 모형. 인수: 자료,주 요인 ID,교차적재 [[지표,요인],...],complete/fiml,행별 집단 ID [],configural/metric. 지표 번호는 선택 순서 기준. 요인당 주 지표 최소 3개·첫 주 적재량 1 고정, 기준 지표 교차적재 금지. FIML은 NA/빈 셀을 관측자료 우도·자유 평균으로 처리(MCAR/MAR), 전부 결측인 행 제외. metric은 원척도 적재량만 동일하게 제약하며 평균·요인분산·오차·경로는 집단별 자유; scalar/strict 불변성 아님. χ²/df/p·CFI·TLI·RMSEA, 단일 완전자료 집단에서 SRMR 제공. 순서형/강건 추정·상관오차·일반 동일성 제약 미지원; AMOS/lavaan 전체 대체 기능 아님.'),
+ 'sem':('CFA measurement options plus acyclic latent [source,target] paths. Arguments: data,primary factors,paths,cross-loadings,complete/fiml,group IDs,configural/metric. Exogenous factors may covary; endogenous disturbances and indicator errors are independent. Cross-loadings, MAR FIML with free indicator means, and group-free/configural or equal-loading metric models supported. Metric does not constrain structural paths or means; no scalar/strict invariance, ordinal/robust estimator, correlated errors, arbitrary equality constraints or cycles. Paths do not establish causality; not a full AMOS/lavaan replacement.',
+        'CFA 측정 옵션과 비순환 잠재 [출발,도착] 경로. 인수: 자료,주 요인,경로,교차적재,complete/fiml,집단 ID,configural/metric. 외생 요인 상관·독립 내생 교란과 지표 오차. 교차적재, 자유 지표 평균을 포함한 MAR FIML, 다집단 형태/적재량 동일 모형 지원. metric은 구조경로·평균을 제약하지 않습니다. scalar/strict 불변성·순서형/강건 추정·상관오차·임의 동일성 제약·순환 미지원. 경로만으로 인과성을 입증하지 않으며 AMOS/lavaan 전체 대체 기능 아님.'),
+ 'manova':('One-way: group ID then multiple responses (legacy default). Factorial: manova(data,factorial,factor count,interaction order), categorical factor columns first; Type III coefficient-block tests with sum contrasts and hierarchical interactions. Repeated: manova(wide data,repeated,occasions), one independent subject per row and equally sized response blocks in occasion order; tests within-subject mean equality using joint contrasts without sphericity. Pillai, Wilks Rao, Hotelling–Lawley F and Roy upper-bound F. Complete data, normal errors and nonsingular residual covariance required. No mixed between/within repeated design, multiple within factors or irregular visits.',
+        '일요인: 그룹 ID 뒤에 여러 반응(기존 기본값). 요인설계: manova(자료,factorial,요인 수,상호작용 차수), 범주 요인 열을 먼저 배치; 합 대비·계층적 상호작용의 Type III 계수 블록 검정. 반복측정: manova(넓은 자료,repeated,시점 수), 행당 독립 대상 1명·시점 순서의 동일 크기 반응 블록; 구형성 없이 대상 내 평균 동일성을 공동 대비로 검정. Pillai·Wilks Rao·Hotelling–Lawley F와 Roy 상한 F. 완전자료·정규 오차·비특이 잔차 공분산 필요. 집단 간/내 혼합 반복설계·다중 대상 내 요인·불규칙 방문 미지원.')
+}
+SPECS=[(*spec[:6],*EXPANDED_HELP[spec[0]]) if spec[0] in EXPANDED_HELP else spec for spec in SPECS]
+
 def forms(field,col,multi,group_fields):
     choice=lambda key,en,ko,default,values: field(key,en,ko,'choice',default,[(v,e,k) for v,e,k in values])
     scaling=choice('standardize','Scaling','척도','1',[('1','Standardize','표준화'),('0','Raw scale','원척도')])
     features=[multi('columns','Feature / item columns','변수·문항 열')]
     regression=[col('response','Response','반응 열',-1),multi('predictors','Predictors','설명변수 열')]
-    measurement=features+[field('factors','Factor IDs in selected order','선택 순서의 요인 ID','text','1,1,1,2,2,2')]
+    measurement=features+[field('factors','Primary factor IDs in selected order','선택 순서의 주 요인 ID','text','1,1,1,2,2,2'),
+        field('cross','Cross-loadings: indicator,factor;…','교차적재: 선택 지표 번호,요인;…','text',''),
+        choice('missing','Missing data','결측 자료','complete',[('complete','Complete rows required','완전한 행 필요'),('fiml','FIML (MAR, continuous)','FIML (MAR, 연속형)')]),
+        choice('groupMode','Groups','집단','single',[('single','Single group','단일 집단'),('multi','Multiple groups','다집단')]),
+        dict(col('group','Group column','집단 열',0),when={'groupMode':['multi']}),
+        dict(choice('invariance','Invariance','불변성','configural',[('configural','Configural (group free)','형태 (집단별 자유)'),('metric','Metric (equal loadings)','측정 (적재량 동일)')]),when={'groupMode':['multi']})]
     layout=choice('layout','Data layout','자료 형태','counts',[('counts','Contingency counts','분할표 빈도'),('pairs','Paired categories','범주 쌍')])
     categorical=[layout,dict(multi('columns','Count columns','빈도 열'),when={'layout':['counts']}),dict(col('first','First variable / rater','첫 변수·평가자',0),when={'layout':['pairs']}),dict(col('second','Second variable / rater','둘째 변수·평가자',1),when={'layout':['pairs']})]
     social=[col('x','Predictor X','설명변수 X',0),col('middle','Mediator M / moderator W','매개 M·조절 W',1),col('response','Outcome Y','결과 Y',-1),field('covariates','Covariate columns (optional)','공변량 열 (선택)','columns','')]
     return {
       'cronbach':features+[choice('mode','Alpha','α','raw',[('raw','Raw','원척도'),('standardized','Standardized','표준화')])],
-      'efa':features+[field('factors','Number of factors','요인 수','number','2'),choice('rotation','Rotation','회전','varimax',[('varimax','Varimax (orthogonal)','Varimax (직교)'),('none','None','없음')])],
+      'efa':features+[field('factors','Factor count or parallel','요인 수 또는 parallel','text','2'),
+        choice('extraction','Extraction','추출','pa',[('pa','Principal axis (common factors)','주축요인법 (공통요인)'),('pca','Principal components','주성분')]),
+        choice('rotation','Rotation','회전','varimax',[('varimax','Varimax (orthogonal)','Varimax (직교)'),('promax','Promax (oblique, power 4)','Promax (사각, 지수 4)'),('oblimin','Oblimin (oblique, delta 0)','Oblimin (사각, delta 0)'),('none','None','없음')]),
+        field('parallelSamples','Parallel simulations (0 = off; parallel count uses 100)','병렬분석 횟수 (0=끔; parallel 자동 선택은 100회)','number','0'),field('seed','Seed','시드','number','0'),field('percentile','Parallel percentile (0–1)','병렬분석 백분위 (0~1)','number','0.95')],
       'cfa':measurement,'sem':measurement+[field('paths','Latent paths: source,target;…','잠재 경로: 출발,도착;…','text','1,2')],
-      'manova':[col('group','Group','그룹 열',0),multi('responses','Response columns','종속변수 열')],
+      'manova':[choice('design','Design','설계','oneway',[('oneway','One factor','일요인'),('factorial','Factorial (Type III)','요인설계 (Type III)'),('repeated','Repeated (wide rows)','반복측정 (대상별 넓은 행)')]),
+        dict(col('group','Group','그룹 열',0),when={'design':['oneway']}),dict(multi('factorColumns','Factor columns','요인 열'),default='0,1',when={'design':['factorial']}),
+        multi('responses','Response columns (occasion blocks for repeated)','종속변수 열 (반복측정은 시점별 블록 순서)'),
+        dict(field('order','Interaction order','상호작용 차수','number','2'),when={'design':['factorial']}),
+        dict(field('occasions','Repeated occasions','반복 시점 수','number','3'),when={'design':['repeated']})],
       'mediation':social+[field('samples','Bootstrap samples','부트스트랩 횟수','number','2000'),field('seed','Seed','시드','number','0')],
       'moderation':social,'cramerv':categorical,'phi':categorical,
       'cohenkappa':categorical+[choice('weights','Weights','가중치','unweighted',[('unweighted','Unweighted','무가중'),('linear','Linear','선형'),('quadratic','Quadratic','제곱')]),dict(field('categories','Category order (comma separated; optional for unweighted)','범주 순서 (쉼표 구분; 무가중은 선택)','text',''),when={'layout':['pairs']})],

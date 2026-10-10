@@ -517,12 +517,12 @@ export function createAdvancedStatistics({state,persist,data,columnLimit,copy,cl
     const button=document.querySelector(`[data-run="${panelId}"]`);button.dataset.invalidAnalysis=String(!source.value.trim());
     button.disabled=!source.value.trim()||document.documentElement.dataset.busy==='true'||document.documentElement.dataset.engine!=='ready';
   };
-  select.onchange=()=>{source.value=selected().example;input.value=selected().controls?(data().trim()&&selected().input!=='none'?'current':'example'):'expression';signature='';update();persist();};
+  select.onchange=()=>{panel('help-details').open=false;source.value=selected().example;input.value=selected().controls?(data().trim()&&selected().input!=='none'?'current':'example'):'expression';signature='';update();persist();};
   input.onchange=()=>{if(input.value==='expression'&&!source.value)source.value=selected().example;signature='';update();persist();};
   panel('example').onclick=()=>{source.value=selected().example;if(selected().controls)input.value='example';signature='';update();persist();};
   panel('data').onclick=()=>{
     try{if(selected().controls){input.value='current';signature='';update();}else {source.value=advancedStatisticsCommand(selected(),advancedStatisticsRows(data(),limit()));input.value='current';}persist();}
-    catch(exc){help.textContent=exc.message;}
+    catch(exc){help.textContent=exc.message;panel('help-details').open=true;}
   };
   $('statistics-data').addEventListener('input',update);
   source.addEventListener('input',update);

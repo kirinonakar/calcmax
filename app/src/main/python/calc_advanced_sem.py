@@ -1,9 +1,10 @@
-"""Continuous-data covariance ML for simple CFA and recursive latent SEM.
+"""Legacy complete-data CFA/SEM, routing extended options to a separate fitter.
 
 Each indicator loads on exactly one factor, with a fixed first loading. All
 factors need at least three indicators. Exogenous factors may covary;
 endogenous disturbances and indicator errors are independent. No cross-loadings,
-cycles, equality constraints, ordinal estimators, mean structures or FIML.
+cycles or ordinal estimators in this path; extended options add cross-loadings,
+group constraints and observed-data FIML in calc_advanced_sem_extended.
 """
 import math
 import mpmath as mp
@@ -16,6 +17,10 @@ from calc_statistics import _chisq_sf
 
 
 def calculate(engine,name,a):
+    offset=3 if name=='sem' else 2
+    if len(a)>offset:
+        from calc_advanced_sem_extended import calculate as extended
+        return extended(engine,name,a)
     rows=table(a[0],5,3); n=len(rows); p=len(rows[0])
     assignments=[integer(v,1,p) for v in vector(a[1],p)] if len(a)>1 else [1]*p
     require(len(assignments)==p,'Specify one factor ID per selected indicator')

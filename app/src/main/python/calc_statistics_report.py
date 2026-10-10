@@ -119,7 +119,10 @@ def statistics_report(name, value, precision, labels=None):
                     estimate=row.get('estimate',row.get('Estimate',row.get('Mean',row.get('adjusted mean',row.get('Mean difference')))))
                     low=row.get('Lower 95% CI',row.get('Lower CI'))
                     high=row.get('Upper 95% CI',row.get('Upper CI'))
-                    if label: intervals.append((label,estimate,low,high))
+                    if label:
+                        if name in ('cfa','sem') and 'Group' in row: label=str(row['Group'])+' / '+str(label)
+                        if name in ('cfa','sem') and 'Factor' in row: label=str(label)+' / Factor '+str(row['Factor'])
+                        intervals.append((label,estimate,low,high))
                     expanded.append(row)
                 if intervals: interval_plot(title+' intervals',intervals,0 if (name=='gameshowell' or 'coefficients' in title.lower() or 'post-hoc' in title.lower()) else None)
                 v=expanded
@@ -130,10 +133,10 @@ def statistics_report(name, value, precision, labels=None):
                 headers = {'survival table':['Time','At risk','Events','Censored','Survival','Lower 95% CI','Upper 95% CI'],
                            'observed':['Category 1','Category 2'], 'expected':['Category 1','Category 2']}.get(title)
                 if headers is None or len(headers) != width:
-                    prefix = ('Factor ' if name=='efa' else 'PC') if title in ('loadings','scores') else 'Feature ' if title=='centroids' else 'Column '
+                    prefix = ('Factor ' if name=='efa' else 'PC') if title in ('loadings','scores','Structure loadings','Factor correlations') else 'Feature ' if title=='centroids' else 'Column '
                     headers = [prefix+str(i+1) for i in range(width)]
                     if title=='centroids': headers=[table_labels.get('feature:'+str(i+1),header) for i,header in enumerate(headers)]
-                index = 'Feature' if title == 'loadings' else 'Cluster' if title == 'centroids' else 'Observation'
+                index = 'Feature' if title in ('loadings','Structure loadings') else 'Factor' if title=='Factor correlations' else 'Cluster' if title == 'centroids' else 'Observation'
                 if categorical and title in ('observed', 'expected'):
                     headers = [str(table_labels['table:column'])+': '+str(table_labels.get('table:column:'+str(i+1), 'Category '+str(i+1))) for i in range(width)]
                     add(title, [table_labels['table:row']]+headers,

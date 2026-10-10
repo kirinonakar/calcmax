@@ -145,7 +145,7 @@ internal fun advancedStatisticsRows(data:String,columnLimit:Int?=null,removeComp
             }
             if(section=="advanced"&&selected!="survivalanalysis")SmallAction(if(ko)"생존분석" else "Survival analysis"){choose(definitions.first {it.getString("id")=="survivalanalysis"})}
         }
-        Text(definition.getString(if(definition.has("controls")&&input!="expression")if(ko)"formHelpKo" else "formHelp" else if(ko)"helpKo" else "help"),fontSize=11.sp,color=LocalInstrument.current.muted)
+        StatisticsExplanation("Model details",definition.getString(if(definition.has("controls")&&input!="expression")if(ko)"formHelpKo" else "formHelp" else if(ko)"helpKo" else "help"),"statistics-$section-model-help",selected)
         if(definition.has("controls")) {
             val ids=if(definition.getString("input")=="none")listOf("example","expression") else listOf("current","example","expression")
             val inputLabels=ids.map {when(it){"current"->if(ko)"현재 데이터" else "Current data";"example"->if(ko)"예제·직접 설정" else "Example / parameters";else->if(ko)"분석 식" else "Expression"}}

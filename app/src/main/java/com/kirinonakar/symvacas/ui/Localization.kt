@@ -12,6 +12,7 @@ private val korean = mapOf(
     "General analysis" to "일반 분석",
     "Reliability" to "신뢰도", "Cronbach α reliability" to "Cronbach α 신뢰도",
     "Assumptions" to "분석 가정",
+    "Model details" to "모델 상세 설명",
     "Reliability & association" to "신뢰도·연관성", "Weights" to "가중치", "Cohen κ" to "Cohen κ", "Cronbach α" to "Cronbach α",
     "Observed agreement" to "관측 일치율", "Expected agreement" to "기대 일치율", "Exact agreement" to "정확 일치율",
     "Cramér’s V" to "Cramér의 V", "Phi coefficient" to "phi 계수", "Cohen’s κ agreement" to "Cohen의 κ 일치도",

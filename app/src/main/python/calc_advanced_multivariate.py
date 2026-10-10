@@ -1,4 +1,4 @@
-"""One-factor MANOVA, LDA/QDA and independent agglomerative clustering."""
+"""One-factor MANOVA and extended-design routing, LDA/QDA and clustering."""
 import math
 import heapq
 import mpmath as mp
@@ -6,7 +6,6 @@ from calc_limits import within_limit
 from calc_shared import require
 from calc_advanced_common import table, integer, option, mean, inverse
 from calc_advanced_survey import covariance, correlation
-from calc_statistics import _f_sf
 
 
 def positive(matrix):
@@ -18,6 +17,9 @@ def positive(matrix):
 
 
 def calculate(engine,name,a):
+    if name=='manova' and len(a)>1 and str(a[1])!='oneway':
+        from calc_advanced_manova import calculate as manova
+        return manova(engine,a)
     rows=table(a[0],2,1 if name=='hcluster' else 2); n=len(rows)
     if name=='hcluster': return cluster(rows,a)
     at=0 if name=='manova' else -1
@@ -35,21 +37,11 @@ def calculate(engine,name,a):
         h=mp.zeros(p)
         for group,center in zip(groups,centers):
             delta=mp.matrix([x-y for x,y in zip(center,overall)]); h+=len(group)*delta*delta.T
-        # Whiten E+H to compute bounded real generalized roots.
-        vals,vec=mp.eigsy(e+h); whitener=vec*mp.diag([1/mp.sqrt(t) for t in vals])*vec.T
-        roots=[max(0.,min(1.-1e-14,float(t))) for t in mp.eigsy(whitener*h*whitener,eigvals_only=True)]
-        q=g-1; s=min(p,q); m=(abs(p-q)-1)/2; nn=(v-p-1)/2
-        pillai=sum(roots); wilks=math.prod(1-t for t in roots); hotelling=sum(t/(1-t) for t in roots); roy=max(t/(1-t) for t in roots)
-        df1=s*(2*m+s+1); df2=s*(2*nn+s+1); f=(df2/df1)*pillai/(s-pillai)
-        tests=[{'Test':'Pillai trace','Statistic':pillai,'F':f,'df1':df1,'df2':df2,'p':float(_f_sf(f,df1,df2))}]
-        t=math.sqrt((p*p*q*q-4)/(p*p+q*q-5)) if p*p+q*q>5 else 1.
-        df1=p*q; df2=(v-(p-q+1)/2)*t-(p*q-2)/2
-        require(df2>0,'More observations are required for MANOVA inference')
-        powered=wilks**(1/t); f=(1-powered)/powered*df2/df1
-        tests.append({'Test':'Wilks lambda (Rao F)','Statistic':wilks,'F':f,'df1':df1,'df2':df2,'p':float(_f_sf(f,df1,df2))})
-        return {'n':n,'groups':g,'responses':p,'df residual':v,'Multivariate tests':tests,'Hotelling–Lawley trace':hotelling,'Roy largest root':roy,
+        from calc_advanced_manova import multivariate_tests
+        tests=multivariate_tests(e,h,g-1,v)
+        return {'n':n,'groups':g,'responses':p,'df residual':v,'Multivariate tests':tests,'Hotelling–Lawley trace':tests[2]['Statistic'],'Roy largest root':tests[3]['Statistic'],
                 'Group means':[{'group':'group:'+str(int(label)),'n':len(group),**{'response:'+str(j+1):value for j,value in enumerate(center)}} for label,group,center in zip(labels,groups,centers)],
-                'Error SSCP':e.tolist(),'Hypothesis SSCP':h.tolist(),'Assumptions':'One independent categorical factor; multivariate normal errors and equal within-group covariance. Pillai F and Wilks Rao F approximations; no repeated or factorial MANOVA.'}
+                'Error SSCP':e.tolist(),'Hypothesis SSCP':h.tolist(),'Assumptions':'One independent categorical factor; multivariate normal errors and equal within-group covariance. Pillai, Wilks Rao and Hotelling–Lawley F approximations; Roy F is an upper bound. Choose factorial or repeated for other supported designs.'}
     method=option(a,1,'lda'); require(method in ('lda','qda'),'Choose LDA or QDA')
     prior=option(a,2,'empirical'); require(prior in ('empirical','equal'),'Choose empirical or equal priors')
     pooled=e/v; matrices=[pooled]*g if method=='lda' else covariances

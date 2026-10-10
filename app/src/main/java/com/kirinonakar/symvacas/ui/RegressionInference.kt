@@ -50,7 +50,7 @@ import kotlin.math.abs
         "C-statistic (AUC)" to "auc","McFadden R²" to "pseudoRSquared","Deviance" to "deviance","AIC" to "aic","LR p" to "likelihoodP",
         "Durbin–Watson" to "durbinWatson","Residual Shapiro p" to "shapiroP")
     Text("n=${report.optInt("n")} · "+(if(report.isNull("df"))"" else "df=${report.optInt("df")} · ")+metrics.filter {report.has(it.second)&&(!report.isNull(it.second)||it.second in listOf("rSquared","adjustedRSquared"))}.map {"${tr(it.first)}=${value(report,it.second)}"}.joinToString(" · "),fontSize=11.sp)
-    Text(tr(when {
+    StatisticsExplanation("Model details",tr(when {
         bayesian->when(report.optString("method")){"nuts"->"NUTS posterior samples; check R-hat, ESS and divergences.";"laplace"->"Gaussian Laplace posterior at the MAP; approximate credible intervals.";else->"Normal-inverse-gamma posterior; exact Student-t credible intervals."}
         report.optString("method")=="firth"->"Firth logistic regression; profile penalized-likelihood intervals."
         machineLearning->"Training fit; ordinary coefficient inference is unavailable."
@@ -58,11 +58,10 @@ import kotlin.math.abs
         report.optString("fitScale")=="log(y)"->"Inference in log(y); R² and RMSE in original y units."
         report.optBoolean("approximate")->"Local Jacobian approximation; independent errors with constant variance."
         else->"OLS inference; independent errors with constant variance."
-    }),fontSize=11.sp,color=colors.muted)
+    })+(if(bayesian)"\n\n"+tr(if(report.optString("method")=="laplace")"Training probabilities evaluated at the MAP." else "Training predictions evaluated at posterior mean coefficients.") else ""),"statistics-regression-model-help",report)
     if(bayesian)Text("${tr("Prior SD")}=${value(report,"priorSD")} · ${tr("Credible level (0–1)")}=${value(report,"credibleLevel")}",fontSize=11.sp,color=colors.muted)
     if(machineLearning)Text(if(forest)"${tr("Random Forest")} · ${tr(if(report.optString("task")=="classification")"Binary classification" else "Regression")} · ${tr("Trees")}: ${report.optInt("trees")} · ${tr("Max depth")}: ${report.optInt("maxDepth")} · ${tr("Random seed")}: ${report.optInt("seed")} · OOB n=${report.optInt("oobN")}/${report.optInt("n")}" else "${tr(report.optString("model").removePrefix("logistic"))} · α=${value(report,"alpha")} · ${tr("Selected predictors")}: ${report.optInt("selectedPredictors")} · L1=${value(report,"l1Ratio")}",fontSize=11.sp,color=colors.muted)
     if(bayesian) {
-        Text(tr(if(report.optString("method")=="laplace")"Training probabilities evaluated at the MAP." else "Training predictions evaluated at posterior mean coefficients."),fontSize=11.sp,color=colors.muted)
         if(report.has("varianceShape"))Text("${tr("Variance prior shape")}=${value(report,"varianceShape")} · ${tr("Variance prior scale")}=${value(report,"varianceScale")} · ${tr("Posterior variance mean")}=${value(report,"posteriorVarianceMean")}",fontSize=11.sp,color=colors.muted)
     }
     report.optJSONObject("nuts")?.let {h->

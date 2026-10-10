@@ -6,17 +6,18 @@ export function editableTable({rows,columns,value,onInput,onDeleteRow,onMoveColu
   const table=element('table','','editable-table'),colgroup=element('colgroup'),head=element('thead'),heading=element('tr'),body=element('tbody');
   // Fixed table layout needs explicit column sizes; cell min-width is unreliable.
   table.style.minWidth=`${columns.length*80+36+(onDeleteRow?36:0)}px`;
+  if(onDeleteRow){const actionColumn=element('col');actionColumn.style.width='36px';colgroup.append(actionColumn);}
   const numberColumn=element('col');numberColumn.style.width='36px';colgroup.append(numberColumn);
   colgroup.append(...columns.map(()=>element('col')));
-  if(onDeleteRow){const actionColumn=element('col');actionColumn.style.width='36px';colgroup.append(actionColumn);}
   table.setAttribute('aria-label',label);
+  if(onDeleteRow)heading.append(element('th',''));
   heading.append(element('th','#'));
   for(const name of columns){const th=element('th',name);th.scope='col';heading.append(th);}
-  if(onDeleteRow)heading.append(element('th',''));
   head.append(heading);
   // Column actions mirror the Android statistics table editor: move left, move right, delete.
   if((onMoveColumn||onDeleteColumn)&&columns.length>1){
     const actions=element('tr','','table-column-actions');
+    if(onDeleteRow)actions.append(element('th',''));
     actions.append(element('th',''));
     columns.forEach((_,col)=>{
       const cell=element('th');
@@ -34,11 +35,12 @@ export function editableTable({rows,columns,value,onInput,onDeleteRow,onMoveColu
       }
       actions.append(cell);
     });
-    if(onDeleteRow)actions.append(element('th',''));
     head.append(actions);
   }
   for(let row=0;row<rows;row++){
-    const tr=element('tr'),number=element('th',String(row+1));number.scope='row';tr.append(number);
+    const tr=element('tr'),number=element('th',String(row+1));number.scope='row';
+    if(onDeleteRow){const td=element('td'),remove=control('×',()=>onDeleteRow(row));remove.setAttribute('aria-label',`${t('Delete')} ${row+1}`);td.className='table-row-action';td.append(remove);tr.append(td);}
+    tr.append(number);
     for(let col=0;col<columns.length;col++){
       const td=element('td'),input=element('input');
       input.value=value(row,col);input.dataset.row=String(row);input.dataset.column=String(col);
@@ -54,7 +56,6 @@ export function editableTable({rows,columns,value,onInput,onDeleteRow,onMoveColu
       };
       td.append(input);tr.append(td);
     }
-    if(onDeleteRow){const td=element('td'),remove=control('−',()=>onDeleteRow(row));remove.setAttribute('aria-label',`${t('Delete')} ${row+1}`);td.className='table-row-action';td.append(remove);tr.append(td);}
     body.append(tr);
   }
   table.append(colgroup,head,body);return table;

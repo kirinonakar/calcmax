@@ -297,8 +297,8 @@ class Engine:
         try:
             if value not in self.functions and value in BASIC_STATISTICS | ADVANCED_STATISTICS | {"regression"}:
                 for argument in args: self.prepare_statistics_dataset(argument)
-            if value == "impute":
-                # NA is a missing-data token only inside impute; elsewhere it
+            if value in ("impute", "cfa", "sem"):
+                # NA is a missing-data token inside these analyses; elsewhere it
                 # retains its existing Avogadro-constant meaning.
                 self.bindings["NA"] = self.symbol("NA")
             if value == "regression" and len(args) > 1 and args[1].get("kind") == "symbol" and args[1].get("value") == "custom":

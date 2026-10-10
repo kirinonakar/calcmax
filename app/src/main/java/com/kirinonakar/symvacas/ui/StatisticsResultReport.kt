@@ -11,6 +11,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
@@ -19,6 +21,20 @@ import androidx.compose.ui.unit.sp
 import com.kirinonakar.symvacas.calculator.CalculatorModel
 import com.kirinonakar.symvacas.ui.theme.LocalInstrument
 import org.json.JSONObject
+
+@Composable internal fun StatisticsExplanation(title:String,text:String,tag:String,resetKey:Any=text) {
+    var expanded by remember(resetKey) {mutableStateOf(false)}
+    val collapseRequest=LocalStatisticsCollapseRequest.current
+    LaunchedEffect(collapseRequest){if(collapseRequest>0)expanded=false}
+    val description=tr(if(expanded)"Expanded" else "Collapsed")
+    Column(Modifier.fillMaxWidth().testTag(tag)) {
+        TextButton(onClick={expanded=!expanded},contentPadding=PaddingValues(horizontal=0.dp,vertical=4.dp),
+            modifier=Modifier.testTag("$tag-toggle").semantics {stateDescription=description}) {
+            Text((if(expanded)"▾ " else "▸ ")+tr(title),fontSize=12.sp,color=LocalInstrument.current.muted)
+        }
+        if(expanded)SelectionContainer {Text(text,Modifier.fillMaxWidth(),fontSize=11.sp,color=LocalInstrument.current.muted)}
+    }
+}
 
 @Composable internal fun StatisticsSelectionTitle(title:String,translate:Boolean=true) {
     Text(if(translate)tr(title) else title,fontSize=14.sp,fontWeight=FontWeight.SemiBold,color=LocalInstrument.current.ink)
@@ -111,15 +127,10 @@ internal fun statisticsCellText(m:CalculatorModel,cell:JSONObject)=ResultDisplay
         }
         if(!plotsShown)StatisticsVisualizations(report.optJSONArray("plots"))
         report.optJSONArray("assumptions")?.takeIf {it.length()>0}?.let {assumptions->
-            Column(Modifier.fillMaxWidth().testTag("statistics-result-assumptions"),verticalArrangement=Arrangement.spacedBy(6.dp)) {
-                Text(tr("Assumptions"),fontSize=13.sp,fontWeight=FontWeight.SemiBold,color=c.ink)
-                SelectionContainer {
-                    Column(Modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(6.dp)) {
-                        for(index in 0 until assumptions.length())Text(tr(assumptions.getString(index)),Modifier.fillMaxWidth(),fontSize=12.sp,color=c.muted)
-                    }
-                }
-            }
+            val descriptions=mutableListOf<String>()
+            for(index in 0 until assumptions.length())descriptions+=tr(assumptions.getString(index))
+            StatisticsExplanation("Assumptions",descriptions.joinToString("\n\n"),"statistics-result-assumptions",report)
         }
-        m.result?.optString("note")?.takeIf(String::isNotBlank)?.let {Text(it,fontSize=12.sp,color=c.muted)}
+        m.result?.optString("note")?.takeIf(String::isNotBlank)?.let {StatisticsExplanation("Interpretation & assumptions",it,"statistics-result-note",report)}
     }
 }
